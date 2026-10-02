@@ -67,7 +67,23 @@ jobs:
       - name: Validate parity contracts and result accounting
         run: uv run python -m unittest discover -s tests -p 'test_parity_*.py'
       - name: Compare ASGI protocol behavior with live reference servers
-        run: uv run --group benchmark python scripts/run_parity.py
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p target/asgi-parity
+          uv run --group benchmark python scripts/run_parity.py \
+            --output target/asgi-parity/result.json 2>&1 \
+            | tee target/asgi-parity/run.log
+      - name: Summarize ASGI parity failures
+        if: always()
+        run: python scripts/summarize_parity_result.py target/asgi-parity/result.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: asgi-parity-${{ github.run_id }}
+          path: target/asgi-parity/
+          if-no-files-found: warn
+          retention-days: 30
       - name: Probe HTTP and ASGI callable behavior
         run: uv run python scripts/probe_http.py
       - name: Probe HTTP/2 and HTTP/3

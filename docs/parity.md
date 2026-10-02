@@ -123,3 +123,12 @@ unrepresented declared operations, and observed output fields embedded in
 active cases. The contract tests cover these fail-closed properties and verify
 that result accounting cannot omit a selected case. The runner selects adapters
 by declared profile and workflow shape, never by case ID.
+
+## CI evidence
+
+The main CI workflow runs this matrix and, even on failure, retains the
+structured result and runner log as an `asgi-parity-<run-id>` Actions artifact
+for 30 days. It also emits a concise annotation for each failed case or
+infrastructure error, so the failure can be located without interpreting a
+large server log. Artifacts are scoped to their workflow run and are not a
+public package release.
