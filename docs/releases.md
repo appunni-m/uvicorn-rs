@@ -9,9 +9,11 @@ review and are not a public distribution channel.
 ## Candidate checks
 
 The main CI workflow is the source of release artifacts. For a pushed commit on
-`main`, it runs the Rust and Python protocol checks, builds and smoke-tests one
-CPython `abi3` wheel on each configured runner, and builds a source distribution
-on Linux. The current artifact targets are:
+`main`, it runs the Rust and Python protocol checks on CPython 3.12.13, builds
+and smoke-tests one CPython 3.12.10 `abi3` wheel on each configured runner, and
+builds a source distribution on Linux. The wheel-build interpreter is kept at
+3.12.10 because setup-python does not provide 3.12.13 for ARM64 macOS and
+Windows. The current artifact targets are:
 
 | Artifact | Build runner | Validation |
 |---|---|---|
