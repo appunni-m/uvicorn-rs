@@ -326,13 +326,32 @@ def free_port(*, tcp_and_udp: bool = False) -> int:
     raise OSError("could not find an available test port")
 
 
-def make_certificate(directory: Path) -> tuple[Path, Path]:
-    certificate, key = directory / "server.pem", directory / "server-key.pem"
+def make_certificate(directory: Path) -> tuple[Path, Path, Path]:
+    leaf_certificate = directory / "server-leaf.pem"
+    certificate = directory / "server-chain.pem"
+    key = directory / "server-key.pem"
+    ca_certificate = directory / "parity-ca.pem"
+    ca_key = directory / "parity-ca-key.pem"
+    csr = directory / "server.csr"
+    extensions = directory / "server-extensions.cnf"
+    extensions.write_text(
+        "[server]\n"
+        "basicConstraints=critical,CA:FALSE\n"
+        "keyUsage=critical,digitalSignature,keyEncipherment\n"
+        "extendedKeyUsage=serverAuth\n"
+        "subjectAltName=DNS:localhost,IP:127.0.0.1\n"
+        "subjectKeyIdentifier=hash\n"
+        "authorityKeyIdentifier=keyid,issuer\n",
+        encoding="utf-8",
+    )
     subprocess.run(
         [
             "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
-            "-keyout", str(key), "-out", str(certificate), "-subj", "/CN=localhost",
-            "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+            "-keyout", str(ca_key), "-out", str(ca_certificate),
+            "-subj", "/CN=uvicorn-rs parity test CA",
+            "-addext", "basicConstraints=critical,CA:TRUE",
+            "-addext", "keyUsage=critical,keyCertSign,cRLSign",
+            "-addext", "subjectKeyIdentifier=hash",
         ],
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
@@ -340,7 +359,31 @@ def make_certificate(directory: Path) -> tuple[Path, Path]:
         check=True,
         timeout=30,
     )
-    return certificate, key
+    subprocess.run(
+        [
+            "openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
+            "-keyout", str(key), "-out", str(csr), "-subj", "/CN=localhost",
+        ],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=True,
+        timeout=30,
+    )
+    subprocess.run(
+        [
+            "openssl", "x509", "-req", "-in", str(csr), "-CA", str(ca_certificate),
+            "-CAkey", str(ca_key), "-CAcreateserial", "-out", str(leaf_certificate),
+            "-days", "2", "-sha256", "-extfile", str(extensions), "-extensions", "server",
+        ],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=True,
+        timeout=30,
+    )
+    certificate.write_bytes(leaf_certificate.read_bytes() + ca_certificate.read_bytes())
+    return certificate, key, ca_certificate
 
 
 def build_h3_client() -> Path:
@@ -782,9 +825,9 @@ def http2_response_streaming_request(
         tls_socket.close()
 
 
-def http3_request(port: int, certificate: Path, request: dict[str, Any], client: Path) -> dict[str, Any]:
+def http3_request(port: int, trust_anchor: Path, request: dict[str, Any], client: Path) -> dict[str, Any]:
     result = subprocess.run(
-        [str(client), f"127.0.0.1:{port}", str(certificate), request["path"]],
+        [str(client), f"127.0.0.1:{port}", str(trust_anchor), request["path"]],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -861,7 +904,7 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
 
 def execute_case(
     case: dict[str, Any], server: dict[str, Any], profile: dict[str, Any],
-    certificate: Path | None, h3_client: Path | None,
+    trust_anchor: Path | None, h3_client: Path | None,
 ) -> dict[str, Any]:
     if "response_stream" in case:
         if profile["id"] == "http1":
@@ -880,9 +923,9 @@ def execute_case(
         if profile_id == "http2":
             return http2_request(server["port"], case["request"])
         if profile_id == "http3":
-            if certificate is None or h3_client is None:
+            if trust_anchor is None or h3_client is None:
                 raise ParityError("HTTP/3 adapter is missing its certificate or client")
-            return http3_request(server["port"], certificate, case["request"], h3_client)
+            return http3_request(server["port"], trust_anchor, case["request"], h3_client)
     if "websocket" in case:
         return websocket_observation(server["port"], case["websocket"])
     if "disconnect" in case:
@@ -939,7 +982,10 @@ def start_profile_servers(
 ) -> tuple[dict[str, Any], dict[str, Any], Path | None]:
     profile_id = profile["id"]
     tls = profile_id in {"http2", "http3"}
-    certificate, key = make_certificate(tempdir) if tls else (None, None)
+    if tls:
+        certificate, key, trust_anchor = make_certificate(tempdir)
+    else:
+        certificate, key, trust_anchor = None, None, None
     config = tempdir / "hypercorn.toml"
     config.write_text("keep_alive_max_requests = 100000000\n", encoding="utf-8")
     graceful_timeout_seconds = next(
@@ -965,7 +1011,7 @@ def start_profile_servers(
         for server in servers.values():
             stop_server(server)
         raise
-    return servers[profile["oracle"]], servers["uvicorn-rs"], certificate
+    return servers[profile["oracle"]], servers["uvicorn-rs"], trust_anchor
 
 
 def execute_profile(
@@ -979,7 +1025,7 @@ def execute_profile(
     with tempfile.TemporaryDirectory(prefix=f"uvicorn-rs-parity-{profile['id']}-") as temporary:
         tempdir = Path(temporary)
         try:
-            oracle, target, certificate = start_profile_servers(profile, tempdir, cases)
+            oracle, target, trust_anchor = start_profile_servers(profile, tempdir, cases)
         except Exception as error:
             infrastructure_errors.append({
                 "profile": profile["id"],
@@ -1002,11 +1048,11 @@ def execute_profile(
             for case_index, case in enumerate(cases):
                 try:
                     try:
-                        oracle_raw = execute_case(case, oracle, profile, certificate, h3_client)
+                        oracle_raw = execute_case(case, oracle, profile, trust_anchor, h3_client)
                     except Exception as error:
                         raise ParityError(f"oracle {oracle['id']} adapter failed: {error}") from error
                     try:
-                        target_raw = execute_case(case, target, profile, certificate, h3_client)
+                        target_raw = execute_case(case, target, profile, trust_anchor, h3_client)
                     except Exception as error:
                         raise ParityError(f"target uvicorn-rs adapter failed: {error}") from error
                     operation = operations[case["operation"]]
