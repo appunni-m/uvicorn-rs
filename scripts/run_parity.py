@@ -789,9 +789,19 @@ def http3_request(port: int, certificate: Path, request: dict[str, Any], client:
         capture_output=True,
         text=True,
         timeout=20,
-        check=True,
     )
-    response = json.loads(result.stdout)
+    if result.returncode != 0:
+        diagnostic = (result.stderr or result.stdout).strip() or "no client diagnostic"
+        raise ParityError(
+            f"HTTP/3 probe client exited {result.returncode}: {diagnostic[-800:]}"
+        )
+    try:
+        response = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        diagnostic = result.stdout.strip() or result.stderr.strip() or "empty client output"
+        raise ParityError(
+            f"HTTP/3 probe client returned invalid JSON: {diagnostic[-800:]}"
+        ) from error
     body = bytes.fromhex(response["body_hex"])
     return response_observation(response["status"], [("content-type", response["content_type"] or "")], body)
 

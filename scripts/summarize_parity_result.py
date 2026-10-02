@@ -46,9 +46,20 @@ def main() -> int:
             profile = escape_command_value(str(case.get("profile", "unknown profile")))
             case_id = escape_command_value(str(case.get("case_id", "unknown case")))
             status = escape_command_value(str(case.get("status", "unknown status")))
+            diagnostic = ""
+            if case.get("status") == "infrastructure_failed":
+                error = case.get("error", {})
+                error_class = str(error.get("class", "unknown error"))
+                error_message = str(error.get("message", ""))[:300]
+                diagnostic = " " + escape_command_value(
+                    f"{error_class}: {error_message}"
+                )
+            elif case.get("difference"):
+                diagnostic = " " + escape_command_value(str(case["difference"])[:300])
             print(
                 f"::error title=ASGI parity {profile}::"
-                f"{case_id} status={status}; see retained parity log artifact."
+                f"{case_id} status={status};{diagnostic} "
+                "see retained parity log artifact."
             )
 
     for error in result.get("infrastructure_errors", []):
