@@ -1,0 +1,199 @@
+{
+  "metadata": {
+    "date": "2026-10-02",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "machine": "arm64",
+    "logical_cpus": 12,
+    "cpu_model": "Apple M3 Pro",
+    "python": "3.12.13",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "hypercorn": "0.18.0",
+    "hypercorn_config": {
+      "keep_alive_max_requests": 100000000
+    },
+    "slow_reader_rate_bytes_per_second": 4194304,
+    "h3_client": "Rust quinn/h3, up to four QUIC connections with multiplexed request streams distributed round-robin, full response-body equality; non-upload requests carry a 1-byte body for ASGI compatibility",
+    "source_sha256": "cc1224ddca1efc11eb182502e4690dd6d1cf36ab97a395b04489b798b71eb276",
+    "workloads": [
+      "fixed"
+    ],
+    "servers": {
+      "uvicorn-rs-asyncio": {
+        "kind": "rust",
+        "loop": "asyncio"
+      },
+      "uvicorn-rs-uvloop": {
+        "kind": "rust",
+        "loop": "uvloop"
+      }
+    },
+    "excluded_servers_by_workload": {},
+    "concurrency": 16,
+    "duration_seconds": 2.0,
+    "workload_concurrency": {
+      "fixed": 16
+    },
+    "warmup_seconds": 0.25,
+    "repetitions": 3,
+    "seed": 20261002,
+    "correctness_gate": "HTTP/3 QUIC/TLS handshake, expected status, and every response byte validated for each measured request"
+  },
+  "summaries_median": {
+    "fixed": {
+      "uvicorn-rs-asyncio": {
+        "requests_per_second": 26891.656,
+        "application_bytes_per_second": 349591.533,
+        "p50_ms": 0.575417,
+        "p95_ms": 0.949834,
+        "p99_ms": 1.136208,
+        "server_cpu_percent_mean": 168.04444444444445,
+        "server_rss_peak_mib": 240.8125,
+        "client_cpu_percent_mean": 99.39999999999999
+      },
+      "uvicorn-rs-uvloop": {
+        "requests_per_second": 31497.724,
+        "application_bytes_per_second": 409470.414,
+        "p50_ms": 0.49225,
+        "p95_ms": 0.792042,
+        "p99_ms": 0.931292,
+        "server_cpu_percent_mean": 175.6,
+        "server_rss_peak_mib": 282.0625,
+        "client_cpu_percent_mean": 115.25
+      }
+    }
+  },
+  "rows": [
+    {
+      "workload": "fixed",
+      "server": "uvicorn-rs-uvloop",
+      "repetition": 1,
+      "requests": 62824,
+      "duration_seconds": 2.000341208,
+      "requests_per_second": 31406.642,
+      "request_body_bytes": 62824,
+      "response_body_bytes": 753888,
+      "response_data_chunks": 62824,
+      "application_bytes_per_second": 408286.345,
+      "p50_ms": 0.496875,
+      "p95_ms": 0.792958,
+      "p99_ms": 0.931292,
+      "failures": 0,
+      "first_failure": null,
+      "server_cpu_percent_mean": 174.14444444444445,
+      "server_cpu_percent_max": 201.1,
+      "server_rss_peak_mib": 280.734375,
+      "client_cpu_percent_mean": 115.2125,
+      "client_rss_peak_mib": 6.125
+    },
+    {
+      "workload": "fixed",
+      "server": "uvicorn-rs-asyncio",
+      "repetition": 1,
+      "requests": 52035,
+      "duration_seconds": 2.000516041,
+      "requests_per_second": 26010.789,
+      "request_body_bytes": 52035,
+      "response_body_bytes": 624420,
+      "response_data_chunks": 52035,
+      "application_bytes_per_second": 338140.253,
+      "p50_ms": 0.592625,
+      "p95_ms": 0.9765,
+      "p99_ms": 1.173292,
+      "failures": 0,
+      "first_failure": null,
+      "server_cpu_percent_mean": 165.54444444444445,
+      "server_cpu_percent_max": 195.3,
+      "server_rss_peak_mib": 236.765625,
+      "client_cpu_percent_mean": 97.8625,
+      "client_rss_peak_mib": 5.96875
+    },
+    {
+      "workload": "fixed",
+      "server": "uvicorn-rs-uvloop",
+      "repetition": 2,
+      "requests": 63006,
+      "duration_seconds": 2.000335,
+      "requests_per_second": 31497.724,
+      "request_body_bytes": 63006,
+      "response_body_bytes": 756072,
+      "response_data_chunks": 63006,
+      "application_bytes_per_second": 409470.414,
+      "p50_ms": 0.49225,
+      "p95_ms": 0.792042,
+      "p99_ms": 0.973375,
+      "failures": 0,
+      "first_failure": null,
+      "server_cpu_percent_mean": 176.87777777777777,
+      "server_cpu_percent_max": 203.6,
+      "server_rss_peak_mib": 282.0625,
+      "client_cpu_percent_mean": 115.25,
+      "client_rss_peak_mib": 6.21875
+    },
+    {
+      "workload": "fixed",
+      "server": "uvicorn-rs-asyncio",
+      "repetition": 2,
+      "requests": 53794,
+      "duration_seconds": 2.000397416,
+      "requests_per_second": 26891.656,
+      "request_body_bytes": 53794,
+      "response_body_bytes": 645528,
+      "response_data_chunks": 53794,
+      "application_bytes_per_second": 349591.533,
+      "p50_ms": 0.575417,
+      "p95_ms": 0.949834,
+      "p99_ms": 1.122667,
+      "failures": 0,
+      "first_failure": null,
+      "server_cpu_percent_mean": 169.15555555555557,
+      "server_cpu_percent_max": 194.5,
+      "server_rss_peak_mib": 240.8125,
+      "client_cpu_percent_mean": 99.39999999999999,
+      "client_rss_peak_mib": 6.15625
+    },
+    {
+      "workload": "fixed",
+      "server": "uvicorn-rs-asyncio",
+      "repetition": 3,
+      "requests": 53851,
+      "duration_seconds": 2.000349625,
+      "requests_per_second": 26920.794,
+      "request_body_bytes": 53851,
+      "response_body_bytes": 646212,
+      "response_data_chunks": 53851,
+      "application_bytes_per_second": 349970.321,
+      "p50_ms": 0.57375,
+      "p95_ms": 0.943542,
+      "p99_ms": 1.136208,
+      "failures": 0,
+      "first_failure": null,
+      "server_cpu_percent_mean": 168.04444444444445,
+      "server_cpu_percent_max": 195.4,
+      "server_rss_peak_mib": 242.390625,
+      "client_cpu_percent_mean": 99.95,
+      "client_rss_peak_mib": 5.96875
+    },
+    {
+      "workload": "fixed",
+      "server": "uvicorn-rs-uvloop",
+      "repetition": 3,
+      "requests": 63763,
+      "duration_seconds": 2.000397542,
+      "requests_per_second": 31875.164,
+      "request_body_bytes": 63763,
+      "response_body_bytes": 765156,
+      "response_data_chunks": 63763,
+      "application_bytes_per_second": 414377.134,
+      "p50_ms": 0.491583,
+      "p95_ms": 0.774959,
+      "p99_ms": 0.909792,
+      "failures": 0,
+      "first_failure": null,
+      "server_cpu_percent_mean": 175.6,
+      "server_cpu_percent_max": 201.1,
+      "server_rss_peak_mib": 283.203125,
+      "client_cpu_percent_mean": 116.2625,
+      "client_rss_peak_mib": 6.15625
+    }
+  ]
+}
