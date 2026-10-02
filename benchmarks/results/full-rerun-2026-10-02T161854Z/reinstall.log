@@ -1,0 +1,8 @@
+Resolved 33 packages in 10ms
+   Building uvicorn-rs @ file:///Users/lazytrot/work/uvicorn-rs
+      Built uvicorn-rs @ file:///Users/lazytrot/work/uvicorn-rs
+Prepared 1 package in 1.32s
+Uninstalled 2 packages in 2ms
+Installed 1 package in 2ms
+ - starlette-rs-py==0.1.0 (from file:///Users/lazytrot/work/starlette-rs)
+ ~ uvicorn-rs==0.1.0 (from file:///Users/lazytrot/work/uvicorn-rs)

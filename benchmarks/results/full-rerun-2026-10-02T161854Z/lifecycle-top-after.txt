@@ -1,0 +1,44 @@
+Processes: 645 total, 4 running, 641 sleeping, 5244 threads 
+2026/10/02 22:05:38
+Load Avg: 2.57, 4.56, 4.83 
+CPU usage: 14.17% user, 9.32% sys, 76.49% idle 
+SharedLibs: 424M resident, 93M data, 55M linkedit.
+MemRegions: 580184 total, 6600M resident, 212M private, 2352M shared.
+PhysMem: 17G used (2688M wired, 2361M compressor), 427M unused.
+VM: 298T vsize, 5702M framework vsize, 31140579(0) swapins, 36337823(0) swapouts.
+Networks: packets: 1919895647/7397G in, 1832889301/7242G out.
+Disks: 483131580/18T read, 218735076/10T written.
+
+PID    COMMAND          %CPU TIME     #TH #WQ #PORTS MEM   PURG CMPRS PGRP  PPID STATE    BOOSTS %CPU_ME %CPU_OTHRS UID FAULTS COW MSGSENT MSGRECV SYSBSD SYSMACH CSW  PAGEINS IDLEW POWER INSTRS CYCLES JETPRI USER              #MREGS RPRVT VPRVT VSIZE KPRVT KSHRD
+99504  AssetCacheLocato 0.0  00:00.05 2   1   44     3025K 0B   2688K 99504 1    sleeping *0[2]  0.00000 0.00000    235 1257   132 118     51      1007   289     144  18      0     0.0   0      0      0      _assetcache       N/A    N/A   N/A   N/A   N/A   N/A  
+99503  CloudTelemetrySe 0.0  00:00.16 3   2   31     5873K 0B   5424K 99503 1    sleeping *0[5]  0.00000 0.00000    0   1962   162 221     129     6270   495     672  38      0     0.0   0      0      0      root              N/A    N/A   N/A   N/A   N/A   N/A  
+99502  accessoryupdater 0.0  00:12.45 3   2   59     5633K 0B   5248K 99502 1    sleeping *0[3]  0.00000 0.00000    278 2195   173 15021   8712    151040 25597   9952 160     0     0.0   0      0      0      _accessoryupdater N/A    N/A   N/A   N/A   N/A   N/A  
+99501  CoreThreadCommis 0.0  00:00.13 2   1   52     3089K 0B   2784K 99501 1    sleeping *0[7]  0.00000 0.00000    501 1354   137 155     46      756    367     531  63      0     0.0   0      0      0      lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+99494  SetStoreUpdateSe 0.0  00:00.08 3   2   34     3185K 0B   2768K 99494 1    sleeping  0[0]  0.00000 0.00000    501 1670   142 158     59      1213   374     516  36      0     0.0   0      0      0      lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+99492  assistant_cdmd   0.0  00:00.05 2   1   43     3361K 0B   2992K 99492 1    sleeping *0[1]  0.00000 0.00000    501 1115   155 128     39      694    295     153  27      0     0.0   0      0      0      lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+99491  sirittsd         0.0  00:01.13 2   1   52     36M   0B   36M   99491 1    sleeping *0[1]  0.00000 0.00000    501 7632   213 218     78      7733   463     1289 3950    0     0.0   0      0      0      lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+99490  homed            0.0  00:02.70 2   1   207    19M   0B   15M   99490 1    sleeping *0[14] 0.00000 0.00000    501 10873  373 2788    1202    46121  6194    7590 3199    0     0.0   0      0      0      lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+99489  IMDPersistenceAg 0.0  00:00.14 2   1   99     6721K 0B   6304K 99489 1    sleeping *0[1]  0.00000 0.00000    501 2007   208 384     82      3648   956     761  128     0     0.0   0      0      0      lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+99488  siriknowledged   0.0  00:01.04 2   1   138    10M   0B   8816K 99488 1    sleeping *0[2]  0.00000 0.00000    501 4747   291 1221    352     21129  2792    5038 645     0     0.0   0      0      0      lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+Processes: 645 total, 4 running, 641 sleeping, 5253 threads 
+2026/10/02 22:05:39
+Load Avg: 2.57, 4.56, 4.83 
+CPU usage: 15.4% user, 5.70% sys, 79.24% idle 
+SharedLibs: 424M resident, 93M data, 55M linkedit.
+MemRegions: 0 total, 0B resident, 212M private, 2352M shared.
+PhysMem: 17G used (2672M wired, 2361M compressor), 390M unused.
+VM: 298T vsize, 5702M framework vsize, 31140579(0) swapins, 36337823(0) swapouts.
+Networks: packets: 1919895803/7397G in, 1832889425/7242G out.
+Disks: 483131586/18T read, 218735228/10T written.
+
+PID    COMMAND          %CPU TIME     #TH    #WQ #PORTS MEM    PURG CMPRS  PGRP  PPID  STATE    BOOSTS         %CPU_ME %CPU_OTHRS UID FAULTS     COW   MSGSENT     MSGRECV    SYSBSD     SYSMACH     CSW         PAGEINS IDLEW      POWER INSTRS      CYCLES     JETPRI USER              #MREGS RPRVT VPRVT VSIZE KPRVT KSHRD
+49031  python3.12       73.6 00:06.11 13/1   0   27     63M+   0B   0B     49031 84227 running  *0[1]          0.00000 0.00000    501 29707+     400   89          30         69974+     864+        645+        39+     0          73.6  16428823511 4025838961 180    lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+83782  ChatGPT          15.3 40:19.40 71     1   5501   422M+  0B   171M   83782 1     sleeping *384023+[1069] 0.00000 0.02343    501 14228195+  41958 35346652+   12685876+  59870646+  121858860+  36714378+   93319   11978      15.3  1371524765  746884981  100    lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+3105   qemu-system-aarc 8.4  48:41:19 95     1   219    6116M  0B   4620M- 3105  1     sleeping *1[2]          0.00000 0.00000    501 2147483647 738   436631574+  218315064+ 2147483647 1549146475+ 1790877723+ 81478   1502054    8.4   148557616   74924911   180    lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+37827  Activity Monitor 8.2  12:06:50 7      5   939    109M   96K  50M    37827 1     sleeping  0[93591]      5.93785 0.00000    501 36393564+  338   610495826+  249284715+ 871532587+ 840010906+  125481740+  41724   34413      8.2   226277414   103276960  100    lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+94737  Storage          5.6  11:41:59 5      3   376-   146M-  0B   98M    94737 1     sleeping  0[2544]       0.23572 0.00000    501 40004863+  552   822774548+  387850527+ 90293838+  763185118+  64948433+   38616   26399      5.6   161891140   64152173   40     lazytrot          N/A    N/A   N/A   N/A   N/A   N/A  
+85620  sysmond          5.5  09:57:12 3      2   22     6161K  0B   4880K  85620 1     sleeping  0[165946]     0.00000 5.55790    0   14253274+  116   1650453733+ 828256999+ 2147483647 1130045290+ 23626930+   947     327        5.5   167477965   85590360   0      root              N/A    N/A   N/A   N/A   N/A   N/A  
+0      kernel_task      5.4  61:29:59 667/12 0   0      73M+   0B   0B     0     0     running   0[0]          0.00000 0.00000    0   789233+    0     2147483647  2147483647 0          0           2147483647  268     169288372+ 0.0   106984554   88211386   0      root              N/A    N/A   N/A   N/A   N/A   N/A  
+49067  top              5.0  00:00.52 1/1    0   27+    5137K+ 0B   0B     27137 27137 running  *0[1]          0.05263 0.00000    0   1903+      92+   1227879+    613935+    6659+      628414+     25+         1       0          5.0   309204782   270935543  180    root              N/A    N/A   N/A   N/A   N/A   N/A  
+313    fseventsd        2.9  03:01:15 15     1   165+   9857K+ 0B   6384K  313   1     sleeping *0[1]          0.12203 0.00000    0   35064478+  121   48571673+   16583586+  778715564+ 98442020+   61780629+   2166    83177      2.9   55691156    38642069   40     root              N/A    N/A   N/A   N/A   N/A   N/A  
+490    com.apple.Driver 2.1  08:36:00 8      6   1466+  33M    0B   1696K  490   1     sleeping  0[1]          0.00000 0.09347    270 14988609+  86    67809942+   126458658+ 628150473+ 518563326+  585170517+  52112   23265552   2.1   24238301    28624673   150    _driverkit        N/A    N/A   N/A   N/A   N/A   N/A  

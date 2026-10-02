@@ -74,9 +74,20 @@ SERVERS = {
 
 
 def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+    # Both listeners use the same numeric port but different transports. A
+    # TCP-only check can hand out a port already owned by a UDP socket, which
+    # makes QUIC server startup fail nondeterministically.
+    for _ in range(128):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
+                try:
+                    tcp.bind(("127.0.0.1", 0))
+                    port = tcp.getsockname()[1]
+                    udp.bind(("127.0.0.1", port))
+                except OSError:
+                    continue
+                return port
+    raise OSError("could not find a port available for both TCP and UDP")
 
 
 def make_certificate(directory: Path) -> tuple[Path, Path]:

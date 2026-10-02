@@ -31,11 +31,17 @@ fn expected_body(config: &Value) -> Result<Vec<u8>, BenchError> {
     if let Some(body) = config.get("expected_body").and_then(Value::as_str) {
         return Ok(body.as_bytes().to_vec());
     }
-    let mode = config.get("mode").and_then(Value::as_str).unwrap_or("fixed");
+    let mode = config
+        .get("mode")
+        .and_then(Value::as_str)
+        .unwrap_or("fixed");
     let body = match mode {
         "upload" => format!(
             "bytes={}",
-            config.get("upload_bytes").and_then(Value::as_u64).unwrap_or(0)
+            config
+                .get("upload_bytes")
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
         )
         .into_bytes(),
         "scope" => b"scope-ok".to_vec(),
@@ -64,8 +70,12 @@ async fn request_once(
     if let Some(headers) = config.get("headers").and_then(Value::as_array) {
         for pair in headers {
             if let (Some(name), Some(value)) = (
-                pair.as_array().and_then(|pair| pair.first()).and_then(Value::as_str),
-                pair.as_array().and_then(|pair| pair.get(1)).and_then(Value::as_str),
+                pair.as_array()
+                    .and_then(|pair| pair.first())
+                    .and_then(Value::as_str),
+                pair.as_array()
+                    .and_then(|pair| pair.get(1))
+                    .and_then(Value::as_str),
             ) {
                 builder = builder.header(name, value);
             }
@@ -155,28 +165,52 @@ async fn connect_h2(
 }
 
 async fn run(config: Value) -> Result<Value, BenchError> {
-    let host = config.get("host").and_then(Value::as_str).unwrap_or("127.0.0.1");
-    let port = config.get("port").and_then(Value::as_u64).ok_or("missing port")? as u16;
-    let cert_path = config.get("certfile").and_then(Value::as_str).ok_or("missing certfile")?;
-    let seconds = config.get("seconds").and_then(Value::as_f64).ok_or("missing duration")?;
-    let concurrency = config.get("concurrency").and_then(Value::as_u64).unwrap_or(1) as usize;
+    let host = config
+        .get("host")
+        .and_then(Value::as_str)
+        .unwrap_or("127.0.0.1");
+    let port = config
+        .get("port")
+        .and_then(Value::as_u64)
+        .ok_or("missing port")? as u16;
+    let cert_path = config
+        .get("certfile")
+        .and_then(Value::as_str)
+        .ok_or("missing certfile")?;
+    let seconds = config
+        .get("seconds")
+        .and_then(Value::as_f64)
+        .ok_or("missing duration")?;
+    let concurrency = config
+        .get("concurrency")
+        .and_then(Value::as_u64)
+        .unwrap_or(1) as usize;
     let connections = config
         .get("connections")
         .and_then(Value::as_u64)
         .unwrap_or(4)
         .max(1)
         .min(concurrency.max(1) as u64) as usize;
-    let expected_status = config.get("expected_status").and_then(Value::as_u64).unwrap_or(200) as u16;
-    let path = config.get("path").and_then(Value::as_str).unwrap_or("/fixed");
+    let expected_status = config
+        .get("expected_status")
+        .and_then(Value::as_u64)
+        .unwrap_or(200) as u16;
+    let path = config
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or("/fixed");
     let uri: Uri = format!("https://localhost:{port}{path}").parse()?;
     let expected = Arc::new(expected_body(&config)?);
-    let upload_size = config.get("upload_bytes").and_then(Value::as_u64).unwrap_or(0) as usize;
+    let upload_size = config
+        .get("upload_bytes")
+        .and_then(Value::as_u64)
+        .unwrap_or(0) as usize;
     let upload_body = Arc::new(vec![b'a'; upload_size]);
     let started = Instant::now();
 
     let cert_file = std::fs::File::open(cert_path)?;
-    let certs = rustls_pemfile::certs(&mut BufReader::new(cert_file))
-        .collect::<Result<Vec<_>, _>>()?;
+    let certs =
+        rustls_pemfile::certs(&mut BufReader::new(cert_file)).collect::<Result<Vec<_>, _>>()?;
     let mut roots = rustls::RootCertStore::empty();
     for cert in certs {
         roots.add(cert)?;
@@ -219,7 +253,9 @@ async fn run(config: Value) -> Result<Value, BenchError> {
                         break;
                     }
                     Err(_) => {
-                        failures.push("HTTP/2 request timed out waiting for a complete response".into());
+                        failures.push(
+                            "HTTP/2 request timed out waiting for a complete response".into(),
+                        );
                         break;
                     }
                 };
@@ -234,7 +270,13 @@ async fn run(config: Value) -> Result<Value, BenchError> {
                 response_data_frames += data_frames as u64;
                 latencies.push(request_started.elapsed().as_secs_f64() * 1000.0);
             }
-            (latencies, request_bytes, response_bytes, response_data_frames, failures)
+            (
+                latencies,
+                request_bytes,
+                response_bytes,
+                response_data_frames,
+                failures,
+            )
         }
     });
     let results = futures_util::future::join_all(workers).await;
@@ -274,7 +316,9 @@ async fn run(config: Value) -> Result<Value, BenchError> {
 
 #[tokio::main]
 async fn main() -> Result<(), BenchError> {
-    let input = std::env::args().nth(1).ok_or("missing JSON client config")?;
+    let input = std::env::args()
+        .nth(1)
+        .ok_or("missing JSON client config")?;
     let config: Value = serde_json::from_str(&input)?;
     let result = run(config).await?;
     println!("{}", serde_json::to_string(&result)?);

@@ -1,0 +1,35 @@
+    Finished `release` profile [optimized] target(s) in 0.14s
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 306, in main
+    metrics = sample(
+              ^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 231, in sample
+    raise RuntimeError(
+RuntimeError: HTTP/3 client failed:
+{"requests":2673,"duration_seconds":6.178409500,"requests_per_second":432.636,"request_body_bytes":2677,"response_body_bytes":32076,"response_data_chunks":2673,"application_bytes_per_second":5624.910,"p50_ms":1.680833,"p95_ms":2.069625,"p99_ms":3.962375,"failures":4,"first_failure":"timed out waiting for H3 response headers"}
+
+Error: "HTTP/3 benchmark correctness gate failed"
+
+server output:
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py:32: RuntimeWarning: coroutine 'QuicProtocol._handle_timer' was never awaited
+  await config.log.exception("Error in ASGI Framework")
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 369, in <module>
+    main()
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 311, in main
+    raise RuntimeError(
+RuntimeError: HTTP/3 case failed: workload=fixed, server=hypercorn-asyncio, repetition=1: HTTP/3 client failed:
+{"requests":2673,"duration_seconds":6.178409500,"requests_per_second":432.636,"request_body_bytes":2677,"response_body_bytes":32076,"response_data_chunks":2673,"application_bytes_per_second":5624.910,"p50_ms":1.680833,"p95_ms":2.069625,"p99_ms":3.962375,"failures":4,"first_failure":"timed out waiting for H3 response headers"}
+
+Error: "HTTP/3 benchmark correctness gate failed"
+
+server output:
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py:32: RuntimeWarning: coroutine 'QuicProtocol._handle_timer' was never awaited
+  await config.log.exception("Error in ASGI Framework")
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+

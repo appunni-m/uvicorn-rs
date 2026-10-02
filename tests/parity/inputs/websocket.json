@@ -1,0 +1,43 @@
+{
+  "schema": "uvicorn-rs-parity/input@2",
+  "cases": [
+    {
+      "case_id": "websocket.text-and-binary-round-trip",
+      "profile": "websocket",
+      "operation": "websocket.message-exchange",
+      "covers": [
+        "websocket.message-exchange"
+      ],
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [
+          "other",
+          "parity"
+        ],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "rust-python-boundary"
+          },
+          {
+            "kind": "binary_base64",
+            "value": "AAEC/3BhcnR5"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "websocket.pre-accept-denial",
+      "profile": "websocket",
+      "operation": "websocket.denial",
+      "covers": [
+        "websocket.denial"
+      ],
+      "websocket": {
+        "path": "/ws-deny",
+        "subprotocols": [],
+        "messages": []
+      }
+    }
+  ]
+}

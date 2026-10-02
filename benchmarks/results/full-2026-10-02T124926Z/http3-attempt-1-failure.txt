@@ -1,0 +1,21 @@
+HTTP/3 attempt 1 was aborted at its correctness gate and is not benchmark data.
+
+The runner passed the protocol-scope workload. During fixed-response workload,
+Hypercorn/uvloop repetition 1 reported four failures, with the first failure
+"timed out waiting for H3 response headers". Its client ran for 5.670679 s
+against the 2 s target. The runner exited non-zero before writing its JSON
+report. A Hypercorn warning said `QuicProtocol._handle_timer` was never awaited.
+
+Attempt 2 passed its first 18 protocol-scope rows, then stopped when
+Hypercorn/uvloop could not bind its UDP listener (`Address already in use`).
+The runner had selected a port by checking only TCP even though H3 uses both
+TCP and UDP on the same port. The H3 allocator now checks both transports
+before returning a port. Attempt 2's stdout is retained in
+`http3-attempt-2.log`; it is partial output, not a report. Attempt 3 used a
+fresh port selected after checking both TCP and UDP, passed the protocol-scope
+rows and fixed rows for the Rust servers and Hypercorn/asyncio, then failed the
+same fixed workload on Hypercorn/uvloop repetition 2. The client recorded four
+responses with empty bodies (first failure: expected 12 bytes, received zero)
+and the runner aborted. See `http3-attempt-3.log`. The Rust candidate and
+Hypercorn/asyncio measurements preceding the failure are partial observations,
+not a complete comparison bundle.

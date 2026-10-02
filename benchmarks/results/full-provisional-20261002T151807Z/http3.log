@@ -1,0 +1,37 @@
+    Finished `release` profile [optimized] target(s) in 0.15s
+{"workload": "protocol-scope", "server": "hypercorn-uvloop", "repetition": 1, "requests": 5203, "duration_seconds": 2.001503875, "requests_per_second": 2599.545, "request_body_bytes": 5203, "response_body_bytes": 72842, "response_data_chunks": 5203, "application_bytes_per_second": 38993.18, "p50_ms": 1.436791, "p95_ms": 1.698333, "p99_ms": 3.835792, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 77.93333333333334, "server_cpu_percent_max": 89.8, "server_rss_peak_mib": 89.1875, "client_cpu_percent_mean": 18.8875, "client_rss_peak_mib": 4.609375}
+{"workload": "protocol-scope", "server": "uvicorn-rs-asyncio", "repetition": 1, "requests": 48382, "duration_seconds": 2.000144375, "requests_per_second": 24189.254, "request_body_bytes": 48382, "response_body_bytes": 677348, "response_data_chunks": 48382, "application_bytes_per_second": 362838.808, "p50_ms": 0.163125, "p95_ms": 0.21575, "p99_ms": 0.250708, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 160.58888888888887, "server_cpu_percent_max": 184.2, "server_rss_peak_mib": 218.125, "client_cpu_percent_mean": 114.5375, "client_rss_peak_mib": 5.84375}
+{"workload": "protocol-scope", "server": "hypercorn-asyncio", "repetition": 1, "requests": 5294, "duration_seconds": 2.001313541, "requests_per_second": 2645.263, "request_body_bytes": 5294, "response_body_bytes": 74116, "response_data_chunks": 5294, "application_bytes_per_second": 39678.94, "p50_ms": 1.500042, "p95_ms": 1.680166, "p99_ms": 1.777208, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 80.77777777777777, "server_cpu_percent_max": 92.8, "server_rss_peak_mib": 86.890625, "client_cpu_percent_mean": 17.825, "client_rss_peak_mib": 4.359375}
+{"workload": "protocol-scope", "server": "uvicorn-rs-uvloop", "repetition": 1, "requests": 59829, "duration_seconds": 2.000105917, "requests_per_second": 29912.916, "request_body_bytes": 59829, "response_body_bytes": 837606, "response_data_chunks": 59829, "application_bytes_per_second": 448693.738, "p50_ms": 0.130958, "p95_ms": 0.1725, "p99_ms": 0.198167, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 171.93333333333334, "server_cpu_percent_max": 197.9, "server_rss_peak_mib": 266.09375, "client_cpu_percent_mean": 138.6, "client_rss_peak_mib": 6.265625}
+{"workload": "protocol-scope", "server": "uvicorn-rs-asyncio", "repetition": 2, "requests": 47715, "duration_seconds": 2.000122458, "requests_per_second": 23856.039, "request_body_bytes": 47715, "response_body_bytes": 668010, "response_data_chunks": 47715, "application_bytes_per_second": 357840.59, "p50_ms": 0.164958, "p95_ms": 0.220208, "p99_ms": 0.256458, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 160.0888888888889, "server_cpu_percent_max": 183.2, "server_rss_peak_mib": 215.328125, "client_cpu_percent_mean": 113.375, "client_rss_peak_mib": 5.890625}
+{"workload": "protocol-scope", "server": "hypercorn-uvloop", "repetition": 2, "requests": 5477, "duration_seconds": 2.001473792, "requests_per_second": 2736.483, "request_body_bytes": 5477, "response_body_bytes": 76678, "response_data_chunks": 5477, "application_bytes_per_second": 41047.252, "p50_ms": 1.441792, "p95_ms": 1.652333, "p99_ms": 1.771083, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 77.28888888888889, "server_cpu_percent_max": 89.8, "server_rss_peak_mib": 88.34375, "client_cpu_percent_mean": 18.0, "client_rss_peak_mib": 4.453125}
+{"workload": "protocol-scope", "server": "uvicorn-rs-uvloop", "repetition": 2, "requests": 59572, "duration_seconds": 2.000097959, "requests_per_second": 29784.541, "request_body_bytes": 59572, "response_body_bytes": 834008, "response_data_chunks": 59572, "application_bytes_per_second": 446768.118, "p50_ms": 0.130666, "p95_ms": 0.174958, "p99_ms": 0.210875, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 171.7, "server_cpu_percent_max": 197.9, "server_rss_peak_mib": 263.65625, "client_cpu_percent_mean": 138.9125, "client_rss_peak_mib": 6.1875}
+{"workload": "protocol-scope", "server": "hypercorn-asyncio", "repetition": 2, "requests": 5344, "duration_seconds": 2.001220625, "requests_per_second": 2670.37, "request_body_bytes": 5344, "response_body_bytes": 74816, "response_data_chunks": 5344, "application_bytes_per_second": 40055.554, "p50_ms": 1.490666, "p95_ms": 1.649542, "p99_ms": 1.7295, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 80.33333333333333, "server_cpu_percent_max": 92.7, "server_rss_peak_mib": 86.75, "client_cpu_percent_mean": 17.662499999999998, "client_rss_peak_mib": 4.28125}
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 306, in main
+    metrics = sample(
+              ^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 199, in sample
+    raise RuntimeError(
+RuntimeError: HTTP/3 warm-up gate failed:
+{"requests":189,"duration_seconds":5.078744375,"requests_per_second":37.214,"request_body_bytes":193,"response_body_bytes":2646,"response_data_chunks":189,"application_bytes_per_second":558.996,"p50_ms":1.477042,"p95_ms":1.902542,"p99_ms":2.964917,"failures":4,"first_failure":"response body length 0 did not match expected 14"}
+
+Error: "HTTP/3 benchmark correctness gate failed"
+
+server output:
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 369, in <module>
+    main()
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 311, in main
+    raise RuntimeError(
+RuntimeError: HTTP/3 case failed: workload=protocol-scope, server=hypercorn-uvloop, repetition=3: HTTP/3 warm-up gate failed:
+{"requests":189,"duration_seconds":5.078744375,"requests_per_second":37.214,"request_body_bytes":193,"response_body_bytes":2646,"response_data_chunks":189,"application_bytes_per_second":558.996,"p50_ms":1.477042,"p95_ms":1.902542,"p99_ms":2.964917,"failures":4,"first_failure":"response body length 0 did not match expected 14"}
+
+Error: "HTTP/3 benchmark correctness gate failed"
+
+server output:
+

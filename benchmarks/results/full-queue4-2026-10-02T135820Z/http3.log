@@ -1,0 +1,43 @@
+    Finished `release` profile [optimized] target(s) in 0.15s
+{"workload": "protocol-scope", "server": "hypercorn-uvloop", "repetition": 1, "requests": 4857, "duration_seconds": 2.000959208, "requests_per_second": 2427.336, "request_body_bytes": 4857, "response_body_bytes": 67998, "response_data_chunks": 4857, "application_bytes_per_second": 36410.038, "p50_ms": 1.436041, "p95_ms": 1.804458, "p99_ms": 4.78, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 75.43333333333334, "server_cpu_percent_max": 89.6, "server_rss_peak_mib": 88.59375, "client_cpu_percent_mean": 17.925, "client_rss_peak_mib": 4.578125}
+{"workload": "protocol-scope", "server": "uvicorn-rs-asyncio", "repetition": 1, "requests": 47633, "duration_seconds": 2.000143792, "requests_per_second": 23814.788, "request_body_bytes": 47633, "response_body_bytes": 666862, "response_data_chunks": 47633, "application_bytes_per_second": 357221.817, "p50_ms": 0.165292, "p95_ms": 0.223333, "p99_ms": 0.262416, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 155.58888888888887, "server_cpu_percent_max": 179.0, "server_rss_peak_mib": 216.421875, "client_cpu_percent_mean": 109.975, "client_rss_peak_mib": 5.765625}
+{"workload": "protocol-scope", "server": "hypercorn-asyncio", "repetition": 1, "requests": 4962, "duration_seconds": 2.00891525, "requests_per_second": 2469.99, "request_body_bytes": 4962, "response_body_bytes": 69468, "response_data_chunks": 4962, "application_bytes_per_second": 37049.846, "p50_ms": 1.598292, "p95_ms": 1.821792, "p99_ms": 1.950292, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 79.6, "server_cpu_percent_max": 92.8, "server_rss_peak_mib": 87.6875, "client_cpu_percent_mean": 17.525, "client_rss_peak_mib": 4.5}
+{"workload": "protocol-scope", "server": "uvicorn-rs-uvloop", "repetition": 1, "requests": 57893, "duration_seconds": 2.000077166, "requests_per_second": 28945.383, "request_body_bytes": 57893, "response_body_bytes": 810502, "response_data_chunks": 57893, "application_bytes_per_second": 434180.748, "p50_ms": 0.134375, "p95_ms": 0.184, "p99_ms": 0.217292, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 164.7111111111111, "server_cpu_percent_max": 190.2, "server_rss_peak_mib": 257.796875, "client_cpu_percent_mean": 133.0, "client_rss_peak_mib": 6.140625}
+{"workload": "protocol-scope", "server": "uvicorn-rs-asyncio", "repetition": 2, "requests": 47448, "duration_seconds": 2.000027625, "requests_per_second": 23723.672, "request_body_bytes": 47448, "response_body_bytes": 664272, "response_data_chunks": 47448, "application_bytes_per_second": 355855.085, "p50_ms": 0.16575, "p95_ms": 0.222208, "p99_ms": 0.259417, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 153.9777777777778, "server_cpu_percent_max": 179.0, "server_rss_peak_mib": 216.46875, "client_cpu_percent_mean": 108.9, "client_rss_peak_mib": 5.890625}
+{"workload": "protocol-scope", "server": "hypercorn-uvloop", "repetition": 2, "requests": 5243, "duration_seconds": 2.001056958, "requests_per_second": 2620.115, "request_body_bytes": 5243, "response_body_bytes": 73402, "response_data_chunks": 5243, "application_bytes_per_second": 39301.73, "p50_ms": 1.500625, "p95_ms": 1.731833, "p99_ms": 1.851334, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 77.62222222222222, "server_cpu_percent_max": 90.0, "server_rss_peak_mib": 90.046875, "client_cpu_percent_mean": 18.2875, "client_rss_peak_mib": 4.515625}
+{"workload": "protocol-scope", "server": "uvicorn-rs-uvloop", "repetition": 2, "requests": 38053, "duration_seconds": 2.00012175, "requests_per_second": 19025.342, "request_body_bytes": 38053, "response_body_bytes": 532742, "response_data_chunks": 38053, "application_bytes_per_second": 285380.127, "p50_ms": 0.178875, "p95_ms": 0.394416, "p99_ms": 0.477792, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 140.96666666666667, "server_cpu_percent_max": 175.7, "server_rss_peak_mib": 183.703125, "client_cpu_percent_mean": 112.3125, "client_rss_peak_mib": 5.625}
+{"workload": "protocol-scope", "server": "hypercorn-asyncio", "repetition": 2, "requests": 3144, "duration_seconds": 2.005631208, "requests_per_second": 1567.586, "request_body_bytes": 3144, "response_body_bytes": 44016, "response_data_chunks": 3144, "application_bytes_per_second": 23513.794, "p50_ms": 1.688542, "p95_ms": 7.586, "p99_ms": 11.559833, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 70.5, "server_cpu_percent_max": 92.8, "server_rss_peak_mib": 89.296875, "client_cpu_percent_mean": 17.15, "client_rss_peak_mib": 4.453125}
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 306, in main
+    metrics = sample(
+              ^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 199, in sample
+    raise RuntimeError(
+RuntimeError: HTTP/3 warm-up gate failed:
+{"requests":191,"duration_seconds":5.164006833,"requests_per_second":36.987,"request_body_bytes":195,"response_body_bytes":2688,"response_data_chunks":192,"application_bytes_per_second":558.287,"p50_ms":2.814583,"p95_ms":4.012333,"p99_ms":35.985916,"failures":4,"first_failure":"timed out waiting for H3 response headers"}
+
+Error: "HTTP/3 benchmark correctness gate failed"
+
+server output:
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py:32: RuntimeWarning: coroutine 'QuicProtocol._handle_timer' was never awaited
+  await config.log.exception("Error in ASGI Framework")
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 369, in <module>
+    main()
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 311, in main
+    raise RuntimeError(
+RuntimeError: HTTP/3 case failed: workload=protocol-scope, server=hypercorn-uvloop, repetition=3: HTTP/3 warm-up gate failed:
+{"requests":191,"duration_seconds":5.164006833,"requests_per_second":36.987,"request_body_bytes":195,"response_body_bytes":2688,"response_data_chunks":192,"application_bytes_per_second":558.287,"p50_ms":2.814583,"p95_ms":4.012333,"p99_ms":35.985916,"failures":4,"first_failure":"timed out waiting for H3 response headers"}
+
+Error: "HTTP/3 benchmark correctness gate failed"
+
+server output:
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py:32: RuntimeWarning: coroutine 'QuicProtocol._handle_timer' was never awaited
+  await config.log.exception("Error in ASGI Framework")
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+

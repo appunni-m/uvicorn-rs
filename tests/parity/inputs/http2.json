@@ -1,0 +1,80 @@
+{
+  "schema": "uvicorn-rs-parity/input@2",
+  "cases": [
+    {
+      "case_id": "http2.scope-query-header-and-body",
+      "profile": "http2",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/scope?from=parity&v=2",
+        "headers": [
+          [
+            "x-parity",
+            "h2-input"
+          ]
+        ],
+        "body_base64": "aHR0cDItaW5wdXQtYnl0ZXM="
+      }
+    },
+    {
+      "case_id": "http2.response-stream-order",
+      "profile": "http2",
+      "operation": "http.response-stream",
+      "covers": [
+        "http.response-stream"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-first-chunk-before-app-completion",
+      "profile": "http2",
+      "operation": "http.response-stream-progress",
+      "covers": [
+        "http.response-stream-progress"
+      ],
+      "response_stream": {
+        "path": "/stream-progress"
+      }
+    },
+    {
+      "case_id": "http2.request-upload-stream",
+      "profile": "http2",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "body_base64": "aDItdXBsb2FkLWJvZHktcGFyaXR5"
+      }
+    },
+    {
+      "case_id": "http2.request-streaming-progress-before-upload-complete",
+      "profile": "http2",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "chunks_base64": [
+          "aDI=",
+          "LWJvZHk="
+        ]
+      }
+    }
+  ]
+}

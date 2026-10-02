@@ -1,0 +1,552 @@
+{
+  "cases": [
+    {
+      "case_id": "http1.scope-query-header-and-body",
+      "difference": null,
+      "operation": "http.scope-and-body",
+      "oracle_observation": {
+        "body_bytes": "eyJodHRwX3ZlcnNpb24iOiIxLjEiLCJtZXRob2QiOiJQT1NUIiwic2NoZW1lIjoiaHR0cCIsInBhdGgiOiIvc2NvcGUiLCJxdWVyeV9zdHJpbmdfYmFzZTY0IjoiWm5KdmJUMXdZWEpwZEhrbWRqMHgiLCJ4LXBhcml0eSI6ImgxLWlucHV0IiwiYm9keV9iYXNlNjQiOiJBQUVDQS85d1lYSnBkSGs9In0=",
+        "content_type": "application/json",
+        "status": 200
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.scope-and-body"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "body_bytes": "eyJodHRwX3ZlcnNpb24iOiIxLjEiLCJtZXRob2QiOiJQT1NUIiwic2NoZW1lIjoiaHR0cCIsInBhdGgiOiIvc2NvcGUiLCJxdWVyeV9zdHJpbmdfYmFzZTY0IjoiWm5KdmJUMXdZWEpwZEhrbWRqMHgiLCJ4LXBhcml0eSI6ImgxLWlucHV0IiwiYm9keV9iYXNlNjQiOiJBQUVDQS85d1lYSnBkSGs9In0=",
+        "content_type": "application/json",
+        "status": 200
+      }
+    },
+    {
+      "case_id": "http1.sync-callable-returns-awaitable",
+      "difference": null,
+      "operation": "http.sync-callable-awaitable",
+      "oracle_observation": {
+        "body_bytes": "c3luYy1jYWxsYWJsZS1hd2FpdGFibGU=",
+        "content_type": "text/plain; charset=utf-8",
+        "status": 200
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.sync-callable-awaitable"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "body_bytes": "c3luYy1jYWxsYWJsZS1hd2FpdGFibGU=",
+        "content_type": "text/plain; charset=utf-8",
+        "status": 200
+      }
+    },
+    {
+      "case_id": "http1.response-stream-order",
+      "difference": null,
+      "operation": "http.response-stream",
+      "oracle_observation": {
+        "content_type": "text/plain; charset=utf-8",
+        "ordered_body_bytes": "Zmlyc3Qvc2Vjb25kL2xhc3Q=",
+        "status": 200
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.response-stream"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "content_type": "text/plain; charset=utf-8",
+        "ordered_body_bytes": "Zmlyc3Qvc2Vjb25kL2xhc3Q=",
+        "status": 200
+      }
+    },
+    {
+      "case_id": "http1.response-first-chunk-before-app-completion",
+      "difference": null,
+      "operation": "http.response-stream-progress",
+      "oracle_observation": {
+        "content_type": "text/plain; charset=utf-8",
+        "early_body_bytes": "Zmlyc3Qv",
+        "ordered_body_bytes": "Zmlyc3Qvc2Vjb25kL2xhc3Q=",
+        "status": 200,
+        "streamed_before_completion": true
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.response-stream-progress"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "content_type": "text/plain; charset=utf-8",
+        "early_body_bytes": "Zmlyc3Qv",
+        "ordered_body_bytes": "Zmlyc3Qvc2Vjb25kL2xhc3Q=",
+        "status": 200,
+        "streamed_before_completion": true
+      }
+    },
+    {
+      "case_id": "http1.request-upload-stream",
+      "difference": null,
+      "operation": "http.request-upload",
+      "oracle_observation": {
+        "ordered_body_bytes": "Y2h1bmstYS1jaHVuay1iLWVuZA==",
+        "status": 200
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.request-upload"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "ordered_body_bytes": "Y2h1bmstYS1jaHVuay1iLWVuZA==",
+        "status": 200
+      }
+    },
+    {
+      "case_id": "http1.request-streaming-progress-before-upload-complete",
+      "difference": null,
+      "operation": "http.request-streaming",
+      "oracle_observation": {
+        "early_body_bytes": "YWJj",
+        "ordered_body_bytes": "YWJjZGVm",
+        "status": 200
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.request-streaming"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "early_body_bytes": "YWJj",
+        "ordered_body_bytes": "YWJjZGVm",
+        "status": 200
+      }
+    },
+    {
+      "case_id": "http1.application-error",
+      "difference": null,
+      "operation": "http.application-error",
+      "oracle_observation": {
+        "body_bytes": "SW50ZXJuYWwgU2VydmVyIEVycm9y",
+        "status": 500
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.application-error"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "body_bytes": "SW50ZXJuYWwgU2VydmVyIEVycm9y",
+        "status": 500
+      }
+    },
+    {
+      "case_id": "http1.application-status-404",
+      "difference": null,
+      "operation": "http.application-status",
+      "oracle_observation": {
+        "body_bytes": "bm90IGZvdW5k",
+        "content_type": "text/plain; charset=utf-8",
+        "status": 404
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.application-status"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "body_bytes": "bm90IGZvdW5k",
+        "content_type": "text/plain; charset=utf-8",
+        "status": 404
+      }
+    },
+    {
+      "case_id": "http1.client-disconnect-event",
+      "difference": null,
+      "operation": "http.client-disconnect",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "c2Vlbg==",
+          "content_type": "text/plain; charset=utf-8",
+          "status": 200
+        }
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.client-disconnect"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "c2Vlbg==",
+          "content_type": "text/plain; charset=utf-8",
+          "status": 200
+        }
+      }
+    },
+    {
+      "case_id": "http2.scope-query-header-and-body",
+      "difference": "observed public fields differ exactly",
+      "operation": "http.scope-and-body",
+      "oracle_observation": {
+        "body_bytes": "",
+        "content_type": null,
+        "status": 500
+      },
+      "profile": "http2",
+      "requirements": [
+        "http.scope-and-body"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "failed",
+      "target_observation": {
+        "body_bytes": "eyJodHRwX3ZlcnNpb24iOiIyIiwibWV0aG9kIjoiUE9TVCIsInNjaGVtZSI6Imh0dHBzIiwicGF0aCI6Ii9zY29wZSIsInF1ZXJ5X3N0cmluZ19iYXNlNjQiOiJabkp2YlQxd1lYSnBkSGttZGoweSIsIngtcGFyaXR5IjoiaDItaW5wdXQiLCJib2R5X2Jhc2U2NCI6ImFIUjBjREl0YVc1d2RYUXRZbmwwWlhNPSJ9",
+        "content_type": "application/json",
+        "status": 200
+      }
+    },
+    {
+      "case_id": "http2.response-stream-order",
+      "difference": "observed public fields differ exactly",
+      "operation": "http.response-stream",
+      "oracle_observation": {
+        "content_type": null,
+        "ordered_body_bytes": "",
+        "status": 500
+      },
+      "profile": "http2",
+      "requirements": [
+        "http.response-stream"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "failed",
+      "target_observation": {
+        "content_type": "text/plain; charset=utf-8",
+        "ordered_body_bytes": "Zmlyc3Qvc2Vjb25kL2xhc3Q=",
+        "status": 200
+      }
+    },
+    {
+      "case_id": "http2.response-first-chunk-before-app-completion",
+      "difference": "observed public fields differ exactly",
+      "operation": "http.response-stream-progress",
+      "oracle_observation": {
+        "content_type": null,
+        "early_body_bytes": "",
+        "ordered_body_bytes": "",
+        "status": 500,
+        "streamed_before_completion": true
+      },
+      "profile": "http2",
+      "requirements": [
+        "http.response-stream-progress"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "failed",
+      "target_observation": {
+        "content_type": "text/plain; charset=utf-8",
+        "early_body_bytes": "Zmlyc3Qv",
+        "ordered_body_bytes": "Zmlyc3Qvc2Vjb25kL2xhc3Q=",
+        "status": 200,
+        "streamed_before_completion": true
+      }
+    },
+    {
+      "case_id": "http2.request-upload-stream",
+      "difference": "observed public fields differ exactly",
+      "operation": "http.request-upload",
+      "oracle_observation": {
+        "ordered_body_bytes": "",
+        "status": 500
+      },
+      "profile": "http2",
+      "requirements": [
+        "http.request-upload"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "failed",
+      "target_observation": {
+        "ordered_body_bytes": "aDItdXBsb2FkLWJvZHktcGFyaXR5",
+        "status": 200
+      }
+    },
+    {
+      "case_id": "http2.request-streaming-progress-before-upload-complete",
+      "error": {
+        "class": "ParityError",
+        "message": "oracle hypercorn adapter failed: The read operation timed out"
+      },
+      "operation": "http.request-streaming",
+      "profile": "http2",
+      "requirements": [
+        "http.request-streaming"
+      ],
+      "status": "infrastructure_failed"
+    },
+    {
+      "case_id": "http3.scope-query-header-and-body",
+      "error": {
+        "class": "ParityError",
+        "message": "oracle hypercorn adapter failed: Command '['/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/target/release/parity-http3', '127.0.0.1:53851', '/var/folders/ht/wsllq4_d55x89lcbwb5yvqpc0000gn/T/uvicorn-rs-parity-http3-nj5v9jv1/server.pem', '/scope?from=parity&v=3']' timed out after 20 seconds"
+      },
+      "operation": "http.scope-and-body",
+      "profile": "http3",
+      "requirements": [
+        "http.scope-and-body"
+      ],
+      "status": "infrastructure_failed"
+    },
+    {
+      "case_id": "http3.response-stream-order",
+      "operation": "http.response-stream",
+      "profile": "http3",
+      "reason": "an earlier http3 case failed to execute",
+      "requirements": [
+        "http.response-stream"
+      ],
+      "status": "not_run"
+    },
+    {
+      "case_id": "websocket.text-and-binary-round-trip",
+      "difference": null,
+      "operation": "websocket.message-exchange",
+      "oracle_observation": {
+        "ordered_messages": [
+          {
+            "kind": "text",
+            "value": "rust-python-boundary"
+          },
+          {
+            "kind": "binary_base64",
+            "value": "AAEC/3BhcnR5"
+          }
+        ],
+        "subprotocol": "parity"
+      },
+      "profile": "websocket",
+      "requirements": [
+        "websocket.message-exchange"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "ordered_messages": [
+          {
+            "kind": "text",
+            "value": "rust-python-boundary"
+          },
+          {
+            "kind": "binary_base64",
+            "value": "AAEC/3BhcnR5"
+          }
+        ],
+        "subprotocol": "parity"
+      }
+    },
+    {
+      "case_id": "websocket.pre-accept-denial",
+      "difference": null,
+      "operation": "websocket.denial",
+      "oracle_observation": {
+        "handshake_status": 403
+      },
+      "profile": "websocket",
+      "requirements": [
+        "websocket.denial"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "handshake_status": 403
+      }
+    },
+    {
+      "case_id": "lifespan.startup-and-shutdown-cancel",
+      "difference": null,
+      "operation": "lifespan.shutdown-cancellation",
+      "oracle_observation": {
+        "application_events": [
+          "lifespan.startup",
+          "request.hold",
+          "request.cancelled",
+          "lifespan.shutdown"
+        ],
+        "process_terminated": true,
+        "state_response": {
+          "body_base64": "cmVhZHk=",
+          "content_type": "text/plain; charset=utf-8",
+          "status": 200
+        }
+      },
+      "profile": "lifecycle",
+      "requirements": [
+        "lifespan.shutdown-cancellation"
+      ],
+      "server_exit_codes": {
+        "oracle": -15,
+        "target": 0
+      },
+      "status": "passed",
+      "target_observation": {
+        "application_events": [
+          "lifespan.startup",
+          "request.hold",
+          "request.cancelled",
+          "lifespan.shutdown"
+        ],
+        "process_terminated": true,
+        "state_response": {
+          "body_base64": "cmVhZHk=",
+          "content_type": "text/plain; charset=utf-8",
+          "status": 200
+        }
+      }
+    }
+  ],
+  "infrastructure_errors": [],
+  "run": {
+    "command": [
+      "/Users/lazytrot/work/uvicorn-rs/.venv/bin/python3",
+      "/Users/lazytrot/work/uvicorn-rs/scripts/run_parity.py",
+      "--output",
+      "benchmarks/results/asgi-parity-2026-10-02-v4.json"
+    ],
+    "environment": {
+      "dependencies": {
+        "aioquic": "1.3.0",
+        "h11": "0.16.0",
+        "h2": "4.4.1",
+        "httptools": "0.8.0",
+        "hypercorn": "0.18.0",
+        "uvicorn": "0.54.0",
+        "uvloop": "0.23.0",
+        "websockets": "17.1",
+        "wsproto": "1.3.2"
+      },
+      "machine": "arm64",
+      "platform": "macOS-15.7.7-arm64-arm-64bit",
+      "python": "3.12.13",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+    },
+    "finished_at": "2026-10-02T16:07:18.973Z",
+    "harness": {
+      "fixture_app": "tests/parity/app.py",
+      "fixture_app_sha256": "3e55e88ac2b2fde3c4b9575dc47f395c4dda47773baf79e2f937b050bfe9cbef",
+      "http3_client": {
+        "path": "tools/http3-probe/target/release/parity-http3",
+        "sha256": "074071cff8ccf4ace22dd3fce0c442e6e7fd418a6a8d94d2b2b5f8a9e4ecb719"
+      },
+      "runner": "scripts/run_parity.py",
+      "runner_sha256": "b9342af8a2d84249f3b10f0b41eae3c74e4efcc316da06bacb9cda619fcf9b40"
+    },
+    "inputs": [
+      {
+        "path": "tests/parity/inputs/http1.json",
+        "schema": "uvicorn-rs-parity/input@2",
+        "sha256": "591b225f16a323ce0638d6ab610222a57126962b67d8303c71ff48ecc03178d4"
+      },
+      {
+        "path": "tests/parity/inputs/http2.json",
+        "schema": "uvicorn-rs-parity/input@2",
+        "sha256": "9c8de83c93c279172ba04be5d136ea9fc59258a746b6e6648f480c46e807e3d8"
+      },
+      {
+        "path": "tests/parity/inputs/http3.json",
+        "schema": "uvicorn-rs-parity/input@2",
+        "sha256": "974c0eb6c18c2123a3544641ae5255caa32bcd5e628e5698d1d17acde53f4d04"
+      },
+      {
+        "path": "tests/parity/inputs/websocket.json",
+        "schema": "uvicorn-rs-parity/input@2",
+        "sha256": "84405b3a60e5f51f77342ba739194366e5d8ef0a454a68b839a536975fd3e4f2"
+      },
+      {
+        "path": "tests/parity/inputs/lifecycle.json",
+        "schema": "uvicorn-rs-parity/input@2",
+        "sha256": "0d0ca8519bf6e70d14cd0327db972c744dc9aaff0c8faff53daee6af21015a78"
+      }
+    ],
+    "manifest": {
+      "path": "tests/parity/manifest.json",
+      "schema": "uvicorn-rs-parity/manifest@2",
+      "sha256": "b86be4fb4ce4d8a3e754f3e72368cfe3447307ac88dd8551b7f6ee342eed661a"
+    },
+    "run_id": "03cab5d1f012429881a27ebebd9b68d3",
+    "started_at": "2026-10-02T16:06:41.124Z",
+    "target": {
+      "cargo_lock_sha256": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+      "dirty": true,
+      "native_extension": {
+        "path": "python/uvicorn_rs/_native.abi3.so",
+        "sha256": "3d36730a7e83deaebbbae1b4960f0c1481b7880a4a29a9b52fca3d62dcbe6cec"
+      },
+      "revision": "e015fa62a9e635ed7febc881f766bc4da230e91c"
+    }
+  },
+  "schema": "uvicorn-rs-parity/result@2",
+  "status": "failed",
+  "summary": {
+    "executed": 18,
+    "failed": 4,
+    "infrastructure_failed": 2,
+    "not_run": 1,
+    "passed": 12,
+    "selected": 19
+  }
+}

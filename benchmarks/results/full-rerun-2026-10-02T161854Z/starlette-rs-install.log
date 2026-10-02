@@ -1,0 +1,6 @@
+Resolved 4 packages in 792ms
+   Building starlette-rs-py @ file:///Users/lazytrot/work/starlette-rs
+      Built starlette-rs-py @ file:///Users/lazytrot/work/starlette-rs
+Prepared 1 package in 8.95s
+Installed 1 package in 1ms
+ + starlette-rs-py==0.1.0 (from file:///Users/lazytrot/work/starlette-rs)

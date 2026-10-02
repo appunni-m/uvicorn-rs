@@ -1,0 +1,17 @@
+PASS: examples.hello_asgi:app on asyncio returned HTTP 200 POST /probe 1.1 payload
+PASS: examples.bridge_contract_asgi:app on uvloop returned HTTP 200 call_thread=True;loop=True;context=caller-context;request=payload
+PASS: examples.raising_asgi:app on asyncio returned HTTP 500 Internal Server Error
+PASS: HTTP/1.1 request scope reports http_version=1.1
+PASS: HTTP/2 request scope reports http_version=2
+PASS: HTTP/1.1 request scope reports http_version=1.1
+PASS: HTTP/2 request scope reports http_version=2
+PASS: HTTP/3 request scope reports http_version=3
+PASS: request and response streamed while the upload was still open
+PASS: response chunks streamed in order
+PASS: WebSocket handshake, subprotocol, and text/binary messages
+PASS: pre-accept websocket.close returned HTTP 403
+PASS: client disconnect delivered an ASGI http.disconnect event
+PASS: ASGI send after disconnect raised OSError
+PASS: graceful shutdown cancelled the remaining ASGI Python task
+PASS: startup state, per-request shallow copies, and SIGTERM shutdown
+PASS: starlette-rs app served without a server runtime dependency

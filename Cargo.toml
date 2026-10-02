@@ -5,10 +5,15 @@ edition = "2021"
 rust-version = "1.83"
 publish = false
 description = "Rust network runtime for Python ASGI applications"
+repository = "https://github.com/appunni-m/uvicorn-rs"
+readme = "README.md"
 
 [lib]
 name = "uvicorn_rs"
 crate-type = ["cdylib", "rlib"]
+
+[features]
+runtime-diagnostics = []
 
 [dependencies]
 bytes = "1"
@@ -21,7 +26,7 @@ h3-quinn = "0.0.10"
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["http1", "http2", "server", "server-auto", "tokio"] }
 percent-encoding = "2"
-pyo3 = { version = "0.29", features = ["abi3-py39", "extension-module"] }
+pyo3 = { version = "0.29", features = ["abi3-py39", "bytes", "extension-module"] }
 pyo3-async-runtimes = { version = "0.29", features = ["tokio-runtime"] }
 quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rustls-pemfile = "2"
@@ -32,3 +37,7 @@ tokio-util = { version = "0.7", features = ["rt"] }
 
 [lints.rust]
 unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+correctness = "deny"

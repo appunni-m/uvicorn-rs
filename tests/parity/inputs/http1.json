@@ -1,0 +1,134 @@
+{
+  "schema": "uvicorn-rs-parity/input@2",
+  "cases": [
+    {
+      "case_id": "http1.scope-query-header-and-body",
+      "profile": "http1",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/scope?from=parity&v=1",
+        "headers": [
+          [
+            "x-parity",
+            "h1-input"
+          ]
+        ],
+        "body_base64": "AAECA/9wYXJpdHk="
+      }
+    },
+    {
+      "case_id": "http1.sync-callable-returns-awaitable",
+      "profile": "http1",
+      "operation": "http.sync-callable-awaitable",
+      "covers": [
+        "http.sync-callable-awaitable"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/sync-callable",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.response-stream-order",
+      "profile": "http1",
+      "operation": "http.response-stream",
+      "covers": [
+        "http.response-stream"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.response-first-chunk-before-app-completion",
+      "profile": "http1",
+      "operation": "http.response-stream-progress",
+      "covers": [
+        "http.response-stream-progress"
+      ],
+      "response_stream": {
+        "path": "/stream-progress"
+      }
+    },
+    {
+      "case_id": "http1.request-upload-stream",
+      "profile": "http1",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "body_base64": "Y2h1bmstYS1jaHVuay1iLWVuZA=="
+      }
+    },
+    {
+      "case_id": "http1.request-streaming-progress-before-upload-complete",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "chunks_base64": [
+          "YWJj",
+          "ZGVm"
+        ]
+      }
+    },
+    {
+      "case_id": "http1.application-error",
+      "profile": "http1",
+      "operation": "http.application-error",
+      "covers": [
+        "http.application-error"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/raise",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.application-status-404",
+      "profile": "http1",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/not-found",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.client-disconnect-event",
+      "profile": "http1",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "disconnect": {
+        "path": "/disconnect-watch",
+        "followup_path": "/disconnect-status"
+      }
+    }
+  ]
+}

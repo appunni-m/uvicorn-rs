@@ -6,8 +6,14 @@ build-backend = "maturin"
 name = "uvicorn-rs"
 version = "0.1.0"
 description = "Rust network runtime for Python ASGI applications"
+readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
+
+[project.urls]
+Repository = "https://github.com/appunni-m/uvicorn-rs"
+Documentation = "https://github.com/appunni-m/uvicorn-rs#readme"
+Issues = "https://github.com/appunni-m/uvicorn-rs/issues"
 
 [project.scripts]
 uvicorn-rs = "uvicorn_rs.cli:main"

@@ -1,0 +1,52 @@
+PASS http1: http1.scope-query-header-and-body
+PASS http1: http1.sync-callable-returns-awaitable
+PASS http1: http1.response-stream-order
+PASS http1: http1.response-first-chunk-before-app-completion
+PASS http1: http1.request-upload-stream
+PASS http1: http1.request-streaming-progress-before-upload-complete
+PASS http1: http1.application-error
+PASS http1: http1.application-status-404
+PASS http1: http1.client-disconnect-event
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 117, in _app_impl
+    raise RuntimeError("parity exception sentinel")
+RuntimeError: parity exception sentinel
+uvicorn-rs: ASGI app completed without response.start
+
+PASS http2: http2.scope-query-header-and-body
+PASS http2: http2.response-stream-order
+PASS http2: http2.response-first-chunk-before-app-completion
+PASS http2: http2.request-upload-stream
+PASS http2: http2.request-streaming-progress-before-upload-complete
+PASS http3: http3.scope-query-header-and-body
+PASS http3: http3.response-stream-order
+--- uvicorn-rs server log ---
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:63382 failed: Remote error: ApplicationClose: 0x0
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:50236 failed: Remote error: ApplicationClose: 0x0
+
+PASS websocket: websocket.text-and-binary-round-trip
+PASS websocket: websocket.pre-accept-denial
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+PASS lifecycle: lifespan.startup-and-shutdown-cancel
+{
+  "status": "completed",
+  "summary": {
+    "selected": 19,
+    "executed": 19,
+    "passed": 19,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "benchmarks/results/full-rerun-2026-10-02T161854Z/asgi-parity.json"
+}

@@ -247,6 +247,34 @@ def _wait_ready(process: subprocess.Popen, port: int, log) -> None:
     raise TimeoutError("server did not open its listener within 15 seconds")
 
 
+def _stop_server(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+    process.send_signal(signal.SIGINT)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.terminate()
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=3)
+
+
+def _runtime_diagnostics(log) -> dict[str, int] | None:
+    log.flush()
+    log.seek(0)
+    prefix = "uvicorn-rs-runtime-diagnostics "
+    for line in log:
+        if line.startswith(prefix):
+            return {
+                key: int(value)
+                for key, value in (part.split("=", 1) for part in line[len(prefix) :].split())
+            }
+    return None
+
+
 def _client(port: int, seconds: float, concurrency: int, case: dict) -> dict:
     result = subprocess.run(
         _client_command(port, seconds, concurrency, case),
@@ -260,7 +288,15 @@ def _client(port: int, seconds: float, concurrency: int, case: dict) -> dict:
     return json.loads(result.stdout)
 
 
-def _sample(server_name: str, server: dict, workload: str, seconds: float, warmup: float, concurrency: int) -> dict:
+def _sample(
+    server_name: str,
+    server: dict,
+    workload: str,
+    seconds: float,
+    warmup: float,
+    concurrency: int,
+    require_runtime_diagnostics: bool = False,
+) -> dict:
     definition = WORKLOADS[workload]
     port = _port()
     log = tempfile.TemporaryFile(mode="w+t")
@@ -324,6 +360,16 @@ def _sample(server_name: str, server: dict, workload: str, seconds: float, warmu
                 "client_rss_peak_mib": max(client_rss, default=0) / (1024 * 1024),
             }
         )
+        if server_name.startswith("uvicorn-rs-"):
+            _stop_server(process)
+            diagnostics = _runtime_diagnostics(log)
+            if diagnostics is not None:
+                metrics["runtime_diagnostics"] = diagnostics
+            elif require_runtime_diagnostics:
+                raise RuntimeError(
+                    "Rust server did not emit runtime diagnostics; rebuild with "
+                    "the `runtime-diagnostics` Cargo feature"
+                )
         return metrics
     except Exception as error:
         log.seek(0)
@@ -333,17 +379,7 @@ def _sample(server_name: str, server: dict, workload: str, seconds: float, warmu
             f"server output (last 4000 characters):\n{server_output[-4000:]}"
         ) from error
     finally:
-        if process.poll() is None:
-            process.send_signal(signal.SIGINT)
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.terminate()
-                try:
-                    process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=3)
+        _stop_server(process)
         log.close()
 
 
@@ -403,6 +439,11 @@ def main() -> None:
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--seed", type=int, default=20261002)
     parser.add_argument(
+        "--require-runtime-diagnostics",
+        action="store_true",
+        help="require the Rust runtime-diagnostics feature and add its counters to candidate rows",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=ROOT / "benchmarks" / "results" / "http-categories-2026-10-02.json",
@@ -434,6 +475,7 @@ def main() -> None:
                         duration,
                         warmup,
                         concurrency,
+                        args.require_runtime_diagnostics,
                     )
                 except Exception as error:
                     raise RuntimeError(
@@ -513,6 +555,7 @@ def main() -> None:
             "seed": args.seed,
             "client": "threaded libcurl C workers with persistent HTTP/1.1 connections and complete response-body checks",
             "correctness_gate": "every measured response status and complete body exactly matches the workload oracle",
+            "runtime_diagnostics_required": args.require_runtime_diagnostics,
             "native_client": "libcurl C client compiled from scripts/bench_http_client.c" if native_client is not None else "unavailable; Node.js fallback used",
             "fallback_client": "Node.js HTTP/1.1 with full body checking; used for slow-reader backpressure",
             "libcurl": subprocess.check_output(["curl-config", "--version"], text=True).strip() if native_client is not None else None,

@@ -1,0 +1,67 @@
+e015fa62a9e635ed7febc881f766bc4da230e91c
+ M Cargo.lock
+ M Cargo.toml
+ M README.md
+ M docs/adr/0001-runtime-and-asyncio-bridge.md
+ M docs/feasibility.md
+ M docs/support-matrix.md
+ M pyproject.toml
+ M python/uvicorn_rs/server.py
+ M src/lib.rs
+ M tools/http3-probe/src/bin/bench.rs
+ M tools/http3-probe/src/bin/http2.rs
+ M tools/http3-probe/src/bin/websocket.rs
+?? .github/
+?? CONTRIBUTING.md
+?? SECURITY.md
+?? SUPPORT.md
+?? benchmarks/results/full-2026-10-02T124926Z/
+?? benchmarks/results/http-zero-copy-2026-10-02.json
+?? benchmarks/results/http-zero-copy-2026-10-02.jsonl
+?? benchmarks/results/http-zero-copy-current-source-contended-2026-10-02.json
+?? benchmarks/results/http-zero-copy-current-source-contended-2026-10-02.jsonl
+?? benchmarks/results/http-zero-copy-final-2026-10-02.json
+?? benchmarks/results/http-zero-copy-final-2026-10-02.jsonl
+?? benchmarks/results/http-zero-copy-first-rerun-contended-2026-10-02.json
+?? benchmarks/results/http-zero-copy-first-rerun-contended-2026-10-02.jsonl
+?? benchmarks/results/http-zero-copy-threshold-2026-10-02.json
+?? benchmarks/results/http-zero-copy-threshold-2026-10-02.jsonl
+?? benchmarks/results/websocket-zero-copy-2026-10-02.json
+?? benchmarks/results/websocket-zero-copy-current-source-2026-10-02.json
+?? benchmarks/results/websocket-zero-copy-final-2026-10-02.json
+?? docs/architecture.md
+?? docs/benchmarks.md
+?? docs/configuration.md
+?? docs/implementation-review.md
+Python 3.12.13
+rustc 1.98.1 (48a229cea 2026-09-01)
+cargo 1.98.1 (797e8a9bc 2026-08-05)
+uv 0.11.29 (901092ee1 2026-07-15 aarch64-apple-darwin)
+uvicorn 0.54.0
+uvloop 0.23.0
+httptools 0.8.0
+hypercorn 0.18.0
+psutil 7.2.2
+Darwin Lazys-MacBook-Pro.local 24.6.0 Darwin Kernel Version 24.6.0: Tue Apr 21 20:16:56 PDT 2026; root:xnu-11417.140.69.710.16~1/RELEASE_ARM64_T6030 arm64
+Apple M3 Pro
+946638c840b45d61b4f3b5327da8903ebe700a0b
+17586 R     97.4 /Users/lazytrot/ /Users/lazytrot/work/fastapi-rs/.venv/bin/python scripts/build_parity_inputs.py
+  379 Ss    12.1 /System/Library/ /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+ 3105 Ss     8.1 /opt/homebrew/sh /opt/homebrew/share/android-commandlinetools/emulator/qemu/darwin-aarch64/qemu-system-aarch64-headless -avd BusinessGateProbeModern -port 5576 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 2048
+39884 S      5.6 /Applications/Ch /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/154.0.8037.57/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --user-data-dir=/Users/lazytrot/Library/Application Support/Codex --standard-schemes=app,codex-sandbox --service-worker-schemes=codex-sandbox --secure-schemes=app,codex-sandbox --fetch-schemes=app,codex-sandbox --cors-schemes=codex-sandbox --streaming-schemes=app,codex-sandbox --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser --enable-blink-features=WebMCP --disable-blink-features=ReplacedNormalFlowStackingInlinePaint --lang=en-GB --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=5 --launch-time-ticks=2679691017113 --shared-files --metrics-shmem-handle=1752395122,r,7868464254075732347,12560454240875888631,1572864 --field-trial-handle=1718379636,r,18326511316614741036,16206643389470874056,262144 --enable-features=DevToolsWebMCPSupport,ReportStuckThrottle --disable-features=DropInputEventsWhilePaintHolding,WebUIOmniboxAimPopup,WebUIOmniboxPopup --variations-seed-version --pseudonymization-salt-handle=1935764596,r,8799938763423584351,3627596669039669808,4 --trace-process-track-uuid=3190708990997080739 --seatbelt-client=308
+37827 S      4.0 /System/Applicat /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+10529 S      3.4 python3.12       python3.12 -m scripts.parity.cli benchmark-upstream
+85620 Ss     2.9 /usr/libexec/sys /usr/libexec/sysmond
+84227 S      2.5 /Applications/Ch /Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex -c features.code_mode_host=true app-server --analytics-default-enabled -c plugins.codex-app-tools@openai-bundled.mcp_servers.codex_app.enabled=true -c plugins.code-review@openai-bundled.mcp_servers.code-review.enabled=true
+83837 S      1.6 /Applications/Ch /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/154.0.8037.57/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service) --type=gpu-process --gpu-recent-crash-count=0 --user-data-dir=/Users/lazytrot/Library/Application Support/Codex --start-stack-profiler --gpu-preferences=WAAAAAAAAAAgAQAEAAAAAAAAAAAAAGAAQAAAAAAAAAADAAAAAAAAADgAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAoAAAAAAAAAAgAAAAAAAAADAAAAAEAAAAAAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --shared-files --metrics-shmem-handle=1752395122,r,6432532781167159990,6492265890656107774,262144 --field-trial-handle=1718379636,r,18326511316614741036,16206643389470874056,262144 --enable-features=DevToolsWebMCPSupport,ReportStuckThrottle --disable-features=DropInputEventsWhilePaintHolding,WebUIOmniboxAimPopup,WebUIOmniboxPopup --variations-seed-version --pseudonymization-salt-handle=1935764596,r,8799938763423584351,3627596669039669808,4 --trace-process-track-uuid=3190708988185955192 --seatbelt-client=46
+  348 Ss     1.4 /usr/libexec/ope /usr/libexec/opendirectoryd
+  490 Ss     1.3 /System/Library/ /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN com.apple.bcmwlan 0x100000c8a com.apple.DriverKit-AppleBCMWLAN
+17644 Ss     1.2 /bin/zsh         /bin/zsh -c RUN_ID=2026-10-02T124926Z\012RESULTS="benchmarks/results/full-${RUN_ID}"\012mkdir -p "$RESULTS"\012{\012  git rev-parse HEAD\012  git status --short\012  uv run python --version\012  rustc --version\012  cargo --version\012  uv --version\012  uv run python -c 'import importlib.metadata as m; print("uvicorn", m.version("uvicorn")); print("uvloop", m.version("uvloop")); print("httptools", m.version("httptools")); print("hypercorn", m.version("hypercorn")); print("psutil", m.version("psutil"))'\012  uname -a\012  sysctl -n machdep.cpu.brand_string 2>/dev/null || true\012  git -C ../starlette-rs rev-parse HEAD\012  git -C ../starlette-rs status --short\012  ps -Ao pid,stat,pcpu,comm,args | sort -k3,3nr | head -20\012} > "$RESULTS/environment.txt" 2>&1\012for probe in probe_http.py probe_http2.py probe_streaming.py probe_websocket.py probe_cancellation.py probe_lifespan.py probe_starlette_rs.py; do\012  echo "RUN $probe"\012  uv run python "scripts/$probe" > "$RESULTS/$probe.log" 2>&1\012  cat "$RESULTS/$probe.log"\012done
+ 5225 S      1.1 /Applications/Ch /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/154.0.8037.57/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --user-data-dir=/Users/lazytrot/Library/Application Support/Codex --standard-schemes=app,codex-sandbox --service-worker-schemes=codex-sandbox --secure-schemes=app,codex-sandbox --fetch-schemes=app,codex-sandbox --cors-schemes=codex-sandbox --streaming-schemes=app,codex-sandbox --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser --enable-blink-features=WebMCP --disable-blink-features=ReplacedNormalFlowStackingInlinePaint --lang=en-GB --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=131 --launch-time-ticks=2722281766791 --shared-files --metrics-shmem-handle=1752395122,r,8921944335053032157,16999943829001883338,1572864 --field-trial-handle=1718379636,r,18326511316614741036,16206643389470874056,262144 --enable-features=DevToolsWebMCPSupport,ReportStuckThrottle --disable-features=DropInputEventsWhilePaintHolding,WebUIOmniboxAimPopup,WebUIOmniboxPopup --variations-seed-version --pseudonymization-salt-handle=1935764596,r,8799938763423584351,3627596669039669808,4 --trace-process-track-uuid=3190709109064353713 --seatbelt-client=231
+  309 Ss     1.0 /usr/libexec/log /usr/libexec/logd
+60621 S      1.0 /opt/homebrew/sh /opt/homebrew/share/android-commandlinetools/emulator/netsimd --host-dns=1.1.1.1,192.168.0.1
+  372 Ss     0.9 /usr/sbin/notify /usr/sbin/notifyd
+  560 S      0.7 /usr/sbin/cfpref /usr/sbin/cfprefsd agent
+    1 Ss     0.6 /sbin/launchd    /sbin/launchd
+83782 S      0.5 /Applications/Ch /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+ 4133 S      0.4 /usr/libexec/tru /usr/libexec/trustd --agent

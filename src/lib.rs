@@ -1,7 +1,27 @@
+#![deny(missing_docs)]
+
+//! Rust network runtime behind the Python `uvicorn_rs` package.
+//!
+//! Tokio, Hyper, Quinn, and `h3` own sockets, protocol state, framing, and
+//! transport backpressure. ASGI callables remain on the Python event loop that
+//! starts the native `serve` entry point; PyO3 schedules calls onto that loop and returns results to
+//! Rust without running application code on Tokio workers.
+//!
+//! # Payload ownership
+//!
+//! Outbound immutable Python `bytes` are retained through PyO3's `bytes`
+//! conversion into Rust [`Bytes`], avoiding a payload copy while the transport
+//! consumes them. Mutable `bytearray` values are snapshotted by that conversion.
+//! Incoming network data must become Python `bytes` for ASGI, so that direction
+//! still copies at the language boundary. Bounded channels cap queued message
+//! counts, but an application controls the size of each individual message.
+
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
+#[cfg(feature = "runtime-diagnostics")]
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -41,6 +61,296 @@ use h3_quinn::quinn::{self, crypto::rustls::QuicServerConfig};
 type BoxError = Box<dyn StdError + Send + Sync>;
 type ResponseBody = UnsyncBoxBody<Bytes, BoxError>;
 type WebSocketTasks = Arc<Mutex<tokio::task::JoinSet<()>>>;
+const RESPONSE_BODY_QUEUE_CAPACITY: usize = 4;
+
+/// Optional counters for attributing Python/Rust bridge work in diagnostic builds.
+///
+/// The default build keeps this type zero-sized, and its inline methods compile
+/// to no-ops. Enable `runtime-diagnostics` only for focused profiling runs.
+#[derive(Clone, Default)]
+struct RuntimeDiagnostics {
+    #[cfg(feature = "runtime-diagnostics")]
+    counters: Arc<RuntimeDiagnosticCounters>,
+}
+
+#[cfg(feature = "runtime-diagnostics")]
+#[derive(Default)]
+struct RuntimeDiagnosticCounters {
+    asgi_task_schedule_calls: AtomicU64,
+    http_requests: AtomicU64,
+    http_receive_immediate: AtomicU64,
+    http_receive_bridge_futures: AtomicU64,
+    http_response_start_messages: AtomicU64,
+    http_response_body_messages: AtomicU64,
+    http_response_body_queue_full: AtomicU64,
+    http_response_body_full_send_wait_ns: AtomicU64,
+    websocket_receive_bridge_futures: AtomicU64,
+    websocket_outgoing_messages: AtomicU64,
+    websocket_outgoing_queue_full: AtomicU64,
+}
+
+impl RuntimeDiagnostics {
+    #[inline]
+    fn asgi_task_scheduled(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .asgi_task_schedule_calls
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_request_started(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters.http_requests.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_receive_immediate(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .http_receive_immediate
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_receive_bridge_future(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .http_receive_bridge_futures
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_response_start(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .http_response_start_messages
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_response_body(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .http_response_body_messages
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_response_body_queue_full(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .http_response_body_queue_full
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_response_body_wait_started(&self) -> Option<std::time::Instant> {
+        #[cfg(feature = "runtime-diagnostics")]
+        return Some(std::time::Instant::now());
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        None
+    }
+
+    #[inline]
+    fn http_response_body_full_send_wait_finished(&self, started: Option<std::time::Instant>) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(started) = started {
+            self.counters
+                .http_response_body_full_send_wait_ns
+                .fetch_add(
+                    started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = started;
+    }
+
+    #[inline]
+    fn websocket_receive_bridge_future(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .websocket_receive_bridge_futures
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn websocket_outgoing_message(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .websocket_outgoing_messages
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn websocket_outgoing_queue_full(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .websocket_outgoing_queue_full
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn report(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        eprintln!(
+            concat!(
+                "uvicorn-rs-runtime-diagnostics ",
+                "asgi_task_schedule_calls={} ",
+                "http_requests={} ",
+                "http_receive_immediate={} ",
+                "http_receive_bridge_futures={} ",
+                "http_response_start_messages={} ",
+                "http_response_body_messages={} ",
+                "http_response_body_queue_full={} ",
+                "http_response_body_full_send_wait_ns={} ",
+                "websocket_receive_bridge_futures={} ",
+                "websocket_outgoing_messages={} ",
+                "websocket_outgoing_queue_full={}"
+            ),
+            self.counters
+                .asgi_task_schedule_calls
+                .load(Ordering::Relaxed),
+            self.counters.http_requests.load(Ordering::Relaxed),
+            self.counters.http_receive_immediate.load(Ordering::Relaxed),
+            self.counters
+                .http_receive_bridge_futures
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_response_start_messages
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_response_body_messages
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_response_body_queue_full
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_response_body_full_send_wait_ns
+                .load(Ordering::Relaxed),
+            self.counters
+                .websocket_receive_bridge_futures
+                .load(Ordering::Relaxed),
+            self.counters
+                .websocket_outgoing_messages
+                .load(Ordering::Relaxed),
+            self.counters
+                .websocket_outgoing_queue_full
+                .load(Ordering::Relaxed),
+        );
+    }
+}
+
+struct ServeOptions {
+    host: String,
+    port: u16,
+    tcp_tls: Option<TlsAcceptor>,
+    quic_config: Option<quinn::ServerConfig>,
+    graceful_timeout: std::time::Duration,
+}
+
+struct ServerContext {
+    app: Arc<Py<PyAny>>,
+    invoke: Arc<Py<PyAny>>,
+    locals: TaskLocals,
+    server_addr: SocketAddr,
+    tcp_tls: Option<TlsAcceptor>,
+    state: Option<Arc<Py<PyDict>>>,
+    websocket_tasks: WebSocketTasks,
+    diagnostics: RuntimeDiagnostics,
+    cancellation: CancellationToken,
+    graceful_timeout: std::time::Duration,
+}
+
+#[derive(Debug)]
+enum AsgiEventType {
+    HttpResponseStart,
+    HttpResponseBody,
+    WebSocketAccept,
+    WebSocketClose,
+    WebSocketSend,
+    LifespanStartupComplete,
+    LifespanStartupFailed,
+    LifespanShutdownComplete,
+    LifespanShutdownFailed,
+    Other(String),
+}
+
+impl AsgiEventType {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::HttpResponseStart => "http.response.start",
+            Self::HttpResponseBody => "http.response.body",
+            Self::WebSocketAccept => "websocket.accept",
+            Self::WebSocketClose => "websocket.close",
+            Self::WebSocketSend => "websocket.send",
+            Self::LifespanStartupComplete => "lifespan.startup.complete",
+            Self::LifespanStartupFailed => "lifespan.startup.failed",
+            Self::LifespanShutdownComplete => "lifespan.shutdown.complete",
+            Self::LifespanShutdownFailed => "lifespan.shutdown.failed",
+            Self::Other(value) => value,
+        }
+    }
+}
+
+fn classify_asgi_event_type(py: Python<'_>, value: Bound<'_, PyAny>) -> PyResult<AsgiEventType> {
+    value.cast::<PyString>()?;
+
+    // Exact built-in strings can be compared to cached Python string objects
+    // without first allocating a Rust String. Subclasses use the old extraction
+    // path so their established conversion behavior is kept.
+    if value.is_exact_instance_of::<PyString>() {
+        if value.eq(pyo3::intern!(py, "http.response.start"))? {
+            return Ok(AsgiEventType::HttpResponseStart);
+        }
+        if value.eq(pyo3::intern!(py, "http.response.body"))? {
+            return Ok(AsgiEventType::HttpResponseBody);
+        }
+        if value.eq(pyo3::intern!(py, "websocket.accept"))? {
+            return Ok(AsgiEventType::WebSocketAccept);
+        }
+        if value.eq(pyo3::intern!(py, "websocket.close"))? {
+            return Ok(AsgiEventType::WebSocketClose);
+        }
+        if value.eq(pyo3::intern!(py, "websocket.send"))? {
+            return Ok(AsgiEventType::WebSocketSend);
+        }
+        if value.eq(pyo3::intern!(py, "lifespan.startup.complete"))? {
+            return Ok(AsgiEventType::LifespanStartupComplete);
+        }
+        if value.eq(pyo3::intern!(py, "lifespan.startup.failed"))? {
+            return Ok(AsgiEventType::LifespanStartupFailed);
+        }
+        if value.eq(pyo3::intern!(py, "lifespan.shutdown.complete"))? {
+            return Ok(AsgiEventType::LifespanShutdownComplete);
+        }
+        if value.eq(pyo3::intern!(py, "lifespan.shutdown.failed"))? {
+            return Ok(AsgiEventType::LifespanShutdownFailed);
+        }
+    }
+
+    let event_type = value.extract::<String>()?;
+    Ok(match event_type.as_str() {
+        "http.response.start" => AsgiEventType::HttpResponseStart,
+        "http.response.body" => AsgiEventType::HttpResponseBody,
+        "websocket.accept" => AsgiEventType::WebSocketAccept,
+        "websocket.close" => AsgiEventType::WebSocketClose,
+        "websocket.send" => AsgiEventType::WebSocketSend,
+        "lifespan.startup.complete" => AsgiEventType::LifespanStartupComplete,
+        "lifespan.startup.failed" => AsgiEventType::LifespanStartupFailed,
+        "lifespan.shutdown.complete" => AsgiEventType::LifespanShutdownComplete,
+        "lifespan.shutdown.failed" => AsgiEventType::LifespanShutdownFailed,
+        _ => AsgiEventType::Other(event_type),
+    })
+}
+
+#[derive(Clone)]
+struct ConnectionContext {
+    server: Arc<ServerContext>,
+    peer_addr: SocketAddr,
+    transport_scheme: &'static str,
+    connection_closed: watch::Receiver<bool>,
+}
 
 struct AbortOnDrop<T> {
     handle: Option<tokio::task::JoinHandle<T>>,
@@ -218,6 +528,7 @@ fn python_task_future(
     py: Python<'_>,
     locals: &TaskLocals,
     awaitable: Bound<'_, PyAny>,
+    diagnostics: RuntimeDiagnostics,
 ) -> PyResult<PythonTaskFuture> {
     let (task_sender, task_receiver) = oneshot::channel();
     let (result_sender, result_receiver) = oneshot::channel();
@@ -232,6 +543,7 @@ fn python_task_future(
     let event_loop = locals.event_loop(py);
     let kwargs = PyDict::new(py);
     kwargs.set_item("context", locals.context(py))?;
+    diagnostics.asgi_task_scheduled();
     event_loop.call_method("call_soon_threadsafe", (starter,), Some(&kwargs))?;
     Ok(PythonTaskFuture {
         task_receiver,
@@ -283,12 +595,14 @@ struct AsgiIo {
     response_started: AtomicBool,
     start: mpsc::Sender<ResponseStart>,
     body: mpsc::Sender<BodyChunk>,
+    diagnostics: RuntimeDiagnostics,
 }
 
 #[pymethods]
 impl AsgiIo {
     fn receive<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if slf.request_disconnected.load(Ordering::Acquire) {
+            slf.diagnostics.http_receive_immediate();
             return Ok(
                 make_http_request_message(py, None, &slf.request_disconnected)?.into_bound(py),
             );
@@ -303,11 +617,13 @@ impl AsgiIo {
             Err(_) => None,
         };
         if let Some(request) = immediate {
+            slf.diagnostics.http_receive_immediate();
             return Ok(
                 make_http_request_message(py, request, &slf.request_disconnected)?.into_bound(py),
             );
         }
         if *slf.connection_closed.borrow() {
+            slf.diagnostics.http_receive_immediate();
             return Ok(
                 make_http_request_message(py, None, &slf.request_disconnected)?.into_bound(py),
             );
@@ -316,6 +632,7 @@ impl AsgiIo {
         let request_messages = Arc::clone(&slf.request_messages);
         let mut connection_closed = slf.connection_closed.clone();
         let request_disconnected = Arc::clone(&slf.request_disconnected);
+        slf.diagnostics.http_receive_bridge_future();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let request = loop {
                 if request_disconnected.load(Ordering::Acquire) {
@@ -341,12 +658,14 @@ impl AsgiIo {
         py: Python<'py>,
         message: Bound<'py, PyDict>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let event_type: String = message
-            .get_item("type")?
-            .ok_or_else(|| PyValueError::new_err("ASGI message is missing 'type'"))?
-            .extract()?;
-        match event_type.as_str() {
-            "http.response.start" => {
+        let event_type = classify_asgi_event_type(
+            py,
+            message
+                .get_item("type")?
+                .ok_or_else(|| PyValueError::new_err("ASGI message is missing 'type'"))?,
+        )?;
+        match event_type {
+            AsgiEventType::HttpResponseStart => {
                 if *slf.connection_closed.borrow()
                     || slf.request_disconnected.load(Ordering::Acquire)
                 {
@@ -364,6 +683,7 @@ impl AsgiIo {
                         "ASGI app sent response.start more than once",
                     ));
                 }
+                slf.diagnostics.http_response_start();
                 if let Err(error) = slf.start.try_send(ResponseStart { status, headers }) {
                     slf.response_started.store(false, Ordering::Release);
                     return Err(PyOSError::new_err(format!(
@@ -372,7 +692,7 @@ impl AsgiIo {
                 }
                 Ok(py.None().into_bound(py))
             }
-            "http.response.body" => {
+            AsgiEventType::HttpResponseBody => {
                 if *slf.connection_closed.borrow()
                     || slf.request_disconnected.load(Ordering::Acquire)
                 {
@@ -386,7 +706,7 @@ impl AsgiIo {
                     ));
                 }
                 let body = match message.get_item("body")? {
-                    Some(value) => Bytes::from(value.extract::<Vec<u8>>()?),
+                    Some(value) => value.extract::<Bytes>()?,
                     None => Bytes::new(),
                 };
                 let more_body = message
@@ -395,27 +715,31 @@ impl AsgiIo {
                     .transpose()?
                     .unwrap_or(false);
                 let chunk = BodyChunk { body, more_body };
+                slf.diagnostics.http_response_body();
                 match slf.body.try_send(chunk) {
                     Ok(()) => Ok(py.None().into_bound(py)),
                     Err(TrySendError::Closed(_)) => {
                         Err(PyOSError::new_err("server response body channel closed"))
                     }
                     Err(TrySendError::Full(chunk)) => {
+                        slf.diagnostics.http_response_body_queue_full();
+                        let wait_started = slf.diagnostics.http_response_body_wait_started();
+                        let diagnostics = slf.diagnostics.clone();
                         let sender = slf.body.clone();
                         pyo3_async_runtimes::tokio::future_into_py(py, async move {
                             sender.send(chunk).await.map_err(|_| {
                                 PyOSError::new_err("server response body channel closed")
                             })?;
+                            diagnostics.http_response_body_full_send_wait_finished(wait_started);
                             Python::attach(|py| Ok(py.None()))
                         })
                     }
                 }
             }
-            other => {
-                return Err(PyValueError::new_err(format!(
-                    "unsupported ASGI event in HTTP prototype: {other}"
-                )));
-            }
+            other => Err(PyValueError::new_err(format!(
+                "unsupported ASGI HTTP event: {}",
+                other.as_str()
+            ))),
         }
     }
 }
@@ -428,6 +752,7 @@ struct WebSocketIo {
     state: Arc<AtomicU8>,
     handshake: std::sync::Mutex<Option<oneshot::Sender<WebSocketHandshake>>>,
     outgoing: mpsc::Sender<WebSocketOutgoing>,
+    diagnostics: RuntimeDiagnostics,
 }
 
 #[pymethods]
@@ -437,6 +762,7 @@ impl WebSocketIo {
         let incoming = Arc::clone(&slf.incoming);
         let mut connection_closed = slf.connection_closed.clone();
         let state = Arc::clone(&slf.state);
+        slf.diagnostics.websocket_receive_bridge_future();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let incoming_message = if connect {
                 None
@@ -497,12 +823,14 @@ impl WebSocketIo {
         py: Python<'py>,
         message: Bound<'py, PyDict>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let event_type: String = message
-            .get_item("type")?
-            .ok_or_else(|| PyValueError::new_err("ASGI message is missing 'type'"))?
-            .extract()?;
-        match event_type.as_str() {
-            "websocket.accept" => {
+        let event_type = classify_asgi_event_type(
+            py,
+            message
+                .get_item("type")?
+                .ok_or_else(|| PyValueError::new_err("ASGI message is missing 'type'"))?,
+        )?;
+        match event_type {
+            AsgiEventType::WebSocketAccept => {
                 if slf
                     .state
                     .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
@@ -532,7 +860,7 @@ impl WebSocketIo {
                     .map_err(|_| PyOSError::new_err("WebSocket handshake channel closed"))?;
                 Ok(py.None().into_bound(py))
             }
-            "websocket.close" => {
+            AsgiEventType::WebSocketClose => {
                 let code = message
                     .get_item("code")?
                     .map(|value| value.extract::<u16>())
@@ -567,12 +895,13 @@ impl WebSocketIo {
                             py,
                             slf.outgoing.clone(),
                             WebSocketOutgoing::Close { code, reason },
+                            slf.diagnostics.clone(),
                         )
                     }
                     _ => Err(PyOSError::new_err("WebSocket connection is closed")),
                 }
             }
-            "websocket.send" => {
+            AsgiEventType::WebSocketSend => {
                 match slf.state.load(Ordering::Acquire) {
                     1 => {}
                     0 => {
@@ -587,24 +916,24 @@ impl WebSocketIo {
                     .map(|value| value.extract::<Option<String>>())
                     .transpose()?
                     .flatten();
-                let data = message
-                    .get_item("bytes")?
-                    .map(|value| value.extract::<Option<Vec<u8>>>())
-                    .transpose()?
-                    .flatten();
+                let data = match message.get_item("bytes")? {
+                    Some(value) => value.extract::<Option<Bytes>>()?,
+                    None => None,
+                };
                 let outgoing = match (text, data) {
                     (Some(text), None) => WebSocketOutgoing::Text(text),
-                    (None, Some(data)) => WebSocketOutgoing::Bytes(Bytes::from(data)),
+                    (None, Some(data)) => WebSocketOutgoing::Bytes(data),
                     _ => {
                         return Err(PyValueError::new_err(
                             "websocket.send must contain exactly one of 'text' or 'bytes'",
                         ));
                     }
                 };
-                queue_websocket_message(py, slf.outgoing.clone(), outgoing)
+                queue_websocket_message(py, slf.outgoing.clone(), outgoing, slf.diagnostics.clone())
             }
             other => Err(PyValueError::new_err(format!(
-                "unsupported ASGI WebSocket event: {other}"
+                "unsupported ASGI WebSocket event: {}",
+                other.as_str()
             ))),
         }
     }
@@ -614,11 +943,14 @@ fn queue_websocket_message<'py>(
     py: Python<'py>,
     sender: mpsc::Sender<WebSocketOutgoing>,
     message: WebSocketOutgoing,
+    diagnostics: RuntimeDiagnostics,
 ) -> PyResult<Bound<'py, PyAny>> {
+    diagnostics.websocket_outgoing_message();
     match sender.try_send(message) {
         Ok(()) => Ok(py.None().into_bound(py)),
         Err(TrySendError::Closed(_)) => Err(PyOSError::new_err("WebSocket connection is closed")),
         Err(TrySendError::Full(message)) => {
+            diagnostics.websocket_outgoing_queue_full();
             pyo3_async_runtimes::tokio::future_into_py(py, async move {
                 sender
                     .send(message)
@@ -667,21 +999,23 @@ impl LifespanIo {
         py: Python<'py>,
         message: Bound<'py, PyDict>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let event_type: String = message
-            .get_item("type")?
-            .ok_or_else(|| PyValueError::new_err("ASGI message is missing 'type'"))?
-            .extract()?;
-        let event = match event_type.as_str() {
-            "lifespan.startup.complete" => LifespanEvent::StartupComplete,
-            "lifespan.startup.failed" => LifespanEvent::StartupFailed(
+        let event_type = classify_asgi_event_type(
+            py,
+            message
+                .get_item("type")?
+                .ok_or_else(|| PyValueError::new_err("ASGI message is missing 'type'"))?,
+        )?;
+        let event = match event_type {
+            AsgiEventType::LifespanStartupComplete => LifespanEvent::StartupComplete,
+            AsgiEventType::LifespanStartupFailed => LifespanEvent::StartupFailed(
                 message
                     .get_item("message")?
                     .map(|value| value.extract::<String>())
                     .transpose()?
                     .unwrap_or_default(),
             ),
-            "lifespan.shutdown.complete" => LifespanEvent::ShutdownComplete,
-            "lifespan.shutdown.failed" => LifespanEvent::ShutdownFailed(
+            AsgiEventType::LifespanShutdownComplete => LifespanEvent::ShutdownComplete,
+            AsgiEventType::LifespanShutdownFailed => LifespanEvent::ShutdownFailed(
                 message
                     .get_item("message")?
                     .map(|value| value.extract::<String>())
@@ -690,7 +1024,8 @@ impl LifespanIo {
             ),
             other => {
                 return Err(PyValueError::new_err(format!(
-                    "unsupported ASGI lifespan event: {other}"
+                    "unsupported ASGI lifespan event: {}",
+                    other.as_str()
                 )));
             }
         };
@@ -721,6 +1056,7 @@ impl LifespanRuntime {
         app: Arc<Py<PyAny>>,
         invoke: Arc<Py<PyAny>>,
         locals: TaskLocals,
+        diagnostics: RuntimeDiagnostics,
     ) -> PyResult<Self> {
         let (request_tx, request_rx) = mpsc::channel(1);
         let (event_tx, mut event_rx) = mpsc::channel(1);
@@ -742,7 +1078,7 @@ impl LifespanRuntime {
             scope.set_item("asgi", asgi)?;
             scope.set_item("state", scope_state.bind(py))?;
             let awaitable = invoke.bind(py).call1((app.bind(py), scope, io))?;
-            python_task_future(py, &locals, awaitable)
+            python_task_future(py, &locals, awaitable, diagnostics)
         })?;
         let mut app_task = AbortOnDrop::new(tokio::spawn(app_future));
         request_tx
@@ -839,31 +1175,29 @@ impl LifespanRuntime {
             .send(LifespanMessage::Shutdown)
             .await
             .map_err(|_| PyRuntimeError::new_err("could not send ASGI lifespan shutdown"))?;
-        loop {
-            tokio::select! {
-                biased;
-                event = events.recv() => match event {
-                    Some(LifespanEvent::ShutdownComplete) => break,
-                    Some(LifespanEvent::ShutdownFailed(message)) => {
-                        return Err(PyRuntimeError::new_err(if message.is_empty() {
-                            "ASGI lifespan shutdown failed".to_string()
-                        } else {
-                            message
-                        }));
-                    }
-                    Some(_) => return Err(PyRuntimeError::new_err("unexpected ASGI lifespan event during shutdown")),
-                    None => return Err(PyRuntimeError::new_err("ASGI lifespan channel closed during shutdown")),
-                },
-                result = app_task => {
-                    self.app_task.take();
-                    return match result {
-                        Ok(Ok(_)) => Err(PyRuntimeError::new_err(
-                            "ASGI app returned before lifespan.shutdown.complete",
-                        )),
-                        Ok(Err(error)) => Err(error),
-                        Err(error) => Err(PyRuntimeError::new_err(format!("ASGI lifespan task failed: {error}"))),
-                    };
+        tokio::select! {
+            biased;
+            event = events.recv() => match event {
+                Some(LifespanEvent::ShutdownComplete) => {}
+                Some(LifespanEvent::ShutdownFailed(message)) => {
+                    return Err(PyRuntimeError::new_err(if message.is_empty() {
+                        "ASGI lifespan shutdown failed".to_string()
+                    } else {
+                        message
+                    }));
                 }
+                Some(_) => return Err(PyRuntimeError::new_err("unexpected ASGI lifespan event during shutdown")),
+                None => return Err(PyRuntimeError::new_err("ASGI lifespan channel closed during shutdown")),
+            },
+            result = app_task => {
+                self.app_task.take();
+                return match result {
+                    Ok(Ok(_)) => Err(PyRuntimeError::new_err(
+                        "ASGI app returned before lifespan.shutdown.complete",
+                    )),
+                    Ok(Err(error)) => Err(error),
+                    Err(error) => Err(PyRuntimeError::new_err(format!("ASGI lifespan task failed: {error}"))),
+                };
             }
         }
         let result = self
@@ -913,11 +1247,7 @@ fn extract_headers(value: Option<Bound<'_, PyAny>>) -> PyResult<Vec<(Bytes, Byte
     let Some(value) = value else {
         return Ok(Vec::new());
     };
-    let items = value.extract::<Vec<(Vec<u8>, Vec<u8>)>>()?;
-    Ok(items
-        .into_iter()
-        .map(|(name, value)| (Bytes::from(name), Bytes::from(value)))
-        .collect())
+    value.extract::<Vec<(Bytes, Bytes)>>()
 }
 
 struct AsgiBody {
@@ -1137,6 +1467,10 @@ impl Body for AsgiBody {
 
 #[pyfunction]
 #[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, control))]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the native callable keeps its established Python argument signature"
+)]
 fn serve<'py>(
     py: Python<'py>,
     app: Py<PyAny>,
@@ -1163,20 +1497,27 @@ fn serve<'py>(
     let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
     let cancellation = control.cancellation.clone();
     let cancel_on_drop = CancelOnDrop(cancellation.clone());
+    let diagnostics = RuntimeDiagnostics::default();
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let _cancel_on_drop = cancel_on_drop;
-        serve_forever(
-            app,
-            invoke,
-            locals,
+        let options = ServeOptions {
             host,
             port,
             tcp_tls,
             quic_config,
+            graceful_timeout: std::time::Duration::from_secs(graceful_timeout),
+        };
+        let result = serve_forever(
+            app,
+            invoke,
+            locals,
             cancellation,
-            std::time::Duration::from_secs(graceful_timeout),
+            options,
+            diagnostics.clone(),
         )
-        .await
+        .await;
+        diagnostics.report();
+        result
     })
 }
 
@@ -1221,22 +1562,24 @@ async fn serve_forever(
     app: Py<PyAny>,
     invoke: Py<PyAny>,
     locals: TaskLocals,
-    host: String,
-    port: u16,
-    tcp_tls: Option<TlsAcceptor>,
-    quic_config: Option<quinn::ServerConfig>,
     cancellation: CancellationToken,
-    graceful_timeout: std::time::Duration,
+    options: ServeOptions,
+    diagnostics: RuntimeDiagnostics,
 ) -> PyResult<()> {
-    let listener = TcpListener::bind((host.as_str(), port))
+    let listener = TcpListener::bind((options.host.as_str(), options.port))
         .await
-        .map_err(|error| PyOSError::new_err(format!("could not bind {host}:{port}: {error}")))?;
+        .map_err(|error| {
+            PyOSError::new_err(format!(
+                "could not bind {}:{}: {error}",
+                options.host, options.port
+            ))
+        })?;
     let server_addr = listener.local_addr().map_err(|error| {
         PyOSError::new_err(format!("could not inspect bound listener: {error}"))
     })?;
     let app = Arc::new(app);
     let invoke = Arc::new(invoke);
-    let endpoint = if let Some(quic_config) = quic_config {
+    let endpoint = if let Some(quic_config) = options.quic_config {
         Some(
             quinn::Endpoint::server(quic_config, server_addr).map_err(|error| {
                 PyOSError::new_err(format!("could not bind HTTP/3 endpoint: {error}"))
@@ -1246,22 +1589,29 @@ async fn serve_forever(
         None
     };
 
-    let mut lifespan =
-        LifespanRuntime::start(Arc::clone(&app), Arc::clone(&invoke), locals.clone()).await?;
+    let mut lifespan = LifespanRuntime::start(
+        Arc::clone(&app),
+        Arc::clone(&invoke),
+        locals.clone(),
+        diagnostics.clone(),
+    )
+    .await?;
     let state = lifespan.state.clone();
     let websocket_tasks: WebSocketTasks = Arc::new(Mutex::new(tokio::task::JoinSet::new()));
-    let http3_task = endpoint.map(|endpoint| {
-        tokio::spawn(serve_http3(
-            endpoint,
-            Arc::clone(&app),
-            Arc::clone(&invoke),
-            locals.clone(),
-            server_addr,
-            state.clone(),
-            cancellation.clone(),
-            graceful_timeout,
-        ))
+    let server = Arc::new(ServerContext {
+        app,
+        invoke,
+        locals,
+        server_addr,
+        tcp_tls: options.tcp_tls,
+        state,
+        websocket_tasks,
+        diagnostics,
+        cancellation: cancellation.clone(),
+        graceful_timeout: options.graceful_timeout,
     });
+    let http3_task =
+        endpoint.map(|endpoint| tokio::spawn(serve_http3(endpoint, Arc::clone(&server))));
 
     let mut connection_tasks = tokio::task::JoinSet::new();
     let mut accept_error = None;
@@ -1276,19 +1626,7 @@ async fn serve_forever(
             }
             accepted = listener.accept() => match accepted {
                 Ok((stream, peer_addr)) => {
-                    connection_tasks.spawn(serve_connection(
-                        stream,
-                        peer_addr,
-                        server_addr,
-                        Arc::clone(&app),
-                        Arc::clone(&invoke),
-                        locals.clone(),
-                        tcp_tls.clone(),
-                        state.clone(),
-                        Arc::clone(&websocket_tasks),
-                        cancellation.clone(),
-                        graceful_timeout,
-                    ));
+                    connection_tasks.spawn(serve_connection(stream, peer_addr, Arc::clone(&server)));
                 }
                 Err(error) => {
                     accept_error = Some(PyOSError::new_err(format!("accept failed: {error}")));
@@ -1299,7 +1637,7 @@ async fn serve_forever(
     }
 
     cancellation.cancel();
-    let shutdown_deadline = tokio::time::Instant::now() + graceful_timeout;
+    let shutdown_deadline = tokio::time::Instant::now() + options.graceful_timeout;
     if let Some(mut http3_task) = http3_task {
         if let Err(error) = tokio::time::timeout(
             shutdown_deadline.saturating_duration_since(tokio::time::Instant::now()),
@@ -1328,7 +1666,7 @@ async fn serve_forever(
         connection_tasks.abort_all();
         while connection_tasks.join_next().await.is_some() {}
     }
-    let mut websocket_tasks = websocket_tasks.lock().await;
+    let mut websocket_tasks = server.websocket_tasks.lock().await;
     if tokio::time::timeout(
         shutdown_deadline.saturating_duration_since(tokio::time::Instant::now()),
         async {
@@ -1349,14 +1687,13 @@ async fn serve_forever(
     // Lifespan shutdown is a separate ASGI phase. The connection drain may
     // consume its full grace period while cancelling outstanding applications;
     // still give the lifespan task its own bounded window to finish.
-    let shutdown_result = match tokio::time::timeout(graceful_timeout, lifespan.shutdown())
-    .await
-    {
-        Ok(result) => result,
-        Err(_) => Err(PyRuntimeError::new_err(
-            "ASGI lifespan shutdown exceeded the graceful timeout",
-        )),
-    };
+    let shutdown_result =
+        match tokio::time::timeout(options.graceful_timeout, lifespan.shutdown()).await {
+            Ok(result) => result,
+            Err(_) => Err(PyRuntimeError::new_err(
+                "ASGI lifespan shutdown exceeded the graceful timeout",
+            )),
+        };
     if let Some(error) = accept_error {
         return Err(error);
     }
@@ -1366,118 +1703,53 @@ async fn serve_forever(
 async fn serve_connection(
     stream: TcpStream,
     peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    tcp_tls: Option<TlsAcceptor>,
-    state: Option<Arc<Py<PyDict>>>,
-    websocket_tasks: WebSocketTasks,
-    cancellation: CancellationToken,
-    graceful_timeout: std::time::Duration,
+    server: Arc<ServerContext>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let scheme = if tcp_tls.is_some() { "https" } else { "http" };
+    let transport_scheme = if server.tcp_tls.is_some() {
+        "https"
+    } else {
+        "http"
+    };
     let (closed_tx, closed_rx) = watch::channel(false);
     let stream = ConnectionIo {
         io: stream,
         closed: closed_tx.clone(),
     };
-    let result = if let Some(tls) = tcp_tls {
+    let context = ConnectionContext {
+        server: Arc::clone(&server),
+        peer_addr,
+        transport_scheme,
+        connection_closed: closed_rx,
+    };
+    let result = if let Some(tls) = server.tcp_tls.as_ref() {
         let stream = tokio::select! {
             biased;
-            _ = cancellation.cancelled() => return Ok(()),
+            _ = server.cancellation.cancelled() => return Ok(()),
             result = tls.accept(stream) => result?,
         };
-        serve_hyper_connection(
-            stream,
-            peer_addr,
-            server_addr,
-            app,
-            invoke,
-            locals,
-            scheme,
-            closed_rx,
-            state,
-            websocket_tasks,
-            cancellation,
-            graceful_timeout,
-        )
-        .await
+        serve_hyper_connection(stream, context).await
     } else {
-        serve_hyper_connection(
-            stream,
-            peer_addr,
-            server_addr,
-            app,
-            invoke,
-            locals,
-            scheme,
-            closed_rx,
-            state,
-            websocket_tasks,
-            cancellation,
-            graceful_timeout,
-        )
-        .await
+        serve_hyper_connection(stream, context).await
     };
     result
 }
 
 async fn serve_hyper_connection<I>(
     io: I,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    scheme: &'static str,
-    connection_closed: watch::Receiver<bool>,
-    state: Option<Arc<Py<PyDict>>>,
-    websocket_tasks: WebSocketTasks,
-    cancellation: CancellationToken,
-    graceful_timeout: std::time::Duration,
+    context: ConnectionContext,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 where
     I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    let service_cancellation = cancellation.clone();
+    let cancellation = context.server.cancellation.clone();
+    let graceful_timeout = context.server.graceful_timeout;
     let service = service_fn(move |request: Request<Incoming>| {
-        let app = Arc::clone(&app);
-        let invoke = Arc::clone(&invoke);
-        let locals = locals.clone();
-        let connection_closed = connection_closed.clone();
-        let state = state.clone();
-        let websocket_tasks = Arc::clone(&websocket_tasks);
-        let cancellation = service_cancellation.clone();
+        let context = context.clone();
         async move {
             let response = if is_websocket_upgrade(&request) {
-                handle_websocket_request(
-                    request,
-                    peer_addr,
-                    server_addr,
-                    app,
-                    invoke,
-                    locals,
-                    scheme,
-                    connection_closed,
-                    state,
-                    websocket_tasks,
-                    cancellation,
-                )
-                .await
+                handle_websocket_request(request, context).await
             } else {
-                handle_request(
-                    request,
-                    peer_addr,
-                    server_addr,
-                    app,
-                    invoke,
-                    locals,
-                    scheme,
-                    connection_closed,
-                    state,
-                )
-                .await
+                handle_request(request, context).await
             };
             Ok::<_, std::convert::Infallible>(response)
         }
@@ -1500,19 +1772,13 @@ where
 
 async fn serve_http3(
     endpoint: quinn::Endpoint,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    server_addr: SocketAddr,
-    state: Option<Arc<Py<PyDict>>>,
-    cancellation: CancellationToken,
-    graceful_timeout: std::time::Duration,
+    server: Arc<ServerContext>,
 ) -> Result<(), BoxError> {
     let mut connections = tokio::task::JoinSet::new();
     loop {
         tokio::select! {
             biased;
-            _ = cancellation.cancelled() => break,
+            _ = server.cancellation.cancelled() => break,
             Some(result) = connections.join_next(), if !connections.is_empty() => {
                 if let Err(error) = result {
                     eprintln!("uvicorn-rs: HTTP/3 connection task failed: {error}");
@@ -1520,26 +1786,12 @@ async fn serve_http3(
             }
             incoming = endpoint.accept() => {
                 let Some(incoming) = incoming else { break; };
-                let app = Arc::clone(&app);
-                let invoke = Arc::clone(&invoke);
-                let locals = locals.clone();
-                let state = state.clone();
-                let cancellation = cancellation.clone();
+                let server = Arc::clone(&server);
                 connections.spawn(async move {
                     match incoming.await {
                         Ok(connection) => {
                             let peer_addr = connection.remote_address();
-                            if let Err(error) = serve_http3_connection(
-                                connection,
-                                peer_addr,
-                                server_addr,
-                                app,
-                                invoke,
-                                locals,
-                                state,
-                                cancellation,
-                                graceful_timeout,
-                            ).await {
+                            if let Err(error) = serve_http3_connection(connection, server).await {
                                 eprintln!("uvicorn-rs: HTTP/3 connection from {peer_addr} failed: {error}");
                             }
                         }
@@ -1551,7 +1803,7 @@ async fn serve_http3(
     }
 
     endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown");
-    if tokio::time::timeout(graceful_timeout, async {
+    if tokio::time::timeout(server.graceful_timeout, async {
         while let Some(result) = connections.join_next().await {
             if let Err(error) = result {
                 eprintln!("uvicorn-rs: HTTP/3 connection task failed during shutdown: {error}");
@@ -1564,21 +1816,15 @@ async fn serve_http3(
         connections.abort_all();
         while connections.join_next().await.is_some() {}
     }
-    let _ = tokio::time::timeout(graceful_timeout, endpoint.wait_idle()).await;
+    let _ = tokio::time::timeout(server.graceful_timeout, endpoint.wait_idle()).await;
     Ok(())
 }
 
 async fn serve_http3_connection(
     connection: quinn::Connection,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    state: Option<Arc<Py<PyDict>>>,
-    cancellation: CancellationToken,
-    graceful_timeout: std::time::Duration,
+    server: Arc<ServerContext>,
 ) -> Result<(), BoxError> {
+    let peer_addr = connection.remote_address();
     let (closed_tx, closed_rx) = watch::channel(false);
     let close_monitor = connection.clone();
     tokio::spawn(async move {
@@ -1591,7 +1837,7 @@ async fn serve_http3_connection(
     loop {
         let accepted = tokio::select! {
             biased;
-            _ = cancellation.cancelled() => {
+            _ = server.cancellation.cancelled() => {
                 h3_connection.shutdown(0).await?;
                 break;
             }
@@ -1600,29 +1846,19 @@ async fn serve_http3_connection(
         let Some(resolver) = accepted else {
             break;
         };
-        let app = Arc::clone(&app);
-        let invoke = Arc::clone(&invoke);
-        let locals = locals.clone();
-        let state = state.clone();
-        let connection_closed = closed_rx.clone();
+        let context = ConnectionContext {
+            server: Arc::clone(&server),
+            peer_addr,
+            transport_scheme: "https",
+            connection_closed: closed_rx.clone(),
+        };
         requests.spawn(async move {
-            if let Err(error) = handle_http3_request(
-                resolver,
-                peer_addr,
-                server_addr,
-                app,
-                invoke,
-                locals,
-                connection_closed,
-                state,
-            )
-            .await
-            {
+            if let Err(error) = handle_http3_request(resolver, context).await {
                 eprintln!("uvicorn-rs: HTTP/3 request from {peer_addr} failed: {error}");
             }
         });
     }
-    if tokio::time::timeout(graceful_timeout, async {
+    if tokio::time::timeout(server.graceful_timeout, async {
         while let Some(result) = requests.join_next().await {
             if let Err(error) = result {
                 eprintln!("uvicorn-rs: HTTP/3 request task failed: {error}");
@@ -1640,13 +1876,7 @@ async fn serve_http3_connection(
 
 async fn handle_http3_request(
     resolver: h3::server::RequestResolver<h3_quinn::Connection, Bytes>,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    connection_closed: watch::Receiver<bool>,
-    state: Option<Arc<Py<PyDict>>>,
+    context: ConnectionContext,
 ) -> Result<(), BoxError> {
     let (request, stream) = resolver.resolve_request().await?;
     let (parts, ()) = request.into_parts();
@@ -1655,24 +1885,10 @@ async fn handle_http3_request(
     tokio::spawn(pump_h3_request_body(
         receive_stream,
         request_tx,
-        connection_closed.clone(),
+        context.connection_closed.clone(),
     ));
 
-    let response = match handle_request_parts(
-        parts,
-        request_rx,
-        None,
-        connection_closed,
-        peer_addr,
-        server_addr,
-        app,
-        invoke,
-        locals,
-        "https",
-        state,
-    )
-    .await
-    {
+    let response = match handle_request_parts(parts, request_rx, None, context).await {
         Ok(response) => response,
         Err(error) => {
             eprintln!("uvicorn-rs: HTTP/3 ASGI request failed: {error}");
@@ -1776,28 +1992,9 @@ async fn pump_h3_request_body(
 
 async fn handle_request(
     request: Request<Incoming>,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    scheme: &'static str,
-    connection_closed: watch::Receiver<bool>,
-    state: Option<Arc<Py<PyDict>>>,
+    context: ConnectionContext,
 ) -> Response<ResponseBody> {
-    match handle_request_inner(
-        request,
-        peer_addr,
-        server_addr,
-        app,
-        invoke,
-        locals,
-        scheme,
-        connection_closed,
-        state,
-    )
-    .await
-    {
+    match handle_request_inner(request, context).await {
         Ok(response) => response,
         Err(error) => {
             eprintln!("uvicorn-rs: ASGI request failed: {error}");
@@ -1812,14 +2009,7 @@ async fn handle_request(
 
 async fn handle_request_inner(
     request: Request<Incoming>,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    scheme: &'static str,
-    connection_closed: watch::Receiver<bool>,
-    state: Option<Arc<Py<PyDict>>>,
+    context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, BoxError> {
     let (parts, body) = request.into_parts();
     let (request_tx, request_rx) = mpsc::channel(1);
@@ -1836,57 +2026,52 @@ async fn handle_request_inner(
         tokio::spawn(pump_http_request_body(
             body,
             request_tx,
-            connection_closed.clone(),
+            context.connection_closed.clone(),
         ));
         None
     };
-    handle_request_parts(
-        parts,
-        request_rx,
-        request_sender,
-        connection_closed,
-        peer_addr,
-        server_addr,
-        app,
-        invoke,
-        locals,
-        scheme,
-        state,
-    )
-    .await
+    handle_request_parts(parts, request_rx, request_sender, context).await
 }
 
 async fn handle_request_parts(
     parts: http::request::Parts,
     request_messages: mpsc::Receiver<RequestMessage>,
     request_sender: Option<mpsc::Sender<RequestMessage>>,
-    connection_closed: watch::Receiver<bool>,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    scheme: &'static str,
-    state: Option<Arc<Py<PyDict>>>,
+    context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, BoxError> {
+    let diagnostics = context.server.diagnostics.clone();
+    diagnostics.http_request_started();
     let (start_tx, mut start_rx) = mpsc::channel(1);
-    let (body_tx, body_rx) = mpsc::channel(1);
+    let (body_tx, body_rx) = mpsc::channel(RESPONSE_BODY_QUEUE_CAPACITY);
     let app_future = Python::attach(move |py| {
         let io = Py::new(
             py,
             AsgiIo {
                 request_messages: Arc::new(Mutex::new(request_messages)),
                 _request_sender: request_sender,
-                connection_closed,
+                connection_closed: context.connection_closed,
                 request_disconnected: Arc::new(AtomicBool::new(false)),
                 response_started: AtomicBool::new(false),
                 start: start_tx,
                 body: body_tx,
+                diagnostics: diagnostics.clone(),
             },
         )?;
-        let scope = build_scope(py, &parts, peer_addr, server_addr, scheme, state.as_ref())?;
-        let awaitable = invoke.bind(py).call1((app.bind(py), scope, io))?;
-        python_task_future(py, &locals, awaitable)
+        let scope = build_scope(
+            py,
+            &parts,
+            context.peer_addr,
+            context.server.server_addr,
+            context.transport_scheme,
+            context.server.state.as_ref(),
+        )?;
+        let awaitable =
+            context
+                .server
+                .invoke
+                .bind(py)
+                .call1((context.server.app.bind(py), scope, io))?;
+        python_task_future(py, &context.server.locals, awaitable, diagnostics.clone())
     })?;
     let mut app_task = AbortOnDrop::new(tokio::spawn(app_future));
 
@@ -1954,32 +2139,9 @@ fn trim_ascii(mut value: &[u8]) -> &[u8] {
 
 async fn handle_websocket_request(
     request: Request<Incoming>,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    transport_scheme: &'static str,
-    connection_closed: watch::Receiver<bool>,
-    scope_state: Option<Arc<Py<PyDict>>>,
-    websocket_tasks: WebSocketTasks,
-    cancellation: CancellationToken,
+    context: ConnectionContext,
 ) -> Response<ResponseBody> {
-    match handle_websocket_request_inner(
-        request,
-        peer_addr,
-        server_addr,
-        app,
-        invoke,
-        locals,
-        transport_scheme,
-        connection_closed,
-        scope_state,
-        websocket_tasks,
-        cancellation,
-    )
-    .await
-    {
+    match handle_websocket_request_inner(request, context).await {
         Ok(response) => response,
         Err(error) => {
             eprintln!("uvicorn-rs: WebSocket request failed: {error}");
@@ -1994,16 +2156,7 @@ async fn handle_websocket_request(
 
 async fn handle_websocket_request_inner(
     mut request: Request<Incoming>,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    app: Arc<Py<PyAny>>,
-    invoke: Arc<Py<PyAny>>,
-    locals: TaskLocals,
-    transport_scheme: &'static str,
-    connection_closed: watch::Receiver<bool>,
-    scope_state: Option<Arc<Py<PyDict>>>,
-    websocket_tasks: WebSocketTasks,
-    cancellation: CancellationToken,
+    context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, BoxError> {
     let request_key = request
         .headers()
@@ -2017,26 +2170,38 @@ async fn handle_websocket_request_inner(
     let (outgoing_tx, outgoing_rx) = mpsc::channel(8);
     let (handshake_tx, mut handshake_rx) = oneshot::channel();
     let state = Arc::new(AtomicU8::new(0));
+    let app_context = context.clone();
+    let diagnostics = context.server.diagnostics.clone();
     let websocket_io = WebSocketIo {
         incoming: Arc::new(Mutex::new(incoming_rx)),
         connect_delivered: AtomicBool::new(false),
-        connection_closed: connection_closed.clone(),
+        connection_closed: context.connection_closed.clone(),
         state: Arc::clone(&state),
         handshake: std::sync::Mutex::new(Some(handshake_tx)),
         outgoing: outgoing_tx,
+        diagnostics: diagnostics.clone(),
     };
     let app_future = Python::attach(move |py| {
         let io = Py::new(py, websocket_io)?;
         let scope = build_websocket_scope(
             py,
             &parts,
-            peer_addr,
-            server_addr,
-            transport_scheme,
-            scope_state.as_ref(),
+            app_context.peer_addr,
+            app_context.server.server_addr,
+            app_context.transport_scheme,
+            app_context.server.state.as_ref(),
         )?;
-        let awaitable = invoke.bind(py).call1((app.bind(py), scope, io))?;
-        python_task_future(py, &locals, awaitable)
+        let awaitable = app_context.server.invoke.bind(py).call1((
+            app_context.server.app.bind(py),
+            scope,
+            io,
+        ))?;
+        python_task_future(
+            py,
+            &app_context.server.locals,
+            awaitable,
+            diagnostics.clone(),
+        )
     })?;
     let mut app_task = AbortOnDrop::new(tokio::spawn(app_future));
 
@@ -2106,7 +2271,11 @@ async fn handle_websocket_request_inner(
     }
 
     let app_task = app_task.take();
-    let upgrade_cancellation = cancellation.clone();
+    let server = Arc::clone(&context.server);
+    let session_cancellation = server.cancellation.clone();
+    let upgrade_cancellation = session_cancellation.clone();
+    let connection_closed = context.connection_closed;
+    let websocket_tasks = Arc::clone(&server.websocket_tasks);
     websocket_tasks.lock().await.spawn(async move {
         tokio::select! {
             biased;
@@ -2129,7 +2298,7 @@ async fn handle_websocket_request_inner(
                         app_task,
                         state,
                         connection_closed,
-                        cancellation,
+                        session_cancellation,
                     ).await {
                         eprintln!("uvicorn-rs: WebSocket session failed: {error}");
                     }
@@ -2158,6 +2327,7 @@ async fn drive_websocket<I>(
 where
     I: AsyncRead + AsyncWrite + Unpin,
 {
+    let mut app_task_completed = false;
     loop {
         tokio::select! {
             biased;
@@ -2167,10 +2337,10 @@ where
                     code: 1006,
                     reason: String::new(),
                 });
-                let _ = tokio::time::timeout(
+                app_task_completed = tokio::time::timeout(
                     std::time::Duration::from_secs(1),
                     &mut app_task,
-                ).await;
+                ).await.is_ok();
                 break;
             }
             _ = cancellation.cancelled() => {
@@ -2186,13 +2356,14 @@ where
                     code: 1001,
                     reason: "server shutdown".to_string(),
                 });
-                let _ = tokio::time::timeout(
+                app_task_completed = tokio::time::timeout(
                     std::time::Duration::from_secs(1),
                     &mut app_task,
-                ).await;
+                ).await.is_ok();
                 break;
             }
             result = &mut app_task => {
+                app_task_completed = true;
                 match result {
                     Ok(Ok(_)) => {
                         if state.load(Ordering::Acquire) == 1 {
@@ -2231,7 +2402,12 @@ where
                             .unwrap_or((1005, String::new()));
                         state.store(3, Ordering::Release);
                         let _ = incoming.send(WebSocketIncoming::Disconnect { code, reason }).await;
-                        let _ = tokio::time::timeout(std::time::Duration::from_secs(1), &mut app_task).await;
+                        app_task_completed = tokio::time::timeout(
+                            std::time::Duration::from_secs(1),
+                            &mut app_task,
+                        )
+                        .await
+                        .is_ok();
                         break;
                     }
                     Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => {}
@@ -2277,10 +2453,12 @@ where
         }
     }
     state.store(3, Ordering::Release);
-    if !app_task.is_finished() {
-        app_task.abort();
+    if !app_task_completed {
+        if !app_task.is_finished() {
+            app_task.abort();
+        }
+        let _ = app_task.await;
     }
-    let _ = app_task.await;
     Ok(())
 }
 

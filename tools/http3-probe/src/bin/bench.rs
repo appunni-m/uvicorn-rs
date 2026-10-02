@@ -25,7 +25,10 @@ async fn main() -> Result<(), BenchError> {
     let certfile = args.next().ok_or("missing CA certificate")?;
     let seconds: f64 = args.next().ok_or("missing duration seconds")?.parse()?;
     let concurrency: usize = args.next().ok_or("missing concurrency")?.parse()?;
-    let requested_connections: usize = args.next().ok_or("missing QUIC connection count")?.parse()?;
+    let requested_connections: usize = args
+        .next()
+        .ok_or("missing QUIC connection count")?
+        .parse()?;
     let connection_count = requested_connections.min(concurrency).max(1);
     let mode = args.next().ok_or("missing mode")?;
     let path = args.next().ok_or("missing path")?;
@@ -33,8 +36,7 @@ async fn main() -> Result<(), BenchError> {
     let upload_bytes: usize = args.next().ok_or("missing upload bytes")?.parse()?;
     let expected_status: u16 = args.next().ok_or("missing expected status")?.parse()?;
     let expected_override = args.next().unwrap_or_default();
-    let read_rate_bytes_per_second: u64 =
-        args.next().unwrap_or_else(|| "0".to_string()).parse()?;
+    let read_rate_bytes_per_second: u64 = args.next().unwrap_or_else(|| "0".to_string()).parse()?;
 
     let expected_body = if response_bytes > 0 {
         vec![b'x'; response_bytes]
@@ -89,143 +91,149 @@ async fn main() -> Result<(), BenchError> {
     let uri = format!("https://localhost:{}{}", address.port(), path);
     let deadline = Instant::now() + Duration::from_secs_f64(seconds);
     let started = Instant::now();
-    let workers = (0..concurrency).map(|worker_index| {
-        let mut request_sender = senders[worker_index % connection_count].clone();
-        let uri = uri.clone();
-        let expected_body = Arc::clone(&expected_body);
-        let upload_chunks = Arc::clone(&upload_chunks);
-        async move {
-            let mut latencies = Vec::new();
-            let mut response_bytes = 0_u64;
-            let mut response_data_chunks = 0_u64;
-            let mut request_bytes = 0_u64;
-            let mut failure = None;
-            while Instant::now() < deadline {
-                let request_started = Instant::now();
-                let method = if upload_bytes > 0 { "POST" } else { "GET" };
-                let content_length = if upload_bytes > 0 {
-                    upload_bytes.to_string()
-                } else {
-                    "1".to_string()
-                };
-                let request = match Request::builder()
-                    .method(method)
-                    .header("content-length", content_length)
-                    .uri(&uri)
-                    .body(())
-                {
-                    Ok(request) => request,
-                    Err(error) => {
-                        failure = Some(error.to_string());
-                        break;
-                    }
-                };
-                let mut stream = match request_sender.send_request(request).await {
-                    Ok(stream) => stream,
-                    Err(error) => {
-                        failure = Some(format!("H3 request failed: {error}"));
-                        break;
-                    }
-                };
-                if upload_bytes > 0 {
-                    for chunk in upload_chunks.iter() {
-                        if let Err(error) = stream.send_data(chunk.clone()).await {
-                            failure = Some(format!("H3 upload failed: {error}"));
+    let workers =
+        (0..concurrency).map(|worker_index| {
+            let mut request_sender = senders[worker_index % connection_count].clone();
+            let uri = uri.clone();
+            let expected_body = Arc::clone(&expected_body);
+            let upload_chunks = Arc::clone(&upload_chunks);
+            async move {
+                let mut latencies = Vec::new();
+                let mut response_bytes = 0_u64;
+                let mut response_data_chunks = 0_u64;
+                let mut request_bytes = 0_u64;
+                let mut failure = None;
+                while Instant::now() < deadline {
+                    let request_started = Instant::now();
+                    let method = if upload_bytes > 0 { "POST" } else { "GET" };
+                    let content_length = if upload_bytes > 0 {
+                        upload_bytes.to_string()
+                    } else {
+                        "1".to_string()
+                    };
+                    let request = match Request::builder()
+                        .method(method)
+                        .header("content-length", content_length)
+                        .uri(&uri)
+                        .body(())
+                    {
+                        Ok(request) => request,
+                        Err(error) => {
+                            failure = Some(error.to_string());
                             break;
                         }
-                        request_bytes += chunk.len() as u64;
+                    };
+                    let mut stream = match request_sender.send_request(request).await {
+                        Ok(stream) => stream,
+                        Err(error) => {
+                            failure = Some(format!("H3 request failed: {error}"));
+                            break;
+                        }
+                    };
+                    if upload_bytes > 0 {
+                        for chunk in upload_chunks.iter() {
+                            if let Err(error) = stream.send_data(chunk.clone()).await {
+                                failure = Some(format!("H3 upload failed: {error}"));
+                                break;
+                            }
+                            request_bytes += chunk.len() as u64;
+                        }
+                        if failure.is_some() {
+                            break;
+                        }
+                    } else {
+                        if let Err(error) = stream.send_data(Bytes::from_static(b"a")).await {
+                            failure = Some(format!("H3 request body failed: {error}"));
+                            break;
+                        }
+                        request_bytes += 1;
+                    }
+                    if let Err(error) = stream.finish().await {
+                        failure = Some(format!("H3 request finish failed: {error}"));
+                        break;
+                    }
+                    let response =
+                        match tokio::time::timeout(Duration::from_secs(5), stream.recv_response())
+                            .await
+                        {
+                            Ok(Ok(response)) => response,
+                            Ok(Err(error)) => {
+                                failure = Some(format!("H3 response headers failed: {error}"));
+                                break;
+                            }
+                            Err(_) => {
+                                failure =
+                                    Some("timed out waiting for H3 response headers".to_string());
+                                break;
+                            }
+                        };
+                    if response.status().as_u16() != expected_status {
+                        failure = Some(format!(
+                            "unexpected HTTP status {} (wanted {})",
+                            response.status(),
+                            expected_status
+                        ));
+                    }
+                    let mut offset = 0_usize;
+                    let pacing_started = Instant::now();
+                    loop {
+                        let mut data =
+                            match tokio::time::timeout(Duration::from_secs(5), stream.recv_data())
+                                .await
+                            {
+                                Ok(Ok(Some(data))) => data,
+                                Ok(Ok(None)) => break,
+                                Ok(Err(error)) => {
+                                    failure = Some(format!("H3 response body failed: {error}"));
+                                    break;
+                                }
+                                Err(_) => {
+                                    failure =
+                                        Some("timed out waiting for H3 response body".to_string());
+                                    break;
+                                }
+                            };
+                        let length = data.remaining();
+                        response_data_chunks += 1;
+                        if offset + length > expected_body.len()
+                            || data.chunk() != &expected_body[offset..offset + length]
+                        {
+                            failure = Some("response body differs from expected bytes".to_string());
+                        }
+                        offset += length;
+                        response_bytes += length as u64;
+                        if read_rate_bytes_per_second > 0 {
+                            let target_elapsed = Duration::from_secs_f64(
+                                offset as f64 / read_rate_bytes_per_second as f64,
+                            );
+                            let elapsed = pacing_started.elapsed();
+                            if target_elapsed > elapsed {
+                                tokio::time::sleep(target_elapsed - elapsed).await;
+                            }
+                        }
+                        data.advance(length);
+                    }
+                    if offset != expected_body.len() {
+                        failure = Some(format!(
+                            "response body length {} did not match expected {}",
+                            offset,
+                            expected_body.len()
+                        ));
                     }
                     if failure.is_some() {
                         break;
                     }
-                } else {
-                    if let Err(error) = stream.send_data(Bytes::from_static(b"a")).await {
-                        failure = Some(format!("H3 request body failed: {error}"));
-                        break;
-                    }
-                    request_bytes += 1;
+                    latencies.push(request_started.elapsed().as_secs_f64() * 1000.0);
                 }
-                if let Err(error) = stream.finish().await {
-                    failure = Some(format!("H3 request finish failed: {error}"));
-                    break;
-                }
-                let response = match tokio::time::timeout(
-                    Duration::from_secs(5),
-                    stream.recv_response(),
+                (
+                    latencies,
+                    request_bytes,
+                    response_bytes,
+                    response_data_chunks,
+                    failure,
                 )
-                .await
-                {
-                    Ok(Ok(response)) => response,
-                    Ok(Err(error)) => {
-                        failure = Some(format!("H3 response headers failed: {error}"));
-                        break;
-                    }
-                    Err(_) => {
-                        failure = Some("timed out waiting for H3 response headers".to_string());
-                        break;
-                    }
-                };
-                if response.status().as_u16() != expected_status {
-                    failure = Some(format!(
-                        "unexpected HTTP status {} (wanted {})",
-                        response.status(), expected_status
-                    ));
-                }
-                let mut offset = 0_usize;
-                let pacing_started = Instant::now();
-                loop {
-                    let mut data = match tokio::time::timeout(
-                        Duration::from_secs(5),
-                        stream.recv_data(),
-                    )
-                    .await
-                    {
-                        Ok(Ok(Some(data))) => data,
-                        Ok(Ok(None)) => break,
-                        Ok(Err(error)) => {
-                            failure = Some(format!("H3 response body failed: {error}"));
-                            break;
-                        }
-                        Err(_) => {
-                            failure = Some("timed out waiting for H3 response body".to_string());
-                            break;
-                        }
-                    };
-                    let length = data.remaining();
-                    response_data_chunks += 1;
-                    if offset + length > expected_body.len()
-                        || data.chunk() != &expected_body[offset..offset + length]
-                    {
-                        failure = Some("response body differs from expected bytes".to_string());
-                    }
-                    offset += length;
-                    response_bytes += length as u64;
-                    if read_rate_bytes_per_second > 0 {
-                        let target_elapsed = Duration::from_secs_f64(
-                            offset as f64 / read_rate_bytes_per_second as f64,
-                        );
-                        let elapsed = pacing_started.elapsed();
-                        if target_elapsed > elapsed {
-                            tokio::time::sleep(target_elapsed - elapsed).await;
-                        }
-                    }
-                    data.advance(length);
-                }
-                if offset != expected_body.len() {
-                    failure = Some(format!(
-                        "response body length {} did not match expected {}",
-                        offset,
-                        expected_body.len()
-                    ));
-                }
-                if failure.is_some() {
-                    break;
-                }
-                latencies.push(request_started.elapsed().as_secs_f64() * 1000.0);
             }
-            (latencies, request_bytes, response_bytes, response_data_chunks, failure)
-        }
-    });
+        });
     let results = join_all(workers).await;
     let elapsed = started.elapsed().as_secs_f64();
     let mut latencies = Vec::new();

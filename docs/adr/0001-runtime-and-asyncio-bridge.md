@@ -1,8 +1,8 @@
 # ADR 0001: Rust network runtime and Python asyncio bridge
 
-- **Status:** Accepted for the protocol prototype. The synchronized receive fast path is correctness-gated and materially improves the Rust baseline, but the server remains slower than Uvicorn's fastest measured HTTP/1.1 configuration and is not approved as a general performance replacement or production server.
+- **Status:** Accepted for the protocol prototype. The synchronized receive fast path has correctness-gated evidence of a baseline improvement. The latest full matrix passed its represented correctness cases but ran under severe host contention; prior and current measurements still show H1 losses against Uvicorn's fastest configuration. This is not approved as a general performance replacement or production server.
 - **Date:** 2026-10-02
-- **Working project name:** `uvicorn-rs` (provisional, taken from the workspace directory; owner confirmation is still open). The CLI name is `uvicorn-rs` and the Python import name is `uvicorn_rs`. This project is independent and is not the Uvicorn project.
+- **Project name:** `uvicorn-rs`, taken from the GitHub repository URL supplied by the owner. The CLI name is `uvicorn-rs` and the Python import name is `uvicorn_rs`. This project is independent and is not affiliated with Uvicorn.
 
 ## Context
 
@@ -30,7 +30,7 @@ The bridge must preserve the original Python exception object and traceback when
 
 ### 3. Backpressure and streaming are end-to-end
 
-Request bodies are exposed as incremental `http.request` events, not accumulated before the app starts. HTTP request and response channels hold at most one pending body item; WebSocket channels hold at most eight messages. Awaiting ASGI `send()` waits for capacity in that bounded writer path. A slow peer therefore applies backpressure to the Python producer instead of growing an unbounded queue.
+Request bodies are exposed as incremental `http.request` events, not accumulated before the app starts. The HTTP request channel holds at most one pending body item and the HTTP response channel holds at most four; WebSocket channels hold at most eight messages. Awaiting ASGI `send()` waits for capacity in that bounded writer path. A slow peer therefore applies backpressure to the Python producer instead of growing an unbounded queue. The response capacity was increased from one to four after diagnostics showed frequent per-chunk bridge waits; this reduced those waits, but did not establish a performance win over Uvicorn.
 
 HTTP response framing, content length, chunked transfer encoding, and connection reuse belong to the Rust HTTP implementation. The server ignores an app-provided `Transfer-Encoding` header and chooses valid framing itself. It preserves duplicate header fields and their order.
 
@@ -43,6 +43,34 @@ Run lifespan startup on the Python app loop before accepting requests. In automa
 Build a Rust extension/library with a thin Python CLI and loader. The server may test against `starlette-rs`, but neither its runtime nor its package metadata may depend on, import, or bundle `starlette-rs`. No package is published as part of this work.
 
 The requested contract is ASGI 3, HTTP/WebSocket 2.5 and lifespan 2.0, over HTTP/1.1, HTTP/2, and experimental HTTP/3. The support matrix separates implemented behavior from live evidence. This does not imply Uvicorn CLI, worker, reload, or deployment-option parity. Uvicorn's documented HTTP choices are `h11` and `httptools`, so HTTP/2 and HTTP/3 cannot be compared directly against Uvicorn; those protocols need a separately named server that supports the same protocol ([Uvicorn settings](https://www.uvicorn.org/settings/)).
+
+### 6. Retain immutable Python output buffers with PyO3 `Bytes`
+
+For HTTP response bodies, WebSocket binary payloads, and header byte pairs,
+extract PyO3's `bytes::Bytes` directly instead of first allocating Rust
+`Vec<u8>` values. With PyO3's `bytes` feature, immutable Python `bytes` can be
+retained through an owner-backed `Bytes`, so Rust can write the original payload
+without copying it at extraction. Mutable `bytearray` input still has to be
+snapshotted to keep the buffer stable for asynchronous transport writes.
+
+Do not use unsafe allocator/layout tricks to transfer a Rust allocation into
+Python `bytes`. The Rust-to-Python request/event path currently constructs
+Python `bytes` objects and copies payloads. This design keeps
+`unsafe_code = "forbid"` and does not claim end-to-end zero-copy I/O. A 1 KiB
+copy threshold was rejected after its fixed and chunked H1 cases regressed in
+the recorded focused run; the selected path always uses direct extraction for
+immutable `bytes`. See the [buffer ownership ledger](../architecture.md#buffer-ownership-and-copies)
+and [optimization results](../feasibility.md#pyo3-buffer-ownership-optimization).
+
+For event dispatch, exact built-in Python `str` values are compared with
+cached interned ASGI event names, avoiding a temporary Rust `String` for common
+HTTP, WebSocket, and lifespan events. Unknown names and `str` subclasses use a
+Rust-owned fallback; known standard event names on subclasses are still mapped
+to the normal Rust event. The live HTTP probe checks that subclass `__eq__`
+overrides are not invoked and dispatch still succeeds. This only avoids a
+small event-name allocation: it does not remove ASGI message construction,
+Python calls, GIL access, or scheduler handoffs. The event-name optimization
+was not isolated in a clean performance run, so no speed gain is claimed.
 
 ## Alternatives considered
 
@@ -66,6 +94,7 @@ Rejected for the MVP. A mature HTTP implementation reduces protocol and request-
 
 - Every request crosses a Rust/Python boundary and runs Python app code under the interpreter's scheduling and GIL constraints. Rust can reduce network overhead, but cannot make arbitrary Python application logic execute in parallel in a conventional GIL-enabled CPython build.
 - Tokio and Python asyncio are separate schedulers. The bridge adds wakeups and conversions; benchmark measurements must include their cost.
+- Owner-backed extraction removes a Python-to-Rust payload copy for immutable outgoing `bytes`, but it does not remove ASGI event construction, Python-to-Rust calls, or Rust-to-Python copies. The focused benchmark showed lower large-response sampled RSS but did not improve every H1 workload.
 - Hyper, Tokio, PyO3, and the async bridge versions must be pinned in the lockfile and checked against the supported Python versions before packaging.
 - The benchmark currently covers one CPython 3.12 environment; it does not establish a supported Python version range.
 - Representative cancellation, exception, lifecycle, streaming, WebSocket, and HTTP protocol probes now pass. These targeted cases do not replace a full ASGI conformance suite.
@@ -73,9 +102,7 @@ Rejected for the MVP. A mature HTTP implementation reduces protocol and request-
 
 ### Feasibility outcome
 
-The synchronized receive fast path remains in the prototype. The full 12-workload H1 matrix confirms that uvicorn-rs/uvloop beats Uvicorn `asyncio + h11` on the fixed response (45,482 versus 22,016 requests/s) but loses to Uvicorn `uvloop + httptools` (45,482 versus 75,641 requests/s), at higher server CPU. Large and chunked H1 responses also show significant throughput, latency, or memory regressions. Some individual workloads favor Rust, but they do not establish a general Uvicorn performance replacement.
-
-The H2/H3 matrices show faster throughput than Hypercorn on several same-protocol cases, with higher CPU on many of those runs. Uvicorn does not provide H2/H3 baselines, Hypercorn failed the H3 16-worker comparison gate, and the H3 upload baseline failed its correctness gate. The Rust server passed a candidate-only H3 fixed-response multiplexing gate at 16 workers. WebSocket measurements are mixed. The correct scope is therefore a protocol/interoperability prototype; stop performance-server expansion until profiling identifies a specific, correctness-preserving opportunity. See [the full category report](../feasibility.md), the [machine-readable medians](../../benchmarks/results/category-summary-2026-10-02.json), and the raw [H1](../../benchmarks/results/http-categories-2026-10-02.json), [H2](../../benchmarks/results/http2-categories-2026-10-02.json), [H3](../../benchmarks/results/http3-categories-2026-10-02.json), [WebSocket](../../benchmarks/results/websocket-categories-2026-10-02.json), and [lifecycle](../../benchmarks/results/lifecycle-categories-2026-10-02.json) results. The earlier single-workload measurements remain as optimization history in the feasibility report.
+The latest full matrix contains 144 H1, 84 H2, 66 H3, 36 WebSocket, and 20 lifecycle rows with all represented correctness checks passing. Its saved process snapshot shows an unrelated test process using 687.4% CPU plus concurrent Rust build/doc jobs; treat its performance values as diagnostic. Uvicorn does not provide H2/H3 baselines, so those protocols compare only to Hypercorn. H3's represented Hypercorn cases now pass; its upload cases remain excluded after prior correctness failures. The correct scope is therefore a protocol/interoperability prototype; further performance work should be driven by clean profiles and correctness-preserving hypotheses. See [the full category report](../feasibility.md) and the [latest raw run](../../benchmarks/results/full-event-type-fastpath-2026-10-02T142406Z/). Historical category data and earlier single-workload measurements remain linked in the feasibility report.
 
 ## References
 

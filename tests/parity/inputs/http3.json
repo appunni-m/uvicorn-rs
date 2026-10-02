@@ -1,0 +1,38 @@
+{
+  "schema": "uvicorn-rs-parity/input@2",
+  "cases": [
+    {
+      "case_id": "http3.scope-query-header-and-body",
+      "profile": "http3",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/scope?from=parity&v=3",
+        "headers": [
+          [
+            "x-parity",
+            "h3-input"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.response-stream-order",
+      "profile": "http3",
+      "operation": "http.response-stream",
+      "covers": [
+        "http.response-stream"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": ""
+      }
+    }
+  ]
+}

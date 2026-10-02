@@ -1,47 +1,102 @@
 # uvicorn-rs
 
-`uvicorn-rs` is an independent Rust network server for Python ASGI 3 applications. The working name is provisional and comes from this workspace; the project is not affiliated with the Uvicorn project. Its CLI is `uvicorn-rs`, and its Python module is `uvicorn_rs`.
+An independent Rust network server for Python ASGI 3 applications. Rust handles
+listeners, HTTP/1.1, HTTP/2, experimental HTTP/3, WebSocket transport, flow
+control, and shutdown. Python loads the application and keeps ownership of its
+asyncio event loop and ASGI tasks.
 
-The Rust data plane currently supports HTTP/1.1, HTTP/2, and experimental HTTP/3. Python asyncio or optional uvloop owns application tasks, context, and exceptions. The server also implements bounded HTTP streaming, HTTP/1.1 WebSockets, ASGI lifespan, disconnect reporting, Python task cancellation, and graceful shutdown. See the [support matrix](docs/support-matrix.md) for tested behavior and limits.
+This is an experimental prototype. Its measured HTTP/1.1 performance does not
+match Uvicorn's fastest configuration across representative workloads; streamed
+responses are a known regression. See [the measured results](docs/feasibility.md)
+before evaluating it for deployment. The current implementation has targeted
+black-box coverage, not a complete ASGI conformance run or a production security
+review.
 
-The general performance gate failed across the completed category matrix: the server beats Uvicorn `asyncio + h11` on the fixed HTTP/1.1 case, but loses to Uvicorn `uvloop + httptools` there and regresses heavily on multi-chunk HTTP/1.1 responses. HTTP/2 and HTTP/3 compare favorably with Hypercorn on several cases, with higher CPU in many runs; those are not Uvicorn comparisons. Treat this as a protocol/interoperability prototype, not a faster or production replacement. Per-run results and category medians are in the [feasibility report](docs/feasibility.md) and [machine-readable summary](benchmarks/results/category-summary-2026-10-02.json).
+`uvicorn-rs` is the project name used by the supplied GitHub repository and is
+not affiliated with the Uvicorn project. `starlette-rs` is an optional,
+separately installed ASGI application; this server neither depends on nor
+bundles it.
 
-`starlette-rs` is optional and remains an independent framework. This project does not install, import, bundle, or declare it as a runtime dependency. An optional [integration example](examples/starlette_rs_asgi.py) and [probe](scripts/probe_starlette_rs.py) can be run when `starlette-rs` is installed separately.
+## Try it locally
 
-## Run
-
-Use Python 3.12 and Rust 1.83 or newer for the checked development setup:
+The local development environment was verified with CPython 3.12.13 and Rust
+1.98.1. `Cargo.toml` declares Rust 1.83 as the minimum, but that exact toolchain
+has not been validated. From a checkout:
 
 ```sh
 uv sync --python 3.12
 uv run uvicorn-rs examples.hello_asgi:app --host 127.0.0.1 --port 8000
 ```
 
-The CLI accepts `module:app`, `--host`, `--port`, `--loop asyncio|uvloop`, `--certfile`, `--keyfile`, and `--graceful-timeout`. uvloop is optional. Supplying a certificate and key enables HTTPS with HTTP/1.1 and HTTP/2 over TCP plus HTTP/3 over QUIC on the same port. Cleartext HTTP/2 accepts prior-knowledge h2c. HTTP/3 is experimental.
-
-## Black-box protocol probes
+In another terminal:
 
 ```sh
-uv sync --python 3.12 --group benchmark
-uv run python scripts/probe_http.py
-uv run python scripts/probe_http2.py
-uv run python scripts/probe_streaming.py
-uv run python scripts/probe_websocket.py
-uv run python scripts/probe_cancellation.py
-uv run python scripts/probe_lifespan.py
+curl http://127.0.0.1:8000/
 ```
 
-For the optional `starlette-rs` check, install that project separately and run `uv run python scripts/probe_starlette_rs.py`.
+The CLI loads an importable `module:attribute` and serves one ASGI application.
+HTTPS and HTTP/3 are enabled together when both `--certfile` and `--keyfile` are
+provided. For all supported arguments, defaults, API behavior, and signal
+handling, see [configuration](docs/configuration.md).
 
-## Architecture and performance
+## What is implemented
 
-- [ADR 0001: Rust runtime and Python asyncio bridge](docs/adr/0001-runtime-and-asyncio-bridge.md)
+- HTTP/1.1, HTTP/2, and experimental HTTP/3 over TCP/TLS and QUIC.
+- HTTP request and response streaming with bounded message queues.
+- HTTP/1.1 WebSocket upgrade and ASGI WebSocket messages.
+- ASGI lifespan, request disconnect events, task cancellation, and graceful
+  shutdown.
+- A Python asyncio boundary, with optional uvloop for the Python application
+  loop. Rust Tokio owns the network runtime; uvloop does not replace Tokio.
+- PyO3 conversion that retains immutable Python `bytes` owners for outgoing
+  HTTP bodies, WebSocket binary payloads, and header fields, avoiding payload
+  copies on those Python-to-Rust paths.
+
+The exact live-tested behaviors, missing protocol cases, and platform limits are
+listed in the [ASGI support matrix](docs/support-matrix.md). See
+[architecture and buffer ownership](docs/architecture.md) for the Rust/Python
+boundary and remaining required copies.
+
+## Development and evidence
+
+Use the [contributor guide](CONTRIBUTING.md) for formatting, lint, documentation,
+black-box probes, and the [input-only parity matrix](docs/parity.md). The
+[implementation review](docs/implementation-review.md) tracks known technical
+issues. The [feasibility report](docs/feasibility.md) includes baseline
+methodology, per-category performance results, and the PyO3 buffer-ownership
+experiment with links to raw JSON.
+
+Run the input-only black-box server parity matrix with
+`uv run --group benchmark python scripts/run_parity.py`; see the [parity suite
+guide](docs/parity.md) for its oracle choices, support slice, and result format.
+
+## Project boundaries
+
+- This is not a drop-in Uvicorn replacement. Uvicorn CLI parity, reload, worker
+  supervision, proxy-header handling, and Unix sockets are outside the current
+  scope.
+- HTTP/2 WebSockets and HTTP/3 WebSockets are unsupported. HTTP/3 remains
+  experimental.
+- No wheel or source distribution has been published.
+- `starlette-rs` stays an independent framework and is not a runtime dependency
+  of this server.
+
+## Support, security, and licensing
+
+There is no published support window; see [support expectations](SUPPORT.md).
+Do not post vulnerability details in a public issue; use the private route in
+[the security policy](SECURITY.md). The project has not selected a license, so
+the public source grants no redistribution or reuse rights.
+
+## Documentation map
+
+- [Architecture decision record](docs/adr/0001-runtime-and-asyncio-bridge.md)
+- [Architecture and memory ownership](docs/architecture.md)
+- [CLI and Python API reference](docs/configuration.md)
 - [ASGI support matrix](docs/support-matrix.md)
-- [Feasibility benchmark history](docs/feasibility.md)
-- [HTTP/1.1 category runner](scripts/run_http_category_bench.py)
-- [HTTP/2 category runner](scripts/run_h2_category_bench.py)
-- [HTTP/3 category runner](scripts/run_h3_category_bench.py)
-- [WebSocket category runner](scripts/run_websocket_category_bench.py)
-- [Lifecycle runner](scripts/run_lifecycle_bench.py)
-
-The benchmark runner compares the same HTTP/1.1 ASGI app and load client against Uvicorn's asyncio/h11 and uvloop/httptools configurations. It has fixed-response and streamed-response workloads. Uvicorn does not provide HTTP/2 or HTTP/3 baselines, so those protocols require a separately named ASGI server for performance comparisons. No package has been published.
+- [Input-only server parity suite](docs/parity.md)
+- [Reproducible full benchmark setup and commands](docs/benchmarks.md)
+- [Release candidate workflow and artifact checks](docs/releases.md)
+- [Performance feasibility and raw results](docs/feasibility.md)
+- [Known implementation issues](docs/implementation-review.md)
+- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Support](SUPPORT.md)

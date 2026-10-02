@@ -1,0 +1,5 @@
+PASS http1.json: 144 correctness-gated rows
+PASS http2.json: 84 correctness-gated rows
+PASS websocket.json: 36 correctness-gated rows
+PASS lifecycle.json: 20 correctness-gated rows
+PASS http3-candidate-only.json: 36 Rust-only rows; no Hypercorn comparison

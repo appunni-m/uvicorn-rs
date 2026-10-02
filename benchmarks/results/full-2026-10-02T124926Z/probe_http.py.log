@@ -1,0 +1,3 @@
+PASS: examples.hello_asgi:app on asyncio returned HTTP 200 POST /probe 1.1 payload
+PASS: examples.bridge_contract_asgi:app on uvloop returned HTTP 200 call_thread=True;loop=True;context=caller-context;request=payload
+PASS: examples.raising_asgi:app on asyncio returned HTTP 500 Internal Server Error

@@ -1,0 +1,257 @@
+{
+  "schema": "uvicorn-rs-parity/manifest@2",
+  "scope": {
+    "id": "asgi-server-protocol-slice",
+    "mode": "slice",
+    "authority": "docs/support-matrix.md",
+    "description": "Consumer-visible ASGI HTTP, WebSocket, lifespan, disconnect, and shutdown behavior represented by indexed input workflows. This is not the full ASGI or Uvicorn contract."
+  },
+  "oracles": [
+    {
+      "id": "uvicorn",
+      "name": "Uvicorn",
+      "version": "0.54.0",
+      "runtime": "CPython 3.12",
+      "protocols": [
+        "http/1.1",
+        "websocket",
+        "lifespan"
+      ],
+      "components": [
+        {
+          "id": "uvloop",
+          "version": "0.23.0"
+        },
+        {
+          "id": "httptools",
+          "version": "0.8.0"
+        },
+        {
+          "id": "websockets",
+          "version": "17.1"
+        }
+      ]
+    },
+    {
+      "id": "hypercorn",
+      "name": "Hypercorn",
+      "version": "0.18.0",
+      "runtime": "CPython 3.12",
+      "protocols": [
+        "http/2",
+        "http/3"
+      ],
+      "components": [
+        {
+          "id": "uvloop",
+          "version": "0.23.0"
+        },
+        {
+          "id": "h11",
+          "version": "0.16.0"
+        },
+        {
+          "id": "h2",
+          "version": "4.4.1"
+        },
+        {
+          "id": "wsproto",
+          "version": "1.3.2"
+        },
+        {
+          "id": "aioquic",
+          "version": "1.3.0"
+        }
+      ]
+    }
+  ],
+  "target": {
+    "id": "uvicorn-rs",
+    "name": "uvicorn-rs",
+    "revision": "recorded-at-run-time",
+    "runtime": "CPython 3.12 + Rust/Tokio",
+    "protocols": [
+      "http/1.1",
+      "http/2",
+      "http/3",
+      "websocket",
+      "lifespan"
+    ]
+  },
+  "profiles": [
+    {
+      "id": "http1",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "http2",
+      "oracle": "hypercorn",
+      "protocol": "http/2",
+      "oracle_config": [
+        "uvloop",
+        "TLS ALPN h2",
+        "explicit ASGI mode for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "http3",
+      "oracle": "hypercorn",
+      "protocol": "http/3",
+      "oracle_config": [
+        "uvloop",
+        "QUIC",
+        "explicit ASGI mode for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "websocket",
+      "oracle": "uvicorn",
+      "protocol": "websocket",
+      "oracle_config": [
+        "uvloop",
+        "websockets",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "lifecycle",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan on",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "id": "http.scope-and-body",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.sync-callable-awaitable",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.response-stream",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "ordered_body_bytes"
+      ]
+    },
+    {
+      "id": "http.response-stream-progress",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "early_body_bytes",
+        "ordered_body_bytes",
+        "streamed_before_completion"
+      ],
+      "required_observations": {
+        "streamed_before_completion": true
+      }
+    },
+    {
+      "id": "http.request-upload",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "ordered_body_bytes"
+      ]
+    },
+    {
+      "id": "http.request-streaming",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "early_body_bytes",
+        "ordered_body_bytes"
+      ]
+    },
+    {
+      "id": "http.application-error",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.application-status",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.client-disconnect",
+      "kind": "protocol_operation",
+      "observe": [
+        "disconnect_event",
+        "followup_response"
+      ]
+    },
+    {
+      "id": "websocket.message-exchange",
+      "kind": "protocol_operation",
+      "observe": [
+        "subprotocol",
+        "ordered_messages"
+      ]
+    },
+    {
+      "id": "websocket.denial",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status"
+      ]
+    },
+    {
+      "id": "lifespan.shutdown-cancellation",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "application_events"
+      ]
+    }
+  ],
+  "inputs": [
+    "inputs/http1.json",
+    "inputs/http2.json",
+    "inputs/http3.json",
+    "inputs/websocket.json",
+    "inputs/lifecycle.json"
+  ],
+  "result_schema": "uvicorn-rs-parity/result@2",
+  "normalization": {
+    "http_headers": "Observe only the application content-type header. Date and server-identification headers are deliberately outside this parity slice.",
+    "body": "Compare response bytes exactly; byte lengths or hashes do not replace byte comparison.",
+    "errors": "Compare public HTTP status and body. Runtime traceback formatting is recorded in logs but is not treated as a cross-server API.",
+    "signal_exit": "The raw exit code is retained as a diagnostic, but parity compares that the process terminated and the ASGI cancellation/lifespan events completed. Uvicorn re-raises its handled signal after graceful cleanup; uvicorn-rs exits normally after cleanup."
+  }
+}

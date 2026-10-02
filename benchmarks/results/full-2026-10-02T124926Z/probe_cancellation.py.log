@@ -1,0 +1,3 @@
+PASS: client disconnect delivered an ASGI http.disconnect event
+PASS: ASGI send after disconnect raised OSError
+PASS: graceful shutdown cancelled the remaining ASGI Python task

@@ -1,0 +1,2 @@
+PASS: WebSocket handshake, subprotocol, and text/binary messages
+PASS: pre-accept websocket.close returned HTTP 403

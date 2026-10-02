@@ -20,7 +20,9 @@ fn percentile(values: &[f64], p: f64) -> f64 {
     values[index.min(values.len() - 1)]
 }
 
-fn check_subprotocol<B>(response: &tokio_tungstenite::tungstenite::http::Response<B>) -> Result<(), String> {
+fn check_subprotocol<B>(
+    response: &tokio_tungstenite::tungstenite::http::Response<B>,
+) -> Result<(), String> {
     match response.headers().get(SEC_WEBSOCKET_PROTOCOL) {
         Some(value) if value == "bench" => Ok(()),
         actual => Err(format!("unexpected WebSocket subprotocol: {actual:?}")),
@@ -69,7 +71,9 @@ async fn main() -> Result<(), BenchError> {
                             break;
                         }
                     };
-                    request.headers_mut().insert(SEC_WEBSOCKET_PROTOCOL, "bench".parse().unwrap());
+                    request
+                        .headers_mut()
+                        .insert(SEC_WEBSOCKET_PROTOCOL, "bench".parse().unwrap());
                     let (mut socket, response) = match timeout(
                         Duration::from_secs(5),
                         tokio_tungstenite::connect_async(request),
@@ -116,7 +120,9 @@ async fn main() -> Result<(), BenchError> {
         let uri = uri.clone();
         async move {
             let mut request = uri.as_str().into_client_request()?;
-            request.headers_mut().insert(SEC_WEBSOCKET_PROTOCOL, "bench".parse().unwrap());
+            request
+                .headers_mut()
+                .insert(SEC_WEBSOCKET_PROTOCOL, "bench".parse().unwrap());
             let (socket, response) = timeout(
                 Duration::from_secs(5),
                 tokio_tungstenite::connect_async(request),
@@ -158,7 +164,6 @@ async fn main() -> Result<(), BenchError> {
     let workers = sockets.into_iter().map(|mut socket| {
         let payload = Arc::clone(&payload);
         let text_payload = Arc::clone(&text_payload);
-        let is_text = is_text;
         async move {
             let mut latencies = Vec::new();
             let mut request_bytes = 0_u64;
@@ -199,7 +204,11 @@ async fn main() -> Result<(), BenchError> {
                     failure = Some("WebSocket echo did not match the complete payload".to_string());
                     break;
                 }
-                let size = if is_text { text_payload.len() } else { payload.len() };
+                let size = if is_text {
+                    text_payload.len()
+                } else {
+                    payload.len()
+                };
                 request_bytes += size as u64;
                 response_bytes += size as u64;
                 latencies.push(request_started.elapsed().as_secs_f64() * 1000.0);

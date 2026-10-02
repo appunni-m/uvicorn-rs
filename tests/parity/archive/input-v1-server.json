@@ -1,0 +1,163 @@
+{
+  "schema": "uvicorn-rs-parity/input@1",
+  "cases": [
+    {
+      "case_id": "http1.scope-query-header-and-body",
+      "profile": "http1",
+      "operation": "http.scope-and-body",
+      "covers": ["http.scope-and-body"],
+      "request": {
+        "method": "POST",
+        "path": "/scope?from=parity&v=1",
+        "headers": [["x-parity", "h1-input"]],
+        "body_base64": "AAECA/9wYXJpdHk="
+      }
+    },
+    {
+      "case_id": "http1.response-stream-order",
+      "profile": "http1",
+      "operation": "http.response-stream",
+      "covers": ["http.response-stream"],
+      "request": {"method": "GET", "path": "/stream", "headers": [], "body_base64": ""}
+    },
+    {
+      "case_id": "http1.response-first-chunk-before-app-completion",
+      "profile": "http1",
+      "operation": "http.response-stream-progress",
+      "covers": ["http.response-stream-progress"],
+      "response_stream": {"path": "/stream-progress"}
+    },
+    {
+      "case_id": "http1.request-upload-stream",
+      "profile": "http1",
+      "operation": "http.request-upload",
+      "covers": ["http.request-upload"],
+      "request": {"method": "POST", "path": "/upload-stream", "headers": [], "body_base64": "Y2h1bmstYS1jaHVuay1iLWVuZA=="}
+    },
+    {
+      "case_id": "http1.request-streaming-progress-before-upload-complete",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": ["http.request-streaming"],
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "chunks_base64": ["YWJj", "ZGVm"]
+      }
+    },
+    {
+      "case_id": "http1.application-error",
+      "profile": "http1",
+      "operation": "http.application-error",
+      "covers": ["http.application-error"],
+      "request": {"method": "GET", "path": "/raise", "headers": [], "body_base64": ""}
+    },
+    {
+      "case_id": "http1.application-status-404",
+      "profile": "http1",
+      "operation": "http.application-status",
+      "covers": ["http.application-status"],
+      "request": {"method": "GET", "path": "/not-found", "headers": [], "body_base64": ""}
+    },
+    {
+      "case_id": "http1.client-disconnect-event",
+      "profile": "http1",
+      "operation": "http.client-disconnect",
+      "covers": ["http.client-disconnect"],
+      "disconnect": {"path": "/disconnect-watch", "followup_path": "/disconnect-status"}
+    },
+    {
+      "case_id": "http2.scope-query-header-and-body",
+      "profile": "http2",
+      "operation": "http.scope-and-body",
+      "covers": ["http.scope-and-body"],
+      "request": {
+        "method": "POST",
+        "path": "/scope?from=parity&v=2",
+        "headers": [["x-parity", "h2-input"]],
+        "body_base64": "aHR0cDItaW5wdXQtYnl0ZXM="
+      }
+    },
+    {
+      "case_id": "http2.response-stream-order",
+      "profile": "http2",
+      "operation": "http.response-stream",
+      "covers": ["http.response-stream"],
+      "request": {"method": "GET", "path": "/stream", "headers": [], "body_base64": ""}
+    },
+    {
+      "case_id": "http2.response-first-chunk-before-app-completion",
+      "profile": "http2",
+      "operation": "http.response-stream-progress",
+      "covers": ["http.response-stream-progress"],
+      "response_stream": {"path": "/stream-progress"}
+    },
+    {
+      "case_id": "http2.request-upload-stream",
+      "profile": "http2",
+      "operation": "http.request-upload",
+      "covers": ["http.request-upload"],
+      "request": {"method": "POST", "path": "/upload-stream", "headers": [], "body_base64": "aDItdXBsb2FkLWJvZHktcGFyaXR5"}
+    },
+    {
+      "case_id": "http2.request-streaming-progress-before-upload-complete",
+      "profile": "http2",
+      "operation": "http.request-streaming",
+      "covers": ["http.request-streaming"],
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "chunks_base64": ["aDI=", "LWJvZHk="]
+      }
+    },
+    {
+      "case_id": "http3.scope-query-header-and-body",
+      "profile": "http3",
+      "operation": "http.scope-and-body",
+      "covers": ["http.scope-and-body"],
+      "request": {
+        "method": "GET",
+        "path": "/scope?from=parity&v=3",
+        "headers": [["x-parity", "h3-input"]],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.response-stream-order",
+      "profile": "http3",
+      "operation": "http.response-stream",
+      "covers": ["http.response-stream"],
+      "request": {"method": "GET", "path": "/stream", "headers": [], "body_base64": ""}
+    },
+    {
+      "case_id": "websocket.text-and-binary-round-trip",
+      "profile": "websocket",
+      "operation": "websocket.message-exchange",
+      "covers": ["websocket.message-exchange"],
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": ["other", "parity"],
+        "messages": [
+          {"kind": "text", "value": "rust-python-boundary"},
+          {"kind": "binary_base64", "value": "AAEC/3BhcnR5"}
+        ]
+      }
+    },
+    {
+      "case_id": "websocket.pre-accept-denial",
+      "profile": "websocket",
+      "operation": "websocket.denial",
+      "covers": ["websocket.denial"],
+      "websocket": {"path": "/ws-deny", "subprotocols": [], "messages": []}
+    },
+    {
+      "case_id": "lifespan.startup-and-shutdown-cancel",
+      "profile": "lifecycle",
+      "operation": "lifespan.shutdown-cancellation",
+      "covers": ["lifespan.shutdown-cancellation"],
+      "lifecycle": {"state_path": "/state", "hold_path": "/hold", "graceful_timeout_seconds": 1}
+    }
+  ]
+}

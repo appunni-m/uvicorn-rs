@@ -1,0 +1,5 @@
+PASS: HTTP/1.1 request scope reports http_version=1.1
+PASS: HTTP/2 request scope reports http_version=2
+PASS: HTTP/1.1 request scope reports http_version=1.1
+PASS: HTTP/2 request scope reports http_version=2
+PASS: HTTP/3 request scope reports http_version=3

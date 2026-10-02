@@ -1,0 +1,64 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `release` profile [optimized] target(s) in 0.17s
+{"workload": "protocol-scope", "server": "hypercorn-uvloop", "repetition": 1, "requests": 4734, "duration_seconds": 2.009560667, "requests_per_second": 2355.739, "request_body_bytes": 4734, "response_body_bytes": 66276, "response_data_chunks": 4734, "application_bytes_per_second": 35336.082, "p50_ms": 1.401792, "p95_ms": 1.972417, "p99_ms": 5.313291, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 75.61111111111111, "server_cpu_percent_max": 89.4, "server_rss_peak_mib": 91.3125, "client_cpu_percent_mean": 18.5, "client_rss_peak_mib": 4.59375}
+{"workload": "protocol-scope", "server": "uvicorn-rs-asyncio", "repetition": 1, "requests": 19282, "duration_seconds": 2.000489625, "requests_per_second": 9638.64, "request_body_bytes": 19282, "response_body_bytes": 269948, "response_data_chunks": 19282, "application_bytes_per_second": 144579.605, "p50_ms": 0.289167, "p95_ms": 0.7545, "p99_ms": 1.731625, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 96.4, "server_cpu_percent_max": 134.1, "server_rss_peak_mib": 103.34375, "client_cpu_percent_mean": 50.2125, "client_rss_peak_mib": 5.3125}
+{"workload": "protocol-scope", "server": "hypercorn-asyncio", "repetition": 1, "requests": 2685, "duration_seconds": 2.001751958, "requests_per_second": 1341.325, "request_body_bytes": 2685, "response_body_bytes": 37590, "response_data_chunks": 2685, "application_bytes_per_second": 20119.875, "p50_ms": 1.829333, "p95_ms": 7.366167, "p99_ms": 18.39325, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 74.3, "server_cpu_percent_max": 93.1, "server_rss_peak_mib": 92.421875, "client_cpu_percent_mean": 21.6, "client_rss_peak_mib": 4.546875}
+{"workload": "protocol-scope", "server": "uvicorn-rs-uvloop", "repetition": 1, "requests": 51987, "duration_seconds": 2.000213917, "requests_per_second": 25990.72, "request_body_bytes": 51987, "response_body_bytes": 727818, "response_data_chunks": 51987, "application_bytes_per_second": 389860.801, "p50_ms": 0.13325, "p95_ms": 0.290375, "p99_ms": 0.436667, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 154.13333333333333, "server_cpu_percent_max": 185.8, "server_rss_peak_mib": 242.21875, "client_cpu_percent_mean": 122.6375, "client_rss_peak_mib": 6.078125}
+{"workload": "protocol-scope", "server": "uvicorn-rs-asyncio", "repetition": 2, "requests": 44213, "duration_seconds": 2.00031975, "requests_per_second": 22102.966, "request_body_bytes": 44213, "response_body_bytes": 618982, "response_data_chunks": 44213, "application_bytes_per_second": 331544.494, "p50_ms": 0.173792, "p95_ms": 0.260959, "p99_ms": 0.345875, "failures": 0, "first_failure": null, "server_cpu_percent_mean": 151.9777777777778, "server_cpu_percent_max": 174.4, "server_rss_peak_mib": 202.734375, "client_cpu_percent_mean": 104.85, "client_rss_peak_mib": 5.84375}
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 295, in main
+    metrics = sample(
+              ^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 179, in sample
+    wait_ready(process, port, log)
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 115, in wait_ready
+    raise RuntimeError(f"server exited early ({process.returncode}):\n{log.read()}")
+RuntimeError: server exited early (1):
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/__main__.py", line 316, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/__main__.py", line 312, in main
+    return run(config)
+           ^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/run.py", line 39, in run
+    sockets = config.create_sockets()
+              ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/config.py", line 204, in create_sockets
+    quic_sockets = self._create_sockets(self.quic_bind, socket.SOCK_DGRAM)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/config.py", line 275, in _create_sockets
+    sock.bind(binding)
+OSError: [Errno 48] Address already in use
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 358, in <module>
+    main()
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 300, in main
+    raise RuntimeError(
+RuntimeError: HTTP/3 case failed: workload=protocol-scope, server=hypercorn-uvloop, repetition=2: server exited early (1):
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/__main__.py", line 316, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/__main__.py", line 312, in main
+    return run(config)
+           ^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/run.py", line 39, in run
+    sockets = config.create_sockets()
+              ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/config.py", line 204, in create_sockets
+    quic_sockets = self._create_sockets(self.quic_bind, socket.SOCK_DGRAM)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/config.py", line 275, in _create_sockets
+    sock.bind(binding)
+OSError: [Errno 48] Address already in use
+

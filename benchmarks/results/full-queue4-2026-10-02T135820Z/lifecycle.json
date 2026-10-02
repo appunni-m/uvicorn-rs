@@ -1,0 +1,249 @@
+{
+  "metadata": {
+    "date": "2026-10-02",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "machine": "arm64",
+    "logical_cpus": 12,
+    "cpu_model": "Apple M3 Pro",
+    "python": "3.12.13",
+    "uvicorn": "0.54.0",
+    "uvloop": "0.23.0",
+    "source_sha256": "8b472ee4f4fa536ab1092badb0a117c19e4392543016f56c3f75e0703627ce6f",
+    "servers": {
+      "uvicorn-rs-asyncio": {
+        "kind": "rust",
+        "loop": "asyncio"
+      },
+      "uvicorn-rs-uvloop": {
+        "kind": "rust",
+        "loop": "uvloop"
+      },
+      "uvicorn-asyncio-h11": {
+        "kind": "uvicorn",
+        "loop": "asyncio",
+        "http": "h11"
+      },
+      "uvicorn-uvloop-httptools": {
+        "kind": "uvicorn",
+        "loop": "uvloop",
+        "http": "httptools"
+      }
+    },
+    "repetitions": 5,
+    "seed": 20261002,
+    "correctness_gate": "lifespan state response, lifespan shutdown complete, and held ASGI request cancellation validated",
+    "definitions": {
+      "cold_start_to_first_lifespan_request_ms": "process spawn through a valid response using state set by lifespan.startup",
+      "idle_sigterm_to_process_exit_ms": "SIGTERM to process exit after one completed request",
+      "active_sigterm_to_process_exit_ms": "SIGTERM to process exit while an ASGI request is blocked; cancellation marker required"
+    }
+  },
+  "summaries_median": {
+    "uvicorn-rs-asyncio": {
+      "cold_start_to_first_lifespan_request_ms": 47.43449995294213,
+      "idle_sigterm_to_process_exit_ms": 10.545541997998953,
+      "active_sigterm_to_process_exit_ms": 2.0462927911430597,
+      "sampled_server_rss_mib": 22.15625
+    },
+    "uvicorn-rs-uvloop": {
+      "cold_start_to_first_lifespan_request_ms": 46.54287500306964,
+      "idle_sigterm_to_process_exit_ms": 10.542124975472689,
+      "active_sigterm_to_process_exit_ms": 2.025814834050834,
+      "sampled_server_rss_mib": 23.578125
+    },
+    "uvicorn-asyncio-h11": {
+      "cold_start_to_first_lifespan_request_ms": 72.8948749601841,
+      "idle_sigterm_to_process_exit_ms": 208.67375005036592,
+      "active_sigterm_to_process_exit_ms": 2.1466886661946774,
+      "sampled_server_rss_mib": 28.484375
+    },
+    "uvicorn-uvloop-httptools": {
+      "cold_start_to_first_lifespan_request_ms": 73.08600004762411,
+      "idle_sigterm_to_process_exit_ms": 242.27187503129244,
+      "active_sigterm_to_process_exit_ms": 2.156646749936044,
+      "sampled_server_rss_mib": 30.5
+    }
+  },
+  "rows": [
+    {
+      "server": "uvicorn-uvloop-httptools",
+      "repetition": 1,
+      "cold_start_to_first_lifespan_request_ms": 81.60966634750366,
+      "idle_sigterm_to_process_exit_ms": 242.27187503129244,
+      "active_sigterm_to_process_exit_ms": 2.156646749936044,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 31.34375
+    },
+    {
+      "server": "uvicorn-rs-asyncio",
+      "repetition": 1,
+      "cold_start_to_first_lifespan_request_ms": 41.23687511309981,
+      "idle_sigterm_to_process_exit_ms": 9.071417152881622,
+      "active_sigterm_to_process_exit_ms": 2.0401231246069074,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 22.296875
+    },
+    {
+      "server": "uvicorn-asyncio-h11",
+      "repetition": 1,
+      "cold_start_to_first_lifespan_request_ms": 73.83695896714926,
+      "idle_sigterm_to_process_exit_ms": 208.67375005036592,
+      "active_sigterm_to_process_exit_ms": 2.183354665990919,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 30.0625
+    },
+    {
+      "server": "uvicorn-rs-uvloop",
+      "repetition": 1,
+      "cold_start_to_first_lifespan_request_ms": 47.51983331516385,
+      "idle_sigterm_to_process_exit_ms": 10.57854201644659,
+      "active_sigterm_to_process_exit_ms": 2.058212374802679,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 23.875
+    },
+    {
+      "server": "uvicorn-rs-asyncio",
+      "repetition": 2,
+      "cold_start_to_first_lifespan_request_ms": 47.43449995294213,
+      "idle_sigterm_to_process_exit_ms": 10.561542119830847,
+      "active_sigterm_to_process_exit_ms": 2.0497127920389175,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 22.078125
+    },
+    {
+      "server": "uvicorn-uvloop-httptools",
+      "repetition": 2,
+      "cold_start_to_first_lifespan_request_ms": 73.08600004762411,
+      "idle_sigterm_to_process_exit_ms": 253.22433421388268,
+      "active_sigterm_to_process_exit_ms": 2.1393205830827355,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 30.5
+    },
+    {
+      "server": "uvicorn-rs-uvloop",
+      "repetition": 2,
+      "cold_start_to_first_lifespan_request_ms": 46.54287500306964,
+      "idle_sigterm_to_process_exit_ms": 10.143999941647053,
+      "active_sigterm_to_process_exit_ms": 2.025814834050834,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 23.421875
+    },
+    {
+      "server": "uvicorn-asyncio-h11",
+      "repetition": 2,
+      "cold_start_to_first_lifespan_request_ms": 75.60604205355048,
+      "idle_sigterm_to_process_exit_ms": 243.22008294984698,
+      "active_sigterm_to_process_exit_ms": 2.1466886661946774,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 28.3125
+    },
+    {
+      "server": "uvicorn-uvloop-httptools",
+      "repetition": 3,
+      "cold_start_to_first_lifespan_request_ms": 78.27604096382856,
+      "idle_sigterm_to_process_exit_ms": 201.84170920401812,
+      "active_sigterm_to_process_exit_ms": 2.1648488328792155,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 30.984375
+    },
+    {
+      "server": "uvicorn-rs-uvloop",
+      "repetition": 3,
+      "cold_start_to_first_lifespan_request_ms": 46.716667246073484,
+      "idle_sigterm_to_process_exit_ms": 9.468874894082546,
+      "active_sigterm_to_process_exit_ms": 2.024207000155002,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 23.578125
+    },
+    {
+      "server": "uvicorn-asyncio-h11",
+      "repetition": 3,
+      "cold_start_to_first_lifespan_request_ms": 72.8948749601841,
+      "idle_sigterm_to_process_exit_ms": 208.67620781064034,
+      "active_sigterm_to_process_exit_ms": 2.1414954168722034,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 28.484375
+    },
+    {
+      "server": "uvicorn-rs-asyncio",
+      "repetition": 3,
+      "cold_start_to_first_lifespan_request_ms": 47.54854226484895,
+      "idle_sigterm_to_process_exit_ms": 10.562583804130554,
+      "active_sigterm_to_process_exit_ms": 2.06022408278659,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 22.078125
+    },
+    {
+      "server": "uvicorn-rs-asyncio",
+      "repetition": 4,
+      "cold_start_to_first_lifespan_request_ms": 54.986207745969296,
+      "idle_sigterm_to_process_exit_ms": 10.005542077124119,
+      "active_sigterm_to_process_exit_ms": 2.0462927911430597,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 23.875
+    },
+    {
+      "server": "uvicorn-uvloop-httptools",
+      "repetition": 4,
+      "cold_start_to_first_lifespan_request_ms": 68.96850001066923,
+      "idle_sigterm_to_process_exit_ms": 206.98808273300529,
+      "active_sigterm_to_process_exit_ms": 2.1766022499650717,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 30.015625
+    },
+    {
+      "server": "uvicorn-rs-uvloop",
+      "repetition": 4,
+      "cold_start_to_first_lifespan_request_ms": 44.380290899425745,
+      "idle_sigterm_to_process_exit_ms": 10.548625141382217,
+      "active_sigterm_to_process_exit_ms": 2.009223375003785,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 23.4375
+    },
+    {
+      "server": "uvicorn-asyncio-h11",
+      "repetition": 4,
+      "cold_start_to_first_lifespan_request_ms": 62.13870830833912,
+      "idle_sigterm_to_process_exit_ms": 208.6183330975473,
+      "active_sigterm_to_process_exit_ms": 2.188980042003095,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 28.359375
+    },
+    {
+      "server": "uvicorn-uvloop-httptools",
+      "repetition": 5,
+      "cold_start_to_first_lifespan_request_ms": 62.59333295747638,
+      "idle_sigterm_to_process_exit_ms": 257.25462520495057,
+      "active_sigterm_to_process_exit_ms": 2.135446249973029,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 30.109375
+    },
+    {
+      "server": "uvicorn-rs-uvloop",
+      "repetition": 5,
+      "cold_start_to_first_lifespan_request_ms": 42.61337500065565,
+      "idle_sigterm_to_process_exit_ms": 10.542124975472689,
+      "active_sigterm_to_process_exit_ms": 2.059055916965008,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 23.6875
+    },
+    {
+      "server": "uvicorn-rs-asyncio",
+      "repetition": 5,
+      "cold_start_to_first_lifespan_request_ms": 43.03466575220227,
+      "idle_sigterm_to_process_exit_ms": 10.545541997998953,
+      "active_sigterm_to_process_exit_ms": 2.025565375108272,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 22.15625
+    },
+    {
+      "server": "uvicorn-asyncio-h11",
+      "repetition": 5,
+      "cold_start_to_first_lifespan_request_ms": 67.81458342447877,
+      "idle_sigterm_to_process_exit_ms": 208.61616730690002,
+      "active_sigterm_to_process_exit_ms": 2.142973708920181,
+      "active_asgi_task_cancelled": true,
+      "sampled_server_rss_mib": 28.640625
+    }
+  ]
+}
