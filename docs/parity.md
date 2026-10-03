@@ -1,5 +1,28 @@
 # ASGI server parity suite
 
+## Correctness gate
+
+The behavior gate is the manifest-backed, live source/target matrix, not a Rust
+unit-test count. `cargo test` currently reports zero Rust unit-test cases, so
+that command is not protocol behavior evidence. The live matrix observes the
+server boundary by starting real reference and target server processes and
+replaying the same indexed network workflows against each.
+
+This follows the fixture-matrix approach used by `image-slash-star`/Pillow-RS,
+adapted to a network server. Pillow-RS compares Rust operations with pinned
+oracle fixtures; this server compares wire-visible behavior with a live,
+version-pinned ASGI server because sockets, protocol state, streaming, and
+lifecycle are part of the contract. Inputs contain stimuli only, not expected
+responses. The Python contract checks validate the matrix and evidence format;
+they are not substitutes for the live behavior comparisons.
+
+The current denominator is the 19 cases indexed by
+`tests/parity/manifest.json`. Every case must run on both sides, every declared
+operation and profile must be represented, and any mismatch or infrastructure
+failure fails the command. When a new behavior is supported, add a mapped input
+case and update the support matrix; do not treat a passing `cargo test` command
+with zero Rust cases as protocol evidence.
+
 The parity runner starts the reference server and `uvicorn-rs` as separate
 processes, imports the same ASGI app in each, sends the same input workflows,
 and compares their live public observations. It does not contain golden
@@ -35,13 +58,13 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 
 ## Oracle selection
 
-| Profile | Reference | Why |
-|---|---|---|
-| HTTP/1.1 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and the measured fast Uvicorn stack. |
-| WebSocket | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 WebSocket upgrade path. |
-| Lifecycle | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same ASGI lifespan and HTTP/1.1 shutdown surface. |
-| HTTP/2 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Uvicorn does not provide an HTTP/2 server profile. |
-| HTTP/3 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Uvicorn does not provide an HTTP/3 server profile. |
+| Profile | Cases | Reference | Why |
+|---|---:|---|---|
+| HTTP/1.1 | 9 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and the measured fast Uvicorn stack. |
+| WebSocket | 2 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 WebSocket upgrade path. |
+| Lifecycle | 1 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same ASGI lifespan and HTTP/1.1 shutdown surface. |
+| HTTP/2 | 5 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Uvicorn does not provide an HTTP/2 server profile. |
+| HTTP/3 | 2 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Uvicorn does not provide an HTTP/3 server profile. |
 
 The H2/H3 rows are same-protocol ASGI observations against Hypercorn. They are
 not described as Uvicorn parity. Server versions and protocol components are

@@ -22,6 +22,7 @@ env:
 
 jobs:
   rust:
+    name: Rust checks (ASGI behavior is gated by live parity)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -36,7 +37,7 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features --locked -- -D warnings
-      - name: Run Rust tests
+      - name: Compile and run Rust test targets
         run: cargo test --all-targets --all-features --locked
       - name: Build Rust API documentation
         env:
@@ -50,6 +51,7 @@ jobs:
         run: cargo test --manifest-path tools/http3-probe/Cargo.toml --all-targets --all-features --locked
 
   python-package:
+    name: Live ASGI parity and Python package checks
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -64,9 +66,9 @@ jobs:
         run: uv sync --python $PYTHON_VERSION --group benchmark --frozen
       - name: Check CLI import and help
         run: uv run uvicorn-rs --help
-      - name: Validate parity contracts and result accounting
+      - name: Validate parity matrix and evidence accounting
         run: uv run python -m unittest discover -s tests -p 'test_parity_*.py'
-      - name: Compare ASGI protocol behavior with live reference servers
+      - name: Run live ASGI source/target parity (behavior correctness gate)
         shell: bash
         run: |
           set -o pipefail
