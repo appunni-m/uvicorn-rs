@@ -1,0 +1,33 @@
+[build-system]
+requires = ["maturin>=1.14,<2"]
+build-backend = "maturin"
+
+[project]
+name = "uvicorn-rs"
+version = "0.1.0"
+description = "Rust network runtime for Python ASGI applications"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/appunni-m/uvicorn-rs"
+Documentation = "https://github.com/appunni-m/uvicorn-rs#readme"
+Issues = "https://github.com/appunni-m/uvicorn-rs/issues"
+
+[project.scripts]
+uvicorn-rs = "uvicorn_rs.cli:main"
+
+[dependency-groups]
+benchmark = [
+    "httptools==0.8.0; python_version >= '3.10'",
+    "hypercorn[h3]==0.18.0 ; python_full_version >= '3.10'",
+    "psutil==7.2.2; python_version >= '3.10'",
+    "uvicorn[standard]==0.54.0; python_version >= '3.10'",
+    "uvloop==0.23.0; python_version >= '3.10'",
+]
+
+[tool.maturin]
+module-name = "uvicorn_rs._native"
+python-source = "python"
+features = ["pyo3/extension-module"]

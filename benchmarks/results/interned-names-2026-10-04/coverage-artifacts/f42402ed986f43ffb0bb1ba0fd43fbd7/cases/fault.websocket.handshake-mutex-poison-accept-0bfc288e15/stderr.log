@@ -1,0 +1,19 @@
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+
+thread '<unnamed>' (179115264) panicked at src/lib.rs:1705:17:
+coverage-injected WebSocket handshake mutex poison
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 312, in _app_impl
+    await send({"type": accept_type, "subprotocol": protocol})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+OSError: WebSocket handshake state poisoned
+

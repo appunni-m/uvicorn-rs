@@ -1,0 +1,6 @@
+{
+  "status": "preparation failed before execution",
+  "cause": "system python lacks h2; shell redirection failed because after dir not created",
+  "native_or_cases_modified": false,
+  "remedy": "use project .venv interpreter"
+}

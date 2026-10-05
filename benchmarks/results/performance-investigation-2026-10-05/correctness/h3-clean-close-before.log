@@ -1,0 +1,18 @@
+FAIL http3: http3.peer-close-h3-no-error
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:49708 failed: Remote error: ApplicationClose: H3_NO_ERROR
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:51862 failed: Remote error: ApplicationClose: H3_NO_ERROR
+
+{
+  "status": "failed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 0,
+    "failed": 1,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "build/performance-2026-10-05/vectored/h3-clean-close-before.json"
+}

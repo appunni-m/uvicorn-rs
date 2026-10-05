@@ -1,0 +1,19 @@
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 396, in _app_impl
+    body = b"" if scope["method"] == "GET" else await _read_body(receive)
+                                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 48, in _read_body
+    message = await receive()
+              ^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 6, in receive
+    result = io.receive()
+             ^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at HttpRequestTypeSetItem
+

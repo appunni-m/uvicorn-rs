@@ -1,0 +1,64 @@
+Processes: 593 total, 3 running, 590 sleeping, 5435 threads 
+2026/10/05 02:49:05
+Load Avg: 3.31, 3.93, 3.87 
+CPU usage: 12.83% user, 9.94% sys, 77.21% idle 
+SharedLibs: 390M resident, 103M data, 62M linkedit.
+MemRegions: 556854 total, 4777M resident, 171M private, 2044M shared.
+PhysMem: 17G used (2916M wired, 5283M compressor), 281M unused.
+VM: 275T vsize, 5702M framework vsize, 41745605(0) swapins, 49676473(0) swapouts.
+Networks: packets: 2129299753/8137G in, 2033947245/7966G out.
+Disks: 583316645/23T read, 247080828/12T written.
+
+PID    %CPU TIME     COMMAND         
+97707  0.0  00:02.27 Codex (Renderer)
+97445  0.0  01:53.28 sccache         
+96571  0.0  00:03.76 node            
+96460  0.0  00:00.47 top             
+96459  0.0  00:01.66 rustc           
+96441  0.0  00:00.00 sccache         
+96363  0.0  00:00.02 extensionkitserv
+96262  0.0  00:00.22 mlhostd         
+95804  0.0  00:00.23 cargo           
+95751  0.0  00:00.01 DiskUnmountWatch
+95724  0.0  00:00.01 maturin         
+95721  0.0  00:00.01 python3.12      
+95559  0.0  00:00.04 uv              
+95554  0.0  00:00.01 make            
+95226  0.0  00:04.34 node            
+95069  0.0  00:00.06 biomesyncd      
+95025  0.0  00:00.59 storagekitd     
+95022  0.0  00:00.05 findmydevice-use
+95021  0.0  00:00.09 findmydeviced   
+95014  0.0  00:00.25 findmylocateagen
+Processes: 593 total, 4 running, 589 sleeping, 5416 threads 
+2026/10/05 02:49:07
+Load Avg: 3.13, 3.88, 3.85 
+CPU usage: 22.48% user, 2.79% sys, 74.72% idle 
+SharedLibs: 390M resident, 103M data, 62M linkedit.
+MemRegions: 1054 total, 254M resident, 171M private, 2083M shared.
+PhysMem: 17G used (2816M wired, 5281M compressor), 279M unused.
+VM: 275T vsize, 5702M framework vsize, 41745605(0) swapins, 49676473(0) swapouts.
+Networks: packets: 2129300036/8137G in, 2033947458/7966G out.
+Disks: 583317026/23T read, 247081021/12T written.
+
+PID    %CPU TIME     COMMAND         
+52350  16.8 58:27.39 Codex (Renderer)
+3105   7.5  53:56:09 qemu-system-aarc
+83837  6.1  03:54:05 Codex (Service) 
+0      4.5  66:38:59 kernel_task     
+96460  4.4  00:00.58 top             
+37827  3.6  13:12:24 Activity Monitor
+85620  3.5  10:40:07 sysmond         
+83782  2.5  02:12:16 ChatGPT         
+84227  2.4  04:11:32 codex           
+97445  1.5  01:53.32 sccache         
+490    1.5  09:46:14 com.apple.Driver
+379    1.3  55:01:02 WindowServer    
+60621  1.2  09:00:27 netsimd         
+10413  1.0  01:01.30 Codex (Renderer)
+313    0.8  03:49:33 fseventsd       
+94977  0.6  00:00.54 searchpartyusera
+348    0.4  01:44:13 opendirectoryd  
+356    0.3  39:36.74 locationd       
+22069  0.2  14:05:39 coverage-mcp    
+76514  0.2  00:32.58 PerfPowerService

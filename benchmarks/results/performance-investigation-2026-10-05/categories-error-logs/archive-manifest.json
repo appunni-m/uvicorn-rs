@@ -1,0 +1,1447 @@
+{
+  "analysis_status": "incomplete_categories",
+  "completed_full_category_rows": 138,
+  "completed_rows": 139,
+  "copy_policy": "original raw files byte-identical; separate source snapshot; no binaries; original paths retained",
+  "created_at": "2026-10-05T11:46:48.873493+00:00",
+  "files": {
+    "README.md": {
+      "byte_identical": null,
+      "bytes": 1615,
+      "kind": "archive documentation",
+      "original_path": null,
+      "sha256": "f8917cd3a0a353d01312c995f7c64fadb7b70ddc996769417231e2b952f6fb6e"
+    },
+    "analysis.json": {
+      "byte_identical": true,
+      "bytes": 135128,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/analysis.json",
+      "sha256": "daaa895b58b4eecbb15055b93c6a83fcccfaf3aa0609cbf2d469a02dad70e479"
+    },
+    "analysis.md": {
+      "byte_identical": true,
+      "bytes": 9773,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/analysis.md",
+      "sha256": "9e57ab9189915a84bc9773cd326777437ddd4695ca19d1520cbac558f8696b53"
+    },
+    "evidence-snapshot/Cargo.lock": {
+      "byte_identical": true,
+      "bytes": 30905,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/Cargo.lock",
+      "sha256": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa"
+    },
+    "evidence-snapshot/Cargo.toml": {
+      "byte_identical": true,
+      "bytes": 1576,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/Cargo.toml",
+      "sha256": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb"
+    },
+    "evidence-snapshot/examples/__init__.py": {
+      "byte_identical": true,
+      "bytes": 63,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/__init__.py",
+      "sha256": "2e5c8dbe6eed412f5fa72635c2daf7539502d22d2ba54116ef40ca2677396393"
+    },
+    "evidence-snapshot/examples/bench_asgi.py": {
+      "byte_identical": true,
+      "bytes": 471,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/bench_asgi.py",
+      "sha256": "eb8533b65daafdc64e391b01e2a3b9f7cb4b396cd91f8af4b0a7d75519c8cef6"
+    },
+    "evidence-snapshot/examples/bench_matrix_asgi.py": {
+      "byte_identical": true,
+      "bytes": 5629,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py",
+      "sha256": "4199f61829a714dc18adb2eccd050b2e7e4f945736c0a3d01ebf415d0c630e9d"
+    },
+    "evidence-snapshot/examples/bench_streaming_asgi.py": {
+      "byte_identical": true,
+      "bytes": 372,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/bench_streaming_asgi.py",
+      "sha256": "f99c1c579acd86afe0612e079e3342da8576af994e82bac9096a997ada52570f"
+    },
+    "evidence-snapshot/examples/bench_sync_asgi.py": {
+      "byte_identical": true,
+      "bytes": 844,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/bench_sync_asgi.py",
+      "sha256": "c9d1c22fd0f4e4629796553a3ca8f8892eb74310b480c34c20b45fd68b174fe7"
+    },
+    "evidence-snapshot/examples/bridge_contract_asgi.py": {
+      "byte_identical": true,
+      "bytes": 1331,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/bridge_contract_asgi.py",
+      "sha256": "ecc04447b5e890603352408c65f2f5d41b5082690f2fb3d12b01111b0334ef6c"
+    },
+    "evidence-snapshot/examples/cancellation_asgi.py": {
+      "byte_identical": true,
+      "bytes": 1824,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/cancellation_asgi.py",
+      "sha256": "ea3a966f46e725b70fc64eab6b521fa9c60ebb8277f94628c5d22a954a6710b5"
+    },
+    "evidence-snapshot/examples/hello_asgi.py": {
+      "byte_identical": true,
+      "bytes": 583,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/hello_asgi.py",
+      "sha256": "5fb07cb581c82b027a27e541d7a1a9f9844fe28df0ec98ff44999ee869e2d6d5"
+    },
+    "evidence-snapshot/examples/lifespan_asgi.py": {
+      "byte_identical": true,
+      "bytes": 1388,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/lifespan_asgi.py",
+      "sha256": "73d69e974e1255337c03c613f3c1e582c212b53dc977e620d8676feab37ddda3"
+    },
+    "evidence-snapshot/examples/protocol_asgi.py": {
+      "byte_identical": true,
+      "bytes": 362,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/protocol_asgi.py",
+      "sha256": "bca428de0c4ee1dae50d049e9a98c7f33092edd7d8a964b61e0fb0a0427c4edf"
+    },
+    "evidence-snapshot/examples/raising_asgi.py": {
+      "byte_identical": true,
+      "bytes": 172,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/raising_asgi.py",
+      "sha256": "512c11e5650f3bea58bc0596cc007ad4331d60f2542623a24420b53cb5ee9391"
+    },
+    "evidence-snapshot/examples/starlette_rs_asgi.py": {
+      "byte_identical": true,
+      "bytes": 343,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/starlette_rs_asgi.py",
+      "sha256": "a852e364fdff3d3730291ff572e8e7878690128303b7c2f314c00983dc2e5026"
+    },
+    "evidence-snapshot/examples/streaming_asgi.py": {
+      "byte_identical": true,
+      "bytes": 1405,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/streaming_asgi.py",
+      "sha256": "97dba5632ff257873e17c81f5ad96276599cbb695756bfb4c27eb9a6a5f3a435"
+    },
+    "evidence-snapshot/examples/websocket_asgi.py": {
+      "byte_identical": true,
+      "bytes": 832,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/websocket_asgi.py",
+      "sha256": "4f2ca0613ab523321c3a50d32fc918031be71ef2e9f6cfcc7ff61cdbc4a24f9b"
+    },
+    "evidence-snapshot/framework-build-record.json": {
+      "byte_identical": true,
+      "bytes": 32923,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/vectored/framework-wheel/build-record.json",
+      "sha256": "e6631896b5daf0ca1c0ff48c6a14276ee2718f5a5b805514e56c0ba3e2e20142"
+    },
+    "evidence-snapshot/pyproject.toml": {
+      "byte_identical": true,
+      "bytes": 916,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/pyproject.toml",
+      "sha256": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b"
+    },
+    "evidence-snapshot/python/uvicorn_rs/__init__.py": {
+      "byte_identical": true,
+      "bytes": 98,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/__init__.py",
+      "sha256": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155"
+    },
+    "evidence-snapshot/python/uvicorn_rs/__main__.py": {
+      "byte_identical": true,
+      "bytes": 30,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/__main__.py",
+      "sha256": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279"
+    },
+    "evidence-snapshot/python/uvicorn_rs/_bridge.py": {
+      "byte_identical": true,
+      "bytes": 418,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py",
+      "sha256": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff"
+    },
+    "evidence-snapshot/python/uvicorn_rs/cli.py": {
+      "byte_identical": true,
+      "bytes": 3200,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/cli.py",
+      "sha256": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f"
+    },
+    "evidence-snapshot/python/uvicorn_rs/server.py": {
+      "byte_identical": true,
+      "bytes": 2244,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/server.py",
+      "sha256": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87"
+    },
+    "evidence-snapshot/scripts/assemble_category_results.py": {
+      "byte_identical": true,
+      "bytes": 9312,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/assemble_category_results.py",
+      "sha256": "3b8be932dc07744abda60f1f95f241fbdbc2eac6ba019d8c08df1611363f5f27"
+    },
+    "evidence-snapshot/scripts/attach_coverage_mcp.py": {
+      "byte_identical": true,
+      "bytes": 7816,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/attach_coverage_mcp.py",
+      "sha256": "06b53e8e80421f00ac9c08a174d40f7aca23390268fbddbd0c6d13046e77a352"
+    },
+    "evidence-snapshot/scripts/bench_h2_client.py": {
+      "byte_identical": true,
+      "bytes": 10390,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/bench_h2_client.py",
+      "sha256": "c897b0ab9507bc482a0eaf49e6511f5232f7865b537fa999855b48d26595ea5c"
+    },
+    "evidence-snapshot/scripts/bench_http.mjs": {
+      "byte_identical": true,
+      "bytes": 4730,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/bench_http.mjs",
+      "sha256": "bf5cd8a492f9640a0d8c07258715cd858c1c27869fecc4fd794a1281dd849bf5"
+    },
+    "evidence-snapshot/scripts/bench_http_client.c": {
+      "byte_identical": true,
+      "bytes": 12765,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/bench_http_client.c",
+      "sha256": "19ba501a9f3d4ede04e1f6f0a80b9e9af370170a21fca9becbf3c78eae9f8e44"
+    },
+    "evidence-snapshot/scripts/bench_http_matrix.mjs": {
+      "byte_identical": true,
+      "bytes": 7429,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/bench_http_matrix.mjs",
+      "sha256": "7d4f32009ba2d0e7407c5f1728ec8c2ce18b44af54d08d201130e200a24f0f37"
+    },
+    "evidence-snapshot/scripts/bench_websocket_client.py": {
+      "byte_identical": true,
+      "bytes": 4844,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/bench_websocket_client.py",
+      "sha256": "1a38702db07125146dbfc6195b24386c75c68541a64e22a931ff8ec6abf52eb9"
+    },
+    "evidence-snapshot/scripts/benchmark_evidence.py": {
+      "byte_identical": true,
+      "bytes": 33947,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/benchmark_evidence.py",
+      "sha256": "d83b60c386f3f6a5ea970b3e2ddc0628f0f97adaa54424ebf4b5e2bbdf9a3bd1"
+    },
+    "evidence-snapshot/scripts/build_coverage_extension.py": {
+      "byte_identical": true,
+      "bytes": 2090,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/build_coverage_extension.py",
+      "sha256": "6f076979ffe03cc644ca1dcdf96a8bad2406b7ad72a8d24aa24a539ea4b8140c"
+    },
+    "evidence-snapshot/scripts/check_release_version.py": {
+      "byte_identical": true,
+      "bytes": 2276,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/check_release_version.py",
+      "sha256": "e3c28a6b6c68c620a043b8c97951d79edd4a662ef34163299805aad943ea6dba"
+    },
+    "evidence-snapshot/scripts/probe_cancellation.py": {
+      "byte_identical": true,
+      "bytes": 4152,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/probe_cancellation.py",
+      "sha256": "83490d9bd578b8adb4dea06d53f6a38e61b7f7271aa8ed0cf8e4b40c8c78e2d4"
+    },
+    "evidence-snapshot/scripts/probe_http.py": {
+      "byte_identical": true,
+      "bytes": 3033,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/probe_http.py",
+      "sha256": "5983ed49aae7fd2331db91fcf013fa0b9d49edd398d0ab23dea9e2d817ee06b9"
+    },
+    "evidence-snapshot/scripts/probe_http2.py": {
+      "byte_identical": true,
+      "bytes": 5670,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/probe_http2.py",
+      "sha256": "d7f95cf6aabd6dc0b298fce9fc1e03b23f069e194f2decb5884ff2199c8aef7d"
+    },
+    "evidence-snapshot/scripts/probe_lifespan.py": {
+      "byte_identical": true,
+      "bytes": 2369,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/probe_lifespan.py",
+      "sha256": "a41266e6f12e53dfb085404be5d5e7fd02c8b209a5168f19a69615463030a747"
+    },
+    "evidence-snapshot/scripts/probe_starlette_rs.py": {
+      "byte_identical": true,
+      "bytes": 2083,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/probe_starlette_rs.py",
+      "sha256": "aca3501dac9968fa143f50e679aabe75b18fe15f31de9aee0962e3029f253c9d"
+    },
+    "evidence-snapshot/scripts/probe_streaming.py": {
+      "byte_identical": true,
+      "bytes": 3784,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/probe_streaming.py",
+      "sha256": "f04b0e16d4fb78ca9f973dc5bac187349f306f192ff8161fbac65e19608c2f62"
+    },
+    "evidence-snapshot/scripts/probe_websocket.py": {
+      "byte_identical": true,
+      "bytes": 3087,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/probe_websocket.py",
+      "sha256": "d4fcad00d23e459364c532d9c0485bd8dc3d7df88d329616e9cffdd4e47e22d8"
+    },
+    "evidence-snapshot/scripts/profile_http_workload.py": {
+      "byte_identical": true,
+      "bytes": 19880,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/profile_http_workload.py",
+      "sha256": "6bdbbef2dffd917e5acabde0172929a3a352ce0139530444e25dd82a14716437"
+    },
+    "evidence-snapshot/scripts/run_feasibility_bench.py": {
+      "byte_identical": true,
+      "bytes": 10879,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_feasibility_bench.py",
+      "sha256": "cfea4e7213c2fb49ed585618ac38c7b75b44abd99ab41e33310e0c5580949e30"
+    },
+    "evidence-snapshot/scripts/run_h2_category_bench.py": {
+      "byte_identical": true,
+      "bytes": 15351,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_h2_category_bench.py",
+      "sha256": "7c1e38ce76b541ac4e50783aeec9c10a5c4fbec8efb25254412466918641c081"
+    },
+    "evidence-snapshot/scripts/run_h3_category_bench.py": {
+      "byte_identical": true,
+      "bytes": 16646,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py",
+      "sha256": "76bdab145d3ea7924b2ed4f6fc61913a3085967d99cd6eadea8b0f22e5ec741d"
+    },
+    "evidence-snapshot/scripts/run_http_category_bench.py": {
+      "byte_identical": true,
+      "bytes": 21821,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_http_category_bench.py",
+      "sha256": "a520d62816d22d5488028fd1b2a593fbfd829bf3fd4b4155d397c6618db0df6d"
+    },
+    "evidence-snapshot/scripts/run_lifecycle_bench.py": {
+      "byte_identical": true,
+      "bytes": 32149,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_lifecycle_bench.py",
+      "sha256": "849ea98b4407225386110d7bf30f4d4c7d419c8f76630074510fc6a8bba36a64"
+    },
+    "evidence-snapshot/scripts/run_parity.py": {
+      "byte_identical": true,
+      "bytes": 297810,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_parity.py",
+      "sha256": "642ad6f5241106150d4120bee6d31ef6c747065f5311255718466b471a7e549c"
+    },
+    "evidence-snapshot/scripts/run_unified_coverage.py": {
+      "byte_identical": true,
+      "bytes": 39197,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_unified_coverage.py",
+      "sha256": "88c4d13ca59dbed6ec9d8e0a9bb2f17e270f168b2e2825ef9ed7917f41cd9402"
+    },
+    "evidence-snapshot/scripts/run_websocket_category_bench.py": {
+      "byte_identical": true,
+      "bytes": 12296,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_websocket_category_bench.py",
+      "sha256": "8cef06e466b863b2abe3c0ddbfb08c35a166163a8bbd82df0124211a821bb243"
+    },
+    "evidence-snapshot/scripts/summarize_parity_result.py": {
+      "byte_identical": true,
+      "bytes": 2821,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/summarize_parity_result.py",
+      "sha256": "6330d44c5ed773652976198dab6cf065dcad258d767dea1fbcb72ecde87b455d"
+    },
+    "evidence-snapshot/scripts/verify_release_candidate.py": {
+      "byte_identical": true,
+      "bytes": 5324,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/verify_release_candidate.py",
+      "sha256": "99027de5848f090a15ee82119e21a78be06f3c34c667e42e50467a29315c4b95"
+    },
+    "evidence-snapshot/src/lib.rs": {
+      "byte_identical": true,
+      "bytes": 209351,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/src/lib.rs",
+      "sha256": "81c239b5f596cf4be18cc71bc3b537c02224c0f1e1ab35174e6386f5203510cd"
+    },
+    "evidence-snapshot/task-local/analyze-current-categories.py": {
+      "byte_identical": true,
+      "bytes": 34893,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/analyze-current-categories.py",
+      "sha256": "32bcdfa9e3f5ba613de28d7cd3818987a0c0ee83b887ade542cfdb13a83b5688"
+    },
+    "evidence-snapshot/task-local/run-current-categories.py": {
+      "byte_identical": true,
+      "bytes": 5244,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/run-current-categories.py",
+      "sha256": "536cd9fbe470693ab128511395bef4296bbd59df05b2fffd42680a87d567e6e3"
+    },
+    "evidence-snapshot/tools/http3-probe/Cargo.lock": {
+      "byte_identical": true,
+      "bytes": 27942,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/Cargo.lock",
+      "sha256": "a8d9eb109c08ff22d0a67812fc2b61559aa478b962b4c0f8012daaa64f7c128f"
+    },
+    "evidence-snapshot/tools/http3-probe/Cargo.toml": {
+      "byte_identical": true,
+      "bytes": 865,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/Cargo.toml",
+      "sha256": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd"
+    },
+    "evidence-snapshot/tools/http3-probe/src/bin/bench.rs": {
+      "byte_identical": true,
+      "bytes": 12281,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/src/bin/bench.rs",
+      "sha256": "8729861d88c427a024683a5a205a2aad5d6941568cd57a37b044b01e5012e505"
+    },
+    "evidence-snapshot/tools/http3-probe/src/bin/http2.rs": {
+      "byte_identical": true,
+      "bytes": 12093,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/src/bin/http2.rs",
+      "sha256": "4eb39ebd721aec22c8b748e2810e3a7b9c7f6d4b5279f56c61557d92efe14ce2"
+    },
+    "evidence-snapshot/tools/http3-probe/src/bin/parity-http3.rs": {
+      "byte_identical": true,
+      "bytes": 14514,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/src/bin/parity-http3.rs",
+      "sha256": "73f0441ecac89c338c81fa88e149c55b771179e407dcbafbebf58a3c0c655f03"
+    },
+    "evidence-snapshot/tools/http3-probe/src/bin/websocket.rs": {
+      "byte_identical": true,
+      "bytes": 11200,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/src/bin/websocket.rs",
+      "sha256": "2092d32b173f4529924c461c60605936594792254ca4f5c770bb7088f378b7dc"
+    },
+    "evidence-snapshot/tools/http3-probe/src/main.rs": {
+      "byte_identical": true,
+      "bytes": 2393,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/src/main.rs",
+      "sha256": "36e37fb61c1702dd9acf66f885c6ef46e7b15873601062dd9520396b7d718947"
+    },
+    "evidence-snapshot/uv.lock": {
+      "byte_identical": true,
+      "bytes": 250058,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/uv.lock",
+      "sha256": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+    },
+    "http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 93800,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "0eef5f1f64503f9e8845e5b7a2a58792a72e17eee85705b0d5929d3db07955f8"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 93800,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "0eef5f1f64503f9e8845e5b7a2a58792a72e17eee85705b0d5929d3db07955f8"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 93800,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "0eef5f1f64503f9e8845e5b7a2a58792a72e17eee85705b0d5929d3db07955f8"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 174600,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e5e2c3a6e22d181f5299b9a2c7cb7ba51e996081e3fbf98637e1bf8c8f6a49cd"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 174600,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e5e2c3a6e22d181f5299b9a2c7cb7ba51e996081e3fbf98637e1bf8c8f6a49cd"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 174600,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e5e2c3a6e22d181f5299b9a2c7cb7ba51e996081e3fbf98637e1bf8c8f6a49cd"
+    },
+    "http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http1.json": {
+      "byte_identical": true,
+      "bytes": 2029063,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.json",
+      "sha256": "746c27e1920230bf2a55d4482b4e02ad5fd20f962adea57b88581ff8de1198d9"
+    },
+    "http1.jsonl": {
+      "byte_identical": true,
+      "bytes": 1044130,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.jsonl",
+      "sha256": "36f4017c1711235aafb27fd137d48ae081321ada1fcaf8154360e816d0baae15"
+    },
+    "http1.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 75716,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.jsonl.meta.json",
+      "sha256": "59bce336c282533ad822ac67f2fe347ae50c6569239ec81300e9b88815ebc0f2"
+    },
+    "http1.log": {
+      "byte_identical": true,
+      "bytes": 1044230,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http1.log",
+      "sha256": "ae9fee05bc13f92f69f736185ddf8a3513653f6fffb6f1b6f373b8688aecf929"
+    },
+    "http2.artifacts/fixed-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/fixed-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/fixed-hypercorn-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/fixed-hypercorn-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/fixed-hypercorn-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/fixed-hypercorn-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/large-response-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/large-response-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/large-response-hypercorn-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/large-response-hypercorn-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/large-response-hypercorn-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/large-response-hypercorn-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-hypercorn-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-hypercorn-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-hypercorn-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-hypercorn-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http2.json": {
+      "byte_identical": true,
+      "bytes": 1444419,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.json",
+      "sha256": "4e320275791d8033585cef6c9795316a465a71c4ac97d492f346c8c6f32b4d13"
+    },
+    "http2.jsonl": {
+      "byte_identical": true,
+      "bytes": 724667,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.jsonl",
+      "sha256": "26d2bce8bf7450be62ffdc0039dfcf5bc34c71181adc07b1de437e1a29940db0"
+    },
+    "http2.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 67944,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.jsonl.meta.json",
+      "sha256": "5c0ca55639e4f1d140d2aa59abb99115b3a70f8144e7a9f8759396c984da4d77"
+    },
+    "http2.log": {
+      "byte_identical": true,
+      "bytes": 724924,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http2.log",
+      "sha256": "25fa8fd8f6e7eb270a6699c58a25b7272844696111da5f886ecb956acca38beb"
+    },
+    "http3.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 2175,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http3.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "284f4812d24479217217a3e72d783219313e88da3df1a347756014f99a74f89e"
+    },
+    "http3.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http3.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "http3.jsonl": {
+      "byte_identical": true,
+      "bytes": 12845,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http3.jsonl",
+      "sha256": "2de9e283013184bd02947c1e6f07c43099469e4d5e3332f83356ca3b6859f056"
+    },
+    "http3.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 67944,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http3.jsonl.meta.json",
+      "sha256": "3f32e3cd915d7f37896dc9bc100868577733ad754fbbb40ac5e1a967f55f5ca5"
+    },
+    "http3.log": {
+      "byte_identical": true,
+      "bytes": 14592,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/http3.log",
+      "sha256": "9c937e9a149b3faa33fb072c983cb8121abf29b50f6a8ec7e67830c85db91826"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 70,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "414862388301bc1c9395b6de3eef58b221956f62992df1ff9c0ba03ac5b1810d"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 70,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "414862388301bc1c9395b6de3eef58b221956f62992df1ff9c0ba03ac5b1810d"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 70,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "414862388301bc1c9395b6de3eef58b221956f62992df1ff9c0ba03ac5b1810d"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 1057,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e31eb3fefc40c37a6db488b1463fde3df816cbcad7a5f96ae8b594c4f2efe51f"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 1057,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "e31eb3fefc40c37a6db488b1463fde3df816cbcad7a5f96ae8b594c4f2efe51f"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 1057,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "e31eb3fefc40c37a6db488b1463fde3df816cbcad7a5f96ae8b594c4f2efe51f"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-2-server.log",
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-3-server.log",
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425"
+    },
+    "lifecycle.json": {
+      "byte_identical": true,
+      "bytes": 444814,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.json",
+      "sha256": "1401ba84e98630e8acf6c1c52bc23511c648711c425308dc6de8cc7607bfdc96"
+    },
+    "lifecycle.jsonl": {
+      "byte_identical": true,
+      "bytes": 153086,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.jsonl",
+      "sha256": "13efa2d1c73d992c05f3ef67032892c4d84cb89cb68d409b7d59383cdbba8157"
+    },
+    "lifecycle.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 68301,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.jsonl.meta.json",
+      "sha256": "9b92f70e7d5c53ca20ecf108e7cf459271aad6b0c5b86c4baf13cc22bc9d71ba"
+    },
+    "lifecycle.log": {
+      "byte_identical": true,
+      "bytes": 153190,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.log",
+      "sha256": "20a01ae5d864221adad61b703ef9d992dd0811531d3d5801f1f2dd798dc5ed61"
+    },
+    "lifecycle.phases.jsonl": {
+      "byte_identical": true,
+      "bytes": 147457,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.phases.jsonl",
+      "sha256": "42866198540f60aff404e2523b224f22cbbb87f6aa64ce70e9fe0f725df3b088"
+    },
+    "lifecycle.phases.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 68301,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/lifecycle.phases.jsonl.meta.json",
+      "sha256": "9b92f70e7d5c53ca20ecf108e7cf459271aad6b0c5b86c4baf13cc22bc9d71ba"
+    },
+    "run.json": {
+      "byte_identical": true,
+      "bytes": 11292,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/run.json",
+      "sha256": "a23215d85b6b993fc3998ed3abddd101ec30b9cd282f7b77c70246072186bef6"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-1-server.log",
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-2-server.log",
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-3-server.log",
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-1-server.log",
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-2-server.log",
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-3-server.log",
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587"
+    },
+    "websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-1-server.log",
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587"
+    },
+    "websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-2-server.log",
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587"
+    },
+    "websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-3-server.log",
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587"
+    },
+    "websocket.json": {
+      "byte_identical": true,
+      "bytes": 477498,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.json",
+      "sha256": "53a9b3828debc8bedd5c71b1ca4640769f35e09c9b3678e0854671012958de44"
+    },
+    "websocket.jsonl": {
+      "byte_identical": true,
+      "bytes": 192446,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.jsonl",
+      "sha256": "dbb92e60e33f2e5734d487770c08bdf4cd057a0a38626c262c1b76493bace31d"
+    },
+    "websocket.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 67963,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.jsonl.meta.json",
+      "sha256": "f6c1850d2ba3b311768c6edc8ff2baf0692eef283e2c9642f6d3bcf2e1388578"
+    },
+    "websocket.log": {
+      "byte_identical": true,
+      "bytes": 192707,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs/websocket.log",
+      "sha256": "b6fb0bd1cd9b5303b4575e5a986acc339ac9e425a9d49718ac9fc20b648b1dac"
+    }
+  },
+  "original_directory": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs",
+  "qualified_pairs": 0,
+  "recorded_identity_stable": true,
+  "recorded_source_hashes_verified_against_snapshot": true,
+  "row_counts": {
+    "http1": {
+      "failures_in_completed_rows": 0,
+      "final_report_present": true,
+      "rows": 72,
+      "timing_valid_rows": 2
+    },
+    "http2": {
+      "failures_in_completed_rows": 0,
+      "final_report_present": true,
+      "rows": 42,
+      "timing_valid_rows": 0
+    },
+    "http3": {
+      "failures_in_completed_rows": 0,
+      "final_report_present": false,
+      "rows": 1,
+      "timing_valid_rows": 1
+    },
+    "lifecycle": {
+      "failures_in_completed_rows": 0,
+      "final_report_present": true,
+      "rows": 6,
+      "timing_valid_rows": 0
+    },
+    "websocket": {
+      "failures_in_completed_rows": 0,
+      "final_report_present": true,
+      "rows": 18,
+      "timing_valid_rows": 4
+    }
+  },
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1",
+  "targeted_rows": 171,
+  "unfinished_h3_checkpoint_rows": 1
+}

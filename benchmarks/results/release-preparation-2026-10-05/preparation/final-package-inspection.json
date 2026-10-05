@@ -1,0 +1,29 @@
+{
+  "schema": "uvicorn-rs-local-package-inspection@1",
+  "state": "dirty-checkout preparation; not hosted release evidence",
+  "wheel": {
+    "name": "uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl",
+    "sha256": "edef65c1f517c72b90dccac59aca5afd5df367fa374553c294621ed292489933",
+    "native_sha256": "766723356793322de55931eac30cad3af2c468de4cf1e8d53b275f0a3a839f45",
+    "entries": 14,
+    "bytes": 2600505
+  },
+  "sdist": {
+    "name": "uvicorn_rs-0.1.0.tar.gz",
+    "sha256": "5c84667b51f47c9cc6fecc19bbfe2900d85db387f93bd9b7bb0093c1a2a1ed90",
+    "entries": 31,
+    "bytes": 245420
+  },
+  "licenses": [
+    "uvicorn_rs-0.1.0.dist-info/licenses/LICENSE",
+    "uvicorn_rs-0.1.0.dist-info/licenses/LICENSE-BSD-3-Clause",
+    "uvicorn_rs-0.1.0.dist-info/licenses/LICENSE-MIT"
+  ],
+  "metadata_license_lines": [
+    "License-File: LICENSE",
+    "License-File: LICENSE-BSD-3-Clause",
+    "License-File: LICENSE-MIT",
+    "License-Expression: BSD-3-Clause OR MIT",
+    "Requires-Python: >=3.9"
+  ]
+}

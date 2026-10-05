@@ -1,0 +1,29 @@
+    Finished `release` profile [optimized] target(s) in 0.04s
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 289, in main
+    metrics = sample(
+              ^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 209, in sample
+    raise RuntimeError(
+RuntimeError: HTTP/3 client failed:
+{"requests":69,"duration_seconds":5.026022416,"requests_per_second":13.729,"request_body_bytes":85,"response_body_bytes":966,"response_data_chunks":69,"application_bytes_per_second":209.112,"p50_ms":2.946958,"p95_ms":8.135750,"p99_ms":10.775750,"failures":16,"first_failure":"timed out waiting for H3 response headers"}
+
+Error: "HTTP/3 benchmark correctness gate failed"
+
+server output:
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 363, in <module>
+    main()
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 294, in main
+    raise RuntimeError(
+RuntimeError: HTTP/3 case failed: workload=protocol-scope, server=hypercorn-uvloop, repetition=1: HTTP/3 client failed:
+{"requests":69,"duration_seconds":5.026022416,"requests_per_second":13.729,"request_body_bytes":85,"response_body_bytes":966,"response_data_chunks":69,"application_bytes_per_second":209.112,"p50_ms":2.946958,"p95_ms":8.135750,"p99_ms":10.775750,"failures":16,"first_failure":"timed out waiting for H3 response headers"}
+
+Error: "HTTP/3 benchmark correctness gate failed"
+
+server output:
+

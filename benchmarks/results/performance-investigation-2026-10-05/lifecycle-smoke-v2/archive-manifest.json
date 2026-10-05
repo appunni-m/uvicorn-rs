@@ -1,0 +1,78 @@
+{
+  "correctness_passed": 2,
+  "created_at": "2026-10-05T11:46:48.881942+00:00",
+  "files": {
+    "README.md": {
+      "byte_identical": null,
+      "bytes": 670,
+      "kind": "archive documentation",
+      "original_path": null,
+      "sha256": "7ee09f92c875987cd4f8971d9d365678744b3f4c19d1c04d37f8c9044984c830"
+    },
+    "lifecycle-smoke-v2.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 70,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "414862388301bc1c9395b6de3eef58b221956f62992df1ff9c0ba03ac5b1810d"
+    },
+    "lifecycle-smoke-v2.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 1057,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "e31eb3fefc40c37a6db488b1463fde3df816cbcad7a5f96ae8b594c4f2efe51f"
+    },
+    "lifecycle-smoke-v2.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425"
+    },
+    "lifecycle-smoke-v2.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-1-server.log",
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425"
+    },
+    "lifecycle-smoke-v2.json": {
+      "byte_identical": true,
+      "bytes": 244464,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.json",
+      "sha256": "b91067042382ff6af836fd6c9719e8bc2dc2ed48686158f6247c7a971a5adc37"
+    },
+    "lifecycle-smoke-v2.jsonl": {
+      "byte_identical": true,
+      "bytes": 51103,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.jsonl",
+      "sha256": "3786e78ae8f170c12ac7dba60cb1e3b878fc2d9688e63a3826c3b525f057379c"
+    },
+    "lifecycle-smoke-v2.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 68256,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.jsonl.meta.json",
+      "sha256": "a53e47a3bbabf836fc97dd5181bf59444660efbe10752ccefc122e790d147865"
+    },
+    "lifecycle-smoke-v2.log": {
+      "byte_identical": true,
+      "bytes": 51162,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.log",
+      "sha256": "3acaa62ff15a1a8f29835bbb4aa75d929e88de9bd3415c9699a61f9fa62ebc4d"
+    },
+    "lifecycle-smoke-v2.phases.jsonl": {
+      "byte_identical": true,
+      "bytes": 49209,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.phases.jsonl",
+      "sha256": "623f7011f8aa2e07f616cf274ff64e25c2c206ea9f65b417ccda435ec04ab473"
+    },
+    "lifecycle-smoke-v2.phases.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 68256,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2.phases.jsonl.meta.json",
+      "sha256": "a53e47a3bbabf836fc97dd5181bf59444660efbe10752ccefc122e790d147865"
+    }
+  },
+  "original_prefix": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/lifecycle-smoke-v2",
+  "qualified_pairs": 0,
+  "rows": 2,
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1",
+  "timing_valid_rows": 0
+}

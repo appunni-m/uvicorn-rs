@@ -1,0 +1,14 @@
+PASS http3: http3.sequential-responses-one-connection
+PASS http3: http3.peer-close-h3-no-error
+{
+  "status": "completed",
+  "summary": {
+    "selected": 2,
+    "executed": 2,
+    "passed": 2,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-false-live-result.json"
+}

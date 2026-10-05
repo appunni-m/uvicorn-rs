@@ -1,0 +1,74 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan.tls-shutdown-cancels-held-request",
+      "profile": "lifecycle-tls",
+      "operation": "lifespan.shutdown-cancellation",
+      "covers": [
+        "lifespan.shutdown-cancellation"
+      ],
+      "lifecycle": {
+        "state_path": "/state",
+        "hold_path": "/hold",
+        "graceful_timeout_seconds": 1
+      }
+    },
+    {
+      "case_id": "lifespan.active-response-stream-drains-on-tls-shutdown",
+      "profile": "lifecycle-tls",
+      "operation": "lifespan.active-stream-graceful-drain",
+      "covers": [
+        "lifespan.active-stream-graceful-drain"
+      ],
+      "lifecycle": {
+        "stream_path": "/stream-shutdown-hold",
+        "graceful_timeout_seconds": 3,
+        "idle_transport_prefix_base64": "UFJJIA=="
+      }
+    },
+    {
+      "case_id": "fault.lifecycle-tls.hyper-connection-write-error-during-shutdown",
+      "profile": "lifecycle-tls",
+      "operation": "lifespan.hyper-connection-write-error-during-shutdown",
+      "covers": [
+        "lifespan.hyper-connection-write-error-during-shutdown"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.connection-io.poll-write-error",
+        "contract": "server-hyper-connection-error-during-shutdown"
+      },
+      "lifecycle": {
+        "stream_path": "/stream-shutdown-hold",
+        "graceful_timeout_seconds": 3
+      }
+    },
+    {
+      "case_id": "lifespan.active-response-reset-during-tls-shutdown",
+      "profile": "lifecycle-tls",
+      "operation": "lifespan.active-stream-reset-during-shutdown",
+      "covers": [
+        "lifespan.active-stream-reset-during-shutdown"
+      ],
+      "lifecycle": {
+        "stream_path": "/stream-shutdown-hold",
+        "graceful_timeout_seconds": 3,
+        "reset_connection_after_shutdown": true
+      }
+    },
+    {
+      "case_id": "lifespan.unfinished-tls-handshake-closes-on-shutdown",
+      "profile": "lifecycle-tls",
+      "operation": "lifespan.tls-handshake-graceful-shutdown",
+      "covers": [
+        "lifespan.tls-handshake-graceful-shutdown"
+      ],
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1,
+        "unfinished_tls_handshake": true
+      }
+    }
+  ]
+}

@@ -1,26 +1,230 @@
 # Implementation review: known gaps
 
-This page separates measured failures from risks that still need targeted
-evidence. The latest full benchmark passed the H1, H2, WebSocket, lifespan,
-and Rust-only H3 correctness gates; its Hypercorn H3 comparison failed, and
-unrelated CPU-heavy jobs contaminated performance samples. It is not a
-security audit or evidence that the server is ready for public deployment.
+The HTTP/3 task-reaping source passes all 451 instrumented attribution cases
+and three complete repeats with zero failures, infrastructure errors, retries
+or cases not run. The matrix has 214 oracle comparisons and 237 target-only
+contracts across 70 input files and 63 operations. Native coverage is
+4,778/4,778 regions and 3,371/3,371 lines with zero unfiltered MCP gaps.
+The restored normal build passes 214/214 public comparisons and all 15
+exclusion checks with three selected live cases. See
+[the current source/build receipt](coverage.md#current-full-verification-451-cases).
+Passing 448-case results below belong to the earlier shared-write source
+identified in [the coverage record](coverage.md#current-full-verification-448-cases);
+they do not attest the changed checkout.
 
-## Measured performance gaps
+This page separates measured failures from risks that still need targeted
+evidence.
+
+## Latest completed historical evidence
+
+The historical shared-write matrix declares 448 cases across 70 input files and 61 operations: 213 live
+oracle comparisons and 235 target-only contracts, including two public
+header-capacity contracts. The named normal build passes all 213 public cases.
+That instrumented source passes 448/448 attribution and three complete
+448-case repeats with zero failures, infrastructure errors, retries or cases
+not run. It measures 4,763/4,763 regions and 3,360/3,360 lines with zero
+unfiltered MCP gap groups, a matching source receipt and tests passed. The
+same source's normal exclusion audit passes all checks and its three selected
+live cases. [Coverage evidence](coverage.md#current-full-verification-448-cases)
+names exact source/build identities and preserves the local dirty-checkout
+scope; it does not establish a release baseline or full ASGI conformance.
+
+## Current transport changes and performance status
+
+`ConnectionIo` now forwards scalar/vectored writes and the underlying vectored
+capability. A borrowed buffer enum uses one fallible write handler, preserving
+error/disconnect handling without allocating or copying payloads. A profile of
+the earlier vectored candidate observed Hyper's flattening-copy path disappear
+on plaintext H1. That wall-stack observation is not a throughput or CPU gain.
+The H3 accept loop now treats only typed H3_NO_ERROR (`0x100`) as clean peer
+close and retains its owned request drain; other acceptance errors still
+propagate. Its new same-input public case failed before the fix and passes now.
+
+The task-reaping source now joins completed HTTP/3 request tasks while accepting
+new requests on a long-lived connection. Its 450-case attribution passed, but
+the complete repeats stopped and two final-drain regions remained uncovered.
+A controlled public GREASE A/B passed the 128-response sequence and clean-close
+pair only with that sequence's GREASE disabled. The new generic held-response
+accept-error workflow uses an existing point and requires remote `0x102`, real
+stream failure, ordered cancellation/original error, application cleanup and a
+healthy fresh request. Its selected instrumented case passed 1/1 and retained
+those actual outcomes; the fresh 451-case full run passes attribution and all
+three repeats, including both formerly missing final-drain spans. The
+`stream_reset` observation uses the client's `recv_data` error convention;
+actual remote application close, body-stream error, connection closure and
+cleanup prove termination/cancellation. The Rust source is unchanged and the
+full run rebuilt instrumentation; [current evidence](coverage.md#current-evidence-status)
+records the exact identities and native scope. The normal build is restored,
+passes 214 public cases and all 15 exclusion checks with three selected live
+cases, and preserves its maintained identity through both gates.
+
+The [October 5 investigation](performance-investigation-2026-10-05.md) retains
+all 120 A/B rows and identity/profile receipts. None of its 90 optimization
+timings qualified, so fixed-key/value caching and one-worker Tokio remain
+unaccepted. Common-method caching was only drafted. Canonical behavior keeps
+two workers, event-name interning, ordinary mapping/method lookups and the
+existing method uppercasing path. Fresh five-category timing with matching
+automatic lifespan and visible reference ERROR logs is pending.
+
+## Historical correctness evidence
+
+The earlier inventory declared 447 cases across 70 input files: 212
+oracle-parity cases and 235 target-only contracts, including two public capacity
+support contracts in the existing fault-contract envelope. That snapshot
+completed regression, native coverage and normal-build exclusion verification.
+Its source passed all 447 attribution cases and three complete repeats
+with zero failures, infrastructure errors, retries, or cases not run. Its
+report records 4,734/4,734 native
+LLVM regions and 3,333/3,333 lines (100%); unfiltered Coverage-MCP has zero gap
+groups and a matching passing receipt. This is default-feature `src/lib.rs`
+with `cfg(coverage)` on macOS ARM64. The preceding source's normal-build audit failed from two
+inactive service-error diagnostic literals; the corrected source's normal
+audit passes all checks and three selected live cases. Its complete instrumented
+gate also passed independently; the extension was restored to that audited
+normal build at the time. [Coverage analysis](coverage.md)
+preserves the historical 423-case 100% result and the subsequent incomplete
+426-case result. The historical 445-case snapshot passed attribution and measured
+every Rust source region and line with zero Coverage-MCP gaps, but remained
+incomplete because its third full repeat had one graceful-drain adapter failure
+and eight cases not run. Its first two repeats passed 445/445. The preceding
+444-case snapshot had an attribution oracle TLS WebSocket handshake timeout
+despite three passing full repeats. The earlier 442-case snapshot
+missed six Rust regions and four lines. None of these snapshots certifies the
+subsequent header-capacity correction or its new public support contracts.
+The correction passed a nine-case attribution subset followed by the preceding
+complete instrumented gate. No fresh performance comparison is available.
+The historical 447-case gate also covered that correction after compiled fault exclusion.
+
+The earlier historical full correctness matrix contained 346 cases: 195
+oracle-parity cases and 151 target-only fault contracts. All cases passed
+attribution and three full matrix repeats with no mismatches or infrastructure
+retries. The unified report records 3,826/3,943 regions and 2,665/2,726 lines;
+Coverage-MCP matched the source/build receipt and inspected all 48 missing
+region groups. Coverage remained below 100% for that snapshot. The complete
+official ASGI
+conformance corpus has not been run. This is not a security audit or evidence
+that the server is ready for public deployment.
+
+The working-tree report for that 346-case snapshot is
+`build/asgi-coverage/unified-current-2026-10-05/coverage-report.json`. It was
+measured on CPython 3.12.13, Rust 1.98.1, and macOS ARM64 at dirty revision
+cf9bf062133721b094e914f49ed8f54c613eb30f. A clean committed-source coverage
+run and a fresh quiet-host performance run remain unverified.
+
+
+<a id="measured-performance-gaps"></a>
+
+## Historical measured performance gaps
 
 | Finding | Evidence | Current action |
 |---|---|---|
-| H1 remains slower than Uvicorn's fastest measured configuration. | Latest provisional medians were 31,028 vs 56,694 requests/s fixed and 892 vs 1,824 on 256 × 4 KiB chunks. Fixed p50 was 1.954 vs 0.845 ms; chunked p50 was 74.187 vs 33.417 ms. Rust server CPU was 124.4% vs 90.4% fixed and 208.3% vs 98.3% chunked. H1 started with two unrelated Rust compiler jobs and a Python workload each using about 70% CPU. | Keep performance claims provisional. Rerun after host contention ends and move large-transfer clients to a separate host when measuring server efficiency. |
-| Per-message bridge/backpressure work is a measured chunk-heavy cost. | The diagnostic queue-one run showed about 224 full sends and 206 ms accumulated full-send wait per 256-chunk response; queue-four reduced this to about 61 waits and 68.8 ms. The timer includes bridge scheduling, not only queue residence. | Preserve app-loop ownership and backpressure while profiling the writer/bridge path; avoid batching across observable ASGI send boundaries. |
-| Large-response memory remains above the Uvicorn baseline after owner-backed extraction. | The latest provisional 1 MiB H1 response row measured 148.1 MiB Rust peak RSS vs 33.0 MiB Uvicorn. The loopback client used 588.8% and 502.2% CPU respectively. | Keep owner-backed extraction. Collect allocation/lifetime profiles on an idle host and move the load client off-host; RSS and client-contended throughput cannot identify retained allocations. |
-| Rust server CPU is high in several benchmark cases. | In the latest provisional H1 run, median server CPU was 124.4% vs 90.4% fixed and 208.3% vs 98.3% for 256 chunks (Rust vs Uvicorn). Rust also measured 247.0% vs 94.6% on WebSocket text echo. | Profiles show bridge, channel, runtime, and transport frames but do not attribute their total CPU share. No evidence points to missing SIMD as the cause. |
-| H3 candidate RSS is unexpectedly high. | The latest Rust-only H3 fixed-response rows peaked between about 177 and 202 MiB at concurrency 4. The comparison failed its Hypercorn correctness gate, and the retry overlapped a Rust compiler. | Re-run H3 under an idle host and profile connection/stream lifetimes before treating this as a leak or a stable memory requirement. |
+| Repeated Python string conversion and scope temporaries remain a profiling question. | The October 2 sampled H1 profile shows PyString::new / PyUnicode_DecodeUTF8Stateful under AsgiIo.send, plus string conversion in PythonTaskStarter; this is a call-path clue, not percentage attribution. The current source interns event names and uses Cow<str> for plain HTTP paths. | Re-profile this exact source on a quiet host before claiming optimization gain. |
+| H1 fixed-response latency and CPU are worse than Uvicorn's fastest measured configuration. | In the provisional matrix, Rust+uvloop measured 39,894 requests/s, p50 1.58 ms, and 139% server CPU; Uvicorn uvloop+httptools measured 67,882 requests/s, p50 0.81 ms, and 94% CPU. | Repeat the correctness-gated matrix on an idle host before accepting a performance conclusion. |
+| Some H1 streaming workloads have higher raw rate, but lower server CPU efficiency. | Rust+uvloop measured 2,226 vs 1,748 requests/s on 256 response chunks (179% vs 88% CPU) and 5,208 vs 3,724 on small response chunks (196% vs 99% CPU). After normalizing each sample's rate by server CPU, medians were 1.22k vs 2.00k and 2.65k vs 3.78k requests/s per core. | Treat both rate and efficiency figures as provisional. Profile CPU per request and per ASGI message before changing the bridge. |
+| Python-heavy H1 workloads remain behind Uvicorn. | Provisional rate ratios were 0.74× for 32-header scope, 0.51× for contextvars, 0.55× for the synchronous-callable/awaitable case, and 0.43× for exception-to-500. | Attribute task scheduling, loop notifications, PyO3 calls, and message construction on an idle fixed workload. |
+| Cross-runtime streaming waits are measurable. | The queue-16 instrumented run saw about 14.9 full sends per 256-chunk response and 24–31 ms accumulated send-wait per request. The timer includes bridge scheduling as well as channel delay; instrumented throughput is not comparable to ordinary runs. | Keep ASGI send ordering and backpressure. Profile bridge wakeups and channel occupancy before considering batching. |
+| Large H1 response sampled RSS remains high after owner-backed extraction. | The 1 MiB response row's median sampled peak RSS was 127 MiB for Rust and 33.9 MiB for Uvicorn. Loopback clients used several CPU cores. | Collect allocation/lifetime profiles and move large-transfer clients off-host; RSS alone does not identify retained allocations. |
+| H3 fixed-response sampled RSS is high. | The Rust+uvloop row's median sampled peak was 252.3 MiB at concurrency 4; the Hypercorn reference was 89.7 MiB. All H3 rows passed correctness, but the host was busy. | Profile connection/stream and buffer lifetimes on a quiet host before treating this as a leak or stable memory requirement. |
+| WebSocket text echo consumes more CPU and is slower than Uvicorn in this run. | Rust+uvloop measured 60,525 messages/s at 244% CPU; Uvicorn uvloop measured 73,207/s at 94% CPU. The 64 KiB binary echo favored Rust in rate but also used more CPU. | Profile the PyO3 message bridge and frame path separately; retain full-message parity gates. |
 
-The newest run, its environment/process snapshots, raw rows, and the rejected
-1 KiB copy threshold experiment are in [the feasibility
-report](feasibility.md). A recorded before/after difference is evidence for an
-optimization candidate, not a statistical proof that a single change caused
-that difference.
+The [October 4 run notes](../benchmarks/results/full-2026-10-04T113122Z/run-notes.md)
+link the environment, every raw category report, and process snapshots. These
+are exploratory medians from a contaminated host, not accepted speedup claims.
+
+## Listener shutdown regression and correction
+
+The strengthened existing graceful-drain workflow exposed retained TCP
+admission over both plaintext and TLS. On the native binary measured by the
+444-case snapshot, Uvicorn refused new connections while its process and held
+response remained active; Rust kept accepting TCP connections into its backlog
+until shutdown finished. Both comparisons failed only the declared
+`listener_closed_before_release` observation. Complete response bytes,
+application/lifespan events, established-connection close, and process
+termination matched. The defending receipt at
+`build/asgi-coverage/listener-admission-before-fix-2026-10-05/parity-result.json`
+records two behavioral failures and zero infrastructure failures.
+
+The current source explicitly drops the listener after the accept loop ends
+and before task drains. The runner treats only connection refusal as listener
+closure: a connect timeout can come from a full backlog, and a close racing
+with a connect can reset the probe. Both outcomes are retried and are not
+closure proof. Both ordinary cases now observe admission for one second within their
+three-second grace, require the process and held response to remain active,
+then release and verify the complete response and shutdown. The listener
+ownership correction passed both cases within a seven-case targeted run with
+zero failures or retries:
+`build/asgi-coverage/listener-ownership-targeted-445-rst-aware-2026-10-05/coverage-report.json`.
+The strengthened listener cases also passed the preceding complete gate. This
+change does not resolve the detached request-body pump ownership concern below.
+
+## Idle protocol-detection cancellation
+
+The full listener-fix snapshot passed all 445 attribution cases and two complete
+repeats. The third repeat completed the held plaintext response but the adapter
+then rejected the global shutdown diagnostic `Cancelled`. The server log did
+not identify a connection, so it did not show an active-stream failure.
+Inspection of pinned `hyper-util` 0.1.20 showed that cancelling a pending HTTP
+version read through `graceful_shutdown()` returns a directly boxed
+`std::io::ErrorKind::Interrupted`. Established HTTP/1.1 and HTTP/2 errors are
+boxed `hyper::Error` values instead.
+
+The implemented correction classifies that direct interrupted I/O result only in
+the explicit graceful-cancellation branch. Other results retain the error
+channel, including the ordinary connection-result branch. The harness keeps
+its error-log assertion and adds a real idle TCP/TLS connection carrying the
+partial HTTP/2 preface `PRI ` before the active held stream. Shutdown must close
+that connection while the active response drains normally. These are stronger
+stimuli and observations in the existing two ordinary cases, with no new case
+family or fault seam. Both cases deterministically reproduced the old native's
+strict `Cancelled` diagnostic rejection in
+`build/asgi-coverage/protocol-detection-before-fix-2026-10-05/parity-result.json`.
+That defending receipt contains two adapter infrastructure failures and zero
+reported behavioral mismatches; it is not two oracle comparison failures.
+The adjacent `before-identity.json` records the exact old native, source,
+harness, fixture, manifest, and input digests. The changed native passed all
+seven targeted attribution cases, including both stronger ordinary drains,
+with zero failures or retries. Both live comparisons report the idle connection
+closed and retain exact response/lifecycle parity. The artifact audit at
+`build/asgi-coverage/protocol-detection-before-after-audit-2026-10-05.json`
+verifies unchanged harness, fixture, manifest, input, environment, and Cargo
+lock identities. That targeted evidence is now historical: the follow-up full
+run was interrupted after 219 attribution passes for the header-capacity issue
+below. The preceding 447-case source passed its separate complete gate.
+
+## Header-map capacity failure
+
+The pinned `http` crate's `HeaderMap::append` panics internally when its finite
+capacity is exceeded. Both the HTTP response helper and WebSocket handshake
+assembly called that infallible method. Ordinary valid ASGI header collections
+can reach the failure, so the authored panic/unwrap/expect lint policy alone
+does not close this dependency call path.
+
+The implemented change uses `try_append`: HTTP headers are built before response
+state is committed, and WebSocket handshake assembly retains its application
+task guard until construction succeeds. Capacity failure retains the
+original native error and the existing public failure/cleanup behavior through
+`Result`. The capacity support cases supply 32,769 distinct valid header names
+through the public ASGI boundary. They are target-only declared capacity
+contracts, with no native injection and no equivalence claim against Uvicorn.
+The exact usable header count depends on map growth, key distribution,
+duplicates, and reserved handshake headers; the internal bucket ceiling is not
+a stable public accepted-count limit.
+
+The same two public-input contracts failed before the correction and each
+produced an unexpected dependency panic at `http-1.5.0/src/header/map.rs:1433`.
+The runner recorded two behavioral failures and two panic-hook infrastructure
+failures even though both target processes exited zero. With the corrected
+native, both contracts passed within a nine-case targeted attribution run with
+zero failures or retries. HTTP recovered with a small 500 response; WebSocket
+returned a 500 handshake and completed application cleanup; both healthy
+follow-ups returned 200. The
+`build/asgi-coverage/header-capacity-before-after-audit-2026-10-05.json`
+receipt verifies unchanged inputs, harness, environment, and Cargo lock while
+recording both source/native identities. Both contracts also passed the preceding
+historical 447-case attribution and repeats. Both also pass the historical shared-write
+448-case attribution, three full repeats and selected normal-build audit.
+The strict unexpected-panic
+hook checks remain enabled.
 
 ## Correctness and protocol coverage
 
@@ -33,15 +237,14 @@ that difference.
   and extensions, and broad HTTP/3 loss/recovery interop remain unverified or
   unsupported. See the [support matrix](support-matrix.md) for per-feature
   status.
-- The HTTP/3 implementation depends on experimental `h3` APIs. An earlier
-  correctness-gated run has a 66-row Hypercorn comparison for its represented
-  workload set. The latest comparison aborted on four Hypercorn asyncio
-  timeouts; the separate 36-row Rust-only matrix passed. Broader
-  interoperability remains unverified.
+- The HTTP/3 implementation depends on experimental `h3` APIs. The October 4
+  correctness-gated matrix passed 66 comparison rows against Hypercorn for its
+  represented workloads; Hypercorn upload remains excluded. This is not a
+  Uvicorn comparison, and broader interoperability remains unverified.
 
 ## Code and operations
 
-- The Rust data plane is concentrated in a 2,300-line `src/lib.rs`. Keeping one
+- The Rust data plane is concentrated in `src/lib.rs`. Keeping one
   module has not yet been shown to cost runtime performance, but it makes
   protocol review and change isolation harder. A module split should preserve
   behavior and be measured independently.
@@ -49,35 +252,57 @@ that difference.
   objects. Incoming body data and scope bytes currently copy into Python
   `bytes`; immutable outgoing Python `bytes` remain owner-backed in Rust.
   Exact built-in ASGI event names compare against interned Python strings and
-  avoid a Rust `String` allocation; unknown names and string subclasses retain
-  the owned-string fallback.
+  avoid a Rust `String` allocation. Fixed scope/message keys and Python method
+  lookups still use ordinary strings; HTTP methods still use the existing
+  uppercasing path. Wider key/value and worker-count experiments are unaccepted,
+  and common-method caching was drafted only. Plain HTTP paths retain `Cow<str>`
+  and avoid an intermediate Rust allocation. No isolated speed gain is claimed.
   See the [copy ledger](architecture.md#buffer-ownership-and-copies).
 - HTTP body queues are bounded by item count, not by bytes per item, and there
   is no configurable body-size limit. Deployments must account for application
   behavior and transport defaults until resource limits are designed and
   verified.
-- Error reporting uses `eprintln!` in some Rust paths; structured logging and
-  configurable access logs are not implemented.
-- The manifest declares Python `>=3.9`, but live validation currently covers
-  only CPython 3.12.13 on macOS ARM64. Linux, Windows, alternate Python
-  interpreters, and free-threaded CPython have not been validated.
-- No package has been published. The repository license is not selected yet;
-  no license grant should be inferred until a license is added.
+- Request-body pump ownership needs follow-up. `handle_request_inner` launches
+  `pump_http_request_body` with a detached Tokio task, outside the connection
+  join set and Python cleanup tracker. The pump retains the incoming body until
+  EOF, reset, or channel release; its receiver-closed and send-error paths drain
+  remaining frames without selecting the connection-close watch. Connection
+  teardown normally closes the incoming body, but shutdown does not separately
+  acknowledge pump completion before `Server.serve()` returns. An unbounded
+  production leak has not been demonstrated. Public partial-upload,
+  early-response, disconnect, and bounded-shutdown evidence is needed before
+  strengthening the ownership contract. The causal coverage-only scheduling
+  pause does not change production pump ownership.
+- Rust diagnostics use fallible best-effort stderr writes; structured logging
+  and configurable access logs are not implemented.
+- The manifest declares Python `>=3.9`. Full public parity uses CPython
+  3.12.13 on macOS ARM64; an actual installed-wheel HTTP/loop/context/lifespan
+  and cancellation smoke also passes on CPython 3.9.25. Linux, Windows,
+  alternate interpreters and free-threaded CPython remain unverified locally.
+- No package has been published. The repository now has BSD-3-Clause/MIT
+  licensing with Appunni M's copyright and retained upstream notices. Hosted
+  CI and a public distribution decision are still required for release.
+- The current H3 close classifier recognizes typed `H3_NO_ERROR` (`0x100`).
+  A benchmark replay exposed a diagnostic error for peer application close
+  code zero. [RFC 9114 section 8](https://www.rfc-editor.org/rfc/rfc9114.html#section-8) requires unknown error codes to be treated as
+  `H3_NO_ERROR`; that extension-code behavior needs its own parity case and
+  native correction. The benchmark client now sends explicit `0x100`, while
+  the failed original replay remains preserved. This does not close the
+  server's unknown-code compatibility gap.
 
 ## Next performance work
 
-1. Repeat the full correctness-gated matrix on an otherwise idle host; the
-   latest snapshots showed two unrelated Rust compilers and a Python workload
-   at H1 start, a Rust compiler at H3 candidate-only start, and a resident
-   Android emulator.
-2. Use the opt-in bridge counters to profile fixed and chunk-heavy H1 behavior;
-   the four-item queue reduces full-channel waits, but fixed sends do not block
-   and still lose to Uvicorn. Add allocation/lifetime profiling for the 1 MiB
-   response; RSS samples cannot explain retained memory.
-3. Attribute the remaining fixed-response cost and change one
-   behavior-preserving mechanism at a time, retaining the black-box
-   correctness gates, and repeat interleaved A/B samples against Uvicorn's
-   `uvloop + httptools` configuration with both server and client CPU recorded.
+1. Complete the correctness-gated five-category comparison on the exact audited
+   normal build with matching automatic lifespan and visible ERROR logs. Keep
+   matching binaries, app, Python, client, seed, and load settings; record both
+   server and client CPU and p50/p95/p99 latency.
+2. If valid paired timings are neutral, mixed or unavailable, use opt-in bridge counters and fresh
+   native/Python profiles to compare fixed and chunk-heavy H1 paths. Then
+   collect allocation/lifetime profiles for the 1 MiB H1 and fixed H3 cases;
+   RSS samples alone cannot explain retained memory.
+3. Change one behavior-preserving mechanism at a time and rerun interleaved A/B
+   samples against Uvicorn `uvloop + httptools`. Do not accept a throughput-only
+   win if CPU or latency regresses materially.
 
 The next benchmark must include the existing category workload names and use
 the same app, client, runtime, concurrency, duration, and machine for both

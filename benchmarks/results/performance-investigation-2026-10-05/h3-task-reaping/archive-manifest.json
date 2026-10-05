@@ -1,0 +1,391 @@
+{
+  "created_at": "2026-10-05T12:01:10.964152+00:00",
+  "files": {
+    "README.md": {
+      "byte_identical": null,
+      "bytes": 1947,
+      "kind": "derived analysis/documentation",
+      "original_path": null,
+      "sha256": "41a7a0f402407fb2ed6293ac9bf872d1420b05e83ade19c258d6e498ef2a7cda"
+    },
+    "after/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "after/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "after/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "after/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-4-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-4-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "after/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-5-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-after.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-5-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "after/h3-retention-after.json": {
+      "byte_identical": true,
+      "bytes": 280951,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-after.json",
+      "sha256": "72f190720f5f128013db9e7b81c36347728143beb6683fe3e9de1fa64e5b4688"
+    },
+    "after/h3-retention-after.jsonl": {
+      "byte_identical": true,
+      "bytes": 77297,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-after.jsonl",
+      "sha256": "8b49c3af04f3f74a83417b846df4c0c8ba2db33e19ce8102bb8bca65e6fd8213"
+    },
+    "after/h3-retention-after.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 67903,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-after.jsonl.meta.json",
+      "sha256": "33441467af05aa4b6eb500b15fcc1e5c135ba07fd3215fff4a34d86eea08c2e0"
+    },
+    "after/h3-retention-after.log": {
+      "byte_identical": true,
+      "bytes": 77418,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-after.log",
+      "sha256": "61edb40c7d565ec805a099ca0497cbd9e3c8c1535db220a85c7ec2b98383cf13"
+    },
+    "after/measured-source-snapshot/Cargo.lock": {
+      "byte_identical": true,
+      "bytes": 30905,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/Cargo.lock",
+      "sha256": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa"
+    },
+    "after/measured-source-snapshot/Cargo.toml": {
+      "byte_identical": true,
+      "bytes": 1576,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/Cargo.toml",
+      "sha256": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb"
+    },
+    "after/measured-source-snapshot/examples/bench_matrix_asgi.py": {
+      "byte_identical": true,
+      "bytes": 5629,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py",
+      "sha256": "4199f61829a714dc18adb2eccd050b2e7e4f945736c0a3d01ebf415d0c630e9d"
+    },
+    "after/measured-source-snapshot/pyproject.toml": {
+      "byte_identical": true,
+      "bytes": 916,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/pyproject.toml",
+      "sha256": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b"
+    },
+    "after/measured-source-snapshot/python/uvicorn_rs/__init__.py": {
+      "byte_identical": true,
+      "bytes": 98,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/__init__.py",
+      "sha256": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155"
+    },
+    "after/measured-source-snapshot/python/uvicorn_rs/__main__.py": {
+      "byte_identical": true,
+      "bytes": 30,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/__main__.py",
+      "sha256": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279"
+    },
+    "after/measured-source-snapshot/python/uvicorn_rs/_bridge.py": {
+      "byte_identical": true,
+      "bytes": 418,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py",
+      "sha256": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff"
+    },
+    "after/measured-source-snapshot/python/uvicorn_rs/cli.py": {
+      "byte_identical": true,
+      "bytes": 3200,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/cli.py",
+      "sha256": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f"
+    },
+    "after/measured-source-snapshot/python/uvicorn_rs/server.py": {
+      "byte_identical": true,
+      "bytes": 2244,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/server.py",
+      "sha256": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87"
+    },
+    "after/measured-source-snapshot/scripts/benchmark_evidence.py": {
+      "byte_identical": true,
+      "bytes": 33947,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/benchmark_evidence.py",
+      "sha256": "d83b60c386f3f6a5ea970b3e2ddc0628f0f97adaa54424ebf4b5e2bbdf9a3bd1"
+    },
+    "after/measured-source-snapshot/scripts/run_h3_category_bench.py": {
+      "byte_identical": true,
+      "bytes": 16646,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py",
+      "sha256": "76bdab145d3ea7924b2ed4f6fc61913a3085967d99cd6eadea8b0f22e5ec741d"
+    },
+    "after/measured-source-snapshot/src/lib.rs": {
+      "byte_identical": true,
+      "bytes": 209852,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-normal/src/lib.rs",
+      "sha256": "313fc3bc68e9eb89611033a924367a74d2d2dc6aa8cfed923c198d01f6f44c0a"
+    },
+    "after/measured-source-snapshot/tools/http3-probe/Cargo.lock": {
+      "byte_identical": true,
+      "bytes": 27942,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/Cargo.lock",
+      "sha256": "a8d9eb109c08ff22d0a67812fc2b61559aa478b962b4c0f8012daaa64f7c128f"
+    },
+    "after/measured-source-snapshot/tools/http3-probe/Cargo.toml": {
+      "byte_identical": true,
+      "bytes": 865,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/Cargo.toml",
+      "sha256": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd"
+    },
+    "after/measured-source-snapshot/tools/http3-probe/src/bin/bench.rs": {
+      "byte_identical": true,
+      "bytes": 12281,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/src/bin/bench.rs",
+      "sha256": "8729861d88c427a024683a5a205a2aad5d6941568cd57a37b044b01e5012e505"
+    },
+    "after/measured-source-snapshot/uv.lock": {
+      "byte_identical": true,
+      "bytes": 250058,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/uv.lock",
+      "sha256": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+    },
+    "analysis.json": {
+      "byte_identical": null,
+      "bytes": 10948,
+      "kind": "derived analysis/documentation",
+      "original_path": null,
+      "sha256": "a0b8906ceff29dcd372c2b1284f1211e58c4d33e4562591f7bdd196b1ecefc55"
+    },
+    "analysis.md": {
+      "byte_identical": null,
+      "bytes": 3773,
+      "kind": "derived analysis/documentation",
+      "original_path": null,
+      "sha256": "1118e49b6be1d829ebf2d73c11ee2f1505ba361e5b6cb23a6643ae8055315366"
+    },
+    "archive-h3-reaping.py": {
+      "byte_identical": true,
+      "bytes": 25307,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/archive-h3-reaping.py",
+      "sha256": "261e3949ee27ed791e88b648eb9a47fb9d7e89f49cd02212439bc112a33585fb"
+    },
+    "before/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "before/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-2-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "before/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-3-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "before/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-4-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-4-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "before/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-5-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-before.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-5-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "before/h3-retention-before.json": {
+      "byte_identical": true,
+      "bytes": 261727,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-before.json",
+      "sha256": "0e17b041d1420574253325e40e9a28e82f8c14d854ea1ee0c7361ea8d9c0d0c2"
+    },
+    "before/h3-retention-before.jsonl": {
+      "byte_identical": true,
+      "bytes": 67433,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-before.jsonl",
+      "sha256": "8da6888365dee6212010abc985edc6d72adfe5fcc54356b9de190afa1ab0f8b4"
+    },
+    "before/h3-retention-before.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 67904,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-before.jsonl.meta.json",
+      "sha256": "11f8edc00e9b865353f569e845c5ef4d0a0e50a8aa81fe6558c3a55022af96c3"
+    },
+    "before/h3-retention-before.log": {
+      "byte_identical": true,
+      "bytes": 67555,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-retention-before.log",
+      "sha256": "fddf5d77da0e33986103c1225aa59761b5989ffdbdc7e85c1e8b21f193dea937"
+    },
+    "before/measured-source-snapshot/Cargo.lock": {
+      "byte_identical": true,
+      "bytes": 30905,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/Cargo.lock",
+      "sha256": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa"
+    },
+    "before/measured-source-snapshot/Cargo.toml": {
+      "byte_identical": true,
+      "bytes": 1576,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/Cargo.toml",
+      "sha256": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb"
+    },
+    "before/measured-source-snapshot/examples/bench_matrix_asgi.py": {
+      "byte_identical": true,
+      "bytes": 5629,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py",
+      "sha256": "4199f61829a714dc18adb2eccd050b2e7e4f945736c0a3d01ebf415d0c630e9d"
+    },
+    "before/measured-source-snapshot/pyproject.toml": {
+      "byte_identical": true,
+      "bytes": 916,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/pyproject.toml",
+      "sha256": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b"
+    },
+    "before/measured-source-snapshot/python/uvicorn_rs/__init__.py": {
+      "byte_identical": true,
+      "bytes": 98,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/__init__.py",
+      "sha256": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155"
+    },
+    "before/measured-source-snapshot/python/uvicorn_rs/__main__.py": {
+      "byte_identical": true,
+      "bytes": 30,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/__main__.py",
+      "sha256": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279"
+    },
+    "before/measured-source-snapshot/python/uvicorn_rs/_bridge.py": {
+      "byte_identical": true,
+      "bytes": 418,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py",
+      "sha256": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff"
+    },
+    "before/measured-source-snapshot/python/uvicorn_rs/cli.py": {
+      "byte_identical": true,
+      "bytes": 3200,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/cli.py",
+      "sha256": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f"
+    },
+    "before/measured-source-snapshot/python/uvicorn_rs/server.py": {
+      "byte_identical": true,
+      "bytes": 2244,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/server.py",
+      "sha256": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87"
+    },
+    "before/measured-source-snapshot/scripts/benchmark_evidence.py": {
+      "byte_identical": true,
+      "bytes": 33947,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/benchmark_evidence.py",
+      "sha256": "d83b60c386f3f6a5ea970b3e2ddc0628f0f97adaa54424ebf4b5e2bbdf9a3bd1"
+    },
+    "before/measured-source-snapshot/scripts/run_h3_category_bench.py": {
+      "byte_identical": true,
+      "bytes": 16646,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py",
+      "sha256": "76bdab145d3ea7924b2ed4f6fc61913a3085967d99cd6eadea8b0f22e5ec741d"
+    },
+    "before/measured-source-snapshot/src/lib.rs": {
+      "byte_identical": true,
+      "bytes": 209351,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/performance-investigation-2026-10-05/current-normal/src/lib.rs",
+      "sha256": "81c239b5f596cf4be18cc71bc3b537c02224c0f1e1ab35174e6386f5203510cd"
+    },
+    "before/measured-source-snapshot/tools/http3-probe/Cargo.lock": {
+      "byte_identical": true,
+      "bytes": 27942,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/Cargo.lock",
+      "sha256": "a8d9eb109c08ff22d0a67812fc2b61559aa478b962b4c0f8012daaa64f7c128f"
+    },
+    "before/measured-source-snapshot/tools/http3-probe/Cargo.toml": {
+      "byte_identical": true,
+      "bytes": 865,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/Cargo.toml",
+      "sha256": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd"
+    },
+    "before/measured-source-snapshot/tools/http3-probe/src/bin/bench.rs": {
+      "byte_identical": true,
+      "bytes": 12281,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/src/bin/bench.rs",
+      "sha256": "8729861d88c427a024683a5a205a2aad5d6941568cd57a37b044b01e5012e505"
+    },
+    "before/measured-source-snapshot/uv.lock": {
+      "byte_identical": true,
+      "bytes": 250058,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/uv.lock",
+      "sha256": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+    }
+  },
+  "raw_copy_policy": "byte-identical originals and empty logs; original paths retained; no binaries",
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1",
+  "summary": {
+    "correct_runs": 10,
+    "qualified_speed_pairs": 0,
+    "timing_valid_after": 0,
+    "timing_valid_before": 2
+  }
+}

@@ -1,0 +1,165 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.lifespan.io-allocation-failure",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.io.allocate",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.lifespan.app-invoke-failure",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.app-invoke",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.lifespan.startup-task-join-error",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.startup.task-join-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.lifespan.startup-send-channel-closed",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.startup.send-closed",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.lifespan.asgi-receive-borrow-conflict",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.asgi-receive.borrow-conflict",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.server.control-shutdown-borrow-conflict",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.control.shutdown.borrow-conflict",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.server.current-python-locals-failure",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.python-locals.get-current",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.server.graceful-timeout-overflow",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.graceful-timeout.overflow",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.server.serve-control-borrow-conflict",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.serve.control.borrow-conflict",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.native.runtime-build-error-before-server-export",
+      "profile": "startup-fault-lifespan-bridge",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "native.runtime.build.error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    }
+  ]
+}

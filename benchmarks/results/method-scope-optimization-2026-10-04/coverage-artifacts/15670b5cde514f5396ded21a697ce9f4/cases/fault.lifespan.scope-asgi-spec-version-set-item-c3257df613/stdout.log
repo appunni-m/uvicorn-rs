@@ -1,0 +1,13 @@
+PASS lifespan-fault-scope-asgi-spec-version: fault.lifespan.scope-asgi-spec-version-set-item
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/method-scope-optimization-2026-10-04/coverage-artifacts/15670b5cde514f5396ded21a697ce9f4/cases/fault.lifespan.scope-asgi-spec-version-set-item-c3257df613/parity-result.json"
+}

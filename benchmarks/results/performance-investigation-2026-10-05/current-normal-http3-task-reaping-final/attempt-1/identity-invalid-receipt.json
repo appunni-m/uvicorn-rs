@@ -1,0 +1,24 @@
+{
+  "schema": "uvicorn-rs-normal-identity-drift-attempt@1",
+  "status": "public_parity_passed_portable_gate_invalid",
+  "reason": "run_parity.build_h3_client inherited the configured Cargo wrapper; client binary changed after capture",
+  "public_summary": {
+    "executed": 214,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 214,
+    "selected": 214
+  },
+  "public_report_sha256": "828a9bb9ef622e451809a15bf4f30b70e4cb94cce999bd4f48e2adf1e2048897",
+  "portable_identity_sha256": "2d9dfd2573a7d2415016fc6f382b039e179fc934cd2638f0e2b69118e77fba3d",
+  "client_before": "1c61f24ec08d63d6bd58536f986d6b925118e66109978004da15cdeba710b206",
+  "client_used_by_public_gate": "628a4febc36792ac86b9dda1dde2dacc9038db6aa4e53afc85b3cf9240daf333",
+  "client_current": "628a4febc36792ac86b9dda1dde2dacc9038db6aa4e53afc85b3cf9240daf333",
+  "source_before": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "native_before": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "native_used": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "owned_session": 43642,
+  "session_closed_exit_code": 0,
+  "resolution": "Preserve this attempt, rebuild only the normal client with empty wrappers, capture a fresh identity and run214 with empty wrappers. No source/package/native change."
+}

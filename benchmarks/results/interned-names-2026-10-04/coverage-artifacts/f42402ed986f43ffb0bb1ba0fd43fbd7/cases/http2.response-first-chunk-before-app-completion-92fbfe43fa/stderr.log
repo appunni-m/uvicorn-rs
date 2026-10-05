@@ -1,0 +1,3 @@
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+

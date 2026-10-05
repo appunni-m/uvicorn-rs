@@ -1,0 +1,13 @@
+PASS http1: http1.reset-during-incomplete-request-body
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/disconnect-neighbor-regressions-artifacts/33b69d4b534341558aa2d79f9b023f52/cases/http1.reset-during-incomplete-request-body-946375853d/parity-result.json"
+}

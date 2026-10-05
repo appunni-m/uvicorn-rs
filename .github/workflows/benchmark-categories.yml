@@ -1,0 +1,221 @@
+name: Manual ASGI category benchmarks
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: Seconds of sustained load per sample
+        default: "5"
+        required: true
+        type: string
+      warmup:
+        description: Warmup seconds per sustained sample
+        default: "1"
+        required: true
+        type: string
+      concurrency:
+        description: Requested concurrency; maintained workload overrides still apply
+        default: "64"
+        required: true
+        type: string
+      repetitions:
+        description: Repetitions per server; at least three are required
+        default: "3"
+        required: true
+        type: string
+      seed:
+        description: Deterministic seed for within-repetition server ordering
+        default: "20261005"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-asgi-benchmarks-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.12.13"
+  RUST_TOOLCHAIN: "1.98.1"
+  FRAMEWORK_REVISION: "738c43362938896c268ca29b9a9a2a5942df510c"
+  CARGO_TERM_COLOR: never
+  RUSTFLAGS: ""
+  CARGO_ENCODED_RUSTFLAGS: ""
+  RUSTC_WRAPPER: ""
+  RUSTC_WORKSPACE_WRAPPER: ""
+
+jobs:
+  categories:
+    name: Public parity gate and sequential category samples
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Prepare stock benchmark environment and record host tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/benchmark-preparation
+          exec > >(tee target/benchmark-preparation/environment.log) 2>&1
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcurl4-openssl-dev
+          uv sync --python "$PYTHON_VERSION" --group benchmark --frozen --no-install-project
+          uv --version
+          .venv/bin/python --version
+          rustc --version --verbose
+          cargo --version
+          node --version
+          cc --version
+          curl-config --version
+          openssl version
+          uname -a
+          lscpu
+          dpkg-query -W build-essential libssl-dev libcurl4-openssl-dev > target/benchmark-preparation/system-packages.txt
+          .venv/bin/python - <<'PY'
+          import importlib.metadata as metadata
+          import json
+          import os
+          import platform
+          from pathlib import Path
+          names = ("uvicorn", "hypercorn", "aioquic", "uvloop", "httptools", "psutil", "h2", "h11", "websockets", "anyio", "typing-extensions")
+          report = {"python": platform.python_version(), "platform": platform.platform(),
+                    "packages": {name: metadata.version(name) for name in names},
+                    "hosted_runner": {name: os.environ.get(name) for name in ("ImageOS", "ImageVersion", "RUNNER_ARCH", "RUNNER_NAME")},
+                    "limits": ["Fresh hosted VM, not dedicated hardware or an assurance of no noisy neighbors.",
+                               "Closed-loop client and server share the VM; client CPU and observer overhead are reported.",
+                               "System package and hosted image versions are recorded, not frozen by this workflow."]}
+          Path("target/benchmark-preparation/environment.json").write_text(json.dumps(report, indent=2) + "\n")
+          PY
+      - name: Build and install the normal release server wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/benchmark-preparation/server-wheels
+          uvx --from maturin==1.14.1 maturin build --release --locked \
+            --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
+            --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
+            2>&1 | tee target/benchmark-preparation/server-build.log
+          mapfile -t wheels < <(find target/benchmark-preparation/server-wheels -maxdepth 1 -type f -name '*.whl')
+          test "${#wheels[@]}" -eq 1
+          uv pip install --python .venv/bin/python --no-deps "${wheels[0]}" \
+            2>&1 | tee target/benchmark-preparation/server-install.log
+      - name: Build and install the independent frozen framework wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          framework_dir="$RUNNER_TEMP/starlette-rs"
+          framework_target="$RUNNER_TEMP/starlette-rs-cargo-target"
+          wheel_dir="$GITHUB_WORKSPACE/target/benchmark-preparation/framework-wheels"
+          mkdir -p "$wheel_dir"
+          git init "$framework_dir"
+          git -C "$framework_dir" remote add origin https://github.com/appunni-m/starlette-rs.git
+          git -C "$framework_dir" fetch --depth 1 origin "$FRAMEWORK_REVISION"
+          git -C "$framework_dir" checkout --detach FETCH_HEAD
+          test "$(git -C "$framework_dir" rev-parse HEAD)" = "$FRAMEWORK_REVISION"
+          git -C "$framework_dir" archive HEAD > target/benchmark-preparation/framework-source.tar
+          git -C "$framework_dir" rev-parse HEAD > target/benchmark-preparation/framework-revision.txt
+          (
+            cd "$framework_dir"
+            RUSTUP_TOOLCHAIN="$RUST_TOOLCHAIN" CARGO_TARGET_DIR="$framework_target" \
+              uvx --from maturin==1.14.1 maturin build --release --locked \
+                --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" --out "$wheel_dir"
+          ) 2>&1 | tee target/benchmark-preparation/framework-build.log
+          test -z "$(git -C "$framework_dir" status --porcelain --untracked-files=no)"
+          mapfile -t wheels < <(find "$wheel_dir" -maxdepth 1 -type f -name '*.whl')
+          test "${#wheels[@]}" -eq 1
+          uv pip install --python .venv/bin/python --no-deps "${wheels[0]}" \
+            2>&1 | tee target/benchmark-preparation/framework-install.log
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import importlib.metadata as metadata
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+          base = Path("target/benchmark-preparation")
+          files = [base / "framework-source.tar", *sorted((base / "framework-wheels").glob("*.whl")),
+                   *sorted((base / "server-wheels").glob("*.whl"))]
+          distributions = {}
+          for name, module in (("starlette-rs-py", "starlette_rs_py._core"), ("uvicorn-rs", "uvicorn_rs._native")):
+              distribution = metadata.distribution(name)
+              native = Path(importlib.util.find_spec(module).origin)
+              record = distribution.read_text("RECORD")
+              distributions[name] = {"version": distribution.version, "native_path": str(native),
+                                     "native_sha256": hashlib.sha256(native.read_bytes()).hexdigest(),
+                                     "record_sha256": hashlib.sha256(record.encode()).hexdigest() if record else None,
+                                     "direct_url": distribution.read_text("direct_url.json")}
+          receipt = {"framework_repository": "https://github.com/appunni-m/starlette-rs.git",
+                     "framework_revision": os.environ["FRAMEWORK_REVISION"],
+                     "build": "maturin 1.14.1, --release --locked, normal default features; no framework source edits",
+                     "files": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files},
+                     "installed_distributions": distributions,
+                     "independence": "Optional benchmark environment wheel only; no uvicorn-rs runtime dependency or bundle."}
+          (base / "wheel-build-record.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          PY
+      - name: Prebuild normal protocol clients and freeze the measured identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bins \
+            2>&1 | tee target/benchmark-preparation/client-build.log
+          .venv/bin/python scripts/run_benchmark_categories.py \
+            --capture-identity target/benchmark-preparation/parity-before.json \
+            2>&1 | tee target/benchmark-preparation/freeze.log
+      - name: Gate the exact normal binary on every indexed public parity case
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_parity.py \
+            --output target/benchmark-preparation/parity.json \
+            2>&1 | tee target/benchmark-preparation/parity.log
+      - name: Run every maintained category sequentially and analyze matching valid repetitions
+        shell: bash
+        env:
+          BENCHMARK_DURATION: ${{ inputs.duration }}
+          BENCHMARK_WARMUP: ${{ inputs.warmup }}
+          BENCHMARK_CONCURRENCY: ${{ inputs.concurrency }}
+          BENCHMARK_REPETITIONS: ${{ inputs.repetitions }}
+          BENCHMARK_SEED: ${{ inputs.seed }}
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_benchmark_categories.py \
+            --parity-before-identity target/benchmark-preparation/parity-before.json \
+            --parity-report target/benchmark-preparation/parity.json \
+            --output-dir target/benchmark-categories \
+            --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
+            --concurrency "$BENCHMARK_CONCURRENCY" --repetitions "$BENCHMARK_REPETITIONS" \
+            --seed "$BENCHMARK_SEED" 2>&1 | tee target/benchmark-preparation/categories-driver.log
+      - name: Retain or recover analysis for an interrupted category run
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f target/benchmark-categories/run.json && ! test -f target/benchmark-categories/analysis.json; then
+            .venv/bin/python scripts/analyze_benchmark_categories.py --input-dir target/benchmark-categories \
+              > target/benchmark-preparation/analysis-recovery.log 2>&1
+          fi
+          if test -f target/benchmark-categories/analysis.md; then
+            cat target/benchmark-categories/analysis.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '%s\n' 'No complete benchmark analysis: inspect retained preparation/parity/category logs.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: asgi-category-benchmarks-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            target/benchmark-preparation/
+            target/benchmark-categories/
+          if-no-files-found: warn
+          retention-days: 30

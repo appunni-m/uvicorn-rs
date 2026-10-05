@@ -1,0 +1,658 @@
+{
+  "benchmark_evidence_version": 1,
+  "performance_evidence_status": "not_proven",
+  "completion_state": "raw checkpoint; category completion requires the final JSON report",
+  "started_at": "2026-10-05T15:40:10.065900+00:00",
+  "identity_before": {
+    "source_sha256": "34914ecb97476e04ef3e5d2d235783d37e26eb8afd2f7188e00aecdc5c10e606",
+    "source_files": {
+      "Cargo.lock": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+      "Cargo.toml": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb",
+      "examples/bench_h3_consumed_asgi.py": "4247667b10b8688350127daef35a5948445cf157ed58663b57b6041e4f72599b",
+      "examples/bench_matrix_asgi.py": "4199f61829a714dc18adb2eccd050b2e7e4f945736c0a3d01ebf415d0c630e9d",
+      "pyproject.toml": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b",
+      "python/uvicorn_rs/__init__.py": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155",
+      "python/uvicorn_rs/__main__.py": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+      "python/uvicorn_rs/_bridge.py": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff",
+      "python/uvicorn_rs/cli.py": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f",
+      "python/uvicorn_rs/server.py": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87",
+      "scripts/benchmark_evidence.py": "d83b60c386f3f6a5ea970b3e2ddc0628f0f97adaa54424ebf4b5e2bbdf9a3bd1",
+      "scripts/run_h3_category_bench.py": "64afc662603e471897691a259bc78f496decbffb667c775a37461101ebecd39e",
+      "src/lib.rs": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+      "tools/http3-probe/Cargo.lock": "a8d9eb109c08ff22d0a67812fc2b61559aa478b962b4c0f8012daaa64f7c128f",
+      "tools/http3-probe/Cargo.toml": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd",
+      "tools/http3-probe/src/bin/bench.rs": "e7e5aa4a3bb1d94a4b95e62faee8f51b28e49c3e5dc37ebf1f3d090b583ae4d4",
+      "uv.lock": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+    },
+    "native_extension": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so",
+      "sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d"
+    },
+    "clients": {
+      "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/target/release/bench": "82f3059f3fe2b2a5c9b38206f52cdd694c6a85dd8747a2a1685d0b48d5f5165d"
+    }
+  },
+  "installed_dependencies_before": {
+    "uvicorn": {
+      "version": "0.54.0",
+      "modules": {
+        "uvicorn": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/__init__.py": "c2aaed31a2528ef6b35eddd90482cd8840acd7cfb0a95e504f20f6eab0187026",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/__main__.py": "0d08b3cba9ca3f4cb084fa6708782644360831f72a64a544ccd2164198eab554",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/_ansi.py": "b3c44fa663d33ba4064601186ec34679ab125aa8849c2b13ae8c80f19e7d434d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/_compat.py": "e97e3d73da2fce63078abd92decca29ce40ccd23c1729f0c36e23d650adb6225",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/_subprocess.py": "7d0e094da8ee5dacba99573c2903467d7bba247a1a6f8e9a4ba93220c58930f9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/_types.py": "94e0216182e9d2fb192b2261b3ba55c2afb11efe24997ac4f2b95d1d0a2b21b4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/config.py": "cf91c6ffae283a2b2020da954b4cc4ed47d3246cb062afd09fb77d98e4c5ca87",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/importer.py": "9d1b74410deaa62dbae3e9ff991d25e790b675d33c9e8c133734f58ec59a6a6f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/lifespan/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/lifespan/off.py": "9df23aa87014a3ff3e0445cc04aa0743dc146ec5eb3da5cb09b0d24b4bca4abf",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/lifespan/on.py": "8844cf163e921613c33dc75e1b17dae372ca226254ecc2398bb41451ea4170f1",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/logging.py": "9020759f8e41e4ee794920298afdb1e94406dcb9c5a8d946bdca211b20306e55",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/loops/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/loops/asyncio.py": "6bcc0ee1f078a4293e44b202abb0a71abfdcc5023b3012c98fe1a8e14425743f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/loops/auto.py": "a5d4ec31caa46c4f1fbdd3602ecd72e1cea1b2e379f7c9993923a50b46b6dd2e",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/loops/uvloop.py": "09af932fe5bcb5b7445b9baf2ff1ab32287b1bc7bfb7fbe135ebe2d8d2988c45",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/loops/zuvloop.py": "e9e8bf423468218a8c5ca07852765290eea4e9af0fa9c8d65799afcd8911d7ad",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/main.py": "ecb83544b48126d700e803d1d558ef158346961a82d0fc5fd5fe77d8befa85df",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/asgi2.py": "610ad0366dd17a116db379b3937938cb0f1a0fc120b63d2d452dcde3962441ad",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/message_logger.py": "2071195129c535a305505770b593b702e1404e761c4a8afe815b4e8db0b3b7c3",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py": "a4d664f3434db1c2c4c22f291a7e9c21b685d1b49f26108a9f7a478eaa9f5bdd",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/wsgi.py": "5676e791d08bdff72d2d6ce4d63dfdc6fc72b2ea000779126268bc4ec38ba4db",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/auto.py": "61f5c6cb359369a136a7f8e44cf5ab2425ecc446909c2dcd2b4f86ed68269e5b",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/auto_zttp_impl.py": "72fa8e52f577f2d739803e2da4d8622fb21e20ac88a02c820867bd46d9d0b4a9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/flow_control.py": "d39d16560df512f3ce907c329c2a0c3f5cd7165fef3b753876eae5739bf2a785",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/h11_impl.py": "a3154a6c2cfaaaebe19ac7aa255dfe9b6b7b490de1da95274c033aa093e8c322",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py": "1d4e1c579df4168433a61a01f10c628b31c1790e72dd9769d2b8633b22214033",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/zttp_h2_impl.py": "01568559ee4a62aecdb339ed985125e95853f99e7ceed762e8aa8b4ffa20facb",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/zttp_impl.py": "e630a7ad5bb36b8a68cda8ec88e85857040b5cf2a00a2c14567d78a74fb3d985",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/utils.py": "d6129d0c29a8fc6b46acad7365f6bbd232fb1ebde60c4f119cbebd3b8ac74118",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/auto.py": "40e9cc2997d71df39c64776ad4e2131f0bfb030c750534b77897d9b30b86114d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py": "6694705fa9d290cae88c268082a0198de028331640a095bd6df52fbf238bb141",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_sansio_impl.py": "8b32a97a1608788bba525c8b1e0d3eb0a93cd09d0f4f41b9b83cebd527336c49",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/wsproto_impl.py": "bb30b15e7bcdbf46a408858d635ab60e7b8e35c766ad86039a0391b3179373c3",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/server.py": "c1be9d133467a42ab88d7168e408ef5a90257661a901899426214a3d1fc2d026",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/supervisors/__init__.py": "c13f1e38422a4f5c96420cad66dbf9b5a58cba5ef1a13218d319b59b8a323d3c",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/supervisors/basereload.py": "0be603d7c7e538a29544d4d1b1208e12fcaa19fdd9c69bee52f474cf46355a98",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/supervisors/multiprocess.py": "53541976227fec0b9ace2c7a5ce8f592ed0d8ff37f3c93c2a18baae9236365c2",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/supervisors/statreload.py": "5cf684b555da6ac208d64906df65141bca03efe7d2d05c325e440b17d4183db0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/supervisors/watchfilesreload.py": "bbe32e626d0bb1930debbd2efd3b525a2301500db3e23d6c21edced80ebb129e",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/workers.py": "94c0ae6e7d568bee21da3c6b5cd32684e259cbb64ff10c5b65b3f7ff63b58871"
+      },
+      "source_sha256": "aca2a0b4813d81e67c1c2668469b93ecf988f9a719a7c93a9ea97ff050fc892d",
+      "record_sha256": "1072234cfd55f3bfcfa15a98f4b03944abfdc12cabec1b9275fa9c28702ede74",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "hypercorn": {
+      "version": "0.18.0",
+      "modules": {
+        "hypercorn": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/__init__.py": "265cf343b2e7576bfb4fa4be0a91e7a4ef6b8c6ce587eb5376f08683957f4239",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/__main__.py": "721ecd5ff4837c2075cc51749adc8f2829ba1016d30e49e419b96be6ba7d8549",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/app_wrappers.py": "73b5284c2188169234c8bb0251638e03ada96e4e24ecf9732c0053d038689aa4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/__init__.py": "17a5ced0d841194b19f67d56d40c361c7223270619e9075dfef70bf7efdaa850",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/lifespan.py": "3598275bc5f05de01eccafee23bf37d71370da1a71070145c65a7fca0143aa5d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/run.py": "bf2ccecd84affc35ec69c243248347a5b50bf61ba44247e2a83e13517874456f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/statsd.py": "05e0f79015f1be276bf311806653234be56bb79394a8316bd9fd2a3d4c8b6654",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py": "71257bea26162a3e4198812ae906f66e9a923adbdf47e4e0af251732d9ca9c0f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/tcp_server.py": "a1919b81b107506829ca9d13f2a10df31da21cc86e83e3fc49a94f902d1b4fa4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/udp_server.py": "5bff07270042fc30f31af9ecc65490831833083e1e6a9ad299c28f2c43b2b70f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/worker_context.py": "b1f2929943535272f9c70d75abe966bff6597ce539b77eb42262efafc5bf136e",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/config.py": "a10e8c834fefe6bcaa65156ee33ec02773b90c6f8b3de3bca4ef589ff57e3af3",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/events.py": "d62b2f03f0ed7f787dc4e2da98db0df6a88039633ee2cdfeef19f1d68fd5dccb",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/logging.py": "7947f4d8c23963f9e636c5f80b4a03f2c5ea94c91a8f5e16ab6b0cbe324a4063",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/middleware/__init__.py": "6da994bb6a74537d24024ff1d9939680521c161ef64e5e0c8e594cb75ca7f8e9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/middleware/dispatcher.py": "5561c4c20439aaeb2080b4baa22472364241a6f9b0a4c268754a940c6ef20fb6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/middleware/http_to_https.py": "47c1f791ef5dab30339682e9bd131858cb89dc35a759bb9270ee793c99d37a6a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/middleware/proxy_fix.py": "ec28054e4e11ace566d262411de9292670c06345bf605f453db1d3c5a1abb444",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/middleware/wsgi.py": "a3a1ced4e09dbd7f3caff542a791692a84c48b2c5c11002405fe9197c88a0a37",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/__init__.py": "c34f9d102bb597417f113a144fa529a5053b4e103ea3cdc0d993608f7dc1dc1c",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/events.py": "d22d1846c7821b3f71292e683ff0763224e5b5c86ab4e636efdc8bad0a3eab2e",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/h11.py": "5d2cfe635578adc65941fd5dc7b35ad1d89a61a9beff3e97742dd94f359ee9e0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/h2.py": "4023f69abd2239e53927fd38a2fe8008cffd45450add2cb075a3e217e7ede740",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/h3.py": "c41ad8fab26c4373470af20a3c9247b602f188276bbeba0acf3bc0ab30653990",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/http_stream.py": "b28bb59de67f2f2813642846cc089fc52bf771f2270f813d039456ba4fe34f7f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/quic.py": "e311f6a09c159fbcd661acd178fab09d9c8c48e10c96a730ed31d13030ddc1c7",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/ws_stream.py": "5eb34e4ac40b06f546154181246bc3d3fe10ab906f3eb7afa06c61167e281e68",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/run.py": "d5404f4dc5a3cff92d74ca9bd599b1f92cf05cad928d0ea228b227fa23d7b5ed",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/statsd.py": "27336593c9bb42e1e3a80ff1592601eec59754c4e79193c98d9c5639371f7b4d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/trio/__init__.py": "a56c95ac7c1f22ad0c09d6104cc87be8a4321f1d240836a6ca16ad4ea84157db",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/trio/lifespan.py": "874bc7505af1c03b0114a9e935824c0083d633caabf7493f5fec16f4ecf64be7",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/trio/run.py": "458b9851c196ac5f05a5afd866be4d22f82ab1acc9f06beda1ff6e7b554d6cb9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/trio/statsd.py": "18d8ef13eb08c91d9dc6ddd7294ab4b03dabb914eccfc333ed02833121ddd4b2",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/trio/task_group.py": "debc4abd1b9155757041313723fe42af9a8cdbad1c6c5e3ad0590162033a0c28",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/trio/tcp_server.py": "fbec50b5df48e46d28e1a594c47931e1395d1dded14044945203f7840d0cba20",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/trio/udp_server.py": "fa470796105b7371dfc3910219599d4f96ca9606421b1cbbf0b977434dc0711d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/trio/worker_context.py": "431948d8c2f013ce3fe9229bfe16bd9308dae972fc60e42843104e2cc2f9f24d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/typing.py": "bad548d2aee2b9cbc6ea0eb3491654cbec58f6648013db451e42818bfc47c155",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/utils.py": "e359430514f0de8302f3f0d823070f46caaf7e81d94063c4e98d85ea7020025a"
+      },
+      "source_sha256": "0b270a2859bdbad868bdec1d0017f8d374ee36e914ceb8333e3360c46efeb6f8",
+      "record_sha256": "bb5162bb92eb957a0973e696106cfb30f90c8472728d8c294cfa011f97fe662c",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "h11": {
+      "version": "0.16.0",
+      "modules": {
+        "h11": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/__init__.py": "88ed4ace448ee36c99e9f7e0f953206f1fd9553586518d349d16045a7facde46",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_abnf.py": "c9b8b1af4c6cba99e403a18503232e6ee5c5e9373595bfe117cf743600ac7cd7",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_connection.py": "93d61155fea4a19a9bb6d056dfac5259a26959d6706bec50554f401c4a3d0ee2",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_events.py": "23deda5e86a5d56bbb7642f9e3c04034150290e21b7bec790a2a1803d201635e",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_headers.py": "3fb0fe9413711f074b64f2e29a6630acf1bef59923125bef25925d6408123fee",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_readers.py": "6b8472a4e454082dddd2afe4c4fb8120cee34c3f222ede57f754c7d05b1db8de",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_receivebuffer.py": "c6bb29b1db0d81617145f41c4d7c51f11add8d15d74cad08a39710616a49d56b",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_state.py": "ff92c6fc1191f0509c1507813c7f93307826ffe07e1147160a74287fff578c51",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_util.py": "2d69248d7c89685940cba2eddfdc3bdd44ad925153e68bdcbe8d13918ed162e9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_version.py": "1954ac6cf48f0dc3ae17aa6d7c88979d52686849b7ca05db327aa5aff1a26a1c",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h11/_writers.py": "a052a6e8fb637877db8f844b5fb541eca0dcd60218e778171b7fc747d96d9930"
+      },
+      "source_sha256": "1d790e179c53cc136f6f5ede9851fc36afa0a06817838ec79c1c20f4c959554e",
+      "record_sha256": "3779e13c17d8e21c769ed9ee8780af123cc3f8656185f5f8d3af258ff5639b3e",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "h2": {
+      "version": "4.4.1",
+      "modules": {
+        "h2": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/__init__.py": "1baaac023c2da4d25451ad290ea0909519ca9eeef92b9dc13cfc61f338252bae",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/_typing.py": "a82c4f398c0b2e3d6feb190ccff82f1ab02815c499c4cbcd660a620648a292f2",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/config.py": "67ec2be6b162cdc076f964d5582b86b5ef32fbc71e6f9076fab95c5742f9b6e5",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/connection.py": "8283e14ad0875ecdd5d94fbd4c4111e3c08d298ef80ae6b3ff223c1ce1aa8e09",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/errors.py": "4be4dd61a25f3ff8709458f6b90189190e12e3fc96894ffd138e1a3f174009b1",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/events.py": "ae36193d2ffac6f8cc9c06a4ed51db607c93aa5f206e314327952495c5df9bb1",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/exceptions.py": "dc49b798b310047c58a4e2a868f74a0861469fc03dadef4006d51d2a56376d93",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/frame_buffer.py": "37febf771e38929065f7c270f555cdcceb386a1253e94dca481736bce08f6b47",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/settings.py": "f356a3a890f7ec16eca6c14f53cb2083433db9eaa73eb2bf424044a8ec0ba356",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/stream.py": "a52bed21bc71d78f7f004c44dec70450844d9c781b6e4d9f0236c3733065034a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/utilities.py": "6250a082e47953214db7fba7ca3259f4afcdf538bb3a9800404bbf6975dcf13d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/h2/windows.py": "26958d843bfec782798c85d25a9d0834792af482203cfdbbc6bf455d8bdacc51"
+      },
+      "source_sha256": "c502639549405f7c52227c64ed4f2b09440de9d57bd9fc143a61d8a1dd3644a6",
+      "record_sha256": "4c3afacbf4ca62c1c9a178c1a4a6d7441debcff0170fe1bac8a4e497da3f95f5",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "hpack": {
+      "version": "4.2.0",
+      "modules": {
+        "hpack": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack/__init__.py": "8d7e285593c15d356e93f6b7c6856a51bb93e2cd6f95e7d74a091e5587b71471",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack/exceptions.py": "5eacbcbe2aaf28a1c1c90ec8a3c169f873e50cfdd3ed133d6a994f4b176bf632",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack/hpack.py": "4ab14aab1a856cee45aea3169854167b16dac9ef9ec4cef1ed1d5da82439769d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack/huffman.py": "cc3b91b4ec8511d29bf7f199acdb40a274c452ca882eb2b6b2d4a1e702e919ee",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack/huffman_constants.py": "e0f84e31e97998dd1ab24151ae7e2756927f09339484ed6a6c544eeaefc87f63",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack/huffman_table.py": "12452e981b596483c227a950ecb1bf6f07c38f58991225cce0035c5e34f5cd4b",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack/struct.py": "06a10e4b74f996ae341257efec6ec24385f6a7209a93ce6657367f5c8cb1a083",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hpack/table.py": "500937f5f52433fafc76704a3832ffa86afdff044e9ca4150761033f60032642"
+      },
+      "source_sha256": "be7a6ff6d88aad71a129ea2379fb4bd715fa41267c6254ee38214d8bfbefdc36",
+      "record_sha256": "9abebd1e7982d80fb426c984a0641c02cad39fa1e0e1d3a091a9cedb86a9b4a6",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "hyperframe": {
+      "version": "6.1.0",
+      "modules": {
+        "hyperframe": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hyperframe/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hyperframe"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hyperframe"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hyperframe/__init__.py": "43f3017642040964cbbe4b0e5e0e67607517f2303c861a10b2e8fa394436e252",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hyperframe/exceptions.py": "0d92eb670e72ecc2c13119310b1aea7f9121cfc0681369fb32955aa780f9bdc2",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hyperframe/flags.py": "f65be969e297adf61ebb18fc5deab6d440f8d0e0d38a9a376577835225f95992",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hyperframe/frame.py": "6ac62192190eaf5bd10777ee6581351c88532050f424d3965b067cbde7735b15"
+      },
+      "source_sha256": "9e5d756e5b673a828405642a1f99bb561fe4fd2548204fa1a594feb98796c0cf",
+      "record_sha256": "b1920ade9d51cf73348e7c21012ebfb5bc71f4a3fd3b51d6001b3372ea00f50c",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "aioquic": {
+      "version": "1.3.0",
+      "modules": {
+        "aioquic": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/__init__.py": "179996d3ba52c86aea0cd636121afe5290f3a41b4df85b185344066567fa3c91",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/_buffer.abi3.so": "4e08267fb85a42d51dd21bef721bb9e14520b756cd725947bb8900d09a0d4b15",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/_crypto.abi3.so": "824f136225d2f1ae3e90ee7bb515271e435b187cd3980c4d434212810b7f16c0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/asyncio/__init__.py": "26c925093635dabf0fd85c8cf1b7db76af9e33e803731a279e578bc6acddbb18",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/asyncio/client.py": "5159d2e28bd33da386c59dbac99dbb35ee47ecf4b480596367299c5ec03dd1c9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/asyncio/protocol.py": "d87759d24c3bba979d2e27e6d4ff3dcdaa1a9395280a32352c38c1d352bab936",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/asyncio/server.py": "fc4080bae8bbb5ccb178290be795dafec273f4d073c2561aba9d2ae092eae62d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/buffer.py": "2638481db99253991c48a50984cda88e109a104aef89ab8f4ca04911c31c7528",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h0/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h0/connection.py": "b74ba2a70a1b3968d7f3717bc1bb90864f9b2b024e136a717eee128f4366ab9c",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h3/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h3/connection.py": "696e9c3735de11c314b8cd1e7e1265761a9373d1bbd2dbdf66570961dac839cd",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h3/events.py": "4e5ec701734d419c820e10ebd755216abd0c5853ebe812d17f9b3a885fde8484",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h3/exceptions.py": "6709c9de429b4b31b7d60258ed258dec6e2b0c5c7454967a6920e69f6a39bb08",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/configuration.py": "a76f7d13196c0dd1314297d37a3d82bf6c7f40a6409335ae5d80039c59c374a9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/congestion/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/congestion/base.py": "047faf1452d1853545fb25e470aa65afaf79eecbf11919451691982460bc9c1a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/congestion/cubic.py": "19b82bb74aa10ab2f720c5dbab7c2dca0cb390e45453dbde8b212b75a7024978",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/congestion/reno.py": "7c98b42e4aed46c4e00d517fffbed60847cf0347bfa10f1fd42ed9fe298883b3",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/connection.py": "f6d0bd15ea563a3bd68518e3d4a6b918f4c9341048f850b27aa582f3a63fab65",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/crypto.py": "23489652e2616a76a4542a32dc07f2a96f66f92a64e001048151316d1a3dc700",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/events.py": "407d63ceb0544ec143bb7aacfd58ffded75aec88670ddd086c824bf6d06af213",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/logger.py": "f840472872c6e5f085aec7f838b745770fa777e5cbe43c1ad1e8e50b661362a6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/packet.py": "292b1ed526322d32d85f749520e05fb4f3b179f714185f9cdfaad854617f6795",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/packet_builder.py": "46518eff486b23874e600fed3f4e89c1550e91e9addb18137acafe91f2f35324",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/rangeset.py": "3a638a8006348a563170cab12a7277dfe9c2c29a4dcfce3aa3a144ceef599579",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/recovery.py": "0be535d23f14e7f5dc500f239ead464bfc8ba668f3c3c310efcb31e70b3ea697",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/retry.py": "2f5250984a812436e403de07795e43041ee15858ab066f46e230042db9e73de7",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/stream.py": "12195b7aeccf0c0cf97e1d373ec2279769a0e503949d5469852cb558b518e0f7",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/tls.py": "681e81f628493f2494b1ffbf2b72346f4b69f6c4075523798ff342fbafff3208"
+      },
+      "source_sha256": "dc5602a82183f47caf3778aabbeaac4a2735f1d204a63b4b4193d3bd3eca28d9",
+      "record_sha256": "500454acaa4937f87c685f593c25788c485b0d538498a23a77a47e602ee52b79",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "uvloop": {
+      "version": "0.23.0",
+      "modules": {
+        "uvloop": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop/__init__.py": "1db6e9f617c96dfacef84b5ca5d362900177752e41130690e5f54b8ea1949f83",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop/_noop.py": "4830094e25a113b8372b2b6d6e33dd962bfe5217ae6acfad297e3fcbf9ef3bf4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop/_testbase.py": "b116631d1fa7307bf8519db7024482b6012cbe0a3cb8ea8372114d3855628918",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop/_version.py": "12f37c24dc3e2f670d6a1ef69e786a02af7c2fa0b6e10b971865572361095ed7",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop/includes/__init__.py": "f8e519eb3afa3a9770efc3cab07622d40b8fef8129ed7072c72a1160eb91b602",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop/loop.cpython-312-darwin.so": "b8121086fd6800f873f9e4e369583128952845df27624158812dd01008f71f60"
+      },
+      "source_sha256": "e273991705ce79e276c7e4996dbf0f9cb53ae7b0e3b84ed47876390419d380a7",
+      "record_sha256": "be8d93e633069448be7c471eaaa7f515b64dec2a288e8b3c84728ede6c8e47d9",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "httptools": {
+      "version": "0.8.0",
+      "modules": {
+        "httptools": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/__init__.py": "e45aef211078296432f4c3bb7d74f3845201550fe078350070ff6107de0c1d16",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/_version.py": "8f3f67707e90ff5b32a64c2e3511722322acf43373eb768af554c3abb4d8c5ef",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/parser/__init__.py": "8a4ac7b134dcfc7e35205ca13d481f1d846e0e88158d5e67b28a4d4c238628e6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/parser/errors.py": "655aed375b263c86ffa2943651ddee09b1a534b32510260cdbee92eebe4b9c7b",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/parser/parser.cpython-312-darwin.so": "656c2ad69b9a6672727ff38b192bf6162183f4ae085473a355931651a5fe0d49",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/parser/protocol.py": "887abfc76ccef0bfe3c74faa895228a70cf6194654781e3f3cb3f31369167736",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/parser/url_parser.cpython-312-darwin.so": "5cc1b9f215d710242d9d49712dab32b84925412b52268ead1879843b6ac6e356"
+      },
+      "source_sha256": "a55c094b287b40c2127a9df877e4d75ba78450e96c3dc2dee23278844abc0663",
+      "record_sha256": "c175129ea22129c601d3b747d427a3e7ffa9dfaec63000abd36380e9d0e055ba",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "websockets": {
+      "version": "17.1",
+      "modules": {
+        "websockets": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/__init__.py": "ce6042263ec421ae99244403a787487739dfcc025403c756e35fa3ec49be4034",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/__main__.py": "c2ee4ddb093c9af060cafaf68219907f8a6b7b301ed3f8bea75db7555adec987",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/asyncio/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/asyncio/client.py": "76cd6b1f39464325281925529b466d73640be5c2ce8942bdf79edb3b42baf8e6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/asyncio/connection.py": "f2eb6ad56371fab33839a7ad2694e4b5610bea839bf92ae1f76e6d0a63f1e346",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/asyncio/messages.py": "bc13ddf7722e2f72c4d0e4b179a202223cefca886de7792687efd9868f9b1b35",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/asyncio/router.py": "2453543482e4001e4ff5fb7a3cba2035a66aea9f765b3d7dbc89717f1d434e58",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/asyncio/server.py": "df846da778379c058b0da052731b9ba1f73390da0320c33330f03074b14ac6fc",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/auth.py": "53f2709a7e7d65143a11e7293af322cd0086fd96c0be051fd6293b85a6510b77",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/cli.py": "7d87f462aad6231fe224303e45675cce1e6f8cef69e99c59be613beb56d4420d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/client.py": "eaf4e66220a92297bc794adc98494e63ea0aae21fa394c72a7e846a535af3cc7",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/connection.py": "38b88c56435ddb9ffceac07c43b0ab0b00685f2f6703438281d80b440f16511f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/datastructures.py": "5c64efbe015d6527af355fd3ebe2e8f83c66d951f125c80a9789750cd43a7d4f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/exceptions.py": "b69d3f132a907ddec260d3879b102278e1fc11df4f49016dd7c7be0ae45e4ce6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/extensions/__init__.py": "42466cc5a255965552a75ba1743e6e3c689b75bc7fd3dd46ad555f4b92d7729c",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/extensions/base.py": "24d7f2939e370bb56e3c7d103a86e2a8aa06af38c920b8deeaccf920bbce3e5e",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/extensions/permessage_deflate.py": "2005dd08663ad337dd8dab4a77a7c37d3322cce79062c9e1d3306d2fdbcfbb30",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/frames.py": "4f08aa9ff6eebd089b94446e81c4fe3039a73d9ee4b7e14c5c449ed8384e4fda",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/headers.py": "c909cf963559c15d7f57ea4e49128d2c6feef36ef0142d61ef671c8a88dc43c3",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/http11.py": "b4b56e36f3400f0b7c775ba2e4a305299099313b49e82a9766f7a880b68f6dfd",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/imports.py": "4ff07d4d4987a1c78a310f8f36985d410007d97771031c1240d790120a882e41",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/legacy/__init__.py": "c10e7344810d1944bfe5e28d017f42444ef1d53c0a6a92a29ab40515637d4b1b",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/legacy/auth.py": "0dc41c09279578ff7725c1fcbc5584d072092fe5fe7f6dcb6740ec2696afd52a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/legacy/client.py": "e6826ead47333dd7578bc45d7b97c0da10f7578a67bfffd9eb8a514573fa1c1b",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/legacy/exceptions.py": "562123a684f4f5fcf1fd9a9fd1a3460d5b510cd8d768ec3481d0ad6b72e48c57",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/legacy/framing.py": "6f4c0cc7cdd74c85d56683bad299770226ca1db4250dbeeb040ca114491a3029",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/legacy/handshake.py": "d8dcebe40376c6f0c2e4474d3fe901de539cac069436562e8fffa1aff8efee93",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/legacy/http.py": "70e0909835a120a4269bc5161973d6ec20d9834df08e8802b1bd0b3fda1eb4d4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/legacy/protocol.py": "dcc4e1d7ed24b564ad4425f4d252d5ebd80bcc5ffd8009fc60b144fdb664cd8c",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/legacy/server.py": "8529389c54ec23778c45bbb925c2388177a2f546f0d3b452ad28ed2f878cda07",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/protocol.py": "dc7b8204c2d324cc69f491dde49301aad4c5f384ac636f62b871f4cb39ee0ff4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/proxy.py": "a05adb118b5ab185aff960dc9e239b0fd9c1479439aa41e9c8254b9e0c7b58c4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/server.py": "ee41092f540414ef294c1f74c0fe1f51b9336060dc6e44daee34ef762499b509",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/speedups.cpython-312-darwin.so": "fccae227e69a5726ca58282bc45d54858c8a0e30c5235f8b91cc970cce1906a1",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/streams.py": "ac9ac33522fd872dc42587353c51e3631e2b75dd6f10b0ae6b40b074588737ff",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/sync/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/sync/client.py": "5b20fde3794aee3e0d40b23b3eaa3158411d77d98c2098e96b4344c71d3c3e3e",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/sync/connection.py": "019a800cd64e13779c4e2a93ed636ad67b146eea23683169ccd89c10df702054",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/sync/messages.py": "abc2b5bf176ba959356ef9f7cd6d49c74f5395a908592c9870e1c2eee7854269",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/sync/router.py": "c0e180bc66cac17caa98d1050425993f77da1efcbfd8c28deced977842fc9c62",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/sync/server.py": "5534fa4ec47e27e352596e657bc51531334d14dccfa7ac1b656b9541487e8d89",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/sync/utils.py": "4ed5be9dc605bc99a2496da03bcea7804d8156c9e705d2fee07f3c91634361b8",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/trio/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/trio/client.py": "9b637921a141acf61c52da755423d4a3cb49d94162d9f4381bef793382423b15",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/trio/connection.py": "d571c39156caddefccf75a4e186798793d286b350ce4d8ea1cea30d0590dae06",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/trio/messages.py": "4a66c0d64fe58c41ae10764d2741cf0def3ea231ed313897191db41eb3c9b8a9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/trio/router.py": "a992fdfb8e268bd48e393194dc22c13ee68237369f406a99f9f265f61569bfeb",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/trio/server.py": "8d1b6b7d97f7847a75690a3a7df34c37bb22696cef65586a0b58aad7f3e3d2c0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/trio/utils.py": "035d8d6143ce8d06a21aeb1a938de85b33c8702c618a429390024b5ed649bdc6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/typing.py": "72ef3d9ff5d05e7a3f83da8fa459a12db6f39c4f8c2956b3500a30b36bb926a5",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/uri.py": "d9f14cc3e01b289e47547342bb0d51c7532790290d591a688315a184cdf4114e",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/utils.py": "59db6c876a908872eb5d40449e9dcb6ad30b253663076084adb78e16fadd5ef1",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/websockets/version.py": "fa82d6b7f153a88ea409283331194af48235ef365eece9cbc359d6d99bea5c4b"
+      },
+      "source_sha256": "1a2831dd865987d5d84259354d8b425a9c781cd93b9ef964e5e00a071471a4d8",
+      "record_sha256": "f34920230e9e6d7ec527e3530b046e468091c25ae4c4ee9daf0c9a47ade5db6d",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "wsproto": {
+      "version": "1.3.2",
+      "modules": {
+        "wsproto": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto/__init__.py": "181783fe40abb8b0cd32ac28fcfe297c6a90e1b1089a004a98dbc01be0cbeef0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto/connection.py": "ba8f00e9c23c2fc185d5671de37e478af377539f751cc3cc96682a4d3281fb9f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto/events.py": "bcc27bf57485bf75d647dd7e4a54c81c01875b7f90b9182d213aa04fa6cb8372",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto/extensions.py": "aa600667a5689ad3b5680b6a5558ca0aa6590c96d61a8149777f8a3a903ec1f9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto/frame_protocol.py": "c74a962e1adef2477eea231ca4359d5df69fc8feef6327a7158200e1f69a4262",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto/handshake.py": "6d6ab4b06b7ecb82d47aea53321bbeede0d3655d9ef23615ce8bf9ea87d9bc16",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto/typing.py": "483f289a7fab1eb78b7655fdadf865fa308158ccecd211412f686fc6740e9e30",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/wsproto/utilities.py": "c61189cbeb6021548a051e0ffcaf702be5b626df8fdeee64532f672cf1953371"
+      },
+      "source_sha256": "6f61a9b77b78bb73d21fd0899e39173ca94ea037b77d16065ea360f65f9e593f",
+      "record_sha256": "9a6df17a17a5eac9b2e29392c43ce69ebd57522ad786054546e39e181f7eb43c",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "cryptography": {
+      "version": "50.0.2",
+      "modules": {
+        "cryptography": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/__about__.py": "95184137751279e4ccc0ababa44ed8bc380fbcdd5ba584f0407c5d14e31c109d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/__init__.py": "9ad86e52b4dde0544e0a9518ad322a863cfab3a4fd763019ad5ee7675a0c9b6a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/cobblestone.py": "4fff85d3cf8051fde58daca965e92535357585639b1f9ee8a38e66552ce4f707",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/exceptions.py": "f37e445882dcd9fc31c3e83214cae27220b64aa8558844c1d742c14b2b670c87",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/fernet.py": "dac2c23ce99e8e13956ee75c4b742c3353c8b876f109e45c46d5a49dc437982a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/__init__.py": "e48c2b2d6ad5a7402312bff815d586fd5d39ecd489198fd6e1e80d36cb9cb748",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/_oid.py": "3a17b69d413a5e32b1d5417a4c0b06532daff06509f958bd0d2e32c52ba4b795",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/asn1/__init__.py": "62a613a071858cb38a8a0442d341c68fa86b8c4c1bbb548fa408aeebebbe7daa",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/asn1/asn1.py": "f6671fae676f2bb2ad8e1458a1f3330235b4bbb9efa9b7ecbcf7db84d40ad414",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/backends/__init__.py": "3b98ef28541d6675e129ea89f87b6e95a10bf4d8bb9abd660f3658e641e56212",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/backends/openssl/__init__.py": "a778e625f9c26a0f62139b1d32b37a56f544bb9e6ee3ac5a4bf223a08d12ae60",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/backends/openssl/backend.py": "d0d73315b8b01b17eaf6a8b6f281d8af4f2bfebed5420e005c78dbd2814fc2a0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/bindings/__init__.py": "c0709b59f69e7daf9f93a4c74b0f6d87d7c952c4ad268ef6e39c1f141aa676e0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/bindings/_rust.abi3.so": "0aced18998c288668c0eb65cfdc76fd41726370e6d5d9760c0b27143929162d2",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/bindings/openssl/__init__.py": "c0709b59f69e7daf9f93a4c74b0f6d87d7c952c4ad268ef6e39c1f141aa676e0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/bindings/openssl/_conditional.py": "bdfce2fb11dd4ad01c2508cbaaa3a54a8b3de0bf03feda85b417bb3afc3e2ad6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/bindings/openssl/binding.py": "16cb8bc5b4e7aea5bad3e7405ad6a482e7deabb4e7a9a41a8b53dcec3a30ae3a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/decrepit/__init__.py": "c0709b59f69e7daf9f93a4c74b0f6d87d7c952c4ad268ef6e39c1f141aa676e0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/decrepit/ciphers/__init__.py": "c0709b59f69e7daf9f93a4c74b0f6d87d7c952c4ad268ef6e39c1f141aa676e0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/decrepit/ciphers/algorithms.py": "5923e3336b177eb2c35ebb4de51ecdeab0355c5edbf772357bf96f0f8cb1da80",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/decrepit/ciphers/modes.py": "3aafcf1300a47b938b73339faffbf300e27ac0fc7eae5b2f1c05cf06e8796fda",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/__init__.py": "c0709b59f69e7daf9f93a4c74b0f6d87d7c952c4ad268ef6e39c1f141aa676e0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/_asymmetric.py": "46181ca2e501e874e214306b4752f1aa4323a54c4888dbd0d6bff3263446eaa4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/_cipheralgorithm.py": "121de2ee5c1e7477e2d1e2d2b07f773d9c502b363d23a9642baeef2f8579b4e7",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/_modes.py": "fc4880383f096fa5a915796ec247144f7102cff4c7f318c6bdb4251a4366e7d4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/_serialization.py": "862d3125b941019f29999c769566be96bba9871befbc6de0f4334ad06f0e75fb",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/__init__.py": "c0709b59f69e7daf9f93a4c74b0f6d87d7c952c4ad268ef6e39c1f141aa676e0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/dh.py": "467b767cb683a501234125fc7cdb659935ce2478e5b7f0ca419d5595f85d8dae",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/dsa.py": "910cd3562a8023d3e210b34e05ca3f9fa31f3f737d7a120f91276e3a9ba9b743",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/ec.py": "2e495508b2f16db433aa213a1d16984d16ae2cca61614c37b44e9cf28048c584",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/ed25519.py": "99b7df2efb3edcf8020de835ad05d55e1ec62e7b6554be004e390811ce29b793",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/ed448.py": "9f474aeb2f952f1bb0fb3beb0f1b8f4f8e7df21ca6817fb5472fe3abd6944211",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/mldsa.py": "2c731a694d26eba12c4ab4a87567f87b691d99d0d14c41910b5cbe7c22b118ad",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/mlkem.py": "c2f5647854fee287fe55c500111dbecc8ff98574faaf04c93cc090f2017d1930",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/padding.py": "8db81a8ef18763090f8cc0e58c7bb99713019437e60b15947b6005d92e8a135d",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/rsa.py": "94813b9467b8e3d5b95112d3282a6f1467ab213a2e2a8655f46c2e4f349cb12a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/types.py": "4a32614eb9c544b9533dd62b043d69a0c8ba723606f9f8747d221a427dd0522c",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/utils.py": "42cf117bd1853e35bfb4da7fef721e2448cf09fd2c94e22c58ec68eaaca64fa9",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/x25519.py": "950720524f8f8ae6e3f329c535641e6267b7b5864c80742a9112a42033872f3a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/asymmetric/x448.py": "6f7ee283b93ba681ba4890ebcb8da3f849428f9ab8790d17e421663744a7f33f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/ciphers/__init__.py": "7b21179a393afc265768e3d80ebeef018197af6f50bf38162f6fb8092a252c5b",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/ciphers/aead.py": "173972c7bc3c29841a9330e9d735a026722beb6ce066b815875bb68787b1079e",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/ciphers/algorithms.py": "2067c2c9c6093a1d53be8237e2b7f0f0a7c9ff19add69fc3a4186dd8582171ea",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/ciphers/base.py": "6810bb1c7041a22c5e6e6a5aad5af4525383b37543d00ec1ea8cff01a4630eff",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/ciphers/modes.py": "1fb0194a02624930428b482b2fdecdc5a912f79d09c852982ecadaf2d8c73f14",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/cmac.py": "b33fece87fdc6273afc7e54d59d20a85185edd89a9f33f09d03dc206a397de08",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/constant_time.py": "c5dba7593d277fc3af29d72a52186514a6b21a9e3f3e0549454d96d702d2aff0",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/hashes.py": "4abb7081cdffa45bd97c88518fd7b5a7859d8be17f3e995e18796a240460b4e8",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/hmac.py": "469077cfdcf9b248ab090ae6ef341bb67a7da4b327023ae54d4bcaa85e5a0c37",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/hpke.py": "46c1e2b2c0b997e7533e7d69d896dcac8ac09c306b2ea339ba0045486a662aee",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/kdf/__init__.py": "bf7ca2601194dbbd84a233576f07d865d6db7c8f5c54e0821b79d78530dd6b79",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/kdf/argon2.py": "649c7e7a7525000e28edbe3a0b5c25cc6fd7010416d3022416050a92b33fc00f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/kdf/concatkdf.py": "0459ce292ef6b71285d3242f012af435aeee873bcb1e95027242b988d002fda4",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/kdf/hkdf.py": "33494011f468738929a78fa7c038fdc81faf359ba420e60442b5255ac04d9fda",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/kdf/kbkdf.py": "0b7c3df6f8c5aa1ab3031cc5387e33cef5681e46f9002e8bcfa00440657b77f8",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/kdf/pbkdf2.py": "5dc86493df6cf8c93a6fa2920a8baa764f0557288d54e48521e9e69d6ded2e04",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/kdf/scrypt.py": "5f259475452686e23d57a4ea00f3afba3092306bf55d0760d1adb52160a63be5",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/kdf/x963kdf.py": "40a8e145e86e4ec02cb4bdfce1b29fbe3bafd727dd6a6007561b014567a7d95c",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/keywrap.py": "b7db7c299bb367852cdf4012521236ecc64f3cf2b2e041114439002be94ced34",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/padding.py": "413f94f8dbd5d9e4063b5c153db0e234635273d91e4434be8a0e5c40eacbcf41",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/poly1305.py": "3f910f415f9107f1493da869834d6ed13b384bf3e7026b2ba312065db19e451a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/serialization/__init__.py": "7d772ee3dba02fdaf1869465ff06639cca84f430a484231cb11c5f8ffa93bde8",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/serialization/base.py": "48006bbe8d12f3a41ca01963ec3a6378b5b2da5cd032bca28a827a0eb1184150",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/serialization/pkcs12.py": "992f5c14d1b869fcefb1ea1ce5ed4c5a863656c91f2fc37c63f3858e5ebb96e6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/serialization/pkcs7.py": "98533b385b99f1c0b1506528a380a87fa06708773f21bc750108e37f19cf971a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/serialization/ssh.py": "162b177bf9d429d3c67ea10d5612a99a86b399a23ca87f067be5466dcd1dca4c",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/twofactor/__init__.py": "b66319181fa0e08535afb94816a012534d7dcebd2e3e9ff010161cc1d0c22820",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/twofactor/hotp.py": "8af668e41adc08658bb2aaa5e27655d175c28f218f8bf8877c3165b4694e2709",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/hazmat/primitives/twofactor/totp.py": "9b92cfa512f4d24a78cd8f204e3af9e477f3f5a3253d2e7790799591240299d6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/utils.py": "21aed2d106734b47b3c2920741f63c1b57bea381a3ac78a31175e3c00af58ae2",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/x509/__init__.py": "d0a54d4e646d758357fe2fdec2c4cdcdb4e6d9ed6ac9fa0e85ce1e9a883984be",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/x509/base.py": "50830a9309acc75d01477fe09c14410814f0429d7e3bcc247d59bb6b31fefe61",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/x509/certificate_transparency.py": "26aa0e203865c089eb60c156e88167efb589d2f885f8f07fae5655defb3d3187",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/x509/extensions.py": "fa25dcc169c82f5ce5e4c977055245904a3fef59dc5def387a1beacd6d6c2b83",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/x509/general_name.py": "b0ffeb575d50969b24e31dd75c6258fccbf443fb3d76d8de2dc907b23a4b4284",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/x509/name.py": "a08db0e95758f33830eeaa4d865c44c79d765b40215835d0ac361fe44b0cd8f6",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/x509/ocsp.py": "61ecba35d155d4c3e3a29db8323fd57a78c4a60de451a328a5258e2b401b781b",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/x509/oid.py": "054ce05d71955a296406474a3d39bd478a84944f600061e07583cc640a7b3c9a",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/cryptography/x509/verification.py": "811d82d9cf97650b5b959853e53e6f8d228eb426fbe1e7f66a53d59847301653"
+      },
+      "source_sha256": "8d64947d912fcc037e407413391aadb237a3cd838cf0110a9e15a20592ded786",
+      "record_sha256": "3829e37bc5bfbf83f1444339772939c9d5572951adde5d5646f81c9980d1ad48",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    },
+    "pylsqpack": {
+      "version": "0.3.24",
+      "modules": {
+        "pylsqpack": {
+          "origin": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/pylsqpack/__init__.py",
+          "package_roots": [
+            "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/pylsqpack"
+          ]
+        }
+      },
+      "package_roots": [
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/pylsqpack"
+      ],
+      "files": {
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/pylsqpack/__init__.py": "abc47619c36bc2563d5e48a634c1a6a41181bb7066b62ee76f41703e1fb0930f",
+        "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/pylsqpack/_binding.abi3.so": "c6e85e8ea44ef8d0854e448c188e14ded61c6ccb6a1987773e02673c881b74d2"
+      },
+      "source_sha256": "642c559ed05a4ea907a411f9d443c2dd4ff3381e3fa45a6ec172e1e3aab02e89",
+      "record_sha256": "26cd1933be52e3f9cb84387c555bb6aa971075cc97a118868fe6a58c74d8855d",
+      "record_content_mismatches": [],
+      "unrecorded_source_files": [],
+      "direct_url": null,
+      "direct_url_sha256": null,
+      "external_checkout": null,
+      "native_instrumentation_detected": []
+    }
+  },
+  "git_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+  "dirty_target": true,
+  "minimum_valid_paired_repetitions": 3,
+  "server_logs_directory": "build/performance-2026-10-05/h3-consumed-c16/http3.artifacts"
+}

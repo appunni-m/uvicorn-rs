@@ -1,0 +1,37 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.startup-fault-native-add-function-serve",
+      "profile": "startup-fault-native-add-function-serve",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "native.module.add-function.serve",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.native-module.wrap-serve-function",
+      "profile": "startup-fault-native-add-function-serve",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "native.module.wrap-function.serve",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    }
+  ]
+}

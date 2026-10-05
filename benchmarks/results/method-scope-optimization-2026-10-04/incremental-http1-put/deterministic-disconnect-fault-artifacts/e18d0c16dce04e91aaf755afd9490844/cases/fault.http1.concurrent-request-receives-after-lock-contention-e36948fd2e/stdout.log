@@ -1,0 +1,13 @@
+PASS http1: fault.http1.concurrent-request-receives-after-lock-contention
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/deterministic-disconnect-fault-artifacts/e18d0c16dce04e91aaf755afd9490844/cases/fault.http1.concurrent-request-receives-after-lock-contention-e36948fd2e/parity-result.json"
+}

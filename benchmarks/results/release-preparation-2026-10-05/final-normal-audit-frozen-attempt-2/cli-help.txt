@@ -1,0 +1,16 @@
+usage: uvicorn-rs [-h] [--host HOST] [--port PORT] [--loop {asyncio,uvloop}]
+                  [--certfile CERTFILE] [--keyfile KEYFILE]
+                  [--graceful-timeout GRACEFUL_TIMEOUT]
+                  app
+
+positional arguments:
+  app                   ASGI application as module:app
+
+options:
+  -h, --help            show this help message and exit
+  --host HOST
+  --port PORT
+  --loop {asyncio,uvloop}
+  --certfile CERTFILE   PEM certificate chain; enables HTTPS and HTTP/3
+  --keyfile KEYFILE     PEM private key for --certfile
+  --graceful-timeout GRACEFUL_TIMEOUT

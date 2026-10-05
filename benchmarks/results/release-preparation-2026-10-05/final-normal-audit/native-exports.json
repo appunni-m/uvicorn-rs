@@ -1,0 +1,1 @@
+{"path": "/Users/lazytrot/work/uvicorn-rs/target/release-parity-environment-2026-10-05/lib/python3.12/site-packages/uvicorn_rs/_native.abi3.so", "exports": ["AsgiIo", "LifespanIo", "ServerControl", "WebSocketIo", "serve"], "serve_text_signature": "(app, invoke, host, port, certfile, keyfile, graceful_timeout, control)"}

@@ -1,0 +1,27 @@
+{
+  "anonymous_repository_readability": "root owner verified anonymous ls-remote HEAD; exact frozen framework revision reachability not verified",
+  "archival_runtime_policy": "stdlib-only reads, JSON analysis, copies and hashes; no project/native imports, application execution, tests, builds, probes or benchmarks",
+  "schema": "uvicorn-rs-reproducible-benchmark-promotion@1",
+  "tracked_files": {
+    ".github/workflows/benchmark-categories.yml": {
+      "byte_identical_to_candidate": true,
+      "sha256": "e6f0cb2da2c8281125441fa585f7308620b81b8fb4384cce6ae8ed26e8bd9ef6"
+    },
+    "scripts/analyze_benchmark_categories.py": {
+      "byte_identical_to_candidate": true,
+      "sha256": "4c8e46fb266b2ad51cdfdea3b4c2e8426af251ece1903ab47b28cccd8eefdd8a"
+    },
+    "scripts/run_benchmark_categories.py": {
+      "byte_identical_to_candidate": true,
+      "sha256": "9efaf0b7f1a9c1b5cbcb4f1106b8368f2c325286a415d79e10519caa037d5f20"
+    }
+  },
+  "verification": {
+    "analysis_check_qualified_pairs": 0,
+    "analysis_check_status": "incomplete_categories",
+    "analysis_input_directory": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/categories-error-logs",
+    "driver_help_log": "driver-help.log",
+    "original_reports_unchanged": "root owner reported unchanged raw inputs; copies verified against their original candidate files"
+  },
+  "workflow_execution": "not dispatched or executed on Linux; no publishing"
+}

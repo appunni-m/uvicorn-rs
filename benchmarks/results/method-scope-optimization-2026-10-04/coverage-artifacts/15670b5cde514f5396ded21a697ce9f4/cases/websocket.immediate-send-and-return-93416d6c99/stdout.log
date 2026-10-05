@@ -1,0 +1,13 @@
+PASS websocket: websocket.immediate-send-and-return
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/method-scope-optimization-2026-10-04/coverage-artifacts/15670b5cde514f5396ded21a697ce9f4/cases/websocket.immediate-send-and-return-93416d6c99/parity-result.json"
+}

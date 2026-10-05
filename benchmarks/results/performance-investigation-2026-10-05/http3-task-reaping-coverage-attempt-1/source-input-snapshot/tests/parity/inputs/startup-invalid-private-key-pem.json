@@ -1,0 +1,16 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "startup-invalid-private-key-pem.invalid-private-key-pem-startup-error",
+      "profile": "startup-invalid-private-key-pem",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "startup_failure": {
+        "expect_failed": true
+      }
+    }
+  ]
+}

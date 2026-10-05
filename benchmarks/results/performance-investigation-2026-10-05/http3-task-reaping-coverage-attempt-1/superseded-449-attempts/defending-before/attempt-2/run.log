@@ -1,0 +1,12 @@
+{
+  "status": "failed",
+  "summary": {
+    "selected": 1,
+    "executed": 0,
+    "passed": 0,
+    "failed": 0,
+    "not_run": 1,
+    "infrastructure_failed": 1
+  },
+  "result": "build/asgi-coverage/unified-http3-task-reaping-449-2026-10-05/defending-before/attempt-2/parity-result.json"
+}

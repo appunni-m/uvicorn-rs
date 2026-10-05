@@ -1,0 +1,9 @@
+{
+  "status": "infrastructure_failed_before_case_execution",
+  "exit_code": 2,
+  "reason": "configured sccache denied by macOS sandbox while rebuilding changed HTTP3 probe",
+  "raw_log": "run.log",
+  "profiles": "profiles",
+  "behavioral_regression_proof": "not_executed",
+  "followup_policy": "separate preserved attempt with explicit empty Rust wrapper overrides"
+}

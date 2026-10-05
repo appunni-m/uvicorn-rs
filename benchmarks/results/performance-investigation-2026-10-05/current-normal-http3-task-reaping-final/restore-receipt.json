@@ -1,0 +1,21 @@
+{
+  "schema": "uvicorn-rs-normal-gate-recapture@1",
+  "status": "archive_sources_settled_normal_identity_captured",
+  "prior_restore_receipt": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/restore-receipt.json",
+  "prior_restore_receipt_sha256": "e8fb526a8036aa7f3307b810a6106874a155a975bcc84cfb0c2b5d74e9bc46db",
+  "prior_identity_invalid_receipts": [
+    "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/identity-invalid-receipt.json",
+    "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/identity-invalid-receipt.json"
+  ],
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "installed_normal_sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "normal_reinstalled": false,
+  "client_rebuilt": false,
+  "client_sha256": "1c61f24ec08d63d6bd58536f986d6b925118e66109978004da15cdeba710b206",
+  "root_archive_source_freeze": "Full archive12 source paths settled; further source/audit archival is lossless.gz or tar.gz during freeze",
+  "cargo_wrapper_environment": {
+    "RUSTC_WRAPPER": "",
+    "RUSTC_WORKSPACE_WRAPPER": ""
+  },
+  "portable_identity_sha256": "dcc0d5f7c8d210a8fa35069240aa4fa25ca4520e4f6f26a64fbfdf243bc9cde2"
+}

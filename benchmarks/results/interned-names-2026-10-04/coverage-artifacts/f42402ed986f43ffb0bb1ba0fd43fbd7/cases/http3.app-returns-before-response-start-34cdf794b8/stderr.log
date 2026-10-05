@@ -1,0 +1,5 @@
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+uvicorn-rs: ASGI app completed without response.start
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:58131 failed: Remote error: ApplicationClose: 0x0
+

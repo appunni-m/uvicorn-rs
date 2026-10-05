@@ -1,0 +1,21 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.startup-fault-native-add-class-websocket-io",
+      "profile": "startup-fault-native-add-class-websocket-io",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "native.module.add-class.websocket-io",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    }
+  ]
+}

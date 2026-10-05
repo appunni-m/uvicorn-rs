@@ -1,0 +1,47 @@
+[
+  {
+    "pid": 639,
+    "status": "sleeping",
+    "repository_cwd": false
+  },
+  {
+    "pid": 13575,
+    "status": "sleeping",
+    "repository_cwd": false
+  },
+  {
+    "pid": 20144,
+    "status": "sleeping",
+    "repository_cwd": false
+  },
+  {
+    "pid": 33965,
+    "status": "sleeping",
+    "repository_cwd": false
+  },
+  {
+    "pid": 49990,
+    "status": "sleeping",
+    "repository_cwd": false
+  },
+  {
+    "pid": 63441,
+    "status": "sleeping",
+    "repository_cwd": false
+  },
+  {
+    "pid": 65795,
+    "status": "sleeping",
+    "repository_cwd": false
+  },
+  {
+    "pid": 86710,
+    "status": "sleeping",
+    "repository_cwd": false
+  },
+  {
+    "pid": 88253,
+    "status": "sleeping",
+    "repository_cwd": false
+  }
+]

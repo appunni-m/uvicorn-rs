@@ -1,0 +1,6 @@
+{
+  "source_sha256": "313fc3bc68e9eb89611033a924367a74d2d2dc6aa8cfed923c198d01f6f44c0a",
+  "native_sha256": "314ac904059bb4cc10ebae97ba538278f2af286a0e356bc207e90eb92c69ea52",
+  "input_identity": "../../frozen-input-identity.json",
+  "purpose": "same frozen strengthened fault case diagnostic before repair"
+}

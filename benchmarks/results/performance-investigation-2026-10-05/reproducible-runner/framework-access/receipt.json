@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/appunni-m/starlette-rs.git",
+  "requested_revision": "738c43362938896c268ca29b9a9a2a5942df510c",
+  "fetched_revision": "738c43362938896c268ca29b9a9a2a5942df510c",
+  "credential_helper": "disabled",
+  "extra_headers": "cleared",
+  "scope": "anonymous shallow source fetch only; no checkout, build, CI dispatch or publication"
+}

@@ -5,12 +5,22 @@ listeners, HTTP/1.1, HTTP/2, experimental HTTP/3, WebSocket transport, flow
 control, and shutdown. Python loads the application and keeps ownership of its
 asyncio event loop and ASGI tasks.
 
-This is an experimental prototype. Its measured HTTP/1.1 performance does not
-match Uvicorn's fastest configuration across representative workloads; streamed
-responses are a known regression. See [the measured results](docs/feasibility.md)
-before evaluating it for deployment. The current implementation has targeted
-black-box coverage, not a complete ASGI conformance run or a production security
-review.
+This is an experimental prototype. Historical HTTP/1.1 measurements show
+workload-dependent results and greater server CPU use. The latest frozen local
+comparison qualifies a 1.59× WebSocket handshake gain across three matched
+runs; other workloads lack clean paired timing evidence. See [the performance investigation](docs/performance-investigation-2026-10-05.md)
+and [historical measurements](docs/feasibility.md) before evaluating deployment.
+The HTTP/3 task-reaping source now passes all 451 instrumented cases and three
+complete repeats with zero failures or retries: 214 live oracle comparisons
+and 237 target-only contracts across 70 inputs and 63 operations. Native
+coverage is 4,778/4,778 regions and 3,371/3,371 lines, with zero unfiltered MCP
+gaps. The fresh build retains the same Rust source; normal-build public parity
+passes 214/214, and the exclusion audit passes all 15 checks and three selected
+live cases. The audited normal extension is restored. [Coverage evidence](docs/coverage.md)
+identifies the source/build, the earlier failed 450-case gate, and historical
+448-case proof. The task-reaping change also has a separate memory diagnostic.
+The complete official ASGI conformance
+suite and a production security review have not been run.
 
 `uvicorn-rs` is the project name used by the supplied GitHub repository and is
 not affiliated with the Uvicorn project. `starlette-rs` is an optional,
@@ -20,8 +30,10 @@ bundles it.
 ## Try it locally
 
 The local development environment was verified with CPython 3.12.13 and Rust
-1.98.1. `Cargo.toml` declares Rust 1.83 as the minimum, but that exact toolchain
-has not been validated. From a checkout:
+1.98.1. Locked default and all-feature library builds also pass on Rust 1.85.0,
+the declared minimum. An actual macOS wheel also passes an installed-package
+HTTP/loop/context/lifespan/cancellation check on CPython 3.9.25. Hosted platform
+checks are still pending. From a checkout:
 
 ```sh
 uv sync --python 3.12
@@ -85,8 +97,9 @@ guide](docs/parity.md) for its oracle choices, support slice, and result format.
 
 There is no published support window; see [support expectations](SUPPORT.md).
 Do not post vulnerability details in a public issue; use the private route in
-[the security policy](SECURITY.md). The project has not selected a license, so
-the public source grants no redistribution or reuse rights.
+[the security policy](SECURITY.md). The project is available under
+[BSD-3-Clause or MIT](LICENSE), at your option. Copyright © 2026 Appunni M;
+the license texts retain the original Uvicorn and Hypercorn notices.
 
 ## Documentation map
 
@@ -98,5 +111,6 @@ the public source grants no redistribution or reuse rights.
 - [Reproducible full benchmark setup and commands](docs/benchmarks.md)
 - [Release candidate workflow and artifact checks](docs/releases.md)
 - [Performance feasibility and raw results](docs/feasibility.md)
+- [October 5 performance investigation](docs/performance-investigation-2026-10-05.md)
 - [Known implementation issues](docs/implementation-review.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Support](SUPPORT.md)

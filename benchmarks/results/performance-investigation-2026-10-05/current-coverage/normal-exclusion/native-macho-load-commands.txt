@@ -1,0 +1,347 @@
+/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/canonical-v2/python/uvicorn_rs/_native.abi3.so:
+Load command 0
+      cmd LC_SEGMENT_64
+  cmdsize 712
+  segname __TEXT
+   vmaddr 0x0000000000000000
+   vmsize 0x00000000004b0000
+  fileoff 0
+ filesize 4915200
+  maxprot 0x00000005
+ initprot 0x00000005
+   nsects 8
+    flags 0x0
+Section
+  sectname __text
+   segname __TEXT
+      addr 0x00000000000008c0
+      size 0x0000000000349694
+    offset 2240
+     align 2^6 (64)
+    reloff 0
+    nreloc 0
+     flags 0x80000400
+ reserved1 0
+ reserved2 0
+Section
+  sectname __stubs
+   segname __TEXT
+      addr 0x0000000000349f54
+      size 0x0000000000000888
+    offset 3448660
+     align 2^2 (4)
+    reloff 0
+    nreloc 0
+     flags 0x80000408
+ reserved1 0 (index into indirect symbol table)
+ reserved2 12 (size of stubs)
+Section
+  sectname __stub_helper
+   segname __TEXT
+      addr 0x000000000034a7dc
+      size 0x00000000000008a0
+    offset 3450844
+     align 2^2 (4)
+    reloff 0
+    nreloc 0
+     flags 0x80000400
+ reserved1 0
+ reserved2 0
+Section
+  sectname __gcc_except_tab
+   segname __TEXT
+      addr 0x000000000034b07c
+      size 0x0000000000045678
+    offset 3453052
+     align 2^2 (4)
+    reloff 0
+    nreloc 0
+     flags 0x00000000
+ reserved1 0
+ reserved2 0
+Section
+  sectname __const
+   segname __TEXT
+      addr 0x0000000000391000
+      size 0x0000000000060658
+    offset 3739648
+     align 2^12 (4096)
+    reloff 0
+    nreloc 0
+     flags 0x00000000
+ reserved1 0
+ reserved2 0
+Section
+  sectname __cstring
+   segname __TEXT
+      addr 0x00000000003f1658
+      size 0x00000000000126d4
+    offset 4134488
+     align 2^0 (1)
+    reloff 0
+    nreloc 0
+     flags 0x00000002
+ reserved1 0
+ reserved2 0
+Section
+  sectname __unwind_info
+   segname __TEXT
+      addr 0x0000000000403d2c
+      size 0x000000000001b250
+    offset 4209964
+     align 2^2 (4)
+    reloff 0
+    nreloc 0
+     flags 0x00000000
+ reserved1 0
+ reserved2 0
+Section
+  sectname __eh_frame
+   segname __TEXT
+      addr 0x000000000041ef80
+      size 0x000000000008ea7c
+    offset 4321152
+     align 2^3 (8)
+    reloff 0
+    nreloc 0
+     flags 0x6800000b
+ reserved1 0
+ reserved2 0
+Load command 1
+      cmd LC_SEGMENT_64
+  cmdsize 232
+  segname __DATA_CONST
+   vmaddr 0x00000000004b0000
+   vmsize 0x0000000000030000
+  fileoff 4915200
+ filesize 196608
+  maxprot 0x00000003
+ initprot 0x00000003
+   nsects 2
+    flags 0x10
+Section
+  sectname __got
+   segname __DATA_CONST
+      addr 0x00000000004b0000
+      size 0x00000000000000d8
+    offset 4915200
+     align 2^3 (8)
+    reloff 0
+    nreloc 0
+     flags 0x00000006
+ reserved1 182 (index into indirect symbol table)
+ reserved2 0
+Section
+  sectname __const
+   segname __DATA_CONST
+      addr 0x00000000004b00e0
+      size 0x000000000002fac0
+    offset 4915424
+     align 2^4 (16)
+    reloff 0
+    nreloc 0
+     flags 0x00000000
+ reserved1 0
+ reserved2 0
+Load command 2
+      cmd LC_SEGMENT_64
+  cmdsize 632
+  segname __DATA
+   vmaddr 0x00000000004e0000
+   vmsize 0x0000000000008000
+  fileoff 5111808
+ filesize 32768
+  maxprot 0x00000003
+ initprot 0x00000003
+   nsects 7
+    flags 0x0
+Section
+  sectname __la_symbol_ptr
+   segname __DATA
+      addr 0x00000000004e0000
+      size 0x00000000000005b0
+    offset 5111808
+     align 2^3 (8)
+    reloff 0
+    nreloc 0
+     flags 0x00000007
+ reserved1 209 (index into indirect symbol table)
+ reserved2 0
+Section
+  sectname __data
+   segname __DATA
+      addr 0x00000000004e05b0
+      size 0x00000000000040d8
+    offset 5113264
+     align 2^3 (8)
+    reloff 0
+    nreloc 0
+     flags 0x00000000
+ reserved1 0
+ reserved2 0
+Section
+  sectname __thread_vars
+   segname __DATA
+      addr 0x00000000004e4688
+      size 0x0000000000000198
+    offset 5129864
+     align 2^3 (8)
+    reloff 0
+    nreloc 0
+     flags 0x00000013
+ reserved1 0
+ reserved2 0
+Section
+  sectname __thread_data
+   segname __DATA
+      addr 0x00000000004e4820
+      size 0x00000000000000e0
+    offset 5130272
+     align 2^3 (8)
+    reloff 0
+    nreloc 0
+     flags 0x00000011
+ reserved1 0
+ reserved2 0
+Section
+  sectname __thread_bss
+   segname __DATA
+      addr 0x00000000004e4900
+      size 0x00000000000000f8
+    offset 0
+     align 2^3 (8)
+    reloff 0
+    nreloc 0
+     flags 0x00000012
+ reserved1 0
+ reserved2 0
+Section
+  sectname __common
+   segname __DATA
+      addr 0x00000000004e49f8
+      size 0x00000000000000c0
+    offset 0
+     align 2^3 (8)
+    reloff 0
+    nreloc 0
+     flags 0x00000001
+ reserved1 0
+ reserved2 0
+Section
+  sectname __bss
+   segname __DATA
+      addr 0x00000000004e4ab8
+      size 0x00000000000000c0
+    offset 0
+     align 2^3 (8)
+    reloff 0
+    nreloc 0
+     flags 0x00000001
+ reserved1 0
+ reserved2 0
+Load command 3
+      cmd LC_SEGMENT_64
+  cmdsize 72
+  segname __LINKEDIT
+   vmaddr 0x00000000004e8000
+   vmsize 0x00000000001f0000
+  fileoff 5144576
+ filesize 2017984
+  maxprot 0x00000001
+ initprot 0x00000001
+   nsects 0
+    flags 0x0
+Load command 4
+          cmd LC_ID_DYLIB
+      cmdsize 96
+         name /Users/lazytrot/work/uvicorn-rs/target/release/deps/libuvicorn_rs.dylib (offset 24)
+   time stamp 1 Thu Jan  1 05:30:01 1970
+      current version 0.0.0
+compatibility version 0.0.0
+Load command 5
+            cmd LC_DYLD_INFO_ONLY
+        cmdsize 48
+     rebase_off 5144576
+    rebase_size 7304
+       bind_off 5151880
+      bind_size 544
+  weak_bind_off 0
+ weak_bind_size 0
+  lazy_bind_off 5152424
+ lazy_bind_size 4232
+     export_off 5156656
+    export_size 64
+Load command 6
+     cmd LC_SYMTAB
+ cmdsize 24
+  symoff 5172936
+   nsyms 18650
+  stroff 5472904
+ strsize 1633960
+Load command 7
+            cmd LC_DYSYMTAB
+        cmdsize 80
+      ilocalsym 0
+      nlocalsym 18439
+     iextdefsym 18439
+     nextdefsym 2
+      iundefsym 18441
+      nundefsym 209
+         tocoff 0
+           ntoc 0
+      modtaboff 0
+        nmodtab 0
+   extrefsymoff 0
+    nextrefsyms 0
+ indirectsymoff 5471336
+  nindirectsyms 391
+      extreloff 0
+        nextrel 0
+      locreloff 0
+        nlocrel 0
+Load command 8
+     cmd LC_UUID
+ cmdsize 24
+    uuid AEE8EFF8-3C7F-3CA9-8089-465980D6636D
+Load command 9
+      cmd LC_BUILD_VERSION
+  cmdsize 32
+ platform 1
+    minos 11.0
+      sdk 15.5
+   ntools 1
+     tool 3
+  version 1167.5
+Load command 10
+      cmd LC_SOURCE_VERSION
+  cmdsize 16
+  version 0.0
+Load command 11
+          cmd LC_LOAD_DYLIB
+      cmdsize 56
+         name /usr/lib/libiconv.2.dylib (offset 24)
+   time stamp 2 Thu Jan  1 05:30:02 1970
+      current version 7.0.0
+compatibility version 7.0.0
+Load command 12
+          cmd LC_LOAD_DYLIB
+      cmdsize 56
+         name /usr/lib/libSystem.B.dylib (offset 24)
+   time stamp 2 Thu Jan  1 05:30:02 1970
+      current version 1351.0.0
+compatibility version 1.0.0
+Load command 13
+      cmd LC_FUNCTION_STARTS
+  cmdsize 16
+  dataoff 5156720
+ datasize 16216
+Load command 14
+      cmd LC_DATA_IN_CODE
+  cmdsize 16
+  dataoff 5172936
+ datasize 0
+Load command 15
+      cmd LC_CODE_SIGNATURE
+  cmdsize 16
+  dataoff 7106864
+ datasize 55696

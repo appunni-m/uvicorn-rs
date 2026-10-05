@@ -1,0 +1,11 @@
+{
+  "exports": [
+    "AsgiIo",
+    "LifespanIo",
+    "ServerControl",
+    "WebSocketIo",
+    "serve"
+  ],
+  "path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/normal-python/uvicorn_rs/_native.abi3.so",
+  "serve_text_signature": "(app, invoke, host, port, certfile, keyfile, graceful_timeout, control)"
+}

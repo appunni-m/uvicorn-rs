@@ -1,0 +1,79 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.lifespan.eager-lifespan-registration-failure-cleanup",
+      "profile": "lifecycle-owned-loop-eager",
+      "operation": "lifespan.eager-registration-failure-cleanup",
+      "covers": [
+        "lifespan.eager-registration-failure-cleanup"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.task-starter.inline-completion-registration-error",
+        "contract": "server-eager-lifespan-registration-cleanup"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1,
+        "cleanup_delay_seconds": 0.5
+      }
+    },
+    {
+      "case_id": "fault.lifespan.eager-application-registration-failure-cleanup",
+      "profile": "lifecycle-owned-loop-eager",
+      "operation": "lifespan.eager-registration-failure-cleanup",
+      "covers": [
+        "lifespan.eager-registration-failure-cleanup"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.task-starter.failure-cleanup.schedule-error",
+        "contract": "server-eager-application-registration-cleanup"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1,
+        "cleanup_delay_seconds": 0.5,
+        "callback_path": "/task-cleanup-hold"
+      }
+    },
+    {
+      "case_id": "fault.lifespan.eager-lifespan-timeout-registration-failure-cleanup",
+      "profile": "lifecycle-owned-loop-eager",
+      "operation": "lifespan.eager-registration-failure-cleanup",
+      "covers": [
+        "lifespan.eager-registration-failure-cleanup"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.task-starter.inline-completion-registration-error",
+        "contract": "server-eager-lifespan-registration-cleanup-timeout"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1,
+        "cleanup_delay_seconds": 5
+      }
+    },
+    {
+      "case_id": "fault.lifespan.eager-application-registration-failure-cancel-suppressed",
+      "profile": "lifecycle-owned-loop-eager",
+      "operation": "lifespan.eager-registration-failure-cleanup",
+      "covers": [
+        "lifespan.eager-registration-failure-cleanup"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.task-starter.inline-completion-registration-error",
+        "contract": "server-eager-application-registration-cleanup-normal-return"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1,
+        "cleanup_delay_seconds": 0.5,
+        "callback_path": "/task-cleanup-suppress-cancel"
+      }
+    }
+  ]
+}

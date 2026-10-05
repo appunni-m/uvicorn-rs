@@ -1,0 +1,949 @@
+{
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1",
+  "original_directory": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories",
+  "files": {
+    "analysis.json": {
+      "sha256": "33e99cd2a4ace0b8010e0713708ce86412a49b21265df00377cb5f733692dd9d",
+      "bytes": 471946,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/analysis.json"
+    },
+    "analysis.log": {
+      "sha256": "966fa1d9ef480c3603cf0dc98e9abc81bdc8718b8c8842e63146ab4972fed7d4",
+      "bytes": 304,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/analysis.log"
+    },
+    "analysis.md": {
+      "sha256": "4d2b59bf3a9b9c4547b05999e17f11200c21863d82bb906d76b516cc1b559b01",
+      "bytes": 12201,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/analysis.md"
+    },
+    "events.jsonl": {
+      "sha256": "caa115867f7e8416c501a5abd83ca9bfe4fa5ab074168b17507bbd69749a8dca",
+      "bytes": 34608,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/events.jsonl"
+    },
+    "http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/contextvars-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/contextvars-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "0eef5f1f64503f9e8845e5b7a2a58792a72e17eee85705b0d5929d3db07955f8",
+      "bytes": 93800,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "0eef5f1f64503f9e8845e5b7a2a58792a72e17eee85705b0d5929d3db07955f8",
+      "bytes": 93800,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "0eef5f1f64503f9e8845e5b7a2a58792a72e17eee85705b0d5929d3db07955f8",
+      "bytes": 93800,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/exception-to-500-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e5e2c3a6e22d181f5299b9a2c7cb7ba51e996081e3fbf98637e1bf8c8f6a49cd",
+      "bytes": 174600,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e5e2c3a6e22d181f5299b9a2c7cb7ba51e996081e3fbf98637e1bf8c8f6a49cd",
+      "bytes": 174600,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e5e2c3a6e22d181f5299b9a2c7cb7ba51e996081e3fbf98637e1bf8c8f6a49cd",
+      "bytes": 174600,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/exception-to-500-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/fixed-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/fixed-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/large-response-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/large-response-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/many-response-chunks-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-small-chunks-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/request-upload-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/scope-32-headers-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/scope-32-headers-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/slow-reader-backpressure-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/small-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/small-response-chunks-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/starlette-rs-route-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/starlette-rs-route-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/sync-callable-awaitable-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.artifacts/sync-callable-awaitable-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "http1.json": {
+      "sha256": "3329102977480fb29a2988c5fca2714be54968051bd40534ad8de6cba6e546cf",
+      "bytes": 1875782,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.json"
+    },
+    "http1.jsonl": {
+      "sha256": "71bbb707e06924b18143f6e81bf9d8187e20abc15079547c466c6c3c9dcbd57d",
+      "bytes": 975331,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.jsonl"
+    },
+    "http1.jsonl.meta.json": {
+      "sha256": "8f2b8fe4d7d6b54ccdb80682535a1a9538c319d10acd422b044a7d3ae749f35d",
+      "bytes": 75721,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.jsonl.meta.json"
+    },
+    "http1.log": {
+      "sha256": "0ac1081b7ea9039dcd9976b5e94c92891b05b10b75fdc92c4239c7846d7c74b6",
+      "bytes": 975436,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http1.log"
+    },
+    "http2.artifacts/fixed-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/fixed-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/fixed-hypercorn-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/fixed-hypercorn-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/fixed-hypercorn-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/fixed-hypercorn-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/fixed-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/large-response-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/large-response-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/large-response-hypercorn-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/large-response-hypercorn-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/large-response-hypercorn-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/large-response-hypercorn-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/large-response-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/many-response-chunks-hypercorn-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/many-response-chunks-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/protocol-scope-hypercorn-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/protocol-scope-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/request-upload-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/request-upload-hypercorn-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-hypercorn-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/request-upload-hypercorn-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-hypercorn-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-small-chunks-hypercorn-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-small-chunks-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/request-upload-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/slow-reader-backpressure-hypercorn-uvloop-repeat-3-server.log"
+    },
+    "http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.artifacts/slow-reader-backpressure-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http2.json": {
+      "sha256": "995aea45c3f250b668da8639f73bb2721f1748e22deb4a54b807d51a8354bb57",
+      "bytes": 1213395,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.json"
+    },
+    "http2.jsonl": {
+      "sha256": "18829e63e90dd3c9c0671821f18f5d4d332521a1570ffc7b59a54e5d2226d229",
+      "bytes": 603104,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.jsonl"
+    },
+    "http2.jsonl.meta.json": {
+      "sha256": "f7c614384d7db3446feea9ad48672591ce485c2fad3cadfc908b4a9c987596ee",
+      "bytes": 67949,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.jsonl.meta.json"
+    },
+    "http2.log": {
+      "sha256": "3e0b66395ba96efbea4f945062a17e0c1d256201792538cdbc085523466ccbcc",
+      "bytes": 603271,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http2.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http3.jsonl": {
+      "sha256": "d841980245bdebdfc9f1824a70a6b20b9d17db2a49da0c90a7c1a7cb4ce1da3d",
+      "bytes": 12848,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http3.jsonl"
+    },
+    "http3.jsonl.meta.json": {
+      "sha256": "e943eaa0e4b77bd5f6748dd278be159849a914970417c75d45913595033dc3fc",
+      "bytes": 68061,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http3.jsonl.meta.json"
+    },
+    "http3.log": {
+      "sha256": "803e4d0ec121eeb00df869de8926882db2c43d2197022c536b85d2845836b1cb",
+      "bytes": 14553,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/http3.log"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "414862388301bc1c9395b6de3eef58b221956f62992df1ff9c0ba03ac5b1810d",
+      "bytes": 70,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "414862388301bc1c9395b6de3eef58b221956f62992df1ff9c0ba03ac5b1810d",
+      "bytes": 70,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "414862388301bc1c9395b6de3eef58b221956f62992df1ff9c0ba03ac5b1810d",
+      "bytes": 70,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-active-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "e31eb3fefc40c37a6db488b1463fde3df816cbcad7a5f96ae8b594c4f2efe51f",
+      "bytes": 1057,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "e31eb3fefc40c37a6db488b1463fde3df816cbcad7a5f96ae8b594c4f2efe51f",
+      "bytes": 1057,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "e31eb3fefc40c37a6db488b1463fde3df816cbcad7a5f96ae8b594c4f2efe51f",
+      "bytes": 1057,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-active-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425",
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425",
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425",
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-idle-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-1-server.log": {
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425",
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-1-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-2-server.log": {
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425",
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-2-server.log"
+    },
+    "lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-3-server.log": {
+      "sha256": "f95c20575c7cfb6c10b386bf37edf1bf66b55c0fa39a89e54d9bec74a8f6d425",
+      "bytes": 27,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.artifacts/lifecycle-idle-uvicorn-uvloop-httptools-repeat-3-server.log"
+    },
+    "lifecycle.json": {
+      "sha256": "fe678696d6a08f90e313874d7b934e1147d100910bfdffb69bce7a5f8a2fc90c",
+      "bytes": 455723,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.json"
+    },
+    "lifecycle.jsonl": {
+      "sha256": "59d98717ffa9ecf667e7435b46948c4c8207c6f3208f15a0420f6bf1da621c05",
+      "bytes": 158198,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.jsonl"
+    },
+    "lifecycle.jsonl.meta.json": {
+      "sha256": "50609331204befe97d609e41e6b7c9b0be6980cb4ecb776a220aebcd48bb83bc",
+      "bytes": 68306,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.jsonl.meta.json"
+    },
+    "lifecycle.log": {
+      "sha256": "9062f47db3abeef7185da0b1e6c8752652fd606f289792ede1384215485a479d",
+      "bytes": 158307,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.log"
+    },
+    "lifecycle.phases.jsonl": {
+      "sha256": "d5a29de905873618f6152affc168e051ba097f7803f12fa90f8d38f24144f922",
+      "bytes": 152548,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.phases.jsonl"
+    },
+    "lifecycle.phases.jsonl.meta.json": {
+      "sha256": "50609331204befe97d609e41e6b7c9b0be6980cb4ecb776a220aebcd48bb83bc",
+      "bytes": 68306,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/lifecycle.phases.jsonl.meta.json"
+    },
+    "run.json": {
+      "sha256": "3445d08890363876a534fa6a079937838e16995a3c6d5f9a6e5dbe5aea90e781",
+      "bytes": 390879,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/run.json"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/binary-64k-echo-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-1-server.log": {
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587",
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-1-server.log"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-2-server.log": {
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587",
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-2-server.log"
+    },
+    "websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-3-server.log": {
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587",
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/binary-64k-echo-uvicorn-uvloop-websockets-repeat-3-server.log"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/connection-handshake-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-1-server.log": {
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587",
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-1-server.log"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-2-server.log": {
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587",
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-2-server.log"
+    },
+    "websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-3-server.log": {
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587",
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/connection-handshake-uvicorn-uvloop-websockets-repeat-3-server.log"
+    },
+    "websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/text-echo-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-1-server.log": {
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587",
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-1-server.log"
+    },
+    "websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-2-server.log": {
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587",
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-2-server.log"
+    },
+    "websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-3-server.log": {
+      "sha256": "32e926d57c472ac6b3b0d7e38ff29702d44e804e9d53aa0366936f812b86c587",
+      "bytes": 365,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.artifacts/text-echo-uvicorn-uvloop-websockets-repeat-3-server.log"
+    },
+    "websocket.json": {
+      "sha256": "3b09bd20aa216909e1cf13aa6e1ba67781820932e15fac77ccc492d01071468b",
+      "bytes": 457361,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.json"
+    },
+    "websocket.jsonl": {
+      "sha256": "fbca95535664f05c6394be16ac671cdcb643bc51854c9c16705d016e796ee7bd",
+      "bytes": 182324,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.jsonl"
+    },
+    "websocket.jsonl.meta.json": {
+      "sha256": "039d01bf89ac91d562ad4f8e09df018738c6a931e8ad0209091bed8723b3c77e",
+      "bytes": 67968,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.jsonl.meta.json"
+    },
+    "websocket.log": {
+      "sha256": "8756c8297da3d2f090e2dfa240e5c05e7cc3dc290e6a6121d9f4f4f614ec62b7",
+      "bytes": 182495,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories/websocket.log"
+    },
+    "driver.log": {
+      "sha256": "caa115867f7e8416c501a5abd83ca9bfe4fa5ab074168b17507bbd69749a8dca",
+      "bytes": 34608,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/final-normal-c7-categories.driver.log"
+    },
+    "sources/src/lib.rs.gz": {
+      "sha256": "aef89eb90ccc761bb8502158cf1bf579d9cdbd6c7ea3ff5d98e3f74f9ee93882",
+      "bytes": 36995,
+      "decompressed_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/src/lib.rs"
+    },
+    "sources/python/uvicorn_rs/server.py.gz": {
+      "sha256": "38337b266142857a8f6c6bd4e33056a04ad0327195cc6d5bdbe32b6347e342cd",
+      "bytes": 892,
+      "decompressed_sha256": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/server.py"
+    },
+    "sources/scripts/run_benchmark_categories.py.gz": {
+      "sha256": "2893dbdce769e0c938bc59fca7ecd80b7365c3fb7d9d7e088f5c31df68a38739",
+      "bytes": 7407,
+      "decompressed_sha256": "9efaf0b7f1a9c1b5cbcb4f1106b8368f2c325286a415d79e10519caa037d5f20",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_benchmark_categories.py"
+    },
+    "sources/scripts/analyze_benchmark_categories.py.gz": {
+      "sha256": "0d435a8b3da41e8cf331df85c74feb6a011b3cdfac34b25c98df45fd29d017b9",
+      "bytes": 9336,
+      "decompressed_sha256": "7e916892c57a7c582d2dd164f3ff98756a9c2ea02ba59c2c4d595a26b5c72548",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/analyze_benchmark_categories.py"
+    },
+    "sources/scripts/benchmark_evidence.py.gz": {
+      "sha256": "2e2649519d2b1d258b846030d19b072498fc4ba9299d6684b03ed12707a4b745",
+      "bytes": 9751,
+      "decompressed_sha256": "d83b60c386f3f6a5ea970b3e2ddc0628f0f97adaa54424ebf4b5e2bbdf9a3bd1",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/benchmark_evidence.py"
+    },
+    "sources/scripts/run_http_category_bench.py.gz": {
+      "sha256": "0f6cca928d79738aebebacb4fa5656883e1991c197660cbe26ab46469fc429f1",
+      "bytes": 6039,
+      "decompressed_sha256": "a520d62816d22d5488028fd1b2a593fbfd829bf3fd4b4155d397c6618db0df6d",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_http_category_bench.py"
+    },
+    "sources/scripts/run_h2_category_bench.py.gz": {
+      "sha256": "f4ee12cd0f79d90be1371a79e6302bd131e0163e70d78db5a2c3c92578be4731",
+      "bytes": 4704,
+      "decompressed_sha256": "7c1e38ce76b541ac4e50783aeec9c10a5c4fbec8efb25254412466918641c081",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_h2_category_bench.py"
+    },
+    "sources/scripts/run_h3_category_bench.py.gz": {
+      "sha256": "f4c252a85494527b7da803438744cc22c4f8db849057e20405890ce11bad7343",
+      "bytes": 5393,
+      "decompressed_sha256": "64afc662603e471897691a259bc78f496decbffb667c775a37461101ebecd39e",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py"
+    },
+    "sources/scripts/run_websocket_category_bench.py.gz": {
+      "sha256": "d6371501f8cb1210ef6a7ce6a95b8e61ffe393382301d248c09e040f75abed4c",
+      "bytes": 4006,
+      "decompressed_sha256": "8cef06e466b863b2abe3c0ddbfb08c35a166163a8bbd82df0124211a821bb243",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_websocket_category_bench.py"
+    },
+    "sources/scripts/run_lifecycle_bench.py.gz": {
+      "sha256": "f44e60488e2823c1f356b13ba7f02d9da0969a11b20dfa3505ba3fc012603e4c",
+      "bytes": 9197,
+      "decompressed_sha256": "849ea98b4407225386110d7bf30f4d4c7d419c8f76630074510fc6a8bba36a64",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/scripts/run_lifecycle_bench.py"
+    },
+    "sources/examples/bench_h3_consumed_asgi.py.gz": {
+      "sha256": "2969b9681291c5c87b708416a399fc104ab26a0e4127357afc1455a6256a79f6",
+      "bytes": 395,
+      "decompressed_sha256": "4247667b10b8688350127daef35a5948445cf157ed58663b57b6041e4f72599b",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/examples/bench_h3_consumed_asgi.py"
+    },
+    "sources/tools/http3-probe/src/bin/bench.rs.gz": {
+      "sha256": "d3590357cf42a215490d7c119f93628846f0e0c1b09efb9b61d02c79ceaaaf1e",
+      "bytes": 3087,
+      "decompressed_sha256": "e7e5aa4a3bb1d94a4b95e62faee8f51b28e49c3e5dc37ebf1f3d090b583ae4d4",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/src/bin/bench.rs"
+    },
+    "README.md": {
+      "sha256": "10c9951010113fd40976c3891ad23cd508d908d5b3cd7374399b59067583d0dc",
+      "bytes": 1146,
+      "kind": "derived scope note"
+    }
+  },
+  "scope": "frozen dirty normal build; incomplete H3; only handshake comparison qualifies"
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan.public-server-api-cancels-and-shuts-down",
+      "profile": "lifecycle-server-api",
+      "operation": "lifespan.shutdown-cancellation",
+      "covers": [
+        "lifespan.shutdown-cancellation"
+      ],
+      "lifecycle": {
+        "state_path": "/state",
+        "hold_path": "/hold",
+        "graceful_timeout_seconds": 1
+      }
+    }
+  ]
+}

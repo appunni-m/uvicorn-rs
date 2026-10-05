@@ -1,0 +1,17 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan-shutdown-failed-subclass.failure-is-reported-during-shutdown",
+      "profile": "lifespan-shutdown-failed-subclass",
+      "operation": "lifespan.shutdown-failure",
+      "covers": [
+        "lifespan.shutdown-failure"
+      ],
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1
+      }
+    }
+  ]
+}

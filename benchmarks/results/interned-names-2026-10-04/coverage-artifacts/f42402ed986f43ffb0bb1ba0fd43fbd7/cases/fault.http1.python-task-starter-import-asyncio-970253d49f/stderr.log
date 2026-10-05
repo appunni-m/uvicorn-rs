@@ -1,0 +1,15 @@
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Exception in callback <builtins.PythonTaskStarter object at 0x1043d8a30>
+handle: <Handle <builtins.PythonTaskStarter object at 0x1043d8a30>>
+Traceback (most recent call last):
+  File "uvloop/cbhandles.pyx", line 64, in uvloop.loop.Handle._run
+MemoryError: coverage-only injected MemoryError at PythonTaskStarterImportAsyncio
+/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/runners.py:118: RuntimeWarning: coroutine 'invoke' was never awaited
+  return self._loop.run_until_complete(task)
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+RuntimeError: Python event loop stopped before the ASGI task started
+

@@ -1,6 +1,6 @@
 # ADR 0001: Rust network runtime and Python asyncio bridge
 
-- **Status:** Accepted for the protocol prototype. The synchronized receive fast path has correctness-gated evidence of a baseline improvement. The latest full matrix passed its represented correctness cases but ran under severe host contention; prior and current measurements still show H1 losses against Uvicorn's fastest configuration. This is not approved as a general performance replacement or production server.
+- **Status:** Accepted for the protocol prototype. Historical receive-fast-path measurements remain scoped to their recorded builds. The October 4 matrix was contended, and the October 5 optimization comparison has no accepted speedup. The task-reaping source passes its 451-case instrumented full gate and source-matched zero-gap MCP verification; its restored normal build passes 214 public comparisons and all 15 exclusion checks with three selected live cases. It is not approved as a general performance replacement or production server.
 - **Date:** 2026-10-02
 - **Project name:** `uvicorn-rs`, taken from the GitHub repository URL supplied by the owner. The CLI name is `uvicorn-rs` and the Python import name is `uvicorn_rs`. This project is independent and is not affiliated with Uvicorn.
 
@@ -30,7 +30,7 @@ The bridge must preserve the original Python exception object and traceback when
 
 ### 3. Backpressure and streaming are end-to-end
 
-Request bodies are exposed as incremental `http.request` events, not accumulated before the app starts. The HTTP request channel holds at most one pending body item and the HTTP response channel holds at most four; WebSocket channels hold at most eight messages. Awaiting ASGI `send()` waits for capacity in that bounded writer path. A slow peer therefore applies backpressure to the Python producer instead of growing an unbounded queue. The response capacity was increased from one to four after diagnostics showed frequent per-chunk bridge waits; this reduced those waits, but did not establish a performance win over Uvicorn.
+Request bodies are exposed as incremental `http.request` events, not accumulated before the app starts. The HTTP request channel holds at most one pending body item and the current HTTP response channel holds at most sixteen; WebSocket channels hold at most eight messages. Awaiting ASGI `send()` waits for capacity in that bounded writer path. A slow peer therefore applies backpressure to the Python producer instead of growing an unbounded queue. Diagnostics first motivated increasing the response capacity from one to four, and it has since been raised to sixteen. The latest instrumented run still recorded about 14.9 full sends per 256-chunk response; this measurement includes bridge scheduling and does not establish a performance win over Uvicorn.
 
 HTTP response framing, content length, chunked transfer encoding, and connection reuse belong to the Rust HTTP implementation. The server ignores an app-provided `Transfer-Encoding` header and chooses valid framing itself. It preserves duplicate header fields and their order.
 
@@ -72,6 +72,66 @@ small event-name allocation: it does not remove ASGI message construction,
 Python calls, GIL access, or scheduler handoffs. The event-name optimization
 was not isolated in a clean performance run, so no speed gain is claimed.
 
+The canonical source does not cache fixed ASGI scope/message keys, Python
+method lookups or common HTTP methods. Key/value and one-Tokio-worker builds
+were tested, but every optimization timing was rejected by the host guard;
+common-method caching was drafted only. These experiments remain unaccepted.
+HTTP path decoding retains its borrowed
+`Cow<str>` for the common already-decoded case instead of first allocating an
+owned Rust `String`. HTTP methods retain the existing uppercasing path;
+percent-encoded paths retain the existing decoding semantics. Event-name
+interning and path borrowing do not establish a speedup independently.
+
+### 7. Preserve transport capabilities and typed H3 close handling
+
+The October 5 source forwards `is_write_vectored` and
+`poll_write_vectored` through `ConnectionIo`. Hyper can then retain queued
+body/header slices on supporting transports instead of flattening them. A
+private borrowed scalar/vectored buffer enum uses one fallible write handler;
+it preserves original errors and disconnect signaling without payload copies,
+allocation, dynamic dispatch or unsafe Rust. TLS retains its encryption and
+buffering work. The earlier plaintext H1 profile observed the flattening copy
+disappear; wall-stack observations are not speed or CPU-percentage evidence.
+
+The H3 accept loop recognizes the pinned library's typed `H3_NO_ERROR`
+(`0x100`) as normal peer closure and drains its owned request tasks. Numeric
+QUIC application code `0` and other acceptance errors keep their error path.
+The new ordinary wire-input case checks exact response, a fresh connection,
+scoped diagnostics and graceful exit against Hypercorn.
+
+The task-reaping source joins completed H3 request tasks during acceptance and
+retains final draining of owned tasks after an acceptance error. The current
+matrix declares 451 cases across 70 input files and 63 operations: 214 public
+comparisons and 237 target-only contracts. Its held-response accept-error
+workflow uses the existing point to require remote `0x102`, actual incomplete
+body/stream failure, cancellation diagnostics before the original error,
+Python cleanup and a healthy fresh request. A selected instrumented public
+pair passed the 128-response sequence with GREASE disabled and the clean-close
+case (2/2). The held-response accept-error contract passed its selected
+instrumented case (1/1), then all 451 attribution cases and three complete
+repeats passed with zero failures, infrastructure errors, retries or cases not
+run. The unchanged Rust source's fresh instrumented build measures
+4,778/4,778 regions and 3,371/3,371 lines with zero unfiltered source-matched
+MCP gaps and tests passed. Both formerly missing final-drain spans are covered
+solely by the held-response case. Its remote `ApplicationClosed(0x102)`,
+body-stream error, connection closure and cleanup establish connection-error
+termination/cancellation; `stream_reset` alone follows a client error convention
+and does not identify a QUIC `RESET_STREAM` frame. The audited normal build is
+restored and passes 214/214 public comparisons plus all 15 exclusion checks
+with three selected live cases. Its maintained identity remains unchanged
+after public parity and the audit.
+See [current evidence](../coverage.md#current-evidence-status).
+
+The historical shared-write normal build passes 213 public cases; 448 instrumented cases and
+three full repeats pass with 4,763/4,763 regions, 3,360/3,360 lines and zero
+source-matched unfiltered MCP gaps. The separate normal exclusion audit passes.
+These are historical source-bound local macOS ARM64 native results; they do
+not attest the changed checkout. The earlier generic helper
+had aggregate 100% coverage but seven MCP function observations; its receipt
+is retained without exclusions or profile merging. See
+[coverage evidence](../coverage.md#current-full-verification-448-cases) and
+[the performance investigation](../performance-investigation-2026-10-05.md).
+
 ## Alternatives considered
 
 ### Use Python asyncio or uvloop for the sockets
@@ -102,7 +162,7 @@ Rejected for the MVP. A mature HTTP implementation reduces protocol and request-
 
 ### Feasibility outcome
 
-The latest full matrix contains 144 H1, 84 H2, 66 H3, 36 WebSocket, and 20 lifecycle rows with all represented correctness checks passing. Its saved process snapshot shows an unrelated test process using 687.4% CPU plus concurrent Rust build/doc jobs; treat its performance values as diagnostic. Uvicorn does not provide H2/H3 baselines, so those protocols compare only to Hypercorn. H3's represented Hypercorn cases now pass; its upload cases remain excluded after prior correctness failures. The correct scope is therefore a protocol/interoperability prototype; further performance work should be driven by clean profiles and correctness-preserving hypotheses. See [the full category report](../feasibility.md) and the [latest raw run](../../benchmarks/results/full-event-type-fastpath-2026-10-02T142406Z/). Historical category data and earlier single-workload measurements remain linked in the feasibility report.
+The historical October 4 full matrix contains 132 H1, 84 H2, 66 H3, 36 WebSocket, and 20 lifecycle rows with all represented correctness checks passing; the optional `starlette-rs` H1 route was omitted. Its saved process snapshots show unrelated parity, Python, and Rust build work, including a compiler at about 787% CPU; treat performance values as diagnostic. Uvicorn does not provide H2/H3 baselines, so those protocols compare only to Hypercorn. H3's represented Hypercorn cases passed; its upload cases remain excluded after prior correctness failures. The scope remains a protocol/interoperability prototype; further performance work requires valid paired measurements. See [the historical category report](../feasibility.md), [October 4 raw run](../../benchmarks/results/full-2026-10-04T113122Z/), and [October 5 investigation](../performance-investigation-2026-10-05.md). Earlier measurements retain their own source/build scope.
 
 ## References
 

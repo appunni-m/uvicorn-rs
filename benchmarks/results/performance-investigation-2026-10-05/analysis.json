@@ -1,0 +1,143 @@
+{
+  "schema": "uvicorn-rs-performance-investigation@1",
+  "status": "not_proven",
+  "source_variants": [
+    {
+      "started_at": "2026-10-05T10:28:26.514787+00:00",
+      "variant_order": [
+        "original",
+        "vectored",
+        "interned-keys-worker1",
+        "interned-keys"
+      ],
+      "harness_sha256": {
+        "scripts/run_http_category_bench.py": "22bbf352d641a6340b61160dec7e1a854c677f51da2b7b5f5c7ce59fb4320156",
+        "scripts/benchmark_evidence.py": "d83b60c386f3f6a5ea970b3e2ddc0628f0f97adaa54424ebf4b5e2bbdf9a3bd1",
+        "scripts/bench_http_matrix.mjs": "7d4f32009ba2d0e7407c5f1728ec8c2ce18b44af54d08d201130e200a24f0f37",
+        "scripts/bench_http_client.c": "19ba501a9f3d4ede04e1f6f0a80b9e9af370170a21fca9becbf3c78eae9f8e44"
+      },
+      "status": "completed_correctness_gated_timing_requires_valid_pairs",
+      "canonical_restore": "build/performance-2026-10-05/vectored-clean-close",
+      "experiments": [
+        {
+          "variant": "original",
+          "report": "build/performance-2026-10-05/h1-experiments/original.json",
+          "report_sha256": "85e48feaf9b975ed53547cdc5e9c4418c575efd2f8ad16345b43f9b85878d863",
+          "source_sha256": "187ebfb2311bc793b2f1d3d98c5dc9f3f9cdc5e50805e3f4210e1179769984f8",
+          "native_sha256": "ba5a6f65508a0d2271a52df9893d9f27f94985144c8a5868e0c10ccdaec9ad89",
+          "rows": 30,
+          "correctness_failures": 0,
+          "timing_valid_rows": 15,
+          "performance_evidence_status": "not_proven"
+        },
+        {
+          "variant": "vectored",
+          "report": "build/performance-2026-10-05/h1-experiments/vectored.json",
+          "report_sha256": "80600d6493824ad759cb1d17958fbd348d719bb038be4a9a59e201b22dab71dd",
+          "source_sha256": "b6421bc45a55e194b4924661f4492b06c2860b47d1bf97d17991145b9094d028",
+          "native_sha256": "b7cc33e962761e91a73454f1547cdd66134c9a6326f50234b00b8174719dd685",
+          "rows": 30,
+          "correctness_failures": 0,
+          "timing_valid_rows": 0,
+          "performance_evidence_status": "not_proven"
+        },
+        {
+          "variant": "interned-keys-worker1",
+          "report": "build/performance-2026-10-05/h1-experiments/interned-keys-worker1.json",
+          "report_sha256": "af7e832e9640f968c0e77601684a4fbc8266ccc5b429df043e5cee9968cc22d0",
+          "source_sha256": "082df87cd61907c1074100ee05bebda93bdda3b6f3eb937dec18ca36625165b3",
+          "native_sha256": "84ad9a4ac8f0d1a5efd886712a73c7d3bf824ab6eaa8b3f4c83c4a035b355681",
+          "rows": 30,
+          "correctness_failures": 0,
+          "timing_valid_rows": 0,
+          "performance_evidence_status": "not_proven"
+        },
+        {
+          "variant": "interned-keys",
+          "report": "build/performance-2026-10-05/h1-experiments/interned-keys.json",
+          "report_sha256": "e68fee24e55c8ccbc84cb7a0f2e4a5434d76ee8c12bfeede0f522bc32d2302d4",
+          "source_sha256": "f5ac571433958bc13fc5adf2d3d20b3480de565ffe278f778e76977c916175d0",
+          "native_sha256": "ecbec37a61cd84d7b3423698d58b6f24f43f870b5ccda7c76d1a8aa20c6bfa48",
+          "rows": 30,
+          "correctness_failures": 0,
+          "timing_valid_rows": 0,
+          "performance_evidence_status": "not_proven"
+        }
+      ],
+      "finished_at": "2026-10-05T10:37:21.695011+00:00",
+      "source_restored_sha256": "b6421bc45a55e194b4924661f4492b06c2860b47d1bf97d17991145b9094d028",
+      "native_restored_sha256": "b7cc33e962761e91a73454f1547cdd66134c9a6326f50234b00b8174719dd685"
+    }
+  ],
+  "total_samples": 120,
+  "correctness_valid_samples": 120,
+  "timing_valid_samples": 15,
+  "timing_invalid_samples": 105,
+  "accepted_speedup_claims": [],
+  "experimental_candidates_unaccepted": [
+    "interned-keys",
+    "interned-keys-worker1"
+  ],
+  "retained_candidate_changes": [
+    "forward TCP vectored-write capability and preserve closed/error handling",
+    "recognize only typed H3_NO_ERROR; drain request tasks"
+  ],
+  "normal_source_sha256": "b6421bc45a55e194b4924661f4492b06c2860b47d1bf97d17991145b9094d028",
+  "normal_native_sha256": "b7cc33e962761e91a73454f1547cdd66134c9a6326f50234b00b8174719dd685",
+  "original_large_response_valid_subset": {
+    "valid_paired_repetitions": [
+      1,
+      2,
+      3
+    ],
+    "load": {
+      "response_bytes": 1048576,
+      "concurrency": 64,
+      "duration_seconds": 3,
+      "warmup_seconds": 1
+    },
+    "medians": {
+      "uvicorn-uvloop-httptools": {
+        "requests_per_second": 12696.609,
+        "application_bytes_per_second": 13313359537.726,
+        "p50_ms": 4.49,
+        "p95_ms": 8.68,
+        "p99_ms": 12.486,
+        "server_cpu_percent_mean": 96.03473910947268,
+        "server_rss_peak_mib": 32.765625,
+        "client_cpu_percent_mean": 286.2696052332803,
+        "server_cpu_percent_elapsed": 94.37688288844566,
+        "server_cpu_microseconds_per_request": 76.62514923847223,
+        "client_cpu_percent_elapsed": 317.45239481840804,
+        "client_cpu_microseconds_per_request": 257.8841586494355,
+        "client_rss_peak_mib": 10.421875
+      },
+      "uvicorn-rs-uvloop": {
+        "requests_per_second": 10028.328,
+        "application_bytes_per_second": 10515464425.07,
+        "p50_ms": 6.051,
+        "p95_ms": 10.737,
+        "p99_ms": 13.092,
+        "server_cpu_percent_mean": 183.1114833774331,
+        "server_rss_peak_mib": 134.296875,
+        "client_cpu_percent_mean": 521.2123140721008,
+        "server_cpu_percent_elapsed": 179.89036420947238,
+        "server_cpu_microseconds_per_request": 187.44972877846791,
+        "client_cpu_percent_elapsed": 540.4634501167103,
+        "client_cpu_microseconds_per_request": 569.802082293849,
+        "client_rss_peak_mib": 9.859375
+      }
+    },
+    "scope": "frozen dirty local experiment; other workloads lack enough matching valid timing repetitions"
+  },
+  "historical_reference_policy": {
+    "log_level": "CRITICAL",
+    "reference_lifespan": "off",
+    "rust_lifespan": "automatic support detection",
+    "diagnostic_parity_proven": false,
+    "fresh_category_policy": "ERROR; automatic lifespan support detection on both servers"
+  },
+  "raw_timing_invalid_reason_counts": {
+    "unrelated_host_cpu_activity": 105
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "report_sha256": "3fea1e0724cb2d05afdf3c82bcfba41a1b77d263987e36a65b4c1cf608b23c6a",
+  "source_fingerprint": "ac7039d4593c067d1b92d34474bd6153da1e8bd94968d3fca0519d30cf99198a",
+  "native_sha256": "c319ee0a3d4cbdcf06be2d7fa51a291713aa41b597fd00ac9922ab9d69889390",
+  "summary": {
+    "lines": {
+      "covered": 3371,
+      "missing": 0,
+      "total": 3371
+    },
+    "regions": {
+      "covered": 4778,
+      "missing": 0,
+      "total": 4778
+    }
+  },
+  "matrix": {
+    "case_attribution_complete": true,
+    "executed": 451,
+    "failed": 0,
+    "fault_contracts": {
+      "failed": 0,
+      "passed": 237,
+      "selected": 237
+    },
+    "infrastructure_failed": 0,
+    "manifest_case_count": 451,
+    "oracle_parity": {
+      "failed": 0,
+      "passed": 214,
+      "selected": 214
+    },
+    "passed": 451,
+    "scope": "complete",
+    "selected": 451,
+    "transient_infrastructure_failures": 0,
+    "verification_runs_required": 3
+  },
+  "repeats": [
+    {
+      "executed": 451,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 451,
+      "selected": 451
+    },
+    {
+      "executed": 451,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 451,
+      "selected": 451
+    },
+    {
+      "executed": 451,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 451,
+      "selected": 451
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.lifespan.receive-startup-type-set-item",
+      "profile": "lifespan-fault-receive-startup",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": [
+        "lifespan.startup-auto-fallback"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.receive.startup.type.set-item",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.lifespan.receive-channel-closed-auto-fallback",
+      "profile": "lifespan-fault-receive-startup",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": [
+        "lifespan.startup-auto-fallback"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.receive.channel-closed",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {
+        "followup_path": "/state"
+      }
+    }
+  ]
+}

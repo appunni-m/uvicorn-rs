@@ -1,0 +1,13 @@
+{
+  "status": "invalid_selector_no_measurement",
+  "request": {
+    "measurement": "build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/full-attempt-2/coverage-report.json",
+    "metric": "regions",
+    "limit": 100
+  },
+  "response": {
+    "isError": true,
+    "message": "limit must be between 1 and 20"
+  },
+  "resolution": "fresh unfiltered request with limit20 succeeded; no test execution"
+}

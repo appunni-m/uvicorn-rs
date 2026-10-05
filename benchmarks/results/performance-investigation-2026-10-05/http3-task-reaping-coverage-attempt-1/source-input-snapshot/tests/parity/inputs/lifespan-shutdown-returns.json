@@ -1,0 +1,17 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan.lifespan-shutdown-returns",
+      "profile": "lifespan-shutdown-returns",
+      "operation": "lifespan.shutdown-failure",
+      "covers": [
+        "lifespan.shutdown-failure"
+      ],
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1
+      }
+    }
+  ]
+}

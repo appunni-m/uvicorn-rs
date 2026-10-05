@@ -1,0 +1,5 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+ Documenting uvicorn-rs v0.1.0 (/Users/lazytrot/work/uvicorn-rs)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.65s
+   Generated /Users/lazytrot/work/uvicorn-rs/target/doc/uvicorn_rs/index.html

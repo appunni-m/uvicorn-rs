@@ -1,0 +1,73 @@
+Task exception was never retrieved
+future: <Task finished name='Task-3' coro=<UDPServer.run() done, defined at /Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/udp_server.py:45> exception=ExceptionGroup('unhandled errors in a TaskGroup', [RuntimeError('TaskGroup <TaskGroup tasks=6 cancelling> is shutting down'), KeyError(72)])>
+  + Exception Group Traceback (most recent call last):
+  |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/udp_server.py", line 51, in run
+  |     async with TaskGroup(self.loop) as task_group:
+  |                ^^^^^^^^^^^^^^^^^^^^
+  |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py", line 75, in __aexit__
+  |     await self._task_group.__aexit__(exc_type, exc_value, tb)
+  |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/taskgroups.py", line 71, in __aexit__
+  |     return await self._aexit(et, exc)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/taskgroups.py", line 164, in _aexit
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (2 sub-exceptions)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py", line 28, in _handle
+    |     await app(scope, receive, send, sync_spawn, call_soon)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/app_wrappers.py", line 34, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    |     await _http(scope, receive, send)
+    |   File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 37, in _http
+    |     await send(
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/http_stream.py", line 145, in app_send
+    |     await self.send(
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/h3.py", line 78, in stream_send
+    |     await self.send()
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/quic.py", line 113, in send_all
+    |     await connection.task.restart(
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/worker_context.py", line 15, in restart
+    |     async with self._lock:
+    |                ^^^^^^^^^^
+    |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/locks.py", line 14, in __aenter__
+    |     await self.acquire()
+    |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/locks.py", line 113, in acquire
+    |     await fut
+    | asyncio.exceptions.CancelledError
+    | 
+    | During handling of the above exception, another exception occurred:
+    | 
+    | Traceback (most recent call last):
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py", line 34, in _handle
+    |     await send(None)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/http_stream.py", line 139, in app_send
+    |     await self._send_error_response(500)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/http_stream.py", line 250, in _send_error_response
+    |     await self.send(
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/h3.py", line 78, in stream_send
+    |     await self.send()
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/quic.py", line 113, in send_all
+    |     await connection.task.restart(
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/worker_context.py", line 23, in restart
+    |     self._handle = task_group._task_group.create_task(action())  # type: ignore
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/taskgroups.py", line 182, in create_task
+    |     raise RuntimeError(f"TaskGroup {self!r} is shutting down")
+    | RuntimeError: TaskGroup <TaskGroup tasks=6 cancelling> is shutting down
+    +---------------- 2 ----------------
+    | Traceback (most recent call last):
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/udp_server.py", line 64, in run
+    |     await self.protocol.handle(event)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/quic.py", line 103, in handle
+    |     await self._handle_events(connection, event.address)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/quic.py", line 147, in _handle_events
+    |     await connection.h3.handle(event)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/h3.py", line 64, in handle
+    |     await self.streams[event.stream_id].handle(
+    |           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+    | KeyError: 72
+    +------------------------------------
+sys:1: RuntimeWarning: coroutine 'QuicProtocol._handle_timer' was never awaited
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback

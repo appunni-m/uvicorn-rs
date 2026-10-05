@@ -1,0 +1,29 @@
+{
+  "schema": "uvicorn-rs-repository-test-process-inventory@1",
+  "recorded_at": "2026-10-05T13:50:13.436917+00:00",
+  "status": "limited",
+  "read_only": true,
+  "repository": "/Users/lazytrot/work/uvicorn-rs",
+  "repository_test_processes": [],
+  "same_user_commandlines_unavailable_pids": [
+    639,
+    13575,
+    20144,
+    33965,
+    49990,
+    63441,
+    65795,
+    86710,
+    88253
+  ],
+  "same_user_processes_inspected": 487,
+  "closed_owned_sessions": [
+    43642,
+    92945,
+    11786,
+    34677,
+    97292
+  ],
+  "signals_sent": 0,
+  "servers_started": 0
+}

@@ -1,0 +1,41 @@
+usage: run_benchmark_categories.py [-h] [--python PYTHON]
+                                   [--output-dir OUTPUT_DIR]
+                                   [--duration DURATION] [--warmup WARMUP]
+                                   [--concurrency CONCURRENCY]
+                                   [--repetitions REPETITIONS] [--seed SEED]
+                                   [--category-timeout CATEGORY_TIMEOUT]
+                                   [--expected-source-sha256 EXPECTED_SOURCE_SHA256]
+                                   [--expected-native-sha256 EXPECTED_NATIVE_SHA256]
+                                   [--expected-public-cases EXPECTED_PUBLIC_CASES]
+                                   [--capture-identity CAPTURE_IDENTITY]
+                                   [--parity-before-identity PARITY_BEFORE_IDENTITY]
+                                   [--parity-report PARITY_REPORT]
+                                   [--skip-analysis]
+
+Run the maintained ASGI benchmark categories against stock live references.
+Build the normal server and Rust clients before invoking this wrapper. Capture
+an identity, run the complete public parity suite on that binary, then supply
+both artifacts. Every category runs sequentially and retains its original
+JSON, JSONL, server logs, and failure observations. No package is published.
+
+options:
+  -h, --help            show this help message and exit
+  --python PYTHON       checkout .venv/bin/python used by every maintained
+                        category
+  --output-dir OUTPUT_DIR
+  --duration DURATION
+  --warmup WARMUP
+  --concurrency CONCURRENCY
+  --repetitions REPETITIONS
+  --seed SEED
+  --category-timeout CATEGORY_TIMEOUT
+  --expected-source-sha256 EXPECTED_SOURCE_SHA256
+  --expected-native-sha256 EXPECTED_NATIVE_SHA256
+  --expected-public-cases EXPECTED_PUBLIC_CASES
+  --capture-identity CAPTURE_IDENTITY
+                        capture normal prebuilt identities before public
+                        parity; runs no benchmarks
+  --parity-before-identity PARITY_BEFORE_IDENTITY
+  --parity-report PARITY_REPORT
+  --skip-analysis       retain only category artifacts; default runs the pure-
+                        JSON analyzer

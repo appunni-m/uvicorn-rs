@@ -1,0 +1,13 @@
+PASS http1: http1.response-burst-backpressure-large-body
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/interned-names-2026-10-04/coverage-artifacts/f42402ed986f43ffb0bb1ba0fd43fbd7/cases/http1.response-burst-backpressure-large-body-3739f4864b/parity-result.json"
+}

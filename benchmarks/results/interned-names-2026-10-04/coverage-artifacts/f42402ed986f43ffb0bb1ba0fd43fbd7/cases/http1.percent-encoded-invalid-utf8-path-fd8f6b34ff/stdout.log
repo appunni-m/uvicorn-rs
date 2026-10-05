@@ -1,0 +1,13 @@
+PASS http1: http1.percent-encoded-invalid-utf8-path
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/interned-names-2026-10-04/coverage-artifacts/f42402ed986f43ffb0bb1ba0fd43fbd7/cases/http1.percent-encoded-invalid-utf8-path-fd8f6b34ff/parity-result.json"
+}

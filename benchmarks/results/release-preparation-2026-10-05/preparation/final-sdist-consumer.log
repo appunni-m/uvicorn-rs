@@ -1,0 +1,5 @@
+Processing ./target/release-final-sdist-consumer-2026-10-05/wheels/uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl
+Installing collected packages: uvicorn-rs
+Successfully installed uvicorn-rs-0.1.0
+{"status": "passed", "receipt": "/Users/lazytrot/work/uvicorn-rs/target/release-final-sdist-consumer-2026-10-05/consumer.json"}
+{"status": "passed", "receipt": "/Users/lazytrot/work/uvicorn-rs/target/release-final-sdist-consumer-2026-10-05/result.json"}

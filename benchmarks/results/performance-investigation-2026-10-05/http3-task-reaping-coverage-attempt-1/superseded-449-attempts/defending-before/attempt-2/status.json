@@ -1,0 +1,9 @@
+{
+  "status": "infrastructure_failed_before_case_execution",
+  "exit_code": 1,
+  "selected": 1,
+  "not_run": 1,
+  "infrastructure_failed": 1,
+  "reason": "could not find an available test port under sandboxed execution",
+  "behavioral_regression_proof": "not_executed"
+}

@@ -1,0 +1,151 @@
+{
+  "created_at": "2026-10-05T12:01:10.968870+00:00",
+  "derived_readme_updated_at": "2026-10-05T13:10:07.245191+00:00",
+  "files": {
+    "README.md": {
+      "byte_identical": null,
+      "bytes": 1583,
+      "kind": "derived analysis/documentation",
+      "original_path": null,
+      "sha256": "46bee0c24ae16203325e763c4bb06d9cfc18c6db1b6e9deceb74a625c387fa9b"
+    },
+    "c1-1s-warm0-20261005-a/report.jsonl": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c1-1s-warm0-20261005-a/report.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "c1-1s-warm0-20261005-a/report.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 67929,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c1-1s-warm0-20261005-a/report.jsonl.meta.json",
+      "sha256": "c0f32a0a33f1c730c9631732c0cf3987043ab747f9cb5e23d7dcd8ee16e71807"
+    },
+    "c1-1s-warm0-20261005-a/runner.log": {
+      "byte_identical": true,
+      "bytes": 1090,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c1-1s-warm0-20261005-a/runner.log",
+      "sha256": "9746fef9a015b3df973f3258e643029b0470ce20bc557646cccc4d207c715c3e"
+    },
+    "c1-1s-warm0-20261005-b/report.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c1-1s-warm0-20261005-b/report.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "c1-1s-warm0-20261005-b/report.json": {
+      "byte_identical": true,
+      "bytes": 156044,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c1-1s-warm0-20261005-b/report.json",
+      "sha256": "14dff3563a58b84b1b542e031cb37c7ccc7f86e29a43ca40cc10914581458fd6"
+    },
+    "c1-1s-warm0-20261005-b/report.jsonl": {
+      "byte_identical": true,
+      "bytes": 7274,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c1-1s-warm0-20261005-b/report.jsonl",
+      "sha256": "98553d75769fe9c6f06cd3ceb7523586a3eee9252baa61d6f38d8c4d2f8c0bb2"
+    },
+    "c1-1s-warm0-20261005-b/report.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 67929,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c1-1s-warm0-20261005-b/report.jsonl.meta.json",
+      "sha256": "740c04c4c921cce2d3afc38bf25f01a0e0a96100b918c4ec28178b903322521c"
+    },
+    "c1-1s-warm0-20261005-b/runner.log": {
+      "byte_identical": true,
+      "bytes": 7421,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c1-1s-warm0-20261005-b/runner.log",
+      "sha256": "0d94d1f33de7c3d88dac036bca9bebaf4e07ee70d8e0ba5456ea12147251e62a"
+    },
+    "c16-1s-warm0-20261005-a/report.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log": {
+      "byte_identical": true,
+      "bytes": 5781,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c16-1s-warm0-20261005-a/report.artifacts/protocol-scope-hypercorn-uvloop-repeat-1-server.log",
+      "sha256": "228182b01a26ec27ce7a27823f6b2bec067040b2f44cfdc8f50611131ed9d57b"
+    },
+    "c16-1s-warm0-20261005-a/report.jsonl": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c16-1s-warm0-20261005-a/report.jsonl",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "c16-1s-warm0-20261005-a/report.jsonl.meta.json": {
+      "byte_identical": true,
+      "bytes": 67930,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c16-1s-warm0-20261005-a/report.jsonl.meta.json",
+      "sha256": "7ef4bf6a72aa4a25445c51643b31f7d9f71bbc44bd8116081513c5cb9611e555"
+    },
+    "c16-1s-warm0-20261005-a/runner.log": {
+      "byte_identical": true,
+      "bytes": 1616,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-diagnostics/c16-1s-warm0-20261005-a/runner.log",
+      "sha256": "3b075f88a66679807968ec35a3c8a4fa5575eabaf6c494175381a82153137c79"
+    },
+    "summary.json": {
+      "byte_identical": null,
+      "bytes": 1850,
+      "kind": "derived analysis/documentation",
+      "original_path": null,
+      "sha256": "737f997a51bfad6605d527963b0e8536d2a3c10e2eb5fa5f6e7b66e24dc55c60"
+    }
+  },
+  "raw_copy_policy": "byte-identical originals and empty logs; original paths retained; no binaries",
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1",
+  "summary": [
+    {
+      "aioquic_version": "1.3.0",
+      "directory": "c1-1s-warm0-20261005-a",
+      "exception_group_contains_key_error_72": false,
+      "final_report_present": false,
+      "hypercorn_version": "0.18.0",
+      "key_error_72_terminal_events": 0,
+      "outcome": "infrastructure failure finding TCP/UDP port under sandbox; no server/load observation",
+      "server_log_files": 0,
+      "stock_dependency_record_checks_passed": true,
+      "uvloop_version": "0.23.0"
+    },
+    {
+      "aioquic_version": "1.3.0",
+      "directory": "c1-1s-warm0-20261005-b",
+      "exception_group_contains_key_error_72": false,
+      "failures": 0,
+      "final_report_present": true,
+      "hypercorn_version": "0.18.0",
+      "key_error_72_terminal_events": 0,
+      "outcome": "low-concurrency functional observation only",
+      "requests": 1974,
+      "server_lifecycle_gate": "passed",
+      "server_log_files": 1,
+      "stock_dependency_record_checks_passed": true,
+      "timing_invalid_reasons": [
+        "unrelated_host_cpu_activity"
+      ],
+      "timing_valid": false,
+      "uvloop_version": "0.23.0"
+    },
+    {
+      "aioquic_version": "1.3.0",
+      "directory": "c16-1s-warm0-20261005-a",
+      "exception_group_contains_key_error_72": true,
+      "final_report_present": false,
+      "hypercorn_version": "0.18.0",
+      "key_error_72_terminal_events": 1,
+      "outcome": "concurrency-16 client correctness timeout and stock Hypercorn UDP task ExceptionGroup containing KeyError(72)",
+      "server_log_files": 1,
+      "stock_dependency_record_checks_passed": true,
+      "uvloop_version": "0.23.0"
+    }
+  ]
+}

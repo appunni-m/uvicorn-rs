@@ -1,0 +1,8 @@
+{
+  "status": "prepared_not_executed",
+  "restore_and_capture": ".venv/bin/python build/asgi-coverage/normal-gates-held-response-451-2026-10-05/restore_normal_and_capture.py",
+  "public_gate": ".venv/bin/python scripts/run_parity.py --output build/asgi-coverage/normal-gates-held-response-451-2026-10-05/public-parity-result.json > build/asgi-coverage/normal-gates-held-response-451-2026-10-05/public-parity.log 2>&1",
+  "exclusion_audit": ".venv/bin/python build/asgi-coverage/normal-gates-held-response-451-2026-10-05/audit_normal.py audit > build/asgi-coverage/normal-gates-held-response-451-2026-10-05/exclusion-audit.log 2>&1",
+  "mcp_attach": ".venv/bin/python scripts/attach_coverage_mcp.py --report build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/full-attempt-2/coverage-report.json --receipt build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/full-attempt-2/coverage-mcp-pages.json",
+  "authorization": "local ASGI verification only; no benchmarks or unit tests; restore only after451/3/0/MCP complete proof"
+}

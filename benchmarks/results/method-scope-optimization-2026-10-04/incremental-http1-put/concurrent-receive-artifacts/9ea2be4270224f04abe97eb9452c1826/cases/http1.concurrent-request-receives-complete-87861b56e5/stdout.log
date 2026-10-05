@@ -1,0 +1,13 @@
+PASS http1: http1.concurrent-request-receives-complete
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/concurrent-receive-artifacts/9ea2be4270224f04abe97eb9452c1826/cases/http1.concurrent-request-receives-complete-87861b56e5/parity-result.json"
+}

@@ -5,7 +5,10 @@ __pycache__/
 *.dylib
 *.dll
 *.pyd
+*.profraw
+*.profdata
 target/
 /dist/
 /.pytest_cache/
 /build/
+/.coverage-mcp/

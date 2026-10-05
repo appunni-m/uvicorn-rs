@@ -6,8 +6,10 @@ window.
 
 The development environment that has been exercised is CPython 3.12.13 on
 macOS ARM64 with Rust 1.98.1. The manifests declare Python 3.9 or newer and
-Rust 1.83 or newer; those lower bounds have not been validated. Other versions
-and platforms are unverified. See the [ASGI support matrix](docs/support-matrix.md)
+Rust 1.85 or newer. Locked default and all-feature library checks pass locally
+on Rust 1.85.0. The actual macOS wheel also passes an installed-package
+HTTP/loop/context/lifespan/cancellation smoke on CPython 3.9.25. Hosted platform
+checks remain pending; this minimum-version smoke is separate from full protocol parity. See the [ASGI support matrix](docs/support-matrix.md)
 for behavioral evidence and known limits.
 
 For a reproducible problem, open a GitHub issue with the commit, operating

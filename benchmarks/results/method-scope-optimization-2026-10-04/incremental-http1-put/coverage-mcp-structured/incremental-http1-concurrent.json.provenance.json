@@ -1,0 +1,16 @@
+{
+  "context": {
+    "build_id": "4f30e39076a8204529ae60cbe773540bd2fbbd91f7d94e2aafa5b6e8110f66c0",
+    "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+    "report_sha256": "80a61f09a53db5839d3048b4a7b913e7d90239f5af7ffbac664f291cc687201f",
+    "scope": "selected_tests",
+    "source_hashes": {
+      "src/lib.rs": "9f2fc5513e93ce9acba8bc504c3f61a68b7acab5da613d22d6a7d954c9b984a3"
+    },
+    "test_status": "passed"
+  },
+  "projected_report_sha256": "80a61f09a53db5839d3048b4a7b913e7d90239f5af7ffbac664f291cc687201f",
+  "projection": "preserve LLVM source coverage details and unified region inventory; omit per-case attribution arrays for MCP ingestion size limit",
+  "source_report": "benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/concurrent-receive-measurement.json",
+  "source_report_sha256": "4a9133867b3166f984d68d0186c8ab67ef95f2ce0121ab587c5494ae569e5984"
+}

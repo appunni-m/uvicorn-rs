@@ -1,0 +1,38 @@
+{
+  "status": "regression_defended",
+  "case_id": "fault.http3.request-task-panic-after-response",
+  "before": {
+    "compiled_source_sha256": "f37a63045a58ac972c2037249225c1acb0c831aa5fdc977a27253e2ecd925bca",
+    "native_sha256": "1feabcc07ed92b7d1b5a4f185b6d9ba498d55372af5ef2447a8bcd1d97557aff",
+    "report": "build/asgi-coverage/before-post-response-task-reaping-2026-10-05/defending-case/parity-result.json",
+    "sha256": "8918f2a04ae207238eda246bc9ec4db689ecf88eb617a579b2498b669887ac55",
+    "summary": {
+      "executed": 1,
+      "failed": 1,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 0,
+      "selected": 1
+    },
+    "diagnostic_before_peer_close": false
+  },
+  "after": {
+    "compiled_source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+    "native_sha256": "41bf61b21be0443b5d1e02329e7ae2e6e893fe17a4b42e636e4367a5aca91cfe",
+    "report": "build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/defending-after/parity-result.json",
+    "sha256": "7258947786a23edc63c2ea57a13c7a1f363cc1133feffecc2eabd0befc80df4f",
+    "summary": {
+      "executed": 1,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 1,
+      "selected": 1
+    },
+    "diagnostic_before_peer_close": true
+  },
+  "same_frozen_manifest_and_inputs": true,
+  "equal_healthy_response_sequences": true,
+  "baseline_only_extra_source": "exact common coverage-only enum/key/post-handler seam; production deferred joins retained",
+  "before_profiles_merged_into_current_coverage": false
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan.state-shallow-copy-does-not-rehash-keys",
+      "profile": "lifespan-state-copy-rehash",
+      "operation": "lifespan.state-shallow-copy",
+      "covers": [
+        "lifespan.state-shallow-copy"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/state-copy-arm",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/state-copy-observe",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/state-copy-observe",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    }
+  ]
+}

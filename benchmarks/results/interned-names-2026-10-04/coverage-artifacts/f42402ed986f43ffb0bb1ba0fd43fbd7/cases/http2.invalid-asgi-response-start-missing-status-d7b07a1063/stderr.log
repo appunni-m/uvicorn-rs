@@ -1,0 +1,12 @@
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 493, in _app_impl
+    await send({"type": "http.response.start", "headers": []})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: response.start is missing 'status'
+

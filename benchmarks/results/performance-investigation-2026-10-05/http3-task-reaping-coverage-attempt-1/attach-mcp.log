@@ -1,0 +1,56 @@
+{
+  "report": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/coverage-report.json",
+  "coverage_mcp": {
+    "status": "measured",
+    "measurement_path": "build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/coverage-report.json",
+    "metric": "regions",
+    "source": "matches_receipt",
+    "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+    "build_id": "9f702bce3d4ba38404d83dbeee3dedfefeb9494086e87c56f3f1cb8f70b07e7b",
+    "tests": "failed",
+    "coverage": {
+      "covered": 4776,
+      "metric": "regions",
+      "missing": 2,
+      "total": 4778
+    },
+    "group_count": 1,
+    "groups": [
+      {
+        "file": "src/lib.rs",
+        "function": "uvicorn_rs::serve_http3_connection::{closure#0}",
+        "missing_observations": 2,
+        "sampled_locations": [
+          {
+            "span": [
+              3878,
+              20,
+              3878,
+              26
+            ],
+            "arm": null
+          },
+          {
+            "span": [
+              3878,
+              57,
+              3880,
+              6
+            ],
+            "arm": null
+          }
+        ],
+        "locations_omitted": 0,
+        "unmeasured_reason": null,
+        "sampled_region_ids": [
+          "fdac9a6e17346262b92cc7cc7c168fc3445f99051ad90f01b409a5ecba56d716",
+          "fdf8da4da29a23ef79041d0427e8b290ab6fc48b29d400e294f83a99b51b8399"
+        ]
+      }
+    ],
+    "location_samples_are_bounded": true,
+    "pages": 1,
+    "receipt_artifact": "build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/coverage-mcp-pages.json"
+  },
+  "receipt": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/coverage-report.json.context.json"
+}

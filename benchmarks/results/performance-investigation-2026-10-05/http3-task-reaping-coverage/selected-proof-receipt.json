@@ -1,0 +1,55 @@
+{
+  "status": "passed",
+  "case_id": "fault.http3.connection-accept-error-aborts-held-response",
+  "verification": "fault-contract; oracle not applicable",
+  "runner_exit_code": 0,
+  "summary": {
+    "executed": 1,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 1,
+    "selected": 1
+  },
+  "report": "build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/selected-attempt-3/parity-result.json",
+  "report_sha256": "26e9c9a45b1fd3ebf1682f6c39b0ba87c0ae044d51123fd00689f347810059c7",
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "native_sha256": "41bf61b21be0443b5d1e02329e7ae2e6e893fe17a4b42e636e4367a5aca91cfe",
+  "client_sha256": "1c61f24ec08d63d6bd58536f986d6b925118e66109978004da15cdeba710b206",
+  "manifest_sha256": "b39fb3780b08087e6e15dd075afc16b7890bed7b53a2465d8d1fe855912000b3",
+  "runner_sha256": "2355d870e80067e163ce3b82740050d7bd17382f5f8e171cac39dfb389877402",
+  "target_observation": {
+    "application_cleanup_before_followup": true,
+    "application_events": [
+      "response.reset.hold",
+      "response.reset.app-cancelled"
+    ],
+    "body_bytes": "Zmlyc3Qv",
+    "body_stream_error": true,
+    "connection_closed": true,
+    "connection_error_observed": true,
+    "content_type": "text/plain; charset=utf-8",
+    "diagnostics_ordered": true,
+    "early_body_bytes": "Zmlyc3Qv",
+    "fault_consumed": true,
+    "followup_response": {
+      "body_base64": "cmVhZHk=",
+      "connection_closed": false,
+      "content_type": "text/plain; charset=utf-8",
+      "status": 200,
+      "stream_reset": false
+    },
+    "peer_close_code": 258,
+    "request_task_cancellation_observed": true,
+    "response_incomplete": true,
+    "response_stream_started": true,
+    "server_log": "uvicorn-rs: connection task failed: tls handshake eof\nuvicorn-rs: HTTP/3 request task failed: task 17 was cancelled\nuvicorn-rs: HTTP/3 request task failed: task 20 was cancelled\nuvicorn-rs: HTTP/3 connection from 127.0.0.1:65050 failed: coverage-injected runtime error at Http3ConnectionAcceptError\n",
+    "status": 200,
+    "stream_reset": true,
+    "trigger_error": null,
+    "trigger_request_sent": true
+  },
+  "raw_profiles": [
+    "build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/selected-attempt-3/profiles/target/61865-13299137380863858081_0.profraw"
+  ]
+}

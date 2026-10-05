@@ -1,0 +1,289 @@
+{
+  "analysis_script_sha256": "261e3949ee27ed791e88b648eb9a47fb9d7e89f49cd02212439bc112a33585fb",
+  "arms": {
+    "after": {
+      "client_sha256": {
+        "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/target/release/bench": "0218921df7393e052f916d16f17547e4c394006cbc91f0cc842fa21871d19b9e"
+      },
+      "correct_response_and_shutdown_rows": 5,
+      "dirty_target": true,
+      "finished_at": "2026-10-05T11:54:43.190053+00:00",
+      "identity_stable": true,
+      "installed_dependencies_stable": true,
+      "native_extension": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so",
+        "sha256": "b11f1697a353b2361fa6019b6b654922ba237a2a04a1c22404d2d4adcbfd21e6"
+      },
+      "performance_evidence_status": "not_proven",
+      "report": "h3-task-reaping/after/h3-retention-after.json",
+      "report_sha256": "72f190720f5f128013db9e7b81c36347728143beb6683fe3e9de1fa64e5b4688",
+      "requests_completed_range": {
+        "max": 155671,
+        "min": 110204
+      },
+      "row_observations": [
+        {
+          "failures": 0,
+          "repetition": 1,
+          "requests": 110204,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 37.21875,
+          "timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "timing_valid": false,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        },
+        {
+          "failures": 0,
+          "repetition": 2,
+          "requests": 129505,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 33.015625,
+          "timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "timing_valid": false,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        },
+        {
+          "failures": 0,
+          "repetition": 3,
+          "requests": 126709,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 33.59375,
+          "timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "timing_valid": false,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        },
+        {
+          "failures": 0,
+          "repetition": 4,
+          "requests": 143723,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 32.75,
+          "timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "timing_valid": false,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        },
+        {
+          "failures": 0,
+          "repetition": 5,
+          "requests": 155671,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 30.9375,
+          "timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "timing_valid": false,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        }
+      ],
+      "rows": 5,
+      "rss_descriptive_all_correct_runs_mib": {
+        "count": 5,
+        "definition": "median/min/max of sampled process-tree peak RSS across every correct run, including timing-invalid runs; not a qualified speed metric",
+        "max": 37.21875,
+        "median": 33.015625,
+        "min": 30.9375
+      },
+      "runtime_diagnostics": false,
+      "source_sha256": "313fc3bc68e9eb89611033a924367a74d2d2dc6aa8cfed923c198d01f6f44c0a",
+      "started_at": "2026-10-05T11:54:09.496531+00:00",
+      "timing_invalid_reason_row_counts": {
+        "unrelated_host_cpu_activity": 5
+      },
+      "timing_invalid_rows": 5,
+      "timing_valid_repetitions": [],
+      "timing_valid_rows": 0
+    },
+    "before": {
+      "client_sha256": {
+        "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/target/release/bench": "0218921df7393e052f916d16f17547e4c394006cbc91f0cc842fa21871d19b9e"
+      },
+      "correct_response_and_shutdown_rows": 5,
+      "dirty_target": true,
+      "finished_at": "2026-10-05T11:52:06.666044+00:00",
+      "identity_stable": true,
+      "installed_dependencies_stable": true,
+      "native_extension": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so",
+        "sha256": "8f69afda0be9d121d304c674d5638f470da6939fbed58ce809457284df6585b6"
+      },
+      "performance_evidence_status": "not_proven",
+      "report": "h3-task-reaping/before/h3-retention-before.json",
+      "report_sha256": "0e17b041d1420574253325e40e9a28e82f8c14d854ea1ee0c7361ea8d9c0d0c2",
+      "requests_completed_range": {
+        "max": 151838,
+        "min": 112855
+      },
+      "row_observations": [
+        {
+          "failures": 0,
+          "repetition": 1,
+          "requests": 150605,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 630.90625,
+          "timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "timing_valid": false,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        },
+        {
+          "failures": 0,
+          "repetition": 2,
+          "requests": 151838,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 657.90625,
+          "timing_invalid_reasons": [],
+          "timing_valid": true,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        },
+        {
+          "failures": 0,
+          "repetition": 3,
+          "requests": 149848,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 614.328125,
+          "timing_invalid_reasons": [],
+          "timing_valid": true,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        },
+        {
+          "failures": 0,
+          "repetition": 4,
+          "requests": 112855,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 467.28125,
+          "timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "timing_valid": false,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        },
+        {
+          "failures": 0,
+          "repetition": 5,
+          "requests": 134655,
+          "server_lifecycle_gate": "passed",
+          "server_rss_peak_mib": 543.890625,
+          "timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "timing_valid": false,
+          "unexpected_native_errors": 0,
+          "unexpected_panic_events": 0
+        }
+      ],
+      "rows": 5,
+      "rss_descriptive_all_correct_runs_mib": {
+        "count": 5,
+        "definition": "median/min/max of sampled process-tree peak RSS across every correct run, including timing-invalid runs; not a qualified speed metric",
+        "max": 657.90625,
+        "median": 614.328125,
+        "min": 467.28125
+      },
+      "runtime_diagnostics": false,
+      "source_sha256": "81c239b5f596cf4be18cc71bc3b537c02224c0f1e1ab35174e6386f5203510cd",
+      "started_at": "2026-10-05T11:51:30.262477+00:00",
+      "timing_invalid_reason_row_counts": {
+        "unrelated_host_cpu_activity": 3
+      },
+      "timing_invalid_rows": 3,
+      "timing_valid_repetitions": [
+        2,
+        3
+      ],
+      "timing_valid_rows": 2
+    }
+  },
+  "changed_measured_source_files": [
+    "src/lib.rs"
+  ],
+  "configuration_equal_before_after": {
+    "concurrency": true,
+    "cpu_model": true,
+    "duration_seconds": true,
+    "h3_client": true,
+    "load_model": true,
+    "machine": true,
+    "platform": true,
+    "python": true,
+    "rustc": true,
+    "seed": true,
+    "servers": true,
+    "warmup_seconds": true,
+    "workload_concurrency": true,
+    "workloads": true
+  },
+  "limitations": [
+    "Target-only before/after memory diagnostic; no stock-reference performance comparison is present.",
+    "All before runs preceded all after runs; arms were not interleaved or randomized.",
+    "Fixed elapsed closed-loop windows completed differing request counts; this is not equal-work or fixed-offered-rate evidence.",
+    "RSS summaries include every correct run, including timing-invalid rows; host contention remains explicitly recorded.",
+    "RSS is sampled process-tree resident memory, not allocator live/peak bytes, PSS, private memory, or proof of a Python payload leak.",
+    "The source-level JoinSet ownership mechanism explains task-allocation retention, while the RSS measurements do not isolate allocator arenas or Python/native heap contributions.",
+    "No qualified throughput, latency, CPU gain, overall speedup, or statistical-significance claim is made.",
+    "Both arms are frozen dirty local normal-release builds, not release or published-package performance proof.",
+    "Clients, server and observer share the host; no open-loop test or coordinated-omission correction is available."
+  ],
+  "normal_release_build_receipts": {
+    "after": "../current-normal-h3-reaping/identity.json",
+    "before": "../current-normal/identity.json"
+  },
+  "recorded_configuration": {
+    "concurrency": 64,
+    "cpu_model": "Apple M3 Pro",
+    "duration_seconds": 5.0,
+    "h3_client": "Rust quinn/h3, up to four QUIC connections with multiplexed request streams distributed round-robin, full response-body equality; non-upload requests carry a 1-byte body for ASGI compatibility",
+    "load_model": "closed loop: each worker sends its next request after the previous complete response",
+    "machine": "arm64",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "python": "3.12.13",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "seed": 20261005,
+    "servers": {
+      "uvicorn-rs-uvloop": {
+        "kind": "rust",
+        "loop": "uvloop"
+      }
+    },
+    "warmup_seconds": 1.0,
+    "workload_concurrency": {
+      "protocol-scope": 64
+    },
+    "workloads": [
+      "protocol-scope"
+    ]
+  },
+  "same_client_binary": true,
+  "same_installed_dependencies": true,
+  "schema": "uvicorn-rs-h3-task-reaping-memory-diagnostic@1",
+  "source_mechanism": {
+    "after": "requests.join_next() is selected during acceptance; completed tasks are observed and reaped while connections remain open",
+    "before": "requests JoinSet joined only after acceptance ended; completed task allocations could remain owned during persistent connections",
+    "preserved_structure": "server cancellation remains the first biased branch, final request-task drain remains, and JoinError reporting is shared"
+  },
+  "speed_gate": {
+    "matching_valid_repetitions": [],
+    "qualified_matching_valid_speed_pairs": 0,
+    "qualified_speed_metrics": {},
+    "reason": "Before has two valid timing repetitions; after has none; no speed pair qualifies. Sequential before/after labels are not an interleaved stock-reference comparison.",
+    "required_matching_valid_repetitions": 3
+  },
+  "status": "descriptive_memory_observation_only_speed_not_proven"
+}

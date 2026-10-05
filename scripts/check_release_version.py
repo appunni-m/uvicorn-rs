@@ -1,67 +1,63 @@
 #!/usr/bin/env python3
-"""Check that Rust, Python, and lockfile versions agree with a release tag."""
+"""Check Rust, Python and both lockfiles against one candidate version."""
 
 from __future__ import annotations
 
+import argparse
+import json
+from pathlib import Path
 import re
 import sys
 import tomllib
-from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
+
+
+def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str, str]:
+    """Return synchronized versions, or reject missing/ambiguous metadata."""
+    documents = {
+        name: tomllib.loads((root / name).read_text(encoding="utf-8"))
+        for name in ("Cargo.toml", "pyproject.toml", "Cargo.lock", "uv.lock")
+    }
+    cargo = documents["Cargo.toml"]["package"]
+    python = documents["pyproject.toml"]["project"]
+    if cargo["name"] != "uvicorn-rs" or python["name"] != "uvicorn-rs":
+        raise ValueError("Cargo and Python package names must both be uvicorn-rs")
+    versions = {"Cargo.toml": cargo["version"], "pyproject.toml": python["version"]}
+    for name in ("Cargo.lock", "uv.lock"):
+        rows = [
+            package for package in documents[name]["package"]
+            if package["name"] in {"uvicorn-rs", "uvicorn_rs"}
+            and (name != "uv.lock" or package.get("source", {}).get("editable") == ".")
+        ]
+        if len(rows) != 1:
+            raise ValueError(f"{name}: expected one locked project entry, found {len(rows)}")
+        versions[name] = rows[0]["version"]
+    expected = expected if expected is not None else versions["Cargo.toml"]
+    if not isinstance(expected, str) or VERSION.fullmatch(expected) is None:
+        raise ValueError("version must use canonical MAJOR.MINOR.PATCH")
+    if any(version != expected for version in versions.values()):
+        details = ", ".join(f"{name}={version}" for name, version in versions.items())
+        raise ValueError(f"release version {expected} does not match project metadata: {details}")
+    return versions
 
 
 def main() -> int:
-    if len(sys.argv) not in {1, 2}:
-        print("usage: check_release_version.py [MAJOR.MINOR.PATCH]", file=sys.stderr)
-        return 2
-
-    expected = sys.argv[1] if len(sys.argv) == 2 else None
-    if expected is not None and re.fullmatch(r"\d+\.\d+\.\d+", expected) is None:
-        print("expected version must use MAJOR.MINOR.PATCH", file=sys.stderr)
-        return 2
-    cargo_manifest = tomllib.loads(Path("Cargo.toml").read_text())
-    python_manifest = tomllib.loads(Path("pyproject.toml").read_text())
-    cargo_lock = tomllib.loads(Path("Cargo.lock").read_text())
-    uv_lock = tomllib.loads(Path("uv.lock").read_text())
-
-    versions = {
-        "Cargo.toml": cargo_manifest["package"]["version"],
-        "pyproject.toml": python_manifest["project"]["version"],
-    }
-    for filename, data in (("Cargo.lock", cargo_lock), ("uv.lock", uv_lock)):
-        matches = [
-            package["version"]
-            for package in data["package"]
-            if package["name"] in {"uvicorn-rs", "uvicorn_rs"}
-            and (
-                filename != "uv.lock"
-                or package.get("source", {}).get("editable") == "."
-            )
-        ]
-        if len(matches) != 1:
-            print(
-                f"{filename}: expected one locked uvicorn-rs entry, "
-                f"found {len(matches)}",
-                file=sys.stderr,
-            )
-            return 1
-        versions[filename] = matches[0]
-
-    expected = expected or versions["Cargo.toml"]
-    mismatches = {
-        name: version for name, version in versions.items() if version != expected
-    }
-    if mismatches:
-        details = ", ".join(f"{name}={version}" for name, version in versions.items())
-        print(
-            f"release version {expected} does not match project metadata: {details}",
-            file=sys.stderr,
-        )
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("version", nargs="?")
+    parser.add_argument("--root", type=Path, default=ROOT)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+    try:
+        versions = project_versions(args.root, args.version)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print(f"release version: {error}", file=sys.stderr)
         return 1
-
-    print(
-        f"release version {expected} matches Cargo.toml, pyproject.toml, "
-        "Cargo.lock, and uv.lock"
-    )
+    if args.json:
+        print(json.dumps({"version": versions["Cargo.toml"], "sources": versions}, sort_keys=True))
+    else:
+        print(f"release version {versions['Cargo.toml']} matches Cargo.toml, pyproject.toml, Cargo.lock, and uv.lock")
     return 0
 
 

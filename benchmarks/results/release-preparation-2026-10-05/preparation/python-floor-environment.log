@@ -1,0 +1,5 @@
+Downloading cpython-3.9.25-macos-aarch64-none (download) (17.6MiB)
+ Downloaded cpython-3.9.25-macos-aarch64-none (download)
+Using CPython 3.9.25
+Creating virtual environment at: target/release-python39-consumer-2026-10-05
+Activate with: source target/release-python39-consumer-2026-10-05/bin/activate

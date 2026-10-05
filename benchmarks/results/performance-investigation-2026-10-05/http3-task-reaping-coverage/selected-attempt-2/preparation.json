@@ -1,0 +1,14 @@
+{
+  "prepared_at": "2026-10-05T13:11:31.735779+00:00",
+  "case_id": "fault.http3.connection-accept-error-aborts-held-response",
+  "files": {
+    "src/lib.rs": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+    "python/uvicorn_rs/_native.abi3.so": "41bf61b21be0443b5d1e02329e7ae2e6e893fe17a4b42e636e4367a5aca91cfe",
+    "scripts/run_parity.py": "2355d870e80067e163ce3b82740050d7bd17382f5f8e171cac39dfb389877402",
+    "tools/http3-probe/src/bin/parity-http3.rs": "fa26b560195f4176fab91fc39ac09ca26bc819754b643c8b5d812a73b4cc6eec",
+    "tools/http3-probe/target/release/parity-http3": "1c61f24ec08d63d6bd58536f986d6b925118e66109978004da15cdeba710b206",
+    "tests/parity/manifest.json": "b39fb3780b08087e6e15dd075afc16b7890bed7b53a2465d8d1fe855912000b3",
+    "tests/parity/inputs/http3.json": "9294800e7417b8f192751b4a198d73ebfe69344a1ac1a382eb3827ac6bdc166c",
+    "tests/parity/app.py": "2f57fcbecbb20d85bfee25069518cbce5d7b84ef28adc8c410421ad5cedb6a33"
+  }
+}

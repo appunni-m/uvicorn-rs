@@ -16,91 +16,159 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_TOOLCHAIN: "1.98.1"
+  MSRV_TOOLCHAIN: "1.85.0"
   PYTHON_VERSION: "3.12.13"
-  # Last Python 3.12 patch with official macOS ARM64 and Windows binaries.
   WHEEL_PYTHON_VERSION: "3.12.10"
+  UV_VERSION: "0.11.29"
+  MATURIN_VERSION: "1.14.1"
+  RUSTC_WRAPPER: ""
+  RUSTC_WORKSPACE_WRAPPER: ""
+  RUSTFLAGS: ""
+  CARGO_ENCODED_RUSTFLAGS: ""
 
 jobs:
   rust:
-    name: Rust checks (ASGI behavior is gated by live parity)
-    runs-on: ubuntu-latest
+    name: Rust formatting, lints, feature builds and documentation
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed stable action
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: rustfmt, clippy
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Run Clippy
-        run: cargo clippy --all-targets --all-features --locked -- -D warnings
-      - name: Compile and run Rust test targets
-        run: cargo test --all-targets --all-features --locked
+      - name: Check formatting and lints
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features --locked -- -D warnings
+          cargo fmt --manifest-path tools/http3-probe/Cargo.toml --all -- --check
+          cargo clippy --manifest-path tools/http3-probe/Cargo.toml --all-targets --all-features --locked -- -D warnings
+      - name: Compile feature modes (behavior is checked through live ASGI cases)
+        run: |
+          cargo check --lib --locked
+          cargo check --lib --no-default-features --locked
+          cargo check --lib --all-features --locked
+          cargo check --manifest-path tools/http3-probe/Cargo.toml --bins --locked
       - name: Build Rust API documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc -p uvicorn-rs --no-deps --locked
-      - name: Check HTTP/3 probe formatting
-        run: cargo fmt --manifest-path tools/http3-probe/Cargo.toml --all -- --check
-      - name: Lint HTTP/3 probe
-        run: cargo clippy --manifest-path tools/http3-probe/Cargo.toml --all-targets --all-features --locked -- -D warnings
-      - name: Test HTTP/3 probe
-        run: cargo test --manifest-path tools/http3-probe/Cargo.toml --all-targets --all-features --locked
+        run: cargo doc -p uvicorn-rs --all-features --no-deps --locked
+
+  msrv:
+    name: Compile the exact Rust minimum
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed stable action
+        with:
+          toolchain: ${{ env.MSRV_TOOLCHAIN }}
+      - run: |
+          cargo check --lib --locked
+          cargo check --lib --no-default-features --locked
+          cargo check --lib --all-features --locked
 
   python-package:
-    name: Live ASGI parity and Python package checks
-    runs-on: ubuntu-latest
+    name: Complete public parity on the installed normal wheel
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
+          version: ${{ env.UV_VERSION }}
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - name: Build the editable project environment
-        run: uv sync --python $PYTHON_VERSION --group benchmark --frozen
-      - name: Check CLI import and help
-        run: uv run uvicorn-rs --help
-      - name: Validate parity matrix and evidence accounting
-        run: uv run python -m unittest discover -s tests -p 'test_parity_*.py'
-      - name: Run live ASGI source/target parity (behavior correctness gate)
+      - name: Build and install normal wheel into stock reference environment
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
+          uv sync --python "$PYTHON_VERSION" --group benchmark --frozen --no-install-project
+          uvx --from "maturin==$MATURIN_VERSION" maturin build --release --locked --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" --out target/normal-wheels
+          wheels=(target/normal-wheels/*.whl)
+          test "${#wheels[@]}" -eq 1
+          uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
+          .venv/bin/python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output target/asgi-parity/wheel-consumer.json
+      - name: Execute complete current public input matrix
+        shell: bash
+        run: |
+          set -euo pipefail
           mkdir -p target/asgi-parity
-          uv run --group benchmark python scripts/run_parity.py \
-            --output target/asgi-parity/result.json 2>&1 \
-            | tee target/asgi-parity/run.log
-      - name: Summarize ASGI parity failures
+          .venv/bin/python scripts/run_parity.py --output target/asgi-parity/result.json 2>&1 | tee target/asgi-parity/run.log
+          .venv/bin/python scripts/check_ci_evidence.py parity target/asgi-parity/result.json
+      - name: Verify normal fault-seam exclusion with existing public cases
+        run: .venv/bin/python scripts/audit_normal_build.py --output-dir target/normal-audit
+      - name: Summarize public parity
         if: always()
         run: python scripts/summarize_parity_result.py target/asgi-parity/result.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: asgi-parity-${{ github.run_id }}
-          path: target/asgi-parity/
-          if-no-files-found: warn
-          retention-days: 30
-      - name: Probe HTTP and ASGI callable behavior
-        run: uv run python scripts/probe_http.py
-      - name: Probe HTTP/2 and HTTP/3
-        run: uv run python scripts/probe_http2.py
-      - name: Probe request and response streaming
-        run: uv run python scripts/probe_streaming.py
-      - name: Probe WebSockets
-        run: uv run python scripts/probe_websocket.py
-      - name: Probe cancellation and disconnect
-        run: uv run python scripts/probe_cancellation.py
-      - name: Probe lifespan and shutdown
-        run: uv run python scripts/probe_lifespan.py
+          name: uvicorn-rs-public-parity
+          path: |
+            target/asgi-parity/
+            target/normal-audit/
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+  unified-coverage:
+    name: All parity and fault contracts, 100% native regions and lines
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: llvm-tools-preview
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Install locked references and pinned coverage tools
+        run: |
+          uv sync --python "$PYTHON_VERSION" --group benchmark --frozen
+          cargo install cargo-llvm-cov --version 0.8.7 --locked
+      - name: Attribute every indexed case and repeat the complete matrix three times
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/asgi-coverage
+          .venv/bin/python scripts/run_unified_coverage.py \
+            --output target/asgi-coverage/coverage-report.json \
+            --artifacts-dir target/asgi-coverage/artifacts \
+            --matrix-repeats 3 --case-infra-retries 0 --matrix-infra-retries 0 \
+            2>&1 | tee target/asgi-coverage/run.log
+          .venv/bin/python scripts/check_ci_evidence.py coverage target/asgi-coverage/coverage-report.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: uvicorn-rs-unified-coverage
+          path: |
+            target/asgi-coverage/coverage-report.json
+            target/asgi-coverage/coverage-report.json.context.json
+            target/asgi-coverage/run.log
+            target/asgi-coverage/artifacts/
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
 
   release-candidate:
-    name: Build and smoke-test ${{ matrix.platform }} artifacts
+    name: Build and verify ${{ matrix.platform }} package artifacts
+    needs: [rust, msrv, python-package, unified-coverage]
     strategy:
       fail-fast: false
       matrix:
@@ -112,7 +180,7 @@ jobs:
           - os: windows-2022
             platform: windows-x86_64
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -120,27 +188,91 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.WHEEL_PYTHON_VERSION }}
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - name: Install pinned Maturin build frontend
-        run: python -m pip install --disable-pip-version-check --no-input maturin==1.14.0
-      - name: Verify package and lockfile versions
-        run: python scripts/check_release_version.py
-      - name: Build the abi3 wheel
-        run: maturin build --release --locked --interpreter python --out dist
-      - name: Install and smoke-test the built wheel
+      - name: Install pinned build frontend and verify metadata
+        run: |
+          python -m pip install --disable-pip-version-check --no-input maturin==${{ env.MATURIN_VERSION }}
+          python scripts/check_release_version.py
+      - name: Build abi3 wheel and install the exact artifact
         shell: bash
         run: |
-          python -m pip install --disable-pip-version-check --no-input --no-deps --no-index --find-links dist "uvicorn-rs==0.1.0"
-          python -c 'import uvicorn_rs; import uvicorn_rs._native; print(uvicorn_rs.__file__)'
-          uvicorn-rs --help
-      - name: Build the source distribution
+          set -euo pipefail
+          maturin build --release --locked --interpreter python --out dist
+          wheels=(dist/*.whl)
+          test "${#wheels[@]}" -eq 1
+          python -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
+          python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
+      - name: Build source distribution
         if: runner.os == 'Linux'
         run: maturin sdist --out dist
+      - name: Rebuild extracted source archive and consume its wheel
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdists=(dist/*.tar.gz)
+          test "${#sdists[@]}" -eq 1
+          python scripts/check_sdist_build.py --sdist "${sdists[0]}" --output-dir target/sdist-consumer
+          cp target/sdist-consumer/result.json dist/consumer-sdist.json
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        if: runner.os == 'Linux'
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Run complete public parity on the exact Linux candidate wheel
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --python "$WHEEL_PYTHON_VERSION" --group benchmark --frozen --no-install-project
+          wheels=(dist/*.whl)
+          test "${#wheels[@]}" -eq 1
+          uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
+          .venv/bin/python scripts/run_parity.py --output dist/parity-linux-x86_64.json
+          .venv/bin/python scripts/check_ci_evidence.py parity dist/parity-linux-x86_64.json
+      - name: Record source, build, license and artifact identities
+        run: >-
+          python scripts/release_evidence.py record --directory dist
+          --platform ${{ matrix.platform }} --commit "${{ github.sha }}"
+          --output dist/build-manifest-${{ matrix.platform }}.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: uvicorn-rs-candidate-${{ matrix.platform }}
-          path: dist/*
+          path: dist/
           if-no-files-found: error
           retention-days: 90
+          overwrite: true
+
+  python-floor:
+    name: Install abi3 wheel on the declared Python floor
+    needs: release-candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.9.25"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: uvicorn-rs-candidate-linux-x86_64
+          path: target/python-floor
+      - name: Check the exact installed wheel with Python 3.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheels=(target/python-floor/*.whl)
+          test "${#wheels[@]}" -eq 1
+          python -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
+          python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output target/python-floor/consumer-python39.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: uvicorn-rs-python-floor
+          path: target/python-floor/consumer-python39.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true

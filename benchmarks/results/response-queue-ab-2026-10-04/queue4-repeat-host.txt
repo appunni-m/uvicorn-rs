@@ -1,0 +1,23 @@
+2026-10-04 12:39:08 IST
+12:39  up 33 days, 18:33, 8 users, load averages: 2.77 5.33 5.74
+Load Avg: 2.77, 5.33, 5.74 
+CPU usage: 2.64% user, 8.27% sys, 89.8% idle 
+PhysMem: 17G used (2624M wired, 5228M compressor), 133M unused.
+Load Avg: 2.77, 5.33, 5.74 
+CPU usage: 2.78% user, 2.25% sys, 94.95% idle 
+PhysMem: 17G used (2623M wired, 5227M compressor), 125M unused.
+Load Avg: 2.54, 5.24, 5.70 
+CPU usage: 2.13% user, 4.11% sys, 93.75% idle 
+PhysMem: 17G used (2623M wired, 5227M compressor), 140M unused.
+94737  61.4 06-18:21:32 /System/Library/ExtensionKit/Extensions/Storage.appex/Contents/MacOS/Storage
+ 3105   7.9 20-16:06:31 /opt/homebrew/share/android-commandlinetools/emulator/qemu/darwin-aarch64/qemu-system-aarch64-headless -avd BusinessGateProbeModern -port 5576 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -memory 2048
+  340   4.8 33-18:32:37 /usr/libexec/diskarbitrationd
+84227   4.0 02-21:33:10 /Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex -c features.code_mode_host=true app-server --analytics-default-enabled -c plugins.codex-app-tools@openai-bundled.mcp_servers.codex_app.enabled=true -c plugins.code-review@openai-bundled.mcp_servers.code-review.enabled=true
+  596   3.2 33-18:32:33 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder
+60621   1.7 20-18:55:57 /opt/homebrew/share/android-commandlinetools/emulator/netsimd --host-dns=1.1.1.1,192.168.0.1
+83782   1.2 02-21:33:16 /Applications/ChatGPT.app/Contents/MacOS/ChatGPT
+83837   0.9 02-21:33:14 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/154.0.8037.57/Helpers/Codex (Service).app/Contents/MacOS/Codex (Service) --type=gpu-process --gpu-recent-crash-count=0 --user-data-dir=/Users/lazytrot/Library/Application Support/Codex --start-stack-profiler --gpu-preferences=WAAAAAAAAAAgAQAEAAAAAAAAAAAAAGAAQAAAAAAAAAADAAAAAAAAADgAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAKAAAAAAAAAAoAAAAAAAAAAgAAAAAAAAADAAAAAEAAAAAAAAAAAAAAAgAAAAAAAAACAAAAAAAAAA= --shared-files --metrics-shmem-handle=1752395122,r,6432532781167159990,6492265890656107774,262144 --field-trial-handle=1718379636,r,18326511316614741036,16206643389470874056,262144 --enable-features=DevToolsWebMCPSupport,ReportStuckThrottle --disable-features=DropInputEventsWhilePaintHolding,WebUIOmniboxAimPopup,WebUIOmniboxPopup --variations-seed-version --pseudonymization-salt-handle=1935764596,r,8799938763423584351,3627596669039669808,4 --trace-process-track-uuid=3190708988185955192 --seatbelt-client=46
+77994   0.7 01-02:06:18 /Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/154.0.8037.57/Helpers/Codex (Renderer).app/Contents/MacOS/Codex (Renderer) --type=renderer --user-data-dir=/Users/lazytrot/Library/Application Support/Codex --standard-schemes=app,codex-sandbox --service-worker-schemes=codex-sandbox --secure-schemes=app,codex-sandbox --fetch-schemes=app,codex-sandbox --cors-schemes=codex-sandbox --streaming-schemes=app,codex-sandbox --owl-scoped-user-agent-additional-hosts=openai.com,chatgpt.com,chatgpt.site,chatgpt-team.site --owl-scoped-user-agent-prefix=CodexBrowser --enable-blink-features=WebMCP --disable-blink-features=ReplacedNormalFlowStackingInlinePaint --lang=en-GB --num-raster-threads=4 --enable-zero-copy --enable-gpu-memory-buffer-compositor-resources --enable-main-frame-before-activation --renderer-client-id=5 --launch-time-ticks=2781051393231 --shared-files --metrics-shmem-handle=1752395122,r,2383945832715102255,13282181945565245884,1572864 --field-trial-handle=1718379636,r,18326511316614741036,16206643389470874056,262144 --enable-features=DevToolsWebMCPSupport,ReportStuckThrottle --disable-features=DropInputEventsWhilePaintHolding,WebUIOmniboxAimPopup,WebUIOmniboxPopup --variations-seed-version --pseudonymization-salt-handle=1935764596,r,8799938763423584351,3627596669039669808,4 --trace-process-track-uuid=3190708990997080739 --seatbelt-client=271
+  490   0.7 33-18:32:36 /System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext/com.apple.DriverKit-AppleBCMWLAN com.apple.bcmwlan 0x100000c8a com.apple.DriverKit-AppleBCMWLAN
+    1   0.7 33-18:33:01 /sbin/launchd
+37827   0.6 32-08:27:09 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor

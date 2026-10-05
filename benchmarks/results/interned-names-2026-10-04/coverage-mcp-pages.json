@@ -1,0 +1,1478 @@
+[
+  {
+    "context": {
+      "checkout_path": "/Users/lazytrot/work/uvicorn-rs",
+      "repo_key": "/Users/lazytrot/work/uvicorn-rs",
+      "schema_revision": 18,
+      "suite": null
+    },
+    "data": {
+      "group_count": 49,
+      "groups": [
+        {
+          "count": 12,
+          "function": "uvicorn_rs::serve_hyper_connection::<tokio_rustls::server::TlsStream<uvicorn_rs::ConnectionIo<tokio::net::tcp::stream::TcpStream>>>::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2805,
+                43,
+                2805,
+                44
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2807,
+                13,
+                2807,
+                23
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2807,
+                24,
+                2807,
+                30
+              ]
+            }
+          ],
+          "locations_omitted": 9,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 11,
+          "function": "<uvicorn_rs::LifespanRuntime>::start::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1930,
+                85,
+                1930,
+                86
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1971,
+                32,
+                1971,
+                37
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1972,
+                29,
+                1972,
+                43
+              ]
+            }
+          ],
+          "locations_omitted": 8,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 10,
+          "function": "<uvicorn_rs::AsgiIo>::receive",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1194,
+                17,
+                1194,
+                18
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1205,
+                13,
+                1205,
+                28
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1205,
+                29,
+                1205,
+                51
+              ]
+            }
+          ],
+          "locations_omitted": 7,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 10,
+          "function": "<uvicorn_rs::AsgiBody>::poll_app_task",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2274,
+                32,
+                2274,
+                49
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2283,
+                19,
+                2283,
+                24
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2284,
+                13,
+                2284,
+                36
+              ]
+            }
+          ],
+          "locations_omitted": 7,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 10,
+          "function": "uvicorn_rs::serve_http3_connection::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2890,
+                81,
+                2890,
+                82
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2896,
+                48,
+                2896,
+                49
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2902,
+                13,
+                2902,
+                18
+              ]
+            }
+          ],
+          "locations_omitted": 7,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 10,
+          "function": "uvicorn_rs::handle_websocket_request_inner::{closure#0}::{closure#3}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3504,
+                32,
+                3504,
+                37
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3512,
+                29,
+                3514,
+                22
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3516,
+                21,
+                3516,
+                26
+              ]
+            }
+          ],
+          "locations_omitted": 7,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 8,
+          "function": "uvicorn_rs::serve_http3::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2831,
+                54,
+                2831,
+                59
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2871,
+                9,
+                2871,
+                20
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2871,
+                21,
+                2871,
+                30
+              ]
+            }
+          ],
+          "locations_omitted": 5,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 6,
+          "function": "<uvicorn_rs::LifespanRuntime>::shutdown::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2048,
+                25,
+                2048,
+                30
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2048,
+                35,
+                2048,
+                110
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2060,
+                20,
+                2060,
+                25
+              ]
+            }
+          ],
+          "locations_omitted": 3,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 6,
+          "function": "uvicorn_rs::serve_forever::{closure#0}::{closure#8}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2610,
+                87,
+                2610,
+                88
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2616,
+                87,
+                2616,
+                88
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2628,
+                33,
+                2628,
+                39
+              ]
+            }
+          ],
+          "locations_omitted": 3,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 6,
+          "function": "uvicorn_rs::serve_forever::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2709,
+                9,
+                2709,
+                36
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2710,
+                15,
+                2710,
+                42
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2710,
+                43,
+                2710,
+                48
+              ]
+            }
+          ],
+          "locations_omitted": 3,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 6,
+          "function": "uvicorn_rs::handle_http3_request::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2936,
+                61,
+                2936,
+                62
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2967,
+                18,
+                2967,
+                19
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2969,
+                52,
+                2969,
+                53
+              ]
+            }
+          ],
+          "locations_omitted": 3,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 6,
+          "function": "uvicorn_rs::pump_h3_request_body::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2989,
+                13,
+                2989,
+                19
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2993,
+                70,
+                2993,
+                76
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3002,
+                21,
+                3002,
+                29
+              ]
+            }
+          ],
+          "locations_omitted": 3,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 5,
+          "function": "uvicorn_rs::handle_websocket_request_inner::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3425,
+                54,
+                3425,
+                55
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3458,
+                43,
+                3458,
+                44
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3463,
+                48,
+                3463,
+                49
+              ]
+            }
+          ],
+          "locations_omitted": 2,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 4,
+          "function": "uvicorn_rs::pump_http_request_body::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2158,
+                86,
+                2158,
+                92
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2166,
+                21,
+                2166,
+                22
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2187,
+                78,
+                2187,
+                84
+              ]
+            }
+          ],
+          "locations_omitted": 1,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 4,
+          "function": "uvicorn_rs::handle_request_parts::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3214,
+                58,
+                3214,
+                59
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3218,
+                54,
+                3218,
+                55
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3237,
+                54,
+                3237,
+                55
+              ]
+            }
+          ],
+          "locations_omitted": 1,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        }
+      ],
+      "measurement": {
+        "build_id": "fa200475cd834ca0fafde623c2b5c5478ea36585dbef00e902fb95dc4f97074c",
+        "coverage": {
+          "covered": 3842,
+          "metric": "regions",
+          "missing": 156,
+          "total": 3998
+        },
+        "format": "llvm",
+        "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+        "ref": "benchmarks/results/interned-names-2026-10-04/coverage-report.compact.json",
+        "source": "matches_receipt",
+        "tests": "failed"
+      },
+      "next_action": "Use rg and bounded file reads at these locations; test references are not coverage attribution.",
+      "next_offset": 15,
+      "ranking": "missing observations, then source location",
+      "status": "measured",
+      "warnings": [
+        "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+      ],
+      "warnings_omitted": 0
+    },
+    "page": null
+  },
+  {
+    "context": {
+      "checkout_path": "/Users/lazytrot/work/uvicorn-rs",
+      "repo_key": "/Users/lazytrot/work/uvicorn-rs",
+      "schema_revision": 18,
+      "suite": null
+    },
+    "data": {
+      "group_count": 49,
+      "groups": [
+        {
+          "count": 3,
+          "function": "<uvicorn_rs::PythonTaskFuture as core::ops::drop::Drop>::drop::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1014,
+                29,
+                1014,
+                48
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1014,
+                49,
+                1014,
+                51
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1018,
+                17,
+                1018,
+                18
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 3,
+          "function": "<uvicorn_rs::LifespanRuntime>::start::{closure#0}::{closure#5}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1972,
+                49,
+                1972,
+                54
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1972,
+                55,
+                1972,
+                60
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1972,
+                61,
+                1972,
+                63
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 3,
+          "function": "uvicorn_rs::handle_request_inner::{closure#0}::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3102,
+                30,
+                3102,
+                38
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3102,
+                39,
+                3102,
+                44
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3102,
+                49,
+                3102,
+                57
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 3,
+          "function": "uvicorn_rs::drive_websocket::<hyper_util::rt::tokio::TokioIo<hyper::upgrade::Upgraded>>::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3632,
+                71,
+                3632,
+                72
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3722,
+                67,
+                3722,
+                68
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3730,
+                9,
+                3730,
+                10
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "uvicorn_rs::cancel_python_task::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1030,
+                13,
+                1030,
+                19
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1038,
+                13,
+                1038,
+                19
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "<uvicorn_rs::AsgiIo>::receive::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1218,
+                27,
+                1218,
+                31
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1227,
+                25,
+                1227,
+                26
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "uvicorn_rs::poison_websocket_handshake_mutex::<core::option::Option<tokio::sync::oneshot::Sender<uvicorn_rs::WebSocketHandshake>>>::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1706,
+                13,
+                1706,
+                14
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1707,
+                9,
+                1707,
+                10
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "<uvicorn_rs::LifespanRuntime>::start::{closure#0}::{closure#2}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1900,
+                14,
+                1900,
+                15
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                1923,
+                77,
+                1923,
+                78
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "<uvicorn_rs::AsgiBody as http_body::Body>::poll_frame",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2363,
+                21,
+                2363,
+                45
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2364,
+                21,
+                2364,
+                38
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "<uvicorn_rs::AsgiBody as http_body::Body>::is_end_stream",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2372,
+                57,
+                2372,
+                80
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2372,
+                81,
+                2372,
+                88
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "uvicorn_rs::load_tls_configs::{closure#6}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2467,
+                21,
+                2467,
+                42
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2467,
+                43,
+                2467,
+                50
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "uvicorn_rs::serve_forever::{closure#0}::{closure#5}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2700,
+                28,
+                2700,
+                33
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2700,
+                44,
+                2702,
+                18
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "uvicorn_rs::serve_http3::{closure#0}::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2863,
+                24,
+                2863,
+                29
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2863,
+                40,
+                2865,
+                14
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "uvicorn_rs::serve_http3_connection::{closure#0}::{closure#2}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2918,
+                24,
+                2918,
+                29
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                2918,
+                40,
+                2920,
+                14
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 2,
+          "function": "uvicorn_rs::handle_request_parts::{closure#0}::{closure#1}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3154,
+                10,
+                3154,
+                11
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3168,
+                65,
+                3168,
+                66
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        }
+      ],
+      "measurement": {
+        "build_id": "fa200475cd834ca0fafde623c2b5c5478ea36585dbef00e902fb95dc4f97074c",
+        "coverage": {
+          "covered": 3842,
+          "metric": "regions",
+          "missing": 156,
+          "total": 3998
+        },
+        "format": "llvm",
+        "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+        "ref": "benchmarks/results/interned-names-2026-10-04/coverage-report.compact.json",
+        "source": "matches_receipt",
+        "tests": "failed"
+      },
+      "next_action": "Use rg and bounded file reads at these locations; test references are not coverage attribution.",
+      "next_offset": 30,
+      "ranking": "missing observations, then source location",
+      "status": "measured",
+      "warnings": [
+        "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+      ],
+      "warnings_omitted": 0
+    },
+    "page": null
+  },
+  {
+    "context": {
+      "checkout_path": "/Users/lazytrot/work/uvicorn-rs",
+      "repo_key": "/Users/lazytrot/work/uvicorn-rs",
+      "schema_revision": 18,
+      "suite": null
+    },
+    "data": {
+      "group_count": 49,
+      "groups": [
+        {
+          "count": 2,
+          "function": "uvicorn_rs::handle_websocket_request_inner::{closure#0}::{closure#2}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3394,
+                43,
+                3394,
+                44
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3407,
+                11,
+                3407,
+                12
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "<uvicorn_rs::PythonTaskFuture as core::ops::drop::Drop>::drop",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1023,
+                9,
+                1023,
+                10
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "<uvicorn_rs::AsgiIo>::__pymethod_receive__",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1162,
+                12,
+                1162,
+                13
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "<uvicorn_rs::WebSocketIo>::__pymethod_receive__",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1397,
+                12,
+                1397,
+                13
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "uvicorn_rs::discard_websocket_handshake_sender::<tokio::sync::oneshot::Sender<uvicorn_rs::WebSocketHandshake>>",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1716,
+                9,
+                1716,
+                10
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "<uvicorn_rs::LifespanIo>::__pymethod_receive__",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1768,
+                12,
+                1768,
+                13
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "<uvicorn_rs::LifespanIo>::receive::{closure#0}::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1778,
+                32,
+                1778,
+                50
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "<uvicorn_rs::LifespanIo>::receive::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1778,
+                83,
+                1778,
+                84
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "<uvicorn_rs::LifespanRuntime>::start::{closure#0}::{closure#3}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                1930,
+                26,
+                1930,
+                44
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "<uvicorn_rs::ServerControl>::__pymethod_shutdown__",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2081,
+                12,
+                2081,
+                13
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "uvicorn_rs::wait_for_connection_close::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2205,
+                9,
+                2205,
+                15
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "uvicorn_rs::serve",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2409,
+                68,
+                2409,
+                69
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "uvicorn_rs::load_tls_configs",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2468,
+                10,
+                2468,
+                11
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "uvicorn_rs::serve_forever::{closure#0}::{closure#9}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2647,
+                29,
+                2647,
+                30
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "uvicorn_rs::serve_connection::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2771,
+                59,
+                2771,
+                65
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        }
+      ],
+      "measurement": {
+        "build_id": "fa200475cd834ca0fafde623c2b5c5478ea36585dbef00e902fb95dc4f97074c",
+        "coverage": {
+          "covered": 3842,
+          "metric": "regions",
+          "missing": 156,
+          "total": 3998
+        },
+        "format": "llvm",
+        "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+        "ref": "benchmarks/results/interned-names-2026-10-04/coverage-report.compact.json",
+        "source": "matches_receipt",
+        "tests": "failed"
+      },
+      "next_action": "Use rg and bounded file reads at these locations; test references are not coverage attribution.",
+      "next_offset": 45,
+      "ranking": "missing observations, then source location",
+      "status": "measured",
+      "warnings": [
+        "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+      ],
+      "warnings_omitted": 0
+    },
+    "page": null
+  },
+  {
+    "context": {
+      "checkout_path": "/Users/lazytrot/work/uvicorn-rs",
+      "repo_key": "/Users/lazytrot/work/uvicorn-rs",
+      "schema_revision": 18,
+      "suite": null
+    },
+    "data": {
+      "group_count": 49,
+      "groups": [
+        {
+          "count": 1,
+          "function": "uvicorn_rs::serve_hyper_connection::<uvicorn_rs::ConnectionIo<tokio::net::tcp::stream::TcpStream>>::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                2809,
+                23,
+                2809,
+                24
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "uvicorn_rs::handle_request_inner::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3102,
+                58,
+                3102,
+                59
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "uvicorn_rs::build_websocket_scope",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3762,
+                39,
+                3762,
+                40
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        },
+        {
+          "count": 1,
+          "function": "uvicorn_rs::_native",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                4070,
+                60,
+                4070,
+                61
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        }
+      ],
+      "measurement": {
+        "build_id": "fa200475cd834ca0fafde623c2b5c5478ea36585dbef00e902fb95dc4f97074c",
+        "coverage": {
+          "covered": 3842,
+          "metric": "regions",
+          "missing": 156,
+          "total": 3998
+        },
+        "format": "llvm",
+        "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+        "ref": "benchmarks/results/interned-names-2026-10-04/coverage-report.compact.json",
+        "source": "matches_receipt",
+        "tests": "failed"
+      },
+      "next_action": "Use rg and bounded file reads at these locations; test references are not coverage attribution.",
+      "next_offset": null,
+      "ranking": "missing observations, then source location",
+      "status": "measured",
+      "warnings": [
+        "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+      ],
+      "warnings_omitted": 0
+    },
+    "page": null
+  }
+]

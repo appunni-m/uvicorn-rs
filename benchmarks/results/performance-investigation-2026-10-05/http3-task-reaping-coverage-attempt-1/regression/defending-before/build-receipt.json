@@ -1,0 +1,30 @@
+{
+  "schema": "uvicorn-rs-regression/isolated-build@1",
+  "status": "passed",
+  "command": [
+    "cargo",
+    "build",
+    "--locked",
+    "--manifest-path",
+    "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/before-post-response-task-reaping-2026-10-05/source/Cargo.toml",
+    "--release",
+    "--lib"
+  ],
+  "started_at": "2026-10-05T12:19:48.249476+00:00",
+  "finished_at": "2026-10-05T12:19:55.269077+00:00",
+  "exit_code": 0,
+  "source_sha256": "f37a63045a58ac972c2037249225c1acb0c831aa5fdc977a27253e2ecd925bca",
+  "normal_behavior": "source81 deferred joins plus exact three current coverage-only seams",
+  "installed": false,
+  "build_log_sha256": "79cdd2e42989fd4fa708228ec7981496f00dceb9b313bf67c04a88de63bc950a",
+  "environment_overrides": {
+    "CARGO_TARGET_DIR": "/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage",
+    "RUSTC_WRAPPER": "/Users/lazytrot/.cargo/bin/cargo-llvm-cov",
+    "RUSTC_WORKSPACE_WRAPPER": "",
+    "RUSTFLAGS": "-C link-arg=-undefined -C link-arg=dynamic_lookup",
+    "__CARGO_LLVM_COV_RUSTC_WRAPPER_RUSTFLAGS": "-C\u001finstrument-coverage\u001f--cfg=coverage",
+    "__CARGO_LLVM_COV_RUSTC_WRAPPER_CRATE_NAMES": "uvicorn_rs"
+  },
+  "native_sha256": "1feabcc07ed92b7d1b5a4f185b6d9ba498d55372af5ef2447a8bcd1d97557aff",
+  "native_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/before-post-response-task-reaping-2026-10-05/native/_native.abi3.so"
+}

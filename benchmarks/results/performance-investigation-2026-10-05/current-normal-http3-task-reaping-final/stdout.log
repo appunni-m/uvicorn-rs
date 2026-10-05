@@ -1,0 +1,15 @@
+PASS http1: http1.scope-query-header-and-body
+PASS http1: support.http1.response-header-capacity-error-recovers
+PASS websocket: support.websocket.accept-header-capacity-error-recovers
+{
+  "status": "completed",
+  "summary": {
+    "selected": 3,
+    "executed": 3,
+    "passed": 3,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/parity-result.json"
+}

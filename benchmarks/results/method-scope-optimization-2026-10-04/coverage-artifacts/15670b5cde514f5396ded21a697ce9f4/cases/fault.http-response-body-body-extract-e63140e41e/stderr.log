@@ -1,0 +1,16 @@
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 635, in _app_impl
+    await send({"type": "http.response.body", "body": chunk, "more_body": True})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at HttpResponseBodyBodyExtract
+uvicorn-rs: connection task failed: error from user's Body stream
+

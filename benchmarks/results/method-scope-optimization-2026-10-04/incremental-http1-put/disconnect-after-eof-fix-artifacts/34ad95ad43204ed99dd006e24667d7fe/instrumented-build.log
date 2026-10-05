@@ -1,0 +1,28 @@
+   Compiling pyo3-ffi v0.29.3
+   Compiling pyo3 v0.29.3
+   Compiling pyo3-async-runtimes v0.29.0
+   Compiling uvicorn-rs v0.1.0 (/Users/lazytrot/work/uvicorn-rs)
+error[E0063]: missing fields `active_http_requests` and `read_eof_waker` in initializer of `ConnectionContext`
+    --> src/lib.rs:2930:23
+     |
+2930 |         let context = ConnectionContext {
+     |                       ^^^^^^^^^^^^^^^^^ missing `active_http_requests` and `read_eof_waker`
+
+error[E0063]: missing fields `active_http_requests` and `read_eof_waker` in initializer of `ConnectionContext`
+    --> src/lib.rs:2769:19
+     |
+2769 |     let context = ConnectionContext {
+     |                   ^^^^^^^^^^^^^^^^^ missing `active_http_requests` and `read_eof_waker`
+
+For more information about this error, try `rustc --explain E0063`.
+error: process didn't exit successfully: `/Users/lazytrot/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc --crate-name uvicorn_rs --edition=2021 src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type cdylib --crate-type rlib --emit=dep-info,link -C opt-level=3 -C embed-bitcode=no --forbid=unsafe_code --warn=unexpected_cfgs '--deny=clippy::correctness' '--warn=clippy::all' --check-cfg 'cfg(coverage)' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("runtime-diagnostics"))' -C metadata=a8dd295e1bc1c177 --out-dir /Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps -C strip=debuginfo -L dependency=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps --extern bytes=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libbytes-b8e7dcebab780c6c.rlib --extern futures_util=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libfutures_util-c0ebcf3ffcad12fb.rlib --extern h3=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libh3-259679d27957d259.rlib --extern h3_quinn=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libh3_quinn-b9541c7c173e9b2f.rlib --extern http=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libhttp-46a743490a9f5024.rlib --extern http_body=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libhttp_body-e2ab9b6af34a4c05.rlib --extern http_body_util=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libhttp_body_util-8c989afd28b9398d.rlib --extern hyper=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libhyper-94c0951727f7bd20.rlib --extern hyper_util=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libhyper_util-e976ca4818699086.rlib --extern percent_encoding=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libpercent_encoding-7a0112322f95ea99.rlib --extern pyo3=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libpyo3-c3a9b2c4d45b7f7c.rlib --extern pyo3_async_runtimes=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libpyo3_async_runtimes-521764d26a76d9bf.rlib --extern quinn=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libquinn-5c8c842214d8a8b0.rlib --extern rustls_pemfile=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/librustls_pemfile-bd75252504afea1c.rlib --extern tokio=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libtokio-b87b46526525e869.rlib --extern tokio_rustls=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libtokio_rustls-8619521b2d427f81.rlib --extern tokio_tungstenite=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libtokio_tungstenite-210394dcd9326391.rlib --extern tokio_util=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/deps/libtokio_util-b9ef15d9efab7498.rlib -C link-arg=-undefined -C link-arg=dynamic_lookup -L native=/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/release/build/ring-f4fa75b6259dd29c/out -C instrument-coverage --cfg=coverage` (exit status: 1)
+error: could not compile `uvicorn-rs` (lib) due to 2 previous errors
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/build_coverage_extension.py", line 63, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/build_coverage_extension.py", line 38, in main
+    subprocess.run(
+  File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['cargo', 'build', '--manifest-path', 'Cargo.toml', '--release', '--lib']' returned non-zero exit status 101.

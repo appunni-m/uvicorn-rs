@@ -1,0 +1,37 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.http1.server-listener-accept-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.listener.accept-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.http1.server-local-address-inspection-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.listener.local-addr-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    }
+  ]
+}

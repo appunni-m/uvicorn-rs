@@ -1,0 +1,105 @@
+{
+  "status": "failed_full_matrix_and_incomplete_region_coverage",
+  "report_sha256": "4dd1a7bcedaf33a133eec1a014b7cdb643dd9e61d3453c7d26e6f1c355870950",
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "native_sha256": "41bf61b21be0443b5d1e02329e7ae2e6e893fe17a4b42e636e4367a5aca91cfe",
+  "attribution_passed": 450,
+  "retries": 0,
+  "coverage": {
+    "lines": {
+      "covered": 3369,
+      "missing": 2,
+      "total": 3371
+    },
+    "regions": {
+      "covered": 4776,
+      "missing": 2,
+      "total": 4778
+    }
+  },
+  "coverage_mcp": {
+    "build_id": "9f702bce3d4ba38404d83dbeee3dedfefeb9494086e87c56f3f1cb8f70b07e7b",
+    "coverage": {
+      "covered": 4776,
+      "metric": "regions",
+      "missing": 2,
+      "total": 4778
+    },
+    "group_count": 1,
+    "groups": [
+      {
+        "file": "src/lib.rs",
+        "function": "uvicorn_rs::serve_http3_connection::{closure#0}",
+        "locations_omitted": 0,
+        "missing_observations": 2,
+        "sampled_locations": [
+          {
+            "arm": null,
+            "span": [
+              3878,
+              20,
+              3878,
+              26
+            ]
+          },
+          {
+            "arm": null,
+            "span": [
+              3878,
+              57,
+              3880,
+              6
+            ]
+          }
+        ],
+        "sampled_region_ids": [
+          "fdac9a6e17346262b92cc7cc7c168fc3445f99051ad90f01b409a5ecba56d716",
+          "fdf8da4da29a23ef79041d0427e8b290ab6fc48b29d400e294f83a99b51b8399"
+        ],
+        "unmeasured_reason": null
+      }
+    ],
+    "location_samples_are_bounded": true,
+    "measurement_path": "build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/coverage-report.json",
+    "metric": "regions",
+    "pages": 1,
+    "receipt_artifact": "build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/coverage-mcp-pages.json",
+    "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+    "source": "matches_receipt",
+    "status": "measured",
+    "tests": "failed"
+  },
+  "repeat_summaries": [
+    {
+      "executed": 404,
+      "failed": 0,
+      "infrastructure_failed": 1,
+      "not_run": 46,
+      "passed": 403,
+      "selected": 450
+    },
+    {
+      "executed": 404,
+      "failed": 0,
+      "infrastructure_failed": 1,
+      "not_run": 46,
+      "passed": 403,
+      "selected": 450
+    },
+    {
+      "executed": 404,
+      "failed": 0,
+      "infrastructure_failed": 2,
+      "not_run": 46,
+      "passed": 402,
+      "selected": 450
+    }
+  ],
+  "reason": [
+    "allindividualcasespassed;fullH3oracle128sequencetimeoutthreeofthree",
+    "additionalUvicornWS-TLShandshaketimeoutrepeat3",
+    "ownedfinaldrainregion2missingafterlivereaping"
+  ],
+  "normal_restored": false,
+  "next_action": "coordinate maintainedinput/probe/setuprepairthenfreshfullcoverage"
+}

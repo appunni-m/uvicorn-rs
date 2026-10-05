@@ -1,0 +1,15 @@
+{
+  "schema": "uvicorn-rs-normal-gate-recapture@1",
+  "status": "normal_native_unchanged_client_restored_identity_captured",
+  "prior_restore_receipt": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/restore-receipt.json",
+  "prior_restore_receipt_sha256": "e8fb526a8036aa7f3307b810a6106874a155a975bcc84cfb0c2b5d74e9bc46db",
+  "prior_identity_invalid_receipt": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/identity-invalid-receipt.json",
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "installed_normal_sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "normal_reinstalled": false,
+  "client_sha256": "1c61f24ec08d63d6bd58536f986d6b925118e66109978004da15cdeba710b206",
+  "corrective_client_build": "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bin parity-http3",
+  "corrective_client_build_log_sha256": "db073818ee343e803727ffd505942b2c27966062c682b273fe90a689e93185e6",
+  "root_benchmark_files_changed": false,
+  "portable_identity_sha256": "a57597e1f3f0fd529e1d4442e6f00463edc26f1f31c6c41c1b59b2684d98196d"
+}

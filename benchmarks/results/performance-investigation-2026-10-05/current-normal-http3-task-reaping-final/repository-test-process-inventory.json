@@ -1,0 +1,114 @@
+{
+  "schema": "uvicorn-rs-repository-test-process-inventory@1",
+  "recorded_at": "2026-10-05T13:50:13.436917+00:00",
+  "status": "passed",
+  "read_only": true,
+  "repository": "/Users/lazytrot/work/uvicorn-rs",
+  "repository_test_processes": [],
+  "same_user_commandlines_unavailable_pids": [],
+  "same_user_processes_inspected": 487,
+  "closed_owned_sessions": [
+    43642,
+    92945,
+    11786,
+    34677,
+    97292
+  ],
+  "signals_sent": 0,
+  "servers_started": 0,
+  "resolved_at": "2026-10-05T13:52:20.756770+00:00",
+  "commandlines_unavailable_non_test_processes": [
+    {
+      "pid": 639,
+      "status": "sleeping",
+      "process_name": "login",
+      "cwd_available": false,
+      "repository_cwd": false,
+      "exe_available": true,
+      "repository_executable": false,
+      "possible_test_runtime": false
+    },
+    {
+      "pid": 13575,
+      "status": "sleeping",
+      "process_name": "login",
+      "cwd_available": false,
+      "repository_cwd": false,
+      "exe_available": true,
+      "repository_executable": false,
+      "possible_test_runtime": false
+    },
+    {
+      "pid": 20144,
+      "status": "sleeping",
+      "process_name": "login",
+      "cwd_available": false,
+      "repository_cwd": false,
+      "exe_available": true,
+      "repository_executable": false,
+      "possible_test_runtime": false
+    },
+    {
+      "pid": 33965,
+      "status": "sleeping",
+      "process_name": "login",
+      "cwd_available": false,
+      "repository_cwd": false,
+      "exe_available": true,
+      "repository_executable": false,
+      "possible_test_runtime": false
+    },
+    {
+      "pid": 49990,
+      "status": "sleeping",
+      "process_name": "login",
+      "cwd_available": false,
+      "repository_cwd": false,
+      "exe_available": true,
+      "repository_executable": false,
+      "possible_test_runtime": false
+    },
+    {
+      "pid": 63441,
+      "status": "sleeping",
+      "process_name": "login",
+      "cwd_available": false,
+      "repository_cwd": false,
+      "exe_available": true,
+      "repository_executable": false,
+      "possible_test_runtime": false
+    },
+    {
+      "pid": 65795,
+      "status": "sleeping",
+      "process_name": "login",
+      "cwd_available": false,
+      "repository_cwd": false,
+      "exe_available": true,
+      "repository_executable": false,
+      "possible_test_runtime": false
+    },
+    {
+      "pid": 86710,
+      "status": "sleeping",
+      "process_name": "login",
+      "cwd_available": false,
+      "repository_cwd": false,
+      "exe_available": true,
+      "repository_executable": false,
+      "possible_test_runtime": false
+    },
+    {
+      "pid": 88253,
+      "status": "sleeping",
+      "process_name": "login",
+      "cwd_available": false,
+      "repository_cwd": false,
+      "exe_available": true,
+      "repository_executable": false,
+      "possible_test_runtime": false
+    }
+  ],
+  "unresolved_process_count": 0,
+  "resolution": "All9 unavailable commandlines were sleeping login wrappers with verified available executable identities outside the repository; no test runtime. Original limited inventory and read-only resolution receipts retained."
+}

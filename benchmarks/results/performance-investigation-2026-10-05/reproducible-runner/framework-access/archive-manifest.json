@@ -1,0 +1,12 @@
+{
+  "receipt.json": {
+    "sha256": "819f039e866b90f915ecc84d59f2cf8eca2e853e52974823a9d51797997f532e",
+    "bytes": 365,
+    "original": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/framework-ci-access/receipt.json"
+  },
+  "run.log": {
+    "sha256": "4cf09cc49322706b0592f1b5550cb583447bca4930a3e38073e057c2f483d37e",
+    "bytes": 123,
+    "original": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/framework-ci-access/run.log"
+  }
+}

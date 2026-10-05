@@ -1,0 +1,10 @@
+{
+  "status": "preparation_failed_before_full_execution",
+  "causes": [
+    "systempython lacks h2; sourcefreeze not created",
+    "configured sccache denied before Cargo clean executed"
+  ],
+  "full_cases_executed": 0,
+  "native_changed": false,
+  "remedy": "project .venv interpreter and explicit empty RUSTC_WRAPPER/RUSTC_WORKSPACE_WRAPPER"
+}

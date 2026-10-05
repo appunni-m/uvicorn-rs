@@ -1,0 +1,6 @@
+{
+  "status": "not_executed_review_capacity_failure",
+  "cause": "Automatic approval review failed: Selected model is at capacity; review not completed, action not executed; not unsafe-action determination.",
+  "full_cases_executed": 0,
+  "native_rebuilt": false
+}

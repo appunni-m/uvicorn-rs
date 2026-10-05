@@ -1,0 +1,12 @@
+{
+  "status": "failed",
+  "summary": {
+    "selected": 2,
+    "executed": 0,
+    "passed": 0,
+    "failed": 0,
+    "not_run": 2,
+    "infrastructure_failed": 1
+  },
+  "result": "build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-true-result.json"
+}

@@ -1,0 +1,54 @@
+{
+  "findings": [
+    {
+      "code": "dirty_worktree",
+      "line": 1,
+      "message": "The worktree has 3594 changed or untracked entries; do not publish with --allow-dirty.",
+      "path": ".",
+      "severity": "error"
+    },
+    {
+      "code": "no_publishable_package",
+      "line": 1,
+      "message": "No publishable workspace package was selected for registry crates-io.",
+      "path": "Cargo.toml",
+      "severity": "error"
+    },
+    {
+      "code": "automated_publish_missing",
+      "line": 1,
+      "message": "No GitHub workflow containing `cargo publish` was detected; verify the documented manual release path.",
+      "path": ".github/workflows",
+      "severity": "review"
+    }
+  ],
+  "inventory": {
+    "expected_version": "0.1.0",
+    "git": {
+      "dirty_entries": 3594,
+      "head": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+      "repository": true,
+      "tags_at_head": []
+    },
+    "manifest": "Cargo.toml",
+    "packages": [],
+    "registry": "crates-io",
+    "root": "/Users/lazytrot/work/uvicorn-rs",
+    "workflows": {
+      "external_action_uses": 28,
+      "files": [
+        ".github/workflows/benchmark-categories.yml",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml"
+      ],
+      "release_workflows": []
+    },
+    "workspace_root": "."
+  },
+  "schema_version": 1,
+  "summary": {
+    "errors": 2,
+    "info": 0,
+    "review": 1
+  }
+}

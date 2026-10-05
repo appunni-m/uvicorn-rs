@@ -1,0 +1,14 @@
+{
+  "status": "exact_common_cfg_seam_prepared_not_built",
+  "base_source_sha256": "81c239b5f596cf4be18cc71bc3b537c02224c0f1e1ab35174e6386f5203510cd",
+  "current_source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "baseline_source_sha256": "f37a63045a58ac972c2037249225c1acb0c831aa5fdc977a27253e2ecd925bca",
+  "patch_sha256": "e17846ef8d936871baf813c52ac9b837e234c3ef489a8a6850be459ec2f64afe",
+  "production_delta_allowed": false,
+  "seams": [
+    "CoverageFaultPoint enum variant",
+    "CoverageFaultPoint key match arm",
+    "post-handler cfg(coverage) hook"
+  ],
+  "native_installed": false
+}

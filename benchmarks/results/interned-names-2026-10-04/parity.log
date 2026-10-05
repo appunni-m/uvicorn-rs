@@ -1,0 +1,527 @@
+PASS http1: http1.scope-query-header-and-body
+PASS http1: http1.absolute-form-target-preserves-raw-headers
+PASS http1: http1.sync-callable-returns-awaitable
+PASS http1: http1.response-stream-order
+PASS http1: http1.response-first-chunk-before-app-completion
+PASS http1: http1.response-reset-after-first-streamed-chunk
+PASS http1: http1.response-reset-cancels-held-application
+PASS http1: http1.request-upload-stream
+PASS http1: http1.request-streaming-progress-before-upload-complete
+PASS http1: http1.application-error
+PASS http1: http1.synchronous-callable-error-before-awaitable
+PASS http1: http1.receive-call-rejects-positional-argument
+PASS http1: http1.application-status-404
+PASS http1: http1.client-disconnect-event
+PASS http1: http1.disconnect-after-response-start-send-error
+PASS http1: http1.post-empty-body
+PASS http1: http1.request-trailers-after-streamed-upload
+PASS http1: http1.asgi-event-type-string-subclass
+PASS http1: http1.invalid-asgi-missing-event-type
+PASS http1: http1.invalid-asgi-unknown-event-type
+PASS http1: http1.invalid-asgi-body-before-start
+PASS http1: http1.response-burst-backpressure
+PASS http1: http1.response-burst-backpressure-large-body
+PASS http1: http1.response-before-upload-drained
+PASS http1: http1.scope-encoded-path-and-query
+PASS http1: http1.response-body-fields-default-empty
+PASS http1: http1.invalid-response-header-name
+PASS http1: http1.invalid-response-header-value
+PASS http1: http1.invalid-asgi-event-type-is-not-string
+PASS http1: http1.invalid-asgi-response-start-missing-status
+PASS http1: http1.invalid-asgi-response-status-range
+PASS http1: http1.invalid-asgi-response-status-type
+PASS http1: http1.invalid-asgi-response-headers-container
+PASS http1: http1.invalid-asgi-response-body-type
+PASS http1: http1.duplicate-response-start
+PASS http1: http1.response-start-then-app-error
+PASS http1: http1.response-body-incomplete
+PASS http1: http1.final-body-then-app-error
+PASS http1: http1.request-body-drained-after-early-response
+PASS http1: http1.disconnect-is-repeatable
+PASS http1: http1.disconnect-remains-repeatable-after-repeated-receive
+PASS http1: http1.wrong-context-websocket-accept-event
+PASS http1: http1.wrong-context-websocket-close-event
+PASS http1: http1.wrong-context-websocket-send-event
+PASS http1: http1.wrong-context-lifespan-startup-complete-event
+PASS http1: http1.wrong-context-lifespan-startup-failed-event
+PASS http1: http1.wrong-context-lifespan-shutdown-complete-event
+PASS http1: http1.wrong-context-lifespan-shutdown-failed-event
+PASS http1: http1.upload-remains-after-one-asgi-receive
+PASS http1: http1.upload-remains-unread-after-early-response
+PASS http1: http1.app-returns-before-response-start
+PASS http1: http1.percent-encoded-invalid-utf8-path
+PASS http1: http1.connection-upgrade-token-without-upgrade
+PASS http1: http1.websocket-upgrade-without-connection-token
+PASS http1: http1.websocket-upgrade-with-whitespace-token
+PASS http1: http1.websocket-upgrade-missing-key
+PASS http1: http1.websocket-upgrade-invalid-key
+PASS http1: http1.websocket-upgrade-key-incorrect-padding
+PASS http1: http1.websocket-upgrade-key-excess-padding
+PASS http1: http1.websocket-upgrade-key-discontinuous-padding
+PASS http1: http1.websocket-upgrade-key-missing-padding
+PASS http1: http1.websocket-upgrade-key-excess-canonical-padding
+PASS http1: http1.websocket-upgrade-key-wrong-decoded-size
+PASS http1: http1.websocket-upgrade-key-valid-single-padding-wrong-size
+PASS http1: http1.websocket-upgrade-missing-version
+PASS http1: http1.websocket-upgrade-wrong-version
+PASS http1: http1.websocket-upgrade-empty-version
+PASS http1: http1.websocket-upgrade-empty-key
+PASS http1: http1.websocket-upgrade-duplicate-key
+PASS http1: http1.persistent-connection-two-requests
+PASS http1: http1.head-streamed-response-suppresses-body
+PASS http1: http1.no-content-status-with-empty-body
+PASS http1: http1.scope-reports-http-1-0
+PASS http1: http1.scope-http-1-0-without-host-header
+PASS http1: http1.disconnect-before-request-body
+PASS http1: http1.reset-during-incomplete-request-body
+PASS http1: http1.malformed-chunk-body-becomes-asgi-disconnect
+--- uvicorn server log ---
+e: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'websocket.send'.
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'lifespan.startup.complete'.
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'lifespan.startup.failed'.
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'lifespan.shutdown.complete'.
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'lifespan.shutdown.failed'.
+ERROR:    ASGI callable returned without starting response.
+ERROR:    Cancel 1 running task(s), timeout graceful shutdown exceeded
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 659, in _app_impl
+    await asyncio.Event().wait()
+  File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/locks.py", line 212, in wait
+    await fut
+asyncio.exceptions.CancelledError: Task cancelled, timeout graceful shutdown exceeded
+
+--- uvicorn-rs server log ---
+ File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 484, in _app_impl
+    await send({"type": "http.response.body", "body": "not-bytes", "more_body": False})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+TypeError: 'str' object is not an instance of 'bytes | bytearray'
+uvicorn-rs: connection task failed: error from user's Body stream
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 470, in _app_impl
+    await send({"type": "http.response.start", "status": 201, "headers": []})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+RuntimeError: ASGI app sent response.start more than once
+uvicorn-rs: connection task failed: error from user's Body stream
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 475, in _app_impl
+    raise RuntimeError("parity response-start exception sentinel")
+RuntimeError: parity response-start exception sentinel
+uvicorn-rs: connection task failed: error from user's Body stream
+uvicorn-rs: connection task failed: error from user's Body stream
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 490, in _app_impl
+    raise RuntimeError("parity final-body exception sentinel")
+RuntimeError: parity final-body exception sentinel
+uvicorn-rs: ASGI app completed without response.start
+uvicorn-rs: ASGI app completed without response.start
+uvicorn-rs: connection task failed: error writing a body to connection
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: unsupported ASGI HTTP event: websocket.accept
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: unsupported ASGI HTTP event: websocket.close
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: unsupported ASGI HTTP event: websocket.send
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: unsupported ASGI HTTP event: lifespan.startup.complete
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: unsupported ASGI HTTP event: lifespan.startup.failed
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: unsupported ASGI HTTP event: lifespan.shutdown.complete
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: unsupported ASGI HTTP event: lifespan.shutdown.failed
+uvicorn-rs: ASGI app completed without response.start
+uvicorn-rs: ASGI app completed without response.start
+uvicorn-rs: ASGI app completed without response.start
+uvicorn-rs: connection task failed: error writing a body to connection
+uvicorn-rs: ASGI app completed without response.start
+
+PASS http1-tls: http1-tls.scope-reports-https
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+
+PASS http2: http2.scope-query-header-and-body
+PASS http2: http2.response-stream-order
+PASS http2: http2.response-first-chunk-before-app-completion
+PASS http2: http2.response-stream-reset-cancels-app
+PASS http2: http2.request-upload-stream
+PASS http2: http2.request-streaming-progress-before-upload-complete
+PASS http2: http2.request-trailers-after-streamed-upload
+PASS http2: http2.asgi-event-type-string-subclass
+PASS http2: http2.response-burst-backpressure
+PASS http2: http2.invalid-asgi-event-type-is-not-string
+PASS http2: http2.invalid-asgi-response-start-missing-status
+PASS http2: http2.application-error-before-response-start
+PASS http2: http2.scope-preserves-duplicate-headers
+PASS http2: http2.scope-host-fallback-without-authority
+PASS http2: http2.app-returns-before-response-start
+PASS http2: http2.upload-abandoned-by-early-app-return
+PASS http2: http2.no-content-status-with-empty-body
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 439, in _app_impl
+    await send({"type": 42})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+TypeError: 'int' object is not an instance of 'str'
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 493, in _app_impl
+    await send({"type": "http.response.start", "headers": []})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: response.start is missing 'status'
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 665, in _app_impl
+    raise RuntimeError("parity exception sentinel")
+RuntimeError: parity exception sentinel
+uvicorn-rs: ASGI app completed without response.start
+uvicorn-rs: ASGI app completed without response.start
+
+PASS http3: http3.scope-query-header-and-body
+PASS http3: http3.response-stream-order
+PASS http3: http3.asgi-event-type-string-subclass
+PASS http3: http3.response-burst-backpressure
+PASS http3: http3.client-cancels-large-response-after-headers
+PASS http3: http3.post-first-upload-response
+PASS http3: http3.application-error-before-response-start
+PASS http3: http3.response-body-fields-default-empty
+PASS http3: http3.scope-preserves-duplicate-headers
+PASS http3: http3.app-returns-before-response-start
+PASS http3: http3.upload-abandoned-by-early-app-return
+PASS http3: http3.early-response-with-open-upload
+PASS http3: http3.no-content-status-with-empty-body
+PASS http3: http3.upload-body-shorter-than-content-length
+PASS http3: http3.invalid-asgi-event-type-is-not-string
+PASS http3: http3.invalid-asgi-response-start-missing-status
+PASS http3: http3.invalid-alpn-handshake-recovers
+PASS http3: http3.graceful-shutdown-drains-open-connection
+PASS websocket: websocket.client-drop-during-pending-upgrade
+PASS websocket: websocket.text-and-binary-round-trip
+PASS websocket: websocket.pre-accept-denial
+PASS websocket: websocket.pre-accept-default-close
+PASS websocket: websocket.missing-event-type
+PASS websocket: websocket.unsupported-event-type
+PASS websocket: websocket.server-initiated-close
+PASS websocket: websocket.app-returns-before-handshake
+PASS websocket: websocket.app-error-before-handshake
+PASS websocket: websocket.synchronous-callable-error-before-awaitable
+PASS websocket: websocket.send-before-accept
+PASS websocket: websocket.duplicate-accept
+PASS websocket: websocket.invalid-send-payload-after-accept
+PASS websocket: websocket.server-app-completion-close
+PASS websocket: websocket.immediate-send-and-return
+PASS websocket: websocket.subclass-event-types
+PASS websocket: websocket.outbound-backpressure-burst
+PASS websocket: websocket.client-close-code-and-reason
+PASS websocket: websocket.application-error-after-accept
+PASS websocket: websocket.receive-call-rejects-positional-argument
+PASS websocket: websocket.send-requires-exactly-one-payload
+PASS websocket: websocket.wrong-context-http-response-start-event
+PASS websocket: websocket.wrong-context-http-response-body-event
+PASS websocket: websocket.empty-text-and-binary-payloads
+PASS websocket: websocket.accept-with-custom-asgi-header
+PASS websocket: websocket.invalid-accept-header-rejected
+PASS websocket: websocket.accepted-default-close
+PASS websocket: websocket.close-twice-after-accept
+PASS websocket: websocket.send-after-client-disconnect
+PASS websocket: websocket.receive-after-client-disconnect
+PASS websocket: websocket.control-ping-pong
+PASS websocket: websocket.abrupt-client-disconnect
+PASS websocket: websocket.invalid-accept-header-container
+PASS websocket: websocket.invalid-subprotocol-type
+PASS websocket: websocket.invalid-pre-accept-close-code-type
+PASS websocket: websocket.server-shutdown-during-pending-upgrade
+PASS websocket: websocket.server-shutdown-cancels-held-session
+PASS websocket-tls: websocket-tls.text-round-trip-with-query-and-subprotocol
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+PASS startup-partial-tls-api: startup-partial-tls-api.partial-tls-startup-error
+PASS startup-missing-certificate: startup-missing-certificate.missing-certificate-startup-error
+PASS startup-invalid-host: startup-invalid-host.invalid-host-startup-error
+PASS startup-empty-certificate: startup-empty-certificate.empty-certificate-startup-error
+PASS startup-invalid-certificate-pem: startup-invalid-certificate-pem.invalid-certificate-pem-startup-error
+PASS startup-missing-private-key: startup-missing-private-key.missing-private-key-startup-error
+PASS startup-empty-private-key: startup-empty-private-key.empty-private-key-startup-error
+PASS startup-invalid-private-key-pem: startup-invalid-private-key-pem.invalid-private-key-pem-startup-error
+PASS startup-mismatched-private-key: startup-mismatched-private-key.mismatched-private-key-startup-error
+PASS lifecycle: lifespan.startup-and-shutdown-cancel
+PASS lifecycle-server-api: lifespan.public-server-api-cancels-and-shuts-down
+PASS lifespan-no-support: lifespan.auto-app-does-not-support-lifespan
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+uvicorn-rs: ASGI app does not support lifespan
+
+PASS lifespan-retained-send: lifespan.app-returns-while-send-is-retained
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+uvicorn-rs: ASGI app does not support lifespan
+
+PASS lifespan-subclass-event-types: lifespan-subclass-event-types.complete-events
+PASS lifespan-no-support-error: lifespan.auto-app-raises-before-startup
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 100, in _app_impl
+    raise RuntimeError("parity lifespan unsupported sentinel")
+RuntimeError: parity lifespan unsupported sentinel
+uvicorn-rs: ASGI app does not support lifespan
+
+PASS lifespan-no-support-error-retained: lifespan.auto-app-raises-after-retaining-send
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 98, in _app_impl
+    raise RuntimeError("parity lifespan unsupported sentinel")
+RuntimeError: parity lifespan unsupported sentinel
+uvicorn-rs: ASGI app does not support lifespan
+
+PASS lifespan-receive-wrong-signature: lifespan.receive-call-rejects-positional-argument
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 63, in _app_impl
+    await receive(None)
+          ^^^^^^^^^^^^^
+TypeError: invoke.<locals>.receive() takes 0 positional arguments but 1 was given
+uvicorn-rs: ASGI app does not support lifespan
+
+PASS lifespan-invalid-startup-event: lifespan-invalid-startup-event.auto-disables-invalid-lifespan
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 107, in _app_impl
+    await send(invalid_startup_events[lifespan_mode])
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: unsupported ASGI lifespan event: http.response.start
+uvicorn-rs: ASGI app does not support lifespan
+
+PASS lifespan-missing-startup-event-type: lifespan-missing-startup-event-type.auto-disables-invalid-lifespan
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 107, in _app_impl
+    await send(invalid_startup_events[lifespan_mode])
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: ASGI message is missing 'type'
+uvicorn-rs: ASGI app does not support lifespan
+
+PASS lifespan-non-string-startup-event-type: lifespan-non-string-startup-event-type.auto-disables-invalid-lifespan
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 107, in _app_impl
+    await send(invalid_startup_events[lifespan_mode])
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+TypeError: 'int' object is not an instance of 'str'
+uvicorn-rs: ASGI app does not support lifespan
+
+PASS lifespan-startup-failed: lifespan-startup-failed.startup-does-not-complete
+PASS lifespan-startup-failed-subclass: lifespan-startup-failed-subclass.startup-does-not-complete
+PASS lifespan-startup-failed-empty: lifespan-startup-failed-empty.startup-does-not-complete
+PASS lifespan-unexpected-startup-event: lifespan-unexpected-startup-event.startup-does-not-complete
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+uvicorn-rs: ASGI app does not support lifespan
+
+PASS lifespan-shutdown-failed: lifespan-shutdown-failed.failure-is-reported-during-shutdown
+PASS lifespan-shutdown-failed-subclass: lifespan-shutdown-failed-subclass.failure-is-reported-during-shutdown
+PASS lifespan-shutdown-failed-empty: lifespan-shutdown-failed-empty.failure-is-reported-during-shutdown
+PASS lifespan-shutdown-returns: lifespan.lifespan-shutdown-returns
+PASS lifespan-shutdown-returns-retained: lifespan.lifespan-shutdown-returns-while-send-retained
+PASS lifespan-shutdown-raises: lifespan.lifespan-shutdown-raises
+PASS lifespan-shutdown-unexpected-event: lifespan.lifespan-shutdown-unexpected-event
+PASS lifespan-startup-complete-then-returns: lifespan.lifespan-startup-complete-then-returns
+{
+  "status": "completed",
+  "summary": {
+    "selected": 183,
+    "executed": 183,
+    "passed": 183,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "benchmarks/results/interned-names-2026-10-04/parity.json"
+}

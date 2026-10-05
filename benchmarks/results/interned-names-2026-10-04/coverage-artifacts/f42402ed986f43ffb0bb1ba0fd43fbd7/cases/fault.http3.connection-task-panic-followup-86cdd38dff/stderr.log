@@ -1,0 +1,9 @@
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+
+thread 'tokio-rt-worker' (179093676) panicked at src/lib.rs:2840:25:
+coverage-injected HTTP/3 connection task panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+uvicorn-rs: HTTP/3 connection task failed: task 14 panicked with message "coverage-injected HTTP/3 connection task panic"
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:54085 failed: Remote error: ApplicationClose: 0x0
+

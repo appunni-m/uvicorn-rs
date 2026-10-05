@@ -1,0 +1,16 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan-startup-failed-subclass.startup-does-not-complete",
+      "profile": "lifespan-startup-failed-subclass",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "startup_failure": {
+        "expect_failed": true
+      }
+    }
+  ]
+}

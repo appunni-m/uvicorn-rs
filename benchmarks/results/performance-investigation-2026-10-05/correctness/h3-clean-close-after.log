@@ -1,0 +1,13 @@
+PASS http3: http3.peer-close-h3-no-error
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "build/performance-2026-10-05/vectored-clean-close/h3-clean-close-after.json"
+}

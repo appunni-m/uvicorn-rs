@@ -1,0 +1,8 @@
+{
+  "schema": "uvicorn-rs-normal-gate-commands@1",
+  "public_gate": "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= .venv/bin/python scripts/run_parity.py --output build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/public-parity-result.json > build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/public-parity.log 2>&1",
+  "exclusion_audit": "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= .venv/bin/python build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/audit_normal.py audit > build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/exclusion-audit.log 2>&1",
+  "final_identity_verification": "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= .venv/bin/python build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/verify_normal_gates.py",
+  "capture_identity": "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= .venv/bin/python scripts/run_benchmark_categories.py --capture-identity build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/benchmark-identity-before-public-parity.json --expected-source-sha256 c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7 --expected-native-sha256 0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d --expected-public-cases 214",
+  "root_benchmark_note": "Keep empty Cargo wrappers on later maintained benchmark launch if its category runners rebuild clients."
+}

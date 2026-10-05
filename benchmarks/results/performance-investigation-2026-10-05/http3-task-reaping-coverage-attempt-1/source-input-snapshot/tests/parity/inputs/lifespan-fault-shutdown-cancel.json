@@ -1,0 +1,22 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.lifespan.pending-task-cancel-on-forced-timeout",
+      "profile": "lifespan-fault-shutdown-cancel",
+      "operation": "lifespan.shutdown-cancellation",
+      "covers": [
+        "lifespan.shutdown-cancellation"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.shutdown.force-timeout",
+        "contract": "server-lifespan-task-cancel"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1
+      }
+    }
+  ]
+}

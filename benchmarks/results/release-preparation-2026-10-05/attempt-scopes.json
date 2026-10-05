@@ -1,0 +1,23 @@
+{
+  "schema": "uvicorn-rs-local-attempt-scopes@1",
+  "scope": "historical dirty-checkout preparation; clean exact-commit CI pending",
+  "failed_attempts": [
+    {
+      "path": "failed-instrumented-build",
+      "reason": "empty CARGO_ENCODED_RUSTFLAGS overrode macOS dynamic lookup flags; superseded by full successful unified-coverage-attempt-2"
+    },
+    {
+      "path": "final-normal-audit",
+      "reason": "subagent sandbox denied live sockets; superseded by root live normal audit"
+    },
+    {
+      "path": "preparation/final-coverage-evidence-check.json",
+      "reason": "reader expected redundant hit_region_ids omitted by compact producer; reader corrected to invert regions[].hit_by; measurement unchanged"
+    },
+    {
+      "path": "preparation/final-coverage-offline-evidence-check.json",
+      "reason": "same compact reader mismatch; corrected offline checker passed"
+    }
+  ],
+  "pre_mcp_raw_report": "only its recorded hash/summary retained; the attachment updated report metadata and context without changing native profiles or totals"
+}

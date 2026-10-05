@@ -1,0 +1,29 @@
+{
+  "schema": "uvicorn-rs-normal-restore@1",
+  "restored_at": "2026-10-05T13:37:25.981089+00:00",
+  "full_report": "build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/full-attempt-2/coverage-report.json",
+  "full_report_sha256": "830e2565823c048d5a1c0c306e151b667c5cfd8d633794e59b538ab70b62fbe1",
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "instrumented_before_sha256": "d2323f9aedf540f543c475166dc1d51148cf6ce1dee23f7e5904e822f577b491",
+  "instrumented_backup": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/instrumented-from-successful-full.abi3.so",
+  "saved_normal": "build/performance-2026-10-05/h3-reaping-final-normal/_native.abi3.so",
+  "installed_normal_sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "full_cases": 451,
+  "full_repeats": 3,
+  "infra_retries": 0,
+  "capture_command": [
+    "/Users/lazytrot/work/uvicorn-rs/.venv/bin/python",
+    "/Users/lazytrot/work/uvicorn-rs/scripts/run_benchmark_categories.py",
+    "--capture-identity",
+    "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/normal-gates-held-response-451-2026-10-05/benchmark-identity-before-public-parity.json",
+    "--expected-source-sha256",
+    "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+    "--expected-native-sha256",
+    "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+    "--expected-public-cases",
+    "214"
+  ],
+  "capture_exit_code": 0,
+  "status": "normal_restored_identity_captured",
+  "portable_identity_sha256": "2d9dfd2573a7d2415016fc6f382b039e179fc934cd2638f0e2b69118e77fba3d"
+}

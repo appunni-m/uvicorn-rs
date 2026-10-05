@@ -1,0 +1,4 @@
+error: process didn't exit successfully: `/opt/homebrew/bin/sccache /Users/lazytrot/.rustup/toolchains/stable-aarch64-apple-darwin/bin/rustc -vV` (exit status: 2)
+--- stderr
+sccache: error: Operation not permitted (os error 1)
+

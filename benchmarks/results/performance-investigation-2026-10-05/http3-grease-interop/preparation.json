@@ -1,0 +1,38 @@
+{
+  "status": "prepared_client_build_running",
+  "prepared_at": "2026-10-05T12:57:58.514933+00:00",
+  "selected_cases": [
+    "http3.sequential-responses-one-connection",
+    "http3.peer-close-h3-no-error"
+  ],
+  "declared_variable": "h3_grease true versus false; all 128 POST /scope requests preserved",
+  "purpose": "Bound the Hypercorn live full-profile receive-headers failure without changing reference packages or deadlines",
+  "hypotheses": [
+    {
+      "hypothesis": "GREASE triggers reference receive-event parser failure",
+      "prediction": "true fails at reference receive headers; false completes both cases"
+    },
+    {
+      "hypothesis": "failure unrelated to GREASE",
+      "prediction": "both variants fail or vary independently of setting"
+    }
+  ],
+  "files": {
+    "src/lib.rs": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+    "python/uvicorn_rs/_native.abi3.so": "41bf61b21be0443b5d1e02329e7ae2e6e893fe17a4b42e636e4367a5aca91cfe",
+    "tests/parity/manifest.json": "33b3faacec03a206bf6b8a594e3da7ce697fff85b753d684b64823c89b895c70",
+    "tests/parity/inputs/http3.json": "8a92034d032f2a6c5f16c768dd4537fdc15e3bc15739984e1f8a18e001a5a260",
+    "scripts/run_parity.py": "af0fc4182fbd64b71e372ca9a49632e5c7a65bb977429715a1ccfc0ee401dec3",
+    "tools/http3-probe/src/bin/parity-http3.rs": "d705db4513023ab95e547d3dda76f0f6623a98e6066c3ea93571a17ecdbb3fb3",
+    "tools/http3-probe/src/bin/bench.rs": "e7e5aa4a3bb1d94a4b95e62faee8f51b28e49c3e5dc37ebf1f3d090b583ae4d4",
+    "tools/http3-probe/Cargo.toml": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd",
+    "tools/http3-probe/Cargo.lock": "a8d9eb109c08ff22d0a67812fc2b61559aa478b962b4c0f8012daaa64f7c128f"
+  },
+  "client_build": {
+    "command": "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bins",
+    "log": "build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/clients-after-grease-build-v2.log",
+    "session_id": 30829
+  },
+  "production_native_changes_authorized": false,
+  "whole_coverage_authorized": false
+}

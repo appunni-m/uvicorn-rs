@@ -1,0 +1,4 @@
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+uvicorn-rs: ASGI app completed without response.start
+

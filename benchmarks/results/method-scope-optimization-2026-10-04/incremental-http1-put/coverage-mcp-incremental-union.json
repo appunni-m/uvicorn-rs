@@ -1,0 +1,60 @@
+{
+  "schema": "uvicorn-rs-coverage-mcp-incremental-union@1",
+  "scope": "incremental",
+  "metric": "regions",
+  "status": "improved",
+  "baseline": {
+    "report": "build/asgi-coverage/unified-lifespan-retained-callables-2026-10-04/coverage-report.json",
+    "cases": 329,
+    "covered": 3697,
+    "total": 3853,
+    "missing": 156
+  },
+  "batches": [
+    {
+      "case_id": "http1.put-method-scope-and-body",
+      "parity_result": "benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/artifacts/d172e5a084bb4302a4f0f5e4ca9079f7/cases/http1.put-method-scope-and-body-75121aa19a/parity-result.json",
+      "coverage_result": "benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/measurement.json",
+      "status": "passed",
+      "regions_covered": 1292,
+      "already_covered": 1292,
+      "newly_covered": 0
+    },
+    {
+      "case_id": "http1.concurrent-request-receives-complete",
+      "parity_result": "benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/parity-concurrent-receive-completion.json",
+      "coverage_result": "benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/concurrent-receive-measurement.json",
+      "status": "passed",
+      "regions_covered": 1401,
+      "already_covered": 1400,
+      "newly_covered": 1,
+      "new_region": {
+        "function": "<uvicorn_rs::AsgiIo>::receive",
+        "path": "src/lib.rs",
+        "span": [1175, 17, 1175, 18]
+      }
+    }
+  ],
+  "combined": {
+    "covered": 3698,
+    "total": 3853,
+    "missing": 155,
+    "gain_percentage_points": 0.025953802232026993,
+    "previous_batches": 2,
+    "source_receipt": "matches_receipt",
+    "build_id": "4f30e39076a8204529ae60cbe773540bd2fbbd91f7d94e2aafa5b6e8110f66c0",
+    "instrumented_extension_sha256": "cc451a45c12bf98da7b4ffcccd7a64182fb1bf9fb6335e5a6a4854a4d8a0139b",
+    "rust_source_sha256": "9f2fc5513e93ce9acba8bc504c3f61a68b7acab5da613d22d6a7d954c9b984a3",
+    "regression_checked": false,
+    "full_matrix_rerun": false
+  },
+  "lines": {
+    "status": "incomparable",
+    "baseline": {
+      "covered": 2574,
+      "total": 2651,
+      "missing": 77
+    },
+    "reason": "Coverage-MCP reported incomplete exact line detail for incremental union; cumulative line coverage is unverified."
+  }
+}

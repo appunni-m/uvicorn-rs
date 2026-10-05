@@ -1,0 +1,8 @@
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+
+thread 'tokio-rt-worker' (179085638) panicked at src/lib.rs:3127:13:
+coverage-injected ASGI request task panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+uvicorn-rs: ASGI request failed: task 16 panicked with message "coverage-injected ASGI request task panic"
+

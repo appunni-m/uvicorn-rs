@@ -1,0 +1,5 @@
+{
+  "public_gate": "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= .venv/bin/python scripts/run_parity.py --output build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/public-parity-result.json > build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/public-parity.log 2>&1",
+  "exclusion_audit": "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= .venv/bin/python build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/audit_normal.py audit > build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/exclusion-audit.log 2>&1",
+  "final_identity_verification": "RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER= .venv/bin/python build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/verify_normal_gates.py"
+}

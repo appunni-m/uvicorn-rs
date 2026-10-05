@@ -1,0 +1,33 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "http1-tls.scope-reports-https",
+      "profile": "http1-tls",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=tls",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.response-body-incomplete",
+      "profile": "http1-tls",
+      "operation": "http.invalid-response-start",
+      "covers": [
+        "http.invalid-response-start"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/incomplete-response-body",
+        "headers": [],
+        "body_base64": ""
+      }
+    }
+  ]
+}

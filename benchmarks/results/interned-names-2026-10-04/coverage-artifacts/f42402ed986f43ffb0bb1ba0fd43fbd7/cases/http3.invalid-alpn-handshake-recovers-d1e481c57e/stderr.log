@@ -1,0 +1,8 @@
+--- hypercorn server log ---
+[1a56d575a484b11300e0b131b87faca1bd72435b] Error: 296, reason: No common ALPN protocols, frame_type: 6
+
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+uvicorn-rs: HTTP/3 handshake failed: the cryptographic handshake failed: error 120: peer doesn't support any known protocol
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:59813 failed: Remote error: ApplicationClose: 0x0
+

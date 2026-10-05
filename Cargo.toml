@@ -2,8 +2,9 @@
 name = "uvicorn-rs"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.83"
+rust-version = "1.85"
 publish = false
+license = "BSD-3-Clause OR MIT"
 description = "Rust network runtime for Python ASGI applications"
 repository = "https://github.com/appunni-m/uvicorn-rs"
 readme = "README.md"
@@ -37,7 +38,13 @@ tokio-util = { version = "0.7", features = ["rt"] }
 
 [lints.rust]
 unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)"] }
 
 [lints.clippy]
-all = "warn"
-correctness = "deny"
+all = { level = "warn", priority = -2 }
+correctness = { level = "deny", priority = -1 }
+panic = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+print_stderr = "deny"
+print_stdout = "deny"

@@ -1,0 +1,7 @@
+{
+  "status": "cached output mismatch detected before after-case execution",
+  "unexpected_native_sha256": "1feabcc07ed92b7d1b5a4f185b6d9ba498d55372af5ef2447a8bcd1d97557aff",
+  "cause": "isolated baseline and current manifest shared Cargo target output",
+  "remedy": "cargo clean only uvicorn-rs leaf package then current builder",
+  "coverage_or_after_case_executed": false
+}

@@ -1,0 +1,31 @@
+--- old81/src/lib.rs
++++ old81-plus-common-cfg-seam/src/lib.rs
+@@ -100,6 +100,7 @@
+     NativeRuntimeBuildError,
+     ServerWebSocketTaskShutdownPanic,
+     Http3RequestTaskPanic,
++    Http3RequestTaskPanicAfterResponse,
+     Http3ConnectionAcceptFinished,
+     Http3BodyPumpSendConnectionClosed,
+     AsgiEventTypeHttpResponseStartEq,
+@@ -324,6 +325,7 @@
+             Self::NativeRuntimeBuildError => "native.runtime.build.error",
+             Self::ServerWebSocketTaskShutdownPanic => "server.websocket-task.shutdown-panic",
+             Self::Http3RequestTaskPanic => "http3.request-task.panic",
++            Self::Http3RequestTaskPanicAfterResponse => "http3.request-task.panic-after-response",
+             Self::Http3ConnectionAcceptFinished => "http3.connection.accept-finished",
+             Self::Http3BodyPumpSendConnectionClosed => "http3.body-pump.send.connection-closed",
+             Self::AsgiEventTypeHttpResponseStartEq => "asgi.event-type.http-response-start.eq",
+@@ -3854,6 +3856,12 @@
+                     "uvicorn-rs: HTTP/3 request from {peer_addr} failed: {error}"
+                 ));
+             }
++            #[cfg(coverage)]
++            if coverage_fault_take(CoverageFaultPoint::Http3RequestTaskPanicAfterResponse) {
++                // Exercise join failure after real response completion without
++                // dropping an unresolved request stream or changing normal IO.
++                coverage_panic("coverage-injected HTTP/3 request task panic after response");
++            }
+         });
+     }
+     // The server-level HTTP/3 JoinSet owns the graceful-shutdown deadline.

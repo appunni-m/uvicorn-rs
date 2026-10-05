@@ -1,0 +1,18 @@
+{
+  "status": "ready_after_forced_native_leaf_clean",
+  "freeze": "build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/frozen-451-identity.json",
+  "cases": 451,
+  "public_cases": 214,
+  "target_cases": 237,
+  "operations": 63,
+  "matrix_repeats": 3,
+  "case_infra_retries": 0,
+  "matrix_infra_retries": 0,
+  "runner": "scripts/run_unified_coverage.py",
+  "build_required": true,
+  "skip_build": false,
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "native_leaf_clean_log": "build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/fresh-native-leaf-clean-v2.log",
+  "selected_proof": "build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/selected-proof-receipt.json",
+  "launch_owner": "root"
+}

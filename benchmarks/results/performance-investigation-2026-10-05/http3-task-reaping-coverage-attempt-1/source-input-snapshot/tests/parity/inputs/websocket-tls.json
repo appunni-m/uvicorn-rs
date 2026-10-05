@@ -1,0 +1,25 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "websocket-tls.text-round-trip-with-query-and-subprotocol",
+      "profile": "websocket-tls",
+      "operation": "websocket.message-exchange",
+      "covers": [
+        "websocket.message-exchange"
+      ],
+      "websocket": {
+        "path": "/ws?parity=tls",
+        "subprotocols": [
+          "parity"
+        ],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "tls-websocket"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,1732 @@
+{
+  "schema": "uvicorn-rs-paired-category-analysis@1",
+  "analyzer_sha256": "7e916892c57a7c582d2dd164f3ff98756a9c2ea02ba59c2c4d595a26b5c72548",
+  "input_directory": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4",
+  "status": "incomplete_categories",
+  "minimum_matching_valid_repetitions": 3,
+  "evidence_scope": "frozen dirty local evidence; no release or published-package performance proof",
+  "eligibility_policy": "timing_valid=true, failures=0, correctness_valid=true when present, strict server lifecycle/panic/native-error gates; lifecycle phases also complete; only intersection with an available recorded metadata pair gate can produce metrics",
+  "correctness_field_compatibility": "Sustained rows lack a dedicated correctness_valid field; failures=0 and server_lifecycle_gate=passed are required. Explicit correctness_valid=false always fails.",
+  "metric_policy": "each metric requires at least three matching finite values; complete client/lifecycle CPU additionally requires explicit completeness on both servers' matching rows",
+  "ratio_policy": "median same-repetition Rust/reference rate ratios; no aggregate winner or significance claim",
+  "driver_record": {
+    "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/run.json",
+    "status": null,
+    "incomplete": false,
+    "input_error": null,
+    "identity_before": null,
+    "identity_after": null,
+    "public_parity_gate": null
+  },
+  "qualified_pairs": 0,
+  "categories": [
+    {
+      "category": "http1",
+      "status": "incomplete_category",
+      "source": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http1.json",
+      "input_sha256": null,
+      "complete_report_present": false,
+      "rows": 0,
+      "eligible_rows": 0,
+      "invalid_rows": 0,
+      "invalid_reason_row_counts": {},
+      "raw_timing_invalid_reason_row_counts": {},
+      "pair_exclusion_row_counts": {},
+      "raw_invalid_row_receipts": [],
+      "input_errors": [],
+      "missing_or_duplicate_expected_rows": [
+        {
+          "workload": "fixed",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "small-response-chunks",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "small-response-chunks",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "small-response-chunks",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "small-response-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "small-response-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "small-response-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "scope-32-headers",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "scope-32-headers",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "scope-32-headers",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "scope-32-headers",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "scope-32-headers",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "scope-32-headers",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "contextvars",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "contextvars",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "contextvars",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "contextvars",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "contextvars",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "contextvars",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "sync-callable-awaitable",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "sync-callable-awaitable",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "sync-callable-awaitable",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "sync-callable-awaitable",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "sync-callable-awaitable",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "sync-callable-awaitable",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "exception-to-500",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "exception-to-500",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "exception-to-500",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "exception-to-500",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "exception-to-500",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "exception-to-500",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "starlette-rs-route",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "starlette-rs-route",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "starlette-rs-route",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "starlette-rs-route",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "starlette-rs-route",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "starlette-rs-route",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        }
+      ],
+      "metadata_gate_reasons": [
+        "category_completion_metadata_missing",
+        "category_incomplete",
+        "recorded_dependency_identities_differ_or_missing",
+        "recorded_identity_not_stable_or_missing",
+        "recorded_source_native_client_identities_differ_or_missing"
+      ],
+      "qualified_pairs": 0,
+      "pairs": [
+        {
+          "workload": "fixed",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "large-response",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "many-response-chunks",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "small-response-chunks",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "request-upload",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "scope-32-headers",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "contextvars",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "sync-callable-awaitable",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "exception-to-500",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing",
+            "unequal_exception_diagnostic_policy"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "starlette-rs-route",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        }
+      ],
+      "evidence_scope": "evidence scope unavailable from incomplete metadata",
+      "dirty_target": null,
+      "git_revision": null,
+      "recorded_performance_evidence_status": null,
+      "modified_or_unrecorded_dependencies": [],
+      "recorded_identity_before": null,
+      "recorded_identity_after": null,
+      "reference_logging_policy": null,
+      "lifespan_policy": null,
+      "recorded_cpu_resource_boundary": null,
+      "recorded_latency_limitations": null
+    },
+    {
+      "category": "http2",
+      "status": "incomplete_category",
+      "source": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http2.json",
+      "input_sha256": null,
+      "complete_report_present": false,
+      "rows": 0,
+      "eligible_rows": 0,
+      "invalid_rows": 0,
+      "invalid_reason_row_counts": {},
+      "raw_timing_invalid_reason_row_counts": {},
+      "pair_exclusion_row_counts": {},
+      "raw_invalid_row_receipts": [],
+      "input_errors": [],
+      "missing_or_duplicate_expected_rows": [
+        {
+          "workload": "protocol-scope",
+          "server": "hypercorn-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "protocol-scope",
+          "server": "hypercorn-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "protocol-scope",
+          "server": "hypercorn-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "protocol-scope",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "protocol-scope",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "protocol-scope",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "hypercorn-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "hypercorn-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "hypercorn-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "fixed",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "hypercorn-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "hypercorn-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "hypercorn-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "large-response",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "hypercorn-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "hypercorn-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "hypercorn-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "many-response-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "hypercorn-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "hypercorn-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "hypercorn-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "hypercorn-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "hypercorn-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "hypercorn-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "hypercorn-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "hypercorn-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "hypercorn-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        }
+      ],
+      "metadata_gate_reasons": [
+        "category_completion_metadata_missing",
+        "category_incomplete",
+        "recorded_dependency_identities_differ_or_missing",
+        "recorded_identity_not_stable_or_missing",
+        "recorded_source_native_client_identities_differ_or_missing"
+      ],
+      "qualified_pairs": 0,
+      "pairs": [
+        {
+          "workload": "protocol-scope",
+          "reference": "hypercorn-uvloop",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "fixed",
+          "reference": "hypercorn-uvloop",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "large-response",
+          "reference": "hypercorn-uvloop",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "many-response-chunks",
+          "reference": "hypercorn-uvloop",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "request-upload",
+          "reference": "hypercorn-uvloop",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "request-upload-small-chunks",
+          "reference": "hypercorn-uvloop",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "slow-reader-backpressure",
+          "reference": "hypercorn-uvloop",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        }
+      ],
+      "evidence_scope": "evidence scope unavailable from incomplete metadata",
+      "dirty_target": null,
+      "git_revision": null,
+      "recorded_performance_evidence_status": null,
+      "modified_or_unrecorded_dependencies": [],
+      "recorded_identity_before": null,
+      "recorded_identity_after": null,
+      "reference_logging_policy": null,
+      "lifespan_policy": null,
+      "recorded_cpu_resource_boundary": null,
+      "recorded_latency_limitations": null
+    },
+    {
+      "category": "http3",
+      "status": "no_qualified_pairs",
+      "source": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.json",
+      "input_sha256": "c7a07d1aafe247925f321f499e46b4e7b62ddcfbd5594bca1a69195ce7c78e10",
+      "complete_report_present": true,
+      "rows": 6,
+      "eligible_rows": 1,
+      "invalid_rows": 5,
+      "invalid_reason_row_counts": {
+        "timing_valid_false_or_missing": 5,
+        "unrelated_host_cpu_activity": 5
+      },
+      "raw_timing_invalid_reason_row_counts": {
+        "unrelated_host_cpu_activity": 5
+      },
+      "pair_exclusion_row_counts": {},
+      "raw_invalid_row_receipts": [
+        {
+          "raw_row_index": 1,
+          "workload": "protocol-scope-consumed-request",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "reasons": [
+            "timing_valid_false_or_missing",
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_valid": false,
+          "raw_correctness_valid": null,
+          "raw_failures": 0
+        },
+        {
+          "raw_row_index": 2,
+          "workload": "protocol-scope-consumed-request",
+          "server": "hypercorn-uvloop",
+          "repetition": 1,
+          "reasons": [
+            "timing_valid_false_or_missing",
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_valid": false,
+          "raw_correctness_valid": null,
+          "raw_failures": 0
+        },
+        {
+          "raw_row_index": 4,
+          "workload": "protocol-scope-consumed-request",
+          "server": "hypercorn-uvloop",
+          "repetition": 2,
+          "reasons": [
+            "timing_valid_false_or_missing",
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_valid": false,
+          "raw_correctness_valid": null,
+          "raw_failures": 0
+        },
+        {
+          "raw_row_index": 5,
+          "workload": "protocol-scope-consumed-request",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "reasons": [
+            "timing_valid_false_or_missing",
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_valid": false,
+          "raw_correctness_valid": null,
+          "raw_failures": 0
+        },
+        {
+          "raw_row_index": 6,
+          "workload": "protocol-scope-consumed-request",
+          "server": "hypercorn-uvloop",
+          "repetition": 3,
+          "reasons": [
+            "timing_valid_false_or_missing",
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_invalid_reasons": [
+            "unrelated_host_cpu_activity"
+          ],
+          "raw_timing_valid": false,
+          "raw_correctness_valid": null,
+          "raw_failures": 0
+        }
+      ],
+      "input_errors": [],
+      "missing_or_duplicate_expected_rows": [],
+      "metadata_gate_reasons": [],
+      "qualified_pairs": 0,
+      "pairs": [
+        {
+          "workload": "protocol-scope-consumed-request",
+          "reference": "hypercorn-uvloop",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [
+            2
+          ],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": {
+            "workload": "protocol-scope-consumed-request",
+            "candidate": "uvicorn-rs-uvloop",
+            "baseline": "hypercorn-uvloop",
+            "valid_matching_repetitions": [],
+            "required": 3,
+            "outcome": "not_proven"
+          },
+          "qualified": false,
+          "exclusion_reasons": [
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_pair_gate_not_available"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        }
+      ],
+      "evidence_scope": "frozen dirty local evidence; not a release performance proof",
+      "dirty_target": true,
+      "git_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+      "recorded_performance_evidence_status": "not_proven",
+      "modified_or_unrecorded_dependencies": [],
+      "recorded_identity_before": {
+        "source_sha256": "34914ecb97476e04ef3e5d2d235783d37e26eb8afd2f7188e00aecdc5c10e606",
+        "source_files": {
+          "Cargo.lock": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+          "Cargo.toml": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb",
+          "examples/bench_h3_consumed_asgi.py": "4247667b10b8688350127daef35a5948445cf157ed58663b57b6041e4f72599b",
+          "examples/bench_matrix_asgi.py": "4199f61829a714dc18adb2eccd050b2e7e4f945736c0a3d01ebf415d0c630e9d",
+          "pyproject.toml": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b",
+          "python/uvicorn_rs/__init__.py": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155",
+          "python/uvicorn_rs/__main__.py": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+          "python/uvicorn_rs/_bridge.py": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff",
+          "python/uvicorn_rs/cli.py": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f",
+          "python/uvicorn_rs/server.py": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87",
+          "scripts/benchmark_evidence.py": "d83b60c386f3f6a5ea970b3e2ddc0628f0f97adaa54424ebf4b5e2bbdf9a3bd1",
+          "scripts/run_h3_category_bench.py": "64afc662603e471897691a259bc78f496decbffb667c775a37461101ebecd39e",
+          "src/lib.rs": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+          "tools/http3-probe/Cargo.lock": "a8d9eb109c08ff22d0a67812fc2b61559aa478b962b4c0f8012daaa64f7c128f",
+          "tools/http3-probe/Cargo.toml": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd",
+          "tools/http3-probe/src/bin/bench.rs": "e7e5aa4a3bb1d94a4b95e62faee8f51b28e49c3e5dc37ebf1f3d090b583ae4d4",
+          "uv.lock": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+        },
+        "native_extension": {
+          "path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so",
+          "sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d"
+        },
+        "clients": {
+          "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/target/release/bench": "82f3059f3fe2b2a5c9b38206f52cdd694c6a85dd8747a2a1685d0b48d5f5165d"
+        }
+      },
+      "recorded_identity_after": {
+        "source_sha256": "34914ecb97476e04ef3e5d2d235783d37e26eb8afd2f7188e00aecdc5c10e606",
+        "source_files": {
+          "Cargo.lock": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+          "Cargo.toml": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb",
+          "examples/bench_h3_consumed_asgi.py": "4247667b10b8688350127daef35a5948445cf157ed58663b57b6041e4f72599b",
+          "examples/bench_matrix_asgi.py": "4199f61829a714dc18adb2eccd050b2e7e4f945736c0a3d01ebf415d0c630e9d",
+          "pyproject.toml": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b",
+          "python/uvicorn_rs/__init__.py": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155",
+          "python/uvicorn_rs/__main__.py": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+          "python/uvicorn_rs/_bridge.py": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff",
+          "python/uvicorn_rs/cli.py": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f",
+          "python/uvicorn_rs/server.py": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87",
+          "scripts/benchmark_evidence.py": "d83b60c386f3f6a5ea970b3e2ddc0628f0f97adaa54424ebf4b5e2bbdf9a3bd1",
+          "scripts/run_h3_category_bench.py": "64afc662603e471897691a259bc78f496decbffb667c775a37461101ebecd39e",
+          "src/lib.rs": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+          "tools/http3-probe/Cargo.lock": "a8d9eb109c08ff22d0a67812fc2b61559aa478b962b4c0f8012daaa64f7c128f",
+          "tools/http3-probe/Cargo.toml": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd",
+          "tools/http3-probe/src/bin/bench.rs": "e7e5aa4a3bb1d94a4b95e62faee8f51b28e49c3e5dc37ebf1f3d090b583ae4d4",
+          "uv.lock": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+        },
+        "native_extension": {
+          "path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so",
+          "sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d"
+        },
+        "clients": {
+          "/Users/lazytrot/work/uvicorn-rs/tools/http3-probe/target/release/bench": "82f3059f3fe2b2a5c9b38206f52cdd694c6a85dd8747a2a1685d0b48d5f5165d"
+        }
+      },
+      "reference_logging_policy": {
+        "level": "ERROR",
+        "access_log": "disabled",
+        "unexpected_errors": "public app exception tracebacks remain visible to the post-shutdown diagnostic gate"
+      },
+      "lifespan_policy": {
+        "reference": "auto via Hypercorn's default support detection",
+        "rust": "automatic startup/support detection and shutdown",
+        "timing_boundary": "startup precedes readiness/warmup/load; the lifespan task and state remain present during load and graceful shutdown"
+      },
+      "recorded_cpu_resource_boundary": "client process lifetime, including setup/drain/report; client active request windows vary by protocol",
+      "recorded_latency_limitations": "no open-loop offered-rate test or coordinated-omission correction; latency includes client work"
+    },
+    {
+      "category": "websocket",
+      "status": "incomplete_category",
+      "source": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/websocket.json",
+      "input_sha256": null,
+      "complete_report_present": false,
+      "rows": 0,
+      "eligible_rows": 0,
+      "invalid_rows": 0,
+      "invalid_reason_row_counts": {},
+      "raw_timing_invalid_reason_row_counts": {},
+      "pair_exclusion_row_counts": {},
+      "raw_invalid_row_receipts": [],
+      "input_errors": [],
+      "missing_or_duplicate_expected_rows": [
+        {
+          "workload": "connection-handshake",
+          "server": "uvicorn-uvloop-websockets",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "connection-handshake",
+          "server": "uvicorn-uvloop-websockets",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "connection-handshake",
+          "server": "uvicorn-uvloop-websockets",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "connection-handshake",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "connection-handshake",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "connection-handshake",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "text-echo",
+          "server": "uvicorn-uvloop-websockets",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "text-echo",
+          "server": "uvicorn-uvloop-websockets",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "text-echo",
+          "server": "uvicorn-uvloop-websockets",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "text-echo",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "text-echo",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "text-echo",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "binary-64k-echo",
+          "server": "uvicorn-uvloop-websockets",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "binary-64k-echo",
+          "server": "uvicorn-uvloop-websockets",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "binary-64k-echo",
+          "server": "uvicorn-uvloop-websockets",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "binary-64k-echo",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "binary-64k-echo",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "binary-64k-echo",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        }
+      ],
+      "metadata_gate_reasons": [
+        "category_completion_metadata_missing",
+        "category_incomplete",
+        "recorded_dependency_identities_differ_or_missing",
+        "recorded_identity_not_stable_or_missing",
+        "recorded_source_native_client_identities_differ_or_missing"
+      ],
+      "qualified_pairs": 0,
+      "pairs": [
+        {
+          "workload": "connection-handshake",
+          "reference": "uvicorn-uvloop-websockets",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "text-echo",
+          "reference": "uvicorn-uvloop-websockets",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        },
+        {
+          "workload": "binary-64k-echo",
+          "reference": "uvicorn-uvloop-websockets",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        }
+      ],
+      "evidence_scope": "evidence scope unavailable from incomplete metadata",
+      "dirty_target": null,
+      "git_revision": null,
+      "recorded_performance_evidence_status": null,
+      "modified_or_unrecorded_dependencies": [],
+      "recorded_identity_before": null,
+      "recorded_identity_after": null,
+      "reference_logging_policy": null,
+      "lifespan_policy": null,
+      "recorded_cpu_resource_boundary": null,
+      "recorded_latency_limitations": null
+    },
+    {
+      "category": "lifecycle",
+      "status": "incomplete_category",
+      "source": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/lifecycle.json",
+      "input_sha256": null,
+      "complete_report_present": false,
+      "rows": 0,
+      "eligible_rows": 0,
+      "invalid_rows": 0,
+      "invalid_reason_row_counts": {},
+      "raw_timing_invalid_reason_row_counts": {},
+      "pair_exclusion_row_counts": {},
+      "raw_invalid_row_receipts": [],
+      "input_errors": [],
+      "missing_or_duplicate_expected_rows": [
+        {
+          "workload": "lifecycle",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "lifecycle",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "lifecycle",
+          "server": "uvicorn-uvloop-httptools",
+          "repetition": 3,
+          "row_count": 0
+        },
+        {
+          "workload": "lifecycle",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 1,
+          "row_count": 0
+        },
+        {
+          "workload": "lifecycle",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 2,
+          "row_count": 0
+        },
+        {
+          "workload": "lifecycle",
+          "server": "uvicorn-rs-uvloop",
+          "repetition": 3,
+          "row_count": 0
+        }
+      ],
+      "metadata_gate_reasons": [
+        "category_completion_metadata_missing",
+        "category_incomplete",
+        "recorded_dependency_identities_differ_or_missing",
+        "recorded_identity_not_stable_or_missing",
+        "recorded_source_native_client_identities_differ_or_missing"
+      ],
+      "qualified_pairs": 0,
+      "pairs": [
+        {
+          "workload": "lifecycle",
+          "reference": "uvicorn-uvloop-httptools",
+          "candidate": "uvicorn-rs-uvloop",
+          "valid_reference_repetitions": [],
+          "valid_rust_repetitions": [],
+          "matched_repetitions": [],
+          "minimum_required": 3,
+          "recorded_pair_gate": null,
+          "qualified": false,
+          "exclusion_reasons": [
+            "category_completion_metadata_missing",
+            "category_incomplete",
+            "fewer_than_required_matching_valid_repetitions",
+            "recorded_dependency_identities_differ_or_missing",
+            "recorded_identity_not_stable_or_missing",
+            "recorded_pair_gate_missing_or_duplicate",
+            "recorded_source_native_client_identities_differ_or_missing"
+          ],
+          "metrics": {},
+          "excluded_reference_details": {}
+        }
+      ],
+      "evidence_scope": "evidence scope unavailable from incomplete metadata",
+      "dirty_target": null,
+      "git_revision": null,
+      "recorded_performance_evidence_status": null,
+      "modified_or_unrecorded_dependencies": [],
+      "recorded_identity_before": null,
+      "recorded_identity_after": null,
+      "reference_logging_policy": null,
+      "lifespan_policy": null,
+      "recorded_cpu_resource_boundary": null,
+      "recorded_latency_limitations": null
+    }
+  ],
+  "limitations": [
+    "Three valid matching repetitions are a descriptive gate, not evidence of statistical significance.",
+    "Medians of per-run latency percentiles are not pooled request latency percentiles.",
+    "Throughput ratios use matching repetitions only; no overall winner or cross-protocol ranking is produced.",
+    "Recorded H1, H2, H3, and WebSocket client clocks/setup/drain boundaries differ and cannot be compared across protocols.",
+    "Closed-loop same-host load has no coordinated-omission correction or open-loop offered-rate evidence.",
+    "Sustained server CPU is observed live process-tree cpu_times deltas over the recorded load/monitor boundary; complete reaped-child accounting is not inferred.",
+    "Client CPU is complete reaped-child RUSAGE_CHILDREN accounting across setup/load/drain/report only when each row explicitly asserts client_cpu_complete.",
+    "RSS is sampled process-tree RSS; the reported value is a median of matched runs' sampled peaks, not allocator peak, PSS, or private memory.",
+    "Lifecycle complete CPU covers the spawned and reaped server process lifetime (startup/readiness/shutdown); the separate elapsed and cold-start boundaries additionally include observer/free-port/environment preparation, and differ from sustained request CPU.",
+    "Lifecycle startup is preparation-to-observed-valid-response, an upper bound affected by polling and observer work; no sub-poll precision is claimed.",
+    "Exception diagnostic policies differ and exception-to-500 timing remains unrankable; H3 uploads have no live qualifying Hypercorn performance pair.",
+    "The analyzer checks recorded identities and gates; it does not independently attest compilation or reconstruct the measured processes."
+  ]
+}

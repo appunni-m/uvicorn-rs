@@ -1,0 +1,30 @@
+{
+  "audit_recipe_sha256": "9eafa5d73752226e3eeb9e52c293d7d3a422467c2e2865cf98a2e8ab8a2c5878",
+  "compile_cfg": "default features; empty Rust wrappers; explicit macOS dynamic-lookup linker flags; verified normal native instrumentation absent",
+  "evidence_kind": "reuse_verified_normal_build_snapshot",
+  "native_extension_sha256": "8f69afda0be9d121d304c674d5638f470da6939fbed58ce809457284df6585b6",
+  "normal_build_log": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/canonical-v2/normal-build.log",
+  "normal_build_log_sha256": "1883f471afb5ef8c4b2a1d4ba95cf9e3ef7946940e21800621ad6803378c8536",
+  "normal_build_snapshot_identity": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/canonical-v2/identity.json",
+  "normal_build_snapshot_identity_sha256": "1b8c797e8e8b777e793e8fa0fe6a7768dab17a2d5a3e033a1ec612d9a21d7be3",
+  "normal_library": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/canonical-v2/python/uvicorn_rs/_native.abi3.so",
+  "original_build_command": [
+    "cargo",
+    "build",
+    "--locked",
+    "--release",
+    "--lib"
+  ],
+  "original_build_flags": "-C link-arg=-undefined -C link-arg=dynamic_lookup",
+  "schema": "uvicorn-rs-normal-build/audit-build@1",
+  "source_hashes_after": {
+    "Cargo.lock": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+    "Cargo.toml": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb",
+    "pyproject.toml": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b",
+    "src/lib.rs": "81c239b5f596cf4be18cc71bc3b537c02224c0f1e1ab35174e6386f5203510cd",
+    "tools/http3-probe/Cargo.toml": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd"
+  },
+  "source_sha256": "81c239b5f596cf4be18cc71bc3b537c02224c0f1e1ab35174e6386f5203510cd",
+  "status": "passed",
+  "workspace_extension_modified": false
+}

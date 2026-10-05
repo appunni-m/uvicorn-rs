@@ -1,0 +1,1 @@
+{"requests":8667,"duration_seconds":1.003180000,"requests_per_second":8639.526,"request_body_bytes":0,"response_body_bytes":9088008192,"application_bytes_per_second":9059199936.206,"p50_ms":3.662000,"p95_ms":5.529000,"p99_ms":6.630000,"failures":0,"first_failure":null}

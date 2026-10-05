@@ -1,0 +1,13 @@
+PASS startup-fault-native-add-function-serve: fault.startup-fault-native-add-function-serve
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/interned-names-2026-10-04/coverage-artifacts/f42402ed986f43ffb0bb1ba0fd43fbd7/cases/fault.startup-fault-native-add-function-serve-4b4c00d23a/parity-result.json"
+}

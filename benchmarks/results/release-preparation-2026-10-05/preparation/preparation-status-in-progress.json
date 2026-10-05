@@ -1,0 +1,46 @@
+{
+  "schema": "uvicorn-rs-local-release-preparation@1",
+  "state": "local dirty-checkout preparation; hosted CI and three-platform assembly pending",
+  "version": "0.1.0",
+  "license_expression": "BSD-3-Clause OR MIT",
+  "copyright": "Copyright (c) 2026 Appunni M",
+  "license_notices": "Uvicorn and Hypercorn original notices retained",
+  "native_source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "checks": {
+    "minimum_rust_default": "msrv-1.85.0.log",
+    "minimum_rust_no_default": "msrv-1.85.0-no-default-features.log",
+    "minimum_rust_all_features": "msrv-1.85.0-all-features.log",
+    "library_clippy": "final-clippy.log",
+    "protocol_client_clippy": "final-probe-clippy.log",
+    "rustdoc": "final-rustdoc.log",
+    "actionlint": "actionlint-final-attempt-4.log",
+    "installed_python312": "final-wheel-consumer.json",
+    "installed_python39": "final-python39-consumer.json",
+    "public_parity": "final-public-parity.json",
+    "normal_exclusion": "final-normal-audit-frozen-attempt-2/receipt.json"
+  },
+  "public_parity_summary": {
+    "executed": 214,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 214,
+    "selected": 214
+  },
+  "normal_exclusion_summary": {
+    "executed": 3,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 3,
+    "selected": 3
+  },
+  "publication_enabled": false,
+  "limitations": [
+    "No hosted CI run on a clean release commit yet",
+    "No local Linux or Windows wheel execution",
+    "Package-floor smoke is not full multi-version protocol parity",
+    "Coverage MCP review for refreshed report pending",
+    "No general throughput win proven"
+  ]
+}

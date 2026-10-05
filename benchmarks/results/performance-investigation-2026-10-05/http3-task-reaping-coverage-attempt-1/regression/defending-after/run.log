@@ -1,0 +1,21 @@
+PASS http3: fault.http3.request-task-panic-after-response
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+
+thread 'tokio-rt-worker' (189562212) panicked at src/lib.rs:74:5:
+coverage-injected HTTP/3 request task panic after response
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+uvicorn-rs: HTTP/3 request task failed: task 17 panicked with message "coverage-injected HTTP/3 request task panic after response"
+
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/defending-after/parity-result.json"
+}

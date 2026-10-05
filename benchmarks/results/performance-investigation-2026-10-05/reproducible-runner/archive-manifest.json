@@ -1,0 +1,71 @@
+{
+  "created_at": "2026-10-05T12:01:10.970087+00:00",
+  "files": {
+    "ARCHIVE.md": {
+      "byte_identical": null,
+      "bytes": 1025,
+      "kind": "derived analysis/documentation",
+      "original_path": null,
+      "sha256": "aa78236258359daeba023f1ba09573f2cc9c6a6d295ba7f6eab2d37987203788"
+    },
+    "README.md": {
+      "byte_identical": true,
+      "bytes": 11694,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/reproducible-runner/README.md",
+      "sha256": "ef5dda41d488483f4711e3e40b0b4d2e1369d3669e18c3fc76383e90a143280a"
+    },
+    "analysis-check.json": {
+      "byte_identical": true,
+      "bytes": 135149,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/reproducible-runner/analysis-check.json",
+      "sha256": "b132067845a4eaf010649b583d10581f1b1669e8884be8295ae7e0b5ca078f7a"
+    },
+    "analysis-check.md": {
+      "byte_identical": true,
+      "bytes": 9773,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/reproducible-runner/analysis-check.md",
+      "sha256": "9e57ab9189915a84bc9773cd326777437ddd4695ca19d1520cbac558f8696b53"
+    },
+    "analyze_benchmark_categories.py": {
+      "byte_identical": true,
+      "bytes": 35027,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/reproducible-runner/analyze_benchmark_categories.py",
+      "sha256": "4c8e46fb266b2ad51cdfdea3b4c2e8426af251ece1903ab47b28cccd8eefdd8a"
+    },
+    "benchmark-categories.yml": {
+      "byte_identical": true,
+      "bytes": 11106,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/reproducible-runner/benchmark-categories.yml",
+      "sha256": "e6f0cb2da2c8281125441fa585f7308620b81b8fb4384cce6ae8ed26e8bd9ef6"
+    },
+    "driver-help.log": {
+      "byte_identical": true,
+      "bytes": 2180,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/reproducible-runner/driver-help.log",
+      "sha256": "cf705e2649416c7b9b44d9d8ec745aea984a2b59b66efd6d27424de8ce58324e"
+    },
+    "promotion-receipt.json": {
+      "byte_identical": null,
+      "bytes": 1441,
+      "kind": "derived analysis/documentation",
+      "original_path": null,
+      "sha256": "28a08165cc8ccf4f838935ff09b67591a17b377dc89d16e76a689a3a2cfc6c3b"
+    },
+    "run_benchmark_categories.py": {
+      "byte_identical": true,
+      "bytes": 25832,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/reproducible-runner/run_benchmark_categories.py",
+      "sha256": "9efaf0b7f1a9c1b5cbcb4f1106b8368f2c325286a415d79e10519caa037d5f20"
+    }
+  },
+  "raw_copy_policy": "byte-identical originals and empty logs; original paths retained; no binaries",
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1",
+  "workflow_execution": "not executed; no dispatch/publishing"
+}

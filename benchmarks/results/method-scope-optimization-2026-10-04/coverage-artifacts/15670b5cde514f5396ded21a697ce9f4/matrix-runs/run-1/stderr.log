@@ -1,0 +1,506 @@
+--- uvicorn server log ---
+e: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'websocket.send'.
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'lifespan.startup.complete'.
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'lifespan.startup.failed'.
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'lifespan.shutdown.complete'.
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 453, in _app_impl
+    await send({"type": wrong_context_events[event_name]})
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 473, in send
+    raise RuntimeError(f"Expected ASGI message 'http.response.start', but got '{message['type']}'.")
+RuntimeError: Expected ASGI message 'http.response.start', but got 'lifespan.shutdown.failed'.
+ERROR:    ASGI callable returned without starting response.
+ERROR:    Cancel 1 running task(s), timeout graceful shutdown exceeded
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 659, in _app_impl
+    await asyncio.Event().wait()
+  File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/locks.py", line 212, in wait
+    await fut
+asyncio.exceptions.CancelledError: Task cancelled, timeout graceful shutdown exceeded
+
+--- uvicorn-rs server log ---
+)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 35, in _respond
+    await send(
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at HttpResponseStartHeadersGetItem
+uvicorn-rs: connection task failed: error from user's Service
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 684, in _app_impl
+    await _respond(send, token.encode(), content_type=b"text/plain; charset=utf-8")
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 35, in _respond
+    await send(
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at HttpResponseStartStatusExtract
+uvicorn-rs: connection task failed: error from user's Service
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 684, in _app_impl
+    await _respond(send, token.encode(), content_type=b"text/plain; charset=utf-8")
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 35, in _respond
+    await send(
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at HttpResponseStartStatusGetItem
+uvicorn-rs: connection task failed: error from user's Service
+Exception in callback <builtins.PythonTaskStarter object at 0x101e64ad0>
+handle: <Handle <builtins.PythonTaskStarter object at 0x101e64ad0>>
+Traceback (most recent call last):
+  File "uvloop/cbhandles.pyx", line 64, in uvloop.loop.Handle._run
+MemoryError: coverage-only injected MemoryError at PythonTaskStarterImportAsyncio
+/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/runners.py:118: RuntimeWarning: coroutine 'invoke' was never awaited
+  return self._loop.run_until_complete(task)
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+RuntimeError: Python event loop stopped before the ASGI task started
+Exception in callback <builtins.PythonTaskStarter object at 0x101e66060>
+handle: <Handle <builtins.PythonTaskStarter object at 0x101e66060>>
+Traceback (most recent call last):
+  File "uvloop/cbhandles.pyx", line 64, in uvloop.loop.Handle._run
+MemoryError: coverage-only injected MemoryError at PythonTaskStarterEnsureFuture
+RuntimeError: Python event loop stopped before the ASGI task started
+Exception in callback <builtins.PythonTaskStarter object at 0x101e64ad0>
+handle: <Handle <builtins.PythonTaskStarter object at 0x101e64ad0>>
+Traceback (most recent call last):
+  File "uvloop/cbhandles.pyx", line 64, in uvloop.loop.Handle._run
+MemoryError: coverage-only injected MemoryError at PythonTaskStarterAddDoneCallback
+RuntimeError: Python event loop stopped before the ASGI task started
+uvicorn-rs: ASGI app completed without response.start
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 684, in _app_impl
+    await _respond(send, token.encode(), content_type=b"text/plain; charset=utf-8")
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 35, in _respond
+    await send(
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+OSError: server response channel closed: channel closed
+uvicorn-rs: connection task failed: error from user's Service
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 635, in _app_impl
+    await send({"type": "http.response.body", "body": chunk, "more_body": True})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+OSError: server response body channel closed
+uvicorn-rs: connection task failed: error from user's Body stream
+
+thread 'tokio-rt-worker' (179561360) panicked at src/lib.rs:988:21:
+coverage-injected ASGI app task panic after final response body
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+uvicorn-rs: ASGI app task failed after the response body completed: task 414 panicked with message "coverage-injected ASGI app task panic after final response body"
+
+thread 'tokio-rt-worker' (179561359) panicked at src/lib.rs:3151:13:
+coverage-injected ASGI request task panic
+uvicorn-rs: ASGI request failed: task 416 panicked with message "coverage-injected ASGI request task panic"
+RuntimeError: Python event loop stopped before the ASGI task started
+RuntimeError: Python event loop stopped before the ASGI task started
+sys:1: RuntimeWarning: coroutine 'invoke' was never awaited
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+uvicorn-rs: ASGI request failed: MemoryError: coverage-only injected MemoryError at PythonTaskFutureStarterAllocation
+uvicorn-rs: ASGI request failed: MemoryError: coverage-only injected MemoryError at PythonTaskFutureContextSetItem
+uvicorn-rs: ASGI request failed: MemoryError: coverage-only injected MemoryError at PythonTaskFutureScheduleCall
+RuntimeError: Python event loop stopped before the ASGI task completed
+uvicorn-rs: connection task failed: error from user's Body stream
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 439, in _app_impl
+    await send({"type": 42})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+TypeError: 'int' object is not an instance of 'str'
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 493, in _app_impl
+    await send({"type": "http.response.start", "headers": []})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: response.start is missing 'status'
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 665, in _app_impl
+    raise RuntimeError("parity exception sentinel")
+RuntimeError: parity exception sentinel
+
+thread 'tokio-rt-worker' (179561663) panicked at src/lib.rs:3151:13:
+coverage-injected ASGI request task panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+uvicorn-rs: ASGI request failed: task 66 panicked with message "coverage-injected ASGI request task panic"
+uvicorn-rs: ASGI app completed without response.start
+uvicorn-rs: ASGI app completed without response.start
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 100, in _app_impl
+    raise RuntimeError("parity lifespan unsupported sentinel")
+RuntimeError: parity lifespan unsupported sentinel
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 98, in _app_impl
+    raise RuntimeError("parity lifespan unsupported sentinel")
+RuntimeError: parity lifespan unsupported sentinel
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 63, in _app_impl
+    await receive(None)
+          ^^^^^^^^^^^^^
+TypeError: invoke.<locals>.receive() takes 0 positional arguments but 1 was given
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 107, in _app_impl
+    await send(invalid_startup_events[lifespan_mode])
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: unsupported ASGI lifespan event: http.response.start
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 107, in _app_impl
+    await send(invalid_startup_events[lifespan_mode])
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+ValueError: ASGI message is missing 'type'
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 107, in _app_impl
+    await send(invalid_startup_events[lifespan_mode])
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+TypeError: 'int' object is not an instance of 'str'
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 83, in _app_impl
+    message = await receive()
+              ^^^^^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 9, in receive
+    return await result
+           ^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at LifespanReceiveStartupTypeSetItem
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 142, in _app_impl
+    await send({"type": "lifespan.startup.complete"})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at AsgiEventTypeLifespanStartupCompleteEq
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 123, in _app_impl
+    await send(failure)
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at AsgiEventTypeLifespanStartupFailedEq
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 123, in _app_impl
+    await send(failure)
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at LifespanStartupFailedMessageGetItem
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 123, in _app_impl
+    await send(failure)
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+MemoryError: coverage-only injected MemoryError at LifespanStartupFailedMessageExtract
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn-rs server log ---
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 142, in _app_impl
+    await send({"type": "lifespan.startup.complete"})
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 12, in send
+    pending = io.send(message)
+              ^^^^^^^^^^^^^^^^
+OSError: ASGI lifespan channel closed: channel closed
+uvicorn-rs: ASGI app does not support lifespan
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+
+--- uvicorn server log ---
+/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/protocols/websockets/websockets_impl.py:41: UvicornDeprecationWarning: The `websockets` implementation is deprecated, and `--ws websockets` will point at the `websockets-sansio` implementation in a future release. Use `--ws websockets-sansio` or `--ws auto` to switch now.
+  warnings.warn(
+

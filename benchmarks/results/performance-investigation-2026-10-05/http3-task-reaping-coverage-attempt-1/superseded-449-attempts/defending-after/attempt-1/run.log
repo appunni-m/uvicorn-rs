@@ -1,0 +1,24 @@
+ERROR http3: fault.http3.request-task-panic: target uvicorn-rs adapter failed: HTTP/3 sequence did not reach its live-connection result barrier: HTTP/3 probe: QUIC connected
+HTTP/3 probe: HTTP/3 connection ready
+Error: ConnectionError(Local { error: Application { code: H3_FRAME_UNEXPECTED, reason: "Stream finished without receiving response headers" } })
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+
+thread 'tokio-rt-worker' (189406789) panicked at src/lib.rs:74:5:
+coverage-injected HTTP/3 request task panic
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+uvicorn-rs: HTTP/3 request task failed: task 17 panicked with message "coverage-injected HTTP/3 request task panic"
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:50391 failed: Remote error: ApplicationClose: H3_FRAME_UNEXPECTED
+
+{
+  "status": "failed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 0,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 1
+  },
+  "result": "build/asgi-coverage/unified-http3-task-reaping-449-2026-10-05/defending-after/attempt-1/parity-result.json"
+}

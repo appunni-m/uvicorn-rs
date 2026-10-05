@@ -1,0 +1,1600 @@
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_bridge.py", line 16, in invoke
+    await app(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 169, in app
+    await _http(scope, receive, send)
+  File "/Users/lazytrot/work/uvicorn-rs/examples/bench_matrix_asgi.py", line 135, in _http
+    raise RuntimeError("benchmark exception path")
+RuntimeError: benchmark exception path

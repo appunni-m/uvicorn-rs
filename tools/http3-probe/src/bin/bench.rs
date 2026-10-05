@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::io::Write;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -37,6 +38,7 @@ async fn main() -> Result<(), BenchError> {
     let expected_status: u16 = args.next().ok_or("missing expected status")?.parse()?;
     let expected_override = args.next().unwrap_or_default();
     let read_rate_bytes_per_second: u64 = args.next().unwrap_or_else(|| "0".to_string()).parse()?;
+    let h3_grease: bool = args.next().unwrap_or_else(|| "true".to_string()).parse()?;
 
     let expected_body = if response_bytes > 0 {
         vec![b'x'; response_bytes]
@@ -81,7 +83,10 @@ async fn main() -> Result<(), BenchError> {
     let mut senders = Vec::with_capacity(connection_count);
     for _ in 0..connection_count {
         let connection = endpoint.connect(address, "localhost")?.await?;
-        let (mut driver, sender) = h3::client::new(h3_quinn::Connection::new(connection)).await?;
+        let (mut driver, sender) = h3::client::builder()
+            .send_grease(h3_grease)
+            .build::<_, _, Bytes>(h3_quinn::Connection::new(connection))
+            .await?;
         tokio::spawn(async move {
             let _ = std::future::poll_fn(|cx| driver.poll_close(cx)).await;
         });
@@ -252,18 +257,23 @@ async fn main() -> Result<(), BenchError> {
     }
     latencies.sort_by(f64::total_cmp);
     let requests = latencies.len();
-    println!(
-        "{{\"requests\":{requests},\"duration_seconds\":{elapsed:.9},\"requests_per_second\":{:.3},\"request_body_bytes\":{request_bytes},\"response_body_bytes\":{response_bytes},\"response_data_chunks\":{response_data_chunks},\"application_bytes_per_second\":{:.3},\"p50_ms\":{:.6},\"p95_ms\":{:.6},\"p99_ms\":{:.6},\"failures\":{},\"first_failure\":{}}}",
+    writeln!(
+        std::io::stdout().lock(),
+        "{{\"h3_grease\":{h3_grease},\"requests\":{requests},\"duration_seconds\":{elapsed:.9},\"requests_per_second\":{:.3},\"request_body_bytes\":{request_bytes},\"response_body_bytes\":{response_bytes},\"response_data_chunks\":{response_data_chunks},\"application_bytes_per_second\":{:.3},\"p50_ms\":{:.6},\"p95_ms\":{:.6},\"p99_ms\":{:.6},\"failures\":{},\"first_failure\":{}}}",
         requests as f64 / elapsed,
         (request_bytes + response_bytes) as f64 / elapsed,
         percentile(&latencies, 0.50),
         percentile(&latencies, 0.95),
         percentile(&latencies, 0.99),
         failures.len(),
-        failures.first().map(|reason| format!("\"{}\"", reason.replace('"', "\\\""))).unwrap_or_else(|| "null".to_string())
-    );
+        failures
+            .first()
+            .map(|reason| format!("\"{}\"", reason.replace('"', "\\\"")))
+            .unwrap_or_else(|| "null".to_string())
+    )?;
     drop(senders);
-    endpoint.close(quinn::VarInt::from_u32(0), b"benchmark complete");
+    // RFC 9114: an HTTP/3 application close without an error uses H3_NO_ERROR.
+    endpoint.close(quinn::VarInt::from_u32(0x100), b"benchmark complete");
     endpoint.wait_idle().await;
     if !failures.is_empty() || requests == 0 {
         return Err("HTTP/3 benchmark correctness gate failed".into());

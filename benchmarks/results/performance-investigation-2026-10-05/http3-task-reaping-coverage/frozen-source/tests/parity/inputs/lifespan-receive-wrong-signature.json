@@ -1,0 +1,19 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan.receive-call-rejects-positional-argument",
+      "profile": "lifespan-receive-wrong-signature",
+      "operation": "lifespan.unsupported",
+      "covers": [
+        "lifespan.unsupported"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,147 @@
+{
+  "created_at": "2026-10-05T13:10:07.244633+00:00",
+  "files": {
+    "README.md": {
+      "byte_identical": null,
+      "bytes": 1306,
+      "kind": "derived documentation",
+      "original_path": null,
+      "sha256": "8652de14bc4824fbe451062e7a7892e8e2ba146265a706cb39fe46efec5790d5"
+    },
+    "ab-receipt.json": {
+      "byte_identical": true,
+      "bytes": 3686,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/ab-receipt.json",
+      "sha256": "95dcac0fbc8ec9145a86c815d49b376ee8c043575eb46aa37653b568070651d9"
+    },
+    "grease-false-live-after.json": {
+      "byte_identical": true,
+      "bytes": 11134,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-false-live-after.json",
+      "sha256": "3de0cff13e9db7a9c5c0d69fb22f092ce0129854ed9eab0d7c97809446c6e283"
+    },
+    "grease-false-live-before.json": {
+      "byte_identical": true,
+      "bytes": 10756,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-false-live-before.json",
+      "sha256": "b8d8159822fc7da22d63f39737a062e5aaff7af79769ce9b183016dd39dbfccc"
+    },
+    "grease-false-live-result.json": {
+      "byte_identical": true,
+      "bytes": 119632,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-false-live-result.json",
+      "sha256": "933297295cae18900644f7de554cea60d8435f4adf134f45d82dca81aa359996"
+    },
+    "grease-false-live-run.log": {
+      "byte_identical": true,
+      "bytes": 366,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-false-live-run.log",
+      "sha256": "9c6af9aadd94c281e66267c233620dad0fe24ba557f8c335163771a2493c222d"
+    },
+    "grease-true-before.json": {
+      "byte_identical": true,
+      "bytes": 10749,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-true-before.json",
+      "sha256": "b674871d45cea6178836d21cf36e09f7e516625a97566efe7a1ee6d3a1485f76"
+    },
+    "grease-true-live-after.json": {
+      "byte_identical": true,
+      "bytes": 10871,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-true-live-after.json",
+      "sha256": "af7a44c80b4e98ff20e48bded35963d9c70d8874750fd16f31403e97c87d1a68"
+    },
+    "grease-true-live-before.json": {
+      "byte_identical": true,
+      "bytes": 11170,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-true-live-before.json",
+      "sha256": "813e061081e1e8f34f9300086fd0a4dd7e0c721b38374f198267b977db8c0cd3"
+    },
+    "grease-true-live-result.json": {
+      "byte_identical": true,
+      "bytes": 19105,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-true-live-result.json",
+      "sha256": "39e6c094cf9d25862a9ded4799ad6bb98e5797762802d7e5abd1a25cbf625033"
+    },
+    "grease-true-live-run.log": {
+      "byte_identical": true,
+      "bytes": 5743,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-true-live-run.log",
+      "sha256": "62e95f4aec7d555431bf931f89afbaa11b377662fcada6838c65a81648fb2a59"
+    },
+    "grease-true-result.json": {
+      "byte_identical": true,
+      "bytes": 18897,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-true-result.json",
+      "sha256": "a06a600229f106e29cefc4bef9f696c77a254c2204c97e74de5f4bcd440b10a1"
+    },
+    "grease-true-run.log": {
+      "byte_identical": true,
+      "bytes": 262,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-true-run.log",
+      "sha256": "fa1b98868c5bf934f2e654e652d34acbd9ab4b2b4f9e8faacce2ff9c8329d570"
+    },
+    "input-grease-false.json": {
+      "byte_identical": true,
+      "bytes": 53396,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/input-grease-false.json",
+      "sha256": "d25c03464157b839d38ce25d2422e0a7a70ebaceaf51bd4e6076edbe6a0bcca0"
+    },
+    "input-grease-true.json": {
+      "byte_identical": true,
+      "bytes": 53395,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/input-grease-true.json",
+      "sha256": "8a92034d032f2a6c5f16c768dd4537fdc15e3bc15739984e1f8a18e001a5a260"
+    },
+    "manifest.json": {
+      "byte_identical": true,
+      "bytes": 44068,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/manifest.json",
+      "sha256": "33b3faacec03a206bf6b8a594e3da7ce697fff85b753d684b64823c89b895c70"
+    },
+    "parity-http3.rs": {
+      "byte_identical": true,
+      "bytes": 22104,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/parity-http3.rs",
+      "sha256": "d705db4513023ab95e547d3dda76f0f6623a98e6066c3ea93571a17ecdbb3fb3"
+    },
+    "parser-evidence.json": {
+      "byte_identical": true,
+      "bytes": 7455,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/parser-evidence.json",
+      "sha256": "61d3a91da8b1a2a7ebf86a2590217a427271f33d424a3d8ce255eed2c305dd7d"
+    },
+    "preparation.json": {
+      "byte_identical": true,
+      "bytes": 2113,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/preparation.json",
+      "sha256": "5a440d6929fef87cae488f79cac2b9bfa13c7985eca4b5e610275cc75d2e2987"
+    },
+    "run_parity.py": {
+      "byte_identical": true,
+      "bytes": 308221,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/http3-grease-public128-ab-2026-10-05/run_parity.py",
+      "sha256": "af0fc4182fbd64b71e372ca9a49632e5c7a65bb977429715a1ccfc0ee401dec3"
+    }
+  },
+  "raw_copy_policy": "byte-identical raw attempts, inputs, sources, logs and receipts; no native binaries",
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1"
+}

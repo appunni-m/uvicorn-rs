@@ -1,0 +1,72 @@
+{
+  "attribution": {
+    "executed": 448,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "passed": 448,
+    "selected": 448,
+    "transient_infrastructure_failures": 0
+  },
+  "coverage_mcp_groups": 1,
+  "coverage_mcp_missing_function_observations": 7,
+  "instrumented_native_sha256": "1738b05415f22f312990282e17fa294382d79cd5e0f486d6a4f95e4c64cb6e97",
+  "native_aggregate": {
+    "lines": {
+      "covered": 3358,
+      "missing": 0,
+      "total": 3358
+    },
+    "regions": {
+      "covered": 4758,
+      "missing": 0,
+      "total": 4758
+    }
+  },
+  "next_action": "Use the reviewed borrowed buffer enum to retain one shared fallible write helper and remeasure the full gate on its new source/build; preserve this historical evidence without excluding observations.",
+  "reason": "The generic FnOnce scalar write helper instance has seven uncovered observations; the vectored instance covers the same source spans, so aggregate native source coverage is 100% while Coverage-MCP reports one missing function group. This is not accepted as zero-gap evidence.",
+  "report_sha256": "e7ccb71298b5cdf3545c17852832ea8e502124bece3038339d02ca5ac587fbc4",
+  "schema": "uvicorn-rs-coverage/status-note@1",
+  "source_sha256": "b6421bc45a55e194b4924661f4492b06c2860b47d1bf97d17991145b9094d028",
+  "status": "historical_aggregate_complete_mcp_function_gap",
+  "verification_runs": [
+    {
+      "runner_exit_code": 0,
+      "status": "completed",
+      "summary": {
+        "executed": 448,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 448,
+        "selected": 448
+      },
+      "transient_infrastructure_failures": 0
+    },
+    {
+      "runner_exit_code": 0,
+      "status": "completed",
+      "summary": {
+        "executed": 448,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 448,
+        "selected": 448
+      },
+      "transient_infrastructure_failures": 0
+    },
+    {
+      "runner_exit_code": 0,
+      "status": "completed",
+      "summary": {
+        "executed": 448,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 448,
+        "selected": 448
+      },
+      "transient_infrastructure_failures": 0
+    }
+  ]
+}

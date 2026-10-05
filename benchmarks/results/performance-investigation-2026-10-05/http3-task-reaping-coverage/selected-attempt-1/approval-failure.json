@@ -1,0 +1,8 @@
+{
+  "status": "not_executed_review_capacity_failure",
+  "cause": "Automatic approval review failed: Selected model is at capacity. The action was not executed because review could not be completed; not a determination that the action is unsafe.",
+  "cases_executed": 0,
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "native_sha256": "41bf61b21be0443b5d1e02329e7ae2e6e893fe17a4b42e636e4367a5aca91cfe",
+  "preserved_client_build_log": "build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/selected-attempt-1/client-build.log"
+}

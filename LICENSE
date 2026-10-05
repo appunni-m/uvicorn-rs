@@ -1,0 +1,8 @@
+Copyright (c) 2026 Appunni M
+
+uvicorn-rs is available under either the BSD 3-Clause license or the MIT
+license, at your option. See LICENSE-BSD-3-Clause and LICENSE-MIT for the
+complete terms. The license texts follow Uvicorn and Hypercorn respectively;
+their original copyright notices are retained in those files.
+
+Dependencies and any incorporated third-party code retain their own licenses.

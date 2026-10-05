@@ -1,0 +1,21 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.lifespan-start-event-channel-closed-after-app-error",
+      "profile": "lifespan-fault-start-event-channel-closed",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": [
+        "lifespan.startup-auto-fallback"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.startup.event-channel-closed",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {
+        "followup_path": "/state"
+      }
+    }
+  ]
+}

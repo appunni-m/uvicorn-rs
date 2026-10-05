@@ -1,0 +1,22 @@
+{
+  "cases": 450,
+  "oracle_parity": 214,
+  "fault_contract": 236,
+  "operations": 62,
+  "input_files": 70,
+  "files": {
+    "scripts/run_parity.py": "e9e80dd81dbd4088ba12dcea6976791f1bdc0c3261ed260395ebc247dfe5ab52",
+    "tools/http3-probe/src/bin/parity-http3.rs": "01ae82bb7b11d6590c9f931bea329e969cb84b0f90d00c9f76dea585c00684bd",
+    "tests/parity/manifest.json": "33b3faacec03a206bf6b8a594e3da7ce697fff85b753d684b64823c89b895c70",
+    "tests/parity/inputs/http3.json": "2460b813b8f2767de04b95f6f411be95454b814fe25c785f7ba35ee26cb01c3b"
+  },
+  "cases_frozen": [
+    "http3.sequential-responses-one-connection",
+    "fault.http3.request-task-panic",
+    "fault.http3.request-task-panic-after-response"
+  ],
+  "live_validation": "pending coverage owner; static strict input contract only",
+  "new_fault_point": "http3.request-task.panic-after-response",
+  "new_fault_contract": "http3-request-task-error-before-peer-close-followup-200",
+  "sequence_barrier": "hold_after_response=1 for target recovery; normal128 after response128; all requests share one endpoint/sender/connection"
+}

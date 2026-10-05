@@ -1,0 +1,67 @@
+{
+  "declared_source_hashes_match_sibling_snapshot": true,
+  "groups_with_any_matching_valid_repetition": 3,
+  "interpretation": "Individual valid rows and matched repetitions are different counts. No workload has the required three valid matching repetitions; no speedup or ratio qualifies.",
+  "matching_valid_repetitions_across_workloads": 5,
+  "native_extension_sha256": "8f69afda0be9d121d304c674d5638f470da6939fbed58ce809457284df6585b6",
+  "original_report_sha256": "fced9f0b4fb75d1fd31ad3cfed199871b3def77663574659c00460a8ea30c1be",
+  "performance_evidence_status": "not_proven",
+  "qualified_workload_groups": 0,
+  "recorded_pair_groups": 5,
+  "recorded_paired_timing_repetitions": [
+    {
+      "baseline": "uvicorn-uvloop-httptools",
+      "candidate": "uvicorn-rs-uvloop",
+      "outcome": "not_proven",
+      "required": 3,
+      "valid_matching_repetitions": [],
+      "workload": "contextvars"
+    },
+    {
+      "baseline": "uvicorn-uvloop-httptools",
+      "candidate": "uvicorn-rs-uvloop",
+      "outcome": "not_proven",
+      "required": 3,
+      "valid_matching_repetitions": [
+        2,
+        3
+      ],
+      "workload": "fixed"
+    },
+    {
+      "baseline": "uvicorn-uvloop-httptools",
+      "candidate": "uvicorn-rs-uvloop",
+      "outcome": "not_proven",
+      "required": 3,
+      "valid_matching_repetitions": [
+        1,
+        3
+      ],
+      "workload": "large-response"
+    },
+    {
+      "baseline": "uvicorn-uvloop-httptools",
+      "candidate": "uvicorn-rs-uvloop",
+      "outcome": "not_proven",
+      "required": 3,
+      "valid_matching_repetitions": [],
+      "workload": "many-response-chunks"
+    },
+    {
+      "baseline": "uvicorn-uvloop-httptools",
+      "candidate": "uvicorn-rs-uvloop",
+      "outcome": "not_proven",
+      "required": 3,
+      "valid_matching_repetitions": [
+        1
+      ],
+      "workload": "scope-32-headers"
+    }
+  ],
+  "response_failures_in_completed_rows": 0,
+  "rows": 30,
+  "schema": "uvicorn-rs-benchmark-archive-summary@1",
+  "source_snapshot": "../categories-error-logs/evidence-snapshot",
+  "timing_invalid_individual_rows": 19,
+  "timing_valid_individual_rows": 11
+}

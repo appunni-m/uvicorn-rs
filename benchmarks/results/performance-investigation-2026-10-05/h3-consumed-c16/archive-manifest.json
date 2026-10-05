@@ -1,0 +1,46 @@
+{
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1",
+  "scope": "two correct host-invalid retained rows; Rust repeat 2 failed diagnostics on benchmark client ApplicationClose(0), before complete category report; no ratio",
+  "files": {
+    "driver.log": {
+      "sha256": "53504bb5b1bae4f7be1c4302dbfe562e5f41a63c1ad9bd72effb62f770868bfa",
+      "bytes": 34469,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c16/driver.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c16/http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c16/http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "3d86933a5b1e7bfae97f8ddcd8dce751d88def7cc6cbc8cded8d0b2484312e21",
+      "bytes": 95,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c16/http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http3.jsonl": {
+      "sha256": "fe5fce6b24a3ac8da69ff9995fbeeb5da83ddf25b6c5cbe8845fb509ce1a3019",
+      "bytes": 32181,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c16/http3.jsonl"
+    },
+    "http3.jsonl.meta.json": {
+      "sha256": "ab344d96dcc039275516d3a45882e780a4aea52c22704d743c340aa7b46c6295",
+      "bytes": 68018,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c16/http3.jsonl.meta.json"
+    },
+    "public-gate-identity-after.json": {
+      "sha256": "d39931d3995f8baedd23fa411cfcebc263df3a987de65b42edb9aac34f5684ba",
+      "bytes": 168962,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c16/public-gate-identity-after.json"
+    },
+    "README.md": {
+      "sha256": "ccbd15c22b4083d7d101a3c2e45b3526a4d4c8f707f54cdf91f167277dfbec6b",
+      "bytes": 675,
+      "kind": "derived scope note"
+    }
+  }
+}

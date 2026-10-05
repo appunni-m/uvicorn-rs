@@ -1,0 +1,21 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.lifespan-fault-asgi-startup-event-channel-closed",
+      "profile": "lifespan-fault-asgi-startup-event-channel-closed",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": [
+        "lifespan.startup-auto-fallback"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.send.event-channel-closed",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {
+        "followup_path": "/state"
+      }
+    }
+  ]
+}

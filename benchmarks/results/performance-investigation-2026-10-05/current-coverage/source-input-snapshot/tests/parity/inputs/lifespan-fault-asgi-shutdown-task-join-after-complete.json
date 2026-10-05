@@ -1,0 +1,22 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.lifespan.shutdown-task-join-after-complete",
+      "profile": "lifespan-fault-asgi-shutdown-task-join-after-complete",
+      "operation": "server.shutdown-failure",
+      "covers": [
+        "server.shutdown-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.shutdown.task-join-after-complete",
+        "contract": "server-shutdown-failure"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1
+      }
+    }
+  ]
+}

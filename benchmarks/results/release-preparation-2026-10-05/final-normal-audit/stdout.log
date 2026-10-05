@@ -1,0 +1,12 @@
+{
+  "status": "failed",
+  "summary": {
+    "selected": 3,
+    "executed": 0,
+    "passed": 0,
+    "failed": 0,
+    "not_run": 3,
+    "infrastructure_failed": 2
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/build/release-path-2026-10-05/final-normal-audit/parity-result.json"
+}

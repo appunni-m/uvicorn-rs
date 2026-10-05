@@ -1,0 +1,1591 @@
+{
+  "schema": "uvicorn-rs-parity/manifest@2",
+  "scope": {
+    "id": "asgi-server-protocol-slice",
+    "mode": "slice",
+    "authority": "docs/support-matrix.md",
+    "description": "Consumer-visible ASGI HTTP, WebSocket, lifespan, disconnect, and shutdown behavior represented by indexed input workflows. This is not the full ASGI or Uvicorn contract."
+  },
+  "oracles": [
+    {
+      "id": "uvicorn",
+      "name": "Uvicorn",
+      "version": "0.54.0",
+      "runtime": "CPython 3.12",
+      "protocols": [
+        "http/1.1",
+        "websocket",
+        "lifespan"
+      ],
+      "components": [
+        {
+          "id": "uvloop",
+          "version": "0.23.0"
+        },
+        {
+          "id": "httptools",
+          "version": "0.8.0"
+        },
+        {
+          "id": "websockets",
+          "version": "17.1"
+        }
+      ]
+    },
+    {
+      "id": "hypercorn",
+      "name": "Hypercorn",
+      "version": "0.18.0",
+      "runtime": "CPython 3.12",
+      "protocols": [
+        "http/2",
+        "http/3"
+      ],
+      "components": [
+        {
+          "id": "uvloop",
+          "version": "0.23.0"
+        },
+        {
+          "id": "h11",
+          "version": "0.16.0"
+        },
+        {
+          "id": "h2",
+          "version": "4.4.1"
+        },
+        {
+          "id": "wsproto",
+          "version": "1.3.2"
+        },
+        {
+          "id": "aioquic",
+          "version": "1.3.0"
+        }
+      ]
+    }
+  ],
+  "target": {
+    "id": "uvicorn-rs",
+    "name": "uvicorn-rs",
+    "revision": "recorded-at-run-time",
+    "runtime": "CPython 3.12 + Rust/Tokio",
+    "protocols": [
+      "http/1.1",
+      "http/2",
+      "http/3",
+      "websocket",
+      "lifespan"
+    ]
+  },
+  "profiles": [
+    {
+      "id": "http1",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "http1-tls",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "TLS",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "http2",
+      "oracle": "hypercorn",
+      "protocol": "http/2",
+      "oracle_config": [
+        "uvloop",
+        "TLS ALPN h2",
+        "explicit ASGI mode for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "http3",
+      "oracle": "hypercorn",
+      "protocol": "http/3",
+      "oracle_config": [
+        "uvloop",
+        "QUIC",
+        "explicit ASGI mode for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "websocket",
+      "oracle": "uvicorn",
+      "protocol": "websocket",
+      "oracle_config": [
+        "uvloop",
+        "websockets",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "websocket-tls",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + websocket",
+      "oracle_config": [
+        "uvloop",
+        "TLS",
+        "websockets",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "startup-partial-tls-api",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "TLS certificate supplied without a key"
+      ]
+    },
+    {
+      "id": "startup-missing-certificate",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "certificate path does not exist"
+      ]
+    },
+    {
+      "id": "startup-invalid-host",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "reserved .invalid hostname cannot resolve"
+      ]
+    },
+    {
+      "id": "startup-empty-certificate",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "certificate file exists but is empty"
+      ]
+    },
+    {
+      "id": "startup-invalid-certificate-pem",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "certificate file contains invalid PEM"
+      ]
+    },
+    {
+      "id": "startup-missing-private-key",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "certificate file is valid but the key path does not exist"
+      ]
+    },
+    {
+      "id": "startup-empty-private-key",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "certificate file is valid but the key file is empty"
+      ]
+    },
+    {
+      "id": "startup-invalid-private-key-pem",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "certificate file is valid but the key file contains invalid PEM"
+      ]
+    },
+    {
+      "id": "startup-mismatched-private-key",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "certificate and valid private key do not match"
+      ]
+    },
+    {
+      "id": "lifecycle",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "lifecycle-tls",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "TLS",
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "lifespan-fault-shutdown-cancel",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "coverage-only injected zero-deadline cancellation while a lifespan task is pending"
+      ]
+    },
+    {
+      "id": "lifecycle-server-api",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn CLI lifespan under SIGTERM",
+        "uvicorn-rs public Server.serve API under task cancellation",
+        "same ASGI app and held request cancellation workflow"
+      ]
+    },
+    {
+      "id": "lifecycle-owned-loop",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server and uvicorn-rs.Server public APIs",
+        "same externally owned asyncio event loop",
+        "observe post-response ASGI task cancellation and completion before probe or loop cleanup"
+      ]
+    },
+    {
+      "id": "lifespan-no-support",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "ASGI lifespan auto with an app that returns during startup"
+      ]
+    },
+    {
+      "id": "lifespan-retained-send",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "ASGI callable returns during startup while retaining the send callable"
+      ]
+    },
+    {
+      "id": "lifespan-subclass-event-types",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "startup.complete and shutdown.complete events use str subclasses"
+      ]
+    },
+    {
+      "id": "lifespan-no-support-error",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI lifespan auto when the app raises before receiving startup"
+      ]
+    },
+    {
+      "id": "lifespan-fault-start-event-channel-closed",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "coverage contract returns channel closure before the app startup exception"
+      ]
+    },
+    {
+      "id": "lifespan-no-support-error-retained",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI app raises after startup while retaining the send callable"
+      ]
+    },
+    {
+      "id": "lifespan-receive-wrong-signature",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto with receive called using an invalid positional argument"
+      ]
+    },
+    {
+      "id": "lifespan-invalid-startup-event",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto with a non-lifespan ASGI event during startup"
+      ]
+    },
+    {
+      "id": "lifespan-missing-startup-event-type",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto with a startup send missing its event type"
+      ]
+    },
+    {
+      "id": "lifespan-non-string-startup-event-type",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto with a non-string startup event type"
+      ]
+    },
+    {
+      "id": "lifespan-startup-failed",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI lifespan.startup.failed with a message"
+      ]
+    },
+    {
+      "id": "lifespan-startup-failed-subclass",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "lifespan.startup.failed event type uses a str subclass"
+      ]
+    },
+    {
+      "id": "lifespan-startup-failed-empty",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI lifespan.startup.failed without a message"
+      ]
+    },
+    {
+      "id": "lifespan-unexpected-startup-event",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "Unexpected shutdown.complete during ASGI startup"
+      ]
+    },
+    {
+      "id": "lifespan-shutdown-failed",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI lifespan.shutdown.failed with a message"
+      ]
+    },
+    {
+      "id": "lifespan-shutdown-failed-subclass",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "lifespan.shutdown.failed event type uses a str subclass"
+      ]
+    },
+    {
+      "id": "lifespan-shutdown-failed-empty",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI lifespan.shutdown.failed without a message"
+      ]
+    },
+    {
+      "id": "lifespan-shutdown-returns",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI app returns without lifespan.shutdown.complete"
+      ]
+    },
+    {
+      "id": "lifespan-shutdown-returns-retained",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI app returns during shutdown while retaining the send callable"
+      ]
+    },
+    {
+      "id": "lifespan-shutdown-raises",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI app raises while handling lifespan.shutdown"
+      ]
+    },
+    {
+      "id": "lifespan-shutdown-unexpected-event",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "ASGI app sends an unexpected event during lifespan.shutdown"
+      ]
+    },
+    {
+      "id": "lifespan-startup-complete-then-returns",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "ASGI app returns after lifespan.startup.complete"
+      ]
+    },
+    {
+      "id": "lifespan-fault-scope-asgi-version",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan scope construction error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-scope-asgi-spec-version",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan scope construction error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-scope-type",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan scope construction error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-scope-asgi",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan scope construction error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-scope-state",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan scope construction error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-receive-startup",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan startup event construction error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-shutdown-receive",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan shutdown event construction error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-startup-complete",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected ASGI startup-complete classification error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-startup-failed",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected ASGI startup-failed classification error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-shutdown-complete",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected ASGI shutdown-complete classification error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-shutdown-failed",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected ASGI shutdown-failed classification error"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-startup-failed-message-get-item",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan.startup.failed.message.get-item fault contract"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-startup-failed-message-extract",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan.startup.failed.message.extract fault contract"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-startup-event-channel-closed",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan.send.event-channel-closed fault contract"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-shutdown-send-type-get-item",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan.asgi.send.type.get-item fault contract"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-shutdown-failed-message-get-item",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan.shutdown.failed.message.get-item fault contract"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-shutdown-failed-message-extract",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected lifespan.shutdown.failed.message.extract fault contract"
+      ]
+    },
+    {
+      "id": "startup-fault-native-add-class-asgi-io",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected native.module.add-class.asgi-io fault contract"
+      ]
+    },
+    {
+      "id": "startup-fault-native-add-class-websocket-io",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected native.module.add-class.websocket-io fault contract"
+      ]
+    },
+    {
+      "id": "startup-fault-native-add-class-lifespan-io",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected native.module.add-class.lifespan-io fault contract"
+      ]
+    },
+    {
+      "id": "startup-fault-lifespan-bridge",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected Python lifespan bridge construction faults"
+      ]
+    },
+    {
+      "id": "startup-fault-native-add-class-server-control",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected native.module.add-class.server-control fault contract"
+      ]
+    },
+    {
+      "id": "startup-fault-native-add-function-serve",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected native.module.add-function.serve fault contract"
+      ]
+    },
+    {
+      "id": "startup-fault-listener-accept",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "target-only injected server.listener.accept-error and server.listener.local-addr-error fault contracts"
+      ]
+    },
+    {
+      "id": "lifespan-shutdown-complete-then-raises",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "ASGI app raises after lifespan.shutdown.complete"
+      ]
+    },
+    {
+      "id": "lifespan-fault-asgi-shutdown-task-join-after-complete",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan auto",
+        "target-only task cancellation after lifespan.shutdown.complete"
+      ]
+    },
+    {
+      "id": "lifespan-state-copy-rehash",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "lifespan state shallow copy preserves key hashes and shared values"
+      ]
+    },
+    {
+      "id": "lifecycle-owned-loop-eager",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "public Server.serve API on externally owned CPython 3.12 asyncio loop",
+        "public eager_task_factory installed before native startup",
+        "target-only registration faults with cooperative or held asynchronous cancellation cleanup"
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "id": "http.scope-and-body",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.sync-callable-awaitable",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.response-stream",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "ordered_body_bytes",
+        "connection_closed"
+      ]
+    },
+    {
+      "id": "http.response-stream-progress",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "early_body_bytes",
+        "ordered_body_bytes",
+        "streamed_before_completion"
+      ],
+      "required_observations": {
+        "streamed_before_completion": true
+      }
+    },
+    {
+      "id": "http.response-stream-reset",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "early_body_bytes",
+        "streamed_before_completion",
+        "connection_closed",
+        "followup_response"
+      ],
+      "required_observations": {
+        "status": 200,
+        "early_body_bytes": "Zmlyc3Qv",
+        "streamed_before_completion": true,
+        "connection_closed": true
+      }
+    },
+    {
+      "id": "http2.response-stream-reset",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "response_stream_started",
+        "stream_reset",
+        "followup_response"
+      ],
+      "required_observations": {
+        "status": 200,
+        "response_stream_started": true,
+        "stream_reset": true
+      }
+    },
+    {
+      "id": "http.invalid-asgi-message",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.request-upload",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "ordered_body_bytes"
+      ]
+    },
+    {
+      "id": "http3.invalid-content-length-status",
+      "kind": "protocol_operation",
+      "observe": [
+        "status"
+      ]
+    },
+    {
+      "id": "http3.request-disconnect",
+      "kind": "protocol_operation",
+      "observe": [
+        "disconnect_event",
+        "followup_response"
+      ],
+      "required_observations": {
+        "disconnect_event": true
+      }
+    },
+    {
+      "id": "http.request-streaming",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "early_body_bytes",
+        "ordered_body_bytes"
+      ]
+    },
+    {
+      "id": "http.application-error",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.response-body-fault",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes",
+        "connection_closed"
+      ]
+    },
+    {
+      "id": "http.application-status",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.response-empty-body",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.client-disconnect",
+      "kind": "protocol_operation",
+      "observe": [
+        "disconnect_event",
+        "followup_response"
+      ]
+    },
+    {
+      "id": "http.websocket-upgrade-detection",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.keepalive-sequence",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses"
+      ]
+    },
+    {
+      "id": "http.application-task-cleanup-observer",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses"
+      ],
+      "required_observations": {
+        "responses": [
+          {
+            "status": 200,
+            "content_type": "application/octet-stream",
+            "body_base64": "aGVsZA=="
+          },
+          {
+            "status": 200,
+            "content_type": "application/json",
+            "body_base64": "eyJwZW5kaW5nX2FwcGxpY2F0aW9uX3Rhc2tzIjoxfQ=="
+          },
+          {
+            "status": 200,
+            "content_type": "application/json",
+            "body_base64": "eyJjYW5jZWxsZWRfYXBwbGljYXRpb25fdGFza3MiOjF9"
+          },
+          {
+            "status": 200,
+            "content_type": "application/json",
+            "body_base64": "eyJwZW5kaW5nX2FwcGxpY2F0aW9uX3Rhc2tzIjowfQ=="
+          }
+        ]
+      }
+    },
+    {
+      "id": "websocket.message-exchange",
+      "kind": "protocol_operation",
+      "observe": [
+        "subprotocol",
+        "ordered_messages"
+      ]
+    },
+    {
+      "id": "websocket.denial",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status"
+      ]
+    },
+    {
+      "id": "websocket.protocol-error",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status"
+      ]
+    },
+    {
+      "id": "websocket.handshake-rejected",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_established"
+      ],
+      "required_observations": {
+        "handshake_established": false
+      }
+    },
+    {
+      "id": "websocket.control-ping",
+      "kind": "protocol_operation",
+      "observe": [
+        "pong_received"
+      ],
+      "required_observations": {
+        "pong_received": true
+      }
+    },
+    {
+      "id": "websocket.abrupt-disconnect",
+      "kind": "protocol_operation",
+      "observe": [
+        "disconnect_event"
+      ],
+      "required_observations": {
+        "disconnect_event": true
+      }
+    },
+    {
+      "id": "websocket.server-close",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "ordered_messages",
+        "close_code",
+        "close_reason"
+      ]
+    },
+    {
+      "id": "websocket.app-error",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "close_code"
+      ]
+    },
+    {
+      "id": "websocket.client-close",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "application_events"
+      ]
+    },
+    {
+      "id": "websocket.fault-contract",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "application_events",
+        "followup_response"
+      ]
+    },
+    {
+      "id": "lifespan.shutdown-cancellation",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "application_events"
+      ]
+    },
+    {
+      "id": "lifespan.post-response-application-shutdown",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "status",
+        "body_bytes",
+        "response_complete_before_app_return",
+        "process_terminated",
+        "process_exit_code",
+        "application_cancelled",
+        "application_cleanup_completed",
+        "application_tasks_finished_before_probe_cleanup",
+        "loop_alive_after_server_return",
+        "lifespan_shutdown_completed",
+        "shutdown_bounded"
+      ],
+      "required_observations": {
+        "status": 200,
+        "body_bytes": "Y29tcGxldGU=",
+        "response_complete_before_app_return": true,
+        "process_terminated": true,
+        "process_exit_code": 0,
+        "application_cancelled": true,
+        "application_cleanup_completed": true,
+        "application_tasks_finished_before_probe_cleanup": true,
+        "loop_alive_after_server_return": true,
+        "lifespan_shutdown_completed": true,
+        "shutdown_bounded": true
+      }
+    },
+    {
+      "id": "lifespan.idle-keepalive-graceful-shutdown",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "application_events",
+        "connection_closed"
+      ],
+      "required_observations": {
+        "connection_closed": true
+      }
+    },
+    {
+      "id": "lifespan.active-stream-graceful-drain",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "application_events",
+        "connection_closed",
+        "listener_closed_before_release",
+        "idle_connection_closed"
+      ],
+      "required_observations": {
+        "process_terminated": true,
+        "connection_closed": true,
+        "listener_closed_before_release": true,
+        "idle_connection_closed": true
+      }
+    },
+    {
+      "id": "lifespan.active-stream-reset-during-shutdown",
+      "kind": "protocol_operation",
+      "observe": [
+        "process_terminated",
+        "application_events",
+        "client_aborted",
+        "response_stream_started"
+      ],
+      "required_observations": {
+        "process_terminated": true,
+        "client_aborted": true,
+        "response_stream_started": true
+      }
+    },
+    {
+      "id": "lifespan.hyper-connection-write-error-during-shutdown",
+      "kind": "protocol_operation",
+      "observe": [
+        "process_terminated",
+        "application_events",
+        "connection_closed",
+        "response_stream_started"
+      ],
+      "required_observations": {
+        "process_terminated": true,
+        "connection_closed": true,
+        "response_stream_started": true
+      }
+    },
+    {
+      "id": "lifespan.unsupported",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.invalid-response-header",
+      "kind": "protocol_operation",
+      "observe": [
+        "connection_closed"
+      ],
+      "required_observations": {
+        "connection_closed": true
+      }
+    },
+    {
+      "id": "http.invalid-response-start",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes",
+        "connection_closed"
+      ]
+    },
+    {
+      "id": "http.invalid-asgi-message-status",
+      "kind": "protocol_operation",
+      "observe": [
+        "status"
+      ]
+    },
+    {
+      "id": "websocket.shutdown-cancellation",
+      "kind": "protocol_operation",
+      "observe": [
+        "process_terminated",
+        "application_events",
+        "close_code",
+        "close_reason"
+      ]
+    },
+    {
+      "id": "websocket.upgrade-client-drop",
+      "kind": "protocol_operation",
+      "observe": [
+        "status"
+      ],
+      "required_observations": {
+        "status": 200
+      }
+    },
+    {
+      "id": "websocket.upgrade-shutdown-cancellation",
+      "kind": "protocol_operation",
+      "observe": [
+        "process_terminated"
+      ],
+      "required_observations": {
+        "process_terminated": true
+      }
+    },
+    {
+      "id": "lifespan.startup-failure",
+      "kind": "protocol_operation",
+      "observe": [
+        "startup_failed",
+        "application_events"
+      ],
+      "required_observations": {
+        "startup_failed": true
+      }
+    },
+    {
+      "id": "lifespan.startup-auto-fallback",
+      "kind": "protocol_operation",
+      "observe": [
+        "startup_error_observed",
+        "followup_response"
+      ]
+    },
+    {
+      "id": "lifespan.shutdown-failure",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "application_events"
+      ],
+      "required_observations": {
+        "process_terminated": true
+      }
+    },
+    {
+      "id": "server.shutdown-failure",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "process_terminated": true
+      }
+    },
+    {
+      "id": "lifespan.event-type-subclass",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "application_events"
+      ],
+      "required_observations": {
+        "process_terminated": true
+      }
+    },
+    {
+      "id": "http3.handshake-recovery",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_rejected",
+        "followup_response"
+      ],
+      "required_observations": {
+        "handshake_rejected": true
+      }
+    },
+    {
+      "id": "http3.injected-stream-error",
+      "kind": "protocol_operation",
+      "observe": [
+        "connection_closed",
+        "stream_reset",
+        "status"
+      ]
+    },
+    {
+      "id": "http3.body-pump-early-exit",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http3.connection-task-shutdown",
+      "kind": "protocol_operation",
+      "observe": [
+        "process_terminated"
+      ],
+      "required_observations": {
+        "process_terminated": true
+      }
+    },
+    {
+      "id": "http3.endpoint-accept-fallback",
+      "kind": "protocol_operation",
+      "observe": [
+        "startup_error_observed",
+        "followup_response"
+      ]
+    },
+    {
+      "id": "http3.peer-close",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes",
+        "stream_reset",
+        "followup_response",
+        "process_terminated",
+        "process_exit_code",
+        "server_error_observed"
+      ],
+      "required_observations": {
+        "status": 200,
+        "stream_reset": false,
+        "process_terminated": true,
+        "process_exit_code": 0,
+        "server_error_observed": false
+      }
+    },
+    {
+      "id": "http3.graceful-shutdown",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes",
+        "process_terminated"
+      ],
+      "required_observations": {
+        "status": 200,
+        "process_terminated": true
+      }
+    },
+    {
+      "id": "http3.graceful-shutdown-aborts-response",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes",
+        "process_terminated"
+      ],
+      "required_observations": {
+        "status": 200,
+        "body_bytes": "Zmlyc3Qv",
+        "process_terminated": true
+      }
+    },
+    {
+      "id": "http3.response-client-abort",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "client_aborted",
+        "followup_response"
+      ],
+      "required_observations": {
+        "status": 200,
+        "client_aborted": true
+      }
+    },
+    {
+      "id": "http.concurrent-streams",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses"
+      ]
+    },
+    {
+      "id": "lifespan.tls-handshake-graceful-shutdown",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "application_events",
+        "connection_closed"
+      ],
+      "required_observations": {
+        "process_terminated": true,
+        "connection_closed": true
+      }
+    },
+    {
+      "id": "http.response-final-before-app-return",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "ordered_body_bytes",
+        "response_complete_before_app_return",
+        "background_work_completed"
+      ],
+      "required_observations": {
+        "status": 200,
+        "response_complete_before_app_return": true,
+        "background_work_completed": true
+      }
+    },
+    {
+      "id": "lifespan.state-shallow-copy",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses"
+      ],
+      "required_observations": {
+        "responses": [
+          {
+            "status": 200,
+            "content_type": "text/plain; charset=utf-8",
+            "body_base64": "YXJtZWQ="
+          },
+          {
+            "status": 200,
+            "content_type": "application/json",
+            "body_base64": "eyJsb2NhbF93cml0ZV9jaGFuZ2VkX3NvdXJjZSI6ZmFsc2UsInJlaGFzaF9jYWxscyI6MCwic2VwYXJhdGVfbmFtZXNwYWNlIjp0cnVlLCJzaGFyZWRfdmFsdWUiOnRydWUsInNvdXJjZV9tdXRhdGVkIjpmYWxzZX0="
+          },
+          {
+            "status": 200,
+            "content_type": "application/json",
+            "body_base64": "eyJsb2NhbF93cml0ZV9jaGFuZ2VkX3NvdXJjZSI6ZmFsc2UsInJlaGFzaF9jYWxscyI6MCwic2VwYXJhdGVfbmFtZXNwYWNlIjp0cnVlLCJzaGFyZWRfdmFsdWUiOnRydWUsInNvdXJjZV9tdXRhdGVkIjpmYWxzZX0="
+          }
+        ]
+      }
+    },
+    {
+      "id": "lifespan.eager-registration-failure-cleanup",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "process_exit_code",
+        "application_tasks_finished_before_probe_cleanup",
+        "lifespan_tasks_finished_before_probe_cleanup",
+        "loop_alive_after_server_return",
+        "serve_cancellation_propagated",
+        "shutdown_bounded",
+        "application_events"
+      ],
+      "required_observations": {
+        "process_terminated": true,
+        "process_exit_code": 0,
+        "application_tasks_finished_before_probe_cleanup": true,
+        "loop_alive_after_server_return": true,
+        "serve_cancellation_propagated": true,
+        "shutdown_bounded": true
+      }
+    }
+  ],
+  "inputs": [
+    "inputs/http1.json",
+    "inputs/http1-tls.json",
+    "inputs/http2.json",
+    "inputs/http3.json",
+    "inputs/websocket.json",
+    "inputs/websocket-tls.json",
+    "inputs/startup-partial-tls-api.json",
+    "inputs/startup-missing-certificate.json",
+    "inputs/startup-invalid-host.json",
+    "inputs/startup-empty-certificate.json",
+    "inputs/startup-invalid-certificate-pem.json",
+    "inputs/startup-missing-private-key.json",
+    "inputs/startup-empty-private-key.json",
+    "inputs/startup-invalid-private-key-pem.json",
+    "inputs/startup-mismatched-private-key.json",
+    "inputs/lifecycle.json",
+    "inputs/lifespan-fault-shutdown-cancel.json",
+    "inputs/lifecycle-server-api.json",
+    "inputs/lifespan-no-support.json",
+    "inputs/lifespan-retained-send.json",
+    "inputs/lifespan-subclass-event-types.json",
+    "inputs/lifespan-no-support-error.json",
+    "inputs/lifespan-fault-start-event-channel-closed.json",
+    "inputs/lifespan-no-support-error-retained.json",
+    "inputs/lifespan-receive-wrong-signature.json",
+    "inputs/lifespan-invalid-startup-event.json",
+    "inputs/lifespan-missing-startup-event-type.json",
+    "inputs/lifespan-non-string-startup-event-type.json",
+    "inputs/lifespan-startup-failed.json",
+    "inputs/lifespan-startup-failed-subclass.json",
+    "inputs/lifespan-startup-failed-empty.json",
+    "inputs/lifespan-unexpected-startup-event.json",
+    "inputs/lifespan-shutdown-failed.json",
+    "inputs/lifespan-shutdown-failed-subclass.json",
+    "inputs/lifespan-shutdown-failed-empty.json",
+    "inputs/lifespan-shutdown-returns.json",
+    "inputs/lifespan-shutdown-returns-retained.json",
+    "inputs/lifespan-shutdown-raises.json",
+    "inputs/lifespan-shutdown-unexpected-event.json",
+    "inputs/lifespan-startup-complete-then-returns.json",
+    "inputs/lifespan-fault-scope-asgi-version.json",
+    "inputs/lifespan-fault-scope-asgi-spec-version.json",
+    "inputs/lifespan-fault-scope-type.json",
+    "inputs/lifespan-fault-scope-asgi.json",
+    "inputs/lifespan-fault-scope-state.json",
+    "inputs/lifespan-fault-receive-startup.json",
+    "inputs/lifespan-fault-shutdown-receive.json",
+    "inputs/lifespan-fault-asgi-startup-complete.json",
+    "inputs/lifespan-fault-asgi-startup-failed.json",
+    "inputs/lifespan-fault-asgi-shutdown-complete.json",
+    "inputs/lifespan-fault-asgi-shutdown-failed.json",
+    "inputs/lifespan-fault-asgi-startup-failed-message-get-item.json",
+    "inputs/lifespan-fault-asgi-startup-failed-message-extract.json",
+    "inputs/lifespan-fault-asgi-startup-event-channel-closed.json",
+    "inputs/lifespan-fault-asgi-shutdown-send-type-get-item.json",
+    "inputs/lifespan-fault-asgi-shutdown-failed-message-get-item.json",
+    "inputs/lifespan-fault-asgi-shutdown-failed-message-extract.json",
+    "inputs/startup-fault-native-add-class-asgi-io.json",
+    "inputs/startup-fault-native-add-class-websocket-io.json",
+    "inputs/startup-fault-native-add-class-lifespan-io.json",
+    "inputs/startup-fault-lifespan-bridge.json",
+    "inputs/startup-fault-native-add-class-server-control.json",
+    "inputs/startup-fault-native-add-function-serve.json",
+    "inputs/startup-fault-listener-accept.json",
+    "inputs/lifecycle-tls.json",
+    "inputs/lifespan-shutdown-complete-then-raises.json",
+    "inputs/lifespan-fault-asgi-shutdown-task-join-after-complete.json",
+    "inputs/lifecycle-owned-loop.json",
+    "inputs/lifespan-state-copy-rehash.json",
+    "inputs/lifecycle-owned-loop-eager.json"
+  ],
+  "result_schema": "uvicorn-rs-parity/result@3",
+  "normalization": {
+    "http_headers": "Observe only the application content-type header. Date and server-identification headers are deliberately outside this parity slice.",
+    "body": "Compare response bytes exactly; byte lengths or hashes do not replace byte comparison.",
+    "errors": "Compare public HTTP status and body. Runtime traceback formatting is recorded in logs but is not treated as a cross-server API.",
+    "signal_exit": "The raw exit code is retained as a diagnostic, but parity compares that the process terminated and the ASGI cancellation/lifespan events completed. Uvicorn re-raises its handled signal after graceful cleanup; uvicorn-rs exits normally after cleanup.",
+    "peer_close_diagnostics": "The HTTP/3 peer-close operation sends an explicit u62 application close code after the complete response, repeats the same request on a fresh QUIC connection, and joins server tasks through graceful shutdown. It compares the presence of ERROR/CRITICAL reference logs or native diagnostic messages, Python tracebacks, and panic messages emitted within this workflow; exact diagnostic text and addresses are retained in stderr rather than compared. Hypercorn uses its public error log level for this operation."
+  }
+}

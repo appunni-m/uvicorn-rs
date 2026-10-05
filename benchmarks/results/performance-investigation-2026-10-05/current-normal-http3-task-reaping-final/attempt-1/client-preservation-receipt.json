@@ -1,0 +1,10 @@
+{
+  "status": "preserved",
+  "client_binary": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/parity-http3-identity-invalid-attempt-1",
+  "client_sha256": "628a4febc36792ac86b9dda1dde2dacc9038db6aa4e53afc85b3cf9240daf333",
+  "recovered_from_retained_cargo_artifact": "tools/http3-probe/target/release/deps/parity_http3-e5e4feebe518528c",
+  "configured_cargo_wrapper": "/opt/homebrew/bin/sccache",
+  "configured_cargo_file_sha256": "7229950738582ae3751bc6d42f4e641e73cf5423c7762a103d3c9ca799d2472c",
+  "current_frozen_client_sha256": "1c61f24ec08d63d6bd58536f986d6b925118e66109978004da15cdeba710b206",
+  "live_client_modified": false
+}

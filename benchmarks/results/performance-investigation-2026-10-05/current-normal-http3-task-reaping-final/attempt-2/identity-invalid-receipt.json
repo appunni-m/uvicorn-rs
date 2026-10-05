@@ -1,0 +1,28 @@
+{
+  "schema": "uvicorn-rs-normal-identity-drift-attempt@1",
+  "status": "public214_exclusion3_passed_portable_gate_invalid",
+  "reason": "Full proof archive added12 source files to editable target dependency external_checkout after capture",
+  "public_summary": {
+    "executed": 214,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 214,
+    "selected": 214
+  },
+  "exclusion_summary": {
+    "executed": 3,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 3,
+    "selected": 3
+  },
+  "public_session_closed": 92945,
+  "exclusion_session_closed": 11786,
+  "client_stable": true,
+  "client_sha256": "1c61f24ec08d63d6bd58536f986d6b925118e66109978004da15cdeba710b206",
+  "native_sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "portable_differences": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/portable-difference-after-public.json",
+  "resolution": "Complete relevant archive source writes, capture fresh maintained identity, rerun214 with empty wrappers, require exact equality before and after final docs/archive work."
+}

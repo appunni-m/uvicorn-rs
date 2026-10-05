@@ -1,0 +1,777 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "started_at": "2026-10-05T09:56:22.720984+00:00",
+  "profiling_only": true,
+  "timing_valid": false,
+  "performance_evidence_status": "not_applicable",
+  "note": "Apple sample perturbs scheduling. Raw client JSON timing fields are retained only as diagnostic artifacts and must not enter benchmark summaries or speed claims.",
+  "correctness_gate": "every response status and complete payload exactly matches the maintained workload oracle",
+  "platform": "macOS-15.7.7-arm64-arm-64bit",
+  "machine": "arm64",
+  "client_build": {
+    "method": "provided binary; no compilation in this run"
+  },
+  "identity_before": {
+    "source_sha256": "dc8df8fe1763a347e953f6643b72df42af889f9d37f2ff750c3a0c1dc07674c1",
+    "source_files": {
+      "Cargo.lock": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+      "Cargo.toml": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb",
+      "examples/bench_matrix_asgi.py": "4199f61829a714dc18adb2eccd050b2e7e4f945736c0a3d01ebf415d0c630e9d",
+      "pyproject.toml": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b",
+      "python/uvicorn_rs/__init__.py": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155",
+      "python/uvicorn_rs/__main__.py": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+      "python/uvicorn_rs/_bridge.py": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff",
+      "python/uvicorn_rs/cli.py": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f",
+      "python/uvicorn_rs/server.py": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87",
+      "scripts/bench_http_client.c": "19ba501a9f3d4ede04e1f6f0a80b9e9af370170a21fca9becbf3c78eae9f8e44",
+      "scripts/bench_http_matrix.mjs": "7d4f32009ba2d0e7407c5f1728ec8c2ce18b44af54d08d201130e200a24f0f37",
+      "scripts/benchmark_evidence.py": "af4256898ebec32da149873be6c935666f82a4baf6930dca42750e5a110b52cc",
+      "scripts/profile_http_workload.py": "6bdbbef2dffd917e5acabde0172929a3a352ce0139530444e25dd82a14716437",
+      "scripts/run_http_category_bench.py": "759b803cb32738207812edf8e3639c1336cb6eeb33e39b49ab807d06b5510e20",
+      "src/lib.rs": "cdfa93f49161e024247e83eff5ac9181cde829f9c526f0d886ecd457d5573ec6",
+      "uv.lock": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+    },
+    "native_extension": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so",
+      "sha256": "1f24524f4a948bc39605b86891bcbaecc57a9f143dfc795076034489d1094534"
+    },
+    "clients": {
+      "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/httpbench": "9087af763d006fa38bd055a33841e5117d1683340036f7cda62b86d92db0015c"
+    }
+  },
+  "preserved": {
+    "source_files": {
+      "Cargo.lock": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/Cargo.lock",
+        "sha256": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa"
+      },
+      "Cargo.toml": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/Cargo.toml",
+        "sha256": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb"
+      },
+      "examples/bench_matrix_asgi.py": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/examples/bench_matrix_asgi.py",
+        "sha256": "4199f61829a714dc18adb2eccd050b2e7e4f945736c0a3d01ebf415d0c630e9d"
+      },
+      "pyproject.toml": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/pyproject.toml",
+        "sha256": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b"
+      },
+      "python/uvicorn_rs/__init__.py": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/python/uvicorn_rs/__init__.py",
+        "sha256": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155"
+      },
+      "python/uvicorn_rs/__main__.py": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/python/uvicorn_rs/__main__.py",
+        "sha256": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279"
+      },
+      "python/uvicorn_rs/_bridge.py": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/python/uvicorn_rs/_bridge.py",
+        "sha256": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff"
+      },
+      "python/uvicorn_rs/cli.py": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/python/uvicorn_rs/cli.py",
+        "sha256": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f"
+      },
+      "python/uvicorn_rs/server.py": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/python/uvicorn_rs/server.py",
+        "sha256": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87"
+      },
+      "scripts/bench_http_client.c": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/scripts/bench_http_client.c",
+        "sha256": "19ba501a9f3d4ede04e1f6f0a80b9e9af370170a21fca9becbf3c78eae9f8e44"
+      },
+      "scripts/bench_http_matrix.mjs": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/scripts/bench_http_matrix.mjs",
+        "sha256": "7d4f32009ba2d0e7407c5f1728ec8c2ce18b44af54d08d201130e200a24f0f37"
+      },
+      "scripts/benchmark_evidence.py": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/scripts/benchmark_evidence.py",
+        "sha256": "af4256898ebec32da149873be6c935666f82a4baf6930dca42750e5a110b52cc"
+      },
+      "scripts/profile_http_workload.py": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/scripts/profile_http_workload.py",
+        "sha256": "6bdbbef2dffd917e5acabde0172929a3a352ce0139530444e25dd82a14716437"
+      },
+      "scripts/run_http_category_bench.py": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/scripts/run_http_category_bench.py",
+        "sha256": "759b803cb32738207812edf8e3639c1336cb6eeb33e39b49ab807d06b5510e20"
+      },
+      "src/lib.rs": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/src/lib.rs",
+        "sha256": "cdfa93f49161e024247e83eff5ac9181cde829f9c526f0d886ecd457d5573ec6"
+      },
+      "uv.lock": {
+        "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sources/uv.lock",
+        "sha256": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+      }
+    },
+    "normal_native": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/normal-native.abi3.so",
+      "sha256": "1f24524f4a948bc39605b86891bcbaecc57a9f143dfc795076034489d1094534"
+    }
+  },
+  "runtime_before": {
+    "python": "3.12.13 (main, Jun 23 2026, 15:44:24) [Clang 22.1.3 ]",
+    "implementation": "CPython",
+    "python_executable": "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12",
+    "python_sha256": "7b05d803bbc1bbfc81644af4faf2b88f0a37b8de96b9f42c1e08033e2cd0848a",
+    "versions": {
+      "uvicorn": "0.54.0",
+      "uvloop": "0.23.0",
+      "httptools": "0.8.0",
+      "hypercorn": "0.18.0",
+      "uvicorn-rs": "0.1.0"
+    },
+    "module_origins": {
+      "uvicorn": {
+        "available": true,
+        "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/__init__.py",
+        "sha256": "c2aaed31a2528ef6b35eddd90482cd8840acd7cfb0a95e504f20f6eab0187026"
+      },
+      "uvloop.loop": {
+        "available": true,
+        "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop/loop.cpython-312-darwin.so",
+        "sha256": "b8121086fd6800f873f9e4e369583128952845df27624158812dd01008f71f60"
+      },
+      "httptools.parser.parser": {
+        "available": true,
+        "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/parser/parser.cpython-312-darwin.so",
+        "sha256": "656c2ad69b9a6672727ff38b192bf6162183f4ae085473a355931651a5fe0d49"
+      },
+      "uvicorn_rs._native": {
+        "available": true,
+        "path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so",
+        "sha256": "1f24524f4a948bc39605b86891bcbaecc57a9f143dfc795076034489d1094534"
+      }
+    }
+  },
+  "server": "uvicorn-rs-uvloop",
+  "workload": "large-response",
+  "workload_definition": {
+    "app": "examples.bench_matrix_asgi:app",
+    "client": {
+      "mode": "large",
+      "path": "/large/1048576",
+      "response_bytes": 1048576
+    }
+  },
+  "concurrency": 32,
+  "load_duration_seconds": 10.0,
+  "sample_duration_seconds": 6,
+  "sample_delay_seconds": 1.0,
+  "sample_interval_ms": 1,
+  "warmup_duration_seconds": 1.0,
+  "commands": {
+    "server": [
+      "/Users/lazytrot/work/uvicorn-rs/.venv/bin/python",
+      "-m",
+      "uvicorn_rs",
+      "examples.bench_matrix_asgi:app",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "51995",
+      "--loop",
+      "uvloop"
+    ],
+    "client": [
+      "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/httpbench",
+      "127.0.0.1",
+      "51995",
+      "10.0",
+      "32",
+      "large",
+      "/large/1048576",
+      "1048576",
+      "0",
+      "200",
+      "",
+      "0",
+      "0"
+    ],
+    "warmup": [
+      "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/httpbench",
+      "127.0.0.1",
+      "51995",
+      "1.0",
+      "32",
+      "large",
+      "/large/1048576",
+      "1048576",
+      "0",
+      "200",
+      "",
+      "0",
+      "0"
+    ],
+    "sample": [
+      "/usr/bin/sample",
+      "65072",
+      "6",
+      "1",
+      "-file",
+      "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/server.sample.txt"
+    ]
+  },
+  "server_pid": 65072,
+  "warmup_returncode": 0,
+  "warmup_correctness": {
+    "requests": 8667,
+    "failures": 0,
+    "first_failure": null,
+    "request_body_bytes": 0,
+    "response_body_bytes": 9088008192
+  },
+  "load_started_at": "2026-10-05T09:56:24.541336+00:00",
+  "sample_started_at": "2026-10-05T09:56:25.544063+00:00",
+  "sample_finished_at": "2026-10-05T09:56:32.093139+00:00",
+  "sample_returncode": 0,
+  "sample_summary": {
+    "target_pid": 65072,
+    "interval_ms": 1,
+    "thread_roots": [
+      {
+        "samples": 4115,
+        "thread": "Thread_188168069   DispatchQueue_1: com.apple.main-thread  (serial)"
+      },
+      {
+        "samples": 4115,
+        "thread": "Thread_188168080: tokio-rt-worker"
+      },
+      {
+        "samples": 4115,
+        "thread": "Thread_188168081: tokio-rt-worker"
+      },
+      {
+        "samples": 4115,
+        "thread": "Thread_188168082: tokio-rt-worker"
+      }
+    ],
+    "top_of_stack_collapsed": [
+      {
+        "symbol": "__psynch_cvwait  (in libsystem_kernel.dylib)",
+        "samples": 5922
+      },
+      {
+        "symbol": "writev  (in libsystem_kernel.dylib)",
+        "samples": 5178
+      },
+      {
+        "symbol": "kevent  (in libsystem_kernel.dylib)",
+        "samples": 2876
+      },
+      {
+        "symbol": "__recvfrom  (in libsystem_kernel.dylib)",
+        "samples": 235
+      },
+      {
+        "symbol": "_PyEval_EvalFrameDefault  (in python3.12)",
+        "samples": 132
+      },
+      {
+        "symbol": "_PyFunction_Vectorcall  (in python3.12)",
+        "samples": 126
+      },
+      {
+        "symbol": "__psynch_mutexwait  (in libsystem_kernel.dylib)",
+        "samples": 124
+      },
+      {
+        "symbol": "__munmap  (in libsystem_kernel.dylib)",
+        "samples": 98
+      },
+      {
+        "symbol": "__mmap  (in libsystem_kernel.dylib)",
+        "samples": 86
+      },
+      {
+        "symbol": "__psynch_cvsignal  (in libsystem_kernel.dylib)",
+        "samples": 65
+      },
+      {
+        "symbol": "tiny_malloc_from_free_list  (in libsystem_malloc.dylib)",
+        "samples": 62
+      },
+      {
+        "symbol": "_platform_memmove  (in libsystem_platform.dylib)",
+        "samples": 46
+      },
+      {
+        "symbol": "tiny_free_no_lock  (in libsystem_malloc.dylib)",
+        "samples": 39
+      },
+      {
+        "symbol": "free_tiny  (in libsystem_malloc.dylib)",
+        "samples": 38
+      },
+      {
+        "symbol": "_PyObject_Free  (in python3.12)",
+        "samples": 33
+      },
+      {
+        "symbol": "_tlv_get_addr  (in libdyld.dylib)",
+        "samples": 32
+      },
+      {
+        "symbol": "_PyObject_Malloc  (in python3.12)",
+        "samples": 27
+      },
+      {
+        "symbol": "pysiphash  (in python3.12)",
+        "samples": 25
+      },
+      {
+        "symbol": "__ulock_wait2  (in libsystem_kernel.dylib)",
+        "samples": 21
+      },
+      {
+        "symbol": "__gettimeofday  (in libsystem_kernel.dylib)",
+        "samples": 20
+      },
+      {
+        "symbol": "__psynch_mutexdrop  (in libsystem_kernel.dylib)",
+        "samples": 20
+      },
+      {
+        "symbol": "PyDict_SetItem  (in python3.12)",
+        "samples": 19
+      },
+      {
+        "symbol": "tupledealloc  (in python3.12)",
+        "samples": 19
+      },
+      {
+        "symbol": "pthread_mutex_unlock  (in libsystem_pthread.dylib)",
+        "samples": 18
+      },
+      {
+        "symbol": "szone_malloc_should_clear  (in libsystem_malloc.dylib)",
+        "samples": 18
+      },
+      {
+        "symbol": "PyUnicode_DecodeUTF8Stateful  (in python3.12)",
+        "samples": 16
+      },
+      {
+        "symbol": "tiny_free_list_add_ptr  (in libsystem_malloc.dylib)",
+        "samples": 15
+      },
+      {
+        "symbol": "_platform_memset  (in libsystem_platform.dylib)",
+        "samples": 14
+      },
+      {
+        "symbol": "tiny_free_list_remove_ptr  (in libsystem_malloc.dylib)",
+        "samples": 14
+      },
+      {
+        "symbol": "tiny_malloc_should_clear  (in libsystem_malloc.dylib)",
+        "samples": 14
+      },
+      {
+        "symbol": "_RNvXNtNtNtCsf1ueLKjW9FD_5hyper5proto2h14roleNtB2_6ServerNtB4_16Http1Transaction6encode  (in _native.abi3.so)",
+        "samples": 13
+      },
+      {
+        "symbol": "free_small  (in libsystem_malloc.dylib)",
+        "samples": 13
+      },
+      {
+        "symbol": "pthread_mutex_init  (in libsystem_pthread.dylib)",
+        "samples": 13
+      },
+      {
+        "symbol": "small_free_list_remove_ptr_no_clear  (in libsystem_malloc.dylib)",
+        "samples": 13
+      },
+      {
+        "symbol": "PyType_GenericAlloc  (in python3.12)",
+        "samples": 12
+      },
+      {
+        "symbol": "<deduplicated_symbol>  (in _native.abi3.so)",
+        "samples": 11
+      },
+      {
+        "symbol": "__pyx_f_6uvloop_4loop_6Handle__run  (in loop.cpython-312-darwin.so)",
+        "samples": 11
+      },
+      {
+        "symbol": "_szone_free  (in libsystem_malloc.dylib)",
+        "samples": 11
+      },
+      {
+        "symbol": "_RNCNvCscPFM434tEfm_10uvicorn_rs14handle_request0B3_  (in _native.abi3.so)",
+        "samples": 10
+      },
+      {
+        "symbol": "dict_dealloc  (in python3.12)",
+        "samples": 10
+      },
+      {
+        "symbol": "pthread_mutex_lock  (in libsystem_pthread.dylib)",
+        "samples": 10
+      },
+      {
+        "symbol": "_RINvMNtNtNtCs82bWklYMk3w_3std3sys4sync8once_boxINtB3_7OnceBoxNtNtNtNtNtB7_3pal4unix4sync5mutex5MutexE10initializeNCNvMNtNtB5_5mutex7pthreadNtB1S_5Mutex3get0ECs9Rz7glgIkFG_5tokio  (in _native.abi3.so)",
+        "samples": 9
+      },
+      {
+        "symbol": "_RNvMNtNtNtCsf1ueLKjW9FD_5hyper5proto2h18dispatchINtB2_10DispatcherINtB2_6ServerINtNtNtB8_7service4util9ServiceFnNCNCINvCscPFM434tEfm_10uvicorn_rs22serve_hyper_connectionINtB1T_12ConnectionIoNtNtNtNtCs9Rz7glgIkFG_5tokio3net3tcp6stream9TcpStreamEE00NtNtNtB8_4body8incoming8IncomingEB3X_EINtNtNtCs6RrU9MU3FJR_14http_body_util11combinators8box_body13UnsyncBoxBodyNtNtCse1VSrGDVcu0_5bytes5bytes5BytesINtNtCshxvaOLs88l5_5alloc5boxed3BoxDNtNtCs8Mbv00yxnRz_4core5error5ErrorNtNtB6Z_6marker4SyncNtB7w_4SendEL_EEINtNtNtCs1eemII4940j_10hyper_util6common6rewind6RewindINtNtNtB8b_2rt5tokio7TokioIoB2H_EENtNtB4_4role6ServerE10poll_writeB1T_  (in _native.abi3.so)",
+        "samples": 9
+      },
+      {
+        "symbol": "_RNvMs_NtNtNtNtCs9Rz7glgIkFG_5tokio7runtime9scheduler12multi_thread6workerNtB4_7Context3run  (in _native.abi3.so)",
+        "samples": 9
+      },
+      {
+        "symbol": "__pyx_pw_6uvloop_4loop_4Loop_39create_task  (in loop.cpython-312-darwin.so)",
+        "samples": 9
+      },
+      {
+        "symbol": "_malloc_zone_malloc  (in libsystem_malloc.dylib)",
+        "samples": 9
+      },
+      {
+        "symbol": "_platform_memcmp  (in libsystem_platform.dylib)",
+        "samples": 9
+      },
+      {
+        "symbol": "rack_get_thread_index  (in libsystem_malloc.dylib)",
+        "samples": 9
+      },
+      {
+        "symbol": "Py_DecRef  (in python3.12)",
+        "samples": 8
+      },
+      {
+        "symbol": "_RNvXs0_NtNtCs8Mbv00yxnRz_4core6future7poll_fnINtB5_6PollFnNCNCNvCscPFM434tEfm_10uvicorn_rs20handle_request_parts0s0_0ENtNtB7_6future6Future4pollB10_  (in _native.abi3.so)",
+        "samples": 8
+      },
+      {
+        "symbol": "pthread_cond_signal  (in libsystem_pthread.dylib)",
+        "samples": 8
+      },
+      {
+        "symbol": "take_gil.llvm.7973028521718388755  (in python3.12)",
+        "samples": 8
+      },
+      {
+        "symbol": "DYLD-STUB$$Py_DecRef  (in _native.abi3.so)",
+        "samples": 7
+      },
+      {
+        "symbol": "_PyObject_GetMethod  (in python3.12)",
+        "samples": 7
+      },
+      {
+        "symbol": "_RNvMs0_NtNtNtCs9Rz7glgIkFG_5tokio4sync4mpsc4listINtB5_2RxNtCscPFM434tEfm_10uvicorn_rs13ResponseStartE3popBV_  (in _native.abi3.so)",
+        "samples": 7
+      },
+      {
+        "symbol": "_RNvMsh_NtNtCs9Rz7glgIkFG_5tokio4sync6notifyNtB5_11NotifyGuard14notify_waiters  (in _native.abi3.so)",
+        "samples": 7
+      },
+      {
+        "symbol": "__pyx_pw_6uvloop_4loop_4Loop_13call_soon  (in loop.cpython-312-darwin.so)",
+        "samples": 7
+      },
+      {
+        "symbol": "__ulock_wake  (in libsystem_kernel.dylib)",
+        "samples": 7
+      },
+      {
+        "symbol": "mach_absolute_time  (in libsystem_kernel.dylib)",
+        "samples": 7
+      },
+      {
+        "symbol": "pthread_mutex_destroy  (in libsystem_pthread.dylib)",
+        "samples": 7
+      },
+      {
+        "symbol": "PyObject_GenericGetAttr  (in python3.12)",
+        "samples": 6
+      },
+      {
+        "symbol": "_PyFrame_ClearExceptCode  (in python3.12)",
+        "samples": 6
+      },
+      {
+        "symbol": "_RNvMsf_NtNtCs9Rz7glgIkFG_5tokio4sync6notifyNtB5_15NotifiedProject13poll_notified  (in _native.abi3.so)",
+        "samples": 6
+      },
+      {
+        "symbol": "_RNvXs6_NtNtCs3vUKxHE6iko_10tokio_util4task12task_trackerINtB5_13TrackedFutureNCNCNvCscPFM434tEfm_10uvicorn_rs20handle_request_parts00ENtNtNtCs8Mbv00yxnRz_4core6future6future6Future4pollB1j_  (in _native.abi3.so)",
+        "samples": 6
+      },
+      {
+        "symbol": "__pyx_f_6uvloop_4loop_4Loop__on_idle  (in loop.cpython-312-darwin.so)",
+        "samples": 6
+      },
+      {
+        "symbol": "dict_subscript  (in python3.12)",
+        "samples": 6
+      },
+      {
+        "symbol": "dictresize.llvm.5666716742499041130  (in python3.12)",
+        "samples": 6
+      },
+      {
+        "symbol": "pthread_mutexattr_init  (in libsystem_pthread.dylib)",
+        "samples": 6
+      },
+      {
+        "symbol": "unicode_hash  (in python3.12)",
+        "samples": 6
+      },
+      {
+        "symbol": "PyObject_Free  (in python3.12)",
+        "samples": 5
+      },
+      {
+        "symbol": "PyTuple_New  (in python3.12)",
+        "samples": 5
+      },
+      {
+        "symbol": "PyTuple_SetItem  (in python3.12)",
+        "samples": 5
+      },
+      {
+        "symbol": "_PyObject_GenericGetAttrWithDict  (in python3.12)",
+        "samples": 5
+      },
+      {
+        "symbol": "_RNvCscPFM434tEfm_10uvicorn_rs11build_scope  (in _native.abi3.so)",
+        "samples": 5
+      },
+      {
+        "symbol": "_RNvMNtNtNtCsf1ueLKjW9FD_5hyper5proto2h14connINtB2_4ConnINtNtNtCs1eemII4940j_10hyper_util6common6rewind6RewindINtNtNtBY_2rt5tokio7TokioIoINtCscPFM434tEfm_10uvicorn_rs12ConnectionIoNtNtNtNtCs9Rz7glgIkFG_5tokio3net3tcp6stream9TcpStreamEEENtNtCse1VSrGDVcu0_5bytes5bytes5BytesNtNtB4_4role6ServerE14poll_read_headB2d_  (in _native.abi3.so)",
+        "samples": 5
+      },
+      {
+        "symbol": "_RNvMsZ_CscPFM434tEfm_10uvicorn_rsNtB5_6AsgiIo17___pymethod_send__  (in _native.abi3.so)",
+        "samples": 5
+      },
+      {
+        "symbol": "_RNvMs_NtNtNtNtCs9Rz7glgIkFG_5tokio7runtime9scheduler12multi_thread6workerNtB4_7Context8run_task  (in _native.abi3.so)",
+        "samples": 5
+      },
+      {
+        "symbol": "_RNvXNtNtNtCsf1ueLKjW9FD_5hyper5proto2h14roleNtB2_6ServerNtB4_16Http1Transaction5parse  (in _native.abi3.so)",
+        "samples": 5
+      },
+      {
+        "symbol": "_RNvXs6_NtNtCs3vUKxHE6iko_10tokio_util4task12task_trackerINtB5_13TrackedFutureNCNvMsi_CscPFM434tEfm_10uvicorn_rsNtB1l_8AsgiBody15finish_response0ENtNtNtCs8Mbv00yxnRz_4core6future6future6Future4pollB1l_  (in _native.abi3.so)",
+        "samples": 5
+      },
+      {
+        "symbol": "__pyx_f_6uvloop_4loop_8UVHandle__ensure_alive  (in loop.cpython-312-darwin.so)",
+        "samples": 5
+      },
+      {
+        "symbol": "get_tiny_previous_free_msize  (in libsystem_malloc.dylib)",
+        "samples": 5
+      },
+      {
+        "symbol": "small_free_list_add_ptr  (in libsystem_malloc.dylib)",
+        "samples": 5
+      }
+    ],
+    "interpretation": "Counts are sampled wall-time stacks, including idle/waiting threads. Inclusive and recursive frames overlap; do not add them as CPU shares. Collapsed entries below five samples are omitted by Apple sample."
+  },
+  "load_finished_at": "2026-10-05T09:56:34.569347+00:00",
+  "client_returncode": 0,
+  "load_correctness": {
+    "requests": 82012,
+    "failures": 0,
+    "first_failure": null,
+    "request_body_bytes": 0,
+    "response_body_bytes": 85995814912
+  },
+  "measurement_identity": {
+    "source_sha256_before": "dc8df8fe1763a347e953f6643b72df42af889f9d37f2ff750c3a0c1dc07674c1",
+    "source_sha256_after": "dc8df8fe1763a347e953f6643b72df42af889f9d37f2ff750c3a0c1dc07674c1",
+    "native_sha256_before": "1f24524f4a948bc39605b86891bcbaecc57a9f143dfc795076034489d1094534",
+    "native_sha256_after": "1f24524f4a948bc39605b86891bcbaecc57a9f143dfc795076034489d1094534",
+    "client_sha256_before": {
+      "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/httpbench": "9087af763d006fa38bd055a33841e5117d1683340036f7cda62b86d92db0015c"
+    },
+    "client_sha256_after": {
+      "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/httpbench": "9087af763d006fa38bd055a33841e5117d1683340036f7cda62b86d92db0015c"
+    }
+  },
+  "identity_invalid_reasons": [],
+  "cleanup": {
+    "sample": {
+      "returncode": 0,
+      "signals": [],
+      "graceful": false
+    },
+    "client": {
+      "returncode": 0,
+      "signals": [],
+      "graceful": false
+    },
+    "server": {
+      "returncode": 0,
+      "signals": [
+        "SIGINT"
+      ],
+      "graceful": true
+    }
+  },
+  "server_error_diagnostic": false,
+  "runtime_after": {
+    "python": "3.12.13 (main, Jun 23 2026, 15:44:24) [Clang 22.1.3 ]",
+    "implementation": "CPython",
+    "python_executable": "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/bin/python3.12",
+    "python_sha256": "7b05d803bbc1bbfc81644af4faf2b88f0a37b8de96b9f42c1e08033e2cd0848a",
+    "versions": {
+      "uvicorn": "0.54.0",
+      "uvloop": "0.23.0",
+      "httptools": "0.8.0",
+      "hypercorn": "0.18.0",
+      "uvicorn-rs": "0.1.0"
+    },
+    "module_origins": {
+      "uvicorn": {
+        "available": true,
+        "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn/__init__.py",
+        "sha256": "c2aaed31a2528ef6b35eddd90482cd8840acd7cfb0a95e504f20f6eab0187026"
+      },
+      "uvloop.loop": {
+        "available": true,
+        "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvloop/loop.cpython-312-darwin.so",
+        "sha256": "b8121086fd6800f873f9e4e369583128952845df27624158812dd01008f71f60"
+      },
+      "httptools.parser.parser": {
+        "available": true,
+        "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/httptools/parser/parser.cpython-312-darwin.so",
+        "sha256": "656c2ad69b9a6672727ff38b192bf6162183f4ae085473a355931651a5fe0d49"
+      },
+      "uvicorn_rs._native": {
+        "available": true,
+        "path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so",
+        "sha256": "1f24524f4a948bc39605b86891bcbaecc57a9f143dfc795076034489d1094534"
+      }
+    }
+  },
+  "identity_after": {
+    "source_sha256": "dc8df8fe1763a347e953f6643b72df42af889f9d37f2ff750c3a0c1dc07674c1",
+    "source_files": {
+      "Cargo.lock": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+      "Cargo.toml": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb",
+      "examples/bench_matrix_asgi.py": "4199f61829a714dc18adb2eccd050b2e7e4f945736c0a3d01ebf415d0c630e9d",
+      "pyproject.toml": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b",
+      "python/uvicorn_rs/__init__.py": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155",
+      "python/uvicorn_rs/__main__.py": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+      "python/uvicorn_rs/_bridge.py": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff",
+      "python/uvicorn_rs/cli.py": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f",
+      "python/uvicorn_rs/server.py": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87",
+      "scripts/bench_http_client.c": "19ba501a9f3d4ede04e1f6f0a80b9e9af370170a21fca9becbf3c78eae9f8e44",
+      "scripts/bench_http_matrix.mjs": "7d4f32009ba2d0e7407c5f1728ec8c2ce18b44af54d08d201130e200a24f0f37",
+      "scripts/benchmark_evidence.py": "af4256898ebec32da149873be6c935666f82a4baf6930dca42750e5a110b52cc",
+      "scripts/profile_http_workload.py": "6bdbbef2dffd917e5acabde0172929a3a352ce0139530444e25dd82a14716437",
+      "scripts/run_http_category_bench.py": "759b803cb32738207812edf8e3639c1336cb6eeb33e39b49ab807d06b5510e20",
+      "src/lib.rs": "cdfa93f49161e024247e83eff5ac9181cde829f9c526f0d886ecd457d5573ec6",
+      "uv.lock": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+    },
+    "native_extension": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so",
+      "sha256": "1f24524f4a948bc39605b86891bcbaecc57a9f143dfc795076034489d1094534"
+    },
+    "clients": {
+      "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/httpbench": "9087af763d006fa38bd055a33841e5117d1683340036f7cda62b86d92db0015c"
+    }
+  },
+  "identity_stable": true,
+  "runtime_identity_stable": true,
+  "git": {
+    "revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+    "dirty_target": true,
+    "tracked_worktree_changes": [
+      " M CONTRIBUTING.md",
+      " M Cargo.toml",
+      " M README.md",
+      " M benchmarks/results/category-summary-2026-10-02.json",
+      " M docs/adr/0001-runtime-and-asyncio-bridge.md",
+      " M docs/architecture.md",
+      " M docs/benchmarks.md",
+      " M docs/configuration.md",
+      " M docs/feasibility.md",
+      " M docs/implementation-review.md",
+      " M docs/parity.md",
+      " M docs/support-matrix.md",
+      " M scripts/bench_http_matrix.mjs",
+      " M scripts/run_h2_category_bench.py",
+      " M scripts/run_h3_category_bench.py",
+      " M scripts/run_http_category_bench.py",
+      " M scripts/run_parity.py",
+      " M scripts/run_websocket_category_bench.py",
+      " M src/lib.rs",
+      " M tests/parity/app.py",
+      " M tests/parity/inputs/http1.json",
+      " M tests/parity/inputs/http2.json",
+      " M tests/parity/inputs/http3.json",
+      " M tests/parity/inputs/lifecycle.json",
+      " M tests/parity/inputs/websocket.json",
+      " M tests/parity/manifest.json",
+      " M tests/test_parity_contract.py",
+      " M tools/http3-probe/Cargo.toml",
+      " M tools/http3-probe/src/bin/bench.rs",
+      " M tools/http3-probe/src/bin/http2.rs",
+      " M tools/http3-probe/src/bin/parity-http3.rs",
+      " M tools/http3-probe/src/bin/websocket.rs",
+      " M tools/http3-probe/src/main.rs"
+    ],
+    "untracked_measured_sources": [
+      "scripts/benchmark_evidence.py",
+      "scripts/profile_http_workload.py"
+    ]
+  },
+  "artifacts": {
+    "client.stderr.log": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/client.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "client.stdout.json": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/client.stdout.json",
+      "sha256": "38a053a076fa257347322d3c7c9164ca3e9b1f547d77621b8935387d2da3c414"
+    },
+    "httpbench": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/httpbench",
+      "sha256": "9087af763d006fa38bd055a33841e5117d1683340036f7cda62b86d92db0015c"
+    },
+    "normal-native.abi3.so": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/normal-native.abi3.so",
+      "sha256": "1f24524f4a948bc39605b86891bcbaecc57a9f143dfc795076034489d1094534"
+    },
+    "sample.stderr.log": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sample.stderr.log",
+      "sha256": "837ee4a123b2dd1af77e3f8bd01a826692ebc17bdb46ce919062b29eaf4e37ac"
+    },
+    "sample.stdout.log": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/sample.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "server.log": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "server.sample.txt": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/server.sample.txt",
+      "sha256": "6a823fa24869de2a62bcf127cce0c72e4319a3b587289f24baa814718b67759d"
+    },
+    "warmup.stderr.log": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/warmup.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "warmup.stdout.json": {
+      "path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/profile-vectored-large-rust/warmup.stdout.json",
+      "sha256": "02ba8d4c772a78c3ff5651e1943f6e8232bc315d9308dd3765bd856e4791643a"
+    }
+  },
+  "finished_at": "2026-10-05T09:56:34.688890+00:00"
+}

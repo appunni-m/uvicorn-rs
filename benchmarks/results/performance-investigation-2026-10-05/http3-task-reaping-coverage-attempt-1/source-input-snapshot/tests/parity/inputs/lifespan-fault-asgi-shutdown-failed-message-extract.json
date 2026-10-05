@@ -1,0 +1,22 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.lifespan-fault-asgi-shutdown-failed-message-extract",
+      "profile": "lifespan-fault-asgi-shutdown-failed-message-extract",
+      "operation": "server.shutdown-failure",
+      "covers": [
+        "server.shutdown-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.shutdown.failed.message.extract",
+        "contract": "server-shutdown-failure"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1
+      }
+    }
+  ]
+}

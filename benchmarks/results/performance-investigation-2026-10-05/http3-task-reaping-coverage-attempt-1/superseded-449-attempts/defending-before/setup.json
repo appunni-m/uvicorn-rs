@@ -1,0 +1,13 @@
+{
+  "schema": "uvicorn-rs-defending-native-comparison@1",
+  "expectation": "structured fault-contract failure: join diagnostic absent while same connection remains open",
+  "compiled_source_sha256": "81c239b5f596cf4be18cc71bc3b537c02224c0f1e1ab35174e6386f5203510cd",
+  "native_sha256": "2aac17afa64ebc070555fdb03913747a051b4b3a00512633f7c54c4ac15c3378",
+  "frozen_input_files": {
+    "scripts/run_parity.py": "e3eff72bbe06db8d14f3d16cf18883b8486c1e0aab6044921f0bb08b605275f3",
+    "tools/http3-probe/src/bin/parity-http3.rs": "8a7c939c5206c8b8ec578232258550236d44a4e2010ab623537876a397be82ba",
+    "tests/parity/manifest.json": "b44e41a349d2384a6876727043979f9a3c857742316ad640d32e14b3fa953160",
+    "tests/parity/inputs/http3.json": "8ceeced6debdd86ef5a49c626db86ff1087c35968de80655d8981dcf16750c2a"
+  },
+  "profile_policy": "old-source profiles kept only under defending-before; never merged into fresh full coverage"
+}

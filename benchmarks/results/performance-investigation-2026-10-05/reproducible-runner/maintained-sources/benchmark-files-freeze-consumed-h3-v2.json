@@ -1,0 +1,16 @@
+{
+  "status": "benchmark_sources_frozen_live_proof_pending",
+  "files": {
+    "examples/bench_h3_consumed_asgi.py": "4247667b10b8688350127daef35a5948445cf157ed58663b57b6041e4f72599b",
+    "scripts/run_h3_category_bench.py": "64afc662603e471897691a259bc78f496decbffb667c775a37461101ebecd39e",
+    "scripts/analyze_benchmark_categories.py": "7e916892c57a7c582d2dd164f3ff98756a9c2ea02ba59c2c4d595a26b5c72548",
+    "tools/http3-probe/src/bin/bench.rs": "e7e5aa4a3bb1d94a4b95e62faee8f51b28e49c3e5dc37ebf1f3d090b583ae4d4"
+  },
+  "default_rows": 177,
+  "declared_grease": {
+    "protocol-scope-consumed-request": false,
+    "other_existing_workloads": true
+  },
+  "previous_freeze": "build/performance-2026-10-05/benchmark-files-freeze-consumed-h3.json",
+  "revision_reason": "Pinned h3 Builder::build has three generic parameters; compile preparation caught the incorrect two-parameter call."
+}

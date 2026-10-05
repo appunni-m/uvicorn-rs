@@ -1,0 +1,8 @@
+{
+  "schema": "uvicorn-rs-instrumented-native-snapshot@1",
+  "source_sha256": "313fc3bc68e9eb89611033a924367a74d2d2dc6aa8cfed923c198d01f6f44c0a",
+  "instrumented_native_sha256": "314ac904059bb4cc10ebae97ba538278f2af286a0e356bc207e90eb92c69ea52",
+  "build_command": "RUSTC_WORKSPACE_WRAPPER= .venv/bin/python scripts/build_coverage_extension.py",
+  "build_log_sha256": "46b76a8e5763e6fdefd627292025468810174e2f61254c0e29e3c94f365e0e4c",
+  "inputs_state": "case edits not yet frozen; full report captures final input snapshot separately"
+}

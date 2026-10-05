@@ -1,0 +1,21 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "fault.lifespan-fault-asgi-startup-failed.startup-failed-classification",
+      "profile": "lifespan-fault-asgi-startup-failed",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": [
+        "lifespan.startup-auto-fallback"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "asgi.event-type.lifespan-startup-failed.eq",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {
+        "followup_path": "/state"
+      }
+    }
+  ]
+}

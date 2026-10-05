@@ -1,0 +1,12 @@
+{
+  "status": "prepared_before_build",
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "normal_native_sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "input_freeze": "build/performance-2026-10-05/http3-regression-inputs-freeze-450.json",
+  "cases": 450,
+  "public_cases": 214,
+  "target_cases": 236,
+  "full_matrix_repeats": 3,
+  "case_infra_retries": 0,
+  "matrix_infra_retries": 0
+}

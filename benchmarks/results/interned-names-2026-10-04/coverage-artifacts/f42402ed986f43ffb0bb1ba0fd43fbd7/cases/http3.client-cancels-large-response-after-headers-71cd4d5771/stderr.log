@@ -1,0 +1,6 @@
+--- uvicorn-rs server log ---
+uvicorn-rs: connection task failed: tls handshake eof
+uvicorn-rs: HTTP/3 request from 127.0.0.1:53068 failed: Remote reset: H3_REQUEST_CANCELLED
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:53068 failed: Remote error: ApplicationClose: H3_NO_ERROR
+uvicorn-rs: HTTP/3 connection from 127.0.0.1:49573 failed: Remote error: ApplicationClose: 0x0
+

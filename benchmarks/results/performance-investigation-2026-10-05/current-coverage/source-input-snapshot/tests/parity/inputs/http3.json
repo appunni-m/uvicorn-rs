@@ -1,0 +1,882 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "http3.peer-close-h3-no-error",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 256
+      }
+    },
+    {
+      "case_id": "http3.request-body-client-abort",
+      "profile": "http3",
+      "operation": "http3.request-disconnect",
+      "covers": [
+        "http3.request-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.client.abort-after-body",
+        "contract": "http3-client-abort-disconnect-followup"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-upload-disconnect",
+        "headers": [
+          [
+            "content-length",
+            "1000"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC1oM2JvZHk=",
+        "abort_after_body": true
+      }
+    },
+    {
+      "case_id": "http3.scope-query-header-and-body",
+      "profile": "http3",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/scope?from=parity&v=3",
+        "headers": [
+          [
+            "x-parity",
+            "h3-input"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.response-stream-order",
+      "profile": "http3",
+      "operation": "http.response-stream",
+      "covers": [
+        "http.response-stream"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.asgi-event-type-string-subclass",
+      "profile": "http3",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/event-type-subclass",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.response-burst-backpressure",
+      "profile": "http3",
+      "operation": "http.response-stream",
+      "covers": [
+        "http.response-stream"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-burst",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.client-cancels-large-response-after-headers",
+      "profile": "http3",
+      "operation": "http3.response-client-abort",
+      "covers": [
+        "http3.response-client-abort"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-burst-large",
+        "headers": [],
+        "body_base64": "",
+        "abort_response_after_headers": true
+      }
+    },
+    {
+      "case_id": "http3.post-first-upload-response",
+      "profile": "http3",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/read-first-upload?from=h3",
+        "headers": [
+          [
+            "x-parity",
+            "http3-upload"
+          ]
+        ],
+        "body_base64": "aDMtcmVxdWVzdC1ib2R5"
+      }
+    },
+    {
+      "case_id": "http3.post-empty-data-frame-before-body",
+      "profile": "http3",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/read-first-upload?from=h3-empty-frame",
+        "headers": [],
+        "body_base64": "aDMtcmVxdWVzdC1ib2R5",
+        "empty_data_frame_before_body": true
+      }
+    },
+    {
+      "case_id": "http3.application-error-before-response-start",
+      "profile": "http3",
+      "operation": "http.application-error",
+      "covers": [
+        "http.application-error"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/raise",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http3.app-task-panic-before-response-start",
+      "profile": "http3",
+      "operation": "http.application-error",
+      "covers": [
+        "http.application-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.app-task.panic-before-response-start",
+        "contract": "http3-500-error-body"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.response-body-fields-default-empty",
+      "profile": "http3",
+      "operation": "http.response-empty-body",
+      "covers": [
+        "http.response-empty-body"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-empty-body-field",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.scope-preserves-duplicate-headers",
+      "profile": "http3",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/h3?dup=1",
+        "headers": [
+          [
+            "x-duplicate",
+            "first"
+          ],
+          [
+            "x-duplicate",
+            "second"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.app-returns-before-response-start",
+      "profile": "http3",
+      "operation": "http.application-error",
+      "covers": [
+        "http.application-error"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/return-before-response-start",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.upload-abandoned-by-early-app-return",
+      "profile": "http3",
+      "operation": "http.application-error",
+      "covers": [
+        "http.application-error"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/return-before-response-start",
+        "headers": [
+          [
+            "content-length",
+            "14"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC11cGxvYWQ="
+      }
+    },
+    {
+      "case_id": "http3.early-response-with-open-upload",
+      "profile": "http3",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/h3-early-response-open-upload",
+        "headers": [
+          [
+            "content-length",
+            "100"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC11cGxvYWQ=",
+        "leave_upload_open_until_response": true
+      }
+    },
+    {
+      "case_id": "http3.no-content-status-with-empty-body",
+      "profile": "http3",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/no-content",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.upload-body-shorter-than-content-length",
+      "profile": "http3",
+      "operation": "http3.invalid-content-length-status",
+      "covers": [
+        "http3.invalid-content-length-status"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/read-first-upload",
+        "headers": [
+          [
+            "content-length",
+            "5"
+          ]
+        ],
+        "body_base64": "aDM="
+      }
+    },
+    {
+      "case_id": "http3.invalid-asgi-event-type-is-not-string",
+      "profile": "http3",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/non-string-type",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.invalid-asgi-response-start-missing-status",
+      "profile": "http3",
+      "operation": "http.invalid-response-start",
+      "covers": [
+        "http.invalid-response-start"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/missing-status",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http3.listener-accept-error-shuts-down-quic",
+      "profile": "http3",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.listener.accept-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "http3.invalid-alpn-handshake-recovers",
+      "profile": "http3",
+      "operation": "http3.handshake-recovery",
+      "covers": [
+        "http3.handshake-recovery"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/must-not-reach-app",
+        "headers": [],
+        "body_base64": "",
+        "invalid_alpn": true
+      }
+    },
+    {
+      "case_id": "fault.http3.connection-task-panic-followup",
+      "profile": "http3",
+      "operation": "http3.handshake-recovery",
+      "covers": [
+        "http3.handshake-recovery"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.connection-task.panic",
+        "contract": "http3-connection-task-error-followup-200"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "invalid_alpn": true
+      }
+    },
+    {
+      "case_id": "http3.graceful-shutdown-drains-open-connection",
+      "profile": "http3",
+      "operation": "http3.graceful-shutdown",
+      "covers": [
+        "http3.graceful-shutdown"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "hold_open_for_shutdown": true
+      }
+    },
+    {
+      "case_id": "http3.graceful-shutdown-aborts-held-response",
+      "profile": "http3",
+      "operation": "http3.graceful-shutdown-aborts-response",
+      "covers": [
+        "http3.graceful-shutdown-aborts-response"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream-shutdown-hold",
+        "headers": [],
+        "body_base64": "",
+        "hold_open_for_shutdown": true,
+        "hold_response_stream_for_shutdown": true
+      }
+    },
+    {
+      "case_id": "fault.http3.shutdown-deadline-aborts-server-task",
+      "profile": "http3",
+      "operation": "http3.graceful-shutdown",
+      "covers": [
+        "http3.graceful-shutdown"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.http3-task.shutdown-hang",
+        "contract": "http3-server-shutdown-force-abort"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "hold_open_for_shutdown": true
+      }
+    },
+    {
+      "case_id": "fault.http3.endpoint-bind-error",
+      "profile": "http3",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.http3-endpoint.bind-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.http3.connection-create-error",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.connection.create-error",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.connection-accept-error",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.connection.accept-error",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.request-resolve-error",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.request.resolve-error",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.response-builder-error",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response.builder-error",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.response-send-error",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response.send-error",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.response-body-frame-error",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response.body-frame-error",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.response-non-data-frame",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response.non-data-frame",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.response-body-send-error",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response.body-send-error",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.response-finish-error",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response.finish-error",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.body-pump-connection-closed",
+      "profile": "http3",
+      "operation": "http3.body-pump-early-exit",
+      "covers": [
+        "http3.body-pump-early-exit"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.body-pump.connection-closed",
+        "contract": "http3-body-pump-early-exit-500"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/return-before-response-start",
+        "headers": [],
+        "body_base64": "cmVxdWVzdC1ib2R5"
+      }
+    },
+    {
+      "case_id": "fault.http3.body-pump-connection-closed-select",
+      "profile": "http3",
+      "operation": "http3.body-pump-early-exit",
+      "covers": [
+        "http3.body-pump-early-exit"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.body-pump.connection-closed-select",
+        "contract": "http3-body-pump-early-exit-500"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/return-before-response-start",
+        "headers": [],
+        "body_base64": "cmVxdWVzdC1ib2R5"
+      }
+    },
+    {
+      "case_id": "fault.http3.body-pump-sender-closed-select",
+      "profile": "http3",
+      "operation": "http3.body-pump-early-exit",
+      "covers": [
+        "http3.body-pump-early-exit"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.body-pump.sender-closed-select",
+        "contract": "http3-body-pump-early-exit-500"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/return-before-response-start",
+        "headers": [],
+        "body_base64": "cmVxdWVzdC1ib2R5"
+      }
+    },
+    {
+      "case_id": "fault.http3.body-pump-empty-data-frame-preserves-upload",
+      "profile": "http3",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.body-pump.empty-data-frame",
+        "contract": "http3-upload-body-pump-preserves-data"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/read-first-upload",
+        "headers": [],
+        "body_base64": "aDMtcmVxdWVzdC1ib2R5"
+      }
+    },
+    {
+      "case_id": "fault.http3.body-pump-send-error-delivers-disconnect",
+      "profile": "http3",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.body-pump.send-error",
+        "contract": "http3-upload-body-pump-send-error-disconnect"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/read-first-upload",
+        "headers": [],
+        "body_base64": "aDMtcmVxdWVzdC1ib2R5"
+      }
+    },
+    {
+      "case_id": "fault.http3.body-pump-final-message-closed-select",
+      "profile": "http3",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.body-pump.final-message-connection-closed-select",
+        "contract": "http3-upload-body-pump-completes-final-message"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-upload-disconnect",
+        "headers": [],
+        "body_base64": "cGFydGlhbC1oM2JvZHk="
+      }
+    },
+    {
+      "case_id": "fault.http3.connection-task-panic-during-shutdown",
+      "profile": "http3",
+      "operation": "http3.connection-task-shutdown",
+      "covers": [
+        "http3.connection-task-shutdown"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.connection-task.panic-during-shutdown",
+        "contract": "http3-connection-task-shutdown-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "hold_open_for_shutdown": true
+      }
+    },
+    {
+      "case_id": "fault.http3.connection-task-hang-aborted-during-shutdown",
+      "profile": "http3",
+      "operation": "http3.connection-task-shutdown",
+      "covers": [
+        "http3.connection-task-shutdown"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.connection-task.shutdown-hang",
+        "contract": "http3-connection-task-shutdown-hang-aborted"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "hold_open_for_shutdown": true
+      }
+    },
+    {
+      "case_id": "fault.http3.endpoint-accept-closed-http1-fallback",
+      "profile": "http3",
+      "operation": "http3.endpoint-accept-fallback",
+      "covers": [
+        "http3.endpoint-accept-fallback"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.endpoint.accept-closed",
+        "contract": "http3-endpoint-accept-closes-http3"
+      },
+      "startup_fallback": {
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.http3.quic-tls-configuration-error",
+      "profile": "http3",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.quic-tls.config-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.http3.request-task-panic",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.request-task.panic",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.accept-finished-closes-connection",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.connection.accept-finished",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.body-pump-disconnect-while-sending",
+      "profile": "http3",
+      "operation": "http3.body-pump-early-exit",
+      "covers": [
+        "http3.body-pump-early-exit"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.body-pump.send.connection-closed",
+        "contract": "http3-body-pump-early-exit-500"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-upload-disconnect",
+        "headers": [],
+        "body_base64": "cmVxdWVzdC1ib2R5"
+      }
+    }
+  ]
+}

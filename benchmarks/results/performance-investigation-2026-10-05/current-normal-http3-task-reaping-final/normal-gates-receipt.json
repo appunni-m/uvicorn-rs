@@ -1,0 +1,41 @@
+{
+  "all_exclusion_checks_passed": true,
+  "exclusion_audit": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/receipt.json",
+  "exclusion_audit_sha256": "0bd7a34e08fd0894ba4db70028113d8f901b129ecd8672034120ef45c884b65f",
+  "exclusion_summary": {
+    "executed": 3,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 3,
+    "selected": 3
+  },
+  "normal_native_sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "portable_identity": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/benchmark-identity-before-public-parity.json",
+  "portable_identity_exactly_stable": true,
+  "portable_identity_sha256": "dcc0d5f7c8d210a8fa35069240aa4fa25ca4520e4f6f26a64fbfdf243bc9cde2",
+  "post_response_fault_marker_absent": true,
+  "public_parity_gate": {
+    "before_parity_identity": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/benchmark-identity-before-public-parity.json",
+    "before_parity_identity_sha256": "dcc0d5f7c8d210a8fa35069240aa4fa25ca4520e4f6f26a64fbfdf243bc9cde2",
+    "native_sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+    "parity_report": "/Users/lazytrot/work/uvicorn-rs/build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/public-parity-result.json",
+    "parity_report_sha256": "f71c41a07832922bccfad3cc5f09ab85f980b32ceb6f429316bc4ab4a61c8d75",
+    "public_cases": 214,
+    "status": "passed"
+  },
+  "public_summary": {
+    "executed": 214,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 214,
+    "selected": 214
+  },
+  "recorded_at": "2026-10-05T13:51:39.483568+00:00",
+  "registered_fault_point_count": 211,
+  "restore_receipt_sha256": "6c79cbc5d626f490140c334c6d2e0be1978ef854a7f6527f55886887c7825b83",
+  "schema": "uvicorn-rs-normal-gates-held-response@1",
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "status": "passed"
+}

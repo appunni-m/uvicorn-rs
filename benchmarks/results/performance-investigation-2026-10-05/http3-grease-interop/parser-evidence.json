@@ -1,0 +1,54 @@
+{
+  "classification": "source-supported inference, not live reference event instrumentation",
+  "observed": "GREASE enabled timed out at request1 receiving headers; disabled returned128 identical200 responses from bothservers. True reference cleanup stack shows fixture waiting in _read_body/receive.",
+  "source_explanation": [
+    "h3 0.0.8 finishes its first request with a GREASE frame before the QUIC FIN when send_grease is true.",
+    "aioquic 1.3.0 discards unknown request frames without an H3 event; when FIN is consumed alongside such a frame, the shown loop has no final additional DataReceived(stream_ended=True).",
+    "Hypercorn 0.18.0 signals ASGI EndBody only on a HeadersReceived or DataReceived event carrying stream_ended. The fixture waits for EndBody before sending its scope response."
+  ],
+  "scope": "The A/B supports the maintained POST-sequence interoperability workaround with these pinned clients/reference versions; no reference package changes or deadline changes were made.",
+  "sources": [
+    {
+      "path": "/Users/lazytrot/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h3-0.0.8/src/connection.rs",
+      "sha256": "fa5acb22e48ba1641611edc21ce52fb64b85c87e39f1944e43a54e18cbdb4247",
+      "start_line": 1098,
+      "end_line": 1118,
+      "source_excerpt": "\n    #[allow(missing_docs)]\n    #[cfg_attr(feature = \"tracing\", instrument(skip_all, level = \"trace\"))]\n    pub async fn finish(&mut self) -> Result<(), StreamError> {\n        if self.send_grease_frame {\n            // send a grease frame once per Connection\n            //= https://www.rfc-editor.org/rfc/rfc9114#section-7.2.8\n            //= type=implication\n            //# Frame types of the format 0x1f * N + 0x21 for non-negative integer\n            //# values of N are reserved to exercise the requirement that unknown\n            //# types be ignored (Section 9).  These frames have no semantics, and\n            //# they MAY be sent on any stream where frames are allowed to be sent.\n            stream::write(&mut self.stream, Frame::Grease)\n                .await\n                .map_err(|e| self.handle_quic_stream_error(e))?;\n            self.send_grease_frame = false;\n        }\n\n        future::poll_fn(|cx| self.stream.poll_finish(cx))\n            .await\n            .map_err(|e| self.handle_quic_stream_error(e))"
+    },
+    {
+      "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h3/connection.py",
+      "sha256": "696e9c3735de11c314b8cd1e7e1265761a9373d1bbd2dbdf66570961dac839cd",
+      "start_line": 721,
+      "end_line": 751,
+      "source_excerpt": "        self,\n        frame_type: int,\n        frame_data: Optional[bytes],\n        stream: H3Stream,\n        stream_ended: bool,\n    ) -> list[H3Event]:\n        \"\"\"\n        Handle a frame received on a request or push stream.\n        \"\"\"\n        http_events: list[H3Event] = []\n\n        if frame_type == FrameType.DATA:\n            # check DATA frame is allowed\n            if stream.headers_recv_state != HeadersState.AFTER_HEADERS:\n                raise FrameUnexpected(\"DATA frame is not allowed in this state\")\n\n            if frame_data is not None:\n                stream.content_length += len(frame_data)\n\n            if stream_ended:\n                self._check_content_length(stream)\n\n            if stream_ended or frame_data:\n                http_events.append(\n                    DataReceived(\n                        data=frame_data,\n                        push_id=stream.push_id,\n                        stream_ended=stream_ended,\n                        stream_id=stream.stream_id,\n                    )\n                )"
+    },
+    {
+      "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h3/connection.py",
+      "sha256": "696e9c3735de11c314b8cd1e7e1265761a9373d1bbd2dbdf66570961dac839cd",
+      "start_line": 833,
+      "end_line": 849,
+      "source_excerpt": "        elif frame_type in (\n            FrameType.PRIORITY,\n            FrameType.CANCEL_PUSH,\n            FrameType.SETTINGS,\n            FrameType.PUSH_PROMISE,\n            FrameType.GOAWAY,\n            FrameType.MAX_PUSH_ID,\n            FrameType.DUPLICATE_PUSH,\n        ):\n            raise FrameUnexpected(\n                \"Invalid frame type on request stream\"\n                if stream.push_id is None\n                else \"Invalid frame type on push stream\"\n            )\n\n        return http_events\n"
+    },
+    {
+      "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h3/connection.py",
+      "sha256": "696e9c3735de11c314b8cd1e7e1265761a9373d1bbd2dbdf66570961dac839cd",
+      "start_line": 1038,
+      "end_line": 1064,
+      "source_excerpt": "            frame_type = stream.frame_type\n            consumed = buf.tell()\n\n            # detect end of frame\n            stream.frame_size -= chunk_size\n            if not stream.frame_size:\n                stream.frame_size = None\n                stream.frame_type = None\n\n            try:\n                http_events.extend(\n                    self._handle_request_or_push_frame(\n                        frame_type=frame_type,\n                        frame_data=frame_data,\n                        stream=stream,\n                        stream_ended=stream.receiving_ended and buf.eof(),\n                    )\n                )\n            except pylsqpack.StreamBlocked:\n                stream.blocked = True\n                stream.blocked_frame_size = len(frame_data)\n                break\n\n        # remove processed data from buffer\n        stream.buffer = stream.buffer[consumed:]\n\n        return http_events"
+    },
+    {
+      "path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/h3.py",
+      "sha256": "c41ad8fab26c4373470af20a3c9247b602f188276bbeba0acf3bc0ab30653990",
+      "start_line": 54,
+      "end_line": 69,
+      "source_excerpt": "    async def handle(self, quic_event: QuicEvent) -> None:\n        for event in self.connection.handle_event(quic_event):\n            if isinstance(event, HeadersReceived):\n                if not self.context.terminated.is_set():\n                    await self._create_stream(event)\n                    if event.stream_ended:\n                        await self.streams[event.stream_id].handle(\n                            EndBody(stream_id=event.stream_id)\n                        )\n            elif isinstance(event, DataReceived):\n                await self.streams[event.stream_id].handle(\n                    Body(stream_id=event.stream_id, data=event.data)\n                )\n                if event.stream_ended:\n                    await self.streams[event.stream_id].handle(EndBody(stream_id=event.stream_id))\n"
+    },
+    {
+      "path": "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py",
+      "sha256": "2f57fcbecbb20d85bfee25069518cbce5d7b84ef28adc8c410421ad5cedb6a33",
+      "start_line": 79,
+      "end_line": 90,
+      "source_excerpt": "\nasync def _read_body(receive) -> bytes:\n    chunks = []\n    while True:\n        message = await receive()\n        if message[\"type\"] == \"http.disconnect\":\n            break\n        chunks.append(message.get(\"body\", b\"\"))\n        if not message.get(\"more_body\", False):\n            break\n    return b\"\".join(chunks)\n"
+    }
+  ]
+}

@@ -5,6 +5,8 @@ build-backend = "maturin"
 [project]
 name = "uvicorn-rs"
 version = "0.1.0"
+license = "BSD-3-Clause OR MIT"
+license-files = ["LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT"]
 description = "Rust network runtime for Python ASGI applications"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -31,3 +33,8 @@ benchmark = [
 module-name = "uvicorn_rs._native"
 python-source = "python"
 features = ["pyo3/extension-module"]
+exclude = [
+    "benchmarks/**", ".coverage-mcp/**", "build/**", "target/**", "tools/**",
+    "tests/**", "scripts/**", "examples/**", ".github/**", ".venv/**",
+    "**/__pycache__/**", "**/*.profraw", "**/*.profdata", "**/*.pem", "**/*.key",
+]

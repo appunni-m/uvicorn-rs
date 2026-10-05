@@ -1,0 +1,13 @@
+PASS lifespan-shutdown-raises: lifespan.lifespan-shutdown-raises
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/method-scope-optimization-2026-10-04/coverage-artifacts/15670b5cde514f5396ded21a697ce9f4/cases/lifespan.lifespan-shutdown-raises-5ba68a7594/parity-result.json"
+}

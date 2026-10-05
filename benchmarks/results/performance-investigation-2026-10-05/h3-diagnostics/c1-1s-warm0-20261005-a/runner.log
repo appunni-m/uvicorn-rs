@@ -1,0 +1,20 @@
+    Finished `release` profile [optimized] target(s) in 0.14s
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 289, in main
+    metrics = sample(
+              ^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 176, in sample
+    port = free_port()
+           ^^^^^^^^^^^
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 92, in free_port
+    raise OSError("could not find a port available for both TCP and UDP")
+OSError: could not find a port available for both TCP and UDP
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 363, in <module>
+    main()
+  File "/Users/lazytrot/work/uvicorn-rs/scripts/run_h3_category_bench.py", line 294, in main
+    raise RuntimeError(
+RuntimeError: HTTP/3 case failed: workload=protocol-scope, server=hypercorn-uvloop, repetition=1: could not find a port available for both TCP and UDP

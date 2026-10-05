@@ -1,0 +1,19 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan.auto-app-raises-after-retaining-send",
+      "profile": "lifespan-no-support-error-retained",
+      "operation": "lifespan.unsupported",
+      "covers": [
+        "lifespan.unsupported"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    }
+  ]
+}

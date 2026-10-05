@@ -1,0 +1,30 @@
+{
+  "audit_recipe_sha256": "d816f9c828202865a45d52beec0554e2fce682e5ff077a88ce9b3498a9b8dac1",
+  "compile_cfg": "default features; empty Rust wrappers; explicit macOS dynamic-lookup linker flags; verified normal native instrumentation absent",
+  "evidence_kind": "reuse_verified_normal_build_snapshot",
+  "native_extension_sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "normal_build_log": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-final-normal/normal-build.log",
+  "normal_build_log_sha256": "f8d139f65c58eec3509e632432e454b03f7f4b69497aa2a9acb60a8736f92446",
+  "normal_build_snapshot_identity": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-final-normal/identity.json",
+  "normal_build_snapshot_identity_sha256": "cb79575586975c5af8b5d9b83dee027de7735015eb18f279873c1ccdef083593",
+  "normal_library": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-final-normal/_native.abi3.so",
+  "original_build_command": [
+    "cargo",
+    "build",
+    "--locked",
+    "--release",
+    "--lib"
+  ],
+  "original_build_flags": "-C link-arg=-undefined -C link-arg=dynamic_lookup",
+  "schema": "uvicorn-rs-normal-build/audit-build@1",
+  "source_hashes_after": {
+    "Cargo.lock": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+    "Cargo.toml": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb",
+    "pyproject.toml": "d8c6907f96c0766b1fde9e59c8c41c8b02bdf1b108988dbe3b242cf83d2e248b",
+    "src/lib.rs": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+    "tools/http3-probe/Cargo.toml": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd"
+  },
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "status": "passed",
+  "workspace_extension_modified": false
+}

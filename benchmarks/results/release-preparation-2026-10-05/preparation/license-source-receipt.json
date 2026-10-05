@@ -1,0 +1,20 @@
+{
+  "copyright": "Copyright (c) 2026 Appunni M",
+  "project_spdx": "BSD-3-Clause OR MIT",
+  "sources": [
+    {
+      "url": "https://raw.githubusercontent.com/Kludex/uvicorn/master/LICENSE.md",
+      "original_sha256": "efe1acf3e62fb99c288b0ec73e5a773b7268ef4320fe757ea994214e4b63c371",
+      "file": "LICENSE-BSD-3-Clause",
+      "file_sha256": "bd58884c98fa79ea18055ccb243265afb8a967735cfe338ffa01336498316e34",
+      "original_notice_retained": true
+    },
+    {
+      "url": "https://raw.githubusercontent.com/pgjones/hypercorn/main/LICENSE",
+      "original_sha256": "1e319d8733d8344677cd0ee6c2a8cc0601c74487791d58b26b2b7ef0630c2b7f",
+      "file": "LICENSE-MIT",
+      "file_sha256": "04e7af3a9a91d02ca169bd23ba9bc5f67433790337f4c1c0edc389c89b3cd16d",
+      "original_notice_retained": true
+    }
+  ]
+}

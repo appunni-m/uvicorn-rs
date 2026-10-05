@@ -1,0 +1,18 @@
+{
+  "files": {
+    "current-analyzer-review.json": {
+      "byte_identical": true,
+      "bytes": 148178,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/reproducible-runner/current-analyzer-review.json",
+      "sha256": "a431271be92137a6ff47dcb201e10e7e01d7aac69c196c1c101893b3183d2d37"
+    },
+    "current-analyzer-review.md": {
+      "byte_identical": true,
+      "bytes": 17612,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/reproducible-runner/current-analyzer-review.md",
+      "sha256": "96c732b543e1143da106f20ec1ae0aaa73cf590caaaeaa8cc769d16c9b8201e9"
+    }
+  },
+  "schema": "uvicorn-rs-derived-analysis-archive@1",
+  "scope": "Current analyzer run over retained original category reports. Does not replace original raw data or original frozen analyzer."
+}

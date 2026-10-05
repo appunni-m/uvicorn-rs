@@ -1,0 +1,12 @@
+{
+  "schema": "uvicorn-rs-native-coverage-handoff@1",
+  "source_sha256": "313fc3bc68e9eb89611033a924367a74d2d2dc6aa8cfed923c198d01f6f44c0a",
+  "normal_native_sha256": "b11f1697a353b2361fa6019b6b654922ba237a2a04a1c22404d2d4adcbfd21e6",
+  "normal_snapshot": "build/performance-2026-10-05/h3-reaping-normal",
+  "old_instrumented_native": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/python/uvicorn_rs/_native.abi3.so",
+  "old_instrumented_native_sha256": "2aac17afa64ebc070555fdb03913747a051b4b3a00512633f7c54c4ac15c3378",
+  "planned_cases": 449,
+  "planned_public": 214,
+  "planned_target": 235,
+  "timing_prohibited_during_ownership": true
+}

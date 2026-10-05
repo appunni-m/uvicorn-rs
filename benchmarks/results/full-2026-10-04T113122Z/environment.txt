@@ -1,0 +1,27 @@
+cf9bf062133721b094e914f49ed8f54c613eb30f
+ M Cargo.toml
+ M docs/parity.md
+ M docs/support-matrix.md
+ M scripts/run_parity.py
+ M src/lib.rs
+ M tests/parity/app.py
+ M tests/parity/inputs/http1.json
+ M tests/parity/inputs/http2.json
+ M tests/parity/inputs/http3.json
+ M tests/parity/inputs/lifecycle.json
+ M tests/parity/inputs/websocket.json
+ M tests/parity/manifest.json
+ M tests/test_parity_contract.py
+ M tools/http3-probe/src/bin/parity-http3.rs
+Python 3.12.13
+rustc 1.98.1 (48a229cea 2026-09-01)
+cargo 1.98.1 (797e8a9bc 2026-08-05)
+uv 0.11.29 (901092ee1 2026-07-15 aarch64-apple-darwin)
+uvicorn 0.54.0
+uvloop 0.23.0
+httptools 0.8.0
+hypercorn 0.18.0
+/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/__init__.py
+/Users/lazytrot/work/uvicorn-rs/python/uvicorn_rs/_native.abi3.so
+Darwin Lazys-MacBook-Pro.local 24.6.0 Darwin Kernel Version 24.6.0: Tue Apr 21 20:16:56 PDT 2026; root:xnu-11417.140.69.710.16~1/RELEASE_ARM64_T6030 arm64
+Apple M3 Pro

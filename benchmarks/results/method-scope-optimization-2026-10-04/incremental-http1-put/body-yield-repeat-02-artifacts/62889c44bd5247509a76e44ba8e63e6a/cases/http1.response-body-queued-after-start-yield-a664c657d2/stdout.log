@@ -1,0 +1,13 @@
+PASS http1: http1.response-body-queued-after-start-yield
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/body-yield-repeat-02-artifacts/62889c44bd5247509a76e44ba8e63e6a/cases/http1.response-body-queued-after-start-yield-a664c657d2/parity-result.json"
+}

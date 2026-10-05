@@ -1,0 +1,83 @@
+[
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/Cargo.lock",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/Cargo.toml",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/scripts/build_coverage_extension.py",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/scripts/run_parity.py",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/scripts/run_unified_coverage.py",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/src/lib.rs",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/tests/parity/app.py",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/tests/parity/server_api_probe.py",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/tests/parity/startup_probe.py",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/tools/http3-probe/Cargo.lock",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/tools/http3-probe/Cargo.toml",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_files/benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/tools/http3-probe/src/bin/parity-http3.rs",
+    "before_present": false,
+    "after_present": true
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/source_sha256",
+    "before": "10e0d1008f78883348f84af7c0db724a3f44ab65ed9ead86d449883a377f3d59",
+    "after": "5f198f5aad2bf9a57e5bdce1d53b9e99d5533749f22085ca9b048df701cff648"
+  },
+  {
+    "path": "identity/dependencies/uvicorn-rs/external_checkout/untracked_source_files",
+    "before_count": 162,
+    "after_count": 174,
+    "added": [
+      "benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/Cargo.lock",
+      "benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/Cargo.toml",
+      "benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/scripts/build_coverage_extension.py",
+      "benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/scripts/run_parity.py",
+      "benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/scripts/run_unified_coverage.py",
+      "benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/src/lib.rs",
+      "benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/tests/parity/app.py",
+      "benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/frozen-source/tests/parity/server_api_probe.py"
+    ],
+    "removed": []
+  }
+]

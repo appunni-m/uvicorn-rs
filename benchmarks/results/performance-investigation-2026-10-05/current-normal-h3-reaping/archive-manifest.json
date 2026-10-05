@@ -1,0 +1,66 @@
+{
+  "created_at": "2026-10-05T12:01:10.967249+00:00",
+  "files": {
+    "Cargo.lock": {
+      "byte_identical": true,
+      "bytes": 30905,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-normal/Cargo.lock",
+      "sha256": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa"
+    },
+    "Cargo.toml": {
+      "byte_identical": true,
+      "bytes": 1576,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-normal/Cargo.toml",
+      "sha256": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb"
+    },
+    "README.md": {
+      "byte_identical": null,
+      "bytes": 921,
+      "kind": "derived analysis/documentation",
+      "original_path": null,
+      "sha256": "780a7b9cccf1775a2c50f8a11b847272786dc3b4ae54172a3ef2fbe2a358d4e5"
+    },
+    "clippy.log": {
+      "byte_identical": true,
+      "bytes": 137,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-normal/clippy.log",
+      "sha256": "dda6d72ec5145e56ad3af5fab615c78f2dc68feab8a7bdfbd4e1deaeaf49b058"
+    },
+    "fmt.log": {
+      "byte_identical": true,
+      "bytes": 0,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-normal/fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "identity.json": {
+      "byte_identical": true,
+      "bytes": 10659,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-normal/identity.json",
+      "sha256": "62574ec844e1d5bdf2eef3126ebb59929183f02afc614ebb96d24f837bbb8054"
+    },
+    "normal-build.log": {
+      "byte_identical": true,
+      "bytes": 127,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-normal/normal-build.log",
+      "sha256": "2bc1b40d10bc6ba3601b93e549cc383a5446230b3bdb9d6fccf03ccd9f700a68"
+    },
+    "src/lib.rs": {
+      "byte_identical": true,
+      "bytes": 209852,
+      "kind": "byte-identical original",
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-normal/src/lib.rs",
+      "sha256": "313fc3bc68e9eb89611033a924367a74d2d2dc6aa8cfed923c198d01f6f44c0a"
+    }
+  },
+  "native_sha256": "b11f1697a353b2361fa6019b6b654922ba237a2a04a1c22404d2d4adcbfd21e6",
+  "omitted_native_binary": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-reaping-normal/_native.abi3.so",
+  "public_parity_gate": "pending owner append",
+  "raw_copy_policy": "byte-identical originals and empty logs; original paths retained; no binaries",
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1"
+}

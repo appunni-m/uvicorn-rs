@@ -1,0 +1,673 @@
+{
+  "created_at": "2026-10-05T13:53:05.654649+00:00",
+  "files": {
+    "README.md": {
+      "bytes": 1520,
+      "derived_documentation": true,
+      "sha256": "75e52262cc063a8759aa8666d083741d6c19faf94e1a5045cb4925715f8270f5"
+    },
+    "armed-fault.txt": {
+      "byte_identical": true,
+      "bytes": 26,
+      "original_bytes": 26,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/armed-fault.txt",
+      "original_sha256": "edbf9bbb1ece0b7e61b94021b34ccb40979dd9bf29ddfc1c4a4e6096cea98ce9",
+      "sha256": "edbf9bbb1ece0b7e61b94021b34ccb40979dd9bf29ddfc1c4a4e6096cea98ce9"
+    },
+    "attempt-1/audit_normal.py.gz": {
+      "bytes": 4942,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 15591,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/audit_normal.py",
+      "original_sha256": "d816f9c828202865a45d52beec0554e2fce682e5ff077a88ce9b3498a9b8dac1",
+      "sha256": "894a76bab77a8d2334f9a3dc704071becc40787ff1d411326ac4e1f24a8b77f8"
+    },
+    "attempt-1/benchmark-identity-before-public-parity.json": {
+      "byte_identical": true,
+      "bytes": 163819,
+      "original_bytes": 163819,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/benchmark-identity-before-public-parity.json",
+      "original_sha256": "2d9dfd2573a7d2415016fc6f382b039e179fc934cd2638f0e2b69118e77fba3d",
+      "sha256": "2d9dfd2573a7d2415016fc6f382b039e179fc934cd2638f0e2b69118e77fba3d"
+    },
+    "attempt-1/build-receipt.json": {
+      "byte_identical": true,
+      "bytes": 1869,
+      "original_bytes": 1869,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/build-receipt.json",
+      "original_sha256": "817873b7d2dc11abe0fda4931e57c819a7ca0757eca527a00b7c20d993c2207d",
+      "sha256": "817873b7d2dc11abe0fda4931e57c819a7ca0757eca527a00b7c20d993c2207d"
+    },
+    "attempt-1/client-preservation-receipt.json": {
+      "byte_identical": true,
+      "bytes": 650,
+      "original_bytes": 650,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/client-preservation-receipt.json",
+      "original_sha256": "12f495cabfe3372265097933bec3f4c68398e7cf1e1682f6c88dec14dedf9356",
+      "sha256": "12f495cabfe3372265097933bec3f4c68398e7cf1e1682f6c88dec14dedf9356"
+    },
+    "attempt-1/client-restore-empty-wrappers.log": {
+      "byte_identical": true,
+      "bytes": 62,
+      "original_bytes": 62,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/client-restore-empty-wrappers.log",
+      "original_sha256": "db073818ee343e803727ffd505942b2c27966062c682b273fe90a689e93185e6",
+      "sha256": "db073818ee343e803727ffd505942b2c27966062c682b273fe90a689e93185e6"
+    },
+    "attempt-1/identity-capture.log": {
+      "byte_identical": true,
+      "bytes": 325,
+      "original_bytes": 325,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/identity-capture.log",
+      "original_sha256": "ad0773cbb4e0c05e23ebbce6aa198fb06ca39f5d76e94dbdcc71654ea535cf02",
+      "sha256": "ad0773cbb4e0c05e23ebbce6aa198fb06ca39f5d76e94dbdcc71654ea535cf02"
+    },
+    "attempt-1/identity-invalid-receipt.json": {
+      "byte_identical": true,
+      "bytes": 1360,
+      "original_bytes": 1360,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/identity-invalid-receipt.json",
+      "original_sha256": "bdafbdf9f4c604508a08242baa6424a2393f2175e5464497a8472ecf40a3ab95",
+      "sha256": "bdafbdf9f4c604508a08242baa6424a2393f2175e5464497a8472ecf40a3ab95"
+    },
+    "attempt-1/parity-http3-identity-invalid-attempt-1": {
+      "byte_identical": true,
+      "bytes": 4124160,
+      "original_bytes": 4124160,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/parity-http3-identity-invalid-attempt-1",
+      "original_sha256": "628a4febc36792ac86b9dda1dde2dacc9038db6aa4e53afc85b3cf9240daf333",
+      "sha256": "628a4febc36792ac86b9dda1dde2dacc9038db6aa4e53afc85b3cf9240daf333"
+    },
+    "attempt-1/prepared-commands.json": {
+      "byte_identical": true,
+      "bytes": 1059,
+      "original_bytes": 1059,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/prepared-commands.json",
+      "original_sha256": "7ad720091d2fabd023681f10b0264458d845c904ba14723ad8ae7723b1c61a86",
+      "sha256": "7ad720091d2fabd023681f10b0264458d845c904ba14723ad8ae7723b1c61a86"
+    },
+    "attempt-1/public-parity-result.json": {
+      "byte_identical": true,
+      "bytes": 3635977,
+      "original_bytes": 3635977,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/public-parity-result.json",
+      "original_sha256": "828a9bb9ef622e451809a15bf4f30b70e4cb94cce999bd4f48e2adf1e2048897",
+      "sha256": "828a9bb9ef622e451809a15bf4f30b70e4cb94cce999bd4f48e2adf1e2048897"
+    },
+    "attempt-1/public-parity.log": {
+      "byte_identical": true,
+      "bytes": 148231,
+      "original_bytes": 148231,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/public-parity.log",
+      "original_sha256": "9e9eb9a10b717c754d982ed8cfd6cb11b101483314ef89098373d29502255872",
+      "sha256": "9e9eb9a10b717c754d982ed8cfd6cb11b101483314ef89098373d29502255872"
+    },
+    "attempt-1/restore-receipt.json": {
+      "byte_identical": true,
+      "bytes": 1639,
+      "original_bytes": 1639,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/restore-receipt.json",
+      "original_sha256": "e8fb526a8036aa7f3307b810a6106874a155a975bcc84cfb0c2b5d74e9bc46db",
+      "sha256": "e8fb526a8036aa7f3307b810a6106874a155a975bcc84cfb0c2b5d74e9bc46db"
+    },
+    "attempt-1/restore_normal_and_capture.py.gz": {
+      "bytes": 2142,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 5434,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/restore_normal_and_capture.py",
+      "original_sha256": "fe8c5a4c57439765b9340f175b9e16b6b00453a01aff1f85fba00fc871e169bd",
+      "sha256": "c55b4ebc4d587896ffb34ec3532e4a5664664e4a88c2513fbceed4bcee7c957e"
+    },
+    "attempt-1/summarize_full_proof.py.gz": {
+      "bytes": 1110,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 2406,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/summarize_full_proof.py",
+      "original_sha256": "449f8276b5e32fb34b5d3f3d82d83b9214a52a0b4b91bb54bdbe7508361850de",
+      "sha256": "30a4451283d5d909f2a2be0cb56c1d47ba9a8fb34073510f6de4af2f532949cd"
+    },
+    "attempt-1/verify_normal_gates.py.gz": {
+      "bytes": 995,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 2428,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05/verify_normal_gates.py",
+      "original_sha256": "691c1730408b6b36991373b0c115f2a1c217181b59163d8f32034285f9bf7d51",
+      "sha256": "7d30bb2ec1cd336222f44da39e5b9d3f365abd5c2cd20227df3847684d2c7514"
+    },
+    "attempt-2/armed-fault.txt": {
+      "byte_identical": true,
+      "bytes": 26,
+      "original_bytes": 26,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/armed-fault.txt",
+      "original_sha256": "edbf9bbb1ece0b7e61b94021b34ccb40979dd9bf29ddfc1c4a4e6096cea98ce9",
+      "sha256": "edbf9bbb1ece0b7e61b94021b34ccb40979dd9bf29ddfc1c4a4e6096cea98ce9"
+    },
+    "attempt-2/audit_normal.py.gz": {
+      "bytes": 4942,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 15591,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/audit_normal.py",
+      "original_sha256": "d816f9c828202865a45d52beec0554e2fce682e5ff077a88ce9b3498a9b8dac1",
+      "sha256": "894a76bab77a8d2334f9a3dc704071becc40787ff1d411326ac4e1f24a8b77f8"
+    },
+    "attempt-2/benchmark-identity-before-public-parity.json": {
+      "byte_identical": true,
+      "bytes": 163819,
+      "original_bytes": 163819,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/benchmark-identity-before-public-parity.json",
+      "original_sha256": "a57597e1f3f0fd529e1d4442e6f00463edc26f1f31c6c41c1b59b2684d98196d",
+      "sha256": "a57597e1f3f0fd529e1d4442e6f00463edc26f1f31c6c41c1b59b2684d98196d"
+    },
+    "attempt-2/build-receipt.json": {
+      "byte_identical": true,
+      "bytes": 1869,
+      "original_bytes": 1869,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/build-receipt.json",
+      "original_sha256": "817873b7d2dc11abe0fda4931e57c819a7ca0757eca527a00b7c20d993c2207d",
+      "sha256": "817873b7d2dc11abe0fda4931e57c819a7ca0757eca527a00b7c20d993c2207d"
+    },
+    "attempt-2/cli-help.txt": {
+      "byte_identical": true,
+      "bytes": 578,
+      "original_bytes": 578,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/cli-help.txt",
+      "original_sha256": "5c2d10a5261421e01b6a9207526387535357a5c4ede3135b8d1b7ab57e886748",
+      "sha256": "5c2d10a5261421e01b6a9207526387535357a5c4ede3135b8d1b7ab57e886748"
+    },
+    "attempt-2/client-restore-empty-wrappers.log": {
+      "byte_identical": true,
+      "bytes": 62,
+      "original_bytes": 62,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/client-restore-empty-wrappers.log",
+      "original_sha256": "db073818ee343e803727ffd505942b2c27966062c682b273fe90a689e93185e6",
+      "sha256": "db073818ee343e803727ffd505942b2c27966062c682b273fe90a689e93185e6"
+    },
+    "attempt-2/exclusion-audit.log": {
+      "byte_identical": true,
+      "bytes": 152,
+      "original_bytes": 152,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/exclusion-audit.log",
+      "original_sha256": "34079c905842218b42681fb660f1d0ff3e21bc53b292e65434b1167deafc0dd4",
+      "sha256": "34079c905842218b42681fb660f1d0ff3e21bc53b292e65434b1167deafc0dd4"
+    },
+    "attempt-2/identity-capture.log": {
+      "byte_identical": true,
+      "bytes": 335,
+      "original_bytes": 335,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/identity-capture.log",
+      "original_sha256": "83fda5b39044fbdfaa26c2ce0e13e23c929ffd4b67aa2ed8ff2d3efbf087dfb2",
+      "sha256": "83fda5b39044fbdfaa26c2ce0e13e23c929ffd4b67aa2ed8ff2d3efbf087dfb2"
+    },
+    "attempt-2/identity-invalid-receipt.json": {
+      "byte_identical": true,
+      "bytes": 1147,
+      "original_bytes": 1147,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/identity-invalid-receipt.json",
+      "original_sha256": "09bbe93436e2a23a6f82fe1aa717efe0ff688270ceaaecdac962e2999e778fae",
+      "sha256": "09bbe93436e2a23a6f82fe1aa717efe0ff688270ceaaecdac962e2999e778fae"
+    },
+    "attempt-2/native-all-symbols.txt": {
+      "byte_identical": true,
+      "bytes": 2390332,
+      "original_bytes": 2390332,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/native-all-symbols.txt",
+      "original_sha256": "65e75f3587d8cb9d7d26f724aed716c9021061da5ed0b8015f7a7425d370ad78",
+      "sha256": "65e75f3587d8cb9d7d26f724aed716c9021061da5ed0b8015f7a7425d370ad78"
+    },
+    "attempt-2/native-exports.json": {
+      "byte_identical": true,
+      "bytes": 366,
+      "original_bytes": 366,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/native-exports.json",
+      "original_sha256": "7ca1f803ed8c405a89ec0d861dd0fb565d92d6050341cce933d924d1d1fc65c7",
+      "sha256": "7ca1f803ed8c405a89ec0d861dd0fb565d92d6050341cce933d924d1d1fc65c7"
+    },
+    "attempt-2/native-global-symbols.txt": {
+      "byte_identical": true,
+      "bytes": 7478,
+      "original_bytes": 7478,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/native-global-symbols.txt",
+      "original_sha256": "f1d7995ed7e337a1d1e16c4e54a1c048e8d5514c5c106e793f12767352f6f032",
+      "sha256": "f1d7995ed7e337a1d1e16c4e54a1c048e8d5514c5c106e793f12767352f6f032"
+    },
+    "attempt-2/native-macho-load-commands.txt": {
+      "byte_identical": true,
+      "bytes": 6934,
+      "original_bytes": 6934,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/native-macho-load-commands.txt",
+      "original_sha256": "09a357c7eb1894113cc889c523f4e09d756db245f5342230f58365e2d7b37a72",
+      "sha256": "09a357c7eb1894113cc889c523f4e09d756db245f5342230f58365e2d7b37a72"
+    },
+    "attempt-2/native-strings.txt": {
+      "byte_identical": true,
+      "bytes": 249530,
+      "original_bytes": 249530,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/native-strings.txt",
+      "original_sha256": "549cb161f2e4d0913556ab9ea7da6dac440594c000ec000fde41b205f8290eef",
+      "sha256": "549cb161f2e4d0913556ab9ea7da6dac440594c000ec000fde41b205f8290eef"
+    },
+    "attempt-2/normal-python/uvicorn_rs/__init__.py.gz": {
+      "bytes": 104,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 98,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/normal-python/uvicorn_rs/__init__.py",
+      "original_sha256": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155",
+      "sha256": "c7139a314288899479184c6d550226db17e338ef7123be2693437fcabd43be2f"
+    },
+    "attempt-2/normal-python/uvicorn_rs/__main__.py.gz": {
+      "bytes": 47,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 30,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/normal-python/uvicorn_rs/__main__.py",
+      "original_sha256": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+      "sha256": "301bec07238fe841e6f263997d354d3ef56c42d0695f5cff3cbf608a9d5ffeb0"
+    },
+    "attempt-2/normal-python/uvicorn_rs/_bridge.py.gz": {
+      "bytes": 231,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 418,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/normal-python/uvicorn_rs/_bridge.py",
+      "original_sha256": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff",
+      "sha256": "e0fbbf93dd4b3ecbd481d860c8656f6598f7919c2792e04689cafccaae326762"
+    },
+    "attempt-2/normal-python/uvicorn_rs/cli.py.gz": {
+      "bytes": 1087,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 3200,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/normal-python/uvicorn_rs/cli.py",
+      "original_sha256": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f",
+      "sha256": "02952c560fa6ac4516af8ab0de5ce759f7820adc88ffda755c33fe1deaffceec"
+    },
+    "attempt-2/normal-python/uvicorn_rs/server.py.gz": {
+      "bytes": 892,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 2244,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/normal-python/uvicorn_rs/server.py",
+      "original_sha256": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87",
+      "sha256": "38337b266142857a8f6c6bd4e33056a04ad0327195cc6d5bdbe32b6347e342cd"
+    },
+    "attempt-2/normal-restore-origin-receipt.json": {
+      "byte_identical": true,
+      "bytes": 1639,
+      "original_bytes": 1639,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/normal-restore-origin-receipt.json",
+      "original_sha256": "e8fb526a8036aa7f3307b810a6106874a155a975bcc84cfb0c2b5d74e9bc46db",
+      "sha256": "e8fb526a8036aa7f3307b810a6106874a155a975bcc84cfb0c2b5d74e9bc46db"
+    },
+    "attempt-2/parity-result.json": {
+      "byte_identical": true,
+      "bytes": 21520,
+      "original_bytes": 21520,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/parity-result.json",
+      "original_sha256": "fb6c197e6cbe366339fb244f17fd4d85664261c006ce0361a74b8718ed9a21a6",
+      "sha256": "fb6c197e6cbe366339fb244f17fd4d85664261c006ce0361a74b8718ed9a21a6"
+    },
+    "attempt-2/portable-difference-after-public.json": {
+      "byte_identical": true,
+      "bytes": 4670,
+      "original_bytes": 4670,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/portable-difference-after-public.json",
+      "original_sha256": "bbff94eb69b891ac71780856469362a8927f478c9e7eb3ea2baf105f6bfb7e14",
+      "sha256": "bbff94eb69b891ac71780856469362a8927f478c9e7eb3ea2baf105f6bfb7e14"
+    },
+    "attempt-2/prepared-commands.json": {
+      "byte_identical": true,
+      "bytes": 1411,
+      "original_bytes": 1411,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/prepared-commands.json",
+      "original_sha256": "5aa3cf4f39f8a3347288638077c64b8257ce173d045f67054be12189fe72b9a7",
+      "sha256": "5aa3cf4f39f8a3347288638077c64b8257ce173d045f67054be12189fe72b9a7"
+    },
+    "attempt-2/public-parity-result.json": {
+      "byte_identical": true,
+      "bytes": 3635987,
+      "original_bytes": 3635987,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/public-parity-result.json",
+      "original_sha256": "0992572171f6e7a08f086d310f966de97b41f9bbc68759eeb55da33a8dbd9123",
+      "sha256": "0992572171f6e7a08f086d310f966de97b41f9bbc68759eeb55da33a8dbd9123"
+    },
+    "attempt-2/public-parity.log": {
+      "byte_identical": true,
+      "bytes": 148336,
+      "original_bytes": 148336,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/public-parity.log",
+      "original_sha256": "9c8bd399ca3b7d431e9cbc28001658fb17af9578569ed979fb92fd93b1e06a16",
+      "sha256": "9c8bd399ca3b7d431e9cbc28001658fb17af9578569ed979fb92fd93b1e06a16"
+    },
+    "attempt-2/receipt.json": {
+      "byte_identical": true,
+      "bytes": 24770,
+      "original_bytes": 24770,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/receipt.json",
+      "original_sha256": "e938916bb3281aaf588472d02bfac459f1bdc064c46dfd5d282c52edb2d1668c",
+      "sha256": "e938916bb3281aaf588472d02bfac459f1bdc064c46dfd5d282c52edb2d1668c"
+    },
+    "attempt-2/restore-receipt.json": {
+      "byte_identical": true,
+      "bytes": 1188,
+      "original_bytes": 1188,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/restore-receipt.json",
+      "original_sha256": "f00f0029166839c68ab6988cff4deeecb1ec2ee3a50618db23c9d1849bee58af",
+      "sha256": "f00f0029166839c68ab6988cff4deeecb1ec2ee3a50618db23c9d1849bee58af"
+    },
+    "attempt-2/stderr.log": {
+      "byte_identical": true,
+      "bytes": 479,
+      "original_bytes": 479,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/stderr.log",
+      "original_sha256": "97070c73d058e89d3a2ce4243d80be7fd482c4d0c058e75fd8f656125df6d8eb",
+      "sha256": "97070c73d058e89d3a2ce4243d80be7fd482c4d0c058e75fd8f656125df6d8eb"
+    },
+    "attempt-2/stdout.log": {
+      "byte_identical": true,
+      "bytes": 491,
+      "original_bytes": 491,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/stdout.log",
+      "original_sha256": "0580fcd41f7f02fd17a6848e64c09e6579cb1ce5aef61176429f070fd6d689e9",
+      "sha256": "0580fcd41f7f02fd17a6848e64c09e6579cb1ce5aef61176429f070fd6d689e9"
+    },
+    "attempt-2/verify_normal_gates.py.gz": {
+      "bytes": 995,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 2428,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-2/verify_normal_gates.py",
+      "original_sha256": "691c1730408b6b36991373b0c115f2a1c217181b59163d8f32034285f9bf7d51",
+      "sha256": "7d30bb2ec1cd336222f44da39e5b9d3f365abd5c2cd20227df3847684d2c7514"
+    },
+    "audit_normal.py.gz": {
+      "bytes": 4942,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 15591,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/audit_normal.py",
+      "original_sha256": "d816f9c828202865a45d52beec0554e2fce682e5ff077a88ce9b3498a9b8dac1",
+      "sha256": "894a76bab77a8d2334f9a3dc704071becc40787ff1d411326ac4e1f24a8b77f8"
+    },
+    "benchmark-identity-before-public-parity.json": {
+      "byte_identical": true,
+      "bytes": 167959,
+      "original_bytes": 167959,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/benchmark-identity-before-public-parity.json",
+      "original_sha256": "dcc0d5f7c8d210a8fa35069240aa4fa25ca4520e4f6f26a64fbfdf243bc9cde2",
+      "sha256": "dcc0d5f7c8d210a8fa35069240aa4fa25ca4520e4f6f26a64fbfdf243bc9cde2"
+    },
+    "build-receipt.json": {
+      "byte_identical": true,
+      "bytes": 1869,
+      "original_bytes": 1869,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/build-receipt.json",
+      "original_sha256": "817873b7d2dc11abe0fda4931e57c819a7ca0757eca527a00b7c20d993c2207d",
+      "sha256": "817873b7d2dc11abe0fda4931e57c819a7ca0757eca527a00b7c20d993c2207d"
+    },
+    "cli-help.txt": {
+      "byte_identical": true,
+      "bytes": 578,
+      "original_bytes": 578,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/cli-help.txt",
+      "original_sha256": "5c2d10a5261421e01b6a9207526387535357a5c4ede3135b8d1b7ab57e886748",
+      "sha256": "5c2d10a5261421e01b6a9207526387535357a5c4ede3135b8d1b7ab57e886748"
+    },
+    "exclusion-audit.log": {
+      "byte_identical": true,
+      "bytes": 152,
+      "original_bytes": 152,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/exclusion-audit.log",
+      "original_sha256": "6161a12d6b42d880ac9435fe265383660f0b1e6d234203a21d6054c165c6a355",
+      "sha256": "6161a12d6b42d880ac9435fe265383660f0b1e6d234203a21d6054c165c6a355"
+    },
+    "identity-capture.log": {
+      "byte_identical": true,
+      "bytes": 335,
+      "original_bytes": 335,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/identity-capture.log",
+      "original_sha256": "57a07694b20b9a9993ad1a43c90ad4ea4370db034d635868088c9fcb52bc7d99",
+      "sha256": "57a07694b20b9a9993ad1a43c90ad4ea4370db034d635868088c9fcb52bc7d99"
+    },
+    "inventory_repository_test_processes.py.gz": {
+      "bytes": 992,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 2300,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/inventory_repository_test_processes.py",
+      "original_sha256": "6085259bf276a9b5db44988a19bf61154c278c5ac7d326bedf3a849e56370de5",
+      "sha256": "ed42a125bd8656ec888fce1839f2c786020e88c34c8fdc7a28fd5ec31a93c4ad"
+    },
+    "native-all-symbols.txt": {
+      "byte_identical": true,
+      "bytes": 2390332,
+      "original_bytes": 2390332,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/native-all-symbols.txt",
+      "original_sha256": "65e75f3587d8cb9d7d26f724aed716c9021061da5ed0b8015f7a7425d370ad78",
+      "sha256": "65e75f3587d8cb9d7d26f724aed716c9021061da5ed0b8015f7a7425d370ad78"
+    },
+    "native-exports.json": {
+      "byte_identical": true,
+      "bytes": 366,
+      "original_bytes": 366,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/native-exports.json",
+      "original_sha256": "c01e019b6300b1c97dd859e0fced190fc41e44addcf1e2fc98f1b5ab114648a9",
+      "sha256": "c01e019b6300b1c97dd859e0fced190fc41e44addcf1e2fc98f1b5ab114648a9"
+    },
+    "native-global-symbols.txt": {
+      "byte_identical": true,
+      "bytes": 7478,
+      "original_bytes": 7478,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/native-global-symbols.txt",
+      "original_sha256": "f1d7995ed7e337a1d1e16c4e54a1c048e8d5514c5c106e793f12767352f6f032",
+      "sha256": "f1d7995ed7e337a1d1e16c4e54a1c048e8d5514c5c106e793f12767352f6f032"
+    },
+    "native-macho-load-commands.txt": {
+      "byte_identical": true,
+      "bytes": 6934,
+      "original_bytes": 6934,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/native-macho-load-commands.txt",
+      "original_sha256": "09a357c7eb1894113cc889c523f4e09d756db245f5342230f58365e2d7b37a72",
+      "sha256": "09a357c7eb1894113cc889c523f4e09d756db245f5342230f58365e2d7b37a72"
+    },
+    "native-strings.txt": {
+      "byte_identical": true,
+      "bytes": 249530,
+      "original_bytes": 249530,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/native-strings.txt",
+      "original_sha256": "549cb161f2e4d0913556ab9ea7da6dac440594c000ec000fde41b205f8290eef",
+      "sha256": "549cb161f2e4d0913556ab9ea7da6dac440594c000ec000fde41b205f8290eef"
+    },
+    "normal-gates-receipt.json": {
+      "byte_identical": true,
+      "bytes": 2033,
+      "original_bytes": 2033,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/normal-gates-receipt.json",
+      "original_sha256": "e6ba239a73e358f54858b609946fcf406c045aad52a64c04692fc82aef7b81a0",
+      "sha256": "e6ba239a73e358f54858b609946fcf406c045aad52a64c04692fc82aef7b81a0"
+    },
+    "normal-python/uvicorn_rs/__init__.py.gz": {
+      "bytes": 104,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 98,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/normal-python/uvicorn_rs/__init__.py",
+      "original_sha256": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155",
+      "sha256": "c7139a314288899479184c6d550226db17e338ef7123be2693437fcabd43be2f"
+    },
+    "normal-python/uvicorn_rs/__main__.py.gz": {
+      "bytes": 47,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 30,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/normal-python/uvicorn_rs/__main__.py",
+      "original_sha256": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+      "sha256": "301bec07238fe841e6f263997d354d3ef56c42d0695f5cff3cbf608a9d5ffeb0"
+    },
+    "normal-python/uvicorn_rs/_bridge.py.gz": {
+      "bytes": 231,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 418,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/normal-python/uvicorn_rs/_bridge.py",
+      "original_sha256": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff",
+      "sha256": "e0fbbf93dd4b3ecbd481d860c8656f6598f7919c2792e04689cafccaae326762"
+    },
+    "normal-python/uvicorn_rs/cli.py.gz": {
+      "bytes": 1087,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 3200,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/normal-python/uvicorn_rs/cli.py",
+      "original_sha256": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f",
+      "sha256": "02952c560fa6ac4516af8ab0de5ce759f7820adc88ffda755c33fe1deaffceec"
+    },
+    "normal-python/uvicorn_rs/server.py.gz": {
+      "bytes": 892,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 2244,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/normal-python/uvicorn_rs/server.py",
+      "original_sha256": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87",
+      "sha256": "38337b266142857a8f6c6bd4e33056a04ad0327195cc6d5bdbe32b6347e342cd"
+    },
+    "parity-result.json": {
+      "byte_identical": true,
+      "bytes": 21520,
+      "original_bytes": 21520,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/parity-result.json",
+      "original_sha256": "2b5a2870c4e1791451a000d4184a8cac3f6b5857af7bd26738e7f17fce379773",
+      "sha256": "2b5a2870c4e1791451a000d4184a8cac3f6b5857af7bd26738e7f17fce379773"
+    },
+    "prepared-commands.json": {
+      "byte_identical": true,
+      "bytes": 768,
+      "original_bytes": 768,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/prepared-commands.json",
+      "original_sha256": "8a3130f03a57414a5de571c5da24e8c2cca89cfd99d95e48574cadfaa3c1d404",
+      "sha256": "8a3130f03a57414a5de571c5da24e8c2cca89cfd99d95e48574cadfaa3c1d404"
+    },
+    "public-parity-result.json": {
+      "byte_identical": true,
+      "bytes": 3635987,
+      "original_bytes": 3635987,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/public-parity-result.json",
+      "original_sha256": "f71c41a07832922bccfad3cc5f09ab85f980b32ceb6f429316bc4ab4a61c8d75",
+      "sha256": "f71c41a07832922bccfad3cc5f09ab85f980b32ceb6f429316bc4ab4a61c8d75"
+    },
+    "public-parity.log": {
+      "byte_identical": true,
+      "bytes": 148534,
+      "original_bytes": 148534,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/public-parity.log",
+      "original_sha256": "aa59d685169e9c44b241504ab3b55e3d194657c50ca9d99fa137e5a7d9926dab",
+      "sha256": "aa59d685169e9c44b241504ab3b55e3d194657c50ca9d99fa137e5a7d9926dab"
+    },
+    "receipt.json": {
+      "byte_identical": true,
+      "bytes": 24770,
+      "original_bytes": 24770,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/receipt.json",
+      "original_sha256": "0bd7a34e08fd0894ba4db70028113d8f901b129ecd8672034120ef45c884b65f",
+      "sha256": "0bd7a34e08fd0894ba4db70028113d8f901b129ecd8672034120ef45c884b65f"
+    },
+    "repository-test-process-inventory-limited-attempt-1.json": {
+      "byte_identical": true,
+      "bytes": 569,
+      "original_bytes": 569,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/repository-test-process-inventory-limited-attempt-1.json",
+      "original_sha256": "fa88aeb35fa93333e986a1d9d4d59815534b2d2e8403684f9512702c435d5a85",
+      "sha256": "fa88aeb35fa93333e986a1d9d4d59815534b2d2e8403684f9512702c435d5a85"
+    },
+    "repository-test-process-inventory.json": {
+      "byte_identical": true,
+      "bytes": 3157,
+      "original_bytes": 3157,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/repository-test-process-inventory.json",
+      "original_sha256": "824122923a89b4bace0ea6a44154ae26725cc9511320aa07db9079c90aab0221",
+      "sha256": "824122923a89b4bace0ea6a44154ae26725cc9511320aa07db9079c90aab0221"
+    },
+    "restore-receipt.json": {
+      "byte_identical": true,
+      "bytes": 1248,
+      "original_bytes": 1248,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/restore-receipt.json",
+      "original_sha256": "6c79cbc5d626f490140c334c6d2e0be1978ef854a7f6527f55886887c7825b83",
+      "sha256": "6c79cbc5d626f490140c334c6d2e0be1978ef854a7f6527f55886887c7825b83"
+    },
+    "source/Cargo.lock.gz": {
+      "bytes": 7876,
+      "lossless_decompression_verified": true,
+      "original_bytes": 30905,
+      "original_path": "Cargo.lock",
+      "original_sha256": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+      "sha256": "62324fc68d3440265c9d9c522a14061fe82f281e15de9acdc5cb91b87ea35543"
+    },
+    "source/Cargo.toml.gz": {
+      "bytes": 676,
+      "lossless_decompression_verified": true,
+      "original_bytes": 1576,
+      "original_path": "Cargo.toml",
+      "original_sha256": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb",
+      "sha256": "5aebffa2c99ad07077153e79d2b3cdf501b09a29c5f8d484f9d4f00f0083a5d6"
+    },
+    "source/src/lib.rs.gz": {
+      "bytes": 36995,
+      "lossless_decompression_verified": true,
+      "original_bytes": 210381,
+      "original_path": "src/lib.rs",
+      "original_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+      "sha256": "aef89eb90ccc761bb8502158cf1bf579d9cdbd6c7ea3ff5d98e3f74f9ee93882"
+    },
+    "stderr.log": {
+      "byte_identical": true,
+      "bytes": 479,
+      "original_bytes": 479,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/stderr.log",
+      "original_sha256": "97070c73d058e89d3a2ce4243d80be7fd482c4d0c058e75fd8f656125df6d8eb",
+      "sha256": "97070c73d058e89d3a2ce4243d80be7fd482c4d0c058e75fd8f656125df6d8eb"
+    },
+    "stdout.log": {
+      "byte_identical": true,
+      "bytes": 491,
+      "original_bytes": 491,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/stdout.log",
+      "original_sha256": "f7665a31a32b2722ba92837453d28efdc90ec4fb32a4968a9b4ad176cb042851",
+      "sha256": "f7665a31a32b2722ba92837453d28efdc90ec4fb32a4968a9b4ad176cb042851"
+    },
+    "unavailable-process-identities-receipt.json": {
+      "byte_identical": true,
+      "bytes": 2134,
+      "original_bytes": 2134,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/unavailable-process-identities-receipt.json",
+      "original_sha256": "79fd58c8c892e7b2f5c23909b34b3d6c91bf757d65a87ec1648ef0d0e26d4329",
+      "sha256": "79fd58c8c892e7b2f5c23909b34b3d6c91bf757d65a87ec1648ef0d0e26d4329"
+    },
+    "unavailable-process-status-receipt.json": {
+      "byte_identical": true,
+      "bytes": 730,
+      "original_bytes": 730,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/unavailable-process-status-receipt.json",
+      "original_sha256": "0d480f3b81e84dc40f20721686de17afa966106e0cd1efbd6af04a829d63096f",
+      "sha256": "0d480f3b81e84dc40f20721686de17afa966106e0cd1efbd6af04a829d63096f"
+    },
+    "verify_normal_gates.py.gz": {
+      "bytes": 995,
+      "compression": "gzip",
+      "lossless_decompression_verified": true,
+      "original_bytes": 2428,
+      "original_path": "build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/verify_normal_gates.py",
+      "original_sha256": "691c1730408b6b36991373b0c115f2a1c217181b59163d8f32034285f9bf7d51",
+      "sha256": "7d30bb2ec1cd336222f44da39e5b9d3f365abd5c2cd20227df3847684d2c7514"
+    }
+  },
+  "native_sha256": "0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d",
+  "schema": "uvicorn-rs-normal-build-evidence-archive@1",
+  "source_sha256": "c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7",
+  "status": "normal214_exclusion3_and_portable_identity_passed"
+}

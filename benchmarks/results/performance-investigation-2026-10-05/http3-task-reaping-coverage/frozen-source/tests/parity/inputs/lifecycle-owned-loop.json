@@ -1,0 +1,36 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan.post-response-background-task-cancelled-before-server-return",
+      "profile": "lifecycle-owned-loop",
+      "operation": "lifespan.post-response-application-shutdown",
+      "covers": [
+        "lifespan.post-response-application-shutdown"
+      ],
+      "lifecycle": {
+        "state_path": "/state",
+        "background_path": "/post-response-hold",
+        "graceful_timeout_seconds": 1
+      }
+    },
+    {
+      "case_id": "fault.lifespan.post-response-completion-receiver-closed-during-forced-shutdown",
+      "profile": "lifecycle-owned-loop",
+      "operation": "lifespan.post-response-application-shutdown",
+      "covers": [
+        "lifespan.post-response-application-shutdown"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.task-completion.result-receiver-closed",
+        "contract": "server-forced-task-completion-error-bounded-shutdown"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "background_path": "/post-response-hold",
+        "graceful_timeout_seconds": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+[
+  {
+    "context": {
+      "checkout_path": "/Users/lazytrot/work/uvicorn-rs",
+      "repo_key": "/Users/lazytrot/work/uvicorn-rs",
+      "schema_revision": 18,
+      "suite": null
+    },
+    "data": {
+      "group_count": 1,
+      "groups": [
+        {
+          "count": 2,
+          "function": "uvicorn_rs::serve_http3_connection::{closure#0}",
+          "locations": [
+            {
+              "arm": null,
+              "span": [
+                3878,
+                20,
+                3878,
+                26
+              ]
+            },
+            {
+              "arm": null,
+              "span": [
+                3878,
+                57,
+                3880,
+                6
+              ]
+            }
+          ],
+          "locations_omitted": 0,
+          "path": "src/lib.rs",
+          "unmeasured_reason": null
+        }
+      ],
+      "measurement": {
+        "build_id": "9f702bce3d4ba38404d83dbeee3dedfefeb9494086e87c56f3f1cb8f70b07e7b",
+        "coverage": {
+          "covered": 4776,
+          "metric": "regions",
+          "missing": 2,
+          "total": 4778
+        },
+        "format": "llvm",
+        "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+        "ref": "build/asgi-coverage/unified-http3-task-reaping-450-2026-10-05/coverage-report.json",
+        "source": "matches_receipt",
+        "tests": "failed"
+      },
+      "next_action": "Use rg and bounded file reads at these locations; test references are not coverage attribution.",
+      "next_offset": null,
+      "ranking": "missing observations, then source location",
+      "status": "measured",
+      "warnings": [
+        "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+      ],
+      "warnings_omitted": 0
+    },
+    "page": null
+  }
+]

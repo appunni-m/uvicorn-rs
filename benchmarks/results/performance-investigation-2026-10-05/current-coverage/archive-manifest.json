@@ -1,0 +1,609 @@
+{
+  "binary_archive_policy": "Native binaries and raw profiles remain preserved at the original local build paths; no binaries copied into this repository archive. Full reports and repeat receipts are losslessly gzip-compressed. Original receipt paths remain unchanged.",
+  "coverage": {
+    "lines": {
+      "covered": 3360,
+      "missing": 0,
+      "total": 3360
+    },
+    "regions": {
+      "covered": 4763,
+      "missing": 0,
+      "total": 4763
+    }
+  },
+  "coverage_gate": "passed",
+  "coverage_mcp": {
+    "build_id": "70b5d44d925d0b6a4885890607320c600d4086a50b9d66a74c27f0ed7a7a6716",
+    "coverage": {
+      "covered": 4763,
+      "metric": "regions",
+      "missing": 0,
+      "total": 4763
+    },
+    "group_count": 0,
+    "groups": [],
+    "location_samples_are_bounded": true,
+    "measurement_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/coverage-report.json",
+    "metric": "regions",
+    "pages": 1,
+    "receipt_artifact": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/coverage-mcp-pages.json",
+    "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+    "source": "matches_receipt",
+    "status": "measured",
+    "tests": "passed"
+  },
+  "files": {
+    "build.log": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/build.log",
+      "sha256": "25611a672ebe256798426cef32ff97df1e617cb83b1da147af402250c445d843"
+    },
+    "coverage-mcp-pages.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/coverage-mcp-pages.json",
+      "sha256": "c7ed9a4a407c4a47f639653f22e36c091b6580dc3b91afbcde9f926a42369933"
+    },
+    "coverage-report.json.context.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/coverage-report.json.context.json",
+      "sha256": "f57eb038112b282e349910553b8a1250d200d464085c97fe4ff9ebc5ea3b752c"
+    },
+    "coverage-report.json.gz": {
+      "compression": "gzip-lossless",
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/coverage-report.json",
+      "sha256": "6d54bf95cc1056acc8d83f92fcba3de6195b6650b2e33076a4eef7de81ee7ace",
+      "uncompressed_sha256": "c8ef9a6039c72a8ad0433366b837699910f22a7592cebc71e1f04f0bef58297c"
+    },
+    "matrix-runs/run-1/parity-result.json.gz": {
+      "compression": "gzip-lossless",
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/artifacts/1f04acb17846461695d774b0c680f069/matrix-runs/run-1/parity-result.json",
+      "sha256": "842cdf977c0b665992470a618de0f9242504b4f3a28c20196e662f1c689d3e70",
+      "uncompressed_sha256": "f38c92feeca5bc87e23b32d781a5e5f19249c85a0c0d164dbab4deca8c101770"
+    },
+    "matrix-runs/run-1/stderr.log": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/artifacts/1f04acb17846461695d774b0c680f069/matrix-runs/run-1/stderr.log",
+      "sha256": "dd1612406dd4ae9be48244dd7104cf90a7b27499da2c32f086729f7bb840aa14"
+    },
+    "matrix-runs/run-1/stdout.log": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/artifacts/1f04acb17846461695d774b0c680f069/matrix-runs/run-1/stdout.log",
+      "sha256": "5d80f7cc89d8252253be81c51ef5ab943d94d8ff7aa560125535915ace8574bc"
+    },
+    "matrix-runs/run-2/parity-result.json.gz": {
+      "compression": "gzip-lossless",
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/artifacts/1f04acb17846461695d774b0c680f069/matrix-runs/run-2/parity-result.json",
+      "sha256": "1d74972b9d8786b99b009978c23029f251c5e931a1bfe3f33fa177e561439fcd",
+      "uncompressed_sha256": "15f6241402dcb9dc502e1a6786a5db4b895caf4a765929dd96861232334050ad"
+    },
+    "matrix-runs/run-2/stderr.log": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/artifacts/1f04acb17846461695d774b0c680f069/matrix-runs/run-2/stderr.log",
+      "sha256": "c53c016254530431108c7bacd3996ee676ab8c56415430d80ecdfea2d076e31e"
+    },
+    "matrix-runs/run-2/stdout.log": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/artifacts/1f04acb17846461695d774b0c680f069/matrix-runs/run-2/stdout.log",
+      "sha256": "b5af8aeb090167f04035813d0f6af6e38b1f34294b14a765ce7e9c47cf1f0f1a"
+    },
+    "matrix-runs/run-3/parity-result.json.gz": {
+      "compression": "gzip-lossless",
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/artifacts/1f04acb17846461695d774b0c680f069/matrix-runs/run-3/parity-result.json",
+      "sha256": "f279f66e7c34585197e3d03db8c0e720bbf2fcb43d445ca08708e122bf1eef53",
+      "uncompressed_sha256": "df0df6f66646055e8d273e137b4ccf8ce3a667adf90a57d6cbc74ff9f2ac6044"
+    },
+    "matrix-runs/run-3/stderr.log": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/artifacts/1f04acb17846461695d774b0c680f069/matrix-runs/run-3/stderr.log",
+      "sha256": "5c8feb4c1a684cf01cc428b6133599cd837d8760e5abf9f0bf6e631f82d73224"
+    },
+    "matrix-runs/run-3/stdout.log": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/artifacts/1f04acb17846461695d774b0c680f069/matrix-runs/run-3/stdout.log",
+      "sha256": "131ef407b745e5dccdf32763fc9c2367ed7a5d118c8d6c12822c7466235db530"
+    },
+    "normal-exclusion/armed-fault.txt": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/armed-fault.txt",
+      "sha256": "edbf9bbb1ece0b7e61b94021b34ccb40979dd9bf29ddfc1c4a4e6096cea98ce9"
+    },
+    "normal-exclusion/audit.log": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/audit.log",
+      "sha256": "a7845bc8231e33bdf12ce4de04a026f2633b84ee4ade34498da8742c1df1b733"
+    },
+    "normal-exclusion/audit_normal.py": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/audit_normal.py",
+      "sha256": "9eafa5d73752226e3eeb9e52c293d7d3a422467c2e2865cf98a2e8ab8a2c5878"
+    },
+    "normal-exclusion/build-receipt.json": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/build-receipt.json",
+      "sha256": "b9054754eaa865625d8df6562c3265a6f032dcbf538a3cdc72d95515250526c1"
+    },
+    "normal-exclusion/cli-help.txt": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/cli-help.txt",
+      "sha256": "5c2d10a5261421e01b6a9207526387535357a5c4ede3135b8d1b7ab57e886748"
+    },
+    "normal-exclusion/native-exports.json": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/native-exports.json",
+      "sha256": "257f42d959514084ebfcde8545a579af2205088d10f5de2c2ef185c22032bf85"
+    },
+    "normal-exclusion/native-global-symbols.txt": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/native-global-symbols.txt",
+      "sha256": "65d0d4d4144b323d2f500acaf07974072ddc7be444bb70ddbc2de4e86e4da199"
+    },
+    "normal-exclusion/native-macho-load-commands.txt": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/native-macho-load-commands.txt",
+      "sha256": "628e8900ca56f363fa777ce21c151251c4b16484a86b5be9a2c1a80815004af0"
+    },
+    "normal-exclusion/receipt.json": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/receipt.json",
+      "sha256": "1994c244577def60255e5ecc4ee3de232e32a5fbe46c2b614dc03323931e8fd5"
+    },
+    "normal-exclusion/stderr.log": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/stderr.log",
+      "sha256": "97070c73d058e89d3a2ce4243d80be7fd482c4d0c058e75fd8f656125df6d8eb"
+    },
+    "normal-exclusion/stdout.log": {
+      "original_path": "build/asgi-coverage/normal-build-shared-write-clean-close-audit-2026-10-05/stdout.log",
+      "sha256": "4d9a674d9eb46a3b0d88f3ca2ed46d5cad39ae35b0c3a91ea75cc911c602f8b9"
+    },
+    "normal-restoration.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/normal-restoration.json",
+      "sha256": "90891796370c12041d1192892250f9b536d8b81be453f5f2bf326ae7c42a8f32"
+    },
+    "previous-generic-helper/coverage-mcp-pages.json": {
+      "original_path": "build/asgi-coverage/unified-vectored-clean-close-448-2026-10-05/coverage-mcp-pages.json",
+      "sha256": "491985c2dea7b4baf0c67cca1f3a52baf3771abfe25a47b38367fcec34ffd088"
+    },
+    "previous-generic-helper/coverage-report.json.context.json": {
+      "original_path": "build/asgi-coverage/unified-vectored-clean-close-448-2026-10-05/coverage-report.json.context.json",
+      "sha256": "27229c25771448e2d25482a832c6290f7e3e3d51ae16001d5888534186865ba8"
+    },
+    "previous-generic-helper/coverage-report.json.gz": {
+      "compression": "gzip-lossless",
+      "original_path": "build/asgi-coverage/unified-vectored-clean-close-448-2026-10-05/coverage-report.json",
+      "sha256": "b7b21dc2ed26299d920aaf82fc9b7808f6e3085ab634e59742ec2d9ef36b01b3",
+      "uncompressed_sha256": "e7ccb71298b5cdf3545c17852832ea8e502124bece3038339d02ca5ac587fbc4"
+    },
+    "previous-generic-helper/evidence-status.json": {
+      "original_path": "build/asgi-coverage/unified-vectored-clean-close-448-2026-10-05/evidence-status.json",
+      "sha256": "a288d3cec32e5d911834c7d87991f7e50e263e4f48ccf71ddee697207c9f3135"
+    },
+    "previous-generic-helper/native-build-identity.json": {
+      "original_path": "build/asgi-coverage/unified-vectored-clean-close-448-2026-10-05/native-build/identity.json",
+      "sha256": "6151c93acde80382352dfc9069f5a48868e54344d7e462afd44852b576a79289"
+    },
+    "previous-generic-helper/src/lib.rs": {
+      "original_path": "build/asgi-coverage/unified-vectored-clean-close-448-2026-10-05/native-build/src/lib.rs",
+      "sha256": "b6421bc45a55e194b4924661f4492b06c2860b47d1bf97d17991145b9094d028"
+    },
+    "run.log": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/run.log",
+      "sha256": "96d9ebfed5826e52ebe8b3684bafdafd750424850f92ff405f9c78081d1c090b"
+    },
+    "source-input-snapshot/Cargo.lock": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/Cargo.lock",
+      "sha256": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa"
+    },
+    "source-input-snapshot/Cargo.toml": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/Cargo.toml",
+      "sha256": "e0f511738765501de37317ff9e316d989501568e6c6bf33ba86a56c983b360bb"
+    },
+    "source-input-snapshot/identity.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/identity.json",
+      "sha256": "c0558d0ab2b07528c23ef8f5d89bec670bdde5ae957547e76b878e105a4de610"
+    },
+    "source-input-snapshot/scripts/build_coverage_extension.py": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/scripts/build_coverage_extension.py",
+      "sha256": "6f076979ffe03cc644ca1dcdf96a8bad2406b7ad72a8d24aa24a539ea4b8140c"
+    },
+    "source-input-snapshot/scripts/run_parity.py": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/scripts/run_parity.py",
+      "sha256": "642ad6f5241106150d4120bee6d31ef6c747065f5311255718466b471a7e549c"
+    },
+    "source-input-snapshot/scripts/run_unified_coverage.py": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/scripts/run_unified_coverage.py",
+      "sha256": "88c4d13ca59dbed6ec9d8e0a9bb2f17e270f168b2e2825ef9ed7917f41cd9402"
+    },
+    "source-input-snapshot/src/lib.rs": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/src/lib.rs",
+      "sha256": "81c239b5f596cf4be18cc71bc3b537c02224c0f1e1ab35174e6386f5203510cd"
+    },
+    "source-input-snapshot/tests/parity/app.py": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/app.py",
+      "sha256": "2f57fcbecbb20d85bfee25069518cbce5d7b84ef28adc8c410421ad5cedb6a33"
+    },
+    "source-input-snapshot/tests/parity/inputs/http1-tls.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/http1-tls.json",
+      "sha256": "8d3c6390852591318ff441a94b5badc3d1e19c22eabd51a08e42707ca40b4075"
+    },
+    "source-input-snapshot/tests/parity/inputs/http1.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/http1.json",
+      "sha256": "77530b60e9d2cd91f0061c45fd151feee61179bbdb95bdd73536ae89da8c57c0"
+    },
+    "source-input-snapshot/tests/parity/inputs/http2.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/http2.json",
+      "sha256": "ac35b37446615c166f93b67ec0234992ffbb0e41e84df84b165baf48dc603d78"
+    },
+    "source-input-snapshot/tests/parity/inputs/http3.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/http3.json",
+      "sha256": "06bdb06c086fc2534d08a027dc4f9abe81dc32f2b75bd9b41c3feceac91e1eb1"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifecycle-owned-loop-eager.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifecycle-owned-loop-eager.json",
+      "sha256": "ab48a7bd260f4326889ba290d9a1d155c705960903473ceaf5dc665f6ed1653c"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifecycle-owned-loop.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifecycle-owned-loop.json",
+      "sha256": "e13fb8c825f4faca37baa03651bdcc0dbe4a58987e4417a11322f6acbd897be2"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifecycle-server-api.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifecycle-server-api.json",
+      "sha256": "b8e97d645081b4062165e15d07c59fa7a46f6e798056e4e67d680bad39a73835"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifecycle-tls.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifecycle-tls.json",
+      "sha256": "e08bdc54f6738b4cf8b51a800bd9551e58eae38bf9ac6d46e3f80f160e8f8b24"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifecycle.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifecycle.json",
+      "sha256": "3e939b44f5fcbd668cbff99e25a65a6d952cda858ba0d8df896ff3f60af71d46"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-shutdown-complete.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-shutdown-complete.json",
+      "sha256": "b66bb0a5895f80ed75e2c9da5e0efe63b884f5b9f6b5583a16b768ec8103165b"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-shutdown-failed-message-extract.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-shutdown-failed-message-extract.json",
+      "sha256": "3d78cf470ce73230f9b308c15d28956cce4fe5e5d30ca57b0b0a02922bd4f08f"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-shutdown-failed-message-get-item.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-shutdown-failed-message-get-item.json",
+      "sha256": "ae99cd2d7104dce4a94b45a5d7297546307cf67722135020508d1734250e870b"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-shutdown-failed.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-shutdown-failed.json",
+      "sha256": "5b890e76933d7c63ee7b7cc8366c792b33354296bd97e2ae5f9f40166467b78f"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-shutdown-send-type-get-item.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-shutdown-send-type-get-item.json",
+      "sha256": "5d14f7c6f03ae15df7520731a9b23306a6a5d3c4c7a5fedc3921d8f2160d0d57"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-shutdown-task-join-after-complete.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-shutdown-task-join-after-complete.json",
+      "sha256": "6be41daf7b0fbe4e87ef815835074979180a00e7d97dfb8763a213e62ec84b93"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-startup-complete.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-startup-complete.json",
+      "sha256": "3ac1ca0be289db46b20be5812b895a245c956e3f65f9ffb5b1e87da88e257888"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-startup-event-channel-closed.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-startup-event-channel-closed.json",
+      "sha256": "3c53809dd40a02b004d14c0831936c9f6e5c6e888b85eca2541da8d9a8ed1cc0"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-startup-failed-message-extract.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-startup-failed-message-extract.json",
+      "sha256": "5707186c1a903884e145315a23d6c722e02858e606b51469a4bb85d04c6e74eb"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-startup-failed-message-get-item.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-startup-failed-message-get-item.json",
+      "sha256": "5aab30aafd9f31f73b0d6468c92357d2173761f54b404e6b78f3513bf20262d4"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-asgi-startup-failed.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-asgi-startup-failed.json",
+      "sha256": "0bb75381464dbe84a813e0e70d62675780fa3657da5629a929c94b7e982f0019"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-receive-startup.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-receive-startup.json",
+      "sha256": "26177e7d834fb7bc70df486515ed2821a1b105e42021af0751413a115eeeb526"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-scope-asgi-spec-version.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-scope-asgi-spec-version.json",
+      "sha256": "583b8f5b6144abf5c2dc41cb15ed692917c52bfe2d8f78ae1275978cc693c937"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-scope-asgi-version.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-scope-asgi-version.json",
+      "sha256": "7e636f640f1fb3f052f459e6b9980e2f592dfc7b96c2859603a599f2572342c9"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-scope-asgi.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-scope-asgi.json",
+      "sha256": "70646921d553b320929637cfde3fdd82c2f8d3ac2862b0fa67af90c6628830b2"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-scope-state.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-scope-state.json",
+      "sha256": "b7cee93238231d15f6457c4f32b1bed87338c6bd8cb3bc7fa384694769176541"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-scope-type.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-scope-type.json",
+      "sha256": "dde532cdac8421516b97d5864f1ccac3f8082d30f40c2e335884bb7e422c691f"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-shutdown-cancel.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-shutdown-cancel.json",
+      "sha256": "d73d048d85f688d088c010595a819e0048eddf1e17e3e4f0ab65f7e1b43025d1"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-shutdown-receive.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-shutdown-receive.json",
+      "sha256": "d2359d4624c475b44f3216030663ba97cf19432107e9df52b4673e9c6518dd89"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-fault-start-event-channel-closed.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-fault-start-event-channel-closed.json",
+      "sha256": "88e68ef4e2676a3662c74ace4c6633c4a5c25c3c3569831ea44d521a22ce3fca"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-invalid-startup-event.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-invalid-startup-event.json",
+      "sha256": "c59a72df4d2663ece2040a66f0c3eb383d97f76144e8616d5deb83e246ed4744"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-missing-startup-event-type.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-missing-startup-event-type.json",
+      "sha256": "f069b49f23bf62b6b0544a25f3026124e1da7ae05f412a052d0f51f02caa0724"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-no-support-error-retained.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-no-support-error-retained.json",
+      "sha256": "f0d6f2b73d63632fae71221c12d554734ac55e5a1402ffa3b92fd7bd8cba0a35"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-no-support-error.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-no-support-error.json",
+      "sha256": "705f8b7675b282abec62dbf748273404ccedc215f4b7fc119c7560d39dd97347"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-no-support.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-no-support.json",
+      "sha256": "e531d524a562be8cda56260e43a1337d42a7c816265b112f58de98d6986d0c93"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-non-string-startup-event-type.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-non-string-startup-event-type.json",
+      "sha256": "ab05e766ac795690fad53e9657e5f9a8ac027499a8d1275fc87bb11227867624"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-receive-wrong-signature.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-receive-wrong-signature.json",
+      "sha256": "307485ea3dd305aed757ac820f2608ecb196b2dc65df4edec1c792bbf848bbff"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-retained-send.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-retained-send.json",
+      "sha256": "86854b2785cb5899c260ff48cd5fa78880d35db141f65a534afb4a82575e26db"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-shutdown-complete-then-raises.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-shutdown-complete-then-raises.json",
+      "sha256": "19153c75a2ad715ea4b004d615bcb492227461be47149c8d9162cc815a3dcdfd"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-shutdown-failed-empty.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-shutdown-failed-empty.json",
+      "sha256": "39d36edd48a921a3572c2c446bedbef7094d57cbe85926ae1ca71453909893a4"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-shutdown-failed-subclass.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-shutdown-failed-subclass.json",
+      "sha256": "c7e48a539634e1558174423c845934710e451d21ccddd48d0b5808a5aa40e461"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-shutdown-failed.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-shutdown-failed.json",
+      "sha256": "7d182bd77cef0a9ca0b4bef4750a4653c1e0fe0ed93a08b48985e3b01ad522ae"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-shutdown-raises.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-shutdown-raises.json",
+      "sha256": "2c37ec64b394d32995ac7466bfaeeb81f5ec4f9c0102811c5ab494a98d16da4c"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-shutdown-returns-retained.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-shutdown-returns-retained.json",
+      "sha256": "7f04dc45c17340425e36e12c4368065c2da19d418ddfffcb3341fa6676ffb9a5"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-shutdown-returns.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-shutdown-returns.json",
+      "sha256": "1ced873288ee5b63e7d577837979e9b67733404a13f75b1038d027a071e35749"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-shutdown-unexpected-event.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-shutdown-unexpected-event.json",
+      "sha256": "ab59b4956c28b35879f21f74bd43c2831ea5c5738e87ea0ddae8a04dbd33d5cb"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-startup-complete-then-returns.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-startup-complete-then-returns.json",
+      "sha256": "9789d8d7d9870beafb16348fd5dd7f69c23aa66b37fedab3b95f3eb0e18da959"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-startup-failed-empty.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-startup-failed-empty.json",
+      "sha256": "2b4ef1fee9c7466408802e74440b6c2e04f89a0174db05b8ca0150e05c9a253f"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-startup-failed-subclass.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-startup-failed-subclass.json",
+      "sha256": "f792fe72b2a67f2a4ecc38ff1b07f8a290489ad68661ff8bc9e4e1e52c7b7f23"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-startup-failed.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-startup-failed.json",
+      "sha256": "4b5f68ffd70349d15aa4e4d45361c5152ac6b30886bb3512c07abd59ed2fb057"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-state-copy-rehash.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-state-copy-rehash.json",
+      "sha256": "27935f8d1652eb7b938d7dc74a5a880085fc1d0a749546ec2c6bbf95e60b3a6e"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-subclass-event-types.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-subclass-event-types.json",
+      "sha256": "a5a29dc5d471f4d2f5f0fe6a682970f0962ed3f71997e5433e873c65a9255543"
+    },
+    "source-input-snapshot/tests/parity/inputs/lifespan-unexpected-startup-event.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/lifespan-unexpected-startup-event.json",
+      "sha256": "b74ae5eef595a0435206309080ef64ef3996c88f84131ba57b4dae20a7362e8e"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-empty-certificate.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-empty-certificate.json",
+      "sha256": "759b37e9ccec68a4105401010e545a415f3cc12de138f0db9f5161fa24052bd7"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-empty-private-key.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-empty-private-key.json",
+      "sha256": "3edf405d3a111d8a1ae9613c206852fe1006e8a25d2d9d16ca5da69145d68981"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-fault-lifespan-bridge.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-fault-lifespan-bridge.json",
+      "sha256": "3eadb224f60a541308207ead0652105125ddc39ae2d84928620213c3210585e4"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-fault-listener-accept.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-fault-listener-accept.json",
+      "sha256": "f1715d9d4ae4fbc1f6bd94e8308b740de173e2828a4293328281dbef614737ad"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-fault-native-add-class-asgi-io.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-fault-native-add-class-asgi-io.json",
+      "sha256": "f8bfc553d7d49ff22bd89cba980b28b3d472d4d73c059d5605fa37930f58a60f"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-fault-native-add-class-lifespan-io.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-fault-native-add-class-lifespan-io.json",
+      "sha256": "76d9083b4a1dbeda6cff8e5f9572a050c09e4aecbdd4293ba60bde569160fd8c"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-fault-native-add-class-server-control.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-fault-native-add-class-server-control.json",
+      "sha256": "ec4139a115724e544e37767898d1b571a7de5c1eaf752f905d08cf49bfcee440"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-fault-native-add-class-websocket-io.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-fault-native-add-class-websocket-io.json",
+      "sha256": "8cafc793dd2b2951c185011637f9a715f87a2ba6a89d7afde64dd3dc46bf8873"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-fault-native-add-function-serve.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-fault-native-add-function-serve.json",
+      "sha256": "94320a4a78063e25d204b9fdc10b9aea9e103fe5b19000df011fdb6dda6e8775"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-invalid-certificate-pem.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-invalid-certificate-pem.json",
+      "sha256": "4c5af2108e5389bd9b7dc576f0b9893a0fd260ff67b622c12f7c9e02b7493347"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-invalid-host.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-invalid-host.json",
+      "sha256": "1c887c1d32aa18bdf413bf6c3664ec6bcc486f3ca61d0942692a719aa109627b"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-invalid-private-key-pem.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-invalid-private-key-pem.json",
+      "sha256": "05ccae2b1bfd966cc99b1c80f24d6aaf39a3621b5c2e129d126432de94d68b05"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-mismatched-private-key.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-mismatched-private-key.json",
+      "sha256": "ccfe6d122e16f3cc5c5b59c964a09df9d0143f958ab18ea9461711242dd5259f"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-missing-certificate.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-missing-certificate.json",
+      "sha256": "d3cf81702471e9f24e671fcda20d2dfd0050089d61c40bf4ff719c252f6915a5"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-missing-private-key.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-missing-private-key.json",
+      "sha256": "dacbd2b813e78df732117fcf15ce3a740b0bbb240fb7bf9e2af570cff181427b"
+    },
+    "source-input-snapshot/tests/parity/inputs/startup-partial-tls-api.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/startup-partial-tls-api.json",
+      "sha256": "4209dab0c48c0a5f4ced9b5ebb891253910fcd13143fa7b80cad8dbad3975d10"
+    },
+    "source-input-snapshot/tests/parity/inputs/websocket-tls.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/websocket-tls.json",
+      "sha256": "7b9f44751d751a339d7bcd7bd72c5dcd39c2fd317d185afea07f66ab02c3a9a9"
+    },
+    "source-input-snapshot/tests/parity/inputs/websocket.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/inputs/websocket.json",
+      "sha256": "8a63221f7a4c4843a13e6376b65b3b063f2d3358ad28812500727096aaa9afe4"
+    },
+    "source-input-snapshot/tests/parity/manifest.json": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/manifest.json",
+      "sha256": "afe134e3b0f8940598dedf9e7aa6f2b866855b74e45edbebef111e86948e15b1"
+    },
+    "source-input-snapshot/tests/parity/server_api_probe.py": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/server_api_probe.py",
+      "sha256": "4aff297c6e9bc2aea63aad2728cebf29c6fba8d43bebac4ba8a0161c1b6a1b7b"
+    },
+    "source-input-snapshot/tests/parity/startup_probe.py": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tests/parity/startup_probe.py",
+      "sha256": "bdd81488a67d327c6cc15c8f1f2c8a6f2070bd59ffbd9ee2cebdc6f837be543a"
+    },
+    "source-input-snapshot/tools/http3-probe/Cargo.lock": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tools/http3-probe/Cargo.lock",
+      "sha256": "a8d9eb109c08ff22d0a67812fc2b61559aa478b962b4c0f8012daaa64f7c128f"
+    },
+    "source-input-snapshot/tools/http3-probe/Cargo.toml": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tools/http3-probe/Cargo.toml",
+      "sha256": "ba9618917787d54f920c3fa8fb416e491a955a8b8db7b9dd661a0e5aebf570dd"
+    },
+    "source-input-snapshot/tools/http3-probe/src/bin/parity-http3.rs": {
+      "original_path": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/tools/http3-probe/src/bin/parity-http3.rs",
+      "sha256": "73f0441ecac89c338c81fa88e149c55b771179e407dcbafbebf58a3c0c655f03"
+    }
+  },
+  "full_report_sha256": "c8ef9a6039c72a8ad0433366b837699910f22a7592cebc71e1f04f0bef58297c",
+  "instrumented_native_sha256": "2aac17afa64ebc070555fdb03913747a051b4b3a00512633f7c54c4ac15c3378",
+  "local_preserved_instrumented_native": "build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/native-build/python/uvicorn_rs/_native.abi3.so",
+  "local_preserved_normal_native": "build/performance-2026-10-05/canonical-v2/python/uvicorn_rs/_native.abi3.so",
+  "matrix": {
+    "executed": 448,
+    "failed": 0,
+    "fault_contracts": {
+      "failed": 0,
+      "passed": 235,
+      "selected": 235
+    },
+    "infrastructure_failed": 0,
+    "oracle_parity": {
+      "failed": 0,
+      "passed": 213,
+      "selected": 213
+    },
+    "passed": 448,
+    "selected": 448,
+    "transient_infrastructure_failures": 0
+  },
+  "normal_exclusion": {
+    "checks": {
+      "armed_fault_file_ignored": true,
+      "authored_panic_error_lints_denied": true,
+      "canonical_native_matches": true,
+      "cli_has_no_fault_option": true,
+      "exact_case_selection": true,
+      "fault_markers_absent": true,
+      "inspection_used_normal_library": true,
+      "live_parity_used_normal_library": true,
+      "llvm_coverage_instrumentation_absent": true,
+      "measured_source_unchanged": true,
+      "native_exports_have_no_fault_control": true,
+      "parity_passed": true,
+      "primary_case_is_live_oracle_parity": true,
+      "support_cases_are_public_inputs_without_native_injection": true,
+      "workspace_extension_unchanged": true
+    },
+    "status": "passed",
+    "summary": {
+      "executed": 3,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 3,
+      "selected": 3
+    }
+  },
+  "normal_exclusion_receipt_sha256": "1994c244577def60255e5ecc4ee3de232e32a5fbe46c2b614dc03323931e8fd5",
+  "normal_native_sha256": "8f69afda0be9d121d304c674d5638f470da6939fbed58ce809457284df6585b6",
+  "schema": "uvicorn-rs-coverage/archive@1",
+  "scope": "src/lib.rs; macOS ARM64 default native features with cfg(coverage); dirty local source. Native/source region and line coverage; not all repository code, all features, all platforms, or full ASGI conformance.",
+  "source_sha256": "81c239b5f596cf4be18cc71bc3b537c02224c0f1e1ab35174e6386f5203510cd",
+  "status": "complete",
+  "verification_runs": [
+    {
+      "runner_exit_code": 0,
+      "status": "completed",
+      "summary": {
+        "executed": 448,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 448,
+        "selected": 448
+      },
+      "transient_infrastructure_failures": 0
+    },
+    {
+      "runner_exit_code": 0,
+      "status": "completed",
+      "summary": {
+        "executed": 448,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 448,
+        "selected": 448
+      },
+      "transient_infrastructure_failures": 0
+    },
+    {
+      "runner_exit_code": 0,
+      "status": "completed",
+      "summary": {
+        "executed": 448,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 448,
+        "selected": 448
+      },
+      "transient_infrastructure_failures": 0
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+ERROR http3: http3.sequential-responses-one-connection: oracle hypercorn adapter failed: HTTP/3 sequence did not reach its live-connection result barrier: HTTP/3 probe: QUIC connected
+HTTP/3 probe: HTTP/3 connection ready
+Error: Custom { kind: Other, error: "HTTP/3 sequence request 1 receive-headers deadline failed: deadline has elapsed" }; diagnostic={"events": ["lifespan.startup"], "server_log": ""}
+--- hypercorn server log ---
+Process SpawnProcess-1:
+  + Exception Group Traceback (most recent call last):
+  |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+  |     self.run()
+  |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/multiprocessing/process.py", line 108, in run
+  |     self._target(*self._args, **self._kwargs)
+  |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/run.py", line 216, in uvloop_worker
+  |     _run(
+  |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/run.py", line 233, in _run
+  |     runner.run(main(shutdown_trigger=shutdown_trigger))
+  |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/runners.py", line 118, in run
+  |     return self._loop.run_until_complete(task)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "uvloop/loop.pyx", line 1515, in uvloop.loop.Loop.run_until_complete
+  |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/run.py", line 170, in worker_serve
+  |     await asyncio.wait_for(gathered_server_tasks, config.graceful_timeout)
+  |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+  |     return await fut
+  |            ^^^^^^^^^
+  |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/udp_server.py", line 51, in run
+  |     async with TaskGroup(self.loop) as task_group:
+  |                ^^^^^^^^^^^^^^^^^^^^
+  |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py", line 75, in __aexit__
+  |     await self._task_group.__aexit__(exc_type, exc_value, tb)
+  |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/taskgroups.py", line 71, in __aexit__
+  |     return await self._aexit(et, exc)
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/taskgroups.py", line 164, in _aexit
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py", line 28, in _handle
+    |     await app(scope, receive, send, sync_spawn, call_soon)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/app_wrappers.py", line 34, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 497, in _app_impl
+    |     body = b"" if scope["method"] == "GET" else await _read_body(receive)
+    |                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/lazytrot/work/uvicorn-rs/tests/parity/app.py", line 83, in _read_body
+    |     message = await receive()
+    |               ^^^^^^^^^^^^^^^
+    |   File "/Users/lazytrot/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/queues.py", line 158, in get
+    |     await getter
+    | asyncio.exceptions.CancelledError
+    | 
+    | During handling of the above exception, another exception occurred:
+    | 
+    | Traceback (most recent call last):
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/asyncio/task_group.py", line 34, in _handle
+    |     await send(None)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/http_stream.py", line 139, in app_send
+    |     await self._send_error_response(500)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/http_stream.py", line 250, in _send_error_response
+    |     await self.send(
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/hypercorn/protocol/h3.py", line 72, in stream_send
+    |     self.connection.send_headers(
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/h3/connection.py", line 597, in send_headers
+    |     self._quic.send_stream_data(
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/connection.py", line 1139, in send_stream_data
+    |     stream.sender.write(data, end_stream=end_stream)
+    |   File "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/aioquic/quic/stream.py", line 334, in write
+    |     assert self._reset_error_code is None, "cannot call write() after reset()"
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    | AssertionError: cannot call write() after reset()
+    +------------------------------------
+
+{
+  "status": "failed",
+  "summary": {
+    "selected": 2,
+    "executed": 1,
+    "passed": 0,
+    "failed": 0,
+    "not_run": 1,
+    "infrastructure_failed": 1
+  },
+  "result": "build/asgi-coverage/http3-grease-public128-ab-2026-10-05/grease-true-live-result.json"
+}

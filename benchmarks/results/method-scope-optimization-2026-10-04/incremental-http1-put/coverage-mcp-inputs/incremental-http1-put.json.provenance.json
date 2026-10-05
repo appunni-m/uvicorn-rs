@@ -1,0 +1,16 @@
+{
+  "context": {
+    "build_id": "4f30e39076a8204529ae60cbe773540bd2fbbd91f7d94e2aafa5b6e8110f66c0",
+    "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+    "report_sha256": "ad6b8fdd72d5a1eabb696088170b5325bd7f2fe016f84266527f209e3ac1a2d4",
+    "scope": "selected_tests",
+    "source_hashes": {
+      "src/lib.rs": "9f2fc5513e93ce9acba8bc504c3f61a68b7acab5da613d22d6a7d954c9b984a3"
+    },
+    "test_status": "passed"
+  },
+  "projected_report_sha256": "ad6b8fdd72d5a1eabb696088170b5325bd7f2fe016f84266527f209e3ac1a2d4",
+  "projection": "preserve LLVM export fields; omit uvicorn_rs_unified attribution metadata for MCP ingestion size limit",
+  "source_report": "benchmarks/results/method-scope-optimization-2026-10-04/incremental-http1-put/measurement.json",
+  "source_report_sha256": "0e3ff9b101344ac7946921aedb4dc38cd3321518ce5f73dac8699d16aee69aa6"
+}

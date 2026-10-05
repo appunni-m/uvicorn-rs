@@ -1,0 +1,17 @@
+{
+  "schema": "uvicorn-rs-parity/input@7",
+  "cases": [
+    {
+      "case_id": "lifespan-subclass-event-types.complete-events",
+      "profile": "lifespan-subclass-event-types",
+      "operation": "lifespan.event-type-subclass",
+      "covers": [
+        "lifespan.event-type-subclass"
+      ],
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1
+      }
+    }
+  ]
+}

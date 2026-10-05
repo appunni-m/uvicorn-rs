@@ -1,0 +1,15 @@
+{
+  "schema": "uvicorn-rs-coverage-preparation-status@1",
+  "status": "superseded_before_full_matrix",
+  "coverage_report_created": false,
+  "full_matrix_executed": false,
+  "reason": "strengthened pre-resolver panic case assumed same-connection stream recovery, but both old and new natives correctly exposed existing synthetic H3_FRAME_UNEXPECTED whole-connection behavior",
+  "preserved_attempts": {
+    "defending-before/attempt-1-status.json": "sccache sandbox failure before execution",
+    "defending-before/attempt-2": "local port allocation failed under sandbox",
+    "defending-before/attempt-3": "live old-native H3_FRAME_UNEXPECTED before barrier",
+    "defending-after/attempt-1": "live new-native same H3_FRAME_UNEXPECTED before barrier"
+  },
+  "approval_review": "first escalation was not executed because reviewer model was at capacity; same reviewed request later succeeded",
+  "next_scope": "restore original pre-resolver fault contract; add distinct post-response cfg fault shared by isolated old baseline and new source; fresh450 full proof; no profiles from this directory enter fresh coverage"
+}

@@ -1,0 +1,16 @@
+{
+  "context": {
+    "build_id": "4f30e39076a8204529ae60cbe773540bd2fbbd91f7d94e2aafa5b6e8110f66c0",
+    "recorded_revision": "cf9bf062133721b094e914f49ed8f54c613eb30f",
+    "report_sha256": "8f5f5527562cd00f8985f90b941ae30b39c9f1bee1057b716fc77a1adf5671a9",
+    "scope": "full",
+    "source_hashes": {
+      "src/lib.rs": "9f2fc5513e93ce9acba8bc504c3f61a68b7acab5da613d22d6a7d954c9b984a3"
+    },
+    "test_status": "passed"
+  },
+  "projected_report_sha256": "8f5f5527562cd00f8985f90b941ae30b39c9f1bee1057b716fc77a1adf5671a9",
+  "projection": "preserve LLVM source coverage details and unified region inventory; omit per-case attribution arrays for MCP ingestion size limit",
+  "source_report": "build/asgi-coverage/unified-lifespan-retained-callables-2026-10-04/coverage-report.json",
+  "source_report_sha256": "0f2781fd39eebeb4ce6be8aa1a6dc6f184dae796167d0b83c5c252eeb1763e89"
+}

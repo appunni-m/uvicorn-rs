@@ -1,0 +1,8 @@
+{
+  "compiled_source_sha256": "f37a63045a58ac972c2037249225c1acb0c831aa5fdc977a27253e2ecd925bca",
+  "installed_native_sha256": "1feabcc07ed92b7d1b5a4f185b6d9ba498d55372af5ef2447a8bcd1d97557aff",
+  "previous_native_sha256": "314ac904059bb4cc10ebae97ba538278f2af286a0e356bc207e90eb92c69ea52",
+  "case": "fault.http3.request-task-panic-after-response",
+  "coverage_profiles": "isolated baseline; never merged into current coverage",
+  "input_freeze": "build/performance-2026-10-05/http3-regression-inputs-freeze-450.json"
+}

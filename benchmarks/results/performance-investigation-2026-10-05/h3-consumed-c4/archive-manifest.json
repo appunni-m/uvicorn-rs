@@ -1,0 +1,76 @@
+{
+  "schema": "uvicorn-rs-lossless-benchmark-archive@1",
+  "scope": "6/6 response/lifecycle checks passed; 1 valid timing and 5 host-invalid; no qualified matched ratio",
+  "files": {
+    "analysis.json": {
+      "sha256": "c90162f907bd0c5a5667d8e8a936c3accf0b3a800071698579200a49b7e6f123",
+      "bytes": 61418,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/analysis.json"
+    },
+    "analysis.md": {
+      "sha256": "66fb90b9e94cfbae8b32d983e714787520e9da9502bcec7b7138724f0a101c1d",
+      "bytes": 12309,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/analysis.md"
+    },
+    "driver.log": {
+      "sha256": "d89a170ee118ea2759640e76b614688d7a38028ce38996228543062efebfbb41",
+      "bytes": 97378,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/driver.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-1-server.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-2-server.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.artifacts/protocol-scope-consumed-request-hypercorn-uvloop-repeat-3-server.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-1-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-1-server.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-2-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-2-server.log"
+    },
+    "http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-3-server.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.artifacts/protocol-scope-consumed-request-uvicorn-rs-uvloop-repeat-3-server.log"
+    },
+    "http3.json": {
+      "sha256": "c7a07d1aafe247925f321f499e46b4e7b62ddcfbd5594bca1a69195ce7c78e10",
+      "bytes": 318003,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.json"
+    },
+    "http3.jsonl": {
+      "sha256": "d981558be40dd4bf1a02c97b29603706a37558d05f82720f4f20cf919e9cd0ff",
+      "bytes": 97255,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.jsonl"
+    },
+    "http3.jsonl.meta.json": {
+      "sha256": "63731cc123aa7db9ed6a6d5afe7da042ba66d7923fdbcaa8d312636872f994f3",
+      "bytes": 68017,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/http3.jsonl.meta.json"
+    },
+    "public-gate-identity-after.json": {
+      "sha256": "22b10866b85a06f0838baf530ad6b609d99aac7bef1e487d957c4887ab99c38c",
+      "bytes": 168906,
+      "original_path": "/Users/lazytrot/work/uvicorn-rs/build/performance-2026-10-05/h3-consumed-c4/public-gate-identity-after.json"
+    },
+    "README.md": {
+      "sha256": "303a06dbcf55abcc072b4c1396c511d44b10be4fc3a292244364fb4f2bd9b602",
+      "bytes": 619,
+      "kind": "derived scope note"
+    }
+  }
+}
