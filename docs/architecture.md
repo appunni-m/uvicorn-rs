@@ -1,16 +1,13 @@
 # Architecture and buffer ownership
 
-The HTTP/3 task-reaping source passes all 451 instrumented attribution cases
-and three complete repeats with zero failures, infrastructure errors, retries
-or cases not run. The matrix has 214 oracle comparisons and 237 target-only
-contracts across 70 input files and 63 operations. Native coverage is
-4,778/4,778 regions and 3,371/3,371 lines with zero unfiltered MCP gaps.
-The restored normal build passes 214/214 public comparisons and all 15
-exclusion checks with three selected live cases. See
-[the current source/build receipt](coverage.md#current-full-verification-451-cases).
-Passing 448-case results below belong to the earlier shared-write source
-identified in [the coverage record](coverage.md#current-full-verification-448-cases);
-they do not attest the changed checkout.
+The current 460-case matrix passes attribution and three full repeats. It
+contains 221 live oracle comparisons and 239 target-only contracts across 70
+input files and 64 operations. Native coverage is 4,810/4,810 regions and
+3,395/3,395 lines, with zero Coverage MCP gaps. The normal wheel passes
+221/221 public parity cases and the 16-check exclusion audit with three
+selected workflows. See the [current source/build receipt](coverage.md#current-full-verification-460-cases).
+Older 451- and 448-case results below are historical and do not attest the
+current checkout.
 
 ## Runtime boundary
 
@@ -209,12 +206,15 @@ knowledge and TLS ALPN. Quinn plus `h3` handles experimental HTTP/3 over QUIC.
 CONNECT and HTTP/3 WebSockets are not implemented. Lifespan startup completes
 before the listeners accept requests.
 
-The H3 accept loop recognizes only the pinned library's typed `H3_NO_ERROR`
-(`0x100`) as normal peer closure. It retains ownership of accepted request tasks
-and drains them before returning. Numeric QUIC application code `0` is not
-reclassified; other application/transport acceptance errors retain their
-existing error propagation. The public `http3.peer-close` workflow checks exact
-response bytes, a fresh connection, scoped diagnostics and graceful exit.
+The H3 accept loop treats typed `H3_NO_ERROR` (`0x100`) and unknown remote
+HTTP/3 application close codes as clean peer closure, as required by
+[RFC 9114 section 8](https://www.rfc-editor.org/rfc/rfc9114.html#section-8).
+Cases cover zero, reserved GREASE `0x21`, unknown `0x111`, and
+maximum u62. Registered HTTP/3-family application codes `0x33`, `0x101`, and
+`0x200` retain the error path. The public workflows check exact response bytes,
+a fresh connection, scoped diagnostics and graceful exit. They do not send a
+QUIC transport `CONNECTION_CLOSE` frame; transport-close behavior remains
+unverified.
 
 While accepting new H3 requests, the connection loop joins completed owned
 request tasks and observes their results. On a real acceptance error it closes
@@ -229,7 +229,7 @@ cancellation diagnostics and Python cleanup before a fresh request. This adds
 no native point or panic and passed its selected instrumented case (1/1).
 The 450-case full gate left two final-drain regions uncovered; the enlarged
 matrix's fresh full verification covers both through this case and passes all
-451 attribution cases plus three full repeats. Actual remote application close
+460 attribution cases plus three full repeats. Actual remote application close
 `0x102`, body-stream error, connection closure and cleanup prove connection-error
 termination/cancellation; the probe's `stream_reset` error convention alone
 does not identify a QUIC `RESET_STREAM` frame. See the

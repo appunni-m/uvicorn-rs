@@ -215,6 +215,8 @@ enum CoverageFaultPoint {
     Http3ConnectionTaskShutdownHang,
     Http3ConnectionCreateError,
     Http3ConnectionAcceptError,
+    Http3PeerCloseUnexpectedError,
+    Http3PeerCloseReasonUnavailable,
     Http3RequestResolveError,
     Http3ResponseBuilderError,
     Http3ResponseSendError,
@@ -488,6 +490,8 @@ impl CoverageFaultPoint {
             Self::Http3ConnectionTaskShutdownHang => "http3.connection-task.shutdown-hang",
             Self::Http3ConnectionCreateError => "http3.connection.create-error",
             Self::Http3ConnectionAcceptError => "http3.connection.accept-error",
+            Self::Http3PeerCloseUnexpectedError => "http3.peer-close.unexpected-error-kind",
+            Self::Http3PeerCloseReasonUnavailable => "http3.peer-close.close-reason-unavailable",
             Self::Http3RequestResolveError => "http3.request.resolve-error",
             Self::Http3ResponseBuilderError => "http3.response.builder-error",
             Self::Http3ResponseSendError => "http3.response.send-error",
@@ -3827,13 +3831,10 @@ async fn serve_http3_connection(
         };
         let accepted = match accepted_result {
             Ok(accepted) => accepted,
-            Err(error)
-                if error
-                    .downcast_ref::<h3::error::ConnectionError>()
-                    .is_some_and(h3::error::ConnectionError::is_h3_no_error) =>
-            {
-                // A peer's normal HTTP/3 close ends acceptance. Drain owned
-                // request tasks below, preserving their completion/cleanup.
+            Err(error) if is_http3_peer_close_ignorable(error.as_ref(), &connection) => {
+                // RFC 9114 requires unknown application close codes to be
+                // treated as H3_NO_ERROR. A peer's normal HTTP/3 close ends
+                // acceptance; drain owned request tasks below.
                 break;
             }
             Err(error) => {
@@ -3879,6 +3880,50 @@ async fn serve_http3_connection(
         observe_http3_request_task(result);
     }
     connection_result
+}
+
+fn is_http3_peer_close_ignorable(
+    error: &(dyn StdError + 'static),
+    connection: &quinn::Connection,
+) -> bool {
+    let Some(connection_error) = error.downcast_ref::<h3::error::ConnectionError>() else {
+        return false;
+    };
+    if connection_error.is_h3_no_error() {
+        return true;
+    }
+    // h3 0.0.8 makes fields of its Remote error variant unmatchable outside
+    // the crate. Its public display text identifies the remote application
+    // close; Quinn's typed close reason supplies the numeric code below.
+    let is_peer_application_close = connection_error
+        .to_string()
+        .starts_with("Remote error: ApplicationClose: ");
+    #[cfg(coverage)]
+    let is_peer_application_close = is_peer_application_close
+        && !coverage_fault_take(CoverageFaultPoint::Http3PeerCloseUnexpectedError);
+    if !is_peer_application_close {
+        return false;
+    }
+    let close_reason = {
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::Http3PeerCloseReasonUnavailable) {
+            None
+        } else {
+            connection.close_reason()
+        }
+        #[cfg(not(coverage))]
+        {
+            connection.close_reason()
+        }
+    };
+    let Some(quinn::ConnectionError::ApplicationClosed(close)) = close_reason else {
+        return false;
+    };
+
+    // h3 0.0.8 exposes the peer's application code through its public QUIC
+    // error. Preserve errors registered by RFC 9114, QPACK, and RFC 9297;
+    // future or private codes follow RFC 9114 section 8 and are non-errors.
+    !matches!(close.error_code.into(), 0x33 | 0x100..=0x110 | 0x200..=0x202)
 }
 
 fn observe_http3_request_task(result: Result<(), tokio::task::JoinError>) {

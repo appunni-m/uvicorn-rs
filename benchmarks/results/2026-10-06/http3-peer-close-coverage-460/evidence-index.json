@@ -1,0 +1,128 @@
+{
+  "schema": "uvicorn-rs-h3-close-coverage-evidence@1",
+  "recorded_at": "2026-10-06T15:35:07.504Z",
+  "git": {
+    "revision": "fce9706c8d7eb21c999989c729b01242b9421731",
+    "dirty": true,
+    "src_lib_rs_sha256": "f3dffa8078bc6454fd0f7277f3bf122db1c3d4e40d5c58851435346cc709b224",
+    "aggregate_coverage_source_sha256": "52551747cf72142ce17f06b2f6898abad8068c2ef9739a0c3de0aba47d164ac6"
+  },
+  "environment": {
+    "dependencies": {
+      "aioquic": "1.3.0",
+      "h11": "0.16.0",
+      "h2": "4.4.1",
+      "httptools": "0.8.0",
+      "hypercorn": "0.18.0",
+      "uvicorn": "0.54.0",
+      "uvloop": "0.23.0",
+      "websockets": "17.1",
+      "wsproto": "1.3.2"
+    },
+    "machine": "arm64",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "python": "3.12.13",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "manifest": {
+    "path": "tests/parity/manifest.json",
+    "sha256": "fc032299ab1fb961780751097a3985b8f65090b1894dc6b53233b384a59bc493",
+    "input_files": 70,
+    "operations": 64
+  },
+  "coverage": {
+    "report": "coverage-report.json.gz",
+    "report_sha256_uncompressed": "c45f978fc76174636ecb7d4062d23e68c4084e2fc7355d090aff99823f606d53",
+    "report_sha256_gzip": "98fced9835aceb64a35c3ea03ca2b5c350b306b89dd16973d7843f5d7c932311",
+    "context": "coverage-report.json.context.json",
+    "context_sha256": "4415053c90832ce2747863a1412c5827fcc0f127f795d39455082ac5a02c4498",
+    "context_report_sha256": "c45f978fc76174636ecb7d4062d23e68c4084e2fc7355d090aff99823f606d53",
+    "cases": 460,
+    "passed": 460,
+    "oracle_parity": {
+      "failed": 0,
+      "passed": 221,
+      "selected": 221
+    },
+    "fault_contracts": {
+      "failed": 0,
+      "passed": 239,
+      "selected": 239
+    },
+    "repeat_summaries": [
+      {
+        "executed": 460,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 460,
+        "selected": 460
+      },
+      {
+        "executed": 460,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 460,
+        "selected": 460
+      },
+      {
+        "executed": 460,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 460,
+        "selected": 460
+      }
+    ],
+    "native_regions": {
+      "covered": 4810,
+      "missing": 0,
+      "total": 4810
+    },
+    "native_lines": {
+      "covered": 3395,
+      "missing": 0,
+      "total": 3395
+    },
+    "instrumented_extension_sha256": "c7fc3b753d9e23f6d4318c0c2fba3d72798d620728b9f162c9960f9121eb7c0f",
+    "build_id": "8a4ca567f4aeef6c7b9010d36f78384187dab7366c731410b02490aa08a2e562",
+    "mcp_receipt": "coverage-mcp-receipt.json",
+    "mcp_receipt_sha256": "4c90549f85bd0abb13ee899fdf184145beecc650de5fe90663019013bafb1622"
+  },
+  "normal_build": {
+    "parity_result": "normal-parity-result.json.gz",
+    "parity_result_sha256_uncompressed": "eea7e61ff11934b1c0107cfd38d01cc792ff0fe260fed73dcedf6eb92e3551a7",
+    "parity_result_sha256_gzip": "272c9f77708e5d8ef11d637664db4da4c8c5990ed86c0ec55f06d41950d608a1",
+    "summary": {
+      "executed": 221,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 221,
+      "selected": 221
+    },
+    "native_extension_sha256": "517e40429c87e0a927ff5a58f9acbcbce4dbe6bc90e7a8d266cfe1c84224be7b",
+    "exclusion_receipt": "normal-exclusion-receipt.json",
+    "exclusion_receipt_sha256": "58a940d284b84ab347322fa03b327f9ac54c250534452624487925d861aa6d00",
+    "exclusion_audit_archive": "normal-exclusion-audit.tar.gz",
+    "exclusion_checks_passed": 16,
+    "exclusion_checks_total": 16,
+    "selected_public_cases": [
+      "http1.scope-query-header-and-body",
+      "support.http1.response-header-capacity-error-recovers",
+      "support.websocket.accept-header-capacity-error-recovers"
+    ]
+  },
+  "evidence_files": {
+    "README.md": "dfab67bbf8608218835af553fc81e1093e6e8195b9a33a815ffdbedaee249492",
+    "coverage-mcp-full-response.json": "461bda5b2b9f60f79c6deabac4a58e03bad6dcdf3caa915a21abf88c145de029",
+    "coverage-mcp-receipt.json": "4c90549f85bd0abb13ee899fdf184145beecc650de5fe90663019013bafb1622",
+    "coverage-report.json.context.json": "4415053c90832ce2747863a1412c5827fcc0f127f795d39455082ac5a02c4498",
+    "coverage-report.json.gz": "98fced9835aceb64a35c3ea03ca2b5c350b306b89dd16973d7843f5d7c932311",
+    "normal-exclusion-audit.tar.gz": "9edc6a52dfba8a2b6340e9b9db7be85d5c960dc198ff9d71f1c01bea6053f4eb",
+    "normal-exclusion-receipt.json": "58a940d284b84ab347322fa03b327f9ac54c250534452624487925d861aa6d00",
+    "normal-parity-result.json.gz": "272c9f77708e5d8ef11d637664db4da4c8c5990ed86c0ec55f06d41950d608a1",
+    "normal-parity.log": "0fae84233767418cc5af79bd10dd471fef9571098f61b33d343a9ecd01b577e8"
+  }
+}

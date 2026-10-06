@@ -1,16 +1,11 @@
 # CLI and Python API
 
-The HTTP/3 task-reaping source passes all 451 instrumented attribution cases
-and three complete repeats with zero failures, infrastructure errors, retries
-or cases not run. The matrix has 214 oracle comparisons and 237 target-only
-contracts across 70 input files and 63 operations. Native coverage is
-4,778/4,778 regions and 3,371/3,371 lines with zero unfiltered MCP gaps.
-The restored normal build passes 214/214 public comparisons and all 15
-exclusion checks with three selected live cases. See
-[the current source/build receipt](coverage.md#current-full-verification-451-cases).
-Passing 448-case results below belong to the earlier shared-write source
-identified in [the coverage record](coverage.md#current-full-verification-448-cases);
-they do not attest the changed checkout.
+The current source passes 460/460 attribution workflows and three complete
+460-case repeats, with 4,810/4,810 native regions and 3,395/3,395 lines
+covered. The matrix contains 221 public oracle cases and 239 target-only
+contracts. The normal wheel passes 221/221 public comparisons and all 16
+exclusion checks with three selected cases. See the
+[current source/build receipt](coverage.md#current-full-verification-460-cases).
 
 ## CLI
 
@@ -92,8 +87,10 @@ API. It is a local source API; the project has not published a wheel or source
 distribution.
 
 The parity input's `close_error_code` controls its HTTP/3 test client. It adds
-no server configuration option. Typed `H3_NO_ERROR` (`0x100`) is a clean peer
-close; other acceptance errors keep their existing error path.
+no server configuration option. Typed `H3_NO_ERROR` (`0x100`) and unknown
+remote HTTP/3 application close codes are treated as clean peer closure;
+registered HTTP/3-family application codes keep their error path. This does
+not describe or guarantee QUIC transport `CONNECTION_CLOSE` behavior.
 The sequence input's optional `h3_grease` boolean also controls only the test
 client and defaults to `true`. The maintained 128-response workflow explicitly
 uses `false`, supported by its selected instrumented public A/B; it adds no

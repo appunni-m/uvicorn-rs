@@ -1,13 +1,14 @@
 # October 5 performance investigation
 
 A general end-to-end speed improvement over Uvicorn or Hypercorn is **not proven**.
-The latest frozen comparison qualifies one workload: WebSocket connection
+The frozen October 5 comparison qualifies one workload: WebSocket connection
 handshakes were 1.59× faster than stock Uvicorn across three valid matched
 repetitions, with lower CPU and latency. Each handshake run completes a fixed
 500 operations with a short observation window; its RSS samples are sparse.
-Fresh comparisons use public error
-logging and automatic lifespan. Most HTTP timings remain excluded by host
-contention; stock Hypercorn's H3 path also failed correctness checks.
+Fresh comparisons use public error logging and automatic lifespan. Most HTTP
+timings remain excluded by host contention; stock Hypercorn's H3 path also
+failed correctness checks. These measurements belong to their archived source
+and binary identities, not the current checkout.
 The retained changes remove an observed HTTP/1 body-copy path and reap completed
 HTTP/3 tasks during acceptance. The latter reduced observed peak RSS substantially
 in a separate target-only diagnostic.
@@ -15,8 +16,11 @@ in a separate target-only diagnostic.
 Raw reports, rejected rows, logs, source/native identities, dependency records,
 and profiling evidence are in
 [`performance-investigation-2026-10-05`](../benchmarks/results/performance-investigation-2026-10-05/).
-The current checkout also retains the separately defended HTTP/3 clean-close
-correction. Throughput, CPU and latency gains require qualifying paired runs.
+The current checkout includes a later HTTP/3 application-close correction.
+Its 460-case attribution gate, three full repeats, 221-case normal-wheel parity,
+and exclusion audit passed on October 6; those correctness results do not
+refresh the performance measurements. Throughput, CPU and latency gains for
+the current source require qualifying paired runs.
 
 The shared-write normal build uses a borrowed scalar/vectored buffer enum to
 share write-error handling. Its source `81c239…`, native `8f69af…` and passing
@@ -25,7 +29,7 @@ share write-error handling. Its source `81c239…`, native `8f69af…` and passi
 The measured HTTP/3 task-reaping build has source `313fc3…` and native
 `b11f16…`; its normal build receipts are in
 [`current-normal-h3-reaping`](../benchmarks/results/performance-investigation-2026-10-05/current-normal-h3-reaping/).
-The current source `c7bd49…` adds a coverage-only failure after a completed H3
+The October 5 source `c7bd49…` adds a coverage-only failure after a completed H3
 response; its saved normal artifact is `0e13bb…`. The first expanded 450-case
 attempt passed individual attribution but failed full repeats and left two
 native regions unobserved. Fresh 451-case verification adds a structured
@@ -104,10 +108,11 @@ The maintained benchmark client now closes with explicit `H3_NO_ERROR`
 (`0x100`), as specified for a clean HTTP/3 close by
 [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html#section-5.2).
 That client revision has not produced replacement timings. It also does not
-fix the server's unknown-close-code gap: RFC 9114 section 8 requires unknown
-codes to be treated as `H3_NO_ERROR`, while the current Rust classifier reports
-code zero as an error. That compatibility gap remains listed in the
-[implementation review](implementation-review.md).
+The server's unknown-close-code gap was reproduced with code zero and corrected
+in the public parity path. The regression inputs also exercise reserved GREASE,
+an unknown value above the registered base range, and the maximum QUIC varint.
+The fix preserves registered H3/QPACK/datagram errors. Fresh complete H3
+coverage and benchmark runs after this source change are still required.
 
 This failure differs from the earlier captured `KeyError` and GREASE-enabled
 first-request timeout. Full request consumption and disabling GREASE did not

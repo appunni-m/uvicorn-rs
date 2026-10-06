@@ -1,16 +1,14 @@
 # Implementation review: known gaps
 
-The HTTP/3 task-reaping source passes all 451 instrumented attribution cases
-and three complete repeats with zero failures, infrastructure errors, retries
-or cases not run. The matrix has 214 oracle comparisons and 237 target-only
-contracts across 70 input files and 63 operations. Native coverage is
-4,778/4,778 regions and 3,371/3,371 lines with zero unfiltered MCP gaps.
-The restored normal build passes 214/214 public comparisons and all 15
-exclusion checks with three selected live cases. See
-[the current source/build receipt](coverage.md#current-full-verification-451-cases).
-Passing 448-case results below belong to the earlier shared-write source
-identified in [the coverage record](coverage.md#current-full-verification-448-cases);
-they do not attest the changed checkout.
+The current source passes the 460-case attribution matrix and three complete
+460-case repeats with zero failures, infrastructure errors, retries or cases
+not run. The matrix has 221 oracle comparisons and 239 target-only contracts
+across 70 input files and 64 operations. Native coverage is 4,810/4,810 regions
+and 3,395/3,395 lines, with zero Coverage MCP gaps. The normal wheel passes
+221/221 public comparisons and the 16-check exclusion audit with three selected
+public cases. See the [current source/build receipt](coverage.md#current-full-verification-460-cases).
+The 451- and 448-case results below are historical and do not attest the
+current checkout.
 
 This page separates measured failures from risks that still need targeted
 evidence.
@@ -36,9 +34,19 @@ capability. A borrowed buffer enum uses one fallible write handler, preserving
 error/disconnect handling without allocating or copying payloads. A profile of
 the earlier vectored candidate observed Hyper's flattening-copy path disappear
 on plaintext H1. That wall-stack observation is not a throughput or CPU gain.
-The H3 accept loop now treats only typed H3_NO_ERROR (`0x100`) as clean peer
-close and retains its owned request drain; other acceptance errors still
-propagate. Its new same-input public case failed before the fix and passes now.
+The H3 accept loop treats typed H3_NO_ERROR (`0x100`) and unknown remote
+application close codes as clean peer closure, as RFC 9114 requires. The
+input-driven public cases cover zero, reserved GREASE `0x21`, unknown `0x111`,
+and maximum u62; registered HTTP/3-family codes `0x33`, `0x101`, and `0x200`
+retain the error path. All close paths retain the owned request drain. The new
+cases fail against the previous native build and pass after the correction.
+They do not send a QUIC transport `CONNECTION_CLOSE` frame. In the pinned
+stack, `h3-quinn` maps transport `ConnectionClosed` to `Undefined`, so
+transport-level `NO_ERROR` currently follows the error path. That path remains
+unverified and has semantics distinct from HTTP/3 application close codes
+([RFC 9000 section 20.1](https://www.rfc-editor.org/rfc/rfc9000.html#section-20.1)).
+The classifier also depends on the pinned `h3` 0.0.8 display text to
+distinguish remote application closes.
 
 The task-reaping source now joins completed HTTP/3 request tasks while accepting
 new requests on a long-lived connection. Its 450-case attribution passed, but
@@ -48,15 +56,14 @@ pair only with that sequence's GREASE disabled. The new generic held-response
 accept-error workflow uses an existing point and requires remote `0x102`, real
 stream failure, ordered cancellation/original error, application cleanup and a
 healthy fresh request. Its selected instrumented case passed 1/1 and retained
-those actual outcomes; the fresh 451-case full run passes attribution and all
+those actual outcomes; the fresh 460-case full run passes attribution and all
 three repeats, including both formerly missing final-drain spans. The
 `stream_reset` observation uses the client's `recv_data` error convention;
 actual remote application close, body-stream error, connection closure and
-cleanup prove termination/cancellation. The Rust source is unchanged and the
-full run rebuilt instrumentation; [current evidence](coverage.md#current-evidence-status)
-records the exact identities and native scope. The normal build is restored,
-passes 214 public cases and all 15 exclusion checks with three selected live
-cases, and preserves its maintained identity through both gates.
+cleanup prove termination/cancellation. The latest full run rebuilt
+instrumentation; [current evidence](coverage.md#current-evidence-status)
+records the exact identities and native scope. The normal wheel passes 221
+public cases and all 16 exclusion checks with three selected live cases.
 
 The [October 5 investigation](performance-investigation-2026-10-05.md) retains
 all 120 A/B rows and identity/profile receipts. None of its 90 optimization
@@ -282,13 +289,13 @@ hook checks remain enabled.
 - No package has been published. The repository now has BSD-3-Clause/MIT
   licensing with Appunni M's copyright and retained upstream notices. Hosted
   CI and a public distribution decision are still required for release.
-- The current H3 close classifier recognizes typed `H3_NO_ERROR` (`0x100`).
-  A benchmark replay exposed a diagnostic error for peer application close
-  code zero. [RFC 9114 section 8](https://www.rfc-editor.org/rfc/rfc9114.html#section-8) requires unknown error codes to be treated as
-  `H3_NO_ERROR`; that extension-code behavior needs its own parity case and
-  native correction. The benchmark client now sends explicit `0x100`, while
-  the failed original replay remains preserved. This does not close the
-  server's unknown-code compatibility gap.
+- The benchmark client now sends explicit `0x100`; the server also handles
+  unknown peer application codes per [RFC 9114 section 8](https://www.rfc-editor.org/rfc/rfc9114.html#section-8).
+  Its regression inputs retain the previously failing code-zero replay and
+  add reserved, out-of-range, and maximum-varint values. Existing registered
+  close codes and internal/transport errors retain their error paths. Original
+  benchmark failures remain preserved; updated repeated H3 performance
+  comparisons have not been measured.
 
 ## Next performance work
 

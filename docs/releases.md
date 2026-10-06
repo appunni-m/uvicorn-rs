@@ -17,12 +17,14 @@ loop/thread/context, lifespan and public API cancellation. The source archive
 was also extracted, rebuilt with locked dependencies and consumed in a fresh
 environment. Its package inputs matched the checkout.
 
-The final macOS wheel also passes all 214 public oracle comparisons. Its normal
-build passes all 16 exclusion gates and the three selected live cases. The
-refreshed unified run passes all 451 attribution cases and three complete
-451-case repeats, with 4,778/4,778 native regions and 3,371/3,371 lines covered.
-Coverage-MCP reports zero gap groups and a matching source receipt. See the
-[local release preparation evidence](../benchmarks/results/release-preparation-2026-10-05/README.md).
+The October 5 local release-preparation evidence below is retained as a
+historical snapshot. On October 6, a normal macOS ARM64 wheel built for the
+current H3 close-code source passed all 221 public oracle comparisons and a
+16-check normal-build exclusion audit with three selected live cases. The
+current instrumented run passed 460 attribution cases and three full repeats,
+with 4,810/4,810 regions and 3,395/3,395 lines covered; Coverage MCP reported
+zero gaps with a matching source receipt. The local reports and identities are
+in the [460-case evidence archive](../benchmarks/results/2026-10-06/http3-peer-close-coverage-460/evidence-index.json).
 
 These are local preparation checks on a dirty checkout. The new hosted jobs
 have not run on a release commit. No tag or public release is prepared by these

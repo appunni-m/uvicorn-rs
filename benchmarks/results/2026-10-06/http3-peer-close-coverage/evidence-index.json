@@ -1,0 +1,88 @@
+{
+  "build_environment": {
+    "machine": "arm64",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "python": "3.12.13",
+    "rust_toolchain": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "coverage": {
+    "archived_report": "coverage-report.json.gz",
+    "archived_report_sha256": "a85c5f2c472abe7caea5d38e3003cf11108b33a7966d9582ddcadf53eaa1aea9",
+    "cases": 457,
+    "coverage_mcp": {
+      "build_id": "8a4ca567f4aeef6c7b9010d36f78384187dab7366c731410b02490aa08a2e562",
+      "coverage": {
+        "covered": 4810,
+        "metric": "regions",
+        "missing": 0,
+        "total": 4810
+      },
+      "format": "llvm",
+      "recorded_revision": "fce9706c8d7eb21c999989c729b01242b9421731",
+      "ref": "build/kata-migration-2026-10-06/h3-close/coverage-final.json",
+      "source": "matches_receipt",
+      "tests": "passed"
+    },
+    "full_repeats": 3,
+    "lines": {
+      "covered": 3395,
+      "missing": 0,
+      "total": 3395
+    },
+    "oracle_parity": {
+      "failed": 0,
+      "passed": 218,
+      "selected": 218
+    },
+    "raw_report_sha256": "475e1e4633c64da983a8256ee195a5731874d87ed66c2689b1ae48bc51100a51",
+    "regions": {
+      "covered": 4810,
+      "missing": 0,
+      "total": 4810
+    },
+    "target_only_contracts": {
+      "failed": 0,
+      "passed": 239,
+      "selected": 239
+    }
+  },
+  "normal_build": {
+    "archive": "normal-exclusion-audit.tar.gz",
+    "archive_sha256": "76a011fce1b0750523d85113c763cadc8a6420f843e0efd8bb68952e1e9c9a49",
+    "native_extension_sha256": "517e40429c87e0a927ff5a58f9acbcbce4dbe6bc90e7a8d266cfe1c84224be7b",
+    "normal_audit_checks": {
+      "armed_fault_file_ignored": true,
+      "authored_panic_error_lints_denied": true,
+      "cli_has_no_fault_option": true,
+      "exact_case_selection": true,
+      "fault_markers_absent": true,
+      "inspection_used_normal_library": true,
+      "installed_native_unchanged": true,
+      "live_parity_used_normal_library": true,
+      "llvm_coverage_instrumentation_absent": true,
+      "measured_source_unchanged": true,
+      "native_exports_have_no_fault_control": true,
+      "native_signature_has_no_fault_control": true,
+      "parity_passed": true,
+      "primary_case_is_live_oracle_parity": true,
+      "strict_current_case_evidence": true,
+      "support_cases_are_public_inputs_without_native_injection": true
+    },
+    "normal_audit_receipt_sha256": "82d42c6261464c3e514d462b333479ce77453f97e1db245c83e081a5a9529eb6",
+    "normal_audit_status": "passed",
+    "parity_result_sha256": "da66ae94ea3e2f801385ac247b390f9fb3b3b6ac18eac598e5e7526606979a9c",
+    "public_parity": {
+      "executed": 218,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 218,
+      "selected": 218
+    }
+  },
+  "recorded_revision": "fce9706c8d7eb21c999989c729b01242b9421731",
+  "rust_source_sha256": "f3dffa8078bc6454fd0f7277f3bf122db1c3d4e40d5c58851435346cc709b224",
+  "schema": "uvicorn-rs-http3-peer-close-evidence@1",
+  "source_identity_sha256": "d1699e0152c11eb7279d9c89144f03d3c80cbea2f1f124a9c183605c52da79d6",
+  "working_tree_dirty": true
+}

@@ -205,6 +205,8 @@ FAULT_POINTS = {
     "http3.connection-task.shutdown-hang",
     "http3.connection.create-error",
     "http3.connection.accept-error",
+    "http3.peer-close.unexpected-error-kind",
+    "http3.peer-close.close-reason-unavailable",
     "http3.request.resolve-error",
     "http3.response.builder-error",
     "http3.response.send-error",
@@ -328,6 +330,7 @@ FAULT_CONTRACTS = {
     "http3-500-error-body",
     "http3-connection-task-error-followup-200",
     "http3-connection-error-cancels-held-response-followup-200",
+    "http3-peer-close-classification-defensive-error",
     "http3-stream-reset-on-runtime-error",
     "http3-request-task-error-before-peer-close-followup-200",
     "http3-body-pump-early-exit-500",
@@ -797,6 +800,19 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 stream-error faults require the reset-observation workflow"
+                    )
+            elif fault["contract"] == "http3-peer-close-classification-defensive-error":
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.peer-close"
+                    or fault["point"] not in {
+                        "http3.peer-close.unexpected-error-kind",
+                        "http3.peer-close.close-reason-unavailable",
+                    }
+                    or case.get("request", {}).get("close_error_code") != 33
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 peer-close classifier faults require the GREASE peer-close workflow"
                     )
             elif fault["contract"] == "http3-body-pump-early-exit-500":
                 if (
@@ -1703,7 +1719,7 @@ def load_contract(
                     "method", "path", "headers", "body_base64", "close_error_code"
                 }:
                     raise ParityError(f"{case_id}: peer closure requires a completed ordinary request")
-            if operation == "http3.peer-close" and (
+            if operation in {"http3.peer-close", "http3.peer-close-registered"} and (
                 kind != "http3" or "close_error_code" not in request
             ):
                 raise ParityError(f"{case_id}: HTTP/3 peer-close requires an explicit close_error_code")
@@ -4249,7 +4265,7 @@ def execute_case(
             if trust_anchor is None or h3_client is None:
                 raise ParityError("HTTP/3 adapter is missing its certificate or client")
             request = case["request"]
-            if case["operation"] == "http3.peer-close":
+            if case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}:
                 return http3_peer_close_request(server, trust_anchor, request, h3_client)
             if request.get("hold_open_for_shutdown"):
                 return http3_shutdown_request(server, trust_anchor, request, h3_client)
@@ -5127,6 +5143,16 @@ def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -
             observation.get("stream_reset") is True
             or observation.get("connection_closed") is True
         )
+    if fault["contract"] == "http3-peer-close-classification-defensive-error":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("status") == 200
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("server_error_observed") is True
+        )
     if fault["contract"] == "http3-request-task-error-before-peer-close-followup-200":
         responses = observation.get("responses")
         followup = observation.get("followup_response")
@@ -5599,7 +5625,8 @@ def start_profile_servers(
                      for case in cases if "lifecycle" in case), 0.5
                 ),
                 observe_connection_errors=any(
-                    case["operation"] == "http3.peer-close" for case in cases
+                    case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}
+                    for case in cases
                 ),
             )
     except Exception:
@@ -5689,7 +5716,7 @@ def execute_profile(
         def stops_server(case: dict[str, Any]) -> bool:
             return bool(
                 "lifecycle" in case
-                or case["operation"] == "http3.peer-close"
+                or case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}
                 or case.get("request", {}).get("hold_open_for_shutdown", False)
                 or case.get("websocket", {}).get("shutdown", False)
                 or case.get("websocket", {}).get("shutdown_during_upgrade", False)
@@ -5701,7 +5728,8 @@ def execute_profile(
                 if case_index:
                     previous_case = execution_cases[case_index - 1]
                     if stops_server(previous_case) or case["operation"] in {
-                        "http3.peer-close", "http3.request-task-recovery",
+                        "http3.peer-close", "http3.peer-close-registered",
+                        "http3.request-task-recovery",
                         "http3.request-task-drain-on-accept-error",
                     }:
                         # These workflows intentionally terminate each shared

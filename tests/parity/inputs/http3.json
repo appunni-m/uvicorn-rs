@@ -1436,6 +1436,131 @@
       }
     },
     {
+      "case_id": "http3.peer-close-unknown-zero",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 0
+      }
+    },
+    {
+      "case_id": "http3.peer-close-registered-h3-datagram",
+      "profile": "http3",
+      "operation": "http3.peer-close-registered",
+      "covers": [
+        "http3.peer-close-registered"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 51
+      }
+    },
+    {
+      "case_id": "http3.peer-close-registered-h3-general-protocol-error",
+      "profile": "http3",
+      "operation": "http3.peer-close-registered",
+      "covers": [
+        "http3.peer-close-registered"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 257
+      }
+    },
+    {
+      "case_id": "http3.peer-close-registered-qpack-decompression-failed",
+      "profile": "http3",
+      "operation": "http3.peer-close-registered",
+      "covers": [
+        "http3.peer-close-registered"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 512
+      }
+    },
+    {
+      "case_id": "http3.peer-close-reserved-grease",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 33
+      }
+    },
+    {
+      "case_id": "http3.peer-close-unknown-above-base-range",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 273
+      }
+    },
+    {
+      "case_id": "http3.peer-close-unknown-maximum-u62",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 4611686018427387903
+      }
+    },
+    {
+      "case_id": "fault.http3.peer-close-missing-quic-close-reason",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.peer-close.close-reason-unavailable",
+        "contract": "http3-peer-close-classification-defensive-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 33
+      }
+    },
+    {
       "case_id": "http3.request-body-client-abort",
       "profile": "http3",
       "operation": "http3.request-disconnect",
@@ -1910,6 +2035,26 @@
         "headers": [],
         "body_base64": "",
         "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.peer-close-unexpected-error-kind",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.peer-close.unexpected-error-kind",
+        "contract": "http3-peer-close-classification-defensive-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 33
       }
     },
     {

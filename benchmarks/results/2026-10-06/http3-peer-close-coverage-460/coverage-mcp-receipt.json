@@ -1,0 +1,29 @@
+{
+  "query": {
+    "limit": 20,
+    "measurement": "build/kata-migration-2026-10-06/h3-close/coverage-final-460.json",
+    "metric": "regions"
+  },
+  "report_sha256": "c45f978fc76174636ecb7d4062d23e68c4084e2fc7355d090aff99823f606d53",
+  "result": {
+    "group_count": 0,
+    "measurement": {
+      "build_id": "8a4ca567f4aeef6c7b9010d36f78384187dab7366c731410b02490aa08a2e562",
+      "coverage": {
+        "covered": 4810,
+        "metric": "regions",
+        "missing": 0,
+        "total": 4810
+      },
+      "format": "llvm",
+      "recorded_revision": "fce9706c8d7eb21c999989c729b01242b9421731",
+      "ref": "build/kata-migration-2026-10-06/h3-close/coverage-final-460.json",
+      "source": "matches_receipt",
+      "tests": "passed"
+    },
+    "status": "measured",
+    "warnings": [
+      "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+    ]
+  }
+}

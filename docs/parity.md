@@ -1,16 +1,15 @@
 # ASGI server parity suite
 
-The HTTP/3 task-reaping source passes all 451 instrumented attribution cases
-and three complete repeats with zero failures, infrastructure errors, retries
-or cases not run. The matrix has 214 oracle comparisons and 237 target-only
-contracts across 70 input files and 63 operations. Native coverage is
-4,778/4,778 regions and 3,371/3,371 lines with zero unfiltered MCP gaps.
-The restored normal build passes 214/214 public comparisons and all 15
-exclusion checks with three selected live cases. See
-[the current source/build receipt](coverage.md#current-full-verification-451-cases).
-Passing 448-case results below belong to the earlier shared-write source
-identified in [the coverage record](coverage.md#current-full-verification-448-cases);
-they do not attest the changed checkout.
+The current 460-case matrix passes attribution and three complete repeats with
+zero failures, infrastructure errors, retries, or cases not run. It contains
+221 live oracle comparisons and 239 target-only contracts across 70 input
+files and 64 operations. Native coverage is 4,810/4,810 regions and
+3,395/3,395 lines; Coverage MCP reports zero gaps with matching source and
+passed test evidence. The normal wheel passes 221/221 public comparisons, and
+its normal-build audit passes 16 checks with three selected workflows. See
+[the current source/build receipt](coverage.md#current-full-verification-460-cases).
+Older 451- and 448-case results below are retained as historical evidence and
+do not attest the current source.
 
 ## Correctness gate
 
@@ -62,8 +61,15 @@ bytes, a healthy request on a fresh connection, a scoped connection-error
 diagnostic observation and graceful owned-process exit. It starts fresh
 profile processes so earlier connection logs cannot contaminate its diagnostic
 window. This field controls the test client; it is not a server CLI option.
-Only typed `H3_NO_ERROR` is treated as clean close; numeric QUIC application
-code `0` and other errors retain their existing classification.
+Typed `H3_NO_ERROR` (`0x100`) and unknown remote HTTP/3 application close codes
+are treated as clean peer closure, as required by
+[RFC 9114 section 8](https://www.rfc-editor.org/rfc/rfc9114.html#section-8). The
+public close-code cases include zero, reserved GREASE `0x21`, an unknown code
+`0x111`, and the maximum u62 value. Registered HTTP/3-family application close
+codes `0x33`, `0x101`, and `0x200` retain the error path. These cases verify
+the response, a healthy request on a fresh connection, scoped diagnostics, and
+graceful process exit. They do not exercise a QUIC transport
+`CONNECTION_CLOSE` frame; transport-close behavior remains unverified.
 
 ## Current HTTP/3 workflows
 
@@ -99,7 +105,7 @@ remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
 The [selected receipt](coverage.md#current-evidence-status) preserves its rich
 observation and identities. The same case passes full attribution and all three
-451-case repeats, and solely covers both formerly missing final-drain spans.
+460-case repeats, and solely covers both formerly missing final-drain spans.
 The `stream_reset` field follows the existing `recv_data` error convention;
 actual remote application close `0x102`, `body_stream_error`,
 `connection_closed` and cleanup establish connection-error termination and

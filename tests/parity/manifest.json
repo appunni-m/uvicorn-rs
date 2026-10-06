@@ -1420,6 +1420,25 @@
       }
     },
     {
+      "id": "http3.peer-close-registered",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes",
+        "stream_reset",
+        "followup_response",
+        "process_terminated",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "status": 200,
+        "stream_reset": false,
+        "process_terminated": true,
+        "process_exit_code": 0
+      }
+    },
+    {
       "id": "http3.graceful-shutdown",
       "kind": "protocol_operation",
       "observe": [

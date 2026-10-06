@@ -1,20 +1,21 @@
 # Feasibility and category benchmark report
 
-## Current correctness evidence (2026-10-05)
+## Current correctness evidence (2026-10-06)
 
-The HTTP/3 task-reaping source passes 451/451 instrumented attribution cases
-and three complete 451-case repeats with zero failures, infrastructure errors,
-retries or cases not run. Its matrix has 214 public comparisons and 237
-target-only contracts across 70 input files and 63 operations. Coverage is
-4,778/4,778 native regions and 3,371/3,371 lines (100%), with zero unfiltered
-source-matched MCP gaps and tests passed. The held-response accept-error
-workflow covers both formerly missing final-drain spans through actual remote
-connection-error termination and cancellation. The restored normal build
-passes 214/214 public comparisons and all 15 exclusion checks with three
-selected live cases under an unchanged maintained identity. The fresh
-instrumented build uses
-the unchanged Rust source; see [current evidence](coverage.md#current-evidence-status)
-for identities and the retained failed 450-case report.
+The current HTTP/3 peer-close source passes 460/460 instrumented attribution
+cases and three complete 460-case repeats with zero failures, infrastructure
+errors, retries or cases not run. Its matrix has 221 public comparisons and
+239 target-only contracts across 70 input files and 64 operations. Coverage is
+4,810/4,810 native regions and 3,395/3,395 lines (100%), with zero unfiltered
+source-matched MCP gaps and tests passed. The current normal wheel passes
+221/221 public comparisons and all 16 exclusion checks with three selected
+live cases. The coverage and normal-wheel reports are preserved in
+[current evidence](coverage.md#current-full-verification-460-cases).
+
+The October 5 category measurements below predate the latest H3 close-code
+source and were not rerun for it. They remain evidence for their recorded
+binaries only. The current correctness result does not add a performance
+claim.
 
 The historical shared-write full gate passed
 213/213 live oracle comparisons, all 448 attribution cases and three full

@@ -5,22 +5,18 @@ listeners, HTTP/1.1, HTTP/2, experimental HTTP/3, WebSocket transport, flow
 control, and shutdown. Python loads the application and keeps ownership of its
 asyncio event loop and ASGI tasks.
 
-This is an experimental prototype. Historical HTTP/1.1 measurements show
-workload-dependent results and greater server CPU use. The latest frozen local
-comparison qualifies a 1.59× WebSocket handshake gain across three matched
-runs; other workloads lack clean paired timing evidence. See [the performance investigation](docs/performance-investigation-2026-10-05.md)
-and [historical measurements](docs/feasibility.md) before evaluating deployment.
-The HTTP/3 task-reaping source now passes all 451 instrumented cases and three
-complete repeats with zero failures or retries: 214 live oracle comparisons
-and 237 target-only contracts across 70 inputs and 63 operations. Native
-coverage is 4,778/4,778 regions and 3,371/3,371 lines, with zero unfiltered MCP
-gaps. The fresh build retains the same Rust source; normal-build public parity
-passes 214/214, and the exclusion audit passes all 15 checks and three selected
-live cases. The audited normal extension is restored. [Coverage evidence](docs/coverage.md)
-identifies the source/build, the earlier failed 450-case gate, and historical
-448-case proof. The task-reaping change also has a separate memory diagnostic.
-The complete official ASGI conformance
-suite and a production security review have not been run.
+This remains an experimental prototype. The last accepted performance report
+measured a 1.59× gain on one fixed WebSocket handshake workload; it does not
+establish a general speedup, and those timings predate the current source.
+Current source correctness is documented in the [460-case report](docs/coverage.md#current-full-verification-460-cases):
+460/460 attributed workflows and three 460/460 repeats pass, with 4,810/4,810
+Rust regions and 3,395/3,395 lines covered. The normal wheel passes all 221
+public parity cases and its 16-check exclusion audit. The report, exact MCP
+receipt, parity output, and wheel audit are preserved in the
+[evidence archive](benchmarks/results/2026-10-06/http3-peer-close-coverage-460/evidence-index.json).
+These local results come from a dirty macOS ARM64 checkout; they are not a clean
+release baseline. The complete official ASGI conformance suite and a production
+security review have not been run.
 
 `uvicorn-rs` is the project name used by the supplied GitHub repository and is
 not affiliated with the Uvicorn project. `starlette-rs` is an optional,

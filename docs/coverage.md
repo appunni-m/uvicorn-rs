@@ -2,37 +2,66 @@
 
 ## Current evidence status
 
-**The fresh 451-case instrumented full gate and unfiltered MCP verification pass.**
-The current matrix declares 451 workflows across 70 input files and 63
-operations: 214 live oracle comparisons and 237 target-only contracts. It adds
-a held-response accept-error workflow to the single-connection sequence and
-post-response task-error recovery cases. The new workflow uses the existing
-`http3.connection.accept-error` point after an actual first body chunk,
-advances a pending accept with a second request on the same connection, and
-checks remote `H3_INTERNAL_ERROR` (`0x102`), cancellation, application cleanup
-and a healthy fresh request. It adds no native fault point or panic.
-The original first-accept and pre-response task-failure cases retain their
-contracts. All 451 attribution cases and three complete 451-case repeats pass
-with zero failures, infrastructure errors, retries or cases not run. Coverage
-is **4,778/4,778 regions and 3,371/3,371 lines (100%)**; unfiltered MCP records
-zero gap groups with `source: matches_receipt` and `tests: passed`.
-The restored normal build independently passes 214/214 public comparisons
-and every exclusion check with three selected live cases.
-No unit tests were added.
+The current source passed the 460-case black-box gate on 2026-10-06. The
+manifest declares 460 workflows across 70 input files and 64 operations:
+221 live oracle comparisons and 239 target-only contracts. All 460 attribution
+cases and three complete 460-case repeats pass with zero failures,
+infrastructure errors, retries or cases not run. Native coverage is
+**4,810/4,810 regions and 3,395/3,395 lines (100%)**. Coverage MCP measured the
+exact retained report with `source: matches_receipt`, `tests: passed`, zero
+missing regions, and zero gap groups. The normal wheel passes 221/221 public
+parity cases; its separate normal-build audit passes 16/16 checks and 3/3
+selected public workflows.
 
-The measured Rust source is
-`c7bd494d0b11d7aa75ed9d8b64c80e6634966b31a916ae01086bdd2e52b417f7`.
-Its normal build has SHA-256
-`0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d`;
-the fresh instrumented native has SHA-256
-`d2323f9aedf540f543c475166dc1d51148cf6ce1dee23f7e5904e822f577b491`.
-The harness addition leaves the Rust source unchanged. The full run rebuilt
-instrumentation and used fresh attribution profiles; the selected proof and
-failed 450-case profiles were not merged. The audited normal build is restored
-to `python/uvicorn_rs/_native.abi3.so`; its public parity and exclusion gates
-pass with an unchanged maintained identity.
+The measured `src/lib.rs` SHA-256 is
+`f3dffa8078bc6454fd0f7277f3bf122db1c3d4e40d5c58851435346cc709b224`; the
+aggregate source fingerprint is
+`52551747cf72142ce17f06b2f6898abad8068c2ef9739a0c3de0aba47d164ac6`. The
+instrumented native SHA-256 is
+`c7fc3b753d9e23f6d4318c0c2fba3d72798d620728b9f162c9960f9121eb7c0f`; the
+normal wheel native SHA-256 is
+`517e40429c87e0a927ff5a58f9acbcbce4dbe6bc90e7a8d266cfe1c84224be7b`. The
+report is local dirty-checkout evidence at revision
+`fce9706c8d7eb21c999989c729b01242b9421731`, not a clean release baseline.
+No unit tests were added; the same manifest-backed input matrix is the
+behavioral evidence system.
 
-## Current full verification (451 cases)
+## Current full verification (460 cases)
+
+The fixed archive at
+[`http3-peer-close-coverage-460`](../benchmarks/results/2026-10-06/http3-peer-close-coverage-460/)
+retains the lossless compressed unified report, its matching context sidecar,
+the exact Coverage MCP response, the normal-wheel parity result, the normal
+exclusion receipt and audit bundle, and an evidence index with file hashes.
+The uncompressed report SHA-256 is
+`c45f978fc76174636ecb7d4062d23e68c4084e2fc7355d090aff99823f606d53`; its
+context SHA-256 is
+`4415053c90832ce2747863a1412c5827fcc0f127f795d39455082ac5a02c4498`. The
+coverage build/MCP ID is
+`8a4ca567f4aeef6c7b9010d36f78384187dab7366c731410b02490aa08a2e562`.
+
+| Verification | Passed | Failures / infrastructure / retries / not run |
+|---|---:|---|
+| Per-case attribution | 460/460 | 0 / 0 / 0 / 0 |
+| Full repeat 1 | 460/460 | 0 / 0 / 0 / 0 |
+| Full repeat 2 | 460/460 | 0 / 0 / 0 / 0 |
+| Full repeat 3 | 460/460 | 0 / 0 / 0 / 0 |
+| Native regions | 4,810/4,810 | 0 missing |
+| Native lines | 3,395/3,395 | 0 missing |
+| Coverage MCP gap groups | 0 | source matches; tests passed |
+| Normal-wheel public parity | 221/221 | 0 / 0 / 0 / 0 |
+| Normal exclusion cases | 3/3 | 0 / 0 / 0 / 0 |
+| Normal exclusion checks | 16/16 | all pass |
+
+The 239 target-only cases include the two public header-capacity support
+contracts; these are not all native fault injections. The normal parity report
+SHA-256 is
+`eea7e61ff11934b1c0107cfd38d01cc792ff0fe260fed73dcedf6eb92e3551a7`; its
+normal native identity matches the wheel member. The normal exclusion receipt
+SHA-256 is
+`58a940d284b84ab347322fa03b327f9ac54c250534452624487925d861aa6d00`.
+
+## Historical full verification (451 cases; October 5 source)
 
 The authoritative local report is
 `build/asgi-coverage/unified-http3-owned-request-drain-451-2026-10-05/full-attempt-2/coverage-report.json`.
@@ -81,7 +110,7 @@ diagnostics, other features/platforms, full official ASGI conformance and
 performance are outside this native coverage claim. This is not a clean
 committed release baseline.
 
-## Current normal-build verification
+## Historical normal-build verification (451-case source)
 
 The accepted final attempt is
 `build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/`.

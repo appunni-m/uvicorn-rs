@@ -1,0 +1,30 @@
+{
+  "context": {
+    "checkout_path": "/Users/lazytrot/work/uvicorn-rs",
+    "repo_key": "/Users/lazytrot/work/uvicorn-rs",
+    "schema_revision": 18,
+    "suite": null
+  },
+  "data": {
+    "group_count": 0,
+    "groups": [],
+    "measurement": {
+      "build_id": "8a4ca567f4aeef6c7b9010d36f78384187dab7366c731410b02490aa08a2e562",
+      "coverage": {
+        "covered": 4810,
+        "metric": "regions",
+        "missing": 0,
+        "total": 4810
+      },
+      "format": "llvm",
+      "recorded_revision": "fce9706c8d7eb21c999989c729b01242b9421731",
+      "ref": "build/kata-migration-2026-10-06/h3-close/coverage-final.json",
+      "source": "matches_receipt",
+      "tests": "passed"
+    },
+    "status": "measured",
+    "warnings": [
+      "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+    ]
+  }
+}

@@ -12,3 +12,4 @@ target/
 /.pytest_cache/
 /build/
 /.coverage-mcp/
+.kata.local.toml
