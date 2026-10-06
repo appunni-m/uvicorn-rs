@@ -1,6 +1,6 @@
 # ADR 0001: Rust network runtime and Python asyncio bridge
 
-- **Status:** Accepted for the protocol prototype. Historical receive-fast-path measurements remain scoped to their recorded builds. The October 4 matrix was contended, and the October 5 optimization comparison has no accepted general speedup. Current 460-case correctness evidence and 221/221 normal-wheel parity are recorded in the [coverage report](../coverage.md#current-full-verification-460-cases). The source remains experimental and is not approved as a general performance replacement or production server.
+- **Status:** Accepted for the protocol prototype. Historical receive-fast-path measurements remain scoped to their recorded builds. The October 4 matrix was contended, and the October 5 optimization comparison has no accepted general speedup. Current 473-case correctness evidence and 225/225 normal-wheel parity are recorded in the [coverage report](../coverage.md#current-full-verification-473-cases). The source remains experimental and is not approved as a general performance replacement or production server.
 - **Date:** 2026-10-02
 - **Project name:** `uvicorn-rs`, taken from the GitHub repository URL supplied by the owner. The CLI name is `uvicorn-rs` and the Python import name is `uvicorn_rs`. This project is independent and is not affiliated with Uvicorn.
 
@@ -104,26 +104,37 @@ Hypercorn. QUIC transport `CONNECTION_CLOSE` behavior is unverified.
 
 The task-reaping source joins completed H3 request tasks during acceptance and
 retains final draining of owned tasks after an acceptance error. The current
-matrix declares 460 cases across 70 input files and 64 operations: 221 public
-comparisons and 239 target-only contracts. Its held-response accept-error
+matrix declares 473 cases across 70 input files and 64 operations: 225 public
+comparisons and 248 target-only contracts. Its held-response accept-error
 workflow uses the existing point to require remote `0x102`, actual incomplete
 body/stream failure, cancellation diagnostics before the original error,
 Python cleanup and a healthy fresh request. A selected instrumented public
 pair passed the 128-response sequence with GREASE disabled and the clean-close
 case (2/2). The held-response accept-error contract passed its selected
-instrumented case (1/1), then all 460 attribution cases and three complete
+instrumented case (1/1), then all 473 attribution cases and three complete
 repeats passed with zero failures, infrastructure errors, retries or cases not
-run. The instrumented build measures
-4,810/4,810 regions and 3,395/3,395 lines with zero unfiltered source-matched
-MCP gaps and tests passed. Both formerly missing final-drain spans are covered
-solely by the held-response case. Its remote `ApplicationClosed(0x102)`,
-body-stream error, connection closure and cleanup establish connection-error
-termination/cancellation; `stream_reset` alone follows a client error convention
-and does not identify a QUIC `RESET_STREAM` frame. The current normal wheel
-passes 221/221 public comparisons plus all 16 exclusion checks
-with three selected live cases. Its maintained identity remains unchanged
-after public parity and the audit.
-See [current evidence](../coverage.md#current-evidence-status).
+run. The instrumented build measures 5,106/5,106 regions and 3,606/3,606 lines
+with zero unfiltered source-matched MCP gaps and tests passed. Both formerly
+missing final-drain spans are covered solely by the held-response case. Its
+remote `ApplicationClosed(0x102)`, body-stream error, connection closure and
+cleanup establish connection-error termination/cancellation; `stream_reset`
+alone follows a client error convention and does not identify a QUIC
+`RESET_STREAM` frame. The current normal wheel passes 225/225 public
+comparisons plus all 16 exclusion checks with three selected live cases. Its
+maintained identity remains unchanged after public parity and the audit.
+See [current evidence](../coverage.md#current-full-verification-473-cases).
+
+The request-body-pump work closes the detached-task ownership gap separately
+from H3 request-task reaping. `ServerContext` owns body pumps in a `JoinSet`;
+each pump observes server, connection and request cancellation. H1 drains after
+the receiver closes to preserve request framing and keep-alive reuse; H2 stream
+cancellation is bridged to `http.disconnect`; H3 body errors and closed
+receivers terminate their request pumps. Shutdown joins all registered pumps
+within the remaining transport grace period, then aborts and drains them if the
+deadline expires. Public and target-only cases exercise partial uploads, early
+responses, disconnects, malformed H1 final chunks, sibling/follow-up health,
+reaping and both graceful and forced shutdown. The complete evidence archive
+binds these cases to the same source/build and normal wheel.
 
 The historical shared-write normal build passes 213 public cases; 448 instrumented cases and
 three full repeats pass with 4,763/4,763 regions, 3,360/3,360 lines and zero

@@ -8,12 +8,12 @@ asyncio event loop and ASGI tasks.
 This remains an experimental prototype. The last accepted performance report
 measured a 1.59× gain on one fixed WebSocket handshake workload; it does not
 establish a general speedup, and those timings predate the current source.
-Current source correctness is documented in the [460-case report](docs/coverage.md#current-full-verification-460-cases):
-460/460 attributed workflows and three 460/460 repeats pass, with 4,810/4,810
-Rust regions and 3,395/3,395 lines covered. The normal wheel passes all 221
-public parity cases and its 16-check exclusion audit. The report, exact MCP
-receipt, parity output, and wheel audit are preserved in the
-[evidence archive](benchmarks/results/2026-10-06/http3-peer-close-coverage-460/evidence-index.json).
+Current source correctness is documented in the [473-case report](docs/coverage.md#current-full-verification-473-cases):
+473/473 attributed workflows and three 473/473 repeats pass, with 5,106/5,106
+Rust regions and 3,606/3,606 lines covered. The normal wheel passes all 225
+public oracle cases and its 16-check exclusion audit. The unified report, exact
+Coverage-MCP receipt, normal parity output, and wheel audit are preserved in
+the [evidence archive](benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/evidence-index.json).
 These local results come from a dirty macOS ARM64 checkout; they are not a clean
 release baseline. The complete official ASGI conformance suite and a production
 security review have not been run.

@@ -361,6 +361,56 @@
         "point": "server.connection-io.eof-recheck.pause",
         "contract": "http-read-eof-recheck-completes"
       }
+    },
+    {
+      "case_id": "http2.reset-incomplete-upload-keeps-sibling-stream-healthy",
+      "profile": "http2",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "disconnect": {
+        "path": "/disconnect-read-once",
+        "followup_path": "/disconnect-status",
+        "content_length": 8,
+        "partial_body_base64": "YWJj",
+        "wait_event": "http.disconnect.waiting",
+        "wait_event_after_disconnect": "http.disconnect",
+        "reset_stream": true
+      }
+    },
+    {
+      "case_id": "http2.reset-after-empty-request-keeps-sibling-stream-healthy",
+      "profile": "http2",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "disconnect": {
+        "path": "/disconnect-after-complete-request",
+        "followup_path": "/disconnect-status",
+        "empty_request": true,
+        "wait_event": "http.disconnect.waiting-after-complete-request",
+        "wait_event_after_disconnect": "http.disconnect.after-complete-request:http.disconnect",
+        "reset_stream": true
+      }
+    },
+    {
+      "case_id": "http2.reset-after-complete-upload-keeps-sibling-stream-healthy",
+      "profile": "http2",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "disconnect": {
+        "path": "/disconnect-after-complete-upload",
+        "followup_path": "/disconnect-status",
+        "complete_body_base64": "Y29tcGxldGUtaDItdXBsb2Fk",
+        "wait_event_before_body": "http.disconnect.waiting-before-complete-upload",
+        "wait_event": "http.disconnect.waiting-after-complete-upload",
+        "wait_event_after_disconnect": "http.disconnect.after-complete-upload:http.disconnect",
+        "reset_stream": true
+      }
     }
   ]
 }

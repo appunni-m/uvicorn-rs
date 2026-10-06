@@ -1,0 +1,23 @@
+{
+  "schema": "uvicorn-rs-installed-wheel-consumer@1",
+  "python": "3.12.13 (main, Jun 23 2026, 15:44:24) [Clang 22.1.3 ]",
+  "version": "0.1.0",
+  "wheel": "/Users/lazytrot/work/uvicorn-rs/target/normal-wheels/uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl",
+  "wheel_sha256": "5eb199ceaf161e67db3a8a7958bac34f35de6f54471a3bb212d286f4189a477c",
+  "native_path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn_rs/_native.abi3.so",
+  "native_sha256": "c26e55e15cd290fff44edf3212115577bced7fe2459da83955361fcc1fb1f98b",
+  "package_path": "/Users/lazytrot/work/uvicorn-rs/.venv/lib/python3.12/site-packages/uvicorn_rs/__init__.py",
+  "cli_help": "passed",
+  "live_asgi": {
+    "status": "passed",
+    "events": [
+      "startup",
+      "http.complete",
+      "shutdown"
+    ],
+    "caller_loop_thread_context_preserved": true,
+    "server_cancellation_propagated": true,
+    "caller_loop_alive": true
+  },
+  "scope": "actual package-consumer HTTP/lifespan/context/cancellation smoke; not full oracle parity"
+}

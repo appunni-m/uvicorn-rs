@@ -86,6 +86,13 @@ enum CoverageFaultPoint {
     HttpBodyPumpSendConnectionClosed,
     HttpBodyPumpFinalSendConnectionClosed,
     HttpBodyPumpAfterFinalConnectionClosed,
+    HttpBodyPumpDrainStopWait,
+    HttpBodyPumpDrainTerminalFrame,
+    HttpBodyPumpErrorStop,
+    HttpBodyPumpReapCancelledTask,
+    HttpBodyPumpShutdownCancelJoin,
+    HttpBodyPumpShutdownHang,
+    HttpBodyPumpShutdownCompleteTaskBeforeAbort,
     ConnectionIoEofRecheckPause,
     PythonAsgiReceiveBorrowConflict,
     ServerControlShutdownBorrowConflict,
@@ -103,6 +110,7 @@ enum CoverageFaultPoint {
     Http3RequestTaskPanicAfterResponse,
     Http3ConnectionAcceptFinished,
     Http3BodyPumpSendConnectionClosed,
+    Http3BodyPumpErrorStop,
     AsgiEventTypeHttpResponseStartEq,
     AsgiEventTypeHttpResponseBodyEq,
     AsgiEventTypeWebSocketAcceptEq,
@@ -311,6 +319,15 @@ impl CoverageFaultPoint {
             Self::HttpBodyPumpAfterFinalConnectionClosed => {
                 "http.body-pump.after-final.connection-closed"
             }
+            Self::HttpBodyPumpDrainStopWait => "http.body-pump.drain.server-stop-wait",
+            Self::HttpBodyPumpDrainTerminalFrame => "http.body-pump.drain.terminal-frame",
+            Self::HttpBodyPumpErrorStop => "http.body-pump.error.request-stop",
+            Self::HttpBodyPumpReapCancelledTask => "http.body-pump.reap.cancelled-task",
+            Self::HttpBodyPumpShutdownCancelJoin => "http.body-pump.shutdown.cancel-join",
+            Self::HttpBodyPumpShutdownHang => "http.body-pump.shutdown.hang",
+            Self::HttpBodyPumpShutdownCompleteTaskBeforeAbort => {
+                "http.body-pump.shutdown.complete-task-before-abort"
+            }
             Self::ConnectionIoEofRecheckPause => "server.connection-io.eof-recheck.pause",
             Self::PythonAsgiReceiveBorrowConflict => "python.asgi-receive.borrow-conflict",
             Self::ServerControlShutdownBorrowConflict => "server.control.shutdown.borrow-conflict",
@@ -330,6 +347,7 @@ impl CoverageFaultPoint {
             Self::Http3RequestTaskPanicAfterResponse => "http3.request-task.panic-after-response",
             Self::Http3ConnectionAcceptFinished => "http3.connection.accept-finished",
             Self::Http3BodyPumpSendConnectionClosed => "http3.body-pump.send.connection-closed",
+            Self::Http3BodyPumpErrorStop => "http3.body-pump.error.request-stop",
             Self::AsgiEventTypeHttpResponseStartEq => "asgi.event-type.http-response-start.eq",
             Self::AsgiEventTypeHttpResponseBodyEq => "asgi.event-type.http-response-body.eq",
             Self::AsgiEventTypeWebSocketAcceptEq => "asgi.event-type.websocket-accept.eq",
@@ -693,6 +711,7 @@ fn log_error(message: fmt::Arguments<'_>) {
 }
 type ResponseBody = UnsyncBoxBody<Bytes, BoxError>;
 type WebSocketTasks = Arc<Mutex<tokio::task::JoinSet<()>>>;
+type RequestBodyTasks = Arc<Mutex<tokio::task::JoinSet<()>>>;
 // Keep a bounded burst ahead of the HTTP body consumer. Sends fit into
 // available slots synchronously; a full queue returns an awaitable so Tokio
 // can apply backpressure. This is bounded by message count, not body bytes.
@@ -892,6 +911,9 @@ struct ServerContext {
     tcp_tls: Option<TlsAcceptor>,
     state: Option<Arc<Py<PyDict>>>,
     websocket_tasks: WebSocketTasks,
+    request_body_tasks: RequestBodyTasks,
+    #[cfg(coverage)]
+    completed_request_body_pumps: Arc<AtomicUsize>,
     diagnostics: RuntimeDiagnostics,
     cancellation: CancellationToken,
     graceful_timeout: std::time::Duration,
@@ -1060,6 +1082,10 @@ impl<T> AbortOnDrop<T> {
         self.guard.0.take();
         self.handle
     }
+
+    fn leave_running(&mut self) {
+        self.guard.0.take();
+    }
 }
 
 struct TaskAbortGuard(Option<tokio::task::AbortHandle>);
@@ -1068,6 +1094,32 @@ impl Drop for TaskAbortGuard {
     fn drop(&mut self) {
         if let Some(handle) = self.0.take() {
             handle.abort();
+        }
+    }
+}
+
+struct RequestCancellationGuard {
+    cancellation: CancellationToken,
+    armed: bool,
+}
+
+impl RequestCancellationGuard {
+    fn new(cancellation: CancellationToken) -> Self {
+        Self {
+            cancellation,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for RequestCancellationGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            self.cancellation.cancel();
         }
     }
 }
@@ -1708,6 +1760,7 @@ struct AsgiIo {
     request_messages: Arc<Mutex<mpsc::Receiver<RequestMessage>>>,
     _request_sender: Option<mpsc::Sender<RequestMessage>>,
     connection_closed: watch::Receiver<bool>,
+    request_cancellation: CancellationToken,
     request_disconnected: Arc<AtomicBool>,
     response_start_attempted: Arc<AtomicBool>,
     response_started: Arc<AtomicBool>,
@@ -1774,6 +1827,7 @@ impl AsgiIo {
         }
         let request_messages = Arc::clone(&slf.request_messages);
         let mut connection_closed = slf.connection_closed.clone();
+        let request_cancellation = slf.request_cancellation.clone();
         let request_disconnected = Arc::clone(&slf.request_disconnected);
         slf.diagnostics.http_receive_bridge_future();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -1788,6 +1842,10 @@ impl AsgiIo {
                     biased;
                     message = async { request_messages.lock().await.recv().await } => message,
                     _ = wait_for_connection_close(&mut connection_closed) => {
+                        request_disconnected.store(true, Ordering::Release);
+                        None
+                    }
+                    _ = request_cancellation.cancelled() => {
                         request_disconnected.store(true, Ordering::Release);
                         None
                     }
@@ -2712,22 +2770,47 @@ async fn pump_http_request_body(
     mut body: Incoming,
     sender: mpsc::Sender<RequestMessage>,
     mut connection_closed: watch::Receiver<bool>,
+    cancellation: CancellationToken,
+    request_cancellation: CancellationToken,
 ) {
     #[cfg(coverage)]
     if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFirstPollPause) {
-        // Hold admission before the first read until a real peer disconnect
-        // closes the connection watch, then resume at the known-close guard.
-        wait_for_connection_close(&mut connection_closed).await;
+        // Hold admission before the first read until the peer or server closes,
+        // then resume at the known-stop guard.
+        wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
     }
     loop {
-        if *connection_closed.borrow() {
+        if *connection_closed.borrow()
+            || cancellation.is_cancelled()
+            || request_cancellation.is_cancelled()
+        {
             return;
         }
         let frame = tokio::select! {
             biased;
-            _ = wait_for_connection_close(&mut connection_closed) => return,
+            _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
             _ = sender.closed() => {
-                while body.frame().await.is_some() {}
+                #[cfg(coverage)]
+                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpDrainStopWait) {
+                    wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
+                    return;
+                }
+                #[cfg(coverage)]
+                if coverage_fault_is_armed(
+                    CoverageFaultPoint::HttpBodyPumpShutdownCompleteTaskBeforeAbort,
+                ) {
+                    log_error(format_args!(
+                        "uvicorn-rs: request-body pump entered shutdown-hold fault"
+                    ));
+                    wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
+                    std::future::pending::<()>().await;
+                }
+                #[cfg(coverage)]
+                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpShutdownHang) {
+                    wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
+                    std::future::pending::<()>().await;
+                }
+                drain_http_request_body(&mut body, &mut connection_closed, &cancellation, &request_cancellation).await;
                 return;
             }
             frame = body.frame() => frame,
@@ -2749,11 +2832,11 @@ async fn pump_http_request_body(
                                 if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpSendConnectionClosed) {
                                     return;
                                 }
-                                wait_for_connection_close(&mut connection_closed).await;
+                                wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
                             } => return,
                             result = sender.send(message) => {
                                 if result.is_err() {
-                                    while body.frame().await.is_some() {}
+                                    drain_http_request_body(&mut body, &mut connection_closed, &cancellation, &request_cancellation).await;
                                     return;
                                 }
                             }
@@ -2762,13 +2845,19 @@ async fn pump_http_request_body(
                 }
             }
             Some(Err(_)) => {
-                let _ = sender
-                    .send(RequestMessage {
+                #[cfg(coverage)]
+                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpErrorStop) {
+                    request_cancellation.cancel();
+                }
+                tokio::select! {
+                    biased;
+                    _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
+                    _ = sender.send(RequestMessage {
                         body: Bytes::new(),
                         more_body: false,
                         disconnected: true,
-                    })
-                    .await;
+                    }) => {}
+                }
                 return;
             }
             None => {
@@ -2784,7 +2873,7 @@ async fn pump_http_request_body(
                         if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFinalSendConnectionClosed) {
                             return;
                         }
-                        wait_for_connection_close(&mut connection_closed).await;
+                        wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
                     } => return,
                     result = sender.send(message) => {
                         if result.is_err() {
@@ -2798,13 +2887,78 @@ async fn pump_http_request_body(
                         if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpAfterFinalConnectionClosed) {
                             return;
                         }
-                        wait_for_connection_close(&mut connection_closed).await;
+                        wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
                     } => return,
                     _ = sender.closed() => return,
                 }
             }
         }
     }
+}
+
+async fn drain_http_request_body(
+    body: &mut Incoming,
+    connection_closed: &mut watch::Receiver<bool>,
+    cancellation: &CancellationToken,
+    request_cancellation: &CancellationToken,
+) {
+    loop {
+        let frame = tokio::select! {
+            biased;
+            _ = wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation) => return,
+            frame = body.frame() => frame,
+        };
+        #[cfg(coverage)]
+        let frame = if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpDrainTerminalFrame) {
+            None
+        } else {
+            frame
+        };
+        match frame {
+            Some(Ok(_)) => {}
+            Some(Err(_)) | None => return,
+        }
+    }
+}
+
+async fn wait_for_body_pump_stop(
+    connection_closed: &mut watch::Receiver<bool>,
+    cancellation: &CancellationToken,
+    request_cancellation: &CancellationToken,
+) {
+    tokio::select! {
+        biased;
+        _ = wait_for_connection_close(connection_closed) => {},
+        _ = cancellation.cancelled() => {},
+        _ = request_cancellation.cancelled() => {},
+    }
+}
+
+async fn spawn_request_body_task<F>(tasks: &RequestBodyTasks, task: F)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    let mut tasks = tasks.lock().await;
+    #[cfg(coverage)]
+    if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpReapCancelledTask) {
+        let completed_handle = tasks.spawn(async {});
+        while !completed_handle.is_finished() {
+            tokio::task::yield_now().await;
+        }
+        let abort_handle = tasks.spawn(std::future::pending::<()>());
+        abort_handle.abort();
+        while !abort_handle.is_finished() {
+            tokio::task::yield_now().await;
+        }
+    }
+    while let Some(result) = tasks.try_join_next() {
+        if let Err(error) = result {
+            log_error(format_args!(
+                "uvicorn-rs: request-body pump failed or was cancelled before reaping: {error}"
+            ));
+        }
+    }
+    tasks.spawn(task);
 }
 
 async fn wait_for_connection_close(connection_closed: &mut watch::Receiver<bool>) {
@@ -3298,6 +3452,7 @@ async fn serve_forever(
     };
     let state = lifespan.state.clone();
     let websocket_tasks: WebSocketTasks = Arc::new(Mutex::new(tokio::task::JoinSet::new()));
+    let request_body_tasks: RequestBodyTasks = Arc::new(Mutex::new(tokio::task::JoinSet::new()));
     // Track each network-side ASGI task together with its Python cancellation
     // cleanup. An aborted Tokio task can register that cleanup only when its
     // future is dropped, so shutdown must wait for both levels.
@@ -3310,6 +3465,9 @@ async fn serve_forever(
         tcp_tls: options.tcp_tls,
         state,
         websocket_tasks,
+        request_body_tasks,
+        #[cfg(coverage)]
+        completed_request_body_pumps: Arc::new(AtomicUsize::new(0)),
         diagnostics,
         cancellation: cancellation.clone(),
         graceful_timeout: options.graceful_timeout,
@@ -3473,6 +3631,63 @@ async fn serve_forever(
     {
         connection_tasks.abort_all();
         while connection_tasks.join_next().await.is_some() {}
+    }
+    let mut request_body_tasks = server.request_body_tasks.lock().await;
+    #[cfg(coverage)]
+    if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpShutdownCancelJoin) {
+        let abort_handle = request_body_tasks.spawn(std::future::pending::<()>());
+        abort_handle.abort();
+        tokio::task::yield_now().await;
+    }
+    if tokio::time::timeout(
+        options
+            .graceful_timeout
+            .saturating_sub(shutdown_started.elapsed()),
+        async {
+            while let Some(result) = request_body_tasks.join_next().await {
+                if let Err(error) = result {
+                    log_error(format_args!(
+                        "uvicorn-rs: request-body pump failed or was cancelled during shutdown: {error}"
+                    ));
+                }
+            }
+        },
+    )
+    .await
+    .is_err()
+    {
+        log_error(format_args!(
+            "uvicorn-rs: request-body pumps exceeded the graceful timeout"
+        ));
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpShutdownCompleteTaskBeforeAbort) {
+            let completed_handle = request_body_tasks.spawn(async {});
+            while !completed_handle.is_finished() {
+                tokio::task::yield_now().await;
+            }
+        }
+        request_body_tasks.abort_all();
+        while let Some(result) = request_body_tasks.join_next().await {
+            if let Err(error) = result {
+                log_error(format_args!(
+                    "uvicorn-rs: request-body pump joined after forced abort: {error}"
+                ));
+            } else {
+                log_error(format_args!(
+                    "uvicorn-rs: request-body pump completed during forced-abort join"
+                ));
+            }
+        }
+    }
+    drop(request_body_tasks);
+    #[cfg(coverage)]
+    {
+        let completed = server.completed_request_body_pumps.load(Ordering::Acquire);
+        if completed > 0 {
+            log_error(format_args!(
+                "uvicorn-rs: request-body pumps joined: {completed}"
+            ));
+        }
     }
     let mut websocket_tasks = server.websocket_tasks.lock().await;
     if tokio::time::timeout(
@@ -3954,30 +4169,46 @@ async fn handle_http3_request(
     let (parts, ()) = request.into_parts();
     let (mut send_stream, receive_stream) = stream.split();
     let (request_tx, request_rx) = mpsc::channel(1);
-    tokio::spawn(pump_h3_request_body(
-        receive_stream,
-        request_tx,
-        context.connection_closed.clone(),
-    ));
+    let request_body_tasks = Arc::clone(&context.server.request_body_tasks);
+    let cancellation = context.server.cancellation.clone();
+    let request_cancellation = CancellationToken::new();
+    let pump_request_cancellation = request_cancellation.clone();
+    let connection_closed = context.connection_closed.clone();
+    #[cfg(coverage)]
+    let completed_pumps = Arc::clone(&context.server.completed_request_body_pumps);
+    spawn_request_body_task(&request_body_tasks, async move {
+        pump_h3_request_body(
+            receive_stream,
+            request_tx,
+            connection_closed,
+            cancellation,
+            pump_request_cancellation,
+        )
+        .await;
+        #[cfg(coverage)]
+        completed_pumps.fetch_add(1, Ordering::Release);
+    })
+    .await;
 
-    let response = match handle_request_parts(parts, request_rx, None, context).await {
-        Ok(response) => response,
-        Err(error) => {
-            log_error(format_args!(
-                "uvicorn-rs: HTTP/3 ASGI request failed: {error}"
-            ));
-            let body = if error.downcast_ref::<InvalidAsgiResponseStart>().is_some() {
-                Bytes::new()
-            } else {
-                Bytes::from_static(b"Internal Server Error")
-            };
-            response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                full_body(body),
-                HeaderMap::new(),
-            )
-        }
-    };
+    let response =
+        match handle_request_parts(parts, request_rx, None, request_cancellation, context).await {
+            Ok(response) => response,
+            Err(error) => {
+                log_error(format_args!(
+                    "uvicorn-rs: HTTP/3 ASGI request failed: {error}"
+                ));
+                let body = if error.downcast_ref::<InvalidAsgiResponseStart>().is_some() {
+                    Bytes::new()
+                } else {
+                    Bytes::from_static(b"Internal Server Error")
+                };
+                response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    full_body(body),
+                    HeaderMap::new(),
+                )
+            }
+        };
 
     let response_result: Result<(), BoxError> = async {
         let (response_parts, mut body) = response.into_parts();
@@ -4043,18 +4274,25 @@ async fn pump_h3_request_body(
     mut body: h3::server::RequestStream<h3_quinn::RecvStream, Bytes>,
     sender: mpsc::Sender<RequestMessage>,
     mut connection_closed: watch::Receiver<bool>,
+    cancellation: CancellationToken,
+    request_cancellation: CancellationToken,
 ) {
     #[cfg(coverage)]
     let mut pending_data: Option<Bytes> = None;
     loop {
         #[cfg(coverage)]
         if *connection_closed.borrow()
+            || cancellation.is_cancelled()
+            || request_cancellation.is_cancelled()
             || coverage_fault_take(CoverageFaultPoint::Http3BodyPumpConnectionClosed)
         {
             return;
         }
         #[cfg(not(coverage))]
-        if *connection_closed.borrow() {
+        if *connection_closed.borrow()
+            || cancellation.is_cancelled()
+            || request_cancellation.is_cancelled()
+        {
             return;
         }
         let data = tokio::select! {
@@ -4064,7 +4302,7 @@ async fn pump_h3_request_body(
                 if coverage_fault_take(CoverageFaultPoint::Http3BodyPumpConnectionClosedSelect) {
                     return;
                 }
-                wait_for_connection_close(&mut connection_closed).await;
+                wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
             } => return,
             _ = async {
                 #[cfg(coverage)]
@@ -4110,7 +4348,7 @@ async fn pump_h3_request_body(
                         if coverage_fault_take(CoverageFaultPoint::Http3BodyPumpSendConnectionClosed) {
                             return;
                         }
-                        wait_for_connection_close(&mut connection_closed).await;
+                        wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
                     } => return,
                     result = async {
                         #[cfg(coverage)]
@@ -4150,7 +4388,7 @@ async fn pump_h3_request_body(
                             }).await;
                             return;
                         }
-                        wait_for_connection_close(&mut connection_closed).await;
+                        wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
                     } => return,
                     result = sender.send(message) => {
                         if result.is_err() {
@@ -4159,18 +4397,24 @@ async fn pump_h3_request_body(
                     }
                 }
                 tokio::select! {
-                    _ = wait_for_connection_close(&mut connection_closed) => return,
+                    _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
                     _ = sender.closed() => return,
                 }
             }
             Err(_) => {
-                let _ = sender
-                    .send(RequestMessage {
+                #[cfg(coverage)]
+                if coverage_fault_take(CoverageFaultPoint::Http3BodyPumpErrorStop) {
+                    request_cancellation.cancel();
+                }
+                tokio::select! {
+                    biased;
+                    _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
+                    _ = sender.send(RequestMessage {
                         body: Bytes::new(),
                         more_body: false,
                         disconnected: true,
-                    })
-                    .await;
+                    }) => {}
+                }
                 return;
             }
         }
@@ -4218,6 +4462,9 @@ async fn handle_request_inner(
     context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, BoxError> {
     let (parts, body) = request.into_parts();
+    let request_cancellation = CancellationToken::new();
+    let mut request_cancellation_guard = (parts.version == Version::HTTP_2)
+        .then(|| RequestCancellationGuard::new(request_cancellation.clone()));
     let (request_tx, request_rx) = mpsc::channel(1);
     let request_sender = if body.is_end_stream() {
         coverage_runtime_result!(
@@ -4230,20 +4477,46 @@ async fn handle_request_inner(
         )?;
         Some(request_tx)
     } else {
-        tokio::spawn(pump_http_request_body(
-            body,
-            request_tx,
-            context.connection_closed.clone(),
-        ));
+        let request_body_tasks = Arc::clone(&context.server.request_body_tasks);
+        let cancellation = context.server.cancellation.clone();
+        let connection_closed = context.connection_closed.clone();
+        let pump_request_cancellation = request_cancellation.clone();
+        #[cfg(coverage)]
+        let completed_pumps = Arc::clone(&context.server.completed_request_body_pumps);
+        spawn_request_body_task(&request_body_tasks, async move {
+            pump_http_request_body(
+                body,
+                request_tx,
+                connection_closed,
+                cancellation,
+                pump_request_cancellation,
+            )
+            .await;
+            #[cfg(coverage)]
+            completed_pumps.fetch_add(1, Ordering::Release);
+        })
+        .await;
         None
     };
-    handle_request_parts(parts, request_rx, request_sender, context).await
+    let result = handle_request_parts(
+        parts,
+        request_rx,
+        request_sender,
+        request_cancellation,
+        context,
+    )
+    .await;
+    if let Some(guard) = &mut request_cancellation_guard {
+        guard.disarm();
+    }
+    result
 }
 
 async fn handle_request_parts(
     parts: http::request::Parts,
     request_messages: mpsc::Receiver<RequestMessage>,
     request_sender: Option<mpsc::Sender<RequestMessage>>,
+    request_cancellation: CancellationToken,
     context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, BoxError> {
     let http_version = parts.version;
@@ -4272,6 +4545,7 @@ async fn handle_request_parts(
                         request_messages: Arc::new(Mutex::new(request_messages)),
                         _request_sender: request_sender,
                         connection_closed: context.connection_closed,
+                        request_cancellation,
                         request_disconnected: Arc::new(AtomicBool::new(false)),
                         response_start_attempted: app_response_start_attempted,
                         response_started: app_response_started,
@@ -4313,6 +4587,12 @@ async fn handle_request_parts(
         run_python_application(app_future, force_application_shutdown).await
     };
     let mut app_task = AbortOnDrop::new(app_task_tracker.spawn(app_future));
+    if http_version == Version::HTTP_2 {
+        // Hyper drops a pending service future when its peer resets the
+        // stream. Keep the tracked ASGI task alive long enough for the
+        // request-body pump to deliver http.disconnect on that stream.
+        app_task.leave_running();
+    }
 
     #[cfg(coverage)]
     let app_task_wins_start_select =

@@ -1,11 +1,11 @@
 # Architecture and buffer ownership
 
-The current 460-case matrix passes attribution and three full repeats. It
-contains 221 live oracle comparisons and 239 target-only contracts across 70
-input files and 64 operations. Native coverage is 4,810/4,810 regions and
-3,395/3,395 lines, with zero Coverage MCP gaps. The normal wheel passes
-221/221 public parity cases and the 16-check exclusion audit with three
-selected workflows. See the [current source/build receipt](coverage.md#current-full-verification-460-cases).
+The current 473-case matrix passes attribution and three full repeats. It
+contains 225 live oracle comparisons and 248 target-only contracts across 70
+input files and 64 operations. Native coverage is 5,106/5,106 regions and
+3,606/3,606 lines, with zero Coverage MCP gaps. The normal wheel passes
+225/225 public parity cases and the 16-check exclusion audit with three
+selected workflows. See the [current source/build receipt](coverage.md#current-full-verification-473-cases).
 Older 451- and 448-case results below are historical and do not attest the
 current checkout.
 
@@ -229,7 +229,7 @@ cancellation diagnostics and Python cleanup before a fresh request. This adds
 no native point or panic and passed its selected instrumented case (1/1).
 The 450-case full gate left two final-drain regions uncovered; the enlarged
 matrix's fresh full verification covers both through this case and passes all
-460 attribution cases plus three full repeats. Actual remote application close
+473 attribution cases plus three full repeats. Actual remote application close
 `0x102`, body-stream error, connection closure and cleanup prove connection-error
 termination/cancellation; the probe's `stream_reset` error convention alone
 does not identify a QUIC `RESET_STREAM` frame. See the
@@ -259,6 +259,24 @@ tasks and their cancellation cleanup are owned by the request tracker.
 Post-response applications receive their normal grace period before a Rust
 cancellation token tells still-running bridges to schedule Python cancellation.
 The server then gives tracked request cleanup a separate bounded window.
+
+HTTP request-body readers have their own server-owned `JoinSet`; H1, H2 and H3
+handlers register a pump before starting the corresponding ASGI request task.
+Each pump observes server shutdown, connection closure and its request-scoped
+cancellation token. H1 drains remaining frames after the ASGI receive channel
+closes so the connection can finish request framing and remain reusable. H2
+request cancellation signals the token so the bridge can expose
+`http.disconnect`; H3 stream errors and closed receivers end the request pump.
+The server joins all remaining pumps within the unused transport grace period.
+If that deadline expires, it logs the timeout, aborts the pumps, and drains
+their join results before returning from `Server.serve()`. The upload channel
+remains bounded and retains its existing backpressure. Full-matrix cases cover
+early responses, abandoned and partial uploads, body errors, disconnects,
+malformed H1 framing, shutdown and healthy sibling/follow-up requests.
+The one-connection HTTP/3 case completes 128 one-byte uploads; its instrumented
+attribution records 128/128 body pumps joined, and each of the three complete
+matrix repeats returns 128/128 responses matching Hypercorn.
+See the [current evidence](coverage.md#current-full-verification-473-cases).
 
 Lifespan has a dedicated cleanup tracker. Its main native task remains outside
 that tracker while startup and shutdown run, so request cleanup does not wait

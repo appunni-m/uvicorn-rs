@@ -1,0 +1,16 @@
+{
+  "build_id": "b90d8c1eba8f88fb6257796a6ad5759ec2a25776f7dbceb2d7ada1369ae89300",
+  "covered": 5106,
+  "full_response": "coverage-mcp-full-response.json",
+  "gap_groups": 0,
+  "measurement": "coverage-report.json.gz (uncompressed at query path: build/asgi-coverage/unified-body-pump-final-2026-10-06/coverage-report.json)",
+  "metric": "regions",
+  "missing": 0,
+  "query_report_sha256_uncompressed": "6bc08ebf1be237392e46094d665517179866abb6a40345f7f9530123424697c8",
+  "recorded_revision": "e38d06521b09e4324d9a45039f0ded5dc2e25fb4",
+  "schema": "uvicorn-rs-coverage-mcp-receipt@1",
+  "source": "matches_receipt",
+  "status": "measured",
+  "tests": "passed",
+  "total": 5106
+}

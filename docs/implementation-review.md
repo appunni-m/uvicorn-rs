@@ -1,12 +1,12 @@
 # Implementation review: known gaps
 
-The current source passes the 460-case attribution matrix and three complete
-460-case repeats with zero failures, infrastructure errors, retries or cases
-not run. The matrix has 221 oracle comparisons and 239 target-only contracts
-across 70 input files and 64 operations. Native coverage is 4,810/4,810 regions
-and 3,395/3,395 lines, with zero Coverage MCP gaps. The normal wheel passes
-221/221 public comparisons and the 16-check exclusion audit with three selected
-public cases. See the [current source/build receipt](coverage.md#current-full-verification-460-cases).
+The current source passes the 473-case attribution matrix and three complete
+473-case repeats with zero failures, infrastructure errors, retries or cases
+not run. The matrix has 225 oracle comparisons and 248 target-only contracts
+across 70 input files and 64 operations. Native coverage is 5,106/5,106 regions
+and 3,606/3,606 lines, with zero Coverage MCP gaps. The normal wheel passes
+225/225 public comparisons and the 16-check exclusion audit with three selected
+public cases. See the [current source/build receipt](coverage.md#current-full-verification-473-cases).
 The 451- and 448-case results below are historical and do not attest the
 current checkout.
 
@@ -56,13 +56,13 @@ pair only with that sequence's GREASE disabled. The new generic held-response
 accept-error workflow uses an existing point and requires remote `0x102`, real
 stream failure, ordered cancellation/original error, application cleanup and a
 healthy fresh request. Its selected instrumented case passed 1/1 and retained
-those actual outcomes; the fresh 460-case full run passes attribution and all
+those actual outcomes; the fresh 473-case full run passes attribution and all
 three repeats, including both formerly missing final-drain spans. The
 `stream_reset` observation uses the client's `recv_data` error convention;
 actual remote application close, body-stream error, connection closure and
 cleanup prove termination/cancellation. The latest full run rebuilt
 instrumentation; [current evidence](coverage.md#current-evidence-status)
-records the exact identities and native scope. The normal wheel passes 221
+records the exact identities and native scope. The normal wheel passes 225
 public cases and all 16 exclusion checks with three selected live cases.
 
 The [October 5 investigation](performance-investigation-2026-10-05.md) retains
@@ -162,7 +162,8 @@ ownership correction passed both cases within a seven-case targeted run with
 zero failures or retries:
 `build/asgi-coverage/listener-ownership-targeted-445-rst-aware-2026-10-05/coverage-report.json`.
 The strengthened listener cases also passed the preceding complete gate. This
-change does not resolve the detached request-body pump ownership concern below.
+change did not resolve the separate request-body-pump ownership question at
+that point; the follow-up is now covered under Code and operations.
 
 ## Idle protocol-detection cancellation
 
@@ -269,17 +270,22 @@ hook checks remain enabled.
   is no configurable body-size limit. Deployments must account for application
   behavior and transport defaults until resource limits are designed and
   verified.
-- Request-body pump ownership needs follow-up. `handle_request_inner` launches
-  `pump_http_request_body` with a detached Tokio task, outside the connection
-  join set and Python cleanup tracker. The pump retains the incoming body until
-  EOF, reset, or channel release; its receiver-closed and send-error paths drain
-  remaining frames without selecting the connection-close watch. Connection
-  teardown normally closes the incoming body, but shutdown does not separately
-  acknowledge pump completion before `Server.serve()` returns. An unbounded
-  production leak has not been demonstrated. Public partial-upload,
-  early-response, disconnect, and bounded-shutdown evidence is needed before
-  strengthening the ownership contract. The causal coverage-only scheduling
-  pause does not change production pump ownership.
+- Request-body pump ownership is implemented and covered. `ServerContext` owns
+  an H1/H2/H3 body-pump `JoinSet`; each request registers its pump there before
+  starting its ASGI application. Pumps select on server shutdown, connection
+  closure and per-request cancellation, and completed pumps are reaped while
+  new requests arrive. H1 keeps draining after the app stops receiving so
+  request framing can finish on a reusable connection. H2 stream cancellation
+  reaches the pump token and can surface as `http.disconnect` on the owning
+  ASGI loop. H3 body errors and a closed request receiver terminate that
+  stream's pump. Shutdown joins pumps within the remaining transport grace
+  period; if the period expires, it logs, aborts and drains the join set before
+  `Server.serve()` returns. The 473-case unified matrix passes three repeats,
+  and the normal wheel passes all 225 public comparisons. The 128-request
+  one-connection HTTP/3 case returns 128 matching responses in each full repeat;
+  its instrumented attribution records 128 body pumps joined. These cases do not
+  establish unbounded-load or indefinite-upload resource ceilings: request
+  queues are bounded by item count and no body-size limit is configured.
 - Rust diagnostics use fallible best-effort stderr writes; structured logging
   and configurable access logs are not implemented.
 - The manifest declares Python `>=3.9`. Full public parity uses CPython

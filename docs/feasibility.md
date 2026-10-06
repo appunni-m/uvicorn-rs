@@ -2,15 +2,15 @@
 
 ## Current correctness evidence (2026-10-06)
 
-The current HTTP/3 peer-close source passes 460/460 instrumented attribution
-cases and three complete 460-case repeats with zero failures, infrastructure
-errors, retries or cases not run. Its matrix has 221 public comparisons and
-239 target-only contracts across 70 input files and 64 operations. Coverage is
-4,810/4,810 native regions and 3,395/3,395 lines (100%), with zero unfiltered
+The current request-body-pump source passes 473/473 instrumented attribution
+cases and three complete 473-case repeats with zero failures, infrastructure
+errors, retries or cases not run. Its matrix has 225 public comparisons and
+248 target-only contracts across 70 input files and 64 operations. Coverage is
+5,106/5,106 native regions and 3,606/3,606 lines (100%), with zero unfiltered
 source-matched MCP gaps and tests passed. The current normal wheel passes
-221/221 public comparisons and all 16 exclusion checks with three selected
+225/225 public comparisons and all 16 exclusion checks with three selected
 live cases. The coverage and normal-wheel reports are preserved in
-[current evidence](coverage.md#current-full-verification-460-cases).
+[current evidence](coverage.md#current-full-verification-473-cases).
 
 The October 5 category measurements below predate the latest H3 close-code
 source and were not rerun for it. They remain evidence for their recorded

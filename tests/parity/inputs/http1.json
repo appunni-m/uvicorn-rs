@@ -690,6 +690,29 @@
       }
     },
     {
+      "case_id": "fault.http1.request-body-pump-drain-joins-on-shutdown",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.drain.server-stop-wait",
+        "contract": "http-body-pump-drain-shutdown-joined"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/ignore-upload",
+        "headers": [],
+        "chunks_base64": [
+          "Zmlyc3QtY2h1bms=",
+          "c2Vjb25kLWNodW5r"
+        ],
+        "hold_until_shutdown": true
+      }
+    },
+    {
       "case_id": "http1.disconnect-is-repeatable",
       "profile": "http1",
       "operation": "http.client-disconnect",
@@ -4707,6 +4730,160 @@
           "body_base64": ""
         }
       ]
+    },
+    {
+      "case_id": "http1.early-response-drain-stops-on-malformed-final-chunk",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "request_stream": {
+        "method": "POST",
+        "path": "/ignore-upload",
+        "headers": [],
+        "chunks_base64": [
+          "Zmlyc3QtY2h1bms=",
+          "c2Vjb25kLWNodW5r"
+        ],
+        "malformed_final_chunk": true,
+        "keep_alive": true
+      }
+    },
+    {
+      "case_id": "fault.http1.malformed-body-error-stop-delivers-disconnect",
+      "profile": "http1",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.error.request-stop",
+        "contract": "http-body-pump-error-stop-disconnect-followup-200"
+      },
+      "disconnect": {
+        "path": "/disconnect-read-twice",
+        "followup_path": "/disconnect-status",
+        "malformed_chunk": true,
+        "wait_event": "http.disconnect.waiting",
+        "wait_event_after_disconnect": "http.disconnect.second:http.disconnect"
+      }
+    },
+    {
+      "case_id": "fault.http1.body-pump-reaps-cancelled-task-before-upload",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.reap.cancelled-task",
+        "contract": "http-body-pump-reaps-cancelled-task"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/read-first-upload",
+        "headers": [],
+        "chunks_base64": [
+          "Zmlyc3QtY2h1bms=",
+          "c2Vjb25kLWNodW5r"
+        ]
+      }
+    },
+    {
+      "case_id": "fault.http1.body-pump-shutdown-joins-cancelled-task",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.shutdown.cancel-join",
+        "contract": "http-body-pump-shutdown-cancelled-join"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/ignore-upload",
+        "headers": [],
+        "chunks_base64": [
+          "Zmlyc3QtY2h1bms=",
+          "c2Vjb25kLWNodW5r"
+        ],
+        "hold_until_shutdown": true
+      }
+    },
+    {
+      "case_id": "fault.http1.body-pump-shutdown-aborts-hung-pump",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.shutdown.hang",
+        "contract": "http-body-pump-shutdown-aborts-hung-pump"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/ignore-upload",
+        "headers": [],
+        "chunks_base64": [
+          "Zmlyc3QtY2h1bms=",
+          "c2Vjb25kLWNodW5r"
+        ],
+        "hold_until_shutdown": true
+      }
+    },
+    {
+      "case_id": "fault.http1.early-response-body-drain-terminal-frame",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.drain.terminal-frame",
+        "contract": "http-body-pump-drain-terminal-frame"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/ignore-upload",
+        "headers": [],
+        "chunks_base64": [
+          "Zmlyc3QtY2h1bms=",
+          "c2Vjb25kLWNodW5r"
+        ],
+        "keep_alive": true,
+        "send_remaining_after_response": true
+      }
+    },
+    {
+      "case_id": "fault.http1.body-pump-shutdown-completes-task-before-abort",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.shutdown.complete-task-before-abort",
+        "contract": "http-body-pump-shutdown-completes-task-before-abort"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/ignore-upload",
+        "headers": [],
+        "chunks_base64": [
+          "Zmlyc3QtY2h1bms=",
+          "c2Vjb25kLWNodW5r"
+        ],
+        "hold_until_shutdown": true
+      }
     }
   ]
 }

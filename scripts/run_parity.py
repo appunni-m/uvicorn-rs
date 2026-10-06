@@ -73,6 +73,13 @@ FAULT_POINTS = {
     "http.body-pump.first-poll-pause",
     "http.body-pump.final-send.connection-closed",
     "http.body-pump.after-final.connection-closed",
+    "http.body-pump.drain.server-stop-wait",
+    "http.body-pump.drain.terminal-frame",
+    "http.body-pump.error.request-stop",
+    "http.body-pump.reap.cancelled-task",
+    "http.body-pump.shutdown.cancel-join",
+    "http.body-pump.shutdown.hang",
+    "http.body-pump.shutdown.complete-task-before-abort",
     "server.connection-io.eof-recheck.pause",
     "python.asgi-receive.borrow-conflict",
     "server.control.shutdown.borrow-conflict",
@@ -90,6 +97,7 @@ FAULT_POINTS = {
     "http3.request-task.panic-after-response",
     "http3.connection.accept-finished",
     "http3.body-pump.send.connection-closed",
+    "http3.body-pump.error.request-stop",
 
     "asgi.event-type.http-response-start.eq",
     "asgi.event-type.http-response-body.eq",
@@ -320,6 +328,13 @@ FAULT_CONTRACTS = {
     "server-eager-application-registration-cleanup",
     "server-eager-application-registration-cleanup-normal-return",
     "http-reset-before-body-worker-disconnect-followup-200",
+    "http-body-pump-drain-shutdown-joined",
+    "http-body-pump-drain-terminal-frame",
+    "http-body-pump-error-stop-disconnect-followup-200",
+    "http-body-pump-reaps-cancelled-task",
+    "http-body-pump-shutdown-cancelled-join",
+    "http-body-pump-shutdown-aborts-hung-pump",
+    "http-body-pump-shutdown-completes-task-before-abort",
     "http-response-header-capacity-recovery-followup-200",
     "websocket-header-capacity-error-followup-200",
     "http-start-error-close-followup-200",
@@ -342,6 +357,8 @@ FAULT_CONTRACTS = {
     "http3-endpoint-accept-closes-http3",
     "http2-500-empty-body",
     "http3-client-abort-disconnect-followup",
+    "http3-body-pump-error-stop-disconnect-followup-200",
+    "http3-body-pump-reaps-cancelled-task",
     "http3-server-shutdown-force-abort",
     "http-final-body-preserved-after-app-task-panic",
     "http-task-panic-before-final-body-closes-stream",
@@ -920,6 +937,30 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: HTTP/3 client-abort contract requires the partial-body disconnect workflow"
                     )
+            elif fault["contract"] == "http3-body-pump-error-stop-disconnect-followup-200":
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.request-disconnect"
+                    or fault["point"] != "http3.body-pump.error.request-stop"
+                    or case.get("request", {}).get("abort_after_body") is not True
+                    or case.get("request", {}).get("path") != "/h3-upload-disconnect"
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 body-pump error stop requires a synchronized client abort"
+                    )
+            elif fault["contract"] == "http3-body-pump-reaps-cancelled-task":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http.request-upload"
+                    or fault["point"] != "http.body-pump.reap.cancelled-task"
+                    or request.get("path") != "/read-first-upload"
+                    or request.get("method") != "POST"
+                    or not request.get("body_base64")
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 task reaping requires a nonempty POST upload probe"
+                    )
             elif fault["contract"] == "http3-server-shutdown-force-abort":
                 if (
                     case.get("profile") != "http3"
@@ -1178,6 +1219,81 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: delayed body-worker reset requires an incomplete upload and real disconnect follow-up"
                     )
+            elif fault["contract"] == "http-body-pump-error-stop-disconnect-followup-200":
+                disconnect = case.get("disconnect", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.client-disconnect"
+                    or fault["point"] != "http.body-pump.error.request-stop"
+                    or disconnect.get("path") != "/disconnect-read-twice"
+                    or disconnect.get("followup_path") != "/disconnect-status"
+                    or disconnect.get("malformed_chunk") is not True
+                    or disconnect.get("wait_event") != "http.disconnect.waiting"
+                    or disconnect.get("wait_event_after_disconnect")
+                    != "http.disconnect.second:http.disconnect"
+                ):
+                    raise ParityError(
+                        f"{case_id}: malformed-body stop requires a synchronized ASGI disconnect and follow-up"
+                    )
+            elif fault["contract"] == "http-body-pump-drain-shutdown-joined":
+                stream = case.get("request_stream", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.request-streaming"
+                    or fault["point"] != "http.body-pump.drain.server-stop-wait"
+                    or stream.get("path") != "/ignore-upload"
+                    or stream.get("hold_until_shutdown") is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: body-pump shutdown requires an open unread upload and synchronized shutdown"
+                    )
+            elif fault["contract"] == "http-body-pump-drain-terminal-frame":
+                stream = case.get("request_stream", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.request-streaming"
+                    or fault["point"] != "http.body-pump.drain.terminal-frame"
+                    or stream.get("path") != "/ignore-upload"
+                ):
+                    raise ParityError(
+                        f"{case_id}: drain termination requires an HTTP/1.1 early-response upload"
+                    )
+            elif fault["contract"] == "http-body-pump-reaps-cancelled-task":
+                stream = case.get("request_stream", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.request-streaming"
+                    or fault["point"] != "http.body-pump.reap.cancelled-task"
+                    or stream.get("path") != "/read-first-upload"
+                ):
+                    raise ParityError(
+                        f"{case_id}: task reaping requires an HTTP/1.1 streamed upload"
+                    )
+            elif fault["contract"] in {
+                "http-body-pump-shutdown-cancelled-join",
+                "http-body-pump-shutdown-aborts-hung-pump",
+                "http-body-pump-shutdown-completes-task-before-abort",
+            }:
+                stream = case.get("request_stream", {})
+                expected_point = (
+                    "http.body-pump.shutdown.cancel-join"
+                    if fault["contract"] == "http-body-pump-shutdown-cancelled-join"
+                    else (
+                        "http.body-pump.shutdown.hang"
+                        if fault["contract"] == "http-body-pump-shutdown-aborts-hung-pump"
+                        else "http.body-pump.shutdown.complete-task-before-abort"
+                    )
+                )
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.request-streaming"
+                    or fault["point"] != expected_point
+                    or stream.get("path") != "/ignore-upload"
+                    or stream.get("hold_until_shutdown") is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: request-body shutdown fault requires the synchronized unread-upload workflow"
+                    )
             elif fault["contract"] == "http-disconnect-error-followup-200":
                 disconnect = case.get("disconnect", {})
                 if (
@@ -1433,11 +1549,27 @@ def load_contract(
             if kind not in {"http1", "http2"}:
                 raise ParityError(f"{case_id}: disconnect workflow supports HTTP/1.1 and HTTP/2")
             if kind == "http2":
-                exact_keys(case["disconnect"], {
-                    "path", "followup_path", "content_length", "partial_body_base64",
-                    "wait_event", "wait_event_after_disconnect",
-                }, f"{case_id}.disconnect HTTP/2")
+                http2_disconnect_keys = {
+                    "path", "followup_path", "wait_event", "wait_event_after_disconnect",
+                }
+                if case["disconnect"].get("empty_request") is True:
+                    http2_disconnect_keys.add("empty_request")
+                elif "complete_body_base64" in case["disconnect"]:
+                    http2_disconnect_keys.update(
+                        {"complete_body_base64", "wait_event_before_body"}
+                    )
+                else:
+                    http2_disconnect_keys.update({"content_length", "partial_body_base64"})
+                if "reset_stream" in case["disconnect"]:
+                    http2_disconnect_keys.add("reset_stream")
+                    if case["disconnect"]["reset_stream"] is not True:
+                        raise ParityError(f"{case_id}: reset_stream must be true when present")
+                exact_keys(case["disconnect"], http2_disconnect_keys, f"{case_id}.disconnect HTTP/2")
             disconnect_keys = {"path", "followup_path"}
+            if "reset_stream" in case["disconnect"]:
+                disconnect_keys.add("reset_stream")
+                if kind != "http2" or case["disconnect"]["reset_stream"] is not True:
+                    raise ParityError(f"{case_id}: reset_stream is supported only for HTTP/2 and must be true")
             if "empty_request" in case["disconnect"]:
                 disconnect_keys.add("empty_request")
                 if case["disconnect"]["empty_request"] is not True:
@@ -1446,6 +1578,22 @@ def load_contract(
                 disconnect_keys.add("malformed_chunk")
                 if case["disconnect"]["malformed_chunk"] is not True:
                     raise ParityError(f"{case_id}: malformed_chunk must be true when present")
+            if "complete_body_base64" in case["disconnect"]:
+                disconnect_keys.update({"complete_body_base64", "wait_event_before_body"})
+                if kind != "http2" or case["disconnect"].get("reset_stream") is not True:
+                    raise ParityError(
+                        f"{case_id}: complete-body resets are supported only for HTTP/2 stream resets"
+                    )
+                try:
+                    complete_body = base64.b64decode(
+                        case["disconnect"]["complete_body_base64"], validate=True
+                    )
+                except (ValueError, TypeError) as error:
+                    raise ParityError(f"{case_id}: invalid complete HTTP/2 body base64") from error
+                if not complete_body:
+                    raise ParityError(f"{case_id}: complete HTTP/2 body must be nonempty")
+                if not isinstance(case["disconnect"]["wait_event_before_body"], str) or not case["disconnect"]["wait_event_before_body"]:
+                    raise ParityError(f"{case_id}: wait_event_before_body must be nonempty text")
             if "wait_event" in case["disconnect"]:
                 disconnect_keys.add("wait_event")
                 if not isinstance(case["disconnect"]["wait_event"], str) or not case["disconnect"]["wait_event"]:
@@ -1502,12 +1650,49 @@ def load_contract(
                 stream_keys.add("send_all_before_read")
                 if stream["send_all_before_read"] is not True:
                     raise ParityError(f"{case_id}: send_all_before_read must be true when present")
+            if "send_remaining_after_response" in stream:
+                stream_keys.add("send_remaining_after_response")
+                if (
+                    stream["send_remaining_after_response"] is not True
+                    or kind != "http1"
+                    or stream.get("send_all_before_read") is True
+                ):
+                    raise ParityError(
+                        f"{case_id}: post-response request-body completion requires HTTP/1.1 streaming"
+                    )
+            if "keep_alive" in stream:
+                stream_keys.add("keep_alive")
+                if stream["keep_alive"] is not True or kind != "http1":
+                    raise ParityError(f"{case_id}: keep_alive is supported only for HTTP/1.1 request streams")
+            if "hold_until_shutdown" in stream:
+                stream_keys.add("hold_until_shutdown")
+                shutdown_contracts = {
+                    "http-body-pump-drain-shutdown-joined",
+                    "http-body-pump-shutdown-cancelled-join",
+                    "http-body-pump-shutdown-aborts-hung-pump",
+                    "http-body-pump-shutdown-completes-task-before-abort",
+                }
+                if (
+                    stream["hold_until_shutdown"] is not True
+                    or kind != "http1"
+                    or case.get("verification") != "fault-contract"
+                    or case.get("fault", {}).get("contract") not in shutdown_contracts
+                ):
+                    raise ParityError(
+                        f"{case_id}: hold_until_shutdown is restricted to the target body-pump shutdown contract"
+                    )
             if "wait_event" in stream:
                 stream_keys.add("wait_event")
                 if kind != "http1":
                     raise ParityError(f"{case_id}: request-stream event synchronization is HTTP/1.1 only")
                 if not isinstance(stream["wait_event"], str) or not stream["wait_event"]:
                     raise ParityError(f"{case_id}: request-stream wait_event must be non-empty text")
+            if "malformed_final_chunk" in stream:
+                stream_keys.add("malformed_final_chunk")
+                if stream["malformed_final_chunk"] is not True or kind != "http1":
+                    raise ParityError(
+                        f"{case_id}: malformed final chunk input is supported only for HTTP/1.1"
+                    )
             exact_keys(stream, stream_keys, f"{case_id}.request_stream")
             if len(stream["chunks_base64"]) < 2:
                 raise ParityError(f"{case_id}: request streaming requires at least two input chunks")
@@ -2717,6 +2902,91 @@ def read_http1_chunk(reader) -> bytes | None:
     return data
 
 
+def http1_body_pump_shutdown_workflow(
+    server: dict[str, Any], specification: dict[str, Any], fault: dict[str, Any]
+) -> dict[str, Any]:
+    """Hold an unread request upload in the body-pump drain until shutdown."""
+    fault_control_path = server.get("coverage_fault_control_path")
+    if fault_control_path is None:
+        raise ParityError("body-pump shutdown workflow requires the instrumented target")
+    chunks = [base64.b64decode(item, validate=True) for item in specification["chunks_base64"]]
+    if not chunks:
+        raise ParityError("body-pump shutdown workflow requires a nonempty first chunk")
+
+    client = socket.create_connection(("127.0.0.1", server["port"]), timeout=10)
+    client.settimeout(10)
+    fault_control_path.write_text(fault["point"], encoding="utf-8")
+    try:
+        headers = [
+            f"{specification['method']} {specification['path']} HTTP/1.1\r\n",
+            "Host: localhost\r\n",
+            "Transfer-Encoding: chunked\r\n",
+        ]
+        headers.extend(f"{name}: {value}\r\n" for name, value in specification["headers"])
+        client.sendall(("".join(headers) + "\r\n").encode("ascii"))
+        first_chunk = chunks[0]
+        client.sendall(f"{len(first_chunk):x}\r\n".encode() + first_chunk + b"\r\n")
+
+        response = http.client.HTTPResponse(client)
+        response.begin()
+        payload = response.read()
+        observation = response_observation(response.status, response.getheaders(), payload)
+        observation["early_body_base64"] = observation["body_base64"]
+
+        if fault["contract"] == "http-body-pump-shutdown-completes-task-before-abort":
+            shutdown_hold_marker = "uvicorn-rs: request-body pump entered shutdown-hold fault"
+            deadline = time.monotonic() + 5
+            while shutdown_hold_marker not in read_server_log(server) and time.monotonic() < deadline:
+                time.sleep(0.005)
+            if shutdown_hold_marker not in read_server_log(server):
+                raise ParityError("request-body pump did not enter the synchronized shutdown hold")
+            drain_pause_consumed = False
+        elif fault["contract"] == "http-body-pump-shutdown-cancelled-join":
+            deadline = time.monotonic() + 5
+            while (
+                "http.body-pump.app-response-finished" not in read_events(server["events"])
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.005)
+            if "http.body-pump.app-response-finished" not in read_events(server["events"]):
+                raise ParityError("ASGI app did not finish its response before body-pump shutdown")
+            drain_pause_consumed = False
+        else:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if fault_control_path.read_text(encoding="utf-8").strip() != fault["point"]:
+                    break
+                time.sleep(0.005)
+            else:
+                raise ParityError("request-body pump did not enter the synchronized unread-body drain")
+            drain_pause_consumed = True
+
+        shutdown_started = time.monotonic()
+        exit_code, server_log = stop_server(server, graceful=True)
+        shutdown_elapsed = time.monotonic() - shutdown_started
+        shutdown_fault_consumed = (
+            fault_control_path.read_text(encoding="utf-8").strip() != fault["point"]
+        )
+        observation.update({
+            "process_terminated": exit_code is not None,
+            "process_exit_code": exit_code,
+            "shutdown_bounded": shutdown_elapsed <= 5,
+            "shutdown_elapsed_seconds": shutdown_elapsed,
+            "drain_pause_consumed": drain_pause_consumed,
+            "shutdown_fault_consumed": shutdown_fault_consumed,
+            "body_pump_joined": bool(re.search(
+                r"^uvicorn-rs: request-body pumps joined: [1-9]\d*$",
+                server_log,
+                re.MULTILINE,
+            )),
+            "server_log": server_log,
+        })
+        return observation
+    finally:
+        fault_control_path.write_text("", encoding="utf-8")
+        client.close()
+
+
 def http1_streaming_request(
     port: int, specification: dict[str, Any], events_path: Path
 ) -> dict[str, Any]:
@@ -2729,8 +2999,9 @@ def http1_streaming_request(
             f"{specification['method']} {specification['path']} HTTP/1.1\r\n",
             "Host: localhost\r\n",
             "Transfer-Encoding: chunked\r\n",
-            "Connection: close\r\n",
         ]
+        if not specification.get("keep_alive", False):
+            headers.append("Connection: close\r\n")
         headers.extend(f"{name}: {value}\r\n" for name, value in specification["headers"])
         client.sendall(("".join(headers) + "\r\n").encode("ascii"))
         wait_event = specification.get("wait_event")
@@ -2751,12 +3022,16 @@ def http1_streaming_request(
                 except (BrokenPipeError, ConnectionResetError):
                     connection_closed = True
                     break
-            trailer_lines = "".join(
-                f"{name}: {value}\r\n" for name, value in specification.get("trailers", [])
-            )
             if not connection_closed:
                 try:
-                    client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
+                    if specification.get("malformed_final_chunk", False):
+                        client.sendall(b"not-a-size\r\n")
+                    else:
+                        trailer_lines = "".join(
+                            f"{name}: {value}\r\n"
+                            for name, value in specification.get("trailers", [])
+                        )
+                        client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
                 except (BrokenPipeError, ConnectionResetError):
                     connection_closed = True
 
@@ -2782,19 +3057,27 @@ def http1_streaming_request(
         early_body = read_http1_chunk(reader)
         if early_body is None:
             raise ParityError("response finished before the request upload was complete")
-        if not specification.get("send_all_before_read", False) and not connection_closed:
+        if (
+            not specification.get("send_all_before_read", False)
+            and not specification.get("send_remaining_after_response", False)
+            and not connection_closed
+        ):
             for chunk in chunks[1:]:
                 try:
                     client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
                 except (BrokenPipeError, ConnectionResetError):
                     connection_closed = True
                     break
-            trailer_lines = "".join(
-                f"{name}: {value}\r\n" for name, value in specification.get("trailers", [])
-            )
             if not connection_closed:
                 try:
-                    client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
+                    if specification.get("malformed_final_chunk", False):
+                        client.sendall(b"not-a-size\r\n")
+                    else:
+                        trailer_lines = "".join(
+                            f"{name}: {value}\r\n"
+                            for name, value in specification.get("trailers", [])
+                        )
+                        client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
                 except (BrokenPipeError, ConnectionResetError):
                     connection_closed = True
         response_chunks = [early_body]
@@ -2803,6 +3086,18 @@ def http1_streaming_request(
                 response_chunks.append(chunk)
         except (BrokenPipeError, ConnectionResetError, ParityError):
             connection_closed = True
+        if specification.get("send_remaining_after_response", False) and not connection_closed:
+            for chunk in chunks[1:]:
+                try:
+                    client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
+                except (BrokenPipeError, ConnectionResetError):
+                    connection_closed = True
+                    break
+            if not connection_closed:
+                try:
+                    client.sendall(b"0\r\n\r\n")
+                except (BrokenPipeError, ConnectionResetError):
+                    connection_closed = True
         result = response_observation(status, response_headers, b"".join(response_chunks))
         result["early_body_base64"] = base64.b64encode(early_body).decode("ascii")
         result["connection_closed"] = connection_closed
@@ -2933,12 +3228,43 @@ def http2_disconnect_request(
         connection = H2Connection(config=H2Configuration(client_side=True, header_encoding="utf-8"))
         connection.initiate_connection()
         stream_id = connection.get_next_available_stream_id()
-        connection.send_headers(stream_id, [
+        headers = [
             (":method", "POST"), (":scheme", "https"),
             (":authority", f"localhost:{port}"), (":path", specification["path"]),
-            ("content-length", str(specification["content_length"])),
-        ], end_stream=False)
-        connection.send_data(stream_id, base64.b64decode(specification["partial_body_base64"], validate=True))
+        ]
+        empty_request = specification.get("empty_request") is True
+        complete_body = specification.get("complete_body_base64")
+        if not empty_request:
+            content_length = (
+                len(base64.b64decode(complete_body, validate=True))
+                if complete_body is not None
+                else specification["content_length"]
+            )
+            headers.append(("content-length", str(content_length)))
+        connection.send_headers(stream_id, headers, end_stream=empty_request)
+        if complete_body is not None:
+            client.sendall(connection.data_to_send())
+            before_body_event = specification["wait_event_before_body"]
+            deadline = time.monotonic() + 3
+            while (
+                before_body_event not in read_events(events_path)[events_before:]
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.01)
+            if before_body_event not in read_events(events_path)[events_before:]:
+                raise ParityError(
+                    "HTTP/2 app did not enter its pre-upload receive checkpoint"
+                )
+            connection.send_data(
+                stream_id,
+                base64.b64decode(complete_body, validate=True),
+                end_stream=True,
+            )
+        elif not empty_request:
+            connection.send_data(
+                stream_id,
+                base64.b64decode(specification["partial_body_base64"], validate=True),
+            )
         client.sendall(connection.data_to_send())
         deadline = time.monotonic() + 3
         while (
@@ -2948,6 +3274,29 @@ def http2_disconnect_request(
             time.sleep(0.01)
         if specification["wait_event"] not in read_events(events_path)[events_before:]:
             raise ParityError("HTTP/2 app did not reach its receive checkpoint before connection close")
+        if specification.get("reset_stream") is True:
+            connection.reset_stream(stream_id, error_code=ErrorCodes.CANCEL)
+            client.sendall(connection.data_to_send())
+            event = specification["wait_event_after_disconnect"]
+            deadline = time.monotonic() + 3
+            while event not in read_events(events_path)[events_before:] and time.monotonic() < deadline:
+                time.sleep(0.01)
+            events = read_events(events_path)[events_before:]
+            if event not in events:
+                raise ParityError(
+                    "HTTP/2 app did not receive disconnect after its stream reset "
+                    f"(events={events!r})"
+                )
+            followup = http2_request_on_connection(client, connection, port, {
+                "method": "GET", "path": specification["followup_path"],
+                "headers": [], "body_base64": "",
+            })
+            return {
+                "disconnect_event": "http.disconnect" in events,
+                "followup": followup,
+                "application_events": events,
+                "same_connection": True,
+            }
     finally:
         client.close()
     event = specification["wait_event_after_disconnect"]
@@ -2962,6 +3311,56 @@ def http2_disconnect_request(
     })
     return {"disconnect_event": "http.disconnect" in events, "followup": followup,
             "application_events": events}
+
+
+def http2_request_on_connection(
+    client: ssl.SSLSocket, connection: H2Connection, port: int, request: dict[str, Any]
+) -> dict[str, Any]:
+    body = base64.b64decode(request["body_base64"], validate=True)
+    stream_id = connection.get_next_available_stream_id()
+    headers = [
+        (":method", request["method"]),
+        (":scheme", "https"),
+        (":authority", f"localhost:{port}"),
+        (":path", request["path"]),
+    ]
+    headers.extend((name.lower(), value) for name, value in request["headers"])
+    if body:
+        headers.append(("content-length", str(len(body))))
+    connection.send_headers(stream_id, headers, end_stream=not body)
+    if body:
+        connection.send_data(stream_id, body, end_stream=True)
+    client.sendall(connection.data_to_send())
+
+    status = 0
+    response_headers: list[tuple[str, str]] = []
+    response_body = bytearray()
+    while True:
+        received = client.recv(65536)
+        if not received:
+            raise ParityError("HTTP/2 connection closed before the sibling request completed")
+        for event in connection.receive_data(received):
+            if isinstance(event, ResponseReceived) and event.stream_id == stream_id:
+                for name, value in event.headers:
+                    if name == ":status":
+                        status = int(value)
+                    else:
+                        response_headers.append((name, value))
+            elif isinstance(event, DataReceived) and event.stream_id == stream_id:
+                response_body.extend(event.data)
+                connection.acknowledge_received_data(event.flow_controlled_length, stream_id)
+            elif isinstance(event, StreamReset) and event.stream_id == stream_id:
+                raise ParityError("HTTP/2 sibling request was reset after the upload stream reset")
+            elif isinstance(event, StreamEnded) and event.stream_id == stream_id:
+                pending = connection.data_to_send()
+                if pending:
+                    client.sendall(pending)
+                observation = response_observation(status, response_headers, bytes(response_body))
+                observation["same_connection"] = True
+                return observation
+        pending = connection.data_to_send()
+        if pending:
+            client.sendall(pending)
 
 
 def http2_concurrent_requests(port: int, requests: list[dict[str, Any]]) -> dict[str, Any]:
@@ -3750,6 +4149,13 @@ def http3_peer_close_request(
     # The public reference logs errors at ERROR; native diagnostic messages
     # have the uvicorn-rs prefix. Preserve raw logs in the run's stderr while
     # comparing their presence, rather than runtime-specific text or addresses.
+    # The coverage-only request-body join count is routine lifecycle accounting.
+    case_log = re.sub(
+        r"^uvicorn-rs: request-body pumps joined: [1-9]\d*$",
+        "",
+        case_log,
+        flags=re.MULTILINE,
+    )
     observation["server_error_observed"] = bool(re.search(
         r"^uvicorn-rs:|\[(?:ERROR|CRITICAL)\]|^Traceback \(most recent call last\):|panicked at",
         case_log,
@@ -4196,15 +4602,44 @@ def execute_case(
             observation["background_work_completed"] = event in read_events(server["events"])[events_before:]
         return observation
     if "request_stream" in case:
+        fault = case.get("fault")
+        if (
+            fault is not None
+            and fault["contract"] in {
+                "http-body-pump-drain-shutdown-joined",
+                "http-body-pump-shutdown-cancelled-join",
+                "http-body-pump-shutdown-aborts-hung-pump",
+                "http-body-pump-shutdown-completes-task-before-abort",
+            }
+        ):
+            if profile["id"] != "http1":
+                raise ParityError("body-pump shutdown workflow is HTTP/1.1 only")
+            return http1_body_pump_shutdown_workflow(server, case["request_stream"], fault)
         if profile["id"] == "http1":
-            fault = case.get("fault")
             fault_control_path = server.get("coverage_fault_control_path") if fault else None
             if fault_control_path is not None:
                 fault_control_path.write_text(fault["point"], encoding="utf-8")
             try:
-                return http1_streaming_request(
+                observation = http1_streaming_request(
                     server["port"], case["request_stream"], server["events"]
                 )
+                if (
+                    fault is not None
+                    and fault["contract"] in {
+                        "http-body-pump-reaps-cancelled-task",
+                        "http-body-pump-drain-terminal-frame",
+                    }
+                ):
+                    deadline = time.monotonic() + 3
+                    while (
+                        fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]
+                        and time.monotonic() < deadline
+                    ):
+                        time.sleep(0.005)
+                    if fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
+                        raise ParityError("request-body test fault was not consumed")
+                    observation["fault_consumed"] = True
+                return observation
             finally:
                 if fault_control_path is not None:
                     fault_control_path.write_text("", encoding="utf-8")
@@ -4311,10 +4746,20 @@ def execute_case(
                         "body_base64": "",
                     }, h3_client,
                 )
-                return {
+                if (
+                    fault is not None
+                    and fault["contract"]
+                    == "http3-body-pump-error-stop-disconnect-followup-200"
+                    and fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]
+                ):
+                    raise ParityError("HTTP/3 body-pump error-stop fault was not consumed")
+                result = {
                     "disconnect_event": "http3.upload.disconnected" in read_events(server["events"])[events_before:],
                     "followup": followup,
                 }
+                if fault is not None and fault["contract"] == "http3-body-pump-error-stop-disconnect-followup-200":
+                    result["fault_consumed"] = True
+                return result
             if request.get("abort_response_after_headers"):
                 followup = http3_request(
                     server["port"], trust_anchor, {
@@ -4328,6 +4773,13 @@ def execute_case(
                     **observation,
                     "followup": followup,
                 }
+            if (
+                fault is not None
+                and fault["contract"] == "http3-body-pump-reaps-cancelled-task"
+            ):
+                if fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
+                    raise ParityError("HTTP/3 request-body reaper fault was not consumed")
+                observation["fault_consumed"] = True
             return observation
     if "websocket" in case:
         fault = case.get("fault")
@@ -4500,6 +4952,12 @@ def execute_case(
                     "ASGI app did not reach post-disconnect checkpoint "
                     f"{after_disconnect_event!r}"
                 )
+        if (
+            fault is not None
+            and fault["contract"] == "http-body-pump-error-stop-disconnect-followup-200"
+            and fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]
+        ):
+            raise ParityError("malformed-body pump stop fault was not consumed")
         if fault_control_path is not None:
             fault_control_path.write_text("", encoding="utf-8")
         followup = http1_request(server["port"], {
@@ -4914,6 +5372,81 @@ def execute_case(
 
 
 def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -> bool:
+    if fault["contract"] == "http-body-pump-drain-shutdown-joined":
+        return (
+            observation.get("status") == 200
+            and observation.get("ordered_body_bytes")
+            == base64.b64encode(b"upload-ignored").decode("ascii")
+            and observation.get("drain_pause_consumed") is True
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("shutdown_bounded") is True
+            and observation.get("body_pump_joined") is True
+            and "request-body pumps exceeded the graceful timeout"
+            not in observation.get("server_log", "")
+        )
+    if fault["contract"] == "http-body-pump-drain-terminal-frame":
+        return (
+            observation.get("status") == 200
+            and observation.get("ordered_body_bytes")
+            == base64.b64encode(b"upload-ignored").decode("ascii")
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http-body-pump-shutdown-cancelled-join":
+        return (
+            observation.get("status") == 200
+            and observation.get("ordered_body_bytes")
+            == base64.b64encode(b"upload-ignored").decode("ascii")
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("shutdown_bounded") is True
+            and observation.get("shutdown_fault_consumed") is True
+            and "request-body pump failed or was cancelled during shutdown"
+            in observation.get("server_log", "")
+            and "request-body pumps exceeded the graceful timeout"
+            not in observation.get("server_log", "")
+        )
+    if fault["contract"] == "http-body-pump-shutdown-aborts-hung-pump":
+        return (
+            observation.get("status") == 200
+            and observation.get("ordered_body_bytes")
+            == base64.b64encode(b"upload-ignored").decode("ascii")
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("shutdown_bounded") is True
+            and observation.get("shutdown_fault_consumed") is True
+            and "request-body pumps exceeded the graceful timeout"
+            in observation.get("server_log", "")
+            and "request-body pump joined after forced abort"
+            in observation.get("server_log", "")
+            and "panicked" not in observation.get("server_log", "")
+        )
+    if fault["contract"] == "http-body-pump-shutdown-completes-task-before-abort":
+        log = observation.get("server_log", "")
+        return (
+            observation.get("status") == 200
+            and observation.get("ordered_body_bytes")
+            == base64.b64encode(b"upload-ignored").decode("ascii")
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("shutdown_bounded") is True
+            and observation.get("shutdown_fault_consumed") is True
+            and "request-body pump entered shutdown-hold fault" in log
+            and "request-body pumps exceeded the graceful timeout" in log
+            and "request-body pump completed during forced-abort join" in log
+            and "request-body pump joined after forced abort" in log
+            and "panicked" not in log
+        )
+    if fault["contract"] in {
+        "http-body-pump-reaps-cancelled-task",
+        "http3-body-pump-reaps-cancelled-task",
+    }:
+        return (
+            observation.get("status") == 200
+            and observation.get("ordered_body_bytes")
+            == base64.b64encode(b"read-once").decode("ascii")
+            and observation.get("fault_consumed") is True
+        )
     if fault["contract"] == "http-response-header-capacity-recovery-followup-200":
         responses = observation.get("responses", [])
         events = observation.get("application_events", [])
@@ -5217,6 +5750,14 @@ def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -
             and isinstance(followup, dict)
             and followup.get("status") == 200
         )
+    if fault["contract"] == "http3-body-pump-error-stop-disconnect-followup-200":
+        followup = observation.get("followup")
+        return (
+            observation.get("disconnect_event") is True
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and observation.get("fault_consumed") is True
+        )
     if fault["contract"] == "http3-server-shutdown-force-abort":
         return (
             observation.get("status") == 200
@@ -5358,6 +5899,18 @@ def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -
             and "http.disconnect.second:http.disconnect" in events
             and isinstance(workflow_elapsed, (int, float))
             and 0 <= workflow_elapsed < 8
+        )
+    if fault["contract"] == "http-body-pump-error-stop-disconnect-followup-200":
+        followup = observation.get("followup_response")
+        events = observation.get("application_events", [])
+        return (
+            observation.get("disconnect_event") is True
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and followup.get("body_base64") == base64.b64encode(b"seen").decode("ascii")
+            and "http.disconnect.waiting" in events
+            and "http.disconnect" in events
+            and "http.disconnect.second:http.disconnect" in events
         )
     if fault["contract"] == "http-disconnect-error-followup-200":
         followup = observation.get("followup_response")
@@ -5718,6 +6271,7 @@ def execute_profile(
                 "lifecycle" in case
                 or case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}
                 or case.get("request", {}).get("hold_open_for_shutdown", False)
+                or case.get("request_stream", {}).get("hold_until_shutdown", False)
                 or case.get("websocket", {}).get("shutdown", False)
                 or case.get("websocket", {}).get("shutdown_during_upgrade", False)
             )
@@ -5808,6 +6362,19 @@ def execute_profile(
                                 "reset_elapsed_seconds": target_raw["reset_elapsed_seconds"],
                                 "disconnect_workflow_seconds": target_raw["disconnect_workflow_seconds"],
                             }
+                        elif case["fault"]["contract"] == "http-body-pump-drain-shutdown-joined":
+                            fault_observation = {**target_result, **target_raw}
+                        elif case["fault"]["contract"] in {
+                            "http-body-pump-error-stop-disconnect-followup-200",
+                            "http-body-pump-drain-terminal-frame",
+                            "http-body-pump-reaps-cancelled-task",
+                            "http-body-pump-shutdown-cancelled-join",
+                            "http-body-pump-shutdown-aborts-hung-pump",
+                            "http-body-pump-shutdown-completes-task-before-abort",
+                            "http3-body-pump-error-stop-disconnect-followup-200",
+                            "http3-body-pump-reaps-cancelled-task",
+                        }:
+                            fault_observation = {**target_result, **target_raw}
                         elif case["fault"]["contract"] == "server-cancellation-schedule-error-bounded-shutdown":
                             fault_observation = {**target_result, "server_log": target_raw["server_log"],
                                                  "process_exit_code": target_raw["process_exit_code"]}

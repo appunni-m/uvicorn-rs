@@ -1,0 +1,49 @@
+{
+  "case_id": "http3.sequential-responses-one-connection",
+  "instrumented_attribution": {
+    "case_result": "http3-sequential-pump-parity-result.json",
+    "pump_completion_observation": "uvicorn-rs: request-body pumps joined: 128",
+    "server_log": "http3-sequential-pump-server.log"
+  },
+  "matrix_repeat_results": [
+    {
+      "case_status": "passed",
+      "oracle_responses": 128,
+      "result_sha256": "1e054148714e327bdb512f3ceb45a1057ce7c902a509a8b2f4bb2f211101a936",
+      "run": 1,
+      "run_id": "8c646794a3284ca3a52c795df1546d9f",
+      "target_all_status_200": true,
+      "target_no_stream_reset": true,
+      "target_responses": 128,
+      "wire_observations_equal": true
+    },
+    {
+      "case_status": "passed",
+      "oracle_responses": 128,
+      "result_sha256": "5b73696d95e07dd2033daba5fc21fc29e7ae03301bacddfeab26f65c415c9288",
+      "run": 2,
+      "run_id": "bdc3a819cc204cfa98f21d60221e3147",
+      "target_all_status_200": true,
+      "target_no_stream_reset": true,
+      "target_responses": 128,
+      "wire_observations_equal": true
+    },
+    {
+      "case_status": "passed",
+      "oracle_responses": 128,
+      "result_sha256": "3f26408c323f953c55d5edc4b65fac11abe238e87903f950a14700b610df37ed",
+      "run": 3,
+      "run_id": "e275839c3855418da07b7e64f068cd97",
+      "target_all_status_200": true,
+      "target_no_stream_reset": true,
+      "target_responses": 128,
+      "wire_observations_equal": true
+    }
+  ],
+  "operation": "http.keepalive-sequence",
+  "request_body_base64": "YQ==",
+  "request_method": "POST",
+  "request_streams_per_run": 128,
+  "schema": "uvicorn-rs-body-pump-sequential-http3-receipt@1",
+  "target_connection": "one HTTP/3 connection per run"
+}

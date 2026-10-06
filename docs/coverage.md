@@ -2,31 +2,79 @@
 
 ## Current evidence status
 
-The current source passed the 460-case black-box gate on 2026-10-06. The
-manifest declares 460 workflows across 70 input files and 64 operations:
-221 live oracle comparisons and 239 target-only contracts. All 460 attribution
-cases and three complete 460-case repeats pass with zero failures,
+The current source passed the 473-case black-box gate on 2026-10-06. The
+manifest declares 473 workflows across 70 input files and 64 operations:
+225 live oracle comparisons and 248 target-only fault contracts. Attribution
+and all three complete 473-case repeats pass with zero failures,
 infrastructure errors, retries or cases not run. Native coverage is
-**4,810/4,810 regions and 3,395/3,395 lines (100%)**. Coverage MCP measured the
-exact retained report with `source: matches_receipt`, `tests: passed`, zero
-missing regions, and zero gap groups. The normal wheel passes 221/221 public
-parity cases; its separate normal-build audit passes 16/16 checks and 3/3
-selected public workflows.
+**5,106/5,106 regions and 3,606/3,606 lines (100%)**. Coverage MCP measured the
+exact report with `source: matches_receipt`, `tests: passed`, zero missing
+regions, and zero gap groups. Current normal-wheel parity and fault-seam
+exclusion evidence are recorded in the same current evidence archive.
 
 The measured `src/lib.rs` SHA-256 is
-`f3dffa8078bc6454fd0f7277f3bf122db1c3d4e40d5c58851435346cc709b224`; the
-aggregate source fingerprint is
-`52551747cf72142ce17f06b2f6898abad8068c2ef9739a0c3de0aba47d164ac6`. The
+`91e022d9fd0154ebe76a2932a23284c23b0521d642f2f9da517b644e7bfaff71`; the
+aggregate source/input fingerprint is
+`f9ee806fa06a1844b010b5921862541e17b55dac48e09bce7b43923feb28630c`. The
 instrumented native SHA-256 is
-`c7fc3b753d9e23f6d4318c0c2fba3d72798d620728b9f162c9960f9121eb7c0f`; the
-normal wheel native SHA-256 is
-`517e40429c87e0a927ff5a58f9acbcbce4dbe6bc90e7a8d266cfe1c84224be7b`. The
-report is local dirty-checkout evidence at revision
-`fce9706c8d7eb21c999989c729b01242b9421731`, not a clean release baseline.
-No unit tests were added; the same manifest-backed input matrix is the
-behavioral evidence system.
+`e119bcf50aa15cdd9f6d3462f857c5eda237dfc23fef18aab8f3389408cd8e08`. The
+report records revision `e38d06521b09e4324d9a45039f0ded5dc2e25fb4` and a dirty
+working tree; this is local source-bound evidence, not a clean release
+baseline. No Rust unit tests were added; the manifest-backed live input matrix
+is the behavioral evidence system.
 
-## Current full verification (460 cases)
+## Current full verification (473 cases)
+
+The fixed archive at
+[`request-body-pump-ownership-coverage-473`](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
+retains the lossless compressed unified report, matching context sidecar,
+exact Coverage-MCP response, normal-wheel parity result and normal exclusion
+audit, with an evidence index and file hashes. The uncompressed report
+SHA-256 is `6bc08ebf1be237392e46094d665517179866abb6a40345f7f9530123424697c8`;
+its context SHA-256 is
+`65a35c22f82a27f78d305ab2d4e215296ac22ddba1ebb34756f1050fb3bd00e2`. Coverage
+MCP build ID is
+`b90d8c1eba8f88fb6257796a6ad5759ec2a25776f7dbceb2d7ada1369ae89300`.
+
+| Verification | Passed | Failures / infrastructure / retries / not run |
+|---|---:|---|
+| Per-case attribution | 473/473 | 0 / 0 / 0 / 0 |
+| Full repeat 1 | 473/473 | 0 / 0 / 0 / 0 |
+| Full repeat 2 | 473/473 | 0 / 0 / 0 / 0 |
+| Full repeat 3 | 473/473 | 0 / 0 / 0 / 0 |
+| Native regions | 5,106/5,106 | 0 missing |
+| Native lines | 3,606/3,606 | 0 missing |
+| Coverage-MCP gap groups | 0 | source matches; tests passed |
+| Normal-wheel public parity | 225/225 | 0 / 0 / 0 / 0 |
+| Normal exclusion workflows | 3/3 | 0 / 0 / 0 / 0 |
+| Normal exclusion checks | 16/16 | all pass |
+
+The 248 target-only contracts include public-input support contracts as well
+as deterministic native fault contracts; they are not all native fault
+injections. The coverage run used CPython 3.12.13, Rust 1.98.1, and macOS
+15.7.7 ARM64. Its measured scope is default-feature `src/lib.rs` with
+`cfg(coverage)`; Python code, dependencies, optional diagnostics, other feature
+combinations and platforms, the official full ASGI suite, and performance are
+outside this native coverage claim.
+
+The installed normal wheel native SHA-256 is
+`c26e55e15cd290fff44edf3212115577bced7fe2459da83955361fcc1fb1f98b`. Its
+225-case public parity report SHA-256 is
+`6b06574e359054d549b756a6a27cca7bd4af00580e83c01d3407697c53b007db`; the
+normal exclusion receipt SHA-256 is
+`59dba2e13389d7e7f6b9e4f1c973942a80cf94522e0b8a90c2ddc1cd3b471766`. The
+exclusion audit covers 221 registered native fault points, confirms their
+absence from the imported release wheel, and passes one public oracle case
+plus two public support contracts without native injection. The audit retains
+16/16 successful checks in the evidence archive.
+
+The repeated HTTP/3 sequence sends 128 one-byte POST requests on one
+connection. Each of the three complete matrix repeats records 128 target
+responses matching all 128 oracle responses. Its instrumented attribution log
+also records exactly `request-body pumps joined: 128`. The case-specific result,
+server log, and structured three-repeat receipt are in the same archive.
+
+## Historical full verification (460 cases; earlier October 6 source)
 
 The fixed archive at
 [`http3-peer-close-coverage-460`](../benchmarks/results/2026-10-06/http3-peer-close-coverage-460/)

@@ -677,6 +677,7 @@ async def _app_impl(scope, receive, send):
 
     if path == "/ignore-upload":
         await _respond(send, b"upload-ignored", content_type=b"text/plain; charset=utf-8")
+        _record("http.body-pump.app-response-finished")
         return
 
     if path == "/read-first-upload":
@@ -948,10 +949,11 @@ async def _app_impl(scope, receive, send):
     if path in {
         "/disconnect-watch",
         "/disconnect-send",
+        "/disconnect-read-once",
         "/disconnect-read-twice",
         "/disconnect-read-thrice",
     }:
-        if path in {"/disconnect-read-twice", "/disconnect-read-thrice"}:
+        if path in {"/disconnect-read-once", "/disconnect-read-twice", "/disconnect-read-thrice"}:
             _record("http.disconnect.waiting")
         while True:
             message = await receive()
@@ -987,6 +989,23 @@ async def _app_impl(scope, receive, send):
         if message["type"] == "http.disconnect":
             _disconnect_seen = True
         return
+
+    if path == "/disconnect-after-complete-upload":
+        _record("http.disconnect.waiting-before-complete-upload")
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                _disconnect_seen = True
+                _record("http.disconnect.before-complete-upload:" + message["type"])
+                return
+            if not message.get("more_body", False):
+                _record("http.disconnect.waiting-after-complete-upload")
+                message = await receive()
+                _record("http.disconnect.after-complete-upload:" + message["type"])
+                if message["type"] == "http.disconnect":
+                    _disconnect_seen = True
+                    _record("http.disconnect")
+                return
 
     if path == "/disconnect-after-close-before-receive":
         _record("http.disconnect.before-first-receive")

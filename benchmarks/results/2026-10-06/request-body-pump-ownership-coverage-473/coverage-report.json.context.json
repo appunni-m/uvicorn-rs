@@ -1,0 +1,10 @@
+{
+  "build_id": "b90d8c1eba8f88fb6257796a6ad5759ec2a25776f7dbceb2d7ada1369ae89300",
+  "recorded_revision": "e38d06521b09e4324d9a45039f0ded5dc2e25fb4",
+  "report_sha256": "6bc08ebf1be237392e46094d665517179866abb6a40345f7f9530123424697c8",
+  "scope": "full",
+  "source_hashes": {
+    "src/lib.rs": "91e022d9fd0154ebe76a2932a23284c23b0521d642f2f9da517b644e7bfaff71"
+  },
+  "test_status": "passed"
+}

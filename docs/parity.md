@@ -1,13 +1,13 @@
 # ASGI server parity suite
 
-The current 460-case matrix passes attribution and three complete repeats with
+The current 473-case matrix passes attribution and three complete repeats with
 zero failures, infrastructure errors, retries, or cases not run. It contains
-221 live oracle comparisons and 239 target-only contracts across 70 input
-files and 64 operations. Native coverage is 4,810/4,810 regions and
-3,395/3,395 lines; Coverage MCP reports zero gaps with matching source and
-passed test evidence. The normal wheel passes 221/221 public comparisons, and
+225 live oracle comparisons and 248 target-only contracts across 70 input
+files and 64 operations. Native coverage is 5,106/5,106 regions and
+3,606/3,606 lines; Coverage MCP reports zero gaps with matching source and
+passed test evidence. The normal wheel passes 225/225 public comparisons, and
 its normal-build audit passes 16 checks with three selected workflows. See
-[the current source/build receipt](coverage.md#current-full-verification-460-cases).
+[the current source/build receipt](coverage.md#current-full-verification-473-cases).
 Older 451- and 448-case results below are retained as historical evidence and
 do not attest the current source.
 
@@ -105,11 +105,43 @@ remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
 The [selected receipt](coverage.md#current-evidence-status) preserves its rich
 observation and identities. The same case passes full attribution and all three
-460-case repeats, and solely covers both formerly missing final-drain spans.
+473-case repeats, and solely covers both formerly missing final-drain spans.
 The `stream_reset` field follows the existing `recv_data` error convention;
 actual remote application close `0x102`, `body_stream_error`,
 `connection_closed` and cleanup establish connection-error termination and
 cancellation. They do not independently identify a QUIC `RESET_STREAM` frame.
+
+## Request-body pump ownership
+
+The H1/H2/H3 body pumps are registered with a server-owned `JoinSet`; request
+handlers no longer leave these network tasks detached from `Server.serve()`.
+Pumps stop on the server token, connection closure or request cancellation, and
+completed entries are reaped when later requests are registered. HTTP/1.1
+continues draining an upload after the app has returned so request framing can
+finish and a keep-alive connection can serve another request. H2 request-stream
+reset is checked after the complete upload while a multiplexed sibling remains
+healthy; incomplete resets and request receive disconnects are covered too.
+H3 early response with an open upload, body-stream error, cancellation and
+follow-up health use real HTTP/3 client/server traffic.
+
+The one-connection HTTP/3 sequence sends 128 one-byte POST requests. Each of
+the three complete matrix repeats receives 128/128 target responses matching
+the oracle. The instrumented per-case run records
+`request-body pumps joined: 128` at shutdown, so the same-connection workload
+also has an explicit completed-pump count in the retained
+[evidence receipt](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/http3-sequential-pump-repeats.json).
+
+Target-only synchronized contracts drive deterministic body errors, canceled
+and completed `JoinSet` reaping, early-response drain termination, and graceful
+or deadline-forced shutdown. They assert `http.disconnect` where the ASGI app
+can still receive, exact response outcomes, fault consumption, pump completion
+or forced join, no unexpected panic, and healthy follow-up/sibling requests.
+These contracts use the existing fault-contract envelope and are reported in
+the same unified matrix; they are not oracle-parity cases. The 473-case source
+passes attribution and all three repeats with 5,106/5,106 regions and
+3,606/3,606 lines covered. The normal wheel separately passes all 225 public
+oracle cases. The fixed [coverage archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
+retains both evidence sets and the Coverage-MCP receipt.
 
 ## Historical correctness evidence
 

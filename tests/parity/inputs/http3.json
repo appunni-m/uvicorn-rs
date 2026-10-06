@@ -2496,6 +2496,50 @@
         "trigger_path": "/state",
         "followup_path": "/state"
       }
+    },
+    {
+      "case_id": "fault.http3.body-pump-error-stop-disconnect-followup",
+      "profile": "http3",
+      "operation": "http3.request-disconnect",
+      "covers": [
+        "http3.request-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.body-pump.error.request-stop",
+        "contract": "http3-body-pump-error-stop-disconnect-followup-200"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-upload-disconnect",
+        "headers": [
+          [
+            "content-length",
+            "1000"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC1oM2JvZHk=",
+        "abort_after_body": true
+      }
+    },
+    {
+      "case_id": "fault.http3.body-pump-reaps-cancelled-task-before-upload",
+      "profile": "http3",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.reap.cancelled-task",
+        "contract": "http3-body-pump-reaps-cancelled-task"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/read-first-upload",
+        "headers": [],
+        "body_base64": "aDMtcmVhcGVy"
+      }
     }
   ]
 }
