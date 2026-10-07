@@ -4699,7 +4699,7 @@ async fn handle_websocket_request(
                 full_body(Bytes::from(handshake_error.to_string())),
                 [(
                     http::header::CONTENT_TYPE,
-                    HeaderValue::from_static("text/plain"),
+                    HeaderValue::from_static("text/plain; charset=utf-8"),
                 )]
                 .into_iter()
                 .collect(),
@@ -4727,7 +4727,9 @@ async fn handle_websocket_request_inner(
         .get(http::header::SEC_WEBSOCKET_KEY)
         .ok_or_else(|| {
             Box::new(WebSocketHandshakeError {
-                response_body: "Failed to open a WebSocket connection: missing Sec-WebSocket-Key header; 'sec-websocket-key'.\n".to_owned(),
+                response_body:
+                    "Failed to open a WebSocket connection: missing Sec-WebSocket-Key header.\n"
+                        .to_owned(),
             }) as BoxError
         })?
         .as_bytes();
@@ -4752,7 +4754,9 @@ async fn handle_websocket_request_inner(
         .get(http::header::SEC_WEBSOCKET_VERSION)
         .ok_or_else(|| {
             Box::new(WebSocketHandshakeError {
-                response_body: "Failed to open a WebSocket connection: missing Sec-WebSocket-Version header; 'sec-websocket-version'.\n".to_owned(),
+                response_body:
+                    "Failed to open a WebSocket connection: missing Sec-WebSocket-Version header.\n"
+                        .to_owned(),
             }) as BoxError
         })?;
     if request_version.as_bytes() != b"13" {

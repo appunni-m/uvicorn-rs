@@ -2634,7 +2634,11 @@ def start_server(
     elif server_id == "uvicorn":
         command = [
             sys.executable, "-m", "uvicorn", APP, *common, "--loop", "uvloop",
-            "--http", "httptools", "--interface", "asgi3", "--ws", "websockets",
+            # Follow Uvicorn's stock selector for the pinned reference version.
+            # Since Uvicorn 0.50, `auto` selects its maintained SansIO adapter
+            # when websockets is installed; forcing `websockets` uses the
+            # deprecated legacy adapter and changes the reference behavior.
+            "--http", "httptools", "--interface", "asgi3", "--ws", "auto",
             "--lifespan", "auto",
             "--log-level", "error", "--no-server-header", "--timeout-graceful-shutdown",
             str(graceful_timeout_seconds),
@@ -4721,6 +4725,13 @@ def run_http_load_case(
     )
 
 
+def websocket_client_subprotocols(specification: dict[str, Any]) -> list[str] | None:
+    """Map no ASGI offers to no wire header for the pinned websockets client."""
+    # websockets 17 sends Sec-WebSocket-Protocol for [] (an invalid empty
+    # header); ASGI's empty list means the client offered no subprotocols.
+    return specification["subprotocols"] or None
+
+
 def websocket_concurrent_sessions(
     server: dict[str, Any],
     specification: dict[str, Any],
@@ -4737,13 +4748,14 @@ def websocket_concurrent_sessions(
         f"{specification['path']}?key={load['key']}&count={load['concurrency']}"
         f"&messages={load['messages_per_session']}&message_bytes={load['message_bytes']}"
     )
+    subprotocols = websocket_client_subprotocols(specification)
     barrier = threading.Barrier(load["concurrency"])
 
     def session(session_index: int) -> dict[str, Any]:
         uri = f"{scheme}://127.0.0.1:{server['port']}{path}"
         with websocket_connect(
             uri,
-            subprotocols=specification["subprotocols"],
+            subprotocols=subprotocols,
             ssl=ssl_context,
             proxy=None,
             open_timeout=20,
@@ -4944,6 +4956,7 @@ def websocket_observation(
 ) -> dict[str, Any]:
     scheme = "wss" if trust_anchor is not None else "ws"
     uri = f"{scheme}://127.0.0.1:{server['port']}{specification['path']}"
+    subprotocols = websocket_client_subprotocols(specification)
     ssl_context = None
     if trust_anchor is not None:
         ssl_context = ssl.create_default_context(cafile=str(trust_anchor))
@@ -5033,7 +5046,7 @@ def websocket_observation(
             try:
                 with websocket_connect(
                     uri,
-                    subprotocols=specification["subprotocols"],
+                    subprotocols=subprotocols,
                     ssl=ssl_context,
                     proxy=None,
                     open_timeout=20,
@@ -5081,7 +5094,7 @@ def websocket_observation(
     try:
         with websocket_connect(
             uri,
-            subprotocols=specification["subprotocols"],
+            subprotocols=subprotocols,
             additional_headers=specification.get("headers", []),
             ssl=ssl_context,
             proxy=None,
