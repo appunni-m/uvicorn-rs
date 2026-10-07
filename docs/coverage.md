@@ -238,9 +238,16 @@ Run [#39](https://github.com/appunni-m/uvicorn-rs/actions/runs/37692260364)
 on exact main commit `a78b4a925654ee0a5fb80814074ca2b0224bb094` passed hosted
 parity (239/239), attribution and all three complete repeats (491/491 cases),
 with 5,121/5,121 regions and 3,624/3,624 lines. Its package matrix and Python
-3.9.25 consumer also passed. This is the current hosted coverage result; the
-source-matched local Coverage-MCP receipt requirement for candidate assembly
-remains separate.
+3.9.25 consumer also passed. This is the current hosted commit-bound coverage
+result.
+
+Coverage-MCP also re-reviewed the local full report in the
+[EOF recheck archive](../benchmarks/results/2026-10-08/asgi-eof-recheck-fault-consumption-491/coverage-report.json.gz).
+It reports `source: matches_receipt`, `tests: passed`, 5,121/5,121 regions,
+and zero gap groups. A hash check matched all 83 recorded coverage input files
+against the current checkout. That report records revision `1a72c9b` and a
+dirty working tree, so it is source-matched local evidence; hosted run #39 is
+the clean commit-bound result.
 
 ## Current full verification (491 cases; EOF fault consumption asserted)
 

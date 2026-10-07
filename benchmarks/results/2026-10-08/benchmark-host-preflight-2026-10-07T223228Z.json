@@ -1,0 +1,493 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-10-07T22:32:28.013079+00:00",
+  "purpose": "benchmark host contention preflight; no workloads or benchmark samples started",
+  "environment": {
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "machine": "arm64",
+    "python": "3.12.13",
+    "psutil": "7.2.2"
+  },
+  "method": {
+    "interval_count": 12,
+    "target_interval_seconds": 0.25,
+    "excluded_sampler_and_ancestor_pids": [
+      0,
+      1,
+      33664,
+      34076,
+      44649
+    ],
+    "excluded_ancestors": [
+      {
+        "pid": 0,
+        "name": "kernel_task"
+      },
+      {
+        "pid": 1,
+        "name": "launchd"
+      },
+      {
+        "pid": 33664,
+        "name": "ChatGPT"
+      },
+      {
+        "pid": 34076,
+        "name": "codex"
+      },
+      {
+        "pid": 44649,
+        "name": "python3.12"
+      }
+    ]
+  },
+  "thresholds": {
+    "per_process_cpu_percent": 25.0,
+    "consecutive_intervals": 2,
+    "single_interval_cpu_percent": 200.0,
+    "aggregate_cpu_percent": 100.0,
+    "cpu_percent_basis": "100% equals one logical core"
+  },
+  "samples": [
+    {
+      "index": 1,
+      "elapsed_seconds": 0.2601,
+      "interval_seconds": 0.2601,
+      "aggregate_cpu_percent": 120.8,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 95.2
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 12.3
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 5.6
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 5.6
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "elapsed_seconds": 0.5201,
+      "interval_seconds": 0.2601,
+      "aggregate_cpu_percent": 90.3,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 58.6
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 16.1
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 8.5
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 6.5
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "elapsed_seconds": 0.7801,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 110.9,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 91.3
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 6.3
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 4.5
+        },
+        {
+          "pid": 1386,
+          "name": "Google Chrome Helper",
+          "cpu_percent": 2.0
+        },
+        {
+          "pid": 1348,
+          "name": "Google Chrome",
+          "cpu_percent": 1.2
+        },
+        {
+          "pid": 59990,
+          "name": "Google Chrome Helper (Renderer)",
+          "cpu_percent": 1.2
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "elapsed_seconds": 1.0402,
+      "interval_seconds": 0.2601,
+      "aggregate_cpu_percent": 96.0,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 62.5
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 15.9
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 8.8
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 7.5
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "elapsed_seconds": 1.3002,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 117.3,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 99.8
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 7.5
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 4.5
+        },
+        {
+          "pid": 34706,
+          "name": "codex-code-mode-host",
+          "cpu_percent": 1.9
+        },
+        {
+          "pid": 34242,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 1.5
+        },
+        {
+          "pid": 1500,
+          "name": "coverage-mcp",
+          "cpu_percent": 1.4
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "elapsed_seconds": 1.5522,
+      "interval_seconds": 0.252,
+      "aggregate_cpu_percent": 115.9,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 61.7
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 38.7
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 8.6
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 4.4
+        },
+        {
+          "pid": 597,
+          "name": "trustd",
+          "cpu_percent": 1.4
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "elapsed_seconds": 1.8123,
+      "interval_seconds": 0.2601,
+      "aggregate_cpu_percent": 102.0,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 60.5
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 14.5
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 14.1
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 10.6
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "elapsed_seconds": 2.0723,
+      "interval_seconds": 0.2601,
+      "aggregate_cpu_percent": 130.7,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 101.2
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 17.1
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 11.1
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "elapsed_seconds": 2.3324,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 96.2,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 55.5
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 16.5
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 16.3
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 6.0
+        },
+        {
+          "pid": 34242,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 1.2
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "elapsed_seconds": 2.5924,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 93.4,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 63.2
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.2
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 7.3
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 3.2
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "elapsed_seconds": 2.8525,
+      "interval_seconds": 0.2601,
+      "aggregate_cpu_percent": 122.4,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 91.5
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 12.9
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 10.7
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 5.0
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "elapsed_seconds": 3.1125,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 83.8,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 61.6
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 7.7
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 7.6
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 6.3
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "mean_aggregate_cpu_percent": 106.6,
+    "max_aggregate_cpu_percent": 130.7,
+    "processes": [
+      {
+        "pid": 5166,
+        "name": "mediaanalysisd",
+        "cpu_percent": 75.2,
+        "max_consecutive_intervals_over_25_percent": 12
+      },
+      {
+        "pid": 34075,
+        "name": "Codex (Renderer)",
+        "cpu_percent": 11.5,
+        "max_consecutive_intervals_over_25_percent": 1
+      },
+      {
+        "pid": 5199,
+        "name": "mediaanalysisd-access",
+        "cpu_percent": 8.8,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 33672,
+        "name": "Codex (Service)",
+        "cpu_percent": 8.7,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 382,
+        "name": "loginwindow",
+        "cpu_percent": 0.3,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 34242,
+        "name": "Codex (Renderer)",
+        "cpu_percent": 0.3,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 34703,
+        "name": "Codex (Renderer)",
+        "cpu_percent": 0.3,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 597,
+        "name": "trustd",
+        "cpu_percent": 0.2,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 1386,
+        "name": "Google Chrome Helper",
+        "cpu_percent": 0.2,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 34706,
+        "name": "codex-code-mode-host",
+        "cpu_percent": 0.2,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 1348,
+        "name": "Google Chrome",
+        "cpu_percent": 0.1,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 1500,
+        "name": "coverage-mcp",
+        "cpu_percent": 0.1,
+        "max_consecutive_intervals_over_25_percent": 0
+      }
+    ],
+    "guard_result": "reject"
+  }
+}
