@@ -169,7 +169,15 @@ def main():
             )
             state = active.stdout.strip()
             if active.returncode != 0 or state in {"failed", "inactive"}:
-                raise RuntimeError(f"systemd unit {unit} is not active")
+                try:
+                    journal = _journal(unit)
+                except RuntimeError as error:
+                    journal = str(error)
+                details = active.stderr.strip() or active.stdout.strip()
+                raise RuntimeError(
+                    f"systemd unit {unit} is not active (state={state!r}; "
+                    f"systemctl={details!r}); journal:\n{journal}"
+                )
             if state != "active":
                 time.sleep(0.05)
                 continue
