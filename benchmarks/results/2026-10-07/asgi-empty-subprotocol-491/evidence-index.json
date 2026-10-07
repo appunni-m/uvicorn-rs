@@ -1,0 +1,181 @@
+{
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "be63bc083a6aa523518255f8cd33e14ed983d420f1cbc65d78d9e5ba224ad7ae",
+      "size_bytes": 3693
+    },
+    {
+      "path": "coverage-mcp-pages.json",
+      "sha256": "1d9ab3d6246fca7586e4512fae87041cc608a010f936b8fbeb77bc9f0ec72859",
+      "size_bytes": 1213
+    },
+    {
+      "path": "coverage-report.json.context.json",
+      "sha256": "273603865a72f7940cca22ace2a1d9280a5aca9230c8e89aaa478d156bb9abc1",
+      "size_bytes": 396
+    },
+    {
+      "path": "coverage-report.json.gz",
+      "sha256": "2870543dd26197966c9ea9baaa173d3ae428b5cec2e88ec54d097262507eac04",
+      "size_bytes": 3018552
+    },
+    {
+      "path": "matrix-repeat-results.tar.gz",
+      "sha256": "f2dbf4c901403180857e24ac4b1cabb25f037066a46446ef1979e2ad7e320a8e",
+      "size_bytes": 188629
+    },
+    {
+      "path": "normal-parity-239.json",
+      "sha256": "6afe9b256333d081398e1e5bdb234fb271ab953809b5388ef8afeedcc1e5e6a6",
+      "size_bytes": 4258410
+    }
+  ],
+  "date": "2026-10-07",
+  "environment": {
+    "cargo_llvm_cov": "cargo-llvm-cov 0.8.7",
+    "machine": "arm64",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "python": "3.12.13",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "instrumented": {
+    "build_id": "0dc04981529e02b3377c0e1455457a15f7268b95eab4676445b42523a8b69724",
+    "coverage": {
+      "lines": {
+        "covered": 3628,
+        "missing": 0,
+        "total": 3628
+      },
+      "regions": {
+        "covered": 5123,
+        "missing": 0,
+        "total": 5123
+      }
+    },
+    "coverage_gate": "passed",
+    "coverage_mcp": {
+      "coverage": {
+        "covered": 5123,
+        "metric": "regions",
+        "missing": 0,
+        "total": 5123
+      },
+      "group_count": 0,
+      "pages": 1,
+      "source": "matches_receipt",
+      "status": "measured",
+      "tests": "passed"
+    },
+    "fault_contracts": {
+      "failed": 0,
+      "passed": 252,
+      "selected": 252
+    },
+    "matrix": {
+      "case_attribution_complete": true,
+      "executed": 491,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "passed": 491,
+      "scope": "complete",
+      "selected": 491,
+      "transient_infrastructure_failures": 0
+    },
+    "native_extension_sha256": "391929f43630a4b4e13feb6570a1d4e522dcf8a8bc24e984f8f30ab52f0aca2c",
+    "oracle_parity": {
+      "failed": 0,
+      "passed": 239,
+      "selected": 239
+    },
+    "profile_union_matches_attribution": true,
+    "report_sha256": "0d98c2773d741e05f80a3707b7cfaf7c4d16b576f827ed0e06cb181dc1909c58",
+    "scope": "full",
+    "test_status": "passed",
+    "verification_repeats": [
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 491,
+        "run": 1,
+        "sha256": "81fc3abfa6c04496d2ecffd02b5d57da41e2e8e9a8bc936a4a6662761c599151",
+        "status": "completed",
+        "transient_infrastructure_failures": 0
+      },
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 491,
+        "run": 2,
+        "sha256": "d561dfb5992fc5266047f85cf9ed06ab623588d618bdf6dcdb724fa2478feb96",
+        "status": "completed",
+        "transient_infrastructure_failures": 0
+      },
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 491,
+        "run": 3,
+        "sha256": "50054dcc2306e8eade865e81818aff6a9f3bef7cef5bd0c395a2dd5cb76b7919",
+        "status": "completed",
+        "transient_infrastructure_failures": 0
+      }
+    ]
+  },
+  "normal_build": {
+    "environment": {
+      "dependencies": {
+        "aioquic": "1.3.0",
+        "h11": "0.16.0",
+        "h2": "4.4.1",
+        "httptools": "0.8.0",
+        "hypercorn": "0.18.0",
+        "uvicorn": "0.54.0",
+        "uvloop": "0.23.0",
+        "websockets": "17.1",
+        "wsproto": "1.3.2"
+      },
+      "machine": "arm64",
+      "platform": "macOS-15.7.7-arm64-arm-64bit",
+      "python": "3.12.13",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+    },
+    "native_extension_sha256": "964f965185b22021b75ad9ddf67261a82f7234f40839b41e54376c9da9c4bd84",
+    "source_sha256": "e8d8510f49992ccb6dc39e529d478ec2f06861674e0678044863ca4aa12d4dbd",
+    "summary": {
+      "executed": 239,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 239,
+      "selected": 239
+    }
+  },
+  "parity_case": {
+    "case_id": "websocket.empty-subprotocol-token-handshake-rejected",
+    "difference": null,
+    "oracle_observation": {
+      "handshake_status": 400
+    },
+    "status": "passed",
+    "target_observation": {
+      "handshake_status": 400
+    }
+  },
+  "schema": "uvicorn-rs-asgi-coverage-evidence@1",
+  "scope": "complete unified ASGI parity and native LLVM region coverage; local working-tree evidence",
+  "source": {
+    "aggregate_sha256": "0fb80c4486587dae82da9c28fa1b321924cf4533b05ea8477d15cff83fbf6949",
+    "case_count": 491,
+    "dirty": true,
+    "input_file_count": 70,
+    "manifest_sha256": "35abb756dda4bc53e6e62e616f08722b9e53de1094317cc77972f668f8dc3972",
+    "operation_count": 71,
+    "revision": "d66548a5f0be8b51bc85245255d07741a60317ba",
+    "src_lib_sha256": "e8d8510f49992ccb6dc39e529d478ec2f06861674e0678044863ca4aa12d4dbd"
+  },
+  "status": "complete"
+}

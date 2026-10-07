@@ -84,6 +84,25 @@
       }
     },
     {
+      "case_id": "websocket.empty-subprotocol-token-handshake-rejected",
+      "profile": "websocket",
+      "operation": "websocket.protocol-error",
+      "covers": [
+        "websocket.protocol-error"
+      ],
+      "websocket": {
+        "path": "/ws-scope-echo/empty-subprotocol-elements",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "sec-websocket-protocol",
+            ""
+          ]
+        ]
+      }
+    },
+    {
       "case_id": "websocket.pre-accept-denial",
       "profile": "websocket",
       "operation": "websocket.denial",

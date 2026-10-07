@@ -2,38 +2,85 @@
 
 ## Current evidence status
 
-The current source passed the 490-case black-box gate on 2026-10-07. The
-manifest declares 490 workflows across 70 input files and 71 operations:
-238 live oracle comparisons and 252 target-only contracts. Per-case attribution
-and all three complete 490-case repeats passed with zero failures,
-infrastructure errors, retries, or cases not run. Native coverage is
-**5,108/5,108 regions and 3,608/3,608 lines (100%)**. Coverage MCP measured the
-same report with `source: matches_receipt`, `tests: passed`, zero missing
-regions, and zero gap groups. The normal non-instrumented local build also
-passed all 238 live oracle comparisons.
+The 491-case black-box gate passed on 2026-10-07. The manifest declares 491
+workflows across 70 input files and 71 operations: 239 live oracle comparisons
+and 252 target-only contracts. Per-case attribution and all three complete
+491-case repeats passed with zero failures, infrastructure errors, retries,
+or cases not run. Native coverage is **5,123/5,123 regions and 3,628/3,628
+lines (100%)**. Coverage-MCP measured this exact report with
+`source: matches_receipt`, `tests: passed`, zero missing regions, and zero gap
+groups. The normal non-instrumented local build passed all 239 live oracle
+comparisons. Formatting and Clippy with `-D warnings` passed.
 
 This is source-bound local macOS ARM64 evidence from a dirty working tree at
-revision `cf3ce35764707edc07b90e7aeb8e05fe1e1210f3`, not a clean release
+revision `d66548a5f0be8b51bc85245255d07741a60317ba`, not a clean release
 baseline. The measured `src/lib.rs` SHA-256 is
-`b598c8e9b2d33db5b0c5bcdfdc8a49ec281918393eb8cfe60ff9185a62957121`; the
+`e8d8510f49992ccb6dc39e529d478ec2f06861674e0678044863ca4aa12d4dbd`; the
 instrumented native SHA-256 is
-`d6d4a04dac3f2bb2cc704731486d7c499951d6610a0fd097008fd2dcefd74232`. No Rust
+`391929f43630a4b4e13feb6570a1d4e522dcf8a8bc24e984f8f30ab52f0aca2c`. No Rust
 unit tests were added; the manifest-backed live input matrix remains the
 behavioral evidence system.
 
-The hosted Linux attempt for commit `9d05c72` is separate evidence. Its
-installed-wheel public parity and deployment job passed, including all 225
-public comparisons, the two framework probes, and the transient systemd stop.
-The unified coverage job then failed with exit code 1 after 25m51s; its
-`uvicorn-rs-unified-coverage` artifact was uploaded, but the public run summary
-does not expose the failing case or coverage gap. The dependent release
-candidate jobs were skipped. The 100% figure above remains the recorded local
-macOS ARM64 result; the hosted Linux result is unresolved. See the
-[CI run and evidence index](../benchmarks/results/framework-integration-2026-10-07/evidence-index.json).
+The hosted Linux failures are separate from this local result. In run
+[#23](https://github.com/appunni-m/uvicorn-rs/actions/runs/37603449348), commit
+`6b28666`, the pasted 490-case report names
+`http3.asgi-event-type-string-subclass` as an infrastructure failure during
+per-case attribution. Each of the three full repeats also reports one
+infrastructure failure and one case not run; their summaries do not identify
+the affected case. The report has 237/238 oracle parity cases passing, no
+behavioral failures, and 5,106/5,108 regions covered (all 3,612 lines covered).
+The independent installed-wheel parity job passed 238/238; the lower count is
+specific to instrumented attribution. The pasted output does not include the
+two uncovered region locations.
 
-## Current full verification (490 cases)
+Later run
+[#24](https://github.com/appunni-m/uvicorn-rs/actions/runs/37607369771), commit
+`d66548a`, passed its separate public-parity job but failed the unified
+coverage job after 25m17s. GitHub retained the `uvicorn-rs-unified-coverage`
+artifact, but this environment cannot download it without GitHub credentials;
+the hosted-only failure details remain unknown. A separate 238-case server-log
+excerpt reports one infrastructure failure and one case not run but does not
+name the failed case. The local 491-case result does not resolve either hosted
+failure.
 
-The current acceptance archive is
+## Current full verification (491 cases)
+
+The archive is
+[`asgi-empty-subprotocol-491`](../benchmarks/results/2026-10-07/asgi-empty-subprotocol-491/).
+It contains the compressed unified LLVM report and matching context receipt,
+the exact Coverage-MCP structured response, three full-matrix repeat results,
+and the complete normal-build oracle result. The uncompressed report SHA-256
+is `0d98c2773d741e05f80a3707b7cfaf7c4d16b576f827ed0e06cb181dc1909c58`; the
+build ID is `0dc04981529e02b3377c0e1455457a15f7268b95eab4676445b42523a8b69724`.
+Case-to-region attribution matches the union of per-case profiles.
+
+| Verification | Passed | Failures / infrastructure / retries / not run |
+|---|---:|---|
+| Per-case attribution | 491/491 | 0 / 0 / 0 / 0 |
+| Full repeat 1 | 491/491 | 0 / 0 / 0 / 0 |
+| Full repeat 2 | 491/491 | 0 / 0 / 0 / 0 |
+| Full repeat 3 | 491/491 | 0 / 0 / 0 / 0 |
+| Oracle parity in each repeat | 239/239 | 0 failed |
+| Target-only contracts in each repeat | 252/252 | 0 failed |
+| Native regions | 5,123/5,123 | 0 missing |
+| Native lines | 3,628/3,628 | 0 missing |
+| Coverage-MCP region gap groups | 0 | source matches; tests passed |
+| Normal non-instrumented oracle parity | 239/239 | 0 / 0 / 0 / 0 |
+
+The new `websocket.empty-subprotocol-token-handshake-rejected` case showed
+that Uvicorn rejects an empty `Sec-WebSocket-Protocol` list member with HTTP
+400 before app dispatch. Rust now rejects the same malformed handshake before
+building the ASGI scope. Both live observations are HTTP 400.
+
+The instrumented run used CPython 3.12.13, Rust 1.98.1, cargo-llvm-cov 0.8.7,
+and macOS 15.7.7 ARM64. Coverage measures default-feature `src/lib.rs` with
+`cfg(coverage)`; Python code, dependencies, optional diagnostics, other
+platforms, the official full ASGI suite, and performance are outside this
+coverage claim. The checkout was dirty, so this is not a clean release result.
+
+## Superseded full verification (490 cases)
+
+The superseded acceptance archive is
 [`famh-concurrent-load-acceptance`](../benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/).
 It contains the compressed unified LLVM report and matching context receipt,
 the full Coverage-MCP structured response, three raw full-matrix repeat

@@ -4677,6 +4677,14 @@ fn is_websocket_upgrade(request: &Request<Incoming>) -> bool {
     request.version() == Version::HTTP_11 && upgrade && connection
 }
 
+fn has_empty_websocket_subprotocol(headers: &HeaderMap) -> bool {
+    headers
+        .get_all(http::header::SEC_WEBSOCKET_PROTOCOL)
+        .iter()
+        .flat_map(|value| value.as_bytes().split(|byte| *byte == b','))
+        .any(|protocol| trim_ascii(protocol).is_empty())
+}
+
 fn trim_ascii(mut value: &[u8]) -> &[u8] {
     while value.first().is_some_and(u8::is_ascii_whitespace) {
         value = &value[1..];
@@ -4722,6 +4730,13 @@ async fn handle_websocket_request_inner(
     mut request: Request<Incoming>,
     context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, BoxError> {
+    if has_empty_websocket_subprotocol(request.headers()) {
+        return Err(Box::new(WebSocketHandshakeError {
+            response_body:
+                "Failed to open a WebSocket connection: invalid Sec-WebSocket-Protocol header.\n"
+                    .to_owned(),
+        }));
+    }
     let request_key = request
         .headers()
         .get(http::header::SEC_WEBSOCKET_KEY)
@@ -5301,9 +5316,7 @@ fn build_websocket_scope<'py>(
             if name == http::header::SEC_WEBSOCKET_PROTOCOL {
                 for protocol in value.as_bytes().split(|byte| *byte == b',') {
                     let protocol = String::from_utf8_lossy(trim_ascii(protocol)).into_owned();
-                    if !protocol.is_empty() {
-                        subprotocols.push(protocol);
-                    }
+                    subprotocols.push(protocol);
                 }
             }
         }
