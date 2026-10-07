@@ -127,7 +127,8 @@ jobs:
           git -C "$framework_dir" rev-parse HEAD > target/benchmark-preparation/framework-revision.txt
           (
             cd "$framework_dir"
-            RUSTUP_TOOLCHAIN="$RUST_TOOLCHAIN" CARGO_TARGET_DIR="$framework_target" \
+            env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cap-lints warn" \
+              RUSTUP_TOOLCHAIN="$RUST_TOOLCHAIN" CARGO_TARGET_DIR="$framework_target" \
               uvx --from maturin==1.14.1 maturin build --release --locked \
                 --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" --out "$wheel_dir"
           ) 2>&1 | tee target/benchmark-preparation/framework-build.log
@@ -157,7 +158,7 @@ jobs:
                                      "direct_url": distribution.read_text("direct_url.json")}
           receipt = {"framework_repository": "https://github.com/appunni-m/starlette-rs.git",
                      "framework_revision": os.environ["FRAMEWORK_REVISION"],
-                     "build": "maturin 1.14.1, --release --locked, normal default features; no framework source edits",
+                     "build": "maturin 1.14.1, --release --locked, default features; RUSTFLAGS=--cap-lints warn only for this third-party fixture; no framework source edits",
                      "files": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files},
                      "installed_distributions": distributions,
                      "independence": "Optional benchmark environment wheel only; no uvicorn-rs runtime dependency or bundle."}

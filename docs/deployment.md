@@ -121,7 +121,8 @@ git -C "$WORK/starlette-rs" fetch --depth 1 origin 738c43362938896c268ca29b9a9a2
 git -C "$WORK/starlette-rs" checkout --detach FETCH_HEAD
 (
   cd "$WORK/starlette-rs"
-  uvx --from maturin==1.14.1 maturin build --release --locked \
+  env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cap-lints warn" \
+    uvx --from maturin==1.14.1 maturin build --release --locked \
     --interpreter "$ROOT/.venv/bin/python" --out "$WORK/wheels"
 )
 FRAMEWORK_WHEEL=$(find "$WORK/wheels" -maxdepth 1 -name 'starlette_rs_py-*.whl' -print -quit)
@@ -165,3 +166,8 @@ checks as evidence. The manual category workflow also runs the
 starlette-rs comparison before performance sampling. See
 [the support matrix](support-matrix.md#framework-and-deployment-evidence) for
 the current recorded results and limits.
+
+The pinned starlette-rs snapshot denies an `unused_mut` lint that is emitted
+for its Linux build. The command caps lint severity only for this optional
+third-party integration wheel; the uvicorn-rs build keeps its normal lint
+settings, and the framework source is not modified.

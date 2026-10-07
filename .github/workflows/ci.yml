@@ -133,7 +133,8 @@ jobs:
           uv venv --python "$PYTHON_VERSION" "$framework_env"
           (
             cd "$framework_dir"
-            RUSTUP_TOOLCHAIN="$RUST_TOOLCHAIN" CARGO_TARGET_DIR="$framework_target" \
+            env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cap-lints warn" \
+              RUSTUP_TOOLCHAIN="$RUST_TOOLCHAIN" CARGO_TARGET_DIR="$framework_target" \
               uvx --from "maturin==$MATURIN_VERSION" maturin build --release --locked \
                 --interpreter "$framework_env/bin/python" --out "$framework_wheels"
           )
