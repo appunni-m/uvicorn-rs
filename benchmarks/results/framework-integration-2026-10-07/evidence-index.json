@@ -24,12 +24,48 @@
     "source_revision": "738c43362938896c268ca29b9a9a2a5942df510c",
     "version": "0.1.0"
   },
+  "hosted_ci": {
+    "commit": "9d05c72eb084b96bf40e0bf669a597372323cf06",
+    "jobs": {
+      "complete_public_parity": {
+        "framework_comparison": "passed",
+        "full_public_parity": "passed",
+        "job_id": 112613812239,
+        "normal_fault_seam_exclusion": "passed",
+        "status": "passed",
+        "transient_systemd_stop": "passed"
+      },
+      "rust_lints_feature_builds_and_docs": "passed",
+      "rust_msrv": "passed",
+      "unified_coverage": {
+        "artifact": {
+          "id": 11460235803,
+          "name": "uvicorn-rs-unified-coverage",
+          "sha256": "06a4aa7dfa04d0d26cb20f63dd79043e0f4cdd5fd9f2b0fc515efd6ebb3dcfe5",
+          "size_bytes": 23522981
+        },
+        "duration_seconds": 1551,
+        "exit_code": 1,
+        "failure_summary": "Process completed with exit code 1; public run summary exposes no underlying case or coverage error.",
+        "job_id": 112614973795,
+        "status": "failed",
+        "url": "https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036/job/112614973795"
+      },
+      "release_candidate_matrix": "skipped (depends on unified_coverage)",
+      "python_floor_package": "skipped (depends on unified_coverage)"
+    },
+    "run_id": 37566368036,
+    "run_status_at_capture": "completed: complete_public_parity passed; unified_coverage failed; release-candidate and Python-floor package jobs skipped",
+    "run_url": "https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036",
+    "runner": "ubuntu-24.04, x86_64",
+    "run_conclusion": "failure"
+  },
   "limits": [
-    "Local macOS ARM64 correctness evidence, not performance evidence or hosted CI evidence.",
-    "The checkout is dirty, but the Rust/Python package source and manifests matched the recorded commit when the exact server wheel was built.",
+    "The local receipts are macOS ARM64 correctness evidence, not performance evidence; the hosted Linux results are recorded separately.",
+    "The checkout was dirty, but the Rust/Python package source and manifests matched the recorded local wheel source commit when the exact server wheel was built.",
     "The pinned starlette-rs revision lacks WebSocketRoute; this WebSocket case tests a plain ASGI branch and server transport, not framework-level routing.",
-    "On this macOS run Uvicorn 0.54.0 completed lifespan cleanup and re-raised SIGTERM (exit -15); uvicorn-rs exited 0, so process exit-code parity is not claimed.",
-    "Direct POSIX process SIGTERM was tested; systemd service-manager behavior still requires a passing hosted Linux CI run."
+    "On the recorded macOS run Uvicorn 0.54.0 completed lifespan cleanup and re-raised SIGTERM (exit -15); uvicorn-rs exited 0, so process exit-code parity is not claimed.",
+    "Hosted deployment evidence covers one Ubuntu 24.04 transient systemd service; persistent service-manager behavior and other platforms remain unverified."
   ],
   "receipts": {
     "framework-comparison.json": {
@@ -81,7 +117,12 @@
   ],
   "source_worktree_dirty": true,
   "systemd_probe": {
-    "reason": "The local runner is macOS ARM64 and has no systemd manager; the exact-wheel probe is configured in Linux CI, with hosted evidence pending.",
-    "status": "not_run"
+    "hosted_ci_run_id": 37566368036,
+    "hosted_ci_run_url": "https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036",
+    "job_id": 112613812239,
+    "limits": "One transient systemd service; persistent unit, launchd, containers, and Windows services are not covered.",
+    "receipt_path": "target/asgi-parity/systemd.json in the uvicorn-rs-public-parity CI artifact",
+    "runner": "ubuntu-24.04, x86_64",
+    "status": "passed"
   }
 }

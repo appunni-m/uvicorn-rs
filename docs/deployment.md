@@ -27,9 +27,9 @@ The current CLI and its defaults are listed in the
 ## Service-manager example
 
 This example shows the documented process boundary for a Linux systemd
-service. A Linux CI job is configured to exercise the installed wheel under a
-transient systemd service and check the manager's stop path. The persistent
-unit below is an example; CI does not install it into a host.
+service. The [hosted Linux CI run for commit `9d05c72`](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036)
+passed the installed wheel's transient systemd service and manager-stop probe.
+The persistent unit below is an example; CI does not install it into a host.
 
 ```ini
 [Unit]
@@ -62,10 +62,11 @@ for every application.
 The installed-wheel check exercises module:app, an HTTP/1.1 request over TLS,
 and POSIX SIGTERM while an ASGI request is held. It requires that the request
 is cancelled, lifespan shutdown completes, and the process exits within five
-seconds in that probe. The separate Linux CI check is configured to start the
-exact installed wheel as a transient systemd service, send the manager's stop
-request, and check request cancellation, lifespan completion, and successful
-bounded exit.
+seconds in that probe. The hosted Linux CI check started the exact installed
+wheel as a transient systemd service, sent the manager's stop request, and
+verified request cancellation, lifespan completion, and successful exit under
+the ten-second stop bound. This was measured on the Ubuntu 24.04 runner in the
+[CI run for commit `9d05c72`](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036).
 
 To run the same service-manager probe on a Linux systemd host, first install
 the exact candidate wheel into the Python environment used to invoke the
@@ -158,12 +159,12 @@ it does not claim starlette-rs framework-level WebSocket route compatibility.
 The results are selected integration evidence, not full framework or official
 ASGI conformance.
 
-The normal installed-wheel CI job is configured to build the pinned
-starlette-rs wheel, run both isolated framework comparisons, compare their
-receipts, and exercise the transient systemd stop path on Linux. A successful
-hosted run for the current revision is still required before treating those CI
-checks as evidence. The manual category workflow also runs the
-starlette-rs comparison before performance sampling. See
+The [hosted CI run for commit `9d05c72`](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036)
+built the pinned starlette-rs wheel, passed both isolated framework
+comparisons, passed the transient systemd stop path, and completed the public
+parity and normal fault-seam exclusion checks. These results are also listed in
+the evidence index. The manual category workflow runs the starlette-rs
+comparison before performance sampling. See
 [the support matrix](support-matrix.md#framework-and-deployment-evidence) for
 the current recorded results and limits.
 

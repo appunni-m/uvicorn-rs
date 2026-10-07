@@ -27,10 +27,16 @@ Coverage MCP reported zero gaps and a matching source receipt. The local
 reports, identities and audit outputs are in the
 [473-case evidence archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/evidence-index.json).
 
-These are local preparation checks on a dirty checkout. The new hosted jobs
-have not run on a release commit. No tag or public release is prepared by these
-local artifacts. The benchmark's separately frozen binaries and results are
-identified in [the investigation](performance-investigation-2026-10-05.md).
+Hosted CI run [37566368036](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036)
+on main commit `9d05c72` passed Rust quality, MSRV, and the installed-wheel
+public parity/deployment job, including both framework comparisons and the
+transient systemd stop. Its independent unified coverage job failed with exit
+code 1, and the package candidate jobs were skipped because they depend on
+coverage. The artifact and exact job status are recorded in the
+[framework/deployment evidence index](../benchmarks/results/framework-integration-2026-10-07/evidence-index.json);
+the failure cause remains unresolved. No hosted release-candidate bundle, tag,
+or public release is complete. The benchmark's separately frozen binaries and
+results are identified in [the investigation](performance-investigation-2026-10-05.md).
 
 ## Main CI gates
 

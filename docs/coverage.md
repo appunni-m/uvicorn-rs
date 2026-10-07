@@ -23,6 +23,16 @@ working tree; this is local source-bound evidence, not a clean release
 baseline. No Rust unit tests were added; the manifest-backed live input matrix
 is the behavioral evidence system.
 
+The hosted Linux attempt for commit `9d05c72` is separate evidence. Its
+installed-wheel public parity and deployment job passed, including all 225
+public comparisons, the two framework probes, and the transient systemd stop.
+The unified coverage job then failed with exit code 1 after 25m51s; its
+`uvicorn-rs-unified-coverage` artifact was uploaded, but the public run summary
+does not expose the failing case or coverage gap. The dependent release
+candidate jobs were skipped. The 100% figure above remains the recorded local
+macOS ARM64 result; the hosted Linux result is unresolved. See the
+[CI run and evidence index](../benchmarks/results/framework-integration-2026-10-07/evidence-index.json).
+
 ## Current full verification (473 cases)
 
 The fixed archive at
