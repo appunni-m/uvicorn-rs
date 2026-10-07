@@ -120,7 +120,9 @@ def main():
 
     port = _free_port()
     unit = f"uvicorn-rs-integration-{os.getpid()}-{secrets.token_hex(4)}.service"
-    python = str(Path(sys.executable).resolve())
+    # Preserve the venv entry point: resolving it follows the symlink to the
+    # base interpreter and drops access to the installed uvicorn-rs wheel.
+    python = sys.executable
     run_command = [
         "sudo",
         "-n",
