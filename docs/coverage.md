@@ -210,7 +210,7 @@ package job failures are recorded in [release status](releases.md#current-state)
 The retained unified-coverage artifact is ID `11506803058`, SHA-256
 `d107cfb007ae41673feb025253cdd00706168f51df411fa5fdfc6c6fdb3a910c`.
 
-## Hosted verification (runs #36–#37)
+## Hosted verification (runs #36–#38)
 
 Runs [#36](https://github.com/appunni-m/uvicorn-rs/actions/runs/37679543470)
 and [#37](https://github.com/appunni-m/uvicorn-rs/actions/runs/37684421046)
@@ -223,6 +223,16 @@ The retained hosted report artifact cannot be downloaded without repository
 authentication from this environment. This closes the hosted coverage gate for
 the current committed source; the local Coverage-MCP receipt requirement for a
 public release remains separate.
+
+Run [#38](https://github.com/appunni-m/uvicorn-rs/actions/runs/37688528361)
+on commit `226ab13` also passed hosted attribution and all three complete
+repeats: 491/491 cases, 5,121/5,121 regions, and 3,624/3,624 lines. Its normal
+installed-wheel public parity passed 239/239. The run failed later in the
+macOS package consumer because the probe certificate had a duplicate
+extension OID; Linux and Windows package jobs passed, while Python-floor was
+skipped. See [release status](releases.md#current-state). This updates hosted
+coverage evidence for `226ab13`; the source-matched local Coverage-MCP receipt
+requirement for a public release remains separate.
 
 ## Current full verification (491 cases; EOF fault consumption asserted)
 

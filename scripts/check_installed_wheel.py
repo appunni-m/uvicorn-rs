@@ -149,8 +149,34 @@ def probe_installed_cli_tls_and_shutdown():
     checkout = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-installed-cli-") as directory:
         workdir = Path(directory)
+        openssl_config = workdir / "openssl.cnf"
         certificate = workdir / "cert.pem"
         private_key = workdir / "key.pem"
+        # Keep the certificate extensions in one explicit config. The prior
+        # system-config plus -addext combination produced duplicate extension
+        # OIDs on macOS, which rustls correctly rejects. Use one deterministic
+        # end-entity server identity.
+        openssl_config.write_text(
+            """[req]
+prompt = no
+distinguished_name = distinguished_name
+x509_extensions = server_certificate
+
+[distinguished_name]
+CN = localhost
+
+[server_certificate]
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+IP.1 = 127.0.0.1
+""",
+            encoding="ascii",
+        )
         subprocess.run(
             [
                 openssl,
@@ -165,12 +191,8 @@ def probe_installed_cli_tls_and_shutdown():
                 str(certificate),
                 "-days",
                 "1",
-                "-subj",
-                "/CN=localhost",
-                "-addext",
-                "basicConstraints=critical,CA:TRUE",
-                "-addext",
-                "subjectAltName=DNS:localhost,IP:127.0.0.1",
+                "-config",
+                str(openssl_config),
             ],
             check=True,
             capture_output=True,

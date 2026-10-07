@@ -11,9 +11,9 @@ or create or move tags. The project is licensed under
 
 The original workflow revisions passed local Actionlint validation; action
 SHAs were checked against their upstream GitHub revisions. Hosted runs #36 and
-#37 confirm the Windows long-path setting lets checkout finish. The current
-working-tree patch excludes `.kata.toml` from distributions, compares packaged
-README text with normalized line endings, and shortens failed wheel-consumer
+#37 confirm the Windows long-path setting lets checkout finish. Commit
+`226ab13` excludes `.kata.toml` from distributions, compares packaged README
+text with normalized line endings, and shortens failed wheel-consumer
 annotations to keep the final traceback within the annotation limit. Local Rust
 1.85.0 default and all-feature checks pass. A macOS ARM64 wheel was built and
 consumed in fresh CPython 3.12.13 and 3.9.25 environments, including a real HTTP request, caller
@@ -53,23 +53,40 @@ the CLI consumer exits during TLS startup; the annotation is truncated before
 the exception cause. Python-floor is skipped and no platform candidate
 artifacts are uploaded.
 
-The current working-tree fixes address the deterministic package failures and
-bound the macOS traceback annotation to its final 30 lines and 3,000
+Commit `226ab13` addresses the deterministic package failures and bounds the
+macOS traceback annotation to its final 30 lines and 3,000
 characters. Local verification built and inspected the 34-member sdist without
 `.kata.toml`, accepted CRLF-converted PKG-INFO with the same README content,
 rebuilt the archive with locked dependencies, and passed its fresh installed-wheel
-consumer for HTTP/TLS/lifespan/shutdown. The
-macOS hosted startup cause remains unconfirmed until a corrected hosted run
-reports the complete exception. No complete release candidate is verified.
+consumer for HTTP/TLS/lifespan/shutdown.
 
-The hosted macOS failure did not reproduce locally. On macOS 15.7.7 ARM64 with
-CPython 3.12.10, Rust/Cargo 1.98.1 and Maturin 1.14.1, the same wheel build and
-exact-wheel consumer passed; `release_evidence.py record --allow-dirty` also
-validated the package metadata, RECORD, licenses and native architecture. The
-wheel, consumer receipt and local-preparation manifest are in the
+Hosted CI [run #38](https://github.com/appunni-m/uvicorn-rs/actions/runs/37688528361)
+on `226ab13` passed Rust quality, Rust 1.85, public installed-wheel parity
+(239/239), and unified coverage (491/491 cases, 5,121/5,121 regions,
+3,624/3,624 lines). The Linux package job, including source rebuild, candidate
+wheel parity, and manifest recording, passed. The Windows package job and
+manifest recording passed. The macOS wheel built and installed, but its CLI TLS
+probe failed while Rustls parsed the generated certificate with
+`ExtensionValueInvalid`; the Python-floor job was skipped and no complete
+candidate is verified.
+
+The TLS failure is in the probe certificate: Rustls reports
+`ExtensionValueInvalid` when a certificate repeats an extension OID. The probe
+previously inherited the host OpenSSL configuration while also supplying
+extensions inline. The probe fix gives OpenSSL one explicit configuration and
+generates a CA:FALSE server certificate with one extension set. A locally built
+normal macOS abi3 wheel passed the installed-wheel HTTP,
+TLS, ALPN, SIGTERM, lifespan, and cancellation consumer. The hosted package
+matrix still needs to verify this fix.
+
+An earlier macOS ARM64 reproduction used CPython 3.12.10, Rust/Cargo 1.98.1,
+and Maturin 1.14.1. Its exact-wheel consumer passed, and
+`release_evidence.py record --allow-dirty` validated package metadata, RECORD,
+licenses, and native architecture. The wheel, consumer receipt, and
+local-preparation manifest are in the
 [macOS reproduction archive](../benchmarks/results/2026-10-08/macos-arm64-run35-local-reproduction/).
-The manifest is explicitly `local preparation` with `source_dirty: true`; this
-does not explain the hosted failure or establish a release candidate.
+That manifest is explicitly `local preparation` with `source_dirty: true` and
+does not establish a release candidate.
 
 Hosted CI run [37566368036](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036)
 on main commit `9d05c72` passed Rust quality, MSRV, and the installed-wheel
