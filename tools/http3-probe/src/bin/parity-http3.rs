@@ -168,6 +168,14 @@ async fn request_sequence(
     address: SocketAddr,
     specification: &Value,
 ) -> Result<(), Box<dyn Error>> {
+    if specification
+        .get("concurrent")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return concurrent_request_sequence(sender, endpoint, connection, address, specification)
+            .await;
+    }
     let requests = specification["request_sequence"]
         .as_array()
         .ok_or("request_sequence must be an array")?;
@@ -191,6 +199,131 @@ async fn request_sequence(
     endpoint.close(
         quinn::VarInt::from_u32(0x100),
         b"parity request sequence complete",
+    );
+    Ok(())
+}
+
+async fn concurrent_request_sequence(
+    sender: &mut h3::client::SendRequest<h3_quinn::OpenStreams, Bytes>,
+    endpoint: &quinn::Endpoint,
+    connection: &quinn::Connection,
+    address: SocketAddr,
+    specification: &Value,
+) -> Result<(), Box<dyn Error>> {
+    let requests = specification["request_sequence"]
+        .as_array()
+        .ok_or("request_sequence must be an array")?;
+    if !(2..=128).contains(&requests.len()) {
+        return Err("request_sequence requires between two and 128 requests".into());
+    }
+    let mut streams = Vec::with_capacity(requests.len());
+    for (index, request) in requests.iter().enumerate() {
+        let method = request["method"]
+            .as_str()
+            .ok_or("missing sequence method")?;
+        let path = request["path"].as_str().ok_or("missing sequence path")?;
+        let body = decode_hex(
+            request["body_hex"]
+                .as_str()
+                .ok_or("missing sequence body")?,
+        )?;
+        let mut builder = Request::builder().method(method).uri(format!(
+            "https://localhost:{}{}",
+            address.port(),
+            path
+        ));
+        let headers = request["headers"]
+            .as_array()
+            .ok_or("missing sequence headers")?;
+        for header in headers {
+            let pair = header.as_array().ok_or("sequence header must be a pair")?;
+            if pair.len() != 2 {
+                return Err("sequence header must contain exactly two values".into());
+            }
+            let name = pair[0]
+                .as_str()
+                .ok_or("sequence header name must be text")?;
+            let value = pair[1]
+                .as_str()
+                .ok_or("sequence header value must be text")?;
+            builder = builder.header(HeaderName::from_bytes(name.as_bytes())?, value);
+        }
+        if !body.is_empty()
+            && !headers.iter().any(|header| {
+                header[0]
+                    .as_str()
+                    .is_some_and(|name| name.eq_ignore_ascii_case("content-length"))
+            })
+        {
+            builder = builder.header(http::header::CONTENT_LENGTH, body.len());
+        }
+        let mut stream = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            sender.send_request(builder.body(())?),
+        )
+        .await
+        .map_err(|error| sequence_stage_error(index + 1, "open-stream deadline", error))?
+        .map_err(|error| sequence_stage_error(index + 1, "open-stream", error))?;
+        if !body.is_empty() {
+            stream
+                .send_data(Bytes::from(body))
+                .await
+                .map_err(|error| sequence_stage_error(index + 1, "send-body", error))?;
+        }
+        stream
+            .finish()
+            .await
+            .map_err(|error| sequence_stage_error(index + 1, "finish-upload", error))?;
+        streams.push((stream, index + 1));
+    }
+    let pause_before_read_ms = specification["pause_before_read_ms"]
+        .as_u64()
+        .ok_or("concurrent request sequence requires pause_before_read_ms")?;
+    tokio::time::sleep(std::time::Duration::from_millis(pause_before_read_ms)).await;
+
+    let mut responses = Vec::with_capacity(streams.len());
+    for (mut stream, request_index) in streams {
+        let response =
+            tokio::time::timeout(std::time::Duration::from_secs(10), stream.recv_response())
+                .await
+                .map_err(|error| {
+                    sequence_stage_error(request_index, "receive-headers deadline", error)
+                })?
+                .map_err(|error| sequence_stage_error(request_index, "receive-headers", error))?;
+        let content_type = response
+            .headers()
+            .get(http::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok());
+        let mut response_body = Vec::new();
+        while let Some(mut data) =
+            tokio::time::timeout(std::time::Duration::from_secs(10), stream.recv_data())
+                .await
+                .map_err(|error| {
+                    sequence_stage_error(request_index, "receive-body deadline", error)
+                })?
+                .map_err(|error| sequence_stage_error(request_index, "receive-body", error))?
+        {
+            let length = data.remaining();
+            response_body.extend_from_slice(data.chunk());
+            data.advance(length);
+        }
+        responses.push(json!({
+            "status": response.status().as_u16(),
+            "content_type": content_type,
+            "body_hex": response_body.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+            "body_stream_error": false,
+            "stream_reset": false
+        }));
+    }
+    hold_sequence_connection(connection, specification, &responses).await?;
+    writeln!(
+        std::io::stdout().lock(),
+        "{}",
+        json!({"responses": responses})
+    )?;
+    endpoint.close(
+        quinn::VarInt::from_u32(0x100),
+        b"parity concurrent request sequence complete",
     );
     Ok(())
 }

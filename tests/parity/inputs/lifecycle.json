@@ -67,6 +67,20 @@
       }
     },
     {
+      "case_id": "lifespan.zero-timeout-shutdown-cancels-16-active-streams",
+      "profile": "lifecycle",
+      "operation": "lifespan.concurrent-stream-zero-timeout-shutdown",
+      "covers": [
+        "lifespan.concurrent-stream-zero-timeout-shutdown"
+      ],
+      "lifecycle": {
+        "stream_path": "/stream-shutdown-hold",
+        "stream_count": 16,
+        "graceful_timeout_seconds": 0,
+        "reset_connection_after_shutdown": true
+      }
+    },
+    {
       "case_id": "fault.lifecycle.hyper-connection-write-error-during-shutdown",
       "profile": "lifecycle",
       "operation": "lifespan.hyper-connection-write-error-during-shutdown",

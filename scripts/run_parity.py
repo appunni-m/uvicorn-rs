@@ -26,9 +26,12 @@ import threading
 import time
 import uuid
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
+import psutil
 from h2.config import H2Configuration
 from h2.connection import H2Connection
 from h2.events import DataReceived, ResponseReceived, StreamEnded, StreamReset
@@ -487,6 +490,54 @@ class ParityError(RuntimeError):
     """Invalid parity contract or failed adapter infrastructure."""
 
 
+class ProcessResourceSampler:
+    """Sample one server process while a synchronized load case is active."""
+
+    def __init__(self, pid: int) -> None:
+        self.process = psutil.Process(pid)
+        self.stop_event = threading.Event()
+        self.samples: list[tuple[int, int]] = []
+        self.thread = threading.Thread(
+            target=self._sample_until_stopped,
+            name="parity-resource-sampler",
+            daemon=True,
+        )
+
+    def sample(self) -> tuple[int, int]:
+        try:
+            with self.process.oneshot():
+                sample = (self.process.memory_info().rss, self.process.num_threads())
+        except psutil.Error as error:
+            raise ParityError(f"could not sample server resources: {error}") from error
+        self.samples.append(sample)
+        return sample
+
+    def _sample_until_stopped(self) -> None:
+        while not self.stop_event.wait(0.005):
+            try:
+                self.sample()
+            except ParityError:
+                return
+
+    def start(self) -> None:
+        self.sample()
+        self.thread.start()
+
+    def finish(self) -> dict[str, int]:
+        self.stop_event.set()
+        self.thread.join(timeout=2)
+        if self.thread.is_alive() or not self.samples:
+            raise ParityError("server resource sampler did not stop cleanly")
+        self.sample()
+        return {
+            "rss_before_bytes": self.samples[0][0],
+            "rss_peak_bytes": max(sample[0] for sample in self.samples),
+            "rss_after_bytes": self.samples[-1][0],
+            "threads_peak": max(sample[1] for sample in self.samples),
+            "sample_count": len(self.samples),
+        }
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -508,6 +559,66 @@ def exact_case_keys(value: dict[str, Any], required: set[str], label: str) -> No
     """Allow versioned case-verification metadata in addition to one stimulus."""
     metadata = {"verification", "fault"} & set(value)
     exact_keys(value, required | metadata, label)
+
+
+def validate_load_input(case: dict[str, Any], kind: str) -> None:
+    load = case.get("load")
+    if not isinstance(load, dict):
+        raise ParityError(f"{case['case_id']}: load workflow requires a load object")
+    if kind == "websocket":
+        keys = {
+            "key", "rounds", "concurrency", "pause_before_read_ms",
+            "messages_per_session", "message_bytes",
+        }
+    else:
+        keys = {
+            "key", "rounds", "concurrency", "pause_before_read_ms",
+            "chunks", "chunk_bytes",
+        }
+    exact_keys(load, keys, f"{case['case_id']}.load")
+    if (
+        not isinstance(load["key"], str)
+        or not load["key"]
+        or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for character in load["key"])
+    ):
+        raise ParityError(f"{case['case_id']}: load key must use ASCII letters, digits, '_' or '-'")
+    if type(load["rounds"]) is not int or not 3 <= load["rounds"] <= 8:
+        raise ParityError(f"{case['case_id']}: load rounds must be between 3 and 8")
+    if type(load["concurrency"]) is not int or not 2 <= load["concurrency"] <= 64:
+        raise ParityError(f"{case['case_id']}: load concurrency must be between 2 and 64")
+    if (
+        type(load["pause_before_read_ms"]) is not int
+        or not 0 <= load["pause_before_read_ms"] <= 5000
+    ):
+        raise ParityError(f"{case['case_id']}: pause_before_read_ms must be between 0 and 5000")
+    if kind == "websocket":
+        if (
+            type(load["messages_per_session"]) is not int
+            or not 1 <= load["messages_per_session"] <= 32
+            or type(load["message_bytes"]) is not int
+            or not 1 <= load["message_bytes"] <= 4096
+        ):
+            raise ParityError(f"{case['case_id']}: WebSocket load message size/count is outside its bounds")
+        if (
+            case.get("profile") not in {"websocket", "websocket-tls"}
+            or case.get("operation") != "websocket.concurrent-session-load"
+        ):
+            raise ParityError(f"{case['case_id']}: WebSocket load profile and operation do not match")
+        return
+    if (
+        type(load["chunks"]) is not int
+        or not 16 <= load["chunks"] <= 64
+        or type(load["chunk_bytes"]) is not int
+        or not 1024 <= load["chunk_bytes"] <= 4096
+    ):
+        raise ParityError(f"{case['case_id']}: HTTP load chunk size/count is outside its bounds")
+    expected = {
+        "http1": "http.concurrent-connections",
+        "http2": "http.concurrent-stream-load",
+        "http3": "http3.concurrent-stream-load",
+    }
+    if case.get("profile") not in expected or case.get("operation") != expected[case["profile"]]:
+        raise ParityError(f"{case['case_id']}: HTTP load profile and operation do not match")
 
 
 def load_contract(
@@ -576,8 +687,12 @@ def load_contract(
         "process_terminated", "process_exit_code", "application_events", "close_code", "close_reason",
         "connection_closed", "listener_closed_before_release", "idle_connection_closed",
         "startup_failed", "startup_error_observed", "responses", "pong_received",
+        "resource_rounds", "resource_stable", "task_count_stable",
+        "active_tasks_zero", "load_reached", "followup_healthy",
         "handshake_rejected", "client_aborted",
         "response_stream_started", "stream_reset", "application_cancelled",
+        "active_streams_held", "application_cancellation_count",
+        "application_completion_count", "shutdown_elapsed_ms",
         "response_complete_before_app_return",
         "background_work_completed",
         "application_cleanup_completed", "application_tasks_finished_before_probe_cleanup",
@@ -1750,20 +1865,45 @@ def load_contract(
             kind in {"http1", "http2", "http3"}
             or (profile_protocols == {"http/1.1", "lifespan"} and not kind.endswith("-tls"))
         ):
-            if kind == "http2" and case["operation"] != "http.concurrent-streams":
+            if kind == "http2" and case["operation"] not in {
+                "http.concurrent-streams", "http.concurrent-stream-load"
+            }:
                 raise ParityError(f"{case_id}: HTTP/2 request sequences require the concurrent-streams operation")
             if kind == "http3" and case["operation"] not in {
-                "http.keepalive-sequence", "http3.request-task-recovery"
+                "http.keepalive-sequence", "http3.request-task-recovery",
+                "http3.concurrent-stream-load",
             }:
-                raise ParityError(f"{case_id}: HTTP/3 sequences require the keep-alive or request-task recovery operation")
+                raise ParityError(f"{case_id}: HTTP/3 sequences require a declared sequence operation")
             sequence_keys = {"case_id", "profile", "operation", "covers", "request_sequence"}
+            if "load" in case:
+                sequence_keys.add("load")
+                validate_load_input(case, "http")
+                if case.get("verification", "oracle-parity") != "oracle-parity" or "fault" in case:
+                    raise ParityError(f"{case_id}: load workflows require live oracle parity")
+            elif case["operation"] in {
+                "http.concurrent-connections", "http.concurrent-stream-load",
+                "http3.concurrent-stream-load",
+            }:
+                raise ParityError(f"{case_id}: declared load operation requires a load input")
             if kind == "http3" and "h3_grease" in case:
                 sequence_keys.add("h3_grease")
                 if not isinstance(case["h3_grease"], bool):
                     raise ParityError(f"{case_id}: h3_grease must be a boolean")
             exact_case_keys(case, sequence_keys, case_id)
             requests = case["request_sequence"]
-            if (
+            if "load" in case:
+                if (
+                    not isinstance(requests, list)
+                    or len(requests) != 1
+                    or not isinstance(requests[0], dict)
+                    or requests[0].get("method") != "GET"
+                    or requests[0].get("path") != "/load/fan-in"
+                    or requests[0].get("body_base64") != ""
+                ):
+                    raise ParityError(
+                        f"{case_id}: load fan-in must declare one empty GET stimulus"
+                    )
+            elif (
                 not isinstance(requests, list) or len(requests) < 2
                 or any(not isinstance(request, dict) for request in requests)
             ):
@@ -1981,9 +2121,22 @@ def load_contract(
             ):
                 raise ParityError(f"{case_id}: headers must be pairs of strings")
         elif kind in {"websocket", "websocket-tls"}:
-            exact_case_keys(case, {"case_id", "profile", "operation", "covers", "websocket"}, case_id)
+            case_keys = {"case_id", "profile", "operation", "covers", "websocket"}
+            if "load" in case:
+                case_keys.add("load")
+                validate_load_input(case, "websocket")
+                if case.get("verification", "oracle-parity") != "oracle-parity" or "fault" in case:
+                    raise ParityError(f"{case_id}: WebSocket load workflows require live oracle parity")
+            elif case["operation"] == "websocket.concurrent-session-load":
+                raise ParityError(f"{case_id}: concurrent WebSocket sessions require a load input")
+            exact_case_keys(case, case_keys, case_id)
             websocket = case["websocket"]
             websocket_keys = {"path", "subprotocols", "messages"}
+            if case.get("operation") == "websocket.concurrent-session-load":
+                if websocket.get("path") != "/ws/load" or websocket.get("messages") != []:
+                    raise ParityError(
+                        f"{case_id}: concurrent WebSocket sessions require the load echo workflow"
+                    )
             if "shutdown" in websocket:
                 websocket_keys.add("shutdown")
                 if websocket["shutdown"] is not True:
@@ -2090,6 +2243,16 @@ def load_contract(
                     raise ParityError(f"{case_id}: asynchronous cleanup delay requires the eager owning-loop fault workflow")
             if "stream_path" in case["lifecycle"]:
                 lifecycle_keys.add("stream_path")
+            if "stream_count" in case["lifecycle"]:
+                lifecycle_keys.add("stream_count")
+                if (
+                    type(case["lifecycle"]["stream_count"]) is not int
+                    or not 2 <= case["lifecycle"]["stream_count"] <= 32
+                    or case["operation"] != "lifespan.concurrent-stream-zero-timeout-shutdown"
+                ):
+                    raise ParityError(
+                        f"{case_id}: concurrent shutdown streams require 2..32 streams and the zero-timeout workflow"
+                    )
             if "idle_transport_prefix_base64" in case["lifecycle"]:
                 lifecycle_keys.add("idle_transport_prefix_base64")
                 if (
@@ -2142,6 +2305,19 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: active-stream graceful drain requires the dedicated held-stream workflow"
                     )
+            elif case["operation"] == "lifespan.concurrent-stream-zero-timeout-shutdown":
+                if (
+                    case["profile"] != "lifecycle"
+                    or case["lifecycle"].get("stream_path") != "/stream-shutdown-hold"
+                    or case["lifecycle"].get("stream_count") is None
+                    or case["lifecycle"].get("graceful_timeout_seconds") != 0
+                    or case["lifecycle"].get("reset_connection_after_shutdown") is not True
+                    or "idle_transport_prefix_base64" in case["lifecycle"]
+                    or "hold_path" in case["lifecycle"]
+                ):
+                    raise ParityError(
+                        f"{case_id}: zero-timeout shutdown requires concurrent held HTTP/1.1 response streams"
+                    )
             elif case["operation"] == "lifespan.active-stream-reset-during-shutdown":
                 if (
                     case["profile"] not in {"lifecycle", "lifecycle-tls"}
@@ -2167,10 +2343,13 @@ def load_contract(
                     )
             elif "stream_path" in case["lifecycle"]:
                 raise ParityError(
-                    f"{case_id}: stream_path is only supported by the active-stream graceful-drain operation"
+                    f"{case_id}: stream_path is only supported by a declared active-stream shutdown operation"
                 )
             if (
-                case["operation"] != "lifespan.active-stream-reset-during-shutdown"
+                case["operation"] not in {
+                    "lifespan.active-stream-reset-during-shutdown",
+                    "lifespan.concurrent-stream-zero-timeout-shutdown",
+                }
                 and "reset_connection_after_shutdown" in case["lifecycle"]
             ):
                 raise ParityError(
@@ -3011,6 +3190,42 @@ def http1_request_sequence(
         connection.close()
 
 
+def http1_concurrent_requests(
+    port: int,
+    requests: list[dict[str, Any]],
+    *,
+    pause_before_read_ms: int,
+) -> list[dict[str, Any]]:
+    """Send one request per connection, then release all response readers together."""
+    barrier = threading.Barrier(len(requests))
+
+    def request_one(request: dict[str, Any]) -> dict[str, Any]:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=20)
+        body = base64.b64decode(request["body_base64"], validate=True)
+        try:
+            connection.connect()
+            connection.putrequest(request["method"], request["path"])
+            headers = list(request["headers"])
+            if body and not any(name.lower() == "content-length" for name, _ in headers):
+                headers.append(("Content-Length", str(len(body))))
+            if not any(name.lower() == "connection" for name, _ in headers):
+                headers.append(("Connection", "close"))
+            for name, value in headers:
+                connection.putheader(name, value)
+            connection.endheaders(body if body else None)
+            barrier.wait(timeout=10)
+            if pause_before_read_ms:
+                time.sleep(pause_before_read_ms / 1000)
+            response = connection.getresponse()
+            return response_observation(response.status, response.getheaders(), response.read())
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=len(requests), thread_name_prefix="parity-http-load") as pool:
+        futures = [pool.submit(request_one, request) for request in requests]
+        return [future.result(timeout=30) for future in futures]
+
+
 def read_http1_chunk(reader) -> bytes | None:
     line = reader.readline()
     if not line:
@@ -3490,7 +3705,12 @@ def http2_request_on_connection(
             client.sendall(pending)
 
 
-def http2_concurrent_requests(port: int, requests: list[dict[str, Any]]) -> dict[str, Any]:
+def http2_concurrent_requests(
+    port: int,
+    requests: list[dict[str, Any]],
+    *,
+    pause_before_read_ms: int = 0,
+) -> dict[str, Any]:
     context = ssl._create_unverified_context()
     context.set_alpn_protocols(["h2"])
     raw_socket = socket.create_connection(("127.0.0.1", port), timeout=5)
@@ -3513,6 +3733,8 @@ def http2_concurrent_requests(port: int, requests: list[dict[str, Any]]) -> dict
                 connection.send_data(stream_id, body, end_stream=True)
             responses[stream_id] = {"status": None, "headers": [], "body": bytearray()}
         tls_socket.sendall(connection.data_to_send())
+        if pause_before_read_ms:
+            time.sleep(pause_before_read_ms / 1000)
         ended = set()
         while len(ended) < len(responses):
             received = tls_socket.recv(65536)
@@ -3539,10 +3761,69 @@ def http2_concurrent_requests(port: int, requests: list[dict[str, Any]]) -> dict
             pending = connection.data_to_send()
             if pending:
                 tls_socket.sendall(pending)
+        close_error = close_http2_connection(connection, tls_socket)
+        if close_error is not None:
+            raise ParityError(f"HTTP/2 load client teardown failed: {close_error}")
         return {"responses": [response_observation(r["status"], r["headers"], bytes(r["body"]))
                               for r in responses.values()]}
     finally:
         tls_socket.close()
+
+
+def close_http2_connection(
+    connection: H2Connection, tls_socket: ssl.SSLSocket
+) -> str | None:
+    """Send GOAWAY, then complete TLS close-notify with the server."""
+    try:
+        # Drain control frames that were already in flight before starting TLS
+        # shutdown. Otherwise a valid SETTINGS ACK or GOAWAY can race with the
+        # TLS close-notify and look like illegal post-close application data.
+        tls_socket.settimeout(0.05)
+        quiet_since = time.monotonic()
+        drain_deadline = quiet_since + 0.5
+        while time.monotonic() < drain_deadline:
+            try:
+                received = tls_socket.recv(65536)
+            except TimeoutError:
+                if time.monotonic() - quiet_since >= 0.05:
+                    break
+                continue
+            if not received:
+                return None
+            quiet_since = time.monotonic()
+            for event in connection.receive_data(received):
+                if isinstance(event, DataReceived):
+                    connection.acknowledge_received_data(
+                        event.flow_controlled_length, event.stream_id
+                    )
+            pending = connection.data_to_send()
+            if pending:
+                tls_socket.sendall(pending)
+        connection.close_connection(error_code=ErrorCodes.NO_ERROR)
+        pending = connection.data_to_send()
+        if pending:
+            tls_socket.sendall(pending)
+        tls_socket.settimeout(0.25)
+        raw_socket = tls_socket.unwrap()
+    except (ssl.SSLZeroReturnError, ssl.SSLEOFError):
+        # Rustls closes the transport after receiving close-notify without
+        # necessarily sending a reciprocal TLS alert. EOF still proves that
+        # the peer observed the close and released this connection.
+        return None
+    except TimeoutError:
+        # The client close-notify has been sent. A server that waits for TCP
+        # EOF instead of returning its own TLS alert will observe the socket
+        # close in the caller's finally block.
+        return None
+    except ssl.SSLError as error:
+        if error.reason == "APPLICATION_DATA_AFTER_CLOSE_NOTIFY":
+            return None
+        return f"{type(error).__name__}: {error}"
+    except OSError as error:
+        return f"{type(error).__name__}: {error}"
+    else:
+        raw_socket.close()
+        return None
 
 
 def http2_request(port: int, request: dict[str, Any]) -> dict[str, Any]:
@@ -3611,6 +3892,9 @@ def http2_request(port: int, request: dict[str, Any]) -> dict[str, Any]:
             if pending:
                 tls_socket.sendall(pending)
     finally:
+        # A TLS close-notify lets the server finish its connection task before
+        # load probes sample the Python task baseline.
+        close_http2_connection(connection, tls_socket)
         tls_socket.close()
 
 
@@ -4143,6 +4427,9 @@ def http3_request_sequence(
     client: Path,
     fault: dict[str, str] | None = None,
     h3_grease: bool = True,
+    *,
+    concurrent: bool = False,
+    pause_before_read_ms: int = 0,
 ) -> dict[str, Any]:
     """Observe sequential streams and optional task diagnostics before peer close."""
     result_path = server["events"].with_suffix(".http3-sequence-result")
@@ -4163,6 +4450,8 @@ def http3_request_sequence(
         "hold_result_file": str(result_path), "hold_release_file": str(release_path),
         "hold_after_response": hold_after_response,
         "h3_grease": h3_grease,
+        "concurrent": concurrent,
+        "pause_before_read_ms": pause_before_read_ms,
     }
     log_offset = len(read_server_log(server))
     control_path = server.get("coverage_fault_control_path") if fault else None
@@ -4259,6 +4548,286 @@ def http3_request_sequence(
                 process.communicate()
         if control_path is not None:
             control_path.write_text("", encoding="utf-8")
+
+
+def load_status_request(
+    server: dict[str, Any],
+    profile_id: str,
+    key: str,
+    trust_anchor: Path | None,
+    h3_client: Path | None,
+    *,
+    kind: str = "http",
+) -> dict[str, Any]:
+    request = {
+        "method": "GET",
+        "path": f"/load/status?kind={kind}&key={key}",
+        "headers": [],
+        "body_base64": "",
+    }
+    if profile_id == "http2":
+        return http2_request(server["port"], request)
+    if profile_id == "http3":
+        if trust_anchor is None or h3_client is None:
+            raise ParityError("HTTP/3 load status is missing its certificate or client")
+        return http3_request(server["port"], trust_anchor, request, h3_client)
+    ssl_context = None
+    if profile_id == "websocket-tls":
+        if trust_anchor is None:
+            raise ParityError("TLS WebSocket load status is missing its trust anchor")
+        ssl_context = ssl.create_default_context(cafile=str(trust_anchor))
+    return http1_request(server["port"], request, ssl_context=ssl_context)
+
+
+def _load_resource_result(
+    responses_by_round: list[Any],
+    resource_rounds: list[dict[str, int]],
+    concurrency: int,
+    rounds: int,
+) -> dict[str, Any]:
+    quiescent = all(result["active"] == 0 for result in resource_rounds)
+    load_reached = all(
+        result["arrived"] == concurrency
+        and result["expected"] == concurrency
+        and result["peak_active"] == concurrency
+        and result["peak_python_tasks"] >= concurrency
+        for result in resource_rounds
+    )
+    settled_rss = [result["rss_after_bytes"] for result in resource_rounds[-3:]]
+    rss_stable = (
+        len(settled_rss) == 3
+        and max(settled_rss) - min(settled_rss) <= 16 * 1024 * 1024
+    )
+    task_counts = [result["idle_python_tasks"] for result in resource_rounds]
+    tasks_stable = (
+        len(task_counts) == rounds
+        and task_counts[-1] <= task_counts[0]
+    )
+    return {
+        "responses": responses_by_round,
+        "resource_rounds": resource_rounds,
+        "active_tasks_zero": quiescent,
+        "load_reached": load_reached,
+        "resource_stable": rss_stable,
+        "task_count_stable": tasks_stable,
+        "followup_healthy": len(resource_rounds) == rounds,
+    }
+
+
+def _load_response_fingerprint(response: dict[str, Any]) -> dict[str, Any]:
+    """Keep exact response parity evidence compact for repeated load rounds."""
+    if "body_base64" in response:
+        body = base64.b64decode(response["body_base64"], validate=True)
+        return {
+            "status": response["status"],
+            "content_type": response["content_type"],
+            "body_bytes": len(body),
+            "body_sha256": hashlib.sha256(body).hexdigest(),
+            "ordered_response_headers": response["ordered_response_headers"],
+        }
+    if "messages" in response:
+        messages = [message.encode("utf-8") for message in response["messages"]]
+        return {
+            "messages": [
+                {"bytes": len(message), "sha256": hashlib.sha256(message).hexdigest()}
+                for message in messages
+            ],
+            "close_code": response["close_code"],
+            "close_reason": response["close_reason"],
+        }
+    raise ParityError("load response has no byte or message payload to fingerprint")
+
+
+def run_http_load_case(
+    server: dict[str, Any],
+    profile: dict[str, Any],
+    case: dict[str, Any],
+    trust_anchor: Path | None,
+    h3_client: Path | None,
+) -> dict[str, Any]:
+    load = case["load"]
+    requests = case["request_sequence"]
+    if len(requests) != 1:
+        raise ParityError("HTTP load input must use one reusable request stimulus")
+    request_stimulus = requests[0]
+    key = load["key"]
+    request_path = (
+        f"/load/fan-in?key={key}&count={load['concurrency']}"
+        f"&chunks={load['chunks']}&chunk_bytes={load['chunk_bytes']}"
+    )
+    expanded_requests = [
+        dict(request_stimulus, path=request_path)
+        for _ in range(load["concurrency"])
+    ]
+    responses_by_round = []
+    resource_rounds = []
+
+    for _round_index in range(load["rounds"]):
+        sampler = ProcessResourceSampler(server["process"].pid)
+        sampler.start()
+        if profile["id"] == "http1":
+            responses = http1_concurrent_requests(
+                server["port"],
+                expanded_requests,
+                pause_before_read_ms=load["pause_before_read_ms"],
+            )
+        elif profile["id"] == "http2":
+            response_group = http2_concurrent_requests(
+                server["port"],
+                expanded_requests,
+                pause_before_read_ms=load["pause_before_read_ms"],
+            )
+            responses = response_group["responses"]
+        elif profile["id"] == "http3":
+            if trust_anchor is None or h3_client is None:
+                raise ParityError("HTTP/3 load request is missing its certificate or client")
+            response_group = http3_request_sequence(
+                server,
+                trust_anchor,
+                expanded_requests,
+                h3_client,
+                h3_grease=False,
+                concurrent=True,
+                pause_before_read_ms=load["pause_before_read_ms"],
+            )
+            responses = response_group["responses"]
+        else:
+            raise ParityError(f"unsupported HTTP load profile: {profile['id']}")
+
+        time.sleep(0.05)
+        status_response = load_status_request(
+            server, profile["id"], key, trust_anchor, h3_client
+        )
+        time.sleep(0.05)
+        resource = sampler.finish()
+        if status_response["status"] != 200:
+            raise ParityError(f"load follow-up returned HTTP {status_response['status']}")
+        try:
+            app_status = json.loads(
+                base64.b64decode(status_response["body_base64"], validate=True)
+            )
+        except (ValueError, json.JSONDecodeError) as error:
+            raise ParityError("load follow-up returned invalid application state") from error
+        responses_by_round.append(
+            [_load_response_fingerprint(response) for response in responses]
+        )
+        resource_rounds.append({**app_status, **resource})
+
+    return _load_resource_result(
+        responses_by_round,
+        resource_rounds,
+        load["concurrency"],
+        load["rounds"],
+    )
+
+
+def websocket_concurrent_sessions(
+    server: dict[str, Any],
+    specification: dict[str, Any],
+    load: dict[str, Any],
+    trust_anchor: Path | None,
+) -> list[dict[str, Any]]:
+    scheme = "wss" if trust_anchor is not None else "ws"
+    ssl_context = (
+        ssl.create_default_context(cafile=str(trust_anchor))
+        if trust_anchor is not None
+        else None
+    )
+    path = (
+        f"{specification['path']}?key={load['key']}&count={load['concurrency']}"
+        f"&messages={load['messages_per_session']}&message_bytes={load['message_bytes']}"
+    )
+    barrier = threading.Barrier(load["concurrency"])
+
+    def session(session_index: int) -> dict[str, Any]:
+        uri = f"{scheme}://127.0.0.1:{server['port']}{path}"
+        with websocket_connect(
+            uri,
+            subprotocols=specification["subprotocols"],
+            ssl=ssl_context,
+            proxy=None,
+            open_timeout=20,
+            close_timeout=3,
+            compression=None,
+            max_size=1024 * 1024,
+        ) as websocket:
+            barrier.wait(timeout=15)
+            payload = chr(65 + session_index % 26) + ("x" * (load["message_bytes"] - 1))
+            for _ in range(load["messages_per_session"]):
+                websocket.send(payload)
+            if load["pause_before_read_ms"]:
+                time.sleep(load["pause_before_read_ms"] / 1000)
+            echoes = [websocket.recv() for _ in range(load["messages_per_session"])]
+            try:
+                unexpected = websocket.recv()
+            except ConnectionClosed:
+                pass
+            else:
+                raise ParityError(
+                    f"WebSocket load session received an unexpected message: {unexpected!r}"
+                )
+            if echoes != [payload] * load["messages_per_session"]:
+                raise ParityError("WebSocket load session received a mismatched echo")
+            return {
+                "messages": echoes,
+                "close_code": websocket.close_code,
+                "close_reason": websocket.close_reason,
+            }
+
+    with ThreadPoolExecutor(
+        max_workers=load["concurrency"], thread_name_prefix="parity-websocket-load"
+    ) as pool:
+        futures = [pool.submit(session, index) for index in range(load["concurrency"])]
+        return [future.result(timeout=45) for future in futures]
+
+
+def run_websocket_load_case(
+    server: dict[str, Any],
+    profile: dict[str, Any],
+    case: dict[str, Any],
+    trust_anchor: Path | None,
+    h3_client: Path | None,
+) -> dict[str, Any]:
+    load = case["load"]
+    responses_by_round = []
+    resource_rounds = []
+    for _round_index in range(load["rounds"]):
+        sampler = ProcessResourceSampler(server["process"].pid)
+        sampler.start()
+        responses = websocket_concurrent_sessions(
+            server, case["websocket"], load, trust_anchor
+        )
+        time.sleep(0.05)
+        status_response = load_status_request(
+            server,
+            profile["id"],
+            load["key"],
+            trust_anchor,
+            h3_client,
+            kind="websocket",
+        )
+        time.sleep(0.05)
+        resource = sampler.finish()
+        if status_response["status"] != 200:
+            raise ParityError(
+                f"WebSocket load follow-up returned HTTP {status_response['status']}"
+            )
+        try:
+            app_status = json.loads(
+                base64.b64decode(status_response["body_base64"], validate=True)
+            )
+        except (ValueError, json.JSONDecodeError) as error:
+            raise ParityError("WebSocket load follow-up returned invalid application state") from error
+        responses_by_round.append(
+            [_load_response_fingerprint(response) for response in responses]
+        )
+        resource_rounds.append({**app_status, **resource})
+    return _load_resource_result(
+        responses_by_round,
+        resource_rounds,
+        load["concurrency"],
+        load["rounds"],
+    )
 
 
 def http3_peer_close_request(
@@ -4639,6 +5208,10 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "followup_response": "followup",
         "client_aborted": "client_aborted",
         "response_stream_started": "response_stream_started",
+        "active_streams_held": "active_streams_held",
+        "application_cancellation_count": "application_cancellation_count",
+        "application_completion_count": "application_completion_count",
+        "shutdown_elapsed_ms": "shutdown_elapsed_ms",
         "stream_reset": "stream_reset",
         "application_cancelled": "application_cancelled",
         "handshake_status": "handshake_status",
@@ -4659,6 +5232,12 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "startup_failed": "startup_failed",
         "startup_error_observed": "startup_error_observed",
         "responses": "responses",
+        "resource_rounds": "resource_rounds",
+        "resource_stable": "resource_stable",
+        "task_count_stable": "task_count_stable",
+        "active_tasks_zero": "active_tasks_zero",
+        "load_reached": "load_reached",
+        "followup_healthy": "followup_healthy",
         "response_complete_before_app_return": "response_complete_before_app_return",
         "background_work_completed": "background_work_completed",
         "application_cleanup_completed": "application_cleanup_completed",
@@ -4689,6 +5268,103 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
             raise ParityError(f"adapter omitted declared observation {field!r}")
         projected[field] = raw[source]
     return projected
+
+
+def run_zero_timeout_concurrent_stream_shutdown(
+    server: dict[str, Any],
+    profile: dict[str, Any],
+    lifecycle: dict[str, Any],
+    trust_anchor: Path | None,
+) -> dict[str, Any]:
+    """Hold concurrent HTTP/1.1 responses, then reset clients during zero-grace shutdown."""
+    count = lifecycle["stream_count"]
+    events_path = server["events"]
+    events_before = len(read_events(events_path))
+    release_path = events_path.with_suffix(".stream-release")
+    release_path.unlink(missing_ok=True)
+    ssl_context = None
+    if profile["id"] == "lifecycle-tls":
+        ssl_context = ssl._create_unverified_context()
+    connections: list[http.client.HTTPConnection] = []
+
+    def open_stream(
+        _index: int,
+    ) -> tuple[http.client.HTTPConnection, http.client.HTTPResponse, socket.socket]:
+        if ssl_context is None:
+            connection = http.client.HTTPConnection(
+                "127.0.0.1", server["port"], timeout=8
+            )
+        else:
+            connection = http.client.HTTPSConnection(
+                "127.0.0.1", server["port"], timeout=8, context=ssl_context
+            )
+        try:
+            connection.request(
+                "GET", lifecycle["stream_path"], headers={"Connection": "close"}
+            )
+            client_socket = connection.sock
+            if client_socket is None:
+                raise ParityError("concurrent shutdown request did not retain its client socket")
+            response = connection.getresponse()
+            if response.status != 200 or response.read(6) != b"first/":
+                raise ParityError("concurrent shutdown stream did not emit its first body chunk")
+            return connection, response, client_socket
+        except BaseException:
+            connection.close()
+            raise
+
+    try:
+        with ThreadPoolExecutor(
+            max_workers=count, thread_name_prefix="parity-shutdown-stream"
+        ) as pool:
+            futures = [pool.submit(open_stream, index) for index in range(count)]
+            streams = [future.result(timeout=12) for future in futures]
+        connections = [connection for connection, _response, _sock in streams]
+
+        deadline = time.monotonic() + 5
+        events = read_events(events_path)[events_before:]
+        while events.count("response.shutdown.hold") < count and time.monotonic() < deadline:
+            time.sleep(0.01)
+            events = read_events(events_path)[events_before:]
+        if events.count("response.shutdown.hold") != count:
+            raise ParityError(
+                "not every concurrent response reached its hold before shutdown: "
+                f"{events.count('response.shutdown.hold')}/{count}"
+            )
+
+        shutdown_started = time.monotonic()
+        server["process"].terminate()
+        aborted = 0
+        for _connection, _response, client_socket in streams:
+            client_socket.setsockopt(
+                socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
+            )
+            client_socket.close()
+            aborted += 1
+        exit_code, server_log = stop_server(server, graceful=True, signal_sent=True)
+        shutdown_elapsed = time.monotonic() - shutdown_started
+        # Release any app task if a server failed to cancel it before process
+        # teardown; the recorded cancellation count remains the acceptance signal.
+        release_path.touch()
+        events = read_events(events_path)[events_before:]
+        return {
+            "process_terminated": exit_code is not None,
+            "client_aborted": aborted == count,
+            "response_stream_started": len(streams) == count,
+            "active_streams_held": events.count("response.shutdown.hold"),
+            "application_cancellation_count": events.count("response.shutdown.cancelled"),
+            "application_completion_count": events.count("response.shutdown.finished"),
+            "application_events": events,
+            "shutdown_bounded": shutdown_elapsed <= lifecycle["graceful_timeout_seconds"] + 3,
+            "shutdown_elapsed_ms": round(shutdown_elapsed * 1000, 3),
+            "server_log": server_log,
+        }
+    finally:
+        release_path.touch()
+        for connection in connections:
+            connection.close()
+        if server["process"].poll() is None:
+            stop_server(server, graceful=True)
 
 
 def execute_case(
@@ -4784,6 +5460,8 @@ def execute_case(
                     fault_control_path.write_text("", encoding="utf-8")
         if profile["id"] == "http2":
             return http2_streaming_request(server["port"], case["request_stream"])
+    if "load" in case and "request_sequence" in case:
+        return run_http_load_case(server, profile, case, trust_anchor, h3_client)
     if "request_sequence" in case:
         if profile["id"] == "http3":
             if trust_anchor is None or h3_client is None:
@@ -4921,6 +5599,10 @@ def execute_case(
                 observation["fault_consumed"] = True
             return observation
     if "websocket" in case:
+        if case.get("operation") == "websocket.concurrent-session-load":
+            return run_websocket_load_case(
+                server, profile, case, trust_anchor, h3_client
+            )
         fault = case.get("fault")
         log_offset = len(read_server_log(server))
         observation = websocket_observation(
@@ -5111,6 +5793,10 @@ def execute_case(
         }
     if "lifecycle" in case:
         lifecycle = case["lifecycle"]
+        if case["operation"] == "lifespan.concurrent-stream-zero-timeout-shutdown":
+            return run_zero_timeout_concurrent_stream_shutdown(
+                server, profile, lifecycle, trust_anchor
+            )
         if case["operation"] == "lifespan.eager-registration-failure-cleanup":
             fault = case["fault"]
             fault_control_path = server["coverage_fault_control_path"]

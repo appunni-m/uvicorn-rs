@@ -1,11 +1,10 @@
 # CLI and Python API
 
-The current source passes 485/485 attribution workflows and three complete
-485-case repeats, with 5,106/5,106 native regions and 3,606/3,606 lines
-covered. The matrix contains 233 public oracle cases and 252 target-only
-contracts. The normal wheel passes 233/233 public comparisons and all 16
-exclusion checks with three selected cases. See the
-[current source/build receipt](coverage.md#current-full-verification-485-cases).
+The current source passes 490/490 attribution workflows and three complete
+490-case repeats, with 5,108/5,108 native regions and 3,608/3,608 lines
+covered. The matrix contains 238 public oracle cases and 252 target-only
+contracts. The normal non-instrumented local build passes 238/238 public
+comparisons. See the [current source/build receipt](coverage.md#current-full-verification-490-cases).
 
 ## CLI
 
@@ -24,7 +23,7 @@ uv run uvicorn-rs examples.hello_asgi:app --host 127.0.0.1 --port 8000
 | `--loop {asyncio,uvloop}` | `asyncio` | Python event-loop implementation used for the application. `uvloop` must be installed separately. Tokio remains the Rust network runtime. |
 | `--certfile PATH` | unset | PEM certificate chain. Must be supplied together with `--keyfile`; enables TLS for TCP and QUIC. |
 | `--keyfile PATH` | unset | PEM private key for `--certfile`. |
-| `--graceful-timeout SECONDS` | `10` | Non-negative integer grace period, in seconds, used for the bounded shutdown stages. |
+| `--graceful-timeout SECONDS` | `10` | Non-negative integer grace period, in seconds, used for bounded transport and request cleanup stages. ASGI lifespan shutdown and cancellation cleanup each retain a 100 ms minimum window, including when this is `0`. |
 
 TLS TCP advertises HTTP/2 and HTTP/1.1 using ALPN. QUIC serves experimental
 HTTP/3 on the same port. Without certificate/key files, the server accepts
@@ -65,8 +64,11 @@ event loop that should own the ASGI application. Cancelling its task requests
 graceful shutdown and then propagates cancellation after the native shutdown
 stages finish. Transport drain, request cleanup, lifespan shutdown, and lifespan
 cleanup use separate windows, so total shutdown time can exceed
-`graceful_timeout`. Python code that suppresses cancellation or exceeds a
-cleanup window can remain unfinished; the server reports that condition.
+`graceful_timeout`. A value of `0` skips waiting for active request/transport
+drain, but still allows a bounded 100 ms window for ASGI lifespan shutdown and
+Python cancellation cleanup. Python code that suppresses cancellation or
+exceeds a cleanup window can remain unfinished; the server reports that
+condition.
 See [shutdown ownership and stages](architecture.md#shutdown-ownership-and-stages).
 
 The native runtime rejects a timeout beyond its supported monotonic deadline

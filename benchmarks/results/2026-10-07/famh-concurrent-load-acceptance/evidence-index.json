@@ -1,0 +1,188 @@
+{
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "62c7ed39d8e66961c9c721588700bbcb9eb5a31bc72dac1e776057ce5c838b60",
+      "size_bytes": 5152
+    },
+    {
+      "path": "coverage-mcp-pages.json",
+      "sha256": "8d889ca641af09a64b532eb7904a15e23cf55d68eee15a7005f15f3a7bd1045c",
+      "size_bytes": 903
+    },
+    {
+      "path": "coverage-report.json.context.json",
+      "sha256": "b3a2364b447d7d4dd4471929b63fc49409adf227a7e39501b97032ef7600e174",
+      "size_bytes": 396
+    },
+    {
+      "path": "coverage-report.json.gz",
+      "sha256": "4c50a1d97a9afe59fddc61a8f54d7f3c04930594633253006442c72ed195a447",
+      "size_bytes": 3135591
+    },
+    {
+      "path": "matrix-repeat-results.tar.gz",
+      "sha256": "532464cb60044098c46751648873d2b003197caec4fbbba3d7dd9f735448f843",
+      "size_bytes": 188309
+    },
+    {
+      "path": "normal-parity-238.json",
+      "sha256": "77feb4ae08e28be9a0c175e15a5e161a8a8d4ad8c9cc6d7eb80d14456bbd721b",
+      "size_bytes": 4257540
+    },
+    {
+      "path": "selected-load-cases.json",
+      "sha256": "332bd1cb79ed7bd7d57bb7361f89f653bb1f08f67128a8c3093b851591fb2830",
+      "size_bytes": 572737
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "http1.concurrent-connections-slow-readers-resource-bound",
+      "normal_build_status": "passed",
+      "selected_status": "passed"
+    },
+    {
+      "case_id": "http2.concurrent-stream-load-slow-reader-resource-bound",
+      "normal_build_status": "passed",
+      "selected_status": "passed"
+    },
+    {
+      "case_id": "http3.concurrent-stream-load-slow-reader-resource-bound",
+      "normal_build_status": "passed",
+      "selected_status": "passed"
+    },
+    {
+      "case_id": "websocket.concurrent-sessions-slow-reader-resource-bound",
+      "normal_build_status": "passed",
+      "selected_status": "passed"
+    },
+    {
+      "case_id": "lifespan.zero-timeout-shutdown-cancels-16-active-streams",
+      "normal_build_status": "passed",
+      "selected_status": "passed"
+    }
+  ],
+  "date": "2026-10-07",
+  "environment": {
+    "instrumented": {
+      "machine": "arm64",
+      "platform": "macOS-15.7.7-arm64-arm-64bit",
+      "python": "3.12.13",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+    },
+    "normal": {
+      "dependencies": {
+        "aioquic": "1.3.0",
+        "h11": "0.16.0",
+        "h2": "4.4.1",
+        "httptools": "0.8.0",
+        "hypercorn": "0.18.0",
+        "uvicorn": "0.54.0",
+        "uvloop": "0.23.0",
+        "websockets": "17.1",
+        "wsproto": "1.3.2"
+      },
+      "machine": "arm64",
+      "platform": "macOS-15.7.7-arm64-arm-64bit",
+      "python": "3.12.13",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+    }
+  },
+  "instrumented": {
+    "build_id": "7257fa49fedfe976b1368cac2fd3656128ff23fde348228da30ce7315a326828",
+    "coverage": {
+      "lines": {
+        "covered": 3608,
+        "missing": 0,
+        "total": 3608
+      },
+      "regions": {
+        "covered": 5108,
+        "missing": 0,
+        "total": 5108
+      }
+    },
+    "coverage_mcp": {
+      "coverage": {
+        "covered": 5108,
+        "metric": "regions",
+        "missing": 0,
+        "total": 5108
+      },
+      "group_count": 0,
+      "metric": "regions",
+      "pages": 1,
+      "source": "matches_receipt",
+      "status": "measured",
+      "tests": "passed"
+    },
+    "matrix": {
+      "case_attribution_complete": true,
+      "executed": 490,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "passed": 490,
+      "selected": 490,
+      "transient_infrastructure_failures": 0
+    },
+    "native_extension_sha256": "d6d4a04dac3f2bb2cc704731486d7c499951d6610a0fd097008fd2dcefd74232",
+    "profile_union_matches_attribution": true,
+    "report_sha256": "ca2814eeb89409c84a6466ce5fd4fc2348881cf29ac35577281bae0da87241a7",
+    "scope": "complete",
+    "status": "complete",
+    "verification_repeats": [
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "passed": 490,
+        "run": 1,
+        "sha256": "4159adefa10060fdb19b02db1fc6239330a509dd2f3c396d84cf20934cfa9c77",
+        "transient_infrastructure_failures": 0
+      },
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "passed": 490,
+        "run": 2,
+        "sha256": "9da54a9677d9836484dae0b63dcc66db765a88ce238520215d2ad3bb0fbd9f61",
+        "transient_infrastructure_failures": 0
+      },
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "passed": 490,
+        "run": 3,
+        "sha256": "a8c5e4db7c738de9fe57914bc18e7521ab3ab5cb3e4d47ff586986cb3f568fbd",
+        "transient_infrastructure_failures": 0
+      }
+    ]
+  },
+  "normal_build": {
+    "instrumented_extension_sha256": "d6d4a04dac3f2bb2cc704731486d7c499951d6610a0fd097008fd2dcefd74232",
+    "native_extension_sha256": "62f6fd952c5d1a8c5e1adbc9370752c17b473d3334926ac95e38f615e6ec6ace",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "python": "3.12.13",
+    "runner_sha256": "734426c119851ab21866b04b14af973a8dd7032d84feafbeb0dbad5e1bdccd58",
+    "summary": {
+      "executed": 238,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 238,
+      "selected": 238
+    }
+  },
+  "schema": "uvicorn-rs-concurrent-load-evidence@1",
+  "scope": "bounded concurrent-load and zero-grace shutdown acceptance; not a performance benchmark",
+  "source": {
+    "aggregate_sha256": "3c3e4217679df29ca055fbc0d073da7d7f475167f82294a5aa8f7fdb95fbc44f",
+    "case_count": 490,
+    "dirty": true,
+    "input_file_count": 70,
+    "manifest_sha256": "35abb756dda4bc53e6e62e616f08722b9e53de1094317cc77972f668f8dc3972",
+    "operation_count": 71,
+    "revision": "cf3ce35764707edc07b90e7aeb8e05fe1e1210f3",
+    "src_lib_sha256": "b598c8e9b2d33db5b0c5bcdfdc8a49ec281918393eb8cfe60ff9185a62957121"
+  }
+}

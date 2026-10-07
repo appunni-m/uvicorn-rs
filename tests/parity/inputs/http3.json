@@ -2613,6 +2613,31 @@
         "headers": [],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "http3.concurrent-stream-load-slow-reader-resource-bound",
+      "profile": "http3",
+      "operation": "http3.concurrent-stream-load",
+      "covers": [
+        "http3.concurrent-stream-load"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/load/fan-in",
+          "headers": [],
+          "body_base64": ""
+        }
+      ],
+      "load": {
+        "key": "http3_fanin",
+        "rounds": 3,
+        "concurrency": 16,
+        "pause_before_read_ms": 100,
+        "chunks": 64,
+        "chunk_bytes": 4096
+      },
+      "h3_grease": false
     }
   ]
 }

@@ -1,13 +1,13 @@
 # Architecture and buffer ownership
 
-The current 485-case matrix passes attribution and three full repeats. It
-contains 233 live oracle comparisons and 252 target-only contracts across 70
-input files and 66 operations. Native coverage is 5,106/5,106 regions and
-3,606/3,606 lines, with zero Coverage MCP gaps. The normal wheel passes
-233/233 public parity cases and the 16-check exclusion audit with three
-selected workflows. See the [current source/build receipt](coverage.md#current-full-verification-485-cases).
-Older 451- and 448-case results below are historical and do not attest the
-current checkout.
+The current 490-case matrix passes attribution and three full repeats. It
+contains 238 live oracle comparisons and 252 target-only contracts across 70
+input files and 71 operations. Native coverage is 5,108/5,108 regions and
+3,608/3,608 lines, with zero Coverage MCP gaps. The normal non-instrumented
+local build passes all 238 public parity cases. See the [current source/build
+receipt](coverage.md#current-full-verification-490-cases). Older 485-, 451-,
+and 448-case results below are historical and do not attest the current
+checkout.
 
 ## Runtime boundary
 
@@ -276,7 +276,7 @@ malformed H1 framing, shutdown and healthy sibling/follow-up requests.
 The one-connection HTTP/3 case completes 128 one-byte uploads; its instrumented
 attribution records 128/128 body pumps joined, and each of the three complete
 matrix repeats returns 128/128 responses matching Hypercorn.
-See the [current evidence](coverage.md#current-full-verification-485-cases).
+See the [current evidence](coverage.md#current-full-verification-490-cases).
 
 Lifespan has a dedicated cleanup tracker. Its main native task remains outside
 that tracker while startup and shutdown run, so request cleanup does not wait
@@ -290,9 +290,11 @@ Unexpected destruction aborts the lifespan task before its channels are
 released. This ownership passed the historical shared-write full matrix after the exclusion
 correction.
 
-Cleanup windows use the configured grace period with a 100 ms minimum. Total
-shutdown time can exceed `graceful_timeout` because transport drain, request
-cleanup, lifespan shutdown, and lifespan cleanup have separate windows.
+Transport and request draining use the configured grace period. ASGI lifespan
+shutdown and Python cancellation cleanup each have a 100 ms minimum window,
+including when `graceful_timeout` is zero. Total shutdown time can exceed
+`graceful_timeout` because transport drain, request cleanup, lifespan shutdown,
+and lifespan cleanup have separate windows.
 An unfinished cleanup window produces a diagnostic while preserving the
 original startup, shutdown, or transport error. The caller's Python loop
 remains responsible for its own lifetime. The current matrix declares cases

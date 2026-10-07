@@ -2,28 +2,24 @@
 
 ## Current evidence status
 
-The current source passed the 485-case black-box gate on 2026-10-07. The
-manifest declares 485 workflows across 70 input files and 66 operations:
-233 live oracle comparisons and 252 target-only contracts. Attribution and all
-three complete 485-case repeats pass with zero failures, infrastructure
-errors, retries or cases not run. Native coverage is **5,106/5,106 regions and
-3,606/3,606 lines (100%)**. Coverage MCP measured the exact report with
-`source: matches_receipt`, `tests: passed`, zero missing regions, and zero gap
-groups. The installed normal wheel passes 233/233 public comparisons and its
-fault-seam exclusion audit passes all 16 checks.
+The current source passed the 490-case black-box gate on 2026-10-07. The
+manifest declares 490 workflows across 70 input files and 71 operations:
+238 live oracle comparisons and 252 target-only contracts. Per-case attribution
+and all three complete 490-case repeats passed with zero failures,
+infrastructure errors, retries, or cases not run. Native coverage is
+**5,108/5,108 regions and 3,608/3,608 lines (100%)**. Coverage MCP measured the
+same report with `source: matches_receipt`, `tests: passed`, zero missing
+regions, and zero gap groups. The normal non-instrumented local build also
+passed all 238 live oracle comparisons.
 
-The measured `src/lib.rs` SHA-256 is
-`91e022d9fd0154ebe76a2932a23284c23b0521d642f2f9da517b644e7bfaff71`; the
-aggregate source/input fingerprint is
-`659aa556ae54bbce2849b43a4453176fe5bc06267b1ea224e4393e84072c7885`. The
+This is source-bound local macOS ARM64 evidence from a dirty working tree at
+revision `cf3ce35764707edc07b90e7aeb8e05fe1e1210f3`, not a clean release
+baseline. The measured `src/lib.rs` SHA-256 is
+`b598c8e9b2d33db5b0c5bcdfdc8a49ec281918393eb8cfe60ff9185a62957121`; the
 instrumented native SHA-256 is
-`e119bcf50aa15cdd9f6d3462f857c5eda237dfc23fef18aab8f3389408cd8e08`. The
-report records revision `cc402eeca7adee56ce0a1606d957a4404a250a67`, a dirty
-working tree, and build ID
-`b90d8c1eba8f88fb6257796a6ad5759ec2a25776f7dbceb2d7ada1369ae89300`; this is
-local source-bound evidence, not a clean release baseline. No Rust unit tests
-were added; the manifest-backed live input matrix is the behavioral evidence
-system.
+`d6d4a04dac3f2bb2cc704731486d7c499951d6610a0fd097008fd2dcefd74232`. No Rust
+unit tests were added; the manifest-backed live input matrix remains the
+behavioral evidence system.
 
 The hosted Linux attempt for commit `9d05c72` is separate evidence. Its
 installed-wheel public parity and deployment job passed, including all 225
@@ -35,9 +31,57 @@ candidate jobs were skipped. The 100% figure above remains the recorded local
 macOS ARM64 result; the hosted Linux result is unresolved. See the
 [CI run and evidence index](../benchmarks/results/framework-integration-2026-10-07/evidence-index.json).
 
-## Current full verification (485 cases)
+## Current full verification (490 cases)
 
-The current archive is
+The current acceptance archive is
+[`famh-concurrent-load-acceptance`](../benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/).
+It contains the compressed unified LLVM report and matching context receipt,
+the full Coverage-MCP structured response, three raw full-matrix repeat
+results, a normal-build 238-case oracle report, and the focused five-case
+load/shutdown result. The report SHA-256 before compression is
+`ca2814eeb89409c84a6466ce5fd4fc2348881cf29ac35577281bae0da87241a7`;
+the build ID is
+`7257fa49fedfe976b1368cac2fd3656128ff23fde348228da30ce7315a326828`.
+The case-to-region attribution matches the union of profiles.
+
+| Verification | Passed | Failures / infrastructure / retries / not run |
+|---|---:|---|
+| Per-case attribution | 490/490 | 0 / 0 / 0 / 0 |
+| Full repeat 1 | 490/490 | 0 / 0 / 0 / 0 |
+| Full repeat 2 | 490/490 | 0 / 0 / 0 / 0 |
+| Full repeat 3 | 490/490 | 0 / 0 / 0 / 0 |
+| Native regions | 5,108/5,108 | 0 missing |
+| Native lines | 3,608/3,608 | 0 missing |
+| Coverage-MCP region gap groups | 0 | source matches; tests passed |
+| Normal non-instrumented oracle parity | 238/238 | 0 / 0 / 0 / 0 |
+| Focused load and zero-timeout parity | 5/5 | 0 / 0 / 0 / 0 |
+
+The instrumented run used CPython 3.12.13, Rust 1.98.1, and macOS 15.7.7
+ARM64. Its native scope is default-feature `src/lib.rs` with `cfg(coverage)`;
+Python code, dependencies, optional diagnostics, other feature combinations
+and platforms, the official full ASGI suite, and performance are outside this
+coverage claim. The ordinary full oracle run used the same fixture and
+reference versions with the normal local extension. It is not an installed
+wheel or release audit.
+
+The new workload cases exercise 32 concurrent HTTP/1.1 connections and 32
+HTTP/2 streams (four 100 ms slow-reader rounds each), 16 HTTP/3 streams (three
+rounds), and 16 WebSocket sessions (four rounds). They compare response
+lengths and SHA-256 fingerprints, require full concurrency and healthy
+follow-up requests, verify application tasks return to zero, require no net
+idle Python-task growth, and constrain the spread in late-round RSS samples to
+16 MiB. These are fixed-load stability checks, not an absolute memory cap or a
+throughput/latency benchmark. A separate zero-grace HTTP/1.1 shutdown case
+holds 16 ASGI response streams, resets their clients, requires 16 cancellations
+and zero completed responses, then checks bounded process exit and completed
+lifespan shutdown. Shutdown duration is recorded for diagnosis only.
+
+The exact inputs, results, environment, source/build receipt, and commands are
+documented in the archive README and evidence index.
+
+## Historical full verification (485 cases; earlier October 7 source)
+
+The earlier archive is
 [`asgi-inventory-485`](../benchmarks/results/2026-10-07/asgi-inventory-485/).
 It contains the compressed full LLVM report and matching context receipt, the
 full Coverage-MCP response and structured receipt, all three raw matrix runs

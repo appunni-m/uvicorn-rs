@@ -7,6 +7,7 @@ import base64
 import json
 import os
 from pathlib import Path
+from urllib.parse import parse_qs
 
 
 _disconnect_seen = False
@@ -14,6 +15,7 @@ _disconnect_sequence = []
 _retained_lifespan_send = None
 _concurrent_arrivals = 0
 _concurrent_barrier = None
+_load_groups = {}
 _task_cleanup_tasks = []
 _state_copy_key = None
 _state_copy_source = None
@@ -96,6 +98,81 @@ def _record(event: str) -> None:
     if path:
         with Path(path).open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(event) + "\n")
+
+
+def _load_parameters(scope, kind):
+    query = parse_qs(scope.get("query_string", b"").decode("ascii"))
+    key = query.get("key", [""])[0]
+    count = query.get("count", [""])[0]
+    if not key or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-" for character in key):
+        raise ValueError("load fixture requires a safe key")
+    if not count.isdigit() or not 2 <= int(count) <= 64:
+        raise ValueError("load fixture count must be between 2 and 64")
+    parameters = {"key": key, "count": int(count)}
+    if kind == "http":
+        chunks = query.get("chunks", [""])[0]
+        chunk_bytes = query.get("chunk_bytes", [""])[0]
+        if not chunks.isdigit() or not 16 <= int(chunks) <= 64:
+            raise ValueError("HTTP load fixture chunk count must be between 16 and 64")
+        if not chunk_bytes.isdigit() or not 1024 <= int(chunk_bytes) <= 4096:
+            raise ValueError("HTTP load fixture chunk size must be between 1024 and 4096")
+        parameters.update({"chunks": int(chunks), "chunk_bytes": int(chunk_bytes)})
+    elif kind == "websocket":
+        messages = query.get("messages", [""])[0]
+        message_bytes = query.get("message_bytes", [""])[0]
+        if not messages.isdigit() or not 1 <= int(messages) <= 32:
+            raise ValueError("WebSocket load fixture message count must be between 1 and 32")
+        if not message_bytes.isdigit() or not 1 <= int(message_bytes) <= 4096:
+            raise ValueError("WebSocket load fixture message size must be between 1 and 4096")
+        parameters.update({"messages": int(messages), "message_bytes": int(message_bytes)})
+    return parameters
+
+
+def _load_enter(scope, kind):
+    parameters = _load_parameters(scope, kind)
+    identity = (kind, parameters["key"])
+    state = _load_groups.get(identity)
+    if state is None:
+        state = {
+            "expected": parameters["count"],
+            "arrived": 0,
+            "active": 0,
+            "peak_active": 0,
+            "peak_python_tasks": 0,
+            "barrier": asyncio.Event(),
+        }
+        _load_groups[identity] = state
+    elif state["expected"] != parameters["count"]:
+        raise ValueError("load fixture count changed while the barrier was active")
+    state["arrived"] += 1
+    state["active"] += 1
+    state["peak_active"] = max(state["peak_active"], state["active"])
+    state["peak_python_tasks"] = max(state["peak_python_tasks"], len(asyncio.all_tasks()))
+    if state["arrived"] >= state["expected"]:
+        state["barrier"].set()
+    return parameters, state, identity
+
+
+def _load_exit(state):
+    state["active"] -= 1
+
+
+def _load_snapshot(kind, key):
+    identity = (kind, key)
+    state = _load_groups.get(identity)
+    if state is None:
+        return None
+    result = {
+        "arrived": state["arrived"],
+        "active": state["active"],
+        "expected": state["expected"],
+        "peak_active": state["peak_active"],
+        "peak_python_tasks": state["peak_python_tasks"],
+        "idle_python_tasks": len(asyncio.all_tasks()),
+    }
+    if state["active"] == 0:
+        _load_groups.pop(identity, None)
+    return result
 
 
 async def _respond(
@@ -436,6 +513,25 @@ async def _app_impl(scope, receive, send):
             await send({"type": "websocket.close", "code": 1000})
             await send({"type": "websocket.close", "code": 1001})
             return
+        if scope["path"] == "/ws/load":
+            parameters, state, _identity = _load_enter(scope, "websocket")
+            try:
+                await state["barrier"].wait()
+                await send({"type": "websocket.accept"})
+                for _ in range(parameters["messages"]):
+                    message = await receive()
+                    if message["type"] == "websocket.disconnect":
+                        return
+                    if message["type"] != "websocket.receive":
+                        raise RuntimeError("WebSocket load fixture received an unexpected event")
+                    if "text" in message:
+                        await send({"type": "websocket.send", "text": message["text"]})
+                    else:
+                        await send({"type": "websocket.send", "bytes": message["bytes"]})
+                await send({"type": "websocket.close", "code": 1000})
+            finally:
+                _load_exit(state)
+            return
         if scope["path"] == "/ws-client-close":
             await send({"type": "websocket.accept"})
             message = await receive()
@@ -627,6 +723,49 @@ async def _app_impl(scope, receive, send):
             _concurrent_barrier.set()
         await _concurrent_barrier.wait()
         await _respond(send, path.encode(), content_type=b"text/plain; charset=utf-8")
+        return
+
+    if path == "/load/fan-in":
+        parameters, state, _identity = _load_enter(scope, "http")
+        try:
+            await state["barrier"].wait()
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [(b"content-type", b"application/octet-stream")],
+                }
+            )
+            for index in range(parameters["chunks"]):
+                chunk = bytes([index % 256]) * parameters["chunk_bytes"]
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": chunk,
+                        "more_body": True,
+                    }
+                )
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+        finally:
+            _load_exit(state)
+        return
+
+    if path == "/load/status":
+        query = parse_qs(scope.get("query_string", b"").decode("ascii"))
+        key = query.get("key", [""])[0]
+        kind = query.get("kind", [""])[0]
+        if kind not in {"http", "websocket"}:
+            await _respond(send, b"invalid load kind", status=400, content_type=b"text/plain")
+            return
+        snapshot = _load_snapshot(kind, key)
+        if snapshot is None:
+            await _respond(send, b"load group not found", status=404, content_type=b"text/plain")
+            return
+        await _respond(
+            send,
+            json.dumps(snapshot, sort_keys=True).encode("ascii"),
+            content_type=b"application/json",
+        )
         return
 
     if path == "/return-before-response-start":
@@ -921,9 +1060,13 @@ async def _app_impl(scope, receive, send):
         await send({"type": "http.response.body", "body": b"first/", "more_body": True})
         _record("response.shutdown.hold")
         release_path = Path(os.environ["ASGI_PARITY_STREAM_RELEASE"])
-        deadline = asyncio.get_running_loop().time() + 5
-        while not release_path.exists() and asyncio.get_running_loop().time() < deadline:
-            await asyncio.sleep(0.005)
+        try:
+            deadline = asyncio.get_running_loop().time() + 5
+            while not release_path.exists() and asyncio.get_running_loop().time() < deadline:
+                await asyncio.sleep(0.005)
+        except asyncio.CancelledError:
+            _record("response.shutdown.cancelled")
+            raise
         if path == "/stream-shutdown-reset-large":
             chunk = b"x" * (256 * 1024)
             for _ in range(32):

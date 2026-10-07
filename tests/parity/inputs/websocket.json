@@ -1789,6 +1789,27 @@
         "messages": [],
         "expect_close": true
       }
+    },
+    {
+      "case_id": "websocket.concurrent-sessions-slow-reader-resource-bound",
+      "profile": "websocket",
+      "operation": "websocket.concurrent-session-load",
+      "covers": [
+        "websocket.concurrent-session-load"
+      ],
+      "websocket": {
+        "path": "/ws/load",
+        "subprotocols": [],
+        "messages": []
+      },
+      "load": {
+        "key": "websocket_fanin",
+        "rounds": 4,
+        "concurrency": 16,
+        "pause_before_read_ms": 100,
+        "messages_per_session": 16,
+        "message_bytes": 4096
+      }
     }
   ]
 }

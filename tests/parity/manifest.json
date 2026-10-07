@@ -1208,6 +1208,39 @@
       }
     },
     {
+      "id": "lifespan.concurrent-stream-zero-timeout-shutdown",
+      "kind": "protocol_operation",
+      "observe": [
+        "process_terminated",
+        "application_events",
+        "active_streams_held",
+        "application_cancellation_count",
+        "application_completion_count",
+        "client_aborted",
+        "response_stream_started",
+        "shutdown_bounded",
+        "shutdown_elapsed_ms"
+      ],
+      "compare": [
+        "active_streams_held",
+        "application_cancellation_count",
+        "application_completion_count",
+        "client_aborted",
+        "process_terminated",
+        "response_stream_started",
+        "shutdown_bounded"
+      ],
+      "required_observations": {
+        "process_terminated": true,
+        "active_streams_held": 16,
+        "application_cancellation_count": 16,
+        "application_completion_count": 0,
+        "client_aborted": true,
+        "response_stream_started": true,
+        "shutdown_bounded": true
+      }
+    },
+    {
       "id": "lifespan.hyper-connection-write-error-during-shutdown",
       "kind": "protocol_operation",
       "observe": [
@@ -1589,6 +1622,98 @@
         "loop_alive_after_server_return": true,
         "serve_cancellation_propagated": true,
         "shutdown_bounded": true
+      }
+    },
+    {
+      "id": "http.concurrent-connections",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses",
+        "resource_rounds",
+        "resource_stable",
+        "active_tasks_zero",
+        "load_reached",
+        "followup_healthy",
+        "task_count_stable"
+      ],
+      "compare": [
+        "responses"
+      ],
+      "required_observations": {
+        "resource_stable": true,
+        "active_tasks_zero": true,
+        "load_reached": true,
+        "followup_healthy": true,
+        "task_count_stable": true
+      }
+    },
+    {
+      "id": "http3.concurrent-stream-load",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses",
+        "resource_rounds",
+        "resource_stable",
+        "active_tasks_zero",
+        "load_reached",
+        "followup_healthy",
+        "task_count_stable"
+      ],
+      "compare": [
+        "responses"
+      ],
+      "required_observations": {
+        "resource_stable": true,
+        "active_tasks_zero": true,
+        "load_reached": true,
+        "followup_healthy": true,
+        "task_count_stable": true
+      }
+    },
+    {
+      "id": "websocket.concurrent-session-load",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses",
+        "resource_rounds",
+        "resource_stable",
+        "active_tasks_zero",
+        "load_reached",
+        "followup_healthy",
+        "task_count_stable"
+      ],
+      "compare": [
+        "responses"
+      ],
+      "required_observations": {
+        "resource_stable": true,
+        "active_tasks_zero": true,
+        "load_reached": true,
+        "followup_healthy": true,
+        "task_count_stable": true
+      }
+    },
+    {
+      "id": "http.concurrent-stream-load",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses",
+        "resource_rounds",
+        "resource_stable",
+        "active_tasks_zero",
+        "load_reached",
+        "followup_healthy",
+        "task_count_stable"
+      ],
+      "compare": [
+        "responses"
+      ],
+      "required_observations": {
+        "resource_stable": true,
+        "active_tasks_zero": true,
+        "load_reached": true,
+        "followup_healthy": true,
+        "task_count_stable": true
       }
     }
   ],

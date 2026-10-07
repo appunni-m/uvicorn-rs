@@ -2,23 +2,22 @@
 
 ## Current evidence status (2026-10-07)
 
-**Current-source regression, native coverage, and normal-build exclusion
-verification are complete for the recorded source/build.** The inventory
-declares 485 workflows across 70 input files: 233 oracle-parity cases and 252
-target-only contracts. The current source passed all 485 attribution cases and
-three complete repeats with zero failures, infrastructure errors,
-retries, or cases not run. The report records 5,106/5,106 native LLVM regions
-and 3,606/3,606 lines (100%); unfiltered Coverage-MCP has zero gap groups,
-`source: matches_receipt`, and `tests: passed`. This is default-feature,
-`cfg(coverage)` evidence for `src/lib.rs` on macOS ARM64, not all repository
-code, all features, or complete ASGI conformance. The normal release wheel
-passed all 233 public parity cases and its consumer check; the normal-build
-exclusion audit passed all 16 checks and three selected live cases, with all
-221 registered fault points absent. The instrumented matrix also records a
-128-request HTTP/3 same-connection sequence in each of three full repeats.
-Source/build identity and retained receipts are documented in
-[current coverage evidence](coverage.md#current-full-verification-485-cases) and the
-[485-case archive](../benchmarks/results/2026-10-07/asgi-inventory-485/).
+**Current-source attribution, native coverage, and normal-build parity pass**
+for the recorded source/build. The inventory declares 490 workflows across 70
+input files: 238 oracle-parity cases and 252 target-only contracts. The source
+passed all 490 attribution cases and three complete repeats with zero failures,
+infrastructure errors, retries, or cases not run. The report records
+5,108/5,108 native LLVM regions and 3,608/3,608 lines (100%); unfiltered
+Coverage-MCP has zero gap groups, `source: matches_receipt`, and `tests:
+passed`. This is default-feature `cfg(coverage)` evidence for `src/lib.rs` on
+macOS ARM64, not all repository code, all features, or complete ASGI
+conformance. A normal non-instrumented local build passed all 238 public
+parity cases. The installed-wheel exclusion audit is from a prior source
+snapshot and must be repeated for release verification. The matrix also
+records a 128-request HTTP/3 same-connection sequence in each of three full
+repeats. Source/build identity and retained receipts are documented in
+[current coverage evidence](coverage.md#current-full-verification-490-cases) and the
+[490-case archive](../benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/).
 
 The historical 445-case snapshot recorded all 4,719/4,719 regions and 3,329/3,329
 lines, with zero Coverage-MCP gaps and 445 passing attribution cases. Two full
@@ -366,7 +365,7 @@ case change.
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 485-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
 
 Before adding failpoints, use true client inputs for any uncovered behavior that can happen on a real deployment. The current matrix covers H1 malformed-final-chunk disconnect, incomplete-upload reset, early-response drain and response-stream reset; H2 partial-upload reset/cancellation and a healthy sibling stream; and H3 body errors, close/cancellation handling and follow-up health. Its H3 one-connection sequence serves 128 requests with 128 request-body pumps joined in each of three full repeats. Remaining candidates must first be reconciled against existing cases and named requirements:
 
@@ -384,7 +383,7 @@ Each candidate must name the missing function/region it targets before it is add
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 485-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
 
 
 The largest unreachable-looking groups are scope construction and PyO3 event conversion. Add named fault points around fallible construction/extraction sites in:
@@ -406,7 +405,7 @@ For each operation class, inject representative errors for allocation/constructi
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 485-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
 
 
 Use real HTTP workflows first, then targeted failpoints for channel/task states that a client cannot create:
@@ -425,7 +424,7 @@ The live observations should include response status/body or connection closure,
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 485-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
 
 
 Build one parameterized WebSocket workflow family covering:
@@ -444,7 +443,7 @@ Use existing raw-wire support or add a low-level WebSocket stimulus adapter only
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 485-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
 
 
 Extend the lifecycle matrix around the existing startup/shutdown cases:
@@ -463,7 +462,7 @@ Use external signals/control files or the existing public server API as workflow
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 485-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
 
 The historical zero-length HTTP/3 DATA-frame investigation encountered a
 Hypercorn timeout and the pinned `h3` receive API treating an empty frame as
@@ -474,7 +473,7 @@ That target-only result does not establish wire-level empty-frame
 interoperability; an independent wire client is still needed for that claim.
 
 
-The current 485-case report has no missing native regions in its declared Rust source scope. The body-pump slice covers request-body errors, cancellation/close selectors, disconnect delivery, bounded pump joining, and same-connection follow-up behavior. Keep that measured coverage distinct from unresolved transport claims: add an ordinary H3 probe for raw request-stream reset and response-write failure where the client can trigger them; use a named target fault contract only when a real client cannot select the internal error deterministically. Invalid ASGI response handling and endpoint/connection-close behavior remain governed by their existing matrix cases; do not duplicate them without a distinct requirement.
+The current 490-case report has no missing native regions in its declared Rust source scope. The body-pump slice covers request-body errors, cancellation/close selectors, disconnect delivery, bounded pump joining, and same-connection follow-up behavior. Keep that measured coverage distinct from unresolved transport claims: add an ordinary H3 probe for raw request-stream reset and response-write failure where the client can trigger them; use a named target fault contract only when a real client cannot select the internal error deterministically. Invalid ASGI response handling and endpoint/connection-close behavior remain governed by their existing matrix cases; do not duplicate them without a distinct requirement.
 
 Keep Hypercorn as the same-protocol oracle for ordinary H3 inputs. Mark injected endpoint/stream failures as target fault-contract results. Preserve clear separation from Uvicorn performance parity claims.
 
@@ -484,7 +483,7 @@ Keep Hypercorn as the same-protocol oracle for ordinary H3 inputs. Mark injected
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 485-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
 
 
 Cover the remaining supervisor and adapter error paths:
@@ -502,10 +501,10 @@ Use real occupied-port, reset, and cancellation workflows where deterministic; u
 ## Current gap inventory
 
 **The current report has zero missing native regions, lines, and unfiltered
-Coverage-MCP function groups.** The 485-case report measures 5,106/5,106 regions
-and 3,606/3,606 lines with passing attribution, three complete repeats, and a
+Coverage-MCP function groups.** The 490-case report measures 5,108/5,108 regions
+and 3,608/3,608 lines with passing attribution, three complete repeats, and a
 matching MCP receipt in the retained
-[evidence archive](../benchmarks/results/2026-10-07/asgi-inventory-485/).
+[evidence archive](../benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/).
 The historical 423-case report also recorded zero missing regions and zero
 Coverage-MCP function groups. Its complete one-page receipt is at
 `build/asgi-coverage/unified-423-final-2026-10-05/coverage-mcp-receipt.json`.
@@ -591,7 +590,7 @@ uncovered region and its exact case attribution.
 - Per-case profiling must not silently omit child server processes, module-import subprocesses, or shutdown paths. Isolate profiles by case and target process, verify profile flush/completeness, and reject an aggregate whose profile union does not equal its per-case hit map.
 - Coverage alone does not prove behavior quality. Each injection needs a meaningful external invariant and follow-up cleanup assertion.
 - Rust-generated PyO3 glue and platform-specific error arms may not be controllable after module import. If they remain unreachable after the fault seam is implemented, report the exact residual and do not quietly exclude it.
-- The current report records 5,106/5,106 native regions and 3,606/3,606 lines, with passing attribution, three complete repeats, matching Coverage-MCP, and a passing normal exclusion audit. Historical reports retain their own source/build scope. This does not cover optional diagnostics, every platform, the full ASGI specification, or performance. The measured checkout was dirty, so run the gates on the committed source before using it as a clean release baseline.
+- The current report records 5,108/5,108 native regions and 3,608/3,608 lines, with passing attribution, three complete repeats, and matching Coverage-MCP. The normal non-instrumented local build passes all public oracle cases; the installed-wheel exclusion audit applies to the prior source snapshot and must be repeated before release. Historical reports retain their own source/build scope. This does not cover optional diagnostics, every platform, the full ASGI specification, or performance. The measured checkout was dirty, so run the gates on the committed source before using it as a clean release baseline.
 
 ## Maintenance after completion
 
@@ -600,7 +599,7 @@ uncovered region and its exact case attribution.
 3. Use Coverage-MCP incremental comparisons only with fixed Rust source, instrumentation, and region inventory. A changed build requires a new full measurement.
 4. After source or input changes, pass every attribution case and three complete repeats. Require zero missing regions/lines, exact profile-union attribution, and attached matching MCP receipts.
 5. Verify normal release builds contain no active fault control. The historical audit is referenced in its unified report; repeat it for the changed native source.
-6. Repeat on clean committed source before establishing a release or hosted CI baseline. Current-source normal exclusion and instrumented verification passed. No package was published.
+6. Repeat on clean committed source before establishing a release or hosted CI baseline. The current instrumented gate and local normal-build parity passed; repeat the installed-wheel exclusion audit. No package was published.
 
 The historical 336-case table above preserves the earlier gap investigation.
 It does not describe the current source. Future batches must retain their own

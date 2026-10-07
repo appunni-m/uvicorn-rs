@@ -484,6 +484,30 @@
         "headers": [],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "http2.concurrent-stream-load-slow-reader-resource-bound",
+      "profile": "http2",
+      "operation": "http.concurrent-stream-load",
+      "covers": [
+        "http.concurrent-stream-load"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/load/fan-in",
+          "headers": [],
+          "body_base64": ""
+        }
+      ],
+      "load": {
+        "key": "http2_fanin",
+        "rounds": 4,
+        "concurrency": 32,
+        "pause_before_read_ms": 100,
+        "chunks": 32,
+        "chunk_bytes": 2048
+      }
     }
   ]
 }

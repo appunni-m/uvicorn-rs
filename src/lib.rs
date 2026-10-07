@@ -3747,10 +3747,16 @@ async fn serve_forever(
             // state before the timeout cancels the lifespan task.
             std::time::Duration::from_secs(1)
         } else {
-            options.graceful_timeout
+            // Zero grace disables active request draining, but still needs a
+            // bounded event-loop window to deliver and answer ASGI shutdown.
+            options
+                .graceful_timeout
+                .max(std::time::Duration::from_millis(100))
         };
     #[cfg(not(coverage))]
-    let lifespan_shutdown_timeout = options.graceful_timeout;
+    let lifespan_shutdown_timeout = options
+        .graceful_timeout
+        .max(std::time::Duration::from_millis(100));
     let shutdown_result =
         match tokio::time::timeout(lifespan_shutdown_timeout, lifespan.shutdown()).await {
             Ok(result) => result,

@@ -1,15 +1,14 @@
 # ASGI server parity suite
 
-The current 485-case matrix passes attribution and three complete repeats with
-zero failures, infrastructure errors, retries, or cases not run. It contains
-233 live oracle comparisons and 252 target-only contracts across 70 input
-files and 66 operations. Native coverage is 5,106/5,106 regions and
-3,606/3,606 lines; Coverage MCP reports zero gaps with matching source and
-passed test evidence. The normal wheel passes 233/233 public comparisons, and
-its normal-build audit passes 16 checks with three selected workflows. See
-[the current source/build receipt](coverage.md#current-full-verification-485-cases).
-Older 451- and 448-case results below are retained as historical evidence and
-do not attest the current source.
+The current 490-case matrix passes per-case attribution and three complete
+repeats with zero failures, infrastructure errors, retries, or cases not run.
+It contains 238 live oracle comparisons and 252 target-only contracts across
+70 input files and 71 operations. Native coverage is 5,108/5,108 regions and
+3,608/3,608 lines; Coverage MCP reports zero gaps with matching source and
+passed test evidence. The normal non-instrumented local build passes all
+238/238 oracle comparisons. See [the current source/build receipt](coverage.md#current-full-verification-490-cases).
+Earlier source/build and installed-wheel audits below remain historical
+evidence and do not attest this dirty working tree.
 
 ## Correctness gate
 
@@ -111,7 +110,7 @@ remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
 The [selected receipt](coverage.md#current-evidence-status) preserves its rich
 observation and identities. The same case passes full attribution and all three
-485-case repeats, and solely covers both formerly missing final-drain spans.
+490-case repeats, and solely covers both formerly missing final-drain spans.
 The `stream_reset` field follows the existing `recv_data` error convention;
 actual remote application close `0x102`, `body_stream_error`,
 `connection_closed` and cleanup establish connection-error termination and
@@ -143,11 +142,56 @@ or deadline-forced shutdown. They assert `http.disconnect` where the ASGI app
 can still receive, exact response outcomes, fault consumption, pump completion
 or forced join, no unexpected panic, and healthy follow-up/sibling requests.
 These contracts use the existing fault-contract envelope and are reported in
-the same unified matrix; they are not oracle-parity cases. The 485-case source
-passes attribution and all three repeats with 5,106/5,106 regions and
-3,606/3,606 lines covered. The normal wheel separately passes all 233 public
-oracle cases. The fixed [coverage archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
-retains both evidence sets and the Coverage-MCP receipt.
+the same unified matrix; they are not oracle-parity cases. The current 490-case
+source passes attribution and all three repeats with 5,108/5,108 regions and
+3,608/3,608 lines covered. The normal non-instrumented local build separately
+passes all 238 public oracle cases. The fixed [coverage archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
+retains the earlier evidence and its Coverage-MCP receipt.
+
+## Concurrent load and zero-grace shutdown workflows
+
+The current input matrix adds one synchronized slow-reader workload per
+protocol category and a zero-grace lifecycle case:
+
+| Case | Stimulus | Required observations |
+|---|---|---|
+| `http1.concurrent-connections-slow-readers-resource-bound` | 32 concurrent connections; 32 response chunks of 2 KiB each; 100 ms pause before reading; four rounds | All connections reach the barrier; response lengths and SHA-256 match; application work returns to zero; follow-up request is healthy. |
+| `http2.concurrent-stream-load-slow-reader-resource-bound` | 32 concurrent streams; 32 response chunks of 2 KiB each; 100 ms pause; four rounds | Same response, task, follow-up, and resource checks over multiplexed HTTP/2 streams. |
+| `http3.concurrent-stream-load-slow-reader-resource-bound` | 16 concurrent streams; 64 response chunks of 4 KiB each; 100 ms pause; three rounds | Same checks over HTTP/3. The probe disables its optional GREASE setting for this workload. |
+| `websocket.concurrent-sessions-slow-reader-resource-bound` | 16 sessions; 16 echoed messages of 4 KiB each; 100 ms pause; four rounds | Message lengths and SHA-256 match; sessions close cleanly; task and follow-up checks pass. |
+| `lifespan.zero-timeout-shutdown-cancels-16-active-streams` | Hold 16 HTTP/1.1 ASGI responses, request SIGTERM with graceful timeout 0, and reset the clients | All 16 applications observe cancellation, none completes its response, lifespan shutdown completes, and the server exits within the case's three-second bound. |
+
+The load cases sample process RSS, OS threads, and the ASGI app's Python task
+count every 5 ms. They require no net idle Python-task growth from the first
+to the final round and a spread of at most 16 MiB across late-round RSS
+samples. The RSS condition is a fixed-workload stability threshold, not an
+absolute cap. A response fingerprint is retained instead of duplicating the
+full repeated body in the report.
+
+This acceptance adds no body-size, byte-queue, or global connection cap. The
+observed RSS stability applies only to these bounded inputs and does not
+justify a safe general-purpose byte limit. The decision for this change is to
+retain current accepted request behavior; any new byte-based resource limit
+needs a separate compatibility contract and parity inputs.
+
+Run the normal oracle set with the default runner, then run attribution and
+three complete matrix repeats with the unified coverage runner:
+
+```sh
+uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs
+uv run --group benchmark python scripts/run_parity.py --output target/parity-normal.json
+uv run --group benchmark python scripts/run_unified_coverage.py \
+  --output build/asgi-coverage/current/coverage-report.json \
+  --artifacts-dir build/asgi-coverage/current/artifacts \
+  --matrix-repeats 3 --matrix-infra-retries 0 --case-infra-retries 0
+```
+
+The exact run retained on 2026-10-07 is linked from [coverage evidence](coverage.md#current-full-verification-490-cases).
+These checks establish fixed-load parity and bounded cleanup on the listed
+workflows. They do not claim high-scale capacity, an absolute memory bound,
+network-loss resilience, or throughput/latency improvement. Only the
+zero-grace HTTP/1.1 path is exercised during shutdown; protocol-wide shutdown
+under concurrent load remains unverified.
 
 ## Historical correctness evidence
 

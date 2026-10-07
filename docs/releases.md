@@ -18,14 +18,16 @@ was also extracted, rebuilt with locked dependencies and consumed in a fresh
 environment. Its package inputs matched the checkout.
 
 The October 5 release-preparation evidence below remains a historical
-snapshot. On October 7, the normal macOS ARM64 wheel built for the current
-source passed all 233 public oracle comparisons. Its separate normal-build
-exclusion audit passed 16/16 checks and three selected public workflows. The
-current instrumented source passed 485 attribution cases and three full
-repeats, with 5,106/5,106 regions and 3,606/3,606 lines covered; Coverage MCP
-reported zero gaps and a matching source receipt. The local reports, identities
-and audit outputs are in the
-[485-case evidence archive](../benchmarks/results/2026-10-07/asgi-inventory-485/evidence-index.json).
+snapshot. An earlier October 7 source snapshot passed 233 public oracle cases
+on an installed macOS ARM64 wheel and its separate normal-build exclusion
+audit passed 16/16 checks. The current dirty source passed 238/238 oracle cases
+on the normal non-instrumented local build and passed 490 attribution cases
+plus three full repeats with 5,108/5,108 regions and 3,608/3,608 lines
+covered; Coverage MCP reported zero gaps and a matching source receipt. The
+new local acceptance evidence is in the
+[490-case archive](../benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/evidence-index.json).
+The installed-wheel exclusion audit has not been rerun for this source, so the
+current result is not a release candidate verification.
 
 Hosted CI run [37566368036](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036)
 on main commit `9d05c72` passed Rust quality, MSRV, and the installed-wheel

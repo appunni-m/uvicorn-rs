@@ -4953,6 +4953,30 @@
         "headers": [],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "http1.concurrent-connections-slow-readers-resource-bound",
+      "profile": "http1",
+      "operation": "http.concurrent-connections",
+      "covers": [
+        "http.concurrent-connections"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/load/fan-in",
+          "headers": [],
+          "body_base64": ""
+        }
+      ],
+      "load": {
+        "key": "http1_fanin",
+        "rounds": 4,
+        "concurrency": 32,
+        "pause_before_read_ms": 100,
+        "chunks": 32,
+        "chunk_bytes": 2048
+      }
     }
   ]
 }

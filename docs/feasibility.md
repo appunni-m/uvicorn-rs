@@ -2,15 +2,14 @@
 
 ## Current correctness evidence (2026-10-07)
 
-The current 485-case behavior inventory passes 485/485 instrumented attribution
-cases and three complete 485-case repeats with zero failures, infrastructure
-errors, retries or cases not run. Its matrix has 233 public comparisons and
-252 target-only contracts across 70 input files and 66 operations. Coverage is
-5,106/5,106 native regions and 3,606/3,606 lines (100%), with zero unfiltered
-source-matched MCP gaps and tests passed. The current normal wheel passes
-233/233 public comparisons and all 16 exclusion checks with three selected
-live cases. The coverage and normal-wheel reports are preserved in
-[current evidence](coverage.md#current-full-verification-485-cases).
+The current 490-case behavior inventory passes 490/490 instrumented
+attribution cases and three complete 490-case repeats with zero failures,
+infrastructure errors, retries or cases not run. Its matrix has 238 public
+comparisons and 252 target-only contracts across 70 input files and 71
+operations. Coverage is 5,108/5,108 native regions and 3,608/3,608 lines
+(100%), with zero unfiltered source-matched MCP gaps and tests passed. The
+normal non-instrumented local build passes all 238 public comparisons. The
+coverage and parity reports are preserved in [current evidence](coverage.md#current-full-verification-490-cases).
 
 The October 5 category measurements below predate the latest H3 close-code
 source and were not rerun for it. They remain evidence for their recorded
