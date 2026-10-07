@@ -35,10 +35,11 @@ on clean commit `1a72c9b` completed with failure. Rust quality and MSRV passed;
 installed-wheel public parity passed 239/239; unified coverage passed 491/491
 cases with 5,121/5,121 regions and 3,624/3,624 lines. Package preparation did
 not pass: the Windows checkout hit a tracked path-length error in retained
-parity evidence; the pending workflow update enables Git's `core.longpaths`
-before checkout. The Linux package, source rebuild and candidate-wheel parity
-steps passed, but the build-manifest recording step failed; its detailed log
-was not publicly retrievable, so the cause remains unknown. The macOS ARM64
+parity evidence. Follow-up run #36 sets Git's `core.longpaths` in the job
+environment so checkout has the setting before its first step; hosted
+verification is pending. The Linux package, source rebuild, and candidate-wheel
+parity steps passed, but the build-manifest recording step failed; its detailed
+log was not publicly retrievable, so the cause remains unknown. The macOS ARM64
 wheel-build/consumer step also failed without a detailed public annotation.
 The Python-floor job was skipped, and no platform candidate artifacts were
 uploaded. This run is not a complete release candidate.
