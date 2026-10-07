@@ -38,10 +38,22 @@ Later run
 `d66548a`, passed its separate public-parity job but failed the unified
 coverage job after 25m17s. GitHub retained the `uvicorn-rs-unified-coverage`
 artifact, but this environment cannot download it without GitHub credentials;
-the hosted-only failure details remain unknown. A separate 238-case server-log
-excerpt reports one infrastructure failure and one case not run but does not
-name the failed case. The local 491-case result does not resolve either hosted
-failure.
+the hosted-only failure details remain unknown.
+
+Follow-up run
+[#25](https://github.com/appunni-m/uvicorn-rs/actions/runs/37619753677), commit
+`a394697`, also failed its unified coverage job after 29m52s. Its separate
+installed-wheel parity job passed 239/239 with no failures, infrastructure
+errors, or cases not run. GitHub retained `uvicorn-rs-unified-coverage` as
+artifact `11482802502` (SHA-256
+`1793948e9fad9e3872da8b61ac4d9af53ca71bb43bffd7f408d94c62fcc134a5`), but
+the download endpoint returns HTTP 401 in this environment. Without the
+artifact report, it is unknown whether this run repeats the H3 infrastructure
+failure, reports uncovered Linux regions, or failed at another gate. The local
+491-case result does not resolve the hosted failures.
+
+A separate earlier 238-case server-log excerpt reports one infrastructure
+failure and one case not run but does not name the failed case.
 
 ## Current full verification (491 cases)
 

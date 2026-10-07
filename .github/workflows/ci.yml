@@ -249,6 +249,13 @@ jobs:
             --matrix-repeats 3 --case-infra-retries 0 --matrix-infra-retries 0 \
             2>&1 | tee target/asgi-coverage/run.log
           .venv/bin/python scripts/check_ci_evidence.py coverage target/asgi-coverage/coverage-report.json
+      - name: Summarize unified coverage diagnostics
+        if: always()
+        continue-on-error: true
+        run: |
+          python scripts/summarize_unified_coverage.py \
+            --report target/asgi-coverage/coverage-report.json \
+            --log target/asgi-coverage/run.log
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
