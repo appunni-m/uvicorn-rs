@@ -1,5 +1,7 @@
 # uvicorn-rs
 
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-DB61A2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/appunni-m)
+
 An independent Rust network server for Python ASGI 3 applications. Rust handles
 listeners, HTTP/1.1, HTTP/2, experimental HTTP/3, WebSocket transport, flow
 control, and shutdown. Python loads the application and keeps ownership of its
