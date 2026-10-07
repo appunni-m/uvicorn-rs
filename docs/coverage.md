@@ -88,7 +88,7 @@ parity/coverage gate. Later hosted runs are recorded below.
 A separate earlier 238-case server-log excerpt reports one infrastructure
 failure and one case not run but does not name the failed case.
 
-## Hosted CI follow-up (runs #30–#32)
+## Hosted CI follow-up (runs #30–#33)
 
 Run [#30](https://github.com/appunni-m/uvicorn-rs/actions/runs/37651700488)
 on commit `19cca6f` completed after 23m53s with failure. The installed-wheel
@@ -140,11 +140,32 @@ reproduce the timeout. The retained `uvicorn-rs-unified-coverage` artifact is ID
 Python-floor jobs were skipped. The exact hosted failure cause remains
 unknown.
 
-The follow-up change in commit `8c17dea` raises the bounded failure detail
+The diagnostic change in commit `8c17dea` raises the bounded failure detail
 from 500 to 5,000 characters and includes the target server-log tail in oracle
-adapter diagnostics. Hosted CI run
-[#33](https://github.com/appunni-m/uvicorn-rs/actions/runs/37663278880) is
-exercising this change.
+adapter diagnostics. Run
+[#33](https://github.com/appunni-m/uvicorn-rs/actions/runs/37663278880)
+exercised it and completed after 30m41s with failure. Rust quality, the Rust
+minimum, and installed-wheel public parity passed; public parity was 239/239
+with no failures, infrastructure errors, or cases not run. Unified coverage
+measured all 5,121 regions and 3,624 lines, but the gate was incomplete at
+489/491 cases.
+
+The check annotations identify two attribution infrastructure failures:
+`websocket-tls.text-round-trip-with-query-and-subprotocol` and
+`websocket-tls.scope-headers-path-query-and-subprotocols`. Repeat 1 reports
+490/491 passed with one infrastructure failure on the scope case and no case
+not run. The visible diagnostics show only `lifespan.startup`, a successful
+HTTPS readiness request, both server processes alive, no Uvicorn WebSocket
+access record, and an empty target log. The Uvicorn oracle timed out waiting
+for the TLS WebSocket handshake response before ASGI dispatch. No behavioral
+mismatch is reported; the underlying cause remains unknown. The other repeat
+details are in the protected artifact and are not asserted here.
+
+GitHub retained `uvicorn-rs-unified-coverage` as artifact `11503562361`
+(25,016,587 bytes); its anonymous download returned HTTP 401. The package and
+Python-floor jobs were skipped. This is consistent with the previous hosted
+TLS-WebSocket oracle timeouts and shows that the expanded diagnostic records
+the empty target log, but it does not establish the cause.
 
 ## Current full verification (491 cases)
 
