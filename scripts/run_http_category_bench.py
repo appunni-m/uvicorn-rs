@@ -137,7 +137,11 @@ WORKLOADS = {
 }
 
 SERVERS = {
-    "uvicorn-asyncio-h11": {"kind": "uvicorn", "loop": "asyncio", "http": "h11"},
+    "uvicorn-asyncio-httptools": {
+        "kind": "uvicorn",
+        "loop": "asyncio",
+        "http": "httptools",
+    },
     "uvicorn-uvloop-httptools": {
         "kind": "uvicorn",
         "loop": "uvloop",

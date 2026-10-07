@@ -27,11 +27,26 @@ import uuid
 
 
 CATEGORIES = (
-    ("http1", "run_http_category_bench.py", "uvicorn-uvloop-httptools"),
-    ("http2", "run_h2_category_bench.py", "hypercorn-uvloop"),
-    ("http3", "run_h3_category_bench.py", "hypercorn-uvloop"),
-    ("websocket", "run_websocket_category_bench.py", "uvicorn-uvloop-websockets"),
-    ("lifecycle", "run_lifecycle_bench.py", "uvicorn-uvloop-httptools"),
+    ("http1", "run_http_category_bench.py", (
+        ("asyncio", "uvicorn-asyncio-httptools", "uvicorn-rs-asyncio"),
+        ("uvloop", "uvicorn-uvloop-httptools", "uvicorn-rs-uvloop"),
+    )),
+    ("http2", "run_h2_category_bench.py", (
+        ("asyncio", "hypercorn-asyncio", "uvicorn-rs-asyncio"),
+        ("uvloop", "hypercorn-uvloop", "uvicorn-rs-uvloop"),
+    )),
+    ("http3", "run_h3_category_bench.py", (
+        ("asyncio", "hypercorn-asyncio", "uvicorn-rs-asyncio"),
+        ("uvloop", "hypercorn-uvloop", "uvicorn-rs-uvloop"),
+    )),
+    ("websocket", "run_websocket_category_bench.py", (
+        ("asyncio", "uvicorn-asyncio-websockets", "uvicorn-rs-asyncio"),
+        ("uvloop", "uvicorn-uvloop-websockets", "uvicorn-rs-uvloop"),
+    )),
+    ("lifecycle", "run_lifecycle_bench.py", (
+        ("asyncio", "uvicorn-asyncio-httptools", "uvicorn-rs-asyncio"),
+        ("uvloop", "uvicorn-uvloop-httptools", "uvicorn-rs-uvloop"),
+    )),
 )
 PROBE_NAMES = ("http2", "bench", "websocket", "parity-http3")
 LIMITATIONS = (
@@ -105,9 +120,9 @@ def workload_names(path):
     raise ValueError(f"{path}: no WORKLOADS dictionary")
 
 
-def expected_rows(path, label, reference, repetitions, selected_workloads=None):
+def expected_rows(path, label, selected_servers, repetitions, selected_workloads=None):
     if label == "lifecycle":
-        return {(label, name, number) for name in (reference, "uvicorn-rs-uvloop")
+        return {(label, name, number) for name in selected_servers
                 for number in range(1, repetitions + 1)}
     statement = next(statement for statement in ast.parse(path.read_text()).body
                      if isinstance(statement, ast.Assign) and any(isinstance(target, ast.Name)
@@ -118,7 +133,7 @@ def expected_rows(path, label, reference, repetitions, selected_workloads=None):
         name = ast.literal_eval(key)
         if selected is not None and name not in selected:
             continue
-        servers = (reference, "uvicorn-rs-uvloop")
+        servers = tuple(selected_servers)
         if not isinstance(definition, ast.Dict):
             raise ValueError(f"{path}: workload {name} must use a literal dictionary")
         for field, value in zip(definition.keys, definition.values):
@@ -341,7 +356,7 @@ def main():
     out = args.output_dir.absolute() if args.output_dir else root / "target/benchmark-categories" / f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:12]}"
     out.mkdir(parents=True, exist_ok=False)
     record = {
-        "schema": "uvicorn-rs-sequential-category-run@1", "started_at": utc_now(),
+        "schema": "uvicorn-rs-sequential-category-run@2", "started_at": utc_now(),
         "status": "running_not_proven", "identity_before": before, "category_runs": [],
         "workload_exclusions": [
             {
@@ -352,7 +367,11 @@ def main():
         ] if not before["optional_workloads"]["starlette-rs-route"]["selected"] else [],
         "public_parity_gate": parity, "limitations": list(LIMITATIONS),
         "parameters": {"duration": args.duration, "warmup": args.warmup, "concurrency": args.concurrency,
-                       "repetitions": args.repetitions, "seed": args.seed, "category_timeout_seconds": args.category_timeout},
+                       "repetitions": args.repetitions, "seed": args.seed, "category_timeout_seconds": args.category_timeout,
+                       "comparison_pairs": {label: [
+                           {"loop": loop, "reference": reference, "candidate": candidate}
+                           for loop, reference, candidate in comparisons
+                       ] for label, _, comparisons in CATEGORIES}},
         "tools": {},
     }
     checkpoint = out / "run.json"
@@ -377,10 +396,13 @@ def main():
                               ("openssl", ["openssl", "version"])):
             record["tools"][name] = checked_tool(command, root).splitlines()[0]
             atomic_json(checkpoint, record)
-        for label, name, reference in CATEGORIES:
+        for label, name, comparisons in CATEGORIES:
             script = root / "scripts" / name
             output = out / f"{label}.json"
-            command = [str(python), str(script), "--servers", reference, "uvicorn-rs-uvloop",
+            servers = tuple(dict.fromkeys(
+                server for _, reference, candidate in comparisons for server in (reference, candidate)
+            ))
+            command = [str(python), str(script), "--servers", *servers,
                        "--repetitions", str(args.repetitions), "--seed", str(args.seed), "--output", str(output)]
             workloads = ["lifecycle"]
             if label != "lifecycle":
@@ -390,10 +412,15 @@ def main():
                 command += ["--workloads", *workloads, "--duration", str(args.duration),
                             "--warmup", str(args.warmup), "--concurrency", str(args.concurrency)]
             planned = expected_rows(
-                script, label, reference, args.repetitions,
+                script, label, servers, args.repetitions,
                 selected_workloads=workloads if label != "lifecycle" else None,
             )
             entry = {"category": label, "command": command, "workloads": workloads,
+                     "servers": list(servers),
+                     "comparison_pairs": [
+                         {"loop": loop, "reference": reference, "candidate": candidate}
+                         for loop, reference, candidate in comparisons
+                     ],
                      "expected_rows": len(planned), "started_at": utc_now(), "log": str(out / f"{label}.log")}
             record["category_runs"].append(entry)
             atomic_json(checkpoint, record)

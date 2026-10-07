@@ -32,7 +32,7 @@ PYTHON = ROOT / ".venv" / "bin" / "python"
 SERVERS = {
     "uvicorn-rs-asyncio": {"kind": "rust", "loop": "asyncio"},
     "uvicorn-rs-uvloop": {"kind": "rust", "loop": "uvloop"},
-    "uvicorn-asyncio-h11": {"kind": "uvicorn", "loop": "asyncio", "http": "h11"},
+    "uvicorn-asyncio-httptools": {"kind": "uvicorn", "loop": "asyncio", "http": "httptools"},
     "uvicorn-uvloop-httptools": {"kind": "uvicorn", "loop": "uvloop", "http": "httptools"},
 }
 

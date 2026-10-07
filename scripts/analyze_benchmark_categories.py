@@ -21,7 +21,10 @@ import statistics
 MINIMUM_MATCHES = 3
 CATEGORIES = {
     "http1": {
-        "reference": "uvicorn-uvloop-httptools",
+        "pairs": [
+            {"loop": "asyncio", "reference": "uvicorn-asyncio-httptools", "candidate": "uvicorn-rs-asyncio"},
+            {"loop": "uvloop", "reference": "uvicorn-uvloop-httptools", "candidate": "uvicorn-rs-uvloop"},
+        ],
         "workloads": [
             "fixed", "large-response", "many-response-chunks", "small-response-chunks",
             "request-upload", "request-upload-small-chunks", "slow-reader-backpressure",
@@ -30,26 +33,40 @@ CATEGORIES = {
         ],
     },
     "http2": {
-        "reference": "hypercorn-uvloop",
+        "pairs": [
+            {"loop": "asyncio", "reference": "hypercorn-asyncio", "candidate": "uvicorn-rs-asyncio"},
+            {"loop": "uvloop", "reference": "hypercorn-uvloop", "candidate": "uvicorn-rs-uvloop"},
+        ],
         "workloads": [
             "protocol-scope", "fixed", "large-response", "many-response-chunks",
             "request-upload", "request-upload-small-chunks", "slow-reader-backpressure",
         ],
     },
     "http3": {
-        "reference": "hypercorn-uvloop",
+        "pairs": [
+            {"loop": "asyncio", "reference": "hypercorn-asyncio", "candidate": "uvicorn-rs-asyncio"},
+            {"loop": "uvloop", "reference": "hypercorn-uvloop", "candidate": "uvicorn-rs-uvloop"},
+        ],
         "workloads": [
             "protocol-scope-consumed-request", "protocol-scope", "fixed", "large-response", "many-response-chunks",
             "request-upload", "slow-reader-backpressure",
         ],
     },
     "websocket": {
-        "reference": "uvicorn-uvloop-websockets",
+        "pairs": [
+            {"loop": "asyncio", "reference": "uvicorn-asyncio-websockets", "candidate": "uvicorn-rs-asyncio"},
+            {"loop": "uvloop", "reference": "uvicorn-uvloop-websockets", "candidate": "uvicorn-rs-uvloop"},
+        ],
         "workloads": ["connection-handshake", "text-echo", "binary-64k-echo"],
     },
-    "lifecycle": {"reference": "uvicorn-uvloop-httptools", "workloads": ["lifecycle"]},
+    "lifecycle": {
+        "pairs": [
+            {"loop": "asyncio", "reference": "uvicorn-asyncio-httptools", "candidate": "uvicorn-rs-asyncio"},
+            {"loop": "uvloop", "reference": "uvicorn-uvloop-httptools", "candidate": "uvicorn-rs-uvloop"},
+        ],
+        "workloads": ["lifecycle"],
+    },
 }
-CANDIDATE = "uvicorn-rs-uvloop"
 SUSTAINED_METRICS = {
     "p50_ms": "p50_ms", "p95_ms": "p95_ms", "p99_ms": "p99_ms",
     "server_cpu_seconds": "server_cpu_seconds",
@@ -309,7 +326,18 @@ def analyze_category(loaded, driver):
     category = loaded["category"]
     metadata, rows = loaded["metadata"], loaded["rows"]
     spec = CATEGORIES[category]
-    reference, candidate = spec["reference"], CANDIDATE
+    configured_servers = metadata.get("servers")
+    if isinstance(configured_servers, dict) and configured_servers and all(isinstance(server, str) for server in configured_servers):
+        selected_servers = list(configured_servers)
+    else:
+        selected_servers = list(dict.fromkeys(
+            server for pair in spec["pairs"] for server in (pair["reference"], pair["candidate"])
+        ))
+    selected_server_set = set(selected_servers)
+    pair_specs = [
+        pair for pair in spec["pairs"]
+        if pair["reference"] in selected_server_set or pair["candidate"] in selected_server_set
+    ] or list(spec["pairs"])
     workloads = metadata.get("workloads", spec["workloads"])
     if category == "lifecycle":
         workloads = ["lifecycle"]
@@ -324,8 +352,10 @@ def analyze_category(loaded, driver):
     identities = Counter(key for row in rows if (key := row_key(row)) is not None)
     missing = []
     for workload in workloads:
-        for server in (reference, candidate):
-            if server == reference and workload in target_only:
+        excluded_for_workload = exclusions.get(workload, {}) if isinstance(exclusions, dict) else {}
+        excluded_servers = set(excluded_for_workload) if isinstance(excluded_for_workload, dict) else set()
+        for server in selected_servers:
+            if server in excluded_servers:
                 continue
             for number in range(1, planned_repetitions + 1):
                 if identities[(workload, server, number)] != 1:
@@ -359,75 +389,78 @@ def analyze_category(loaded, driver):
                                      "raw_failures": row.get("failures") if isinstance(row, dict) else None})
         elif key is not None:
             eligible[key] = row
-        if isinstance(row, dict) and row.get("workload") in target_only and row.get("server") == candidate:
+        if (isinstance(row, dict) and row.get("workload") in target_only
+                and row.get("server") in {pair["candidate"] for pair in pair_specs}):
             exclusions_counts["target_only_no_live_reference_pair"] += 1
     gates = metadata.get("paired_timing_repetitions", [])
     pairs = []
     for workload in workloads:
-        reference_rows = {number: row for (name, server, number), row in eligible.items() if name == workload and server == reference}
-        candidate_rows = {number: row for (name, server, number), row in eligible.items() if name == workload and server == candidate}
-        reasons = list(gate_reasons)
-        matching = sorted(reference_rows.keys() & candidate_rows.keys())
-        gate_matches = [gate for gate in gates if isinstance(gate, dict) and gate.get("workload") == workload
-                        and gate.get("baseline") == reference and gate.get("candidate") == candidate] if isinstance(gates, list) else []
-        if len(gate_matches) != 1:
-            reasons.append("recorded_pair_gate_missing_or_duplicate")
-            gate = None
-        else:
-            gate = gate_matches[0]
-            if gate.get("outcome") != "available":
-                reasons.append("recorded_pair_gate_not_available")
-            recorded_matches = gate.get("valid_matching_repetitions", [])
-            if not isinstance(recorded_matches, list) or not all(repetition(number) for number in recorded_matches):
-                reasons.append("recorded_pair_repetitions_malformed")
-                matching = []
+        for pair_spec in pair_specs:
+            reference, candidate = pair_spec["reference"], pair_spec["candidate"]
+            reference_rows = {number: row for (name, server, number), row in eligible.items() if name == workload and server == reference}
+            candidate_rows = {number: row for (name, server, number), row in eligible.items() if name == workload and server == candidate}
+            reasons = list(gate_reasons)
+            matching = sorted(reference_rows.keys() & candidate_rows.keys())
+            gate_matches = [gate for gate in gates if isinstance(gate, dict) and gate.get("workload") == workload
+                            and gate.get("baseline") == reference and gate.get("candidate") == candidate] if isinstance(gates, list) else []
+            if len(gate_matches) != 1:
+                reasons.append("recorded_pair_gate_missing_or_duplicate")
+                gate = None
             else:
-                matching = sorted(set(matching) & set(recorded_matches))
-        minimum = max(MINIMUM_MATCHES, metadata.get("minimum_valid_paired_repetitions", MINIMUM_MATCHES) if repetition(metadata.get("minimum_valid_paired_repetitions")) else MINIMUM_MATCHES,
-                      gate.get("required", MINIMUM_MATCHES) if gate and repetition(gate.get("required")) else MINIMUM_MATCHES)
-        if len(matching) < minimum:
-            reasons.append("fewer_than_required_matching_valid_repetitions")
-        if workload in target_only:
-            reasons.append("target_only_no_live_reference_pair")
-        if workload == "exception-to-500":
-            reasons.append("unequal_exception_diagnostic_policy")
-        pair = {"workload": workload, "reference": reference, "candidate": candidate,
-                "valid_reference_repetitions": sorted(reference_rows), "valid_rust_repetitions": sorted(candidate_rows),
-                "matched_repetitions": matching, "minimum_required": minimum,
-                "recorded_pair_gate": gate, "qualified": not reasons,
-                "exclusion_reasons": sorted(set(reasons)), "metrics": {},
-                "excluded_reference_details": exclusions.get(workload, {}) if isinstance(exclusions, dict) else {}}
-        if pair["qualified"]:
-            reference_rows = {number: reference_rows[number] for number in matching}
-            candidate_rows = {number: candidate_rows[number] for number in matching}
-            if category == "lifecycle":
-                for key in LIFECYCLE_METRICS:
-                    predicate = None
-                    if "server_cpu" in key:
-                        phase = "idle" if key.startswith("idle_") else "active"
-                        predicate = lambda row, phase=phase: row.get("phase_measurements", {}).get(phase, {}).get("server_cpu_complete") is True
-                    pair["metrics"][key] = median_pair(reference_rows, candidate_rows, key, predicate, minimum)
-                pair["operation_unit"] = "two independent process lifetimes: idle and active"
-                pair["cpu_accounting"] = "explicit complete reaped-server lifetime CPU; different boundary from sustained requests"
-            else:
-                throughput = "messages_per_second" if category == "websocket" else "requests_per_second"
-                pair["operation_unit"] = "completed handshakes" if category == "websocket" and workload == "connection-handshake" else "completed echoed messages" if category == "websocket" else "completed HTTP requests"
-                pair["metrics"]["operations_per_second"] = median_pair(reference_rows, candidate_rows, throughput, minimum=minimum)
-                for name, key in SUSTAINED_METRICS.items():
-                    pair["metrics"][name] = median_pair(reference_rows, candidate_rows, key, minimum=minimum)
-                for name, key in (("client_cpu_seconds_complete", "client_cpu_seconds"),
-                                  ("client_cpu_percent_elapsed_complete", "client_cpu_percent_elapsed"),
-                                  ("client_cpu_microseconds_per_operation_complete", "client_cpu_microseconds_per_request")):
-                    pair["metrics"][name] = median_pair(reference_rows, candidate_rows, key, lambda row: row.get("client_cpu_complete") is True, minimum)
-                ratio_repetitions = [number for number in matching if numeric(reference_rows[number].get(throughput)) and reference_rows[number][throughput] > 0 and numeric(candidate_rows[number].get(throughput)) and candidate_rows[number][throughput] > 0]
-                pair["throughput_ratio"] = {"definition": "median of same-repetition Rust/reference throughput ratios",
-                                            "matched_repetitions": ratio_repetitions,
-                                            "rust_over_reference": statistics.median(candidate_rows[number][throughput] / reference_rows[number][throughput] for number in ratio_repetitions) if len(ratio_repetitions) >= minimum else None}
-                pair["cpu_accounting"] = {"server": "observed live process-tree CPU deltas; no complete reaped-child accounting inferred",
-                                          "client": "complete RUSAGE_CHILDREN accounting only for explicitly marked paired rows"}
-                pair["raw_server_cpu_complete_markers"] = {"reference": [reference_rows[number].get("server_cpu_complete") for number in matching],
-                                                           "rust": [candidate_rows[number].get("server_cpu_complete") for number in matching]}
-        pairs.append(pair)
+                gate = gate_matches[0]
+                if gate.get("outcome") != "available":
+                    reasons.append("recorded_pair_gate_not_available")
+                recorded_matches = gate.get("valid_matching_repetitions", [])
+                if not isinstance(recorded_matches, list) or not all(repetition(number) for number in recorded_matches):
+                    reasons.append("recorded_pair_repetitions_malformed")
+                    matching = []
+                else:
+                    matching = sorted(set(matching) & set(recorded_matches))
+            minimum = max(MINIMUM_MATCHES, metadata.get("minimum_valid_paired_repetitions", MINIMUM_MATCHES) if repetition(metadata.get("minimum_valid_paired_repetitions")) else MINIMUM_MATCHES,
+                          gate.get("required", MINIMUM_MATCHES) if gate and repetition(gate.get("required")) else MINIMUM_MATCHES)
+            if len(matching) < minimum:
+                reasons.append("fewer_than_required_matching_valid_repetitions")
+            if workload in target_only:
+                reasons.append("target_only_no_live_reference_pair")
+            if workload == "exception-to-500":
+                reasons.append("unequal_exception_diagnostic_policy")
+            pair = {"workload": workload, "loop": pair_spec["loop"], "reference": reference, "candidate": candidate,
+                    "valid_reference_repetitions": sorted(reference_rows), "valid_rust_repetitions": sorted(candidate_rows),
+                    "matched_repetitions": matching, "minimum_required": minimum,
+                    "recorded_pair_gate": gate, "qualified": not reasons,
+                    "exclusion_reasons": sorted(set(reasons)), "metrics": {},
+                    "excluded_reference_details": exclusions.get(workload, {}) if isinstance(exclusions, dict) else {}}
+            if pair["qualified"]:
+                reference_rows = {number: reference_rows[number] for number in matching}
+                candidate_rows = {number: candidate_rows[number] for number in matching}
+                if category == "lifecycle":
+                    for key in LIFECYCLE_METRICS:
+                        predicate = None
+                        if "server_cpu" in key:
+                            phase = "idle" if key.startswith("idle_") else "active"
+                            predicate = lambda row, phase=phase: row.get("phase_measurements", {}).get(phase, {}).get("server_cpu_complete") is True
+                        pair["metrics"][key] = median_pair(reference_rows, candidate_rows, key, predicate, minimum)
+                    pair["operation_unit"] = "two independent process lifetimes: idle and active"
+                    pair["cpu_accounting"] = "explicit complete reaped-server lifetime CPU; different boundary from sustained requests"
+                else:
+                    throughput = "messages_per_second" if category == "websocket" else "requests_per_second"
+                    pair["operation_unit"] = "completed handshakes" if category == "websocket" and workload == "connection-handshake" else "completed echoed messages" if category == "websocket" else "completed HTTP requests"
+                    pair["metrics"]["operations_per_second"] = median_pair(reference_rows, candidate_rows, throughput, minimum=minimum)
+                    for name, key in SUSTAINED_METRICS.items():
+                        pair["metrics"][name] = median_pair(reference_rows, candidate_rows, key, minimum=minimum)
+                    for name, key in (("client_cpu_seconds_complete", "client_cpu_seconds"),
+                                      ("client_cpu_percent_elapsed_complete", "client_cpu_percent_elapsed"),
+                                      ("client_cpu_microseconds_per_operation_complete", "client_cpu_microseconds_per_request")):
+                        pair["metrics"][name] = median_pair(reference_rows, candidate_rows, key, lambda row: row.get("client_cpu_complete") is True, minimum)
+                    ratio_repetitions = [number for number in matching if numeric(reference_rows[number].get(throughput)) and reference_rows[number][throughput] > 0 and numeric(candidate_rows[number].get(throughput)) and candidate_rows[number][throughput] > 0]
+                    pair["throughput_ratio"] = {"definition": "median of same-repetition Rust/reference throughput ratios",
+                                                "matched_repetitions": ratio_repetitions,
+                                                "rust_over_reference": statistics.median(candidate_rows[number][throughput] / reference_rows[number][throughput] for number in ratio_repetitions) if len(ratio_repetitions) >= minimum else None}
+                    pair["cpu_accounting"] = {"server": "observed live process-tree CPU deltas; no complete reaped-child accounting inferred",
+                                              "client": "complete RUSAGE_CHILDREN accounting only for explicitly marked paired rows"}
+                    pair["raw_server_cpu_complete_markers"] = {"reference": [reference_rows[number].get("server_cpu_complete") for number in matching],
+                                                               "rust": [candidate_rows[number].get("server_cpu_complete") for number in matching]}
+            pairs.append(pair)
     qualified_count = sum(pair["qualified"] for pair in pairs)
     dirty = metadata.get("dirty_target")
     status = "incomplete_category" if not complete else "no_qualified_pairs" if not qualified_count else "qualified_local_pairs"
@@ -475,34 +508,34 @@ def markdown(report):
         lines.append(f"| {category['category']} | {category['status']} | {category['rows']} / {category['invalid_rows']} | {category['qualified_pairs']} | {escape(category['evidence_scope'])} |")
     lines += ["", "## Matched throughput and latency", "",
               "HTTP rate is requests/s; WebSocket rate is completed messages/s or handshakes/s. Latency cells are p50 / p95 / p99 in ms, separately for each server.",
-              "", "| Category / workload | Pairs | Rate ref / Rust | Latency ref | Latency Rust | Rust/ref rate |",
+              "", "| Category / workload / loop | Pairs | Rate ref / Rust | Latency ref | Latency Rust | Rust/ref rate |",
               "| --- | ---: | ---: | --- | --- | ---: |"]
     qualified = [(category["category"], pair) for category in report["categories"] if category["category"] != "lifecycle" for pair in category["pairs"] if pair["qualified"]]
     for name, pair in qualified:
         reference_latency = " / ".join(cell(pair["metrics"][key]["reference"]) for key in ("p50_ms", "p95_ms", "p99_ms"))
         rust_latency = " / ".join(cell(pair["metrics"][key]["rust"]) for key in ("p50_ms", "p95_ms", "p99_ms"))
-        lines.append(f"| {name} / {escape(pair['workload'])} | {len(pair['matched_repetitions'])} | {paired_cell(pair, 'operations_per_second')} | {reference_latency} | {rust_latency} | {cell(pair['throughput_ratio']['rust_over_reference'])} |")
+        lines.append(f"| {name} / {escape(pair['workload'])} / {pair['loop']} | {len(pair['matched_repetitions'])} | {paired_cell(pair, 'operations_per_second')} | {reference_latency} | {rust_latency} | {cell(pair['throughput_ratio']['rust_over_reference'])} |")
     if not qualified:
         lines.append("| No qualified matching pairs | — | — | — | — | — |")
     lines += ["", "## Matched resource metrics", "",
               "Server CPU is observed live process-tree CPU µs/op over its recorded boundary. Client CPU is complete reaped-child CPU µs/op only when explicitly marked. RSS cells are medians of sampled peak MiB.",
-              "", "| Category / workload | Server CPU µs/op ref / Rust | Server RSS ref / Rust | Client CPU µs/op ref / Rust | Client RSS ref / Rust |",
+              "", "| Category / workload / loop | Server CPU µs/op ref / Rust | Server RSS ref / Rust | Client CPU µs/op ref / Rust | Client RSS ref / Rust |",
               "| --- | ---: | ---: | ---: | ---: |"]
     for name, pair in qualified:
-        lines.append(f"| {name} / {escape(pair['workload'])} | {paired_cell(pair, 'server_cpu_microseconds_per_operation')} | {paired_cell(pair, 'server_rss_sampled_peak_mib')} | {paired_cell(pair, 'client_cpu_microseconds_per_operation_complete')} | {paired_cell(pair, 'client_rss_sampled_peak_mib')} |")
+        lines.append(f"| {name} / {escape(pair['workload'])} / {pair['loop']} | {paired_cell(pair, 'server_cpu_microseconds_per_operation')} | {paired_cell(pair, 'server_rss_sampled_peak_mib')} | {paired_cell(pair, 'client_cpu_microseconds_per_operation_complete')} | {paired_cell(pair, 'client_rss_sampled_peak_mib')} |")
     if not qualified:
         lines.append("| No qualified matching pairs | — | — | — | — |")
     lines += ["", "## Lifecycle", "",
               "Startup is a preparation-to-observed-response upper bound. CPU is complete reaped-server lifetime seconds, with idle and active phases kept separate.",
-              "", "| Pairs | Startup ms ref / Rust | Idle exit ms ref / Rust | Held exit ms ref / Rust | Idle CPU s ref / Rust | Active CPU s ref / Rust | Idle RSS MiB ref / Rust | Active RSS MiB ref / Rust |",
-              "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+              "", "| Loop | Pairs | Startup ms ref / Rust | Idle exit ms ref / Rust | Held exit ms ref / Rust | Idle CPU s ref / Rust | Active CPU s ref / Rust | Idle RSS MiB ref / Rust | Active RSS MiB ref / Rust |",
+              "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     lifecycle = [pair for category in report["categories"] if category["category"] == "lifecycle" for pair in category["pairs"] if pair["qualified"]]
     for pair in lifecycle:
         keys = ("cold_start_to_first_lifespan_request_ms", "idle_sigterm_to_process_exit_ms", "active_sigterm_to_process_exit_ms",
                 "idle_phase_server_cpu_seconds", "active_phase_server_cpu_seconds", "idle_phase_server_rss_peak_mib", "active_phase_server_rss_peak_mib")
-        lines.append(f"| {len(pair['matched_repetitions'])} | " + " | ".join(paired_cell(pair, key) for key in keys) + " |")
+        lines.append(f"| {pair['loop']} | {len(pair['matched_repetitions'])} | " + " | ".join(paired_cell(pair, key) for key in keys) + " |")
     if not lifecycle:
-        lines.append("| No qualified matching lifecycle pairs | — | — | — | — | — | — | — |")
+        lines.append("| No qualified matching lifecycle pairs | — | — | — | — | — | — | — | — |")
     lines += ["", "## Exclusions and incomplete inputs", ""]
     for category in report["categories"]:
         counts = category["invalid_reason_row_counts"]
@@ -512,7 +545,7 @@ def markdown(report):
             lines.append(f"- {category['category']} target-only exclusions: {category['pair_exclusion_row_counts']}.")
         for pair in category["pairs"]:
             if not pair["qualified"]:
-                lines.append(f"- {category['category']}/{escape(pair['workload'])}: {len(pair['matched_repetitions'])} matching valid repetitions; " + "; ".join(escape(reason) for reason in pair["exclusion_reasons"]) + ".")
+                lines.append(f"- {category['category']}/{escape(pair['workload'])}/{pair['loop']}: {len(pair['matched_repetitions'])} matching valid repetitions; " + "; ".join(escape(reason) for reason in pair["exclusion_reasons"]) + ".")
     lines += ["", "## Interpretation limits", ""]
     lines += [f"- {value}" for value in report["limitations"]]
     return "\n".join(lines) + "\n"
@@ -540,7 +573,7 @@ def main():
     driver_incomplete = driver_error is not None or (driver is not None and driver.get("status") not in {"completed_correctness_gated", "completed_with_failures"})
     incomplete = driver_incomplete or any(category["status"] == "incomplete_category" for category in categories)
     report = {
-        "schema": "uvicorn-rs-paired-category-analysis@1",
+        "schema": "uvicorn-rs-paired-category-analysis@2",
         "analyzer_sha256": digest(Path(__file__).read_bytes()), "input_directory": str(directory),
         "status": "incomplete_categories" if incomplete else "no_qualified_pairs" if not qualified_count else "qualified_local_pairs",
         "minimum_matching_valid_repetitions": MINIMUM_MATCHES,

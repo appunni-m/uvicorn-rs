@@ -23,6 +23,11 @@ configuration order within a repetition using the supplied seed.
 | WebSockets | Rust server with asyncio and uvloop; Uvicorn with its WebSocket implementation and asyncio or uvloop. | Handshake/subprotocol and complete text or binary payload equality are checked. |
 | Lifespan/shutdown | Rust server and Uvicorn with both loop choices. | Lifespan state, graceful lifespan completion, and cancellation of an active request are required. |
 
+Each comparison matches event loops: asyncio with asyncio and uvloop with
+uvloop. Uvicorn uses `httptools` for both H1 pairs so the asyncio comparison
+does not also change the HTTP parser. The analyzer reports these pairs
+separately and does not combine loop profiles into one rate or latency ratio.
+
 Uvicorn has no H2 or H3 server baseline, so those rows compare with Hypercorn
 only. HTTP/3 upload has Rust-only rows because the tested Hypercorn version did
 not return a response after consuming the upload. The historical October 4
@@ -457,8 +462,9 @@ cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bi
 
 Every capture file and output directory must be new. Omitting `--output-dir`
 creates a timestamp/UUID directory under `target/benchmark-categories/`. The
-default plan has 177 rows when all optional workloads are available; omitting
-`starlette-rs-route` removes its six H1 candidate/reference repetition rows.
+default plan has 354 rows when all optional workloads are available: each
+category includes both loop-matched pairs at three repetitions. Omitting
+`starlette-rs-route` removes its 12 H1 server/repetition rows, leaving 342.
 `run.json`, event/checkpoint JSONL, source/binary/dependency hashes, server logs,
 cleanup receipts and raw failures are retained. The wrapper stops on identity
 drift and preserves independent category attempts after an isolated failure.
