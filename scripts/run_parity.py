@@ -7355,10 +7355,13 @@ def execute_profile(
                             oracle_raw = execute_case(case, oracle, profile, trust_anchor, h3_client)
                         except Exception as error:
                             diagnostic = {
+                                "case_id": case["case_id"],
+                                "profile": profile["id"],
                                 "events": read_events(oracle["events"]),
                                 "server_log": read_server_log(oracle)[-2000:],
                                 "oracle_process": server_process_diagnostic(oracle),
                                 "target_process": server_process_diagnostic(target),
+                                "target_server_log": read_server_log(target)[-2000:],
                             }
                             raise ParityError(
                                 f"oracle {oracle['id']} adapter failed: {error}; "

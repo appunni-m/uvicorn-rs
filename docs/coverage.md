@@ -81,11 +81,68 @@ zero behavior mismatches. Upstream Starlette, starlette-rs, systemd, Rust, and
 MSRV checks passed; platform/Python-floor jobs were skipped. The two retained
 artifacts are `uvicorn-rs-unified-coverage` (ID `11496587798`) and
 `uvicorn-rs-public-parity` (ID `11495180440`); unauthenticated download
-attempts were denied with HTTP 403. The current source therefore has full local coverage and full hosted
-region/line measurement, but no passing hosted parity/coverage gate.
+attempts were denied with HTTP 403. At that point, the source had full local
+coverage and full hosted region/line measurement, but no passing hosted
+parity/coverage gate. Later hosted runs are recorded below.
 
 A separate earlier 238-case server-log excerpt reports one infrastructure
 failure and one case not run but does not name the failed case.
+
+## Hosted CI follow-up (runs #30–#32)
+
+Run [#30](https://github.com/appunni-m/uvicorn-rs/actions/runs/37651700488)
+on commit `19cca6f` completed after 23m53s with failure. The installed-wheel
+public parity job passed 237/239 cases: the Uvicorn oracle timed out waiting
+for the TLS WebSocket handshake in
+`websocket-tls.text-round-trip-with-query-and-subprotocol`; the following
+scope case was `not_run`. It reported zero behavioral mismatches. Unified
+coverage attributed 490/491 cases and measured all 5,121 regions and 3,624
+lines, but the gate was incomplete. The same text-case infrastructure timeout
+occurred during attribution and repeat 2; the scope case was not run after
+those failures. The artifact annotations show only `lifespan.startup` in the
+oracle events, both oracle and target processes alive, and an empty Uvicorn
+server log. Platform and Python-floor jobs did not run.
+
+Run [#31](https://github.com/appunni-m/uvicorn-rs/actions/runs/37655305687)
+on commit `4c40c47` completed after 23m58s with the same class of failure.
+Public parity was 237/239: the Uvicorn oracle timed out on the TLS WebSocket
+text case and the following scope case was `not_run`, with zero behavioral
+mismatches. Unified coverage measured all 5,121 regions and 3,624 lines, but
+attribution was 490/491: the scope case hit the oracle handshake timeout.
+Repeat 2 hit the text-case timeout and left the scope case `not_run`. As in
+run #30, diagnostics showed only `lifespan.startup`, live oracle and target
+processes, and an empty Uvicorn log. The local TLS-WebSocket isolation archive
+passed its focused two-case pair five times and a 485-case attribution plus
+three-repeat gate with zero infrastructure failures. That local result does
+not disprove the hosted instability; neither hosted run reports a behavioral
+mismatch or establishes a target-server regression. See the
+[local isolation diagnostics](../benchmarks/results/2026-10-07/asgi-inventory-485/tls-websocket-isolation-diagnostics.json).
+
+Run [#32](https://github.com/appunni-m/uvicorn-rs/actions/runs/37657779165)
+on commit `500860e` completed with failure at 2026-10-07 17:46 UTC. Rust
+quality, the Rust minimum, and installed-wheel public parity passed; public
+parity was 239/239 with zero behavior or infrastructure failures and no cases
+not run. Unified coverage per-case attribution passed 491/491 and measured
+5,121/5,121 regions and 3,624/3,624 lines, but the gate was incomplete.
+Repeat 3 had 489/491 passed, zero behavior failures, one infrastructure
+failure, and one case not run. The Uvicorn oracle adapter timed out waiting
+for the TLS WebSocket handshake in
+`websocket-tls.text-round-trip-with-query-and-subprotocol`; the following
+`websocket-tls.scope-headers-path-query-and-subprotocols` case was not run.
+The available check annotation is truncated after Uvicorn startup/listening
+logs; its visible diagnostic includes `lifespan.startup` and an oracle process
+that is still alive. It does not expose the rest of the per-attempt diagnostic
+or establish why the handshake stalled. Uvicorn debug logging was enabled
+only for this reference profile, and the separate public parity pass did not
+reproduce the timeout. The retained `uvicorn-rs-unified-coverage` artifact is ID
+`11501705854` (24,945,569 bytes); its unauthenticated download returned HTTP
+401, so raw per-attempt logs remain unavailable here. Platform package and
+Python-floor jobs were skipped. The exact hosted failure cause remains
+unknown.
+
+The follow-up working-tree change raises the bounded failure detail from 500
+to 5,000 characters and includes the target server-log tail in oracle adapter
+diagnostics. It has not yet been exercised by hosted CI.
 
 ## Current full verification (491 cases)
 

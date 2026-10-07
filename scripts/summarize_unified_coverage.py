@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_CASE_DIAGNOSTICS = 20
-MAX_LOG_CHARS = 3000
+MAX_LOG_CHARS = 5000
 
 
 def command_value(value: str) -> str:
@@ -89,7 +89,9 @@ def case_message(row: dict[str, Any]) -> str:
     if isinstance(error, dict):
         error_class = error.get("class") or error.get("type") or "error"
         error_message = error.get("message") or error.get("detail") or ""
-        fields.append(f"error={plain(error_class)}: {plain(error_message)}")
+        fields.append(
+            f"error={plain(error_class)}: {plain(error_message, MAX_LOG_CHARS)}"
+        )
     elif error:
         fields.append(f"error={plain(error)}")
     difference = row.get("difference")
@@ -175,7 +177,10 @@ def markdown_summary(report: dict[str, Any]) -> tuple[str, list[tuple[str, str, 
         summary.extend(["### Attribution failures", ""])
         for row in attribution_failures[:MAX_CASE_DIAGNOSTICS]:
             message = case_message(row)
-            summary.append(f"- `{plain(row.get('case_id', 'unknown'))}`: {plain(message)}")
+            summary.append(
+                f"- `{plain(row.get('case_id', 'unknown'))}`: "
+                f"{plain(message, MAX_LOG_CHARS)}"
+            )
             diagnostics.append(("error", "Coverage attribution failure", message, None))
         if len(attribution_failures) > MAX_CASE_DIAGNOSTICS:
             summary.append(f"- … and {len(attribution_failures) - MAX_CASE_DIAGNOSTICS} more cases")
@@ -196,7 +201,10 @@ def markdown_summary(report: dict[str, Any]) -> tuple[str, list[tuple[str, str, 
                     continue
                 for row in failing_cases(result)[:MAX_CASE_DIAGNOSTICS]:
                     detail = case_message(row)
-                    summary.append(f"  - `{plain(row.get('case_id', 'unknown'))}`: {plain(detail)}")
+                    summary.append(
+                        f"  - `{plain(row.get('case_id', 'unknown'))}`: "
+                        f"{plain(detail, MAX_LOG_CHARS)}"
+                    )
                     diagnostics.append(("error", "Coverage repeat case failure", detail, None))
 
     if uncovered:
