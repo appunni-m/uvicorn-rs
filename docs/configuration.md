@@ -35,6 +35,9 @@ Ctrl-C and SIGTERM initiate shutdown. The server runs ASGI lifespan startup
 before serving and lifespan shutdown after draining/cancelling active work.
 Exact protocol and shutdown coverage is tracked in the
 [support matrix](support-matrix.md).
+See [deployment and framework integration](deployment.md) for installed-wheel
+TLS and signal checks, service-manager guidance, and Starlette integration
+setup.
 
 ## Python API
 

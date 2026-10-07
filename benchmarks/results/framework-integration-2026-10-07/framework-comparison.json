@@ -1,0 +1,29 @@
+{
+  "app": "examples.starlette_compat_asgi:app",
+  "app_sha256": "73339fa35fe988ce25d4c00d89a7cf7ab5ee38d6efee76a66ee87ddc9e566b3d",
+  "frameworks": {
+    "starlette": "1.6.0",
+    "starlette-rs-py": "0.1.0"
+  },
+  "match_count": 7,
+  "matched_observation_categories": [
+    "application_error",
+    "background_task",
+    "lifespan_shutdown",
+    "lifespan_state",
+    "request_stream",
+    "response_stream",
+    "websocket"
+  ],
+  "probe_sha256": "8789800f720b1a3cda70cebcc40c7165a3b7b146f200466c923f494d12e73e5e",
+  "receipts": {
+    "starlette_rs_sha256": "ca6bd8bb5aab7fef7af3eff7941f73c7f2f725b24b092c2ad6bc42dc5c9b89a7",
+    "starlette_sha256": "529abb3d6bfe6278b411c60402f5d59edfb6c87f60066c552e6a6052a7a6bd65"
+  },
+  "schema": "uvicorn-rs-framework-matrix-comparison@1",
+  "scope_note": "Selected shared-app integration parity; the starlette-rs WebSocket case uses a plain ASGI scope handler because this framework revision does not expose WebSocketRoute.",
+  "server_wheel_sha256": "d9f431b35f8edb951e244e410b1a8fc76530f693454df5b13b6afa5e0c326855",
+  "status": "passed",
+  "uvicorn_rs_version": "0.1.0",
+  "uvicorn_version": "0.54.0"
+}

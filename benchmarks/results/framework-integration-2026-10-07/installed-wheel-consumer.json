@@ -1,0 +1,39 @@
+{
+  "schema": "uvicorn-rs-installed-wheel-consumer@1",
+  "python": "3.12.13 (main, Jun 23 2026, 15:44:24) [Clang 22.1.3 ]",
+  "platform": "darwin",
+  "consumer_probe_sha256": "bc9cd449857089562ecba001136e5c37ac89e3447865e1f6d7794c7a634c78d1",
+  "version": "0.1.0",
+  "wheel": "/Users/lazytrot/work/uvicorn-rs/target/integration-wheels/uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl",
+  "wheel_sha256": "d9f431b35f8edb951e244e410b1a8fc76530f693454df5b13b6afa5e0c326855",
+  "native_path": "/Users/lazytrot/work/uvicorn-rs/target/integration-envs/stock-starlette/lib/python3.12/site-packages/uvicorn_rs/_native.abi3.so",
+  "native_sha256": "c26e55e15cd290fff44edf3212115577bced7fe2459da83955361fcc1fb1f98b",
+  "package_path": "/Users/lazytrot/work/uvicorn-rs/target/integration-envs/stock-starlette/lib/python3.12/site-packages/uvicorn_rs/__init__.py",
+  "cli_help": "passed",
+  "cli_tls_and_shutdown": {
+    "status": "passed",
+    "command": "python -m uvicorn_rs module:app --certfile ... --keyfile ...",
+    "http_status": 200,
+    "http_body": "startup-token:0",
+    "tls_version": "TLSv1.3",
+    "alpn": "http/1.1",
+    "held_request_cancelled": true,
+    "lifespan_shutdown_completed": true,
+    "signal": "SIGTERM",
+    "shutdown_elapsed_seconds": 2.044962,
+    "shutdown_bound_seconds": 5,
+    "exit_code": 0
+  },
+  "live_asgi": {
+    "status": "passed",
+    "events": [
+      "startup",
+      "http.complete",
+      "shutdown"
+    ],
+    "caller_loop_thread_context_preserved": true,
+    "server_cancellation_propagated": true,
+    "caller_loop_alive": true
+  },
+  "scope": "actual package-consumer HTTP/lifespan/context/cancellation and POSIX CLI/TLS/shutdown smoke; not full oracle parity"
+}

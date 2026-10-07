@@ -163,6 +163,19 @@ jobs:
                      "independence": "Optional benchmark environment wheel only; no uvicorn-rs runtime dependency or bundle."}
           (base / "wheel-build-record.json").write_text(json.dumps(receipt, indent=2) + "\n")
           PY
+      - name: Compare the normal wheel with Uvicorn on the frozen starlette-rs app
+        shell: bash
+        run: |
+          set -euo pipefail
+          server_wheel="$(find target/benchmark-preparation/server-wheels -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          framework_wheel="$(find target/benchmark-preparation/framework-wheels -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          test -n "$server_wheel"
+          test -n "$framework_wheel"
+          .venv/bin/python scripts/probe_starlette_rs.py \
+            --framework starlette-rs \
+            --server-wheel "$server_wheel" \
+            --framework-wheel "$framework_wheel" \
+            --output target/benchmark-preparation/starlette-rs-integration.json
       - name: Prebuild normal protocol clients and freeze the measured identity
         shell: bash
         run: |

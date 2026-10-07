@@ -105,12 +105,16 @@ uv run --no-sync python scripts/probe_streaming.py
 uv run --no-sync python scripts/probe_websocket.py
 uv run --no-sync python scripts/probe_cancellation.py
 uv run --no-sync python scripts/probe_lifespan.py
-uv run --no-sync python scripts/probe_starlette_rs.py  # only after separate installation
 ```
 
 These are targeted black-box cases, not the complete official ASGI conformance
 suite. Save their stdout/stderr as `live-probes.log` in the run's result
 directory. The support matrix lists the exact behaviors covered and known gaps.
+
+The Starlette integration command requires an installed normal uvicorn-rs wheel
+and the separately built starlette-rs wheel. Upstream Starlette uses a
+different environment because both frameworks install the starlette import
+namespace. See [deployment and framework integration](deployment.md#test-starlette-integrations).
 
 ## Evidence required for a comparison
 

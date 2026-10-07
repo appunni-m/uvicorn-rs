@@ -45,7 +45,9 @@ curl http://127.0.0.1:8000/
 The CLI loads an importable `module:attribute` and serves one ASGI application.
 HTTPS and HTTP/3 are enabled together when both `--certfile` and `--keyfile` are
 provided. For all supported arguments, defaults, API behavior, and signal
-handling, see [configuration](docs/configuration.md).
+handling, see [configuration](docs/configuration.md). See
+[deployment and framework integration](docs/deployment.md) for service-manager
+guidance and isolated Starlette compatibility probes.
 
 ## What is implemented
 
@@ -102,6 +104,7 @@ the license texts retain the original Uvicorn and Hypercorn notices.
 - [Architecture decision record](docs/adr/0001-runtime-and-asyncio-bridge.md)
 - [Architecture and memory ownership](docs/architecture.md)
 - [CLI and Python API reference](docs/configuration.md)
+- [Deployment and framework integration](docs/deployment.md)
 - [ASGI support matrix](docs/support-matrix.md)
 - [Input-only server parity suite](docs/parity.md)
 - [Reproducible full benchmark setup and commands](docs/benchmarks.md)

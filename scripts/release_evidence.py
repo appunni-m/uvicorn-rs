@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Inspect actual packages and record commit-bound native build evidence.
 
 Receipts are trusted CI integrity records, not signatures or independent proof
@@ -10,25 +9,25 @@ from __future__ import annotations
 import argparse
 import ast
 import base64
-import csv
 import configparser
-from datetime import datetime, timezone
-from email import policy
-from email.parser import BytesParser
+import csv
 import hashlib
 import io
 import json
 import os
-from pathlib import Path, PurePosixPath
 import re
 import stat
 import struct
 import subprocess
 import sys
 import tarfile
-import tomllib
 import zipfile
+from datetime import datetime, timezone
+from email import policy
+from email.parser import BytesParser
+from pathlib import Path, PurePosixPath
 
+import tomllib
 from check_release_version import project_versions
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,7 +72,7 @@ def load_json(path: Path) -> dict:
     result = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_json_pairs,
                         parse_constant=reject_constant)
     if not isinstance(result, dict):
-        raise ValueError(f"expected a JSON object: {path.name}")
+        raise TypeError(f"expected a JSON object: {path.name}")
     return result
 
 
@@ -310,10 +309,34 @@ def validate_consumer(value: dict, version: str, wheel_sha: str, native_sha: str
         raise ValueError("consumer wheel identity must be a SHA-256 digest")
     if (value.get("schema") != "uvicorn-rs-installed-wheel-consumer@1" or value.get("version") != version
             or value.get("wheel_sha256") != wheel_sha or value.get("cli_help") != "passed"
-            or SHA256.fullmatch(str(value.get("native_sha256", ""))) is None):
+            or SHA256.fullmatch(str(value.get("native_sha256", ""))) is None
+            or SHA256.fullmatch(str(value.get("consumer_probe_sha256", ""))) is None):
         raise ValueError("installed-wheel consumer identity/CLI evidence mismatch")
     if native_sha is not None and value["native_sha256"] != native_sha:
         raise ValueError("consumer imported a different native module")
+    deployment = value.get("cli_tls_and_shutdown", {})
+    if not isinstance(deployment, dict):
+        raise TypeError("installed-wheel CLI/TLS/shutdown evidence must be an object")
+    if value.get("platform") == "win32":
+        if deployment.get("status") != "not_run":
+            raise ValueError("Windows consumer must identify the POSIX-only CLI/TLS/signal probe as not_run")
+    elif (
+        deployment.get("status") != "passed"
+        or deployment.get("command") != "python -m uvicorn_rs module:app --certfile ... --keyfile ..."
+        or deployment.get("http_status") != 200
+        or deployment.get("http_body") != "startup-token:0"
+        or not isinstance(deployment.get("tls_version"), str)
+        or not deployment["tls_version"].startswith("TLS")
+        or deployment.get("alpn") != "http/1.1"
+        or deployment.get("held_request_cancelled") is not True
+        or deployment.get("lifespan_shutdown_completed") is not True
+        or deployment.get("signal") != "SIGTERM"
+        or deployment.get("exit_code") != 0
+        or deployment.get("shutdown_bound_seconds") != 5
+        or not isinstance(deployment.get("shutdown_elapsed_seconds"), (int, float))
+        or deployment["shutdown_elapsed_seconds"] > 5
+    ):
+        raise ValueError("installed-wheel CLI/TLS/shutdown evidence is incomplete or failed")
     live = value.get("live_asgi", {})
     if (live.get("status") != "passed" or live.get("events") != ["startup", "http.complete", "shutdown"]
             or any(live.get(key) is not True for key in ("caller_loop_thread_context_preserved", "server_cancellation_propagated", "caller_loop_alive"))):

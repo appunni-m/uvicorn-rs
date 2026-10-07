@@ -21,6 +21,7 @@ env:
   WHEEL_PYTHON_VERSION: "3.12.10"
   UV_VERSION: "0.11.29"
   MATURIN_VERSION: "1.14.1"
+  STARLETTE_RS_REVISION: "738c43362938896c268ca29b9a9a2a5942df510c"
   RUSTC_WRAPPER: ""
   RUSTC_WORKSPACE_WRAPPER: ""
   RUSTFLAGS: ""
@@ -98,6 +99,62 @@ jobs:
           test "${#wheels[@]}" -eq 1
           uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
           .venv/bin/python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output target/asgi-parity/wheel-consumer.json
+      - name: Compare the installed wheel with Uvicorn on upstream Starlette
+        shell: bash
+        run: |
+          set -euo pipefail
+          environment="$RUNNER_TEMP/uvicorn-rs-starlette"
+          uv venv --python "$PYTHON_VERSION" "$environment"
+          wheel="$(find target/normal-wheels -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          test -n "$wheel"
+          uv pip install --python "$environment/bin/python" \
+            "uvicorn[standard]==0.54.0" "starlette==1.6.0" "$wheel"
+          "$environment/bin/python" scripts/probe_starlette_rs.py \
+            --framework starlette --server-wheel "$wheel" \
+            --output target/asgi-parity/starlette.json
+      - name: Compare the exact wheel with both Starlette frameworks
+        shell: bash
+        run: |
+          set -euo pipefail
+          framework_dir="$RUNNER_TEMP/starlette-rs"
+          framework_target="$RUNNER_TEMP/starlette-rs-cargo-target"
+          framework_wheels="$RUNNER_TEMP/starlette-rs-wheels"
+          framework_env="$RUNNER_TEMP/uvicorn-rs-starlette-rs"
+          mkdir -p "$framework_wheels"
+          git init "$framework_dir"
+          git -C "$framework_dir" remote add origin https://github.com/appunni-m/starlette-rs.git
+          git -C "$framework_dir" fetch --depth 1 origin "$STARLETTE_RS_REVISION"
+          git -C "$framework_dir" checkout --detach FETCH_HEAD
+          test "$(git -C "$framework_dir" rev-parse HEAD)" = "$STARLETTE_RS_REVISION"
+          uv venv --python "$PYTHON_VERSION" "$framework_env"
+          (
+            cd "$framework_dir"
+            RUSTUP_TOOLCHAIN="$RUST_TOOLCHAIN" CARGO_TARGET_DIR="$framework_target" \
+              uvx --from "maturin==$MATURIN_VERSION" maturin build --release --locked \
+                --interpreter "$framework_env/bin/python" --out "$framework_wheels"
+          )
+          server_wheel="$(find target/normal-wheels -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          framework_wheel="$(find "$framework_wheels" -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          test -n "$server_wheel"
+          test -n "$framework_wheel"
+          uv pip install --python "$framework_env/bin/python" \
+            "uvicorn[standard]==0.54.0" "$server_wheel" "$framework_wheel"
+          "$framework_env/bin/python" scripts/probe_starlette_rs.py \
+            --framework starlette-rs --server-wheel "$server_wheel" \
+            --framework-wheel "$framework_wheel" \
+            --output target/asgi-parity/starlette-rs.json
+          .venv/bin/python scripts/compare_framework_receipts.py \
+            --starlette target/asgi-parity/starlette.json \
+            --starlette-rs target/asgi-parity/starlette-rs.json \
+            --output target/asgi-parity/framework-comparison.json
+      - name: Stop the exact installed wheel through a transient systemd service
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheel="$(find target/normal-wheels -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          test -n "$wheel"
+          .venv/bin/python scripts/probe_systemd_deployment.py \
+            --wheel "$wheel" --output target/asgi-parity/systemd.json
       - name: Execute complete current public input matrix
         shell: bash
         run: |
