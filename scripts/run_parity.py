@@ -2924,6 +2924,20 @@ def read_server_log(server: dict[str, Any]) -> str:
     return os.pread(log.fileno(), size, 0).decode("utf-8", errors="replace")
 
 
+def server_process_diagnostic(server: dict[str, Any]) -> dict[str, Any]:
+    """Return bounded process state when a live adapter fails."""
+    process: subprocess.Popen = server["process"]
+    exit_code = process.poll()
+    return {
+        "pid": process.pid,
+        "alive": exit_code is None,
+        "exit_code": exit_code,
+        "attempted_cases": [
+            case["case_id"] for case in server.get("attempted_cases", [])[-8:]
+        ],
+    }
+
+
 def read_server_api_snapshot(server: dict[str, Any]) -> dict[str, Any]:
     """Read the owning-loop observation recorded before any probe cleanup."""
     path = server.get("api_snapshot_path")
@@ -7336,6 +7350,8 @@ def execute_profile(
                             diagnostic = {
                                 "events": read_events(oracle["events"]),
                                 "server_log": read_server_log(oracle)[-2000:],
+                                "oracle_process": server_process_diagnostic(oracle),
+                                "target_process": server_process_diagnostic(target),
                             }
                             raise ParityError(
                                 f"oracle {oracle['id']} adapter failed: {error}; "
