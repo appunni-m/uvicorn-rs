@@ -347,6 +347,17 @@ three matching valid repetitions before producing ratios. The separate
 normal wheels and clients, records the Linux environment and uploads failures.
 It has been added and statically reviewed; its hosted execution remains unrun.
 
+Two fresh host preflights after the `a78b4a9` TLS-probe fix still rejected
+timing before any workload started. The 12-sample reports measured mean
+unrelated aggregate CPU at 281.0% (maximum 319.4%; this sample overlapped a
+transient compile) and 272.2% (maximum 315.9%; `mediaanalysisd` averaged 66.9%
+of one core, with transient Python activity). The complete reports are
+[preflight 1](../benchmarks/results/2026-10-08/benchmark-host-preflight-2026-10-07T215407Z.json)
+and
+[preflight 2](../benchmarks/results/2026-10-08/benchmark-host-preflight-2026-10-07T215514Z.json).
+Neither report contains benchmark rows. A valid matched run still requires a
+quiet local interval or an authenticated workflow dispatch.
+
 Run these commands on an idle host. Compare HTTP/1.1/WebSockets with Uvicorn and
 H2/H3 with unmodified Hypercorn. Retain every failed or excluded attempt. Accept
 an end-to-end speed claim only after at least three valid matched repetitions

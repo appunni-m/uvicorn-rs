@@ -19,19 +19,17 @@ annotations to keep the final traceback within the annotation limit. Local Rust
 consumed in fresh CPython 3.12.13 and 3.9.25 environments, including a real HTTP request, caller
 loop/thread/context, lifespan and public API cancellation. The corrected
 source archive was also safely extracted, rebuilt with locked dependencies,
-and consumed in a fresh environment on macOS ARM64. These local checks do not
-replace a hosted package matrix for the corrected commit.
+and consumed in a fresh environment on macOS ARM64. Hosted run #39 later
+verified the corrected commit across the platform package matrix.
 
-The October 5 release-preparation evidence below remains a historical
-snapshot. Clean hosted CI run #35 passed 239/239 installed-wheel public parity
-cases and all 491 unified coverage cases, with 5,121/5,121 regions and
-3,624/3,624 lines. Its parity job also passed the normal-build fault-seam
-exclusion audit. The local 2026-10-08 report strengthens the H2 EOF
-fault-consumption assertion and passes 491/491 attribution cases plus three
-complete repeats with full region and line coverage; Coverage-MCP reports zero
-gaps. Hosted run #35 predates that assertion. Current package failures and the
-local macOS reproduction are recorded below; no complete release candidate is
-verified.
+The October 5 release-preparation evidence and hosted runs #35–#38 below are
+historical. The local 2026-10-08 report strengthens the H2 EOF fault-consumption
+assertion and passes 491/491 attribution cases plus three complete repeats with
+full region and line coverage; Coverage-MCP reports zero gaps. Hosted run #39
+on `a78b4a9` now passes the complete CI and platform package gates. Its exact
+results and artifact identities are recorded below. An immutable tagged
+candidate bundle has not been assembled, and representative performance
+superiority remains unproven.
 
 Hosted CI run [37672645704](https://github.com/appunni-m/uvicorn-rs/actions/runs/37672645704)
 on clean commit `1a72c9b` completed with failure. Rust quality and MSRV passed;
@@ -76,8 +74,28 @@ previously inherited the host OpenSSL configuration while also supplying
 extensions inline. The probe fix gives OpenSSL one explicit configuration and
 generates a CA:FALSE server certificate with one extension set. A locally built
 normal macOS abi3 wheel passed the installed-wheel HTTP,
-TLS, ALPN, SIGTERM, lifespan, and cancellation consumer. The hosted package
-matrix still needs to verify this fix.
+TLS, ALPN, SIGTERM, lifespan, and cancellation consumer. Hosted run #39 later
+verified this fix on macOS.
+
+Hosted CI [run #39](https://github.com/appunni-m/uvicorn-rs/actions/runs/37692260364)
+completed successfully on exact main commit `a78b4a925654ee0a5fb80814074ca2b0224bb094`.
+Rust quality, Rust 1.85, installed-wheel parity (239/239), and unified
+coverage (491/491 cases, 5,121/5,121 regions, 3,624/3,624 lines) passed. The
+Linux x86-64 source archive rebuilt and passed its installed-wheel consumer;
+all three platform wheel builds and installed-wheel checks passed. The exact
+Linux candidate wheel passed full public parity, and the CPython 3.9.25 wheel
+consumer passed. This verifies the deterministic TLS certificate probe on
+hosted macOS. The uploaded Actions artifact digests are:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Linux x86-64 candidate | `62b50e78d2c72eee703e34ab00cee5ecb010697f24fc600f3f702959be53b443` |
+| macOS ARM64 candidate | `0b8cc5fa0e9b15d753a9e7f1514b0798105828ad6303b3e075fdae9fcf487923` |
+| Windows x86-64 candidate | `168ca29f4c08b7c1ddafa3636a3d58842db29af8db79569e4c15197bdac66541` |
+| Python 3.9.25 consumer | `b63c185cb1a727bb1dc74494eac8c1a567aa55a45b16c6e415d9c5f472a7c79c` |
+
+Run #39 prepares CI artifacts only. No tag, immutable release-candidate
+bundle, registry package, or GitHub Release was created.
 
 An earlier macOS ARM64 reproduction used CPython 3.12.10, Rust/Cargo 1.98.1,
 and Maturin 1.14.1. Its exact-wheel consumer passed, and

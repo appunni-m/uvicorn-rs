@@ -1,0 +1,741 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-10-07T21:55:14.042308+00:00",
+  "purpose": "benchmark host contention preflight; no workloads or benchmark samples started",
+  "environment": {
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "machine": "arm64",
+    "python": "3.12.13 (main, Jun 23 2026, 15:44:24) [Clang 22.1.3 ]",
+    "psutil": "7.2.2"
+  },
+  "method": {
+    "interval_count": 12,
+    "target_interval_seconds": 0.25,
+    "excluded_sampler_and_ancestor_pids": [
+      0,
+      1,
+      33664,
+      34076,
+      38961
+    ],
+    "excluded_ancestors": [
+      {
+        "pid": 0,
+        "name": "kernel_task"
+      },
+      {
+        "pid": 1,
+        "name": "launchd"
+      },
+      {
+        "pid": 33664,
+        "name": "ChatGPT"
+      },
+      {
+        "pid": 34076,
+        "name": "codex"
+      },
+      {
+        "pid": 38961,
+        "name": "python3.12"
+      }
+    ]
+  },
+  "thresholds": {
+    "per_process_cpu_percent": 25.0,
+    "consecutive_intervals": 2,
+    "single_interval_cpu_percent": 200.0,
+    "aggregate_cpu_percent": 100.0,
+    "cpu_percent_basis": "100% equals one logical core"
+  },
+  "samples": [
+    {
+      "index": 1,
+      "elapsed_seconds": 0.2785,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 315.9,
+      "top_processes": [
+        {
+          "pid": 38960,
+          "name": "python3.12",
+          "cpu_percent": 103.2
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 99.0
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 24.2
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 20.2
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 20.0
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 18.0
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 16.4
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 9.0
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 5.9
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "elapsed_seconds": 0.5483,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 147.9,
+      "top_processes": [
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 40.1
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 23.4
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.7
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 17.5
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 16.3
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 16.0
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 10.7
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 2.6
+        },
+        {
+          "pid": 38921,
+          "name": "python3.12",
+          "cpu_percent": 1.6
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "elapsed_seconds": 0.818,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 295.1,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 103.6
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 86.9
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 23.7
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 21.2
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.9
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 17.3
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 17.3
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 5.2
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "elapsed_seconds": 1.0787,
+      "interval_seconds": 0.251,
+      "aggregate_cpu_percent": 284.5,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 103.7
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 58.4
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 31.3
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 23.0
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.1
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 18.8
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 16.9
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 9.2
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 4.1
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "elapsed_seconds": 1.3454,
+      "interval_seconds": 0.2569,
+      "aggregate_cpu_percent": 274.2,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 99.8
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 51.2
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 37.2
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 24.0
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 21.8
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 17.2
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 16.0
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 7.0
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "elapsed_seconds": 1.612,
+      "interval_seconds": 0.257,
+      "aggregate_cpu_percent": 301.3,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 96.4
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 96.3
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 22.8
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.0
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 17.6
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 17.3
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 16.3
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 11.4
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 3.1
+        },
+        {
+          "pid": 1386,
+          "name": "Google Chrome Helper",
+          "cpu_percent": 1.1
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "elapsed_seconds": 1.8787,
+      "interval_seconds": 0.2568,
+      "aggregate_cpu_percent": 250.3,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 99.4
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 42.0
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 23.5
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.8
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 17.7
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 16.9
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 15.1
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 9.9
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 6.0
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "elapsed_seconds": 2.1487,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 292.8,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 101.3
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 88.9
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 24.7
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 22.0
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.6
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 17.5
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 15.3
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 3.5
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "elapsed_seconds": 2.4182,
+      "interval_seconds": 0.26,
+      "aggregate_cpu_percent": 277.5,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 99.8
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 53.0
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 33.7
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 22.6
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 20.2
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 16.6
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 15.7
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 13.7
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 2.2
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "elapsed_seconds": 2.6787,
+      "interval_seconds": 0.251,
+      "aggregate_cpu_percent": 268.0,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 99.8
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 70.1
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 24.2
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 20.4
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.1
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 16.9
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 14.8
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 2.7
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "elapsed_seconds": 2.9456,
+      "interval_seconds": 0.2572,
+      "aggregate_cpu_percent": 300.8,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 100.1
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 71.1
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 35.7
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 24.3
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.3
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 17.8
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 16.4
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 13.9
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 2.2
+        }
+      ]
+    },
+    {
+      "index": 12,
+      "elapsed_seconds": 3.212,
+      "interval_seconds": 0.2567,
+      "aggregate_cpu_percent": 257.9,
+      "top_processes": [
+        {
+          "pid": 38962,
+          "name": "python3.12",
+          "cpu_percent": 101.0
+        },
+        {
+          "pid": 5166,
+          "name": "mediaanalysisd",
+          "cpu_percent": 45.4
+        },
+        {
+          "pid": 36174,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 24.7
+        },
+        {
+          "pid": 29258,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 20.8
+        },
+        {
+          "pid": 34343,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 19.0
+        },
+        {
+          "pid": 34347,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 17.1
+        },
+        {
+          "pid": 33672,
+          "name": "Codex (Service)",
+          "cpu_percent": 15.1
+        },
+        {
+          "pid": 5199,
+          "name": "mediaanalysisd-access",
+          "cpu_percent": 10.4
+        },
+        {
+          "pid": 34075,
+          "name": "Codex (Renderer)",
+          "cpu_percent": 4.4
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "mean_aggregate_cpu_percent": 272.2,
+    "max_aggregate_cpu_percent": 315.9,
+    "processes": [
+      {
+        "pid": 38960,
+        "name": "python3.12",
+        "cpu_percent": 103.2,
+        "max_consecutive_intervals_over_25_percent": 1
+      },
+      {
+        "pid": 38962,
+        "name": "python3.12",
+        "cpu_percent": 100.5,
+        "max_consecutive_intervals_over_25_percent": 10
+      },
+      {
+        "pid": 5166,
+        "name": "mediaanalysisd",
+        "cpu_percent": 66.9,
+        "max_consecutive_intervals_over_25_percent": 12
+      },
+      {
+        "pid": 36174,
+        "name": "Codex (Renderer)",
+        "cpu_percent": 23.7,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 29258,
+        "name": "Codex (Renderer)",
+        "cpu_percent": 22.9,
+        "max_consecutive_intervals_over_25_percent": 1
+      },
+      {
+        "pid": 34343,
+        "name": "Codex (Renderer)",
+        "cpu_percent": 19.6,
+        "max_consecutive_intervals_over_25_percent": 1
+      },
+      {
+        "pid": 34347,
+        "name": "Codex (Renderer)",
+        "cpu_percent": 18.0,
+        "max_consecutive_intervals_over_25_percent": 1
+      },
+      {
+        "pid": 33672,
+        "name": "Codex (Service)",
+        "cpu_percent": 16.6,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 5199,
+        "name": "mediaanalysisd-access",
+        "cpu_percent": 7.8,
+        "max_consecutive_intervals_over_25_percent": 0
+      },
+      {
+        "pid": 34075,
+        "name": "Codex (Renderer)",
+        "cpu_percent": 4.1,
+        "max_consecutive_intervals_over_25_percent": 0
+      }
+    ],
+    "guard_result": "reject"
+  }
+}

@@ -210,7 +210,7 @@ package job failures are recorded in [release status](releases.md#current-state)
 The retained unified-coverage artifact is ID `11506803058`, SHA-256
 `d107cfb007ae41673feb025253cdd00706168f51df411fa5fdfc6c6fdb3a910c`.
 
-## Hosted verification (runs #36–#38)
+## Hosted verification (runs #36–#39)
 
 Runs [#36](https://github.com/appunni-m/uvicorn-rs/actions/runs/37679543470)
 and [#37](https://github.com/appunni-m/uvicorn-rs/actions/runs/37684421046)
@@ -233,6 +233,14 @@ extension OID; Linux and Windows package jobs passed, while Python-floor was
 skipped. See [release status](releases.md#current-state). This updates hosted
 coverage evidence for `226ab13`; the source-matched local Coverage-MCP receipt
 requirement for a public release remains separate.
+
+Run [#39](https://github.com/appunni-m/uvicorn-rs/actions/runs/37692260364)
+on exact main commit `a78b4a925654ee0a5fb80814074ca2b0224bb094` passed hosted
+parity (239/239), attribution and all three complete repeats (491/491 cases),
+with 5,121/5,121 regions and 3,624/3,624 lines. Its package matrix and Python
+3.9.25 consumer also passed. This is the current hosted coverage result; the
+source-matched local Coverage-MCP receipt requirement for candidate assembly
+remains separate.
 
 ## Current full verification (491 cases; EOF fault consumption asserted)
 
@@ -269,8 +277,9 @@ The run used CPython 3.12.13, Rust 1.98.1, cargo-llvm-cov 0.8.7, and macOS
 `2fcd0eeb88f38d7c07801335e37416837761fd0d4a340d86aab57ba8638dc2d5`. The
 source file hashes, exact Coverage-MCP page, full report, and repeat outputs
 are retained in the archive. This local result does not establish benchmark
-performance. Hosted run #37 independently passes the unified gate on the exact
-current commit.
+performance. Hosted run #37 independently passed the unified gate on the exact
+commit tested there. Run #38 on `226ab13` also passed hosted unified coverage;
+the later `a78b4a9` package-probe fix changes no `src/lib.rs` coverage source.
 
 ## Previous full verification (491 cases; before EOF fault-consumption assertion)
 
