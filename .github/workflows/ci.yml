@@ -174,8 +174,26 @@ jobs:
           set -euo pipefail
           wheel="$(find target/normal-wheels -maxdepth 1 -type f -name '*.whl' -print -quit)"
           test -n "$wheel"
+          systemd_log=target/asgi-parity/systemd-deployment.log
+          set +e
           .venv/bin/python scripts/probe_systemd_deployment.py \
-            --wheel "$wheel" --output target/asgi-parity/systemd.json
+            --wheel "$wheel" --output target/asgi-parity/systemd.json \
+            >"$systemd_log" 2>&1
+          systemd_status=$?
+          set -e
+          if [ "$systemd_status" -ne 0 ]; then
+            .venv/bin/python - "$systemd_log" <<'PY'
+          from pathlib import Path
+          import sys
+
+          lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
+          detail = "\n".join(lines[-30:])[-3000:]
+          encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          print(f"::error file=.github/workflows/ci.yml,line=157,title=systemd deployment probe failure::{encoded}")
+          PY
+            exit "$systemd_status"
+          fi
+          tail -n 5 "$systemd_log"
       - name: Execute complete current public input matrix
         shell: bash
         run: |
