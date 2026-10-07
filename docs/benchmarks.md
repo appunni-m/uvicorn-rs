@@ -92,7 +92,10 @@ Run the commands below with `--no-sync` after installation so an implicit
 environment sync cannot replace the optional framework between samples. If the
 framework is unavailable or cannot pass its live integration probe, omit
 `starlette-rs-route`, record the reason, and report 11 H1 workloads rather than
-all 12.
+all 12. The maintained category wrapper detects a missing `starlette-rs-py`
+distribution and records that omission automatically. If an installed framework
+fails the live gate, preserve the failed run, then use
+`--exclude-starlette-rs-route` during both identity capture and the clean rerun.
 
 ## Correctness probes
 
@@ -436,8 +439,8 @@ maintained HTTP/1.1, HTTP/2, HTTP/3, WebSocket and lifecycle categories sequenti
 It derives workloads and public parity cases from the maintained matrix, rejects
 coverage/fault/diagnostic binaries, and requires a passing complete public matrix
 on the exact measured normal binary. Prepare the normal release server, coherent
-independent framework wheel and release protocol clients using the setup above.
-Keep using the installed environment directly after adding the framework wheel.
+release protocol clients using the setup above. The separate Starlette-RS wheel
+is optional; see the workload-selection rule above.
 
 ```sh
 export RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER=
@@ -454,7 +457,8 @@ cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bi
 
 Every capture file and output directory must be new. Omitting `--output-dir`
 creates a timestamp/UUID directory under `target/benchmark-categories/`. The
-default plan has 177 rows with maintained concurrency and duration overrides.
+default plan has 177 rows when all optional workloads are available; omitting
+`starlette-rs-route` removes its six H1 candidate/reference repetition rows.
 `run.json`, event/checkpoint JSONL, source/binary/dependency hashes, server logs,
 cleanup receipts and raw failures are retained. The wrapper stops on identity
 drift and preserves independent category attempts after an isolated failure.
