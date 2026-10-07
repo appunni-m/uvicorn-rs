@@ -10,14 +10,17 @@ or create or move tags. The project is licensed under
 ## Current state
 
 The original workflow revisions passed local Actionlint validation; action
-SHAs were checked against their upstream GitHub revisions. The current
-Windows-long-path and failure-annotation edits parse as YAML and await hosted
-verification. Local Rust 1.85.0 default and all-feature checks pass. A macOS
-ARM64 wheel was built and consumed in fresh CPython 3.12.13 and 3.9.25
-environments, including a real HTTP request, caller loop/thread/context,
-lifespan and public API cancellation. The source archive was also extracted,
-rebuilt with locked dependencies and consumed in a fresh environment. Its
-package inputs matched the checkout.
+SHAs were checked against their upstream GitHub revisions. Hosted runs #36 and
+#37 confirm the Windows long-path setting lets checkout finish. The current
+working-tree patch excludes `.kata.toml` from distributions, compares packaged
+README text with normalized line endings, and shortens failed wheel-consumer
+annotations to keep the final traceback within the annotation limit. Local Rust
+1.85.0 default and all-feature checks pass. A macOS ARM64 wheel was built and
+consumed in fresh CPython 3.12.13 and 3.9.25 environments, including a real HTTP request, caller
+loop/thread/context, lifespan and public API cancellation. The corrected
+source archive was also safely extracted, rebuilt with locked dependencies,
+and consumed in a fresh environment on macOS ARM64. These local checks do not
+replace a hosted package matrix for the corrected commit.
 
 The October 5 release-preparation evidence below remains a historical
 snapshot. Clean hosted CI run #35 passed 239/239 installed-wheel public parity
@@ -35,14 +38,29 @@ on clean commit `1a72c9b` completed with failure. Rust quality and MSRV passed;
 installed-wheel public parity passed 239/239; unified coverage passed 491/491
 cases with 5,121/5,121 regions and 3,624/3,624 lines. Package preparation did
 not pass: the Windows checkout hit a tracked path-length error in retained
-parity evidence. Follow-up run #36 sets Git's `core.longpaths` in the job
-environment so checkout has the setting before its first step; hosted
-verification is pending. The Linux package, source rebuild, and candidate-wheel
-parity steps passed, but the build-manifest recording step failed; its detailed
-log was not publicly retrievable, so the cause remains unknown. The macOS ARM64
-wheel-build/consumer step also failed without a detailed public annotation.
-The Python-floor job was skipped, and no platform candidate artifacts were
-uploaded. This run is not a complete release candidate.
+parity evidence.
+
+Hosted runs [#36](https://github.com/appunni-m/uvicorn-rs/actions/runs/37679543470)
+and [#37](https://github.com/appunni-m/uvicorn-rs/actions/runs/37684421046)
+confirm the checkout fix and pass Rust quality, Rust 1.85, installed-wheel
+public parity (239/239), and unified coverage (491/491 cases, 5,121/5,121
+regions, 3,624/3,624 lines). Package checks fail in both runs. Windows builds
+and consumes the wheel, then its manifest check reports README line-ending
+differences. Linux completes the source rebuild, installed-wheel consumer, and
+candidate-wheel public parity, then its manifest check finds unreviewed
+`.kata.toml` in the source archive. macOS builds and installs the wheel, but
+the CLI consumer exits during TLS startup; the annotation is truncated before
+the exception cause. Python-floor is skipped and no platform candidate
+artifacts are uploaded.
+
+The current working-tree fixes address the deterministic package failures and
+bound the macOS traceback annotation to its final 30 lines and 3,000
+characters. Local verification built and inspected the 34-member sdist without
+`.kata.toml`, accepted CRLF-converted PKG-INFO with the same README content,
+rebuilt the archive with locked dependencies, and passed its fresh installed-wheel
+consumer for HTTP/TLS/lifespan/shutdown. The
+macOS hosted startup cause remains unconfirmed until a corrected hosted run
+reports the complete exception. No complete release candidate is verified.
 
 The hosted macOS failure did not reproduce locally. On macOS 15.7.7 ARM64 with
 CPython 3.12.10, Rust/Cargo 1.98.1 and Maturin 1.14.1, the same wheel build and

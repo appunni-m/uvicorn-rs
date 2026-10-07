@@ -210,6 +210,20 @@ package job failures are recorded in [release status](releases.md#current-state)
 The retained unified-coverage artifact is ID `11506803058`, SHA-256
 `d107cfb007ae41673feb025253cdd00706168f51df411fa5fdfc6c6fdb3a910c`.
 
+## Hosted verification (runs #36–#37)
+
+Runs [#36](https://github.com/appunni-m/uvicorn-rs/actions/runs/37679543470)
+and [#37](https://github.com/appunni-m/uvicorn-rs/actions/runs/37684421046)
+passed the unified coverage job. Run #37 is on exact main commit `e617f13`;
+its check annotation reports 491/491 cases, 5,121/5,121 regions and 3,624/3,624
+lines. The job runs one attribution pass and three complete matrix repetitions.
+The separate installed-wheel parity gate passed 239/239. Run #37 failed
+afterward in the platform package jobs; see [release status](releases.md#current-state).
+The retained hosted report artifact cannot be downloaded without repository
+authentication from this environment. This closes the hosted coverage gate for
+the current committed source; the local Coverage-MCP receipt requirement for a
+public release remains separate.
+
 ## Current full verification (491 cases; EOF fault consumption asserted)
 
 The new archive is
@@ -244,10 +258,9 @@ The run used CPython 3.12.13, Rust 1.98.1, cargo-llvm-cov 0.8.7, and macOS
 15.7.7 ARM64. The instrumented extension SHA-256 is
 `2fcd0eeb88f38d7c07801335e37416837761fd0d4a340d86aab57ba8638dc2d5`. The
 source file hashes, exact Coverage-MCP page, full report, and repeat outputs
-are retained in the archive. This local result does not replace the pending
-hosted validation of the strengthened EOF fault-consumption assertion and does
-not establish benchmark performance. Run #35 supplies clean hosted evidence
-for the preceding 491-case matrix.
+are retained in the archive. This local result does not establish benchmark
+performance. Hosted run #37 independently passes the unified gate on the exact
+current commit.
 
 ## Previous full verification (491 cases; before EOF fault-consumption assertion)
 

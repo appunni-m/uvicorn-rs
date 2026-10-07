@@ -349,7 +349,7 @@ jobs:
           import sys
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
-          detail = "\n".join(lines[-80:])[-5000:]
+          detail = "\n".join(lines[-30:])[-3000:]
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error title=Package wheel build or consumer failure::{encoded}")
           PY

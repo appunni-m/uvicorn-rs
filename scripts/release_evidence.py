@@ -56,6 +56,10 @@ def file_sha256(path: Path) -> str:
     return sha256(path.read_bytes())
 
 
+def normalize_line_endings(value: str) -> str:
+    return value.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
 def _json_pairs(pairs: list[tuple[str, object]]) -> dict:
     result = {}
     for name, value in pairs:
@@ -190,7 +194,9 @@ def package_metadata(data: bytes, version: str) -> object:
             raise ValueError(f"package metadata {key} must be exactly {expected!r}")
     if sorted(metadata.get_all("License-File", [])) != sorted(LICENSES):
         raise ValueError("package metadata must include exactly three License-File fields")
-    if metadata.get_payload(decode=True).decode("utf-8").strip() != (ROOT / "README.md").read_text(encoding="utf-8").strip():
+    packaged_readme = metadata.get_payload(decode=True).decode("utf-8")
+    checkout_readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    if normalize_line_endings(packaged_readme) != normalize_line_endings(checkout_readme):
         raise ValueError("packaged README differs from the reviewed checkout")
     return metadata
 

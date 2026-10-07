@@ -34,7 +34,7 @@ module-name = "uvicorn_rs._native"
 python-source = "python"
 features = ["pyo3/extension-module"]
 exclude = [
-    "benchmarks/**", ".coverage-mcp/**", "build/**", "target/**", "tools/**",
+    ".kata.toml", "benchmarks/**", ".coverage-mcp/**", "build/**", "target/**", "tools/**",
     "tests/**", "scripts/**", "examples/**", ".github/**", ".venv/**",
     "**/__pycache__/**", "**/*.profraw", "**/*.profdata", "**/*.pem", "**/*.key",
 ]
