@@ -116,6 +116,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p target/asgi-parity
+          framework_log=target/asgi-parity/starlette-rs-integration.log
+          set +e
+          bash -euo pipefail >"$framework_log" 2>&1 <<'BASH'
           framework_dir="$RUNNER_TEMP/starlette-rs"
           framework_target="$RUNNER_TEMP/starlette-rs-cargo-target"
           framework_wheels="$RUNNER_TEMP/starlette-rs-wheels"
@@ -147,6 +151,22 @@ jobs:
             --starlette target/asgi-parity/starlette.json \
             --starlette-rs target/asgi-parity/starlette-rs.json \
             --output target/asgi-parity/framework-comparison.json
+          BASH
+          framework_status=$?
+          set -e
+          if [ "$framework_status" -ne 0 ]; then
+            .venv/bin/python - "$framework_log" <<'PY'
+          from pathlib import Path
+          import sys
+
+          lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
+          detail = "\n".join(lines[-30:])[-3000:]
+          encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          print(f"::error file=.github/workflows/ci.yml,line=126,title=Starlette integration failure::{encoded}")
+          PY
+            exit "$framework_status"
+          fi
+          tail -n 5 "$framework_log"
       - name: Stop the exact installed wheel through a transient systemd service
         shell: bash
         run: |
