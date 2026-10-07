@@ -63,8 +63,26 @@ reported. Run
 `dc8cf3f`, attributed 490/491 cases and measured 5,122/5,123 regions. The
 attribution and repeat failures were also TLS-WebSocket handshake
 infrastructure errors; the installed-wheel public parity job passed 239/239.
-The coverage-only source change in the current local report has not yet run on
-hosted Linux.
+At that point the coverage-only source change in the current local report had
+not yet run on hosted Linux; run #29 below is its hosted measurement.
+
+Run [#29](https://github.com/appunni-m/uvicorn-rs/actions/runs/37646875313),
+commit `376ebdf`, exercised the coverage-only source change. Rust quality and
+MSRV passed, but hosted coverage attribution was 490/491 because the Uvicorn
+oracle timed out during `websocket-tls.text-round-trip-with-query-and-subprotocol`;
+the only recorded app event was `lifespan.startup`, with an empty server log.
+The coverage report measured all 5,121 regions and 3,624 lines, but the gate
+remained incomplete. Repeat 1 also had an infrastructure timeout in
+`websocket-tls.scope-headers-path-query-and-subprotocols` (490/491, zero
+behavior failures); annotations do not provide the other repeat summaries.
+The separate normal-wheel parity job passed 237/239, with the same class of
+Uvicorn oracle timeout on the text case, one following TLS case not run, and
+zero behavior mismatches. Upstream Starlette, starlette-rs, systemd, Rust, and
+MSRV checks passed; platform/Python-floor jobs were skipped. The two retained
+artifacts are `uvicorn-rs-unified-coverage` (ID `11496587798`) and
+`uvicorn-rs-public-parity` (ID `11495180440`); unauthenticated download
+attempts were denied with HTTP 403. The current source therefore has full local coverage and full hosted
+region/line measurement, but no passing hosted parity/coverage gate.
 
 A separate earlier 238-case server-log excerpt reports one infrastructure
 failure and one case not run but does not name the failed case.

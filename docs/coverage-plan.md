@@ -17,8 +17,15 @@ release verification. Source/build identity and retained receipts are
 documented in [current coverage evidence](coverage.md#current-full-verification-491-cases)
 and the
 [`asgi-coverage-region-fix-491` archive](../benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/).
-The hosted failures in runs #23, #27, and #28 predate this local coverage fix;
-the exact source change still needs a clean hosted run.
+Hosted run [#29](https://github.com/appunni-m/uvicorn-rs/actions/runs/37646875313)
+on commit `376ebdf` exercised the coverage fix and measured all 5,121 regions
+and 3,624 lines, but it did not pass the gate: attribution and repeat 1 each
+had a Uvicorn TLS-WebSocket oracle infrastructure timeout; the report was
+incomplete at 490/491 attributed cases. Its normal installed-wheel parity job
+also had a TLS-WebSocket oracle timeout (237/239, zero behavior mismatches),
+so dependent platform/Python-floor jobs were skipped. The retained artifacts
+are listed in [coverage evidence](coverage.md); unauthenticated downloads were
+denied with HTTP 403. A clean hosted parity/coverage pass is still required.
 
 The historical 445-case snapshot recorded all 4,719/4,719 regions and 3,329/3,329
 lines, with zero Coverage-MCP gaps and 445 passing attribution cases. Two full
