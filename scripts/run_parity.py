@@ -10,7 +10,9 @@ import hashlib
 import http.client
 import importlib
 import importlib.metadata
+import io
 import json
+import logging
 import os
 from pathlib import Path
 import platform
@@ -4981,6 +4983,24 @@ def websocket_observation(
     ssl_context = None
     if trust_anchor is not None:
         ssl_context = ssl.create_default_context(cafile=str(trust_anchor))
+    client_trace = None
+    client_logger = None
+    client_handler = None
+    if (
+        trust_anchor is not None
+        and os.environ.get("ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG") == "1"
+        and not specification.get("drop_during_upgrade")
+        and not specification.get("shutdown_during_upgrade")
+        and not specification.get("shutdown")
+    ):
+        client_trace = io.StringIO()
+        client_logger = logging.Logger(
+            f"asgi-parity-websocket-client-{uuid.uuid4().hex}", level=logging.DEBUG
+        )
+        client_logger.propagate = False
+        client_handler = logging.StreamHandler(client_trace)
+        client_handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
+        client_logger.addHandler(client_handler)
     events_path = server["events"]
     events_before = len(read_events(events_path))
     if fault_control_path is not None:
@@ -5072,6 +5092,7 @@ def websocket_observation(
                     proxy=None,
                     open_timeout=20,
                     close_timeout=2,
+                    logger=client_logger,
                 ) as websocket:
                     ready.set()
                     try:
@@ -5121,6 +5142,7 @@ def websocket_observation(
             proxy=None,
             open_timeout=20,
             close_timeout=2,
+            logger=client_logger,
         ) as websocket:
             if specification.get("abrupt_disconnect", False):
                 websocket.close_socket()
@@ -5200,6 +5222,11 @@ def websocket_observation(
                     "websocket.receive.closed-reason.set-item",
                 },
             )
+    except TimeoutError as error:
+        if client_trace is None:
+            raise
+        trace = client_trace.getvalue()[-3000:] or "<no WebSocket protocol log emitted>"
+        raise ParityError(f"WebSocket client timed out; client_trace={trace}") from error
     except ConnectionClosed as error:
         if fault_control_path is None:
             raise
@@ -5224,6 +5251,14 @@ def websocket_observation(
             wait_for_events=False,
         )
     finally:
+        if client_logger is not None and client_handler is not None:
+            trace = client_trace.getvalue()[-3000:]
+            if trace:
+                sys.stderr.write(
+                    f"--- {server['id']} WebSocket client trace ---\n{trace}\n"
+                )
+            client_logger.removeHandler(client_handler)
+            client_handler.close()
         if fault_control_path is not None:
             fault_control_path.write_text("", encoding="utf-8")
 
@@ -7410,7 +7445,7 @@ def execute_profile(
                         "operation": case["operation"],
                         "requirements": case["covers"],
                         "status": "infrastructure_failed",
-                        "error": {"class": type(error).__name__, "message": str(error)[:1000]},
+                        "error": {"class": type(error).__name__, "message": str(error)[:5000]},
                     })
                     print(f"ERROR {profile['id']}: {case['case_id']}: {error}", flush=True)
                     for unrun_case in execution_cases[case_index + 1:]:

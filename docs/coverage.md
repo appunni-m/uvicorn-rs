@@ -88,7 +88,7 @@ parity/coverage gate. Later hosted runs are recorded below.
 A separate earlier 238-case server-log excerpt reports one infrastructure
 failure and one case not run but does not name the failed case.
 
-## Hosted CI follow-up (runs #30–#33)
+## Hosted CI follow-up (runs #30–#34)
 
 Run [#30](https://github.com/appunni-m/uvicorn-rs/actions/runs/37651700488)
 on commit `19cca6f` completed after 23m53s with failure. The installed-wheel
@@ -166,6 +166,30 @@ GitHub retained `uvicorn-rs-unified-coverage` as artifact `11503562361`
 Python-floor jobs were skipped. This is consistent with the previous hosted
 TLS-WebSocket oracle timeouts and shows that the expanded diagnostic records
 the empty target log, but it does not establish the cause.
+
+Run [#34](https://github.com/appunni-m/uvicorn-rs/actions/runs/37667890595)
+on `ad7d698` completed after 31m02s with failure. Rust quality, the Rust
+minimum, and installed-wheel public parity passed; public parity was 239/239
+with no behavior failures, infrastructure errors, or cases not run. Unified
+coverage remained incomplete at 490/491 cases and measured 5,119/5,121
+regions and 3,620/3,624 lines. Attribution and repeats 2 and 3 failed on
+`websocket-tls.text-round-trip-with-query-and-subprotocol`; each repeat also
+left `websocket-tls.scope-headers-path-query-and-subprotocols` not run. The
+reported error is a Uvicorn oracle timeout while waiting for the TLS
+WebSocket handshake response. The captured oracle events contain only
+`lifespan.startup`; both server processes remained alive, Uvicorn logged its
+HTTPS readiness request but no WebSocket request, and the target log was
+empty. This still does not establish whether the stall is in the client,
+TLS, or server path. Coverage annotations identify two missing native regions
+at `src/lib.rs:3017-3019` and `src/lib.rs:3020`. The matching local full report
+attributes those spans to `fault.http2.connection-disconnect-completes-eof-recheck`;
+the hosted summary does not show whether this case reached the same path, so
+the difference remains unresolved and is tracked separately from the
+WebSocket timeout. GitHub retained `uvicorn-rs-unified-coverage` (23.8 MB,
+SHA-256 `873d16a5eb54b832ce9488d800103bafd16a7bf2afce30ae53b6400483592a5d`).
+Platform package and Python-floor jobs were skipped. A local-only diagnostic
+patch now captures the WebSocket client's protocol trace on this failure path;
+run #34 predates that patch.
 
 ## Current full verification (491 cases)
 

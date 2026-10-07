@@ -26,7 +26,7 @@ env:
   RUSTC_WORKSPACE_WRAPPER: ""
   RUSTFLAGS: ""
   CARGO_ENCODED_RUSTFLAGS: ""
-  # Include handshake progress in Uvicorn oracle failures; target behavior is unchanged.
+  # Include client handshake and Uvicorn progress in WSS oracle failures; target behavior is unchanged.
   ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG: "1"
 
 jobs:
