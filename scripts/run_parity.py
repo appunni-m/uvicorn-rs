@@ -2632,6 +2632,12 @@ def start_server(
             command.extend(["--certfile", str(certificate), "--keyfile", str(key)])
         command.extend(["--graceful-timeout", str(graceful_timeout_seconds)])
     elif server_id == "uvicorn":
+        # Keep TLS WebSocket handshake progress in hosted diagnostics when the
+        # reference adapter stalls before ASGI dispatch.
+        websocket_tls_debug = (
+            profile_id == "websocket-tls"
+            and env.get("ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG") == "1"
+        )
         command = [
             sys.executable, "-m", "uvicorn", APP, *common, "--loop", "uvloop",
             # Follow Uvicorn's stock selector for the pinned reference version.
@@ -2640,7 +2646,8 @@ def start_server(
             # deprecated legacy adapter and changes the reference behavior.
             "--http", "httptools", "--interface", "asgi3", "--ws", "auto",
             "--lifespan", "auto",
-            "--log-level", "error", "--no-server-header", "--timeout-graceful-shutdown",
+            "--log-level", "debug" if websocket_tls_debug else "error",
+            "--no-server-header", "--timeout-graceful-shutdown",
             str(graceful_timeout_seconds),
         ]
         if certificate and key:
