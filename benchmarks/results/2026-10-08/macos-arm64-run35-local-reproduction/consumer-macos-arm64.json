@@ -1,0 +1,39 @@
+{
+  "schema": "uvicorn-rs-installed-wheel-consumer@1",
+  "python": "3.12.10 (main, May 30 2025, 05:53:56) [Clang 20.1.4 ]",
+  "platform": "darwin",
+  "consumer_probe_sha256": "bc9cd449857089562ecba001136e5c37ac89e3447865e1f6d7794c7a634c78d1",
+  "version": "0.1.0",
+  "wheel": "/private/tmp/uvicorn-rs-macos-31210-20261008/uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl",
+  "wheel_sha256": "ab3ac30886a0cbddccbf127fda1a54df895e8ebff3da026cfb937a87dcca7282",
+  "native_path": "/private/tmp/uvicorn-rs-macos-31210-20261008/consumer-env/lib/python3.12/site-packages/uvicorn_rs/_native.abi3.so",
+  "native_sha256": "0e75d893144bb2a87819904e7356a532ca844eaef7b35d16d97b54e6cffb1485",
+  "package_path": "/private/tmp/uvicorn-rs-macos-31210-20261008/consumer-env/lib/python3.12/site-packages/uvicorn_rs/__init__.py",
+  "cli_help": "passed",
+  "cli_tls_and_shutdown": {
+    "status": "passed",
+    "command": "python -m uvicorn_rs module:app --certfile ... --keyfile ...",
+    "http_status": 200,
+    "http_body": "startup-token:0",
+    "tls_version": "TLSv1.3",
+    "alpn": "http/1.1",
+    "held_request_cancelled": true,
+    "lifespan_shutdown_completed": true,
+    "signal": "SIGTERM",
+    "shutdown_elapsed_seconds": 2.029501,
+    "shutdown_bound_seconds": 5,
+    "exit_code": 0
+  },
+  "live_asgi": {
+    "status": "passed",
+    "events": [
+      "startup",
+      "http.complete",
+      "shutdown"
+    ],
+    "caller_loop_thread_context_preserved": true,
+    "server_cancellation_propagated": true,
+    "caller_loop_alive": true
+  },
+  "scope": "actual package-consumer HTTP/lifespan/context/cancellation and POSIX CLI/TLS/shutdown smoke; not full oracle parity"
+}

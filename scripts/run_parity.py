@@ -3584,7 +3584,11 @@ def http1_response_reset_request(
 
 
 def http2_disconnect_request(
-    port: int, specification: dict[str, Any], events_path: Path
+    port: int,
+    specification: dict[str, Any],
+    events_path: Path,
+    fault_control_path: Path | None = None,
+    fault_point: str | None = None,
 ) -> dict[str, Any]:
     events_before = len(read_events(events_path))
     context = ssl._create_unverified_context()
@@ -3675,11 +3679,33 @@ def http2_disconnect_request(
     events = read_events(events_path)[events_before:]
     if event not in events:
         raise ParityError("HTTP/2 app did not finish its disconnect receives")
+    fault_consumed = False
+    if fault_control_path is not None:
+        if fault_point is None:
+            raise ParityError("HTTP/2 EOF recheck fault observation requires its point selector")
+        deadline = time.monotonic() + 3
+        while (
+            fault_control_path.read_text(encoding="utf-8").strip()
+            == fault_point
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.005)
+        if fault_control_path.read_text(encoding="utf-8").strip() == fault_point:
+            raise ParityError(
+                "HTTP/2 EOF recheck pause was not consumed while the disconnected request was held"
+            )
+        fault_consumed = True
     followup = http2_request(port, {
         "method": "GET", "path": specification["followup_path"], "headers": [], "body_base64": "",
     })
-    return {"disconnect_event": "http.disconnect" in events, "followup": followup,
-            "application_events": events}
+    observation = {
+        "disconnect_event": "http.disconnect" in events,
+        "followup": followup,
+        "application_events": events,
+    }
+    if fault_control_path is not None:
+        observation["fault_consumed"] = fault_consumed
+    return observation
 
 
 def http2_request_on_connection(
@@ -5731,8 +5757,16 @@ def execute_case(
         if fault_control_path is not None:
             fault_control_path.write_text(fault["point"], encoding="utf-8")
         if profile["id"] == "http2":
+            eof_recheck_control = (
+                fault_control_path
+                if fault and fault["contract"] == "http-read-eof-recheck-completes"
+                else None
+            )
             try:
-                return http2_disconnect_request(server["port"], disconnect, server["events"])
+                return http2_disconnect_request(
+                    server["port"], disconnect, server["events"], eof_recheck_control,
+                    fault["point"] if eof_recheck_control is not None else None,
+                )
             finally:
                 if fault_control_path is not None:
                     fault_control_path.write_text("", encoding="utf-8")
@@ -6458,6 +6492,7 @@ def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -
         followup = observation.get("followup_response")
         return (
             observation.get("disconnect_event") is True
+            and observation.get("fault_consumed") is True
             and isinstance(followup, dict) and followup.get("status") == 200
         )
     if fault["contract"] == "server-cancellation-schedule-error-bounded-shutdown":
@@ -7278,6 +7313,11 @@ def execute_profile(
                                                  "lifespan_shutdown_completed": target_raw["lifespan_shutdown_completed"]}
                         elif case["fault"]["contract"] == "http-response-reset-cancels-deferred-task":
                             fault_observation = {**target_result, "application_events": target_raw["application_events"]}
+                        elif case["fault"]["contract"] == "http-read-eof-recheck-completes":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
                         elif case["fault"]["contract"] == "http-reset-before-body-worker-disconnect-followup-200":
                             fault_observation = {
                                 **target_result,

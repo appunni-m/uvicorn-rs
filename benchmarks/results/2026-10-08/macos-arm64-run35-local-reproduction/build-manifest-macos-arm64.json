@@ -1,0 +1,120 @@
+{
+  "build": {
+    "environment": {
+      "CARGO_BUILD_RUSTFLAGS": "",
+      "CARGO_ENCODED_RUSTFLAGS": "",
+      "RUSTC_WORKSPACE_WRAPPER": "",
+      "RUSTC_WRAPPER": "",
+      "RUSTFLAGS": ""
+    },
+    "features": [
+      "pyo3/extension-module"
+    ],
+    "locked": true,
+    "profile": "release",
+    "wheel_command": [
+      "maturin",
+      "build",
+      "--release",
+      "--locked",
+      "--interpreter",
+      "python",
+      "--out",
+      "dist"
+    ]
+  },
+  "commit": "1a72c9b3ab18e01389b1e19efbc76bf569e98730",
+  "files": {
+    "consumer-macos-arm64.json": "a8a4c7a2e39f0e05afb117827e15c60b57e4ffdabaecc928596ddecd50166afd",
+    "uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl": "ab3ac30886a0cbddccbf127fda1a54df895e8ebff3da026cfb937a87dcca7282"
+  },
+  "license_expression": "BSD-3-Clause OR MIT",
+  "packages": {
+    "uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl": {
+      "filename": "uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl",
+      "members": [
+        "uvicorn_rs-0.1.0.dist-info/METADATA",
+        "uvicorn_rs-0.1.0.dist-info/RECORD",
+        "uvicorn_rs-0.1.0.dist-info/WHEEL",
+        "uvicorn_rs-0.1.0.dist-info/entry_points.txt",
+        "uvicorn_rs-0.1.0.dist-info/licenses/LICENSE",
+        "uvicorn_rs-0.1.0.dist-info/licenses/LICENSE-BSD-3-Clause",
+        "uvicorn_rs-0.1.0.dist-info/licenses/LICENSE-MIT",
+        "uvicorn_rs-0.1.0.dist-info/sboms/uvicorn-rs.cyclonedx.json",
+        "uvicorn_rs/__init__.py",
+        "uvicorn_rs/__main__.py",
+        "uvicorn_rs/_bridge.py",
+        "uvicorn_rs/_native.abi3.so",
+        "uvicorn_rs/cli.py",
+        "uvicorn_rs/server.py"
+      ],
+      "native": {
+        "fault_points_checked": 221,
+        "fault_registry_sha256": "7da12738ccee75ccb8e5c1ff1506ca405e3292da46574107d30d817b4881a550",
+        "member": "uvicorn_rs/_native.abi3.so",
+        "normal_markers_absent": true,
+        "sha256": "0e75d893144bb2a87819904e7356a532ca844eaef7b35d16d97b54e6cffb1485",
+        "size": 7257216
+      },
+      "platform": "macos-arm64",
+      "record_verified": true,
+      "sha256": "ab3ac30886a0cbddccbf127fda1a54df895e8ebff3da026cfb937a87dcca7282",
+      "size": 2638475,
+      "tags": [
+        "cp39-abi3-macosx_11_0_arm64"
+      ]
+    }
+  },
+  "platform": "macos-arm64",
+  "publication_blockers": [
+    "dirty source checkout"
+  ],
+  "recorded_at": "2026-10-07T20:02:17.357555+00:00",
+  "schema": "uvicorn-rs-platform-build@1",
+  "source_dirty": true,
+  "source_hashes": {
+    ".gitignore": "148b22bd91671164b43c6d69de8ab852b2ac4b601c8fee84ce32c941a0d2cd97",
+    "AGENTS.md": "5a587834646da08ce947b7d73dd45f8031d340f760b26ed61f92ba4ec19da9c9",
+    "CONTRIBUTING.md": "55e85d0c8748d968bc37e7adcff44570b29f87c73e4935156b494cbed2bb99fa",
+    "Cargo.lock": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+    "Cargo.toml": "cba8bd65fea930574eba838116937fd6348fd1ba7d14c5e5c79b76dd7fdfe994",
+    "LICENSE": "1ad2292eb9c2d434aabdf05edf5b7bd4af4a130816139c619d7435fb4cfd2d5c",
+    "LICENSE-BSD-3-Clause": "bd58884c98fa79ea18055ccb243265afb8a967735cfe338ffa01336498316e34",
+    "LICENSE-MIT": "04e7af3a9a91d02ca169bd23ba9bc5f67433790337f4c1c0edc389c89b3cd16d",
+    "README.md": "9da1bfc295372f67e0dc1b8f47987d3750a83de86d44661027a67b4227e3b89c",
+    "SECURITY.md": "298bc7ece661f7f72df842322eb2deeb4f6347268c3a9cc4075f9913cfc04a94",
+    "SUPPORT.md": "801d48e66cc778511553ef85205bf366ea24e820c028ad7d09188d7e94a2fca2",
+    "docs/adr/0001-runtime-and-asyncio-bridge.md": "901ebe906b3e1d75accb129f75d0bcd02554cdffb4979df42f654dfd9d0f1fef",
+    "docs/architecture.md": "f5b868600e614f753b4ee909ceb89ffc81f9fc14f62d847fa96e333d7bb038aa",
+    "docs/asgi-case-inventory.md": "b578d42e3c67c46a609ba1ec1da422c570aeadbf67fcc3f7b70f90d83e224c4c",
+    "docs/benchmarks.md": "61c1ae5bc4edfe030e863a72b29c2abaadcf1298915370ce5cff9b28fd1e2db6",
+    "docs/configuration.md": "6ad0f6e30a9c9463c4712d8e477a3176beb01c672ebc4d25d792e629a665d12b",
+    "docs/coverage-plan.md": "a27511f0118b2eb14e13b321a673e31e5859b353651ff4675f5627084191d8ce",
+    "docs/coverage.md": "99e6b1dc27e9e85dd2e45db4b81c9ba78ee088a604e9f53e51bc7a5332708205",
+    "docs/deployment.md": "10cceeb57ed49397391370e457ef62c13b4c6fec45058ecb34620400c796a60f",
+    "docs/feasibility.md": "15ac411d1bfe575b83eee30b72119b93b957c937488950d521fc3de6615c47e9",
+    "docs/implementation-review.md": "4b20fcf54d9b08a6b04aed3e3585f87adecb918770a45cc297a3dd06258019ad",
+    "docs/parity.md": "c90dd2b31cd1f0f2f8c33f722966a846f663cb81e09e603217f2951933bc5de4",
+    "docs/performance-investigation-2026-10-05.md": "1bbc909fceee4db846c43ab7aa93ffc465534d0daa71b081fb8b2a57506346ae",
+    "docs/releases.md": "3f5a3b3693e299152e15a62edc802fc464db741869f9ea447364ae84790f7f75",
+    "docs/support-matrix.md": "70f50e9eaae8fdf79ced5a6a70f26fc104e58abae9f83479b400e5111ea8990b",
+    "pyproject.toml": "6a84b06a5b4bc74271632548a4e0068ec1bb4cefadcdb596f6f85dae79a388de",
+    "python/uvicorn_rs/__init__.py": "de4174caed539773b9868a018681a5b5023a7bcbf354db69391ca12bd4f59155",
+    "python/uvicorn_rs/__main__.py": "6d8b7d7846a845059d7a3107143f11131f63c5511d669b44085b15ec5e3d2279",
+    "python/uvicorn_rs/_bridge.py": "ef702a2e4e2a37c5ab41c24a7a50ec588818896e59ca0e565d7645f6e657b3ff",
+    "python/uvicorn_rs/cli.py": "fe6ccd65d0afe6333a43389470aa67351443996662763f7f76685436ffa32a1f",
+    "python/uvicorn_rs/server.py": "77ea5a87b795071a1ddbb0fd2bfeaee3a2e7d29b95fd05774ac6fe810d5aed87",
+    "src/lib.rs": "1a0c90dbdd08e7f6172a1a6d6f6928f021bd473d74836ee7eeb853e1fb4d55a4",
+    "uv.lock": "21cd4e12bf4124f5e72f41ee4165d4ad74301bf1adefa51171c99e34973bd445"
+  },
+  "source_sha256": "1a0c90dbdd08e7f6172a1a6d6f6928f021bd473d74836ee7eeb853e1fb4d55a4",
+  "state": "local preparation",
+  "target": "aarch64-apple-darwin",
+  "toolchain": {
+    "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+    "maturin": "maturin 1.14.1",
+    "python": "3.12.10 (main, May 30 2025, 05:53:56) [Clang 20.1.4 ]",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: aarch64-apple-darwin\nrelease: 1.98.1\nLLVM version: 22.1.8"
+  },
+  "version": "0.1.0"
+}

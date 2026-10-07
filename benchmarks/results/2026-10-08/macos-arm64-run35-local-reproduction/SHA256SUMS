@@ -1,0 +1,4 @@
+27ca6b3ed902a45cb3aebc6c7810de36150cbabd3df359080e359658a220806e  README.md
+16af9645920359914521457a275f941eb5a346dca7322050a83b019f46859b4e  build-manifest-macos-arm64.json
+a8a4c7a2e39f0e05afb117827e15c60b57e4ffdabaecc928596ddecd50166afd  consumer-macos-arm64.json
+ab3ac30886a0cbddccbf127fda1a54df895e8ebff3da026cfb937a87dcca7282  uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl

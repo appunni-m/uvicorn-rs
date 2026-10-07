@@ -1,0 +1,13 @@
+PASS http2: fault.http2.connection-disconnect-completes-eof-recheck
+{
+  "status": "completed",
+  "summary": {
+    "selected": 1,
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "not_run": 0,
+    "infrastructure_failed": 0
+  },
+  "result": "/Users/lazytrot/work/uvicorn-rs/target/asgi-coverage/local-eof-fault-consumed-2026-10-08/artifacts/e00c7edd99034689aa2d225ac1faf1dc/cases/fault.http2.connection-disconnect-completes-eof-recheck-1b032ad4e7/parity-result.json"
+}

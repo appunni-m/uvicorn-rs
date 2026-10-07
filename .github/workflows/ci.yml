@@ -307,6 +307,12 @@ jobs:
             platform: windows-x86_64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    # Windows checkout must handle the retained, deeply nested parity evidence
+    # paths before any ordinary setup step can configure Git.
+    env:
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -325,11 +331,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          maturin build --release --locked --interpreter python --out dist
-          wheels=(dist/*.whl)
-          test "${#wheels[@]}" -eq 1
-          python -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
-          python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
+          log="$RUNNER_TEMP/uvicorn-rs-wheel-consumer.log"
+          set +e
+          (
+            set -euo pipefail
+            maturin build --release --locked --interpreter python --out dist
+            wheels=(dist/*.whl)
+            test "${#wheels[@]}" -eq 1
+            python -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
+            python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
+          ) >"$log" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            python - "$log" <<'PY'
+          from pathlib import Path
+          import sys
+
+          lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
+          detail = "\n".join(lines[-80:])[-5000:]
+          encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          print(f"::error title=Package wheel build or consumer failure::{encoded}")
+          PY
+            cat "$log"
+            exit "$status"
+          fi
+          cat "$log"
       - name: Build source distribution
         if: runner.os == 'Linux'
         run: maturin sdist --out dist
@@ -358,10 +385,30 @@ jobs:
           .venv/bin/python scripts/run_parity.py --output dist/parity-linux-x86_64.json
           .venv/bin/python scripts/check_ci_evidence.py parity dist/parity-linux-x86_64.json
       - name: Record source, build, license and artifact identities
-        run: >-
-          python scripts/release_evidence.py record --directory dist
-          --platform ${{ matrix.platform }} --commit "${{ github.sha }}"
-          --output dist/build-manifest-${{ matrix.platform }}.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/uvicorn-rs-release-evidence.log"
+          set +e
+          python scripts/release_evidence.py record --directory dist \
+            --platform ${{ matrix.platform }} --commit "${{ github.sha }}" \
+            --output dist/build-manifest-${{ matrix.platform }}.json >"$log" 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            python - "$log" <<'PY'
+          from pathlib import Path
+          import sys
+
+          lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
+          detail = "\n".join(lines[-80:])[-5000:]
+          encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+          print(f"::error title=Release evidence recording failure::{encoded}")
+          PY
+            cat "$log"
+            exit "$status"
+          fi
+          cat "$log"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: uvicorn-rs-candidate-${{ matrix.platform }}

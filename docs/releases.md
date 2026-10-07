@@ -9,25 +9,48 @@ or create or move tags. The project is licensed under
 
 ## Current state
 
-The new workflows pass local Actionlint validation; action SHAs were checked
-against their upstream GitHub revisions. Local Rust 1.85.0 default and
-all-feature checks pass. A macOS ARM64 wheel was built, installed into a fresh
-CPython 3.12.13 and 3.9.25 environments, and checked through a real HTTP request, caller
-loop/thread/context, lifespan and public API cancellation. The source archive
-was also extracted, rebuilt with locked dependencies and consumed in a fresh
-environment. Its package inputs matched the checkout.
+The original workflow revisions passed local Actionlint validation; action
+SHAs were checked against their upstream GitHub revisions. The current
+Windows-long-path and failure-annotation edits parse as YAML and await hosted
+verification. Local Rust 1.85.0 default and all-feature checks pass. A macOS
+ARM64 wheel was built and consumed in fresh CPython 3.12.13 and 3.9.25
+environments, including a real HTTP request, caller loop/thread/context,
+lifespan and public API cancellation. The source archive was also extracted,
+rebuilt with locked dependencies and consumed in a fresh environment. Its
+package inputs matched the checkout.
 
 The October 5 release-preparation evidence below remains a historical
-snapshot. An earlier October 7 source snapshot passed 233 public oracle cases
-on an installed macOS ARM64 wheel and its separate normal-build exclusion
-audit passed 16/16 checks. The current dirty source passed 238/238 oracle cases
-on the normal non-instrumented local build and passed 490 attribution cases
-plus three full repeats with 5,108/5,108 regions and 3,608/3,608 lines
-covered; Coverage MCP reported zero gaps and a matching source receipt. The
-new local acceptance evidence is in the
-[490-case archive](../benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/evidence-index.json).
-The installed-wheel exclusion audit has not been rerun for this source, so the
-current result is not a release candidate verification.
+snapshot. Clean hosted CI run #35 passed 239/239 installed-wheel public parity
+cases and all 491 unified coverage cases, with 5,121/5,121 regions and
+3,624/3,624 lines. Its parity job also passed the normal-build fault-seam
+exclusion audit. The local 2026-10-08 report strengthens the H2 EOF
+fault-consumption assertion and passes 491/491 attribution cases plus three
+complete repeats with full region and line coverage; Coverage-MCP reports zero
+gaps. Hosted run #35 predates that assertion. Current package failures and the
+local macOS reproduction are recorded below; no complete release candidate is
+verified.
+
+Hosted CI run [37672645704](https://github.com/appunni-m/uvicorn-rs/actions/runs/37672645704)
+on clean commit `1a72c9b` completed with failure. Rust quality and MSRV passed;
+installed-wheel public parity passed 239/239; unified coverage passed 491/491
+cases with 5,121/5,121 regions and 3,624/3,624 lines. Package preparation did
+not pass: the Windows checkout hit a tracked path-length error in retained
+parity evidence; the pending workflow update enables Git's `core.longpaths`
+before checkout. The Linux package, source rebuild and candidate-wheel parity
+steps passed, but the build-manifest recording step failed; its detailed log
+was not publicly retrievable, so the cause remains unknown. The macOS ARM64
+wheel-build/consumer step also failed without a detailed public annotation.
+The Python-floor job was skipped, and no platform candidate artifacts were
+uploaded. This run is not a complete release candidate.
+
+The hosted macOS failure did not reproduce locally. On macOS 15.7.7 ARM64 with
+CPython 3.12.10, Rust/Cargo 1.98.1 and Maturin 1.14.1, the same wheel build and
+exact-wheel consumer passed; `release_evidence.py record --allow-dirty` also
+validated the package metadata, RECORD, licenses and native architecture. The
+wheel, consumer receipt and local-preparation manifest are in the
+[macOS reproduction archive](../benchmarks/results/2026-10-08/macos-arm64-run35-local-reproduction/).
+The manifest is explicitly `local preparation` with `source_dirty: true`; this
+does not explain the hosted failure or establish a release candidate.
 
 Hosted CI run [37566368036](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036)
 on main commit `9d05c72` passed Rust quality, MSRV, and the installed-wheel

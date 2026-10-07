@@ -2,28 +2,32 @@
 
 ## Current evidence status
 
-The current local 491-case black-box gate passed on 2026-10-07. The manifest
-declares 491 workflows across 70 input files and 71 operations: 239 live oracle
-comparisons and 252 target-only contracts. Per-case attribution and all three
-complete 491-case repeats passed with zero failures, infrastructure errors,
-retries, or cases not run. Native coverage is **5,121/5,121 regions and
-3,624/3,624 lines (100%)**. Coverage-MCP measured the attached report with
-`source: matches_receipt`, `tests: passed`, zero missing regions, and zero gap
-groups. A rebuilt normal non-instrumented local build passed all 239 live
-oracle comparisons. The current report and its full evidence archive are
-linked below.
+The current local 491-case black-box gate passed on 2026-10-08 after the H2 EOF
+recheck fault contract was strengthened to require proof that its injected
+pause was consumed. The manifest declares 491 workflows across 70 input files
+and 71 operations: 239 live oracle comparisons and 252 target-only contracts.
+Per-case attribution and all three complete 491-case repeats passed with zero
+failures, infrastructure errors, retries, or cases not run. Native coverage is
+**5,121/5,121 regions and 3,624/3,624 lines (100%)**. Coverage-MCP measured the
+attached report with `source: matches_receipt`, `tests: passed`, zero missing
+regions, and zero gap groups. The exact report, Coverage-MCP receipt, repeat
+results, and focused H2 result are in the [current evidence archive](../benchmarks/results/2026-10-08/asgi-eof-recheck-fault-consumption-491/).
 
 This is source-bound local macOS ARM64 evidence from a dirty working tree at
-revision `dc8cf3f58623b761d7187153d5e96636bbdd77be`, not a clean hosted release
+revision `1a72c9b3ab18e01389b1e19efbc76bf569e98730`, not a clean hosted release
 baseline. The measured `src/lib.rs` SHA-256 is
 `1a0c90dbdd08e7f6172a1a6d6f6928f021bd473d74836ee7eeb853e1fb4d55a4`; the
 instrumented native SHA-256 is
 `2fcd0eeb88f38d7c07801335e37416837761fd0d4a340d86aab57ba8638dc2d5`. The
-region denominator changed because the coverage-only HTTP receive contention
-diagnostic no longer has a second coverage-only conditional outcome. The
-diagnostic remains absent from production builds. No Rust unit tests were
-added; the manifest-backed live input matrix remains the behavioral evidence
-system.
+aggregate source/input SHA-256 is
+`9c52350403f9bee48166ede3230e87d083f845bf134da0f70297120e7feede84`; the
+Coverage-MCP build ID is
+`93a183b2b3a8330d6ad74e170416c68c456b658d884be7f3a96dc637b0d337dc`. The
+tracked working-tree change measured here is in `scripts/run_parity.py`; the
+Rust source and parity inputs match the preceding local 491-case report. The
+coverage-only HTTP receive contention diagnostic remains excluded from
+production builds. No Rust unit tests were added; the manifest-backed live
+input matrix remains the behavioral evidence system.
 
 Hosted Linux failures are separate from this local result. The attached run
 [#23](https://github.com/appunni-m/uvicorn-rs/actions/runs/37603449348), commit
@@ -34,6 +38,11 @@ not run. The report has 237/238 oracle parity cases passing, no behavioral
 failures, and 5,106/5,108 regions covered (all 3,612 lines covered). The
 independent installed-wheel parity job passed 238/238. The two missing region
 locations are not present in the pasted output.
+
+The clean local 491-case run on 2026-10-08 passed this H3 subclass case during
+attribution and all three repeat matrices. The attached 490-case output is
+therefore historical infrastructure-failure evidence, not a reproduced H3
+behavior mismatch.
 
 Later run
 [#24](https://github.com/appunni-m/uvicorn-rs/actions/runs/37607369771), commit
@@ -191,7 +200,56 @@ Platform package and Python-floor jobs were skipped. A local-only diagnostic
 patch now captures the WebSocket client's protocol trace on this failure path;
 run #34 predates that patch.
 
-## Current full verification (491 cases)
+Run [#35](https://github.com/appunni-m/uvicorn-rs/actions/runs/37672645704)
+on commit `1a72c9b` completed with an overall failure on 2026-10-07. Rust
+quality, the minimum-version build, installed-wheel public parity, and unified
+coverage passed. Public parity was 239/239; hosted coverage was 491/491 cases,
+5,121/5,121 regions, and 3,624/3,624 lines. The hosted matrix predates the
+local strengthening of the H2 EOF fault contract described below. Platform
+package job failures are recorded in [release status](releases.md#current-state).
+The retained unified-coverage artifact is ID `11506803058`, SHA-256
+`d107cfb007ae41673feb025253cdd00706168f51df411fa5fdfc6c6fdb3a910c`.
+
+## Current full verification (491 cases; EOF fault consumption asserted)
+
+The new archive is
+[`asgi-eof-recheck-fault-consumption-491`](../benchmarks/results/2026-10-08/asgi-eof-recheck-fault-consumption-491/).
+It supersedes the previous local 491-case report below. The working tree was
+dirty at revision `1a72c9b3ab18e01389b1e19efbc76bf569e98730`; the unified report
+SHA-256 is `bc49875bbdbdc0486465de314101b5124a552476a650296871171e9fe79129e1`,
+and its context receipt binds the same source/build identity. The tracked change
+in this measurement is the parity-runner assertion that consumes the named
+fault before allowing the HTTP/2 follow-up request.
+
+| Verification | Passed | Failures / infrastructure / retries / not run |
+|---|---:|---|
+| Per-case attribution | 491/491 | 0 / 0 / 0 / 0 |
+| Full repeat 1 | 491/491 | 0 / 0 / 0 / 0 |
+| Full repeat 2 | 491/491 | 0 / 0 / 0 / 0 |
+| Full repeat 3 | 491/491 | 0 / 0 / 0 / 0 |
+| Oracle parity in each repeat | 239/239 | 0 failed |
+| Target-only contracts in each repeat | 252/252 | 0 failed |
+| Native regions | 5,121/5,121 | 0 missing |
+| Native lines | 3,624/3,624 | 0 missing |
+| Coverage-MCP region gap groups | 0 | source matches; tests passed |
+
+The strengthened H2 case asserts that the instrumented target cleared
+`UVICORN_RS_COVERAGE_FAULT_FILE` for
+`server.connection-io.eof-recheck.pause` before the follow-up request, then
+requires `http.disconnect` and a 200 follow-up. The focused case and all full
+matrix runs passed. No temporary Rust trace instrumentation remains in the
+source.
+
+The run used CPython 3.12.13, Rust 1.98.1, cargo-llvm-cov 0.8.7, and macOS
+15.7.7 ARM64. The instrumented extension SHA-256 is
+`2fcd0eeb88f38d7c07801335e37416837761fd0d4a340d86aab57ba8638dc2d5`. The
+source file hashes, exact Coverage-MCP page, full report, and repeat outputs
+are retained in the archive. This local result does not replace the pending
+hosted validation of the strengthened EOF fault-consumption assertion and does
+not establish benchmark performance. Run #35 supplies clean hosted evidence
+for the preceding 491-case matrix.
+
+## Previous full verification (491 cases; before EOF fault-consumption assertion)
 
 The archive is
 [`asgi-coverage-region-fix-491`](../benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/).

@@ -1,0 +1,162 @@
+{
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "2016f4408337196682b54fe575dfe4676e83d056f3bfc4f78148a2ea1bfa5aa7",
+      "size_bytes": 3575
+    },
+    {
+      "path": "coverage-mcp-pages.json",
+      "sha256": "ebd7c495c60b8d2cfd2b921aab467e5b23e306ef252dd6c724642a908ad16ea5",
+      "size_bytes": 1213
+    },
+    {
+      "path": "coverage-report.json.context.json",
+      "sha256": "9b7cec1c8782baed87f98d9d81c08a5907f4b92ddcd3ae5994d4e38370c4bed9",
+      "size_bytes": 396
+    },
+    {
+      "path": "coverage-report.json.gz",
+      "sha256": "5293c23fa811b8697471c2826b1991f02b13230d1ebf7d9c723a72576e249a6a",
+      "size_bytes": 3043766
+    },
+    {
+      "path": "eof-recheck-case/parity-result.json",
+      "sha256": "ae74a629c538c02e3e6ac1585852197fc6b7d039037479665a30ea434789135f",
+      "size_bytes": 19273
+    },
+    {
+      "path": "eof-recheck-case/stderr.log",
+      "sha256": "f97e993c616148f6ca47b562ee66f1b89755dbaf2c1f6f0083d3ba8a40bf906e",
+      "size_bytes": 180
+    },
+    {
+      "path": "eof-recheck-case/stdout.log",
+      "sha256": "4aa54511c4ebb4b3563839011deee19c7ca0c696a655b5cc8a43829195bb61f7",
+      "size_bytes": 476
+    },
+    {
+      "path": "matrix-repeat-results.tar.gz",
+      "sha256": "5e373befea566b473574d205efcfd6818afc2ec183ddcfc97d1fece44d4d866c",
+      "size_bytes": 235105
+    }
+  ],
+  "date": "2026-10-08",
+  "environment": {
+    "cargo_llvm_cov": "cargo-llvm-cov 0.8.7",
+    "machine": "arm64",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "python": "3.12.13",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "eof_recheck_contract": {
+    "assertion": "fault-control file must show the injected pause was consumed before the follow-up request; the contract also requires disconnect and follow-up status 200",
+    "case_id": "fault.http2.connection-disconnect-completes-eof-recheck",
+    "contract": "http-read-eof-recheck-completes",
+    "status": "passed"
+  },
+  "instrumented": {
+    "build_id": "93a183b2b3a8330d6ad74e170416c68c456b658d884be7f3a96dc637b0d337dc",
+    "coverage": {
+      "lines": {
+        "covered": 3624,
+        "missing": 0,
+        "total": 3624
+      },
+      "regions": {
+        "covered": 5121,
+        "missing": 0,
+        "total": 5121
+      }
+    },
+    "coverage_mcp": {
+      "build_id": "93a183b2b3a8330d6ad74e170416c68c456b658d884be7f3a96dc637b0d337dc",
+      "coverage": {
+        "covered": 5121,
+        "metric": "regions",
+        "missing": 0,
+        "total": 5121
+      },
+      "group_count": 0,
+      "groups": [],
+      "location_samples_are_bounded": true,
+      "measurement_path": "target/asgi-coverage/local-eof-fault-consumed-2026-10-08/coverage-report.json",
+      "metric": "regions",
+      "pages": 1,
+      "receipt_artifact": "target/asgi-coverage/local-eof-fault-consumed-2026-10-08/coverage-mcp-pages.json",
+      "recorded_revision": "1a72c9b3ab18e01389b1e19efbc76bf569e98730",
+      "source": "matches_receipt",
+      "status": "measured",
+      "tests": "passed"
+    },
+    "fault_contracts": {
+      "failed": 0,
+      "passed": 252,
+      "selected": 252
+    },
+    "matrix": {
+      "case_attribution_complete": true,
+      "executed": 491,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "passed": 491,
+      "scope": "complete",
+      "selected": 491,
+      "transient_infrastructure_failures": 0
+    },
+    "native_extension_sha256": "2fcd0eeb88f38d7c07801335e37416837761fd0d4a340d86aab57ba8638dc2d5",
+    "oracle_parity": {
+      "failed": 0,
+      "passed": 239,
+      "selected": 239
+    },
+    "profile_union_matches_attribution": true,
+    "report_sha256": "bc49875bbdbdc0486465de314101b5124a552476a650296871171e9fe79129e1",
+    "verification_repeats": [
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 491,
+        "run": 1,
+        "run_id": "fad2259fcdb24a98bfbd6cbacd25ac91",
+        "sha256": "0e01796c1a72a41afc0352c63e4cca0ce05d7b2435f528d6227240d279cdd5cf",
+        "status": "completed",
+        "transient_infrastructure_failures": 0
+      },
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 491,
+        "run": 2,
+        "run_id": "8f715ce965e94821a692aa06e6fe4ec6",
+        "sha256": "a219613cdd7cb813de5ca18e39f90bf55616e960bd264e3c13a33422d28c92fe",
+        "status": "completed",
+        "transient_infrastructure_failures": 0
+      },
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 491,
+        "run": 3,
+        "run_id": "8cf6dc58edd34df4859dbe2edd39a50b",
+        "sha256": "962294a5ad42c00d23b819724edac3b7c00bf6842e719294a67a9cd5dc20e010",
+        "status": "completed",
+        "transient_infrastructure_failures": 0
+      }
+    ]
+  },
+  "schema": "uvicorn-rs-asgi-coverage-evidence@1",
+  "scope": "complete unified ASGI parity and native LLVM region coverage; local working-tree evidence",
+  "source": {
+    "aggregate_sha256": "9c52350403f9bee48166ede3230e87d083f845bf134da0f70297120e7feede84",
+    "case_count": 491,
+    "dirty": true,
+    "manifest_sha256": "35abb756dda4bc53e6e62e616f08722b9e53de1094317cc77972f668f8dc3972",
+    "revision": "1a72c9b3ab18e01389b1e19efbc76bf569e98730",
+    "runner_sha256": "a61d16ea5d1432ece5bac31aebbee7c99124a57877e60c4e781ded55909b9ee7",
+    "src_lib_sha256": "1a0c90dbdd08e7f6172a1a6d6f6928f021bd473d74836ee7eeb853e1fb4d55a4"
+  }
+}
