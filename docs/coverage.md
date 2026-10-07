@@ -140,9 +140,11 @@ reproduce the timeout. The retained `uvicorn-rs-unified-coverage` artifact is ID
 Python-floor jobs were skipped. The exact hosted failure cause remains
 unknown.
 
-The follow-up working-tree change raises the bounded failure detail from 500
-to 5,000 characters and includes the target server-log tail in oracle adapter
-diagnostics. It has not yet been exercised by hosted CI.
+The follow-up change in commit `8c17dea` raises the bounded failure detail
+from 500 to 5,000 characters and includes the target server-log tail in oracle
+adapter diagnostics. Hosted CI run
+[#33](https://github.com/appunni-m/uvicorn-rs/actions/runs/37663278880) is
+exercising this change.
 
 ## Current full verification (491 cases)
 
