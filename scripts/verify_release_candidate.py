@@ -102,8 +102,8 @@ def verify_external_evidence(directory: Path, version: str, commit: str, linux: 
 def verify(root: Path, version: str, commit: str, evidence: Path | None) -> dict:
     if COMMIT.fullmatch(commit) is None or command_output(["git", "rev-parse", "HEAD"]) != commit:
         raise ValueError("candidate commit must equal the full checked-out Git commit")
-    if command_output(["git", "status", "--porcelain", "--untracked-files=no"]):
-        raise ValueError("candidate assembly requires a clean tracked checkout")
+    if command_output(["git", "status", "--porcelain", "--untracked-files=all"]):
+        raise ValueError("candidate assembly requires a clean checkout")
     project_versions(expected=version)
     license_contract()
     if not root.is_dir():

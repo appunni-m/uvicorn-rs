@@ -52,7 +52,7 @@ jobs:
           # peeled commit. Never create or move a tag to repair verification.
           version="${GITHUB_REF_NAME#v}"
           python scripts/check_release_version.py "$version"
-          test -z "$(git status --porcelain --untracked-files=no)"
+          test -z "$(git status --porcelain --untracked-files=all)"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Require successful complete main CI for this exact commit
