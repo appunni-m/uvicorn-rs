@@ -1,0 +1,37 @@
+[
+  {
+    "context": {
+      "checkout_path": "/Users/lazytrot/work/uvicorn-rs",
+      "repo_key": "/Users/lazytrot/work/uvicorn-rs",
+      "schema_revision": 18,
+      "suite": null
+    },
+    "data": {
+      "group_count": 0,
+      "groups": [],
+      "measurement": {
+        "build_id": "93a183b2b3a8330d6ad74e170416c68c456b658d884be7f3a96dc637b0d337dc",
+        "coverage": {
+          "covered": 5121,
+          "metric": "regions",
+          "missing": 0,
+          "total": 5121
+        },
+        "format": "llvm",
+        "recorded_revision": "dc8cf3f58623b761d7187153d5e96636bbdd77be",
+        "ref": "target/asgi-coverage/local-coverage-region-fix-retry-2026-10-07/coverage-report.json",
+        "source": "matches_receipt",
+        "tests": "passed"
+      },
+      "next_action": "Use rg and bounded file reads at these locations; test references are not coverage attribution.",
+      "next_offset": null,
+      "ranking": "missing observations, then source location",
+      "status": "measured",
+      "warnings": [
+        "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+      ],
+      "warnings_omitted": 0
+    },
+    "page": null
+  }
+]

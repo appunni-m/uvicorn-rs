@@ -1811,11 +1811,9 @@ impl AsgiIo {
             },
             Err(_) => {
                 #[cfg(coverage)]
-                if coverage_fault_is_armed(CoverageFaultPoint::HttpReceiveLockContention) {
-                    log_error(format_args!(
-                        "uvicorn-rs: coverage observed concurrent HTTP receive lock contention"
-                    ));
-                }
+                log_error(format_args!(
+                    "uvicorn-rs: coverage observed concurrent HTTP receive lock contention"
+                ));
                 None
             }
         };

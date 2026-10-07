@@ -2,36 +2,38 @@
 
 ## Current evidence status
 
-The 491-case black-box gate passed on 2026-10-07. The manifest declares 491
-workflows across 70 input files and 71 operations: 239 live oracle comparisons
-and 252 target-only contracts. Per-case attribution and all three complete
-491-case repeats passed with zero failures, infrastructure errors, retries,
-or cases not run. Native coverage is **5,123/5,123 regions and 3,628/3,628
-lines (100%)**. Coverage-MCP measured this exact report with
+The current local 491-case black-box gate passed on 2026-10-07. The manifest
+declares 491 workflows across 70 input files and 71 operations: 239 live oracle
+comparisons and 252 target-only contracts. Per-case attribution and all three
+complete 491-case repeats passed with zero failures, infrastructure errors,
+retries, or cases not run. Native coverage is **5,121/5,121 regions and
+3,624/3,624 lines (100%)**. Coverage-MCP measured the attached report with
 `source: matches_receipt`, `tests: passed`, zero missing regions, and zero gap
-groups. The normal non-instrumented local build passed all 239 live oracle
-comparisons. Formatting and Clippy with `-D warnings` passed.
+groups. A rebuilt normal non-instrumented local build passed all 239 live
+oracle comparisons. The current report and its full evidence archive are
+linked below.
 
 This is source-bound local macOS ARM64 evidence from a dirty working tree at
-revision `d66548a5f0be8b51bc85245255d07741a60317ba`, not a clean release
+revision `dc8cf3f58623b761d7187153d5e96636bbdd77be`, not a clean hosted release
 baseline. The measured `src/lib.rs` SHA-256 is
-`e8d8510f49992ccb6dc39e529d478ec2f06861674e0678044863ca4aa12d4dbd`; the
+`1a0c90dbdd08e7f6172a1a6d6f6928f021bd473d74836ee7eeb853e1fb4d55a4`; the
 instrumented native SHA-256 is
-`391929f43630a4b4e13feb6570a1d4e522dcf8a8bc24e984f8f30ab52f0aca2c`. No Rust
-unit tests were added; the manifest-backed live input matrix remains the
-behavioral evidence system.
+`2fcd0eeb88f38d7c07801335e37416837761fd0d4a340d86aab57ba8638dc2d5`. The
+region denominator changed because the coverage-only HTTP receive contention
+diagnostic no longer has a second coverage-only conditional outcome. The
+diagnostic remains absent from production builds. No Rust unit tests were
+added; the manifest-backed live input matrix remains the behavioral evidence
+system.
 
-The hosted Linux failures are separate from this local result. In run
+Hosted Linux failures are separate from this local result. The attached run
 [#23](https://github.com/appunni-m/uvicorn-rs/actions/runs/37603449348), commit
-`6b28666`, the pasted 490-case report names
-`http3.asgi-event-type-string-subclass` as an infrastructure failure during
-per-case attribution. Each of the three full repeats also reports one
-infrastructure failure and one case not run; their summaries do not identify
-the affected case. The report has 237/238 oracle parity cases passing, no
-behavioral failures, and 5,106/5,108 regions covered (all 3,612 lines covered).
-The independent installed-wheel parity job passed 238/238; the lower count is
-specific to instrumented attribution. The pasted output does not include the
-two uncovered region locations.
+`6b28666`, used a 490-case snapshot. Its attribution log identifies
+`http3.asgi-event-type-string-subclass` as an infrastructure failure; each of
+the three complete repeats ended with one infrastructure failure and one case
+not run. The report has 237/238 oracle parity cases passing, no behavioral
+failures, and 5,106/5,108 regions covered (all 3,612 lines covered). The
+independent installed-wheel parity job passed 238/238. The two missing region
+locations are not present in the pasted output.
 
 Later run
 [#24](https://github.com/appunni-m/uvicorn-rs/actions/runs/37607369771), commit
@@ -48,9 +50,21 @@ errors, or cases not run. GitHub retained `uvicorn-rs-unified-coverage` as
 artifact `11482802502` (SHA-256
 `1793948e9fad9e3872da8b61ac4d9af53ca71bb43bffd7f408d94c62fcc134a5`), but
 the download endpoint returns HTTP 401 in this environment. Without the
-artifact report, it is unknown whether this run repeats the H3 infrastructure
-failure, reports uncovered Linux regions, or failed at another gate. The local
-491-case result does not resolve the hosted failures.
+artifact report, its exact unified-coverage failure remains unknown.
+
+Run [#27](https://github.com/appunni-m/uvicorn-rs/actions/runs/37625295530),
+commit `6cd1109`, later attributed 491/491 cases and measured 5,122/5,123
+regions with all 3,628 lines covered. Its three matrix repeats encountered
+Uvicorn oracle TLS-WebSocket adapter infrastructure failures: the text case
+timed out waiting for its handshake, the scope case had no close frame, and a
+later repeat stopped before 30 cases ran. No behavioral mismatches were
+reported. Run
+[#28](https://github.com/appunni-m/uvicorn-rs/actions/runs/37630629260), commit
+`dc8cf3f`, attributed 490/491 cases and measured 5,122/5,123 regions. The
+attribution and repeat failures were also TLS-WebSocket handshake
+infrastructure errors; the installed-wheel public parity job passed 239/239.
+The coverage-only source change in the current local report has not yet run on
+hosted Linux.
 
 A separate earlier 238-case server-log excerpt reports one infrastructure
 failure and one case not run but does not name the failed case.
@@ -58,12 +72,13 @@ failure and one case not run but does not name the failed case.
 ## Current full verification (491 cases)
 
 The archive is
-[`asgi-empty-subprotocol-491`](../benchmarks/results/2026-10-07/asgi-empty-subprotocol-491/).
+[`asgi-coverage-region-fix-491`](../benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/).
 It contains the compressed unified LLVM report and matching context receipt,
-the exact Coverage-MCP structured response, three full-matrix repeat results,
-and the complete normal-build oracle result. The uncompressed report SHA-256
-is `0d98c2773d741e05f80a3707b7cfaf7c4d16b576f827ed0e06cb181dc1909c58`; the
-build ID is `0dc04981529e02b3377c0e1455457a15f7268b95eab4676445b42523a8b69724`.
+the exact Coverage-MCP page, three full-matrix repeat results, a normal-build
+oracle result, and an evidence index. The report SHA-256 before compression is
+`4478d365b091dc9094462c13903c3e49d2450ff9f90f5dd8f4cf89a8f2e3bf8e`; the
+Coverage-MCP build ID is
+`93a183b2b3a8330d6ad74e170416c68c456b658d884be7f3a96dc637b0d337dc`.
 Case-to-region attribution matches the union of per-case profiles.
 
 | Verification | Passed | Failures / infrastructure / retries / not run |
@@ -74,21 +89,32 @@ Case-to-region attribution matches the union of per-case profiles.
 | Full repeat 3 | 491/491 | 0 / 0 / 0 / 0 |
 | Oracle parity in each repeat | 239/239 | 0 failed |
 | Target-only contracts in each repeat | 252/252 | 0 failed |
-| Native regions | 5,123/5,123 | 0 missing |
-| Native lines | 3,628/3,628 | 0 missing |
+| Native regions | 5,121/5,121 | 0 missing |
+| Native lines | 3,624/3,624 | 0 missing |
 | Coverage-MCP region gap groups | 0 | source matches; tests passed |
 | Normal non-instrumented oracle parity | 239/239 | 0 / 0 / 0 / 0 |
 
-The new `websocket.empty-subprotocol-token-handshake-rejected` case showed
-that Uvicorn rejects an empty `Sec-WebSocket-Protocol` list member with HTTP
-400 before app dispatch. Rust now rejects the same malformed handshake before
-building the ASGI scope. Both live observations are HTTP 400.
+The coverage change removes the conditional guard around a `cfg(coverage)`
+diagnostic inside the HTTP receive lock-contention branch. The existing
+forced-contention input now attributes this branch consistently. The log call
+remains excluded from production builds.
 
 The instrumented run used CPython 3.12.13, Rust 1.98.1, cargo-llvm-cov 0.8.7,
 and macOS 15.7.7 ARM64. Coverage measures default-feature `src/lib.rs` with
 `cfg(coverage)`; Python code, dependencies, optional diagnostics, other
 platforms, the official full ASGI suite, and performance are outside this
-coverage claim. The checkout was dirty, so this is not a clean release result.
+coverage claim. One infrastructure-only attribution retry was permitted but
+not used. The checkout was dirty, so this is not a clean hosted release result.
+
+## Superseded full verification (491 cases; before receive-region fix)
+
+The prior archive is
+[`asgi-empty-subprotocol-491`](../benchmarks/results/2026-10-07/asgi-empty-subprotocol-491/).
+It remains the evidence for adding the empty WebSocket subprotocol parity case;
+its report passed 491-case attribution and three repeats with 5,123/5,123
+regions and 3,628/3,628 lines before the coverage-only HTTP receive diagnostic
+adjustment. The current archive above is the source/build receipt for the
+latest region denominator.
 
 ## Superseded full verification (490 cases)
 

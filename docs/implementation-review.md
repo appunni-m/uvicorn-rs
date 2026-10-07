@@ -1,15 +1,17 @@
 # Implementation review: known gaps
 
-The current source passes the 490-case attribution matrix and three complete
-490-case repeats with zero failures, infrastructure errors, retries or cases
-not run. The matrix has 238 oracle comparisons and 252 target-only contracts
-across 70 input files and 71 operations. Native coverage is 5,108/5,108 regions
-and 3,608/3,608 lines, with zero Coverage MCP gaps. The normal
-non-instrumented local build passes 238/238 public comparisons. The earlier
-installed-wheel exclusion audit applies to a prior source snapshot. See the
-[current source/build receipt](coverage.md#current-full-verification-490-cases).
-The 485-, 451- and 448-case results below are historical and do not attest the
-current checkout.
+The current local source passes the 491-case attribution matrix and three
+complete 491-case repeats with zero failures, infrastructure errors, retries,
+or cases not run. The matrix has 239 oracle comparisons and 252 target-only
+contracts across 70 input files and 71 operations. Native coverage is
+5,121/5,121 regions and 3,624/3,624 lines, with zero Coverage-MCP gaps. A
+rebuilt normal non-instrumented local build passes 239/239 public comparisons.
+The earlier installed-wheel exclusion audit applies to a prior source
+snapshot. Hosted verification of the current coverage-only source change is
+still pending. See the
+[current source/build receipt](coverage.md#current-full-verification-491-cases).
+The earlier coverage and implementation results below are historical and do
+not attest the current checkout.
 
 This page separates measured failures from risks that still need targeted
 evidence.
@@ -57,13 +59,13 @@ pair only with that sequence's GREASE disabled. The new generic held-response
 accept-error workflow uses an existing point and requires remote `0x102`, real
 stream failure, ordered cancellation/original error, application cleanup and a
 healthy fresh request. Its selected instrumented case passed 1/1 and retained
-those actual outcomes; the fresh 490-case full run passes attribution and all
-three repeats, including both formerly missing final-drain spans. The
+those actual outcomes; the then-current 490-case full run passed attribution
+and all three repeats, including both formerly missing final-drain spans. The
 `stream_reset` observation uses the client's `recv_data` error convention;
 actual remote application close, body-stream error, connection closure and
-cleanup prove termination/cancellation. The latest full run rebuilt
-instrumentation; [current evidence](coverage.md#current-full-verification-490-cases)
-records the exact identities and native scope. The 225-case normal-wheel and
+cleanup prove termination/cancellation. That 490-case run rebuilt
+instrumentation; [its evidence](coverage.md#superseded-full-verification-490-cases)
+records the identities and native scope. The 225-case normal-wheel and
 16-check exclusion results cited by the preceding snapshot are historical.
 
 The [October 5 investigation](performance-investigation-2026-10-05.md) retains

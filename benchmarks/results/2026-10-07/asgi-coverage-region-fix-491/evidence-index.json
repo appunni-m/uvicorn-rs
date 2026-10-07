@@ -1,0 +1,213 @@
+{
+  "artifacts": [
+    {
+      "path": "README.md",
+      "sha256": "86ff76b9321fd4041c7855c5729ff3e6855256a1f2914c276455c9cb06ee2c10",
+      "size_bytes": 4794
+    },
+    {
+      "path": "coverage-mcp-pages.json",
+      "sha256": "40e028ac8bf98496815c3129359110beef665fe0d28cad2846b192b07cbd7987",
+      "size_bytes": 1220
+    },
+    {
+      "path": "coverage-report.json.context.json",
+      "sha256": "cdcf38239435ec70e37e665fbc76e47a89404e4ca443e29019014177b21247b6",
+      "size_bytes": 396
+    },
+    {
+      "path": "coverage-report.json.gz",
+      "sha256": "d8ffe7a1a211ec5c4979905ff787ffaa8459146c48c14c81d44b948e325f30a6",
+      "size_bytes": 3010938
+    },
+    {
+      "path": "matrix-repeat-results.tar.gz",
+      "sha256": "e911385a546f504be09c485d99a021ab40c20fd504f79fa6a38a88f62bac0a4a",
+      "size_bytes": 185199
+    },
+    {
+      "path": "normal-parity-239.json",
+      "sha256": "3d567eba140e19738fe99540eb7ca71cd2651021b643e5f19b95d8e5736ecde6",
+      "size_bytes": 4258432
+    }
+  ],
+  "attached_ci_run": {
+    "case_snapshot": 490,
+    "coverage": {
+      "lines": {
+        "covered": 3612,
+        "total": 3612
+      },
+      "regions": {
+        "covered": 5106,
+        "total": 5108
+      }
+    },
+    "failure": "http3.asgi-event-type-string-subclass infrastructure failure during attribution; each verification repeat had one infrastructure failure and one case not run",
+    "head_sha": "6b28666",
+    "relationship": "older hosted evidence; it does not measure the local source snapshot in this archive",
+    "url": "https://github.com/appunni-m/uvicorn-rs/actions/runs/37603449348"
+  },
+  "date": "2026-10-07",
+  "environment": {
+    "cargo_llvm_cov": "cargo-llvm-cov 0.8.7",
+    "machine": "arm64",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "python": "3.12.13",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "instrumented": {
+    "build_id": "93a183b2b3a8330d6ad74e170416c68c456b658d884be7f3a96dc637b0d337dc",
+    "coverage": {
+      "lines": {
+        "covered": 3624,
+        "missing": 0,
+        "total": 3624
+      },
+      "regions": {
+        "covered": 5121,
+        "missing": 0,
+        "total": 5121
+      }
+    },
+    "coverage_gate": "passed",
+    "coverage_mcp": {
+      "coverage": {
+        "covered": 5121,
+        "metric": "regions",
+        "missing": 0,
+        "total": 5121
+      },
+      "group_count": 0,
+      "pages": 1,
+      "source": "matches_receipt",
+      "status": "measured",
+      "tests": "passed"
+    },
+    "fault_contracts": {
+      "failed": 0,
+      "passed": 252,
+      "selected": 252
+    },
+    "matrix": {
+      "case_attribution_complete": true,
+      "executed": 491,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "passed": 491,
+      "scope": "complete",
+      "selected": 491,
+      "transient_infrastructure_failures": 0
+    },
+    "native_extension_sha256": "2fcd0eeb88f38d7c07801335e37416837761fd0d4a340d86aab57ba8638dc2d5",
+    "oracle_parity": {
+      "failed": 0,
+      "passed": 239,
+      "selected": 239
+    },
+    "profile_union_matches_attribution": true,
+    "report_sha256": "4478d365b091dc9094462c13903c3e49d2450ff9f90f5dd8f4cf89a8f2e3bf8e",
+    "scope": "full",
+    "test_status": "passed",
+    "verification_repeats": [
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 491,
+        "run": 1,
+        "run_id": "1dd6e58c66404457b3679aac6fb66b6a",
+        "sha256": "e3f43997118a49019db77c7a70bc6ba2ed8eb6b9f0060d20f0ca661b68b68742",
+        "status": "completed",
+        "transient_infrastructure_failures": 0
+      },
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 491,
+        "run": 2,
+        "run_id": "26ee96a939994f6695cdc20f2b3cb74d",
+        "sha256": "203732f62ac705f9c349a652f20e6fa650c311f8576238559c08dcf5d878167b",
+        "status": "completed",
+        "transient_infrastructure_failures": 0
+      },
+      {
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 491,
+        "run": 3,
+        "run_id": "48e180d10dc742afaa23b77555bd54b3",
+        "sha256": "4ee72d0c3a5158ce70a5f9b8707661db17cd0e272de6cc1c48a42eb060f1a227",
+        "status": "completed",
+        "transient_infrastructure_failures": 0
+      }
+    ]
+  },
+  "normal_build": {
+    "environment": {
+      "dependencies": {
+        "aioquic": "1.3.0",
+        "h11": "0.16.0",
+        "h2": "4.4.1",
+        "httptools": "0.8.0",
+        "hypercorn": "0.18.0",
+        "uvicorn": "0.54.0",
+        "uvloop": "0.23.0",
+        "websockets": "17.1",
+        "wsproto": "1.3.2"
+      },
+      "machine": "arm64",
+      "platform": "macOS-15.7.7-arm64-arm-64bit",
+      "python": "3.12.13",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+    },
+    "native_extension_sha256": "0e75d893144bb2a87819904e7356a532ca844eaef7b35d16d97b54e6cffb1485",
+    "source_sha256": "1a0c90dbdd08e7f6172a1a6d6f6928f021bd473d74836ee7eeb853e1fb4d55a4",
+    "summary": {
+      "executed": 239,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 239,
+      "selected": 239
+    }
+  },
+  "repository_validation": {
+    "clippy": [
+      {
+        "command": "cargo clippy --all-targets --all-features --locked -- -D warnings",
+        "status": "passed"
+      },
+      {
+        "command": "cargo clippy --manifest-path tools/http3-probe/Cargo.toml --all-targets --all-features --locked -- -D warnings",
+        "status": "passed"
+      }
+    ],
+    "coverage_evidence_check": {
+      "mode": "offline",
+      "status": "passed"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "passed"
+    },
+    "format": {
+      "command": "cargo fmt --all -- --check",
+      "status": "passed"
+    }
+  },
+  "schema": "uvicorn-rs-asgi-coverage-evidence@1",
+  "scope": "complete unified ASGI parity and native LLVM region coverage; local working-tree evidence",
+  "source": {
+    "aggregate_sha256": "dba61473dae213fa5336d8d9c29e03ffd8a9ae6476fcd9fa0ac9c37061c20830",
+    "case_count": 491,
+    "dirty": true,
+    "input_file_count": 70,
+    "manifest_sha256": "35abb756dda4bc53e6e62e616f08722b9e53de1094317cc77972f668f8dc3972",
+    "revision": "dc8cf3f58623b761d7187153d5e96636bbdd77be",
+    "src_lib_sha256": "1a0c90dbdd08e7f6172a1a6d6f6928f021bd473d74836ee7eeb853e1fb4d55a4"
+  },
+  "status": "complete"
+}

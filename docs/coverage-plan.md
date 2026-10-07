@@ -2,22 +2,23 @@
 
 ## Current evidence status (2026-10-07)
 
-**Current-source attribution, native coverage, and normal-build parity pass**
-for the recorded source/build. The inventory declares 490 workflows across 70
-input files: 238 oracle-parity cases and 252 target-only contracts. The source
-passed all 490 attribution cases and three complete repeats with zero failures,
+**The current local source passes full attribution, native coverage, and
+normal-build parity.** The manifest declares 491 workflows across 70 input
+files: 239 oracle-parity cases and 252 target-only contracts. All 491
+attribution cases and three complete repeats passed with zero failures,
 infrastructure errors, retries, or cases not run. The report records
-5,108/5,108 native LLVM regions and 3,608/3,608 lines (100%); unfiltered
-Coverage-MCP has zero gap groups, `source: matches_receipt`, and `tests:
-passed`. This is default-feature `cfg(coverage)` evidence for `src/lib.rs` on
-macOS ARM64, not all repository code, all features, or complete ASGI
-conformance. A normal non-instrumented local build passed all 238 public
-parity cases. The installed-wheel exclusion audit is from a prior source
-snapshot and must be repeated for release verification. The matrix also
-records a 128-request HTTP/3 same-connection sequence in each of three full
-repeats. Source/build identity and retained receipts are documented in
-[current coverage evidence](coverage.md#current-full-verification-490-cases) and the
-[490-case archive](../benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/).
+5,121/5,121 native LLVM regions and 3,624/3,624 lines (100%); Coverage-MCP has
+zero gap groups, `source: matches_receipt`, and `tests: passed`. A rebuilt
+normal non-instrumented local build passed all 239 public parity cases. This is
+default-feature `cfg(coverage)` evidence for `src/lib.rs` on macOS ARM64, not
+all repository code, all features, or complete ASGI conformance. The prior
+installed-wheel exclusion audit must be repeated for
+release verification. Source/build identity and retained receipts are
+documented in [current coverage evidence](coverage.md#current-full-verification-491-cases)
+and the
+[`asgi-coverage-region-fix-491` archive](../benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/).
+The hosted failures in runs #23, #27, and #28 predate this local coverage fix;
+the exact source change still needs a clean hosted run.
 
 The historical 445-case snapshot recorded all 4,719/4,719 regions and 3,329/3,329
 lines, with zero Coverage-MCP gaps and 445 passing attribution cases. Two full
@@ -501,10 +502,10 @@ Use real occupied-port, reset, and cancellation workflows where deterministic; u
 ## Current gap inventory
 
 **The current report has zero missing native regions, lines, and unfiltered
-Coverage-MCP function groups.** The 490-case report measures 5,108/5,108 regions
-and 3,608/3,608 lines with passing attribution, three complete repeats, and a
+Coverage-MCP function groups.** The 491-case report measures 5,121/5,121 regions
+and 3,624/3,624 lines with passing attribution, three complete repeats, and a
 matching MCP receipt in the retained
-[evidence archive](../benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/).
+[evidence archive](../benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/).
 The historical 423-case report also recorded zero missing regions and zero
 Coverage-MCP function groups. Its complete one-page receipt is at
 `build/asgi-coverage/unified-423-final-2026-10-05/coverage-mcp-receipt.json`.
@@ -590,7 +591,7 @@ uncovered region and its exact case attribution.
 - Per-case profiling must not silently omit child server processes, module-import subprocesses, or shutdown paths. Isolate profiles by case and target process, verify profile flush/completeness, and reject an aggregate whose profile union does not equal its per-case hit map.
 - Coverage alone does not prove behavior quality. Each injection needs a meaningful external invariant and follow-up cleanup assertion.
 - Rust-generated PyO3 glue and platform-specific error arms may not be controllable after module import. If they remain unreachable after the fault seam is implemented, report the exact residual and do not quietly exclude it.
-- The current report records 5,108/5,108 native regions and 3,608/3,608 lines, with passing attribution, three complete repeats, and matching Coverage-MCP. The normal non-instrumented local build passes all public oracle cases; the installed-wheel exclusion audit applies to the prior source snapshot and must be repeated before release. Historical reports retain their own source/build scope. This does not cover optional diagnostics, every platform, the full ASGI specification, or performance. The measured checkout was dirty, so run the gates on the committed source before using it as a clean release baseline.
+- The current report records 5,121/5,121 native regions and 3,624/3,624 lines, with passing attribution, three complete repeats, and matching Coverage-MCP. The normal non-instrumented local build passes all 239 public oracle cases; the installed-wheel exclusion audit applies to the prior source snapshot and must be repeated before release. Historical reports retain their own source/build scope. This does not cover optional diagnostics, every platform, the full ASGI specification, or performance. The measured checkout was dirty, so run the gates on the committed source before using it as a clean release baseline.
 
 ## Maintenance after completion
 
