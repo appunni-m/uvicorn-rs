@@ -346,7 +346,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let uri: http::Uri = format!("https://localhost:{}{}", address.port(), path).parse()?;
+    let authority = specification
+        .get("authority")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("localhost:{}", address.port()));
+    let uri: http::Uri = format!("https://{authority}{path}").parse()?;
     let mut request_builder = Request::builder().method(method).uri(uri);
     let headers = specification["headers"]
         .as_array()
@@ -722,9 +727,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>();
+    let ordered_response_headers = response
+        .headers()
+        .iter()
+        .filter(|(name, _)| name.as_str().starts_with("x-asgi-"))
+        .map(|(name, value)| {
+            json!([
+                name.as_str(),
+                String::from_utf8_lossy(value.as_bytes()).into_owned()
+            ])
+        })
+        .collect::<Vec<_>>();
     let observation = json!({
         "status": status,
         "content_type": content_type,
+        "ordered_response_headers": ordered_response_headers,
         "body_hex": body_hex,
         "body_stream_error": body_stream_error
     });

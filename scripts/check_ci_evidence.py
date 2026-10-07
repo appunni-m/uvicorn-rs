@@ -170,7 +170,14 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
             f"target observation envelope differs: {case['case_id']}")
     require(row.get("difference") is None, f"passing case carries a difference: {case['case_id']}")
     if case.get("verification", "oracle-parity") == "oracle-parity":
-        require(isinstance(oracle, dict) and target == oracle, f"live observations differ: {case['case_id']}")
+        require(isinstance(oracle, dict), f"oracle observation is missing: {case['case_id']}")
+        compare = operation.get("compare", operation["observe"])
+        require(isinstance(compare, list) and bool(compare)
+                and len(compare) == len(set(compare))
+                and set(compare).issubset(operation["observe"]),
+                f"invalid comparison fields: {case['case_id']}")
+        require(all(target[field] == oracle[field] for field in compare),
+                f"live observations differ on declared comparison fields: {case['case_id']}")
         for field, expected in operation.get("required_observations", {}).items():
             require(target.get(field) == expected, f"required observation differs: {case['case_id']} ({field})")
     else:

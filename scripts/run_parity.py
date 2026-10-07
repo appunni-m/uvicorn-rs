@@ -291,9 +291,14 @@ PUBLIC_INPUT_CONTRACT_POINTS = {
     "public.http-response-header-capacity",
     "public.websocket-accept-header-capacity",
 }
+ASGI_SCOPE_SUPPORT_CONTRACT_POINTS = {"public.asgi-spec-version"}
 # These selectors describe real protocol/application input. They are never
 # native injection points and must not arm the coverage fault control.
-HARNESS_FAULT_POINTS = {"http3.client.abort-after-body"} | PUBLIC_INPUT_CONTRACT_POINTS
+HARNESS_FAULT_POINTS = (
+    {"http3.client.abort-after-body"}
+    | PUBLIC_INPUT_CONTRACT_POINTS
+    | ASGI_SCOPE_SUPPORT_CONTRACT_POINTS
+)
 PYTHON_TASK_START_ERRORS = {
     "python.task-starter.import-asyncio": "MemoryError: coverage-only injected MemoryError at PythonTaskStarterImportAsyncio",
     "python.task-starter.ensure-future": "MemoryError: coverage-only injected MemoryError at PythonTaskStarterEnsureFuture",
@@ -315,6 +320,7 @@ EAGER_REGISTRATION_CLEANUP_CONTRACTS = (
     EAGER_APPLICATION_CLEANUP_CONTRACTS | EAGER_LIFESPAN_CLEANUP_CONTRACTS
 )
 FAULT_CONTRACTS = {
+    "asgi-spec-version-2.5",
     "http-response-reset-cancels-deferred-task",
     "server-cancellation-schedule-error-bounded-shutdown",
     "http-read-eof-recheck-completes",
@@ -564,6 +570,7 @@ def load_contract(
         raise ParityError("duplicate profile ID")
     observation_fields = {
         "status", "content_type", "body_bytes", "ordered_body_bytes", "early_body_bytes",
+        "ordered_response_headers", "response_header_values_by_name",
         "streamed_before_completion", "disconnect_event", "followup_response",
         "handshake_status", "handshake_established", "subprotocol", "ordered_messages", "state_response",
         "process_terminated", "process_exit_code", "application_events", "close_code", "close_reason",
@@ -585,6 +592,8 @@ def load_contract(
     }
     for operation in manifest["operations"]:
         expected_operation_keys = {"id", "kind", "observe"}
+        if "compare" in operation:
+            expected_operation_keys.add("compare")
         if "required_observations" in operation:
             expected_operation_keys.add("required_observations")
             if not set(operation["required_observations"]).issubset(observation_fields):
@@ -597,6 +606,13 @@ def load_contract(
             or not set(operation["observe"]).issubset(observation_fields)
         ):
             raise ParityError(f"{operation.get('id')}: unsupported observation field")
+        if "compare" in operation and (
+            not isinstance(operation["compare"], list)
+            or not operation["compare"]
+            or len(operation["compare"]) != len(set(operation["compare"]))
+            or not set(operation["compare"]).issubset(operation["observe"])
+        ):
+            raise ParityError(f"{operation.get('id')}: comparison fields must be observed")
         required = operation.get("required_observations", {})
         if not isinstance(required, dict) or not set(required).issubset(operation["observe"]):
             raise ParityError(f"{operation.get('id')}: required observations must be declared in observe")
@@ -675,6 +691,25 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: public HTTP header capacity requires its finite response and recovery sequence"
+                    )
+            elif fault["contract"] == "asgi-spec-version-2.5":
+                http_path = case.get("request", {}).get("path")
+                websocket_path = case.get("websocket", {}).get("path")
+                valid_http = (
+                    case.get("profile") in {"http1", "http2", "http3"}
+                    and case.get("operation") == "http.scope-and-body"
+                    and http_path == "/scope-echo/asgi-version"
+                )
+                valid_websocket = (
+                    case.get("profile") in {"websocket", "websocket-tls"}
+                    and case.get("operation") == "websocket.scope-and-messages"
+                    and websocket_path == "/ws-scope-echo/asgi-version"
+                )
+                if fault["point"] != "public.asgi-spec-version" or not (
+                    valid_http or valid_websocket
+                ):
+                    raise ParityError(
+                        f"{case_id}: the ASGI spec-version contract requires its declared public scope probe"
                     )
             elif fault["contract"] in {
                 "http-500-then-followup-200", "http-callback-error-followup-200",
@@ -1815,6 +1850,29 @@ def load_contract(
                     raise ParityError(f"{case_id}: omit_authority is currently scoped to HTTP/2")
                 if not any(name.lower() == "host" for name, _ in request["headers"]):
                     raise ParityError(f"{case_id}: omitting :authority requires a Host header")
+            if "authority" in request:
+                request_keys.add("authority")
+                authority = request["authority"]
+                if (
+                    kind not in {"http2", "http3"}
+                    or not isinstance(authority, str)
+                    or not authority
+                    or any(character.isspace() for character in authority)
+                    or any(character in authority for character in "/?#")
+                ):
+                    raise ParityError(
+                        f"{case_id}: authority must be a nonempty HTTP/2 or HTTP/3 authority"
+                    )
+                if request.get("omit_authority"):
+                    raise ParityError(f"{case_id}: authority cannot be combined with omit_authority")
+            if "raw_headers" in request:
+                request_keys.add("raw_headers")
+                if request["raw_headers"] is not True or kind != "http1":
+                    raise ParityError(f"{case_id}: raw_headers is currently scoped to HTTP/1.1")
+                if request.get("http_version", "1.1") != "1.1":
+                    raise ParityError(f"{case_id}: raw_headers requires HTTP/1.1")
+                if any(name.lower() == "host" for name, _ in request["headers"]):
+                    raise ParityError(f"{case_id}: raw_headers adapter supplies Host")
             if "absolute_target" in request:
                 request_keys.add("absolute_target")
                 if request["absolute_target"] is not True or kind != "http1":
@@ -1961,6 +2019,15 @@ def load_contract(
                 websocket_keys.add("ping_payload")
                 if not isinstance(websocket["ping_payload"], str):
                     raise ParityError(f"{case_id}: ping_payload must be text")
+            if "headers" in websocket:
+                websocket_keys.add("headers")
+                if not isinstance(websocket["headers"], list) or any(
+                    not isinstance(header, list)
+                    or len(header) != 2
+                    or not all(isinstance(part, str) for part in header)
+                    for header in websocket["headers"]
+                ):
+                    raise ParityError(f"{case_id}: WebSocket headers must be pairs of strings")
             if "followup_path" in websocket:
                 websocket_keys.add("followup_path")
                 if not isinstance(websocket["followup_path"], str) or not websocket["followup_path"].startswith("/"):
@@ -2691,10 +2758,22 @@ def read_server_api_snapshot(server: dict[str, Any]) -> dict[str, Any]:
 
 def response_observation(status: int, headers: list[tuple[str, str]], body: bytes) -> dict[str, Any]:
     content_type = next((value for name, value in headers if name.lower() == "content-type"), None)
+    ordered_response_headers = [
+        [name.lower(), value]
+        for name, value in headers
+        if name.lower().startswith("x-asgi-")
+    ]
+    response_header_values_by_name: dict[str, list[str]] = {}
+    for name, value in ordered_response_headers:
+        response_header_values_by_name.setdefault(name, []).append(value)
     return {
         "status": status,
         "content_type": content_type,
         "body_base64": base64.b64encode(body).decode("ascii"),
+        "ordered_response_headers": ordered_response_headers,
+        "response_header_values_by_name": [
+            [name, values] for name, values in sorted(response_header_values_by_name.items())
+        ],
         "connection_closed": False,
     }
 
@@ -2707,6 +2786,8 @@ def http1_request(
         if ssl_context is not None:
             raise ParityError("the absolute-target adapter does not support TLS")
         return http1_absolute_request(port, request)
+    if request.get("raw_headers"):
+        return http1_raw_header_request(port, request, body, ssl_context=ssl_context)
     if request.get("omit_host", False):
         if ssl_context is not None:
             raise ParityError("the omit_host adapter does not support TLS")
@@ -2742,6 +2823,52 @@ def http1_request(
         connection.request(request["method"], request["path"], body=body, headers=dict(request["headers"]))
         try:
             response = connection.getresponse()
+        except http.client.RemoteDisconnected:
+            return {
+                "status": None,
+                "content_type": None,
+                "body_base64": "",
+                "connection_closed": True,
+            }
+        try:
+            payload = response.read()
+        except http.client.IncompleteRead as error:
+            observation = response_observation(
+                response.status,
+                response.getheaders(),
+                error.partial,
+            )
+            observation["connection_closed"] = True
+            return observation
+        return response_observation(response.status, response.getheaders(), payload)
+    finally:
+        connection.close()
+
+
+def http1_raw_header_request(
+    port: int,
+    request: dict[str, Any],
+    body: bytes,
+    *,
+    ssl_context: ssl.SSLContext | None = None,
+) -> dict[str, Any]:
+    """Send ordered HTTP/1.1 header pairs without a mapping that folds duplicates."""
+    connection = socket.create_connection(("127.0.0.1", port), timeout=10)
+    connection.settimeout(10)
+    if ssl_context is not None:
+        connection = ssl_context.wrap_socket(connection, server_hostname="localhost")
+    try:
+        headers = list(request["headers"])
+        headers.insert(0, ("Host", f"localhost:{port}"))
+        if body and not any(name.lower() == "content-length" for name, _ in headers):
+            headers.append(("Content-Length", str(len(body))))
+        request_bytes = [f"{request['method']} {request['path']} HTTP/1.1\r\n"]
+        request_bytes.extend(f"{name}: {value}\r\n" for name, value in headers)
+        request_bytes.append("\r\n")
+        connection.sendall("".join(request_bytes).encode("latin-1") + body)
+        response = http.client.HTTPResponse(connection)
+        try:
+            response.begin()
         except http.client.RemoteDisconnected:
             return {
                 "status": None,
@@ -3436,7 +3563,7 @@ def http2_request(port: int, request: dict[str, Any]) -> dict[str, Any]:
         (":scheme", "https"),
     ]
     if not request.get("omit_authority"):
-        headers.append((":authority", f"localhost:{port}"))
+        headers.append((":authority", request.get("authority", f"localhost:{port}")))
     headers.append((":path", request["path"]))
     headers.extend((name.lower(), value) for name, value in request["headers"])
     if body:
@@ -3755,6 +3882,8 @@ def http3_request(
         "empty_data_frame_before_body": request.get("empty_data_frame_before_body", False),
         "invalid_alpn": request.get("invalid_alpn", False),
     }
+    if "authority" in request:
+        specification["authority"] = request["authority"]
     if "close_error_code" in request:
         specification["close_error_code"] = request["close_error_code"]
     command = [str(client), f"127.0.0.1:{port}", str(trust_anchor)]
@@ -3856,6 +3985,13 @@ def http3_request(
     observation = response_observation(
         response["status"], [("content-type", response["content_type"] or "")], body
     )
+    observation["ordered_response_headers"] = response.get("ordered_response_headers", [])
+    response_header_values_by_name: dict[str, list[str]] = {}
+    for name, value in observation["ordered_response_headers"]:
+        response_header_values_by_name.setdefault(name, []).append(value)
+    observation["response_header_values_by_name"] = [
+        [name, values] for name, values in sorted(response_header_values_by_name.items())
+    ]
     observation["connection_closed"] = response["body_stream_error"]
     observation["stream_reset"] = response["body_stream_error"]
     return observation
@@ -4377,6 +4513,7 @@ def websocket_observation(
         with websocket_connect(
             uri,
             subprotocols=specification["subprotocols"],
+            additional_headers=specification.get("headers", []),
             ssl=ssl_context,
             proxy=None,
             open_timeout=20,
@@ -4494,6 +4631,8 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "content_type": "content_type",
         "body_bytes": "body_base64",
         "ordered_body_bytes": "body_base64",
+        "ordered_response_headers": "ordered_response_headers",
+        "response_header_values_by_name": "response_header_values_by_name",
         "early_body_bytes": "early_body_base64",
         "streamed_before_completion": "streamed_before_completion",
         "disconnect_event": "disconnect_event",
@@ -5372,6 +5511,27 @@ def execute_case(
 
 
 def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -> bool:
+    if fault["contract"] == "asgi-spec-version-2.5":
+        payload = None
+        body = observation.get("body_bytes")
+        if isinstance(body, str):
+            try:
+                payload = json.loads(base64.b64decode(body, validate=True))
+            except (ValueError, json.JSONDecodeError):
+                return False
+        if payload is None:
+            messages = observation.get("ordered_messages", [])
+            for message in messages:
+                if message.get("kind") == "text":
+                    try:
+                        payload = json.loads(message["value"])
+                    except (KeyError, TypeError, json.JSONDecodeError):
+                        return False
+                    break
+        return (
+            isinstance(payload, dict)
+            and payload.get("asgi_spec_version") == "2.5"
+        )
     if fault["contract"] == "http-body-pump-drain-shutdown-joined":
         return (
             observation.get("status") == 200
@@ -6274,14 +6434,22 @@ def execute_profile(
                 or case.get("request_stream", {}).get("hold_until_shutdown", False)
                 or case.get("websocket", {}).get("shutdown", False)
                 or case.get("websocket", {}).get("shutdown_during_upgrade", False)
+                # Keep the TLS scope-close probe independent from the next
+                # WSS workflow. Both servers close this WebSocket normally,
+                # but their TLS transports can still be draining when the
+                # next case starts on the shared profile listener.
+                or case["case_id"] == "websocket-tls.scope-headers-path-query-and-subprotocols"
             )
+
+        def needs_fresh_server(case: dict[str, Any]) -> bool:
+            return case["case_id"] == "websocket-tls.scope-headers-path-query-and-subprotocols"
 
         execution_cases = sorted(cases, key=stops_server)
         try:
             for case_index, case in enumerate(execution_cases):
                 if case_index:
                     previous_case = execution_cases[case_index - 1]
-                    if stops_server(previous_case) or case["operation"] in {
+                    if stops_server(previous_case) or needs_fresh_server(case) or case["operation"] in {
                         "http3.peer-close", "http3.peer-close-registered",
                         "http3.request-task-recovery",
                         "http3.request-task-drain-on-accept-error",
@@ -6475,14 +6643,21 @@ def execute_profile(
                                 f"diagnostic={json.dumps(diagnostic, sort_keys=True)}"
                             ) from error
                         oracle_result = project_observation(oracle_raw, operation)
-                        matches = oracle_result == target_result
+                        comparison_fields = operation.get("compare", operation["observe"])
+                        oracle_comparison = {
+                            field: oracle_result[field] for field in comparison_fields
+                        }
+                        target_comparison = {
+                            field: target_result[field] for field in comparison_fields
+                        }
+                        matches = oracle_comparison == target_comparison
                         required = operation.get("required_observations", {})
                         if any(
                             oracle_result.get(field) != value or target_result.get(field) != value
                             for field, value in required.items()
                         ):
                             matches = False
-                        if not (oracle_result == target_result):
+                        if oracle_comparison != target_comparison:
                             difference = "observed public fields differ exactly"
                         elif not matches:
                             difference = f"required observation did not match {required!r}"

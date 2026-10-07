@@ -1,11 +1,11 @@
 # CLI and Python API
 
-The current source passes 473/473 attribution workflows and three complete
-473-case repeats, with 5,106/5,106 native regions and 3,606/3,606 lines
-covered. The matrix contains 225 public oracle cases and 248 target-only
-contracts. The normal wheel passes 225/225 public comparisons and all 16
+The current source passes 485/485 attribution workflows and three complete
+485-case repeats, with 5,106/5,106 native regions and 3,606/3,606 lines
+covered. The matrix contains 233 public oracle cases and 252 target-only
+contracts. The normal wheel passes 233/233 public comparisons and all 16
 exclusion checks with three selected cases. See the
-[current source/build receipt](coverage.md#current-full-verification-473-cases).
+[current source/build receipt](coverage.md#current-full-verification-485-cases).
 
 ## CLI
 

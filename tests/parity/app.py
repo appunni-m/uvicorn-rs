@@ -31,6 +31,45 @@ def _header_capacity_headers(query_string):
     return [(f"x-capacity-{index:x}".encode("ascii"), b"x") for index in range(count)]
 
 
+def _scope_address(scope, key):
+    address = scope.get(key)
+    if address is None:
+        return None
+    host, port = address
+    return [host, "<port>" if port is not None else None]
+
+
+def _scope_headers(scope, *, excluded=frozenset()):
+    headers = []
+    http_version = scope.get("http_version")
+    http2_or_3_cookie_values = []
+    for name, value in scope.get("headers", []):
+        lowered_name = name.lower()
+        if lowered_name in excluded:
+            continue
+        if lowered_name == b"cookie" and http_version in {"2", "3"}:
+            # ASGI permits HTTP/2 and HTTP/3 Cookie fields either split or
+            # joined with the cookie delimiter. Compare their ordered value
+            # bytes after applying that permitted representation change.
+            http2_or_3_cookie_values.append(value)
+            continue
+        # Normalize listener-selected ports while retaining authority presence.
+        if lowered_name == b"host" and b":" in value:
+            host, separator, port = value.rpartition(b":")
+            if separator and port.isdigit():
+                value = host + b":<port>"
+        headers.append(
+            [base64.b64encode(name).decode("ascii"), base64.b64encode(value).decode("ascii")]
+        )
+    if http2_or_3_cookie_values:
+        headers.append([
+            base64.b64encode(b"cookie").decode("ascii"),
+            base64.b64encode(b"; ".join(http2_or_3_cookie_values)).decode("ascii"),
+        ])
+    # Header-name order is not significant, but same-name values retain order.
+    return sorted(headers, key=lambda header: header[0])
+
+
 class _StateCopyKey(str):
     """Detect rehashing of a key while a server copies lifespan state."""
 
@@ -234,6 +273,44 @@ async def _app_impl(scope, receive, send):
     if scope["type"] == "websocket":
         if os.environ.get("ASGI_PARITY_TRACE_WEBSOCKET_SCOPE") == "1":
             _record(f"websocket.scope:{scope['path']}")
+        if scope["path"].startswith("/ws-scope-echo/"):
+            await receive()
+            offered = scope.get("subprotocols", [])
+            observed = {
+                "type": scope["type"],
+                "asgi_version": scope.get("asgi", {}).get("version"),
+                "http_version": scope.get("http_version"),
+                "scheme": scope.get("scheme"),
+                "path": scope.get("path"),
+                "raw_path_base64": (
+                    base64.b64encode(scope["raw_path"]).decode("ascii")
+                    if scope.get("raw_path") is not None
+                    else None
+                ),
+                "query_string_base64": base64.b64encode(
+                    scope.get("query_string", b"") or b""
+                ).decode("ascii"),
+                "root_path": scope.get("root_path", ""),
+                "headers_base64": _scope_headers(
+                    scope, excluded={b"sec-websocket-key"}
+                ),
+                "client": _scope_address(scope, "client"),
+                "server": _scope_address(scope, "server"),
+                "subprotocols": offered,
+                "state": scope.get("state", {}),
+            }
+            if scope["path"] == "/ws-scope-echo/asgi-version":
+                observed["asgi_spec_version"] = scope.get("asgi", {}).get("spec_version")
+            await send({
+                "type": "websocket.accept",
+                "subprotocol": "parity" if "parity" in offered else None,
+            })
+            await send({
+                "type": "websocket.send",
+                "text": json.dumps(observed, separators=(",", ":")),
+            })
+            await send({"type": "websocket.close", "code": 1000, "reason": "scope complete"})
+            return
         if scope["path"] == "/ws-header-capacity":
             try:
                 await send({
@@ -451,30 +528,38 @@ async def _app_impl(scope, receive, send):
         raise RuntimeError(f"unsupported ASGI scope type: {scope['type']}")
 
     path = scope["path"]
+    if path == "/response-headers-order":
+        await send({
+            "type": "http.response.start",
+            "status": 201,
+            "headers": [
+                (b"x-asgi-order", b"first"),
+                (b"x-asgi-duplicate", b"second"),
+                (b"x-asgi-order", b"last"),
+                (b"x-asgi-duplicate", b"first"),
+                (b"content-type", b"text/plain"),
+            ],
+        })
+        await send({"type": "http.response.body", "body": b"ordered-headers"})
+        return
     if path.startswith("/scope-echo/"):
-        headers = []
-        for name, value in scope["headers"]:
-            # Each parity server gets a different ephemeral listener port.
-            # Retain authority presence and host while normalizing only that
-            # run-specific port in the response fixture.
-            if name.lower() == b"host" and b":" in value:
-                host, separator, port = value.rpartition(b":")
-                if separator and port.isdigit():
-                    value = host + b":<port>"
-            headers.append(
-                [base64.b64encode(name).decode("ascii"), base64.b64encode(value).decode("ascii")]
-            )
         observed = {
+            "type": scope["type"],
+            "asgi_version": scope.get("asgi", {}).get("version"),
             "method": scope["method"],
             "scheme": scope["scheme"],
             "http_version": scope["http_version"],
             "path": scope["path"],
             "raw_path_base64": base64.b64encode(scope["raw_path"]).decode("ascii"),
             "query_string_base64": base64.b64encode(scope["query_string"]).decode("ascii"),
-            "root_path": scope["root_path"],
-            "headers_base64": sorted(headers),
+            "root_path": scope.get("root_path", ""),
+            "headers_base64": _scope_headers(scope),
+            "client": _scope_address(scope, "client"),
+            "server": _scope_address(scope, "server"),
             "state": scope.get("state", {}),
         }
+        if path == "/scope-echo/asgi-version":
+            observed["asgi_spec_version"] = scope.get("asgi", {}).get("spec_version")
         await _respond(send, json.dumps(observed, separators=(",", ":")).encode(), content_type=b"application/json")
         return
 

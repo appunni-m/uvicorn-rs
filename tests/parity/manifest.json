@@ -810,6 +810,23 @@
       ]
     },
     {
+      "id": "http.response-headers",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "ordered_response_headers",
+        "response_header_values_by_name",
+        "body_bytes"
+      ],
+      "compare": [
+        "status",
+        "content_type",
+        "response_header_values_by_name",
+        "body_bytes"
+      ]
+    },
+    {
       "id": "http.sync-callable-awaitable",
       "kind": "protocol_operation",
       "observe": [
@@ -1013,6 +1030,16 @@
       "observe": [
         "subprotocol",
         "ordered_messages"
+      ]
+    },
+    {
+      "id": "websocket.scope-and-messages",
+      "kind": "protocol_operation",
+      "observe": [
+        "subprotocol",
+        "ordered_messages",
+        "close_code",
+        "close_reason"
       ]
     },
     {

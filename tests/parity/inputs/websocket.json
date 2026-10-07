@@ -57,6 +57,33 @@
       }
     },
     {
+      "case_id": "websocket.scope-headers-path-query-and-subprotocols",
+      "profile": "websocket",
+      "operation": "websocket.scope-and-messages",
+      "covers": [
+        "websocket.scope-and-messages"
+      ],
+      "websocket": {
+        "path": "/ws-scope-echo/raw%20space-%C3%A9?tag=second&tag=first&plus=a+b&escaped=%2B",
+        "subprotocols": [
+          "scope-v1",
+          "parity"
+        ],
+        "messages": [],
+        "headers": [
+          [
+            "x-duplicate",
+            "second"
+          ],
+          [
+            "x-duplicate",
+            "first"
+          ]
+        ],
+        "expect_close": true
+      }
+    },
+    {
       "case_id": "websocket.pre-accept-denial",
       "profile": "websocket",
       "operation": "websocket.denial",
@@ -1740,6 +1767,27 @@
         "subprotocols": [],
         "messages": [],
         "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "support.websocket.asgi-http-spec-version-2-5",
+      "profile": "websocket",
+      "operation": "websocket.scope-and-messages",
+      "covers": [
+        "websocket.scope-and-messages"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "public.asgi-spec-version",
+        "contract": "asgi-spec-version-2.5"
+      },
+      "websocket": {
+        "path": "/ws-scope-echo/asgi-version",
+        "subprotocols": [
+          "parity"
+        ],
+        "messages": [],
+        "expect_close": true
       }
     }
   ]

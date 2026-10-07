@@ -2,6 +2,33 @@
   "schema": "uvicorn-rs-parity/input@7",
   "cases": [
     {
+      "case_id": "websocket-tls.scope-headers-path-query-and-subprotocols",
+      "profile": "websocket-tls",
+      "operation": "websocket.scope-and-messages",
+      "covers": [
+        "websocket.scope-and-messages"
+      ],
+      "websocket": {
+        "path": "/ws-scope-echo/raw%20space-%C3%A9?tag=second&tag=first&plus=a+b&escaped=%2B",
+        "subprotocols": [
+          "scope-v1",
+          "parity"
+        ],
+        "messages": [],
+        "headers": [
+          [
+            "x-duplicate",
+            "second"
+          ],
+          [
+            "x-duplicate",
+            "first"
+          ]
+        ],
+        "expect_close": true
+      }
+    },
+    {
       "case_id": "websocket-tls.text-round-trip-with-query-and-subprotocol",
       "profile": "websocket-tls",
       "operation": "websocket.message-exchange",

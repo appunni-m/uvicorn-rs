@@ -2,26 +2,28 @@
 
 ## Current evidence status
 
-The current source passed the 473-case black-box gate on 2026-10-06. The
-manifest declares 473 workflows across 70 input files and 64 operations:
-225 live oracle comparisons and 248 target-only fault contracts. Attribution
-and all three complete 473-case repeats pass with zero failures,
-infrastructure errors, retries or cases not run. Native coverage is
-**5,106/5,106 regions and 3,606/3,606 lines (100%)**. Coverage MCP measured the
-exact report with `source: matches_receipt`, `tests: passed`, zero missing
-regions, and zero gap groups. Current normal-wheel parity and fault-seam
-exclusion evidence are recorded in the same current evidence archive.
+The current source passed the 485-case black-box gate on 2026-10-07. The
+manifest declares 485 workflows across 70 input files and 66 operations:
+233 live oracle comparisons and 252 target-only contracts. Attribution and all
+three complete 485-case repeats pass with zero failures, infrastructure
+errors, retries or cases not run. Native coverage is **5,106/5,106 regions and
+3,606/3,606 lines (100%)**. Coverage MCP measured the exact report with
+`source: matches_receipt`, `tests: passed`, zero missing regions, and zero gap
+groups. The installed normal wheel passes 233/233 public comparisons and its
+fault-seam exclusion audit passes all 16 checks.
 
 The measured `src/lib.rs` SHA-256 is
 `91e022d9fd0154ebe76a2932a23284c23b0521d642f2f9da517b644e7bfaff71`; the
 aggregate source/input fingerprint is
-`f9ee806fa06a1844b010b5921862541e17b55dac48e09bce7b43923feb28630c`. The
+`659aa556ae54bbce2849b43a4453176fe5bc06267b1ea224e4393e84072c7885`. The
 instrumented native SHA-256 is
 `e119bcf50aa15cdd9f6d3462f857c5eda237dfc23fef18aab8f3389408cd8e08`. The
-report records revision `e38d06521b09e4324d9a45039f0ded5dc2e25fb4` and a dirty
-working tree; this is local source-bound evidence, not a clean release
-baseline. No Rust unit tests were added; the manifest-backed live input matrix
-is the behavioral evidence system.
+report records revision `cc402eeca7adee56ce0a1606d957a4404a250a67`, a dirty
+working tree, and build ID
+`b90d8c1eba8f88fb6257796a6ad5759ec2a25776f7dbceb2d7ada1369ae89300`; this is
+local source-bound evidence, not a clean release baseline. No Rust unit tests
+were added; the manifest-backed live input matrix is the behavioral evidence
+system.
 
 The hosted Linux attempt for commit `9d05c72` is separate evidence. Its
 installed-wheel public parity and deployment job passed, including all 225
@@ -33,7 +35,60 @@ candidate jobs were skipped. The 100% figure above remains the recorded local
 macOS ARM64 result; the hosted Linux result is unresolved. See the
 [CI run and evidence index](../benchmarks/results/framework-integration-2026-10-07/evidence-index.json).
 
-## Current full verification (473 cases)
+## Current full verification (485 cases)
+
+The current archive is
+[`asgi-inventory-485`](../benchmarks/results/2026-10-07/asgi-inventory-485/).
+It contains the compressed full LLVM report and matching context receipt, the
+full Coverage-MCP response and structured receipt, all three raw matrix runs
+inside a compressed artifact bundle, the normal-wheel parity result, the wheel
+consumer result, and the normal-build exclusion audit. The exact report SHA-256
+before compression is
+`457ae9d02ae1bee0f5f6d7a75315fb162b0b9c14c02bb50e721f2ca9fd64067b`; the
+compressed report is
+[`coverage-report-isolated.json.gz`](../benchmarks/results/2026-10-07/asgi-inventory-485/coverage-report-isolated.json.gz).
+The Coverage-MCP receipt reports matching source/build identity and `tests:
+passed`. The case-to-region attribution is verified against the profile union.
+
+| Verification | Passed | Failures / infrastructure / retries / not run |
+|---|---:|---|
+| Per-case attribution | 485/485 | 0 / 0 / 0 / 0 |
+| Full repeat 1 | 485/485 | 0 / 0 / 0 / 0 |
+| Full repeat 2 | 485/485 | 0 / 0 / 0 / 0 |
+| Full repeat 3 | 485/485 | 0 / 0 / 0 / 0 |
+| Native regions | 5,106/5,106 | 0 missing |
+| Native lines | 3,606/3,606 | 0 missing |
+| Coverage-MCP gap groups | 0 | source matches; tests passed |
+| Normal-wheel public parity | 233/233 | 0 / 0 / 0 / 0 |
+| Normal exclusion workflows | 3/3 | 0 / 0 / 0 / 0 |
+| Normal exclusion checks | 16/16 | all pass |
+| Installed-wheel consumer probe | 1/1 | all pass |
+
+The matrix contains 233 oracle comparisons and 252 target-only contracts. The
+target-only set includes public support contracts as well as deterministic
+fault contracts; it is not 252 injected failures. The normal wheel is the
+macOS ARM64 abi3 wheel built from the same Rust source; its SHA-256 is
+`8c33d0abccef25d7f07b662d18b01703908707b933f0f705c1adc58ee52fa9e2`, and its
+native extension SHA-256 is
+`c26e55e15cd290fff44edf3212115577bced7fe2459da83955361fcc1fb1f98b`.
+
+The instrumented run used CPython 3.12.13, Rust 1.98.1, and macOS 15.7.7 ARM64.
+Its measured scope is default-feature `src/lib.rs` with `cfg(coverage)`; Python
+code, dependencies, optional diagnostics, other feature combinations and
+platforms, the official full ASGI suite, and performance are outside this
+native coverage claim. The source checkout was dirty. A separate preliminary
+485-case run used infrastructure retries while diagnosing a TLS WebSocket
+profile-reuse timeout; it is retained under `preliminary-retry-tolerant/` and
+is not the clean result summarized above. The final no-retry runs isolate the
+TLS WebSocket close case at a fresh server boundary; the diagnostic record is
+[`tls-websocket-isolation-diagnostics.json`](../benchmarks/results/2026-10-07/asgi-inventory-485/tls-websocket-isolation-diagnostics.json).
+
+The case inventory is a focused black-box map, not full ASGI conformance. The
+known cross-name response-header ordering deviation and unsupported extensions
+are listed in the [support matrix](support-matrix.md) and [ASGI case
+inventory](asgi-case-inventory.md).
+
+## Historical full verification (473 cases; October 6 source inventory)
 
 The fixed archive at
 [`request-body-pump-ownership-coverage-473`](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)

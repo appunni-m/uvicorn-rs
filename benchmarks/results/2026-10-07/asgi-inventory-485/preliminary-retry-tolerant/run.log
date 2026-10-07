@@ -1,0 +1,671 @@
+[1/485] PASSED http1.scope-query-header-and-body (1819 regions)
+[2/485] PASSED http1.put-method-scope-and-body (1640 regions)
+[3/485] PASSED http1.absolute-form-target-preserves-raw-headers (1568 regions)
+[4/485] PASSED http1.sync-callable-returns-awaitable (1584 regions)
+[5/485] PASSED http1.response-stream-order (1585 regions)
+[6/485] PASSED http1.response-body-queued-after-start-yield (1605 regions)
+[7/485] PASSED http1.response-body-pending-then-complete (1605 regions)
+[8/485] PASSED fault.http1.response-start-and-final-body-queued-after-task-wins-select (1694 regions)
+[9/485] PASSED fault.http1.response-body-queued-after-receiver-pending (1726 regions)
+[10/485] PASSED http1.response-first-chunk-before-app-completion (1624 regions)
+[11/485] PASSED http1.response-reset-after-first-streamed-chunk (1707 regions)
+[12/485] PASSED http1.response-reset-cancels-held-application (1707 regions)
+[13/485] PASSED http1.request-upload-stream (1826 regions)
+[14/485] PASSED http1.request-streaming-progress-before-upload-complete (1844 regions)
+[15/485] PASSED http1.concurrent-request-receives-complete (1828 regions)
+[16/485] PASSED fault.http1.concurrent-request-receives-after-lock-contention (1985 regions)
+[17/485] PASSED http1.application-error (1424 regions)
+[18/485] PASSED http1.synchronous-callable-error-before-awaitable (1424 regions)
+[19/485] PASSED http1.receive-call-rejects-positional-argument (1424 regions)
+[20/485] PASSED http1.application-status-404 (1584 regions)
+[21/485] PASSED http1.client-disconnect-event (1771 regions)
+[22/485] PASSED http1.disconnect-after-response-start-send-error (1864 regions)
+[23/485] PASSED http1.post-empty-body (1640 regions)
+[24/485] PASSED http1.request-trailers-after-streamed-upload (1845 regions)
+[25/485] PASSED http1.asgi-event-type-string-subclass (1592 regions)
+[26/485] PASSED http1.invalid-asgi-missing-event-type (1433 regions)
+[27/485] PASSED http1.invalid-asgi-unknown-event-type (1465 regions)
+[28/485] PASSED http1.invalid-asgi-body-before-start (1442 regions)
+[29/485] PASSED http1.response-burst-backpressure (1606 regions)
+[30/485] PASSED http1.response-burst-backpressure-large-body (1659 regions)
+[31/485] PASSED http1.response-before-upload-drained (1705 regions)
+[32/485] PASSED http1.scope-encoded-path-and-query (1584 regions)
+[33/485] PASSED http1.scope-duplicate-header-order-and-raw-uri (1584 regions)
+[34/485] PASSED http1.response-body-fields-default-empty (1563 regions)
+[35/485] PASSED http1.invalid-response-header-name (1441 regions)
+[36/485] PASSED http1.invalid-response-header-value (1445 regions)
+[37/485] PASSED http1.invalid-asgi-event-type-is-not-string (1434 regions)
+[38/485] PASSED http1.invalid-asgi-response-start-missing-status (1409 regions)
+[39/485] PASSED http1.invalid-asgi-response-status-range (1418 regions)
+[40/485] PASSED http1.invalid-asgi-response-status-type (1412 regions)
+[41/485] PASSED http1.invalid-asgi-response-headers-container (1431 regions)
+[42/485] PASSED http1.invalid-asgi-response-body-type (1582 regions)
+[43/485] PASSED http1.duplicate-response-start (1567 regions)
+[44/485] PASSED http1.response-start-then-app-error (1566 regions)
+[45/485] PASSED http1.response-body-incomplete (1601 regions)
+[46/485] PASSED http1.final-body-then-app-error (1573 regions)
+[47/485] PASSED http1.request-body-drained-after-early-response (1799 regions)
+[48/485] PASSED fault.http1.request-body-pump-drain-joins-on-shutdown (1855 regions)
+[49/485] PASSED http1.disconnect-is-repeatable (1772 regions)
+[50/485] PASSED http1.disconnect-remains-repeatable-after-repeated-receive (1875 regions)
+[51/485] PASSED http1.wrong-context-websocket-accept-event (1443 regions)
+[52/485] PASSED http1.wrong-context-websocket-close-event (1443 regions)
+[53/485] PASSED http1.wrong-context-websocket-send-event (1443 regions)
+[54/485] PASSED http1.wrong-context-lifespan-startup-complete-event (1442 regions)
+[55/485] PASSED http1.wrong-context-lifespan-startup-failed-event (1443 regions)
+[56/485] PASSED http1.wrong-context-lifespan-shutdown-complete-event (1442 regions)
+[57/485] PASSED http1.wrong-context-lifespan-shutdown-failed-event (1449 regions)
+[58/485] PASSED http1.upload-remains-after-one-asgi-receive (1790 regions)
+[59/485] PASSED http1.upload-remains-unread-after-early-response (1734 regions)
+[60/485] PASSED http1.app-returns-before-response-start (1427 regions)
+[61/485] PASSED http1.percent-encoded-invalid-utf8-path (1584 regions)
+[62/485] PASSED http1.connection-upgrade-token-without-upgrade (1602 regions)
+[63/485] PASSED http1.websocket-upgrade-without-connection-token (1606 regions)
+[64/485] PASSED http1.websocket-upgrade-with-whitespace-token (1715 regions)
+[65/485] PASSED http1.websocket-upgrade-missing-key (1157 regions)
+[66/485] PASSED http1.websocket-upgrade-invalid-key (1176 regions)
+[67/485] PASSED http1.websocket-upgrade-key-incorrect-padding (1192 regions)
+[68/485] PASSED http1.websocket-upgrade-key-excess-padding (1200 regions)
+[69/485] PASSED http1.websocket-upgrade-key-discontinuous-padding (1191 regions)
+[70/485] PASSED http1.websocket-upgrade-key-missing-padding (1199 regions)
+[71/485] PASSED http1.websocket-upgrade-key-excess-canonical-padding (1200 regions)
+[72/485] PASSED http1.websocket-upgrade-key-wrong-decoded-size (1198 regions)
+[73/485] PASSED http1.websocket-upgrade-key-valid-single-padding-wrong-size (1199 regions)
+[74/485] PASSED http1.websocket-upgrade-missing-version (1200 regions)
+[75/485] PASSED http1.websocket-upgrade-wrong-version (1204 regions)
+[76/485] PASSED http1.websocket-upgrade-empty-version (1205 regions)
+[77/485] PASSED http1.websocket-upgrade-empty-key (1196 regions)
+[78/485] PASSED http1.websocket-upgrade-duplicate-key (1712 regions)
+[79/485] PASSED http1.persistent-connection-two-requests (1584 regions)
+[80/485] PASSED http1.head-streamed-response-suppresses-body (1611 regions)
+[81/485] PASSED http1.no-content-status-with-empty-body (1594 regions)
+[82/485] PASSED http1.scope-reports-http-1-0 (1581 regions)
+[83/485] PASSED http1.scope-http-1-0-without-host-header (1565 regions)
+[84/485] PASSED http1.disconnect-before-request-body (1705 regions)
+[85/485] PASSED http1.reset-during-incomplete-request-body (1875 regions)
+[86/485] PASSED http1.disconnect-before-first-asgi-receive (1664 regions)
+[87/485] PASSED http1.disconnect-after-complete-request-while-receive-waits (1744 regions)
+[88/485] PASSED fault.http1.scope-asgi-version-memory-error (1765 regions)
+[89/485] PASSED fault.http1.scope-http-asgi-spec-version-set-item (1765 regions)
+[90/485] PASSED fault.http1.scope-http-type-set-item (1765 regions)
+[91/485] PASSED fault.http1.scope-http-asgi-set-item (1765 regions)
+[92/485] PASSED fault.http1.scope-http-http-version-set-item (1765 regions)
+[93/485] PASSED fault.http1.scope-http-method-set-item (1765 regions)
+[94/485] PASSED fault.http1.scope-http-scheme-set-item (1765 regions)
+[95/485] PASSED fault.http1.scope-http-path-set-item (1765 regions)
+[96/485] PASSED fault.http1.scope-http-raw-path-set-item (1765 regions)
+[97/485] PASSED fault.http1.scope-http-query-string-set-item (1765 regions)
+[98/485] PASSED fault.http1.scope-http-root-path-set-item (1765 regions)
+[99/485] PASSED fault.http1.scope-http-headers-append (1765 regions)
+[100/485] PASSED fault.http1.scope-http-headers-set-item (1765 regions)
+[101/485] PASSED fault.http1.scope-http-client-set-item (1765 regions)
+[102/485] PASSED fault.http1.scope-http-server-set-item (1765 regions)
+[103/485] PASSED fault.http1.scope-state-copy-set-item (1767 regions)
+[104/485] PASSED fault.http1.scope-state-set-item (1766 regions)
+[105/485] PASSED fault.http1.scope-websocket-asgi-version-set-item (1937 regions)
+[106/485] PASSED fault.http1.scope-websocket-asgi-spec-version-set-item (1941 regions)
+[107/485] PASSED fault.http1.scope-websocket-type-set-item (1945 regions)
+[108/485] PASSED fault.http1.scope-websocket-asgi-set-item (1949 regions)
+[109/485] PASSED fault.http1.scope-websocket-http-version-set-item (1958 regions)
+[110/485] PASSED fault.http1.scope-websocket-method-set-item (1995 regions)
+[111/485] PASSED fault.http1.scope-websocket-scheme-set-item (1962 regions)
+[112/485] PASSED fault.http1.scope-websocket-path-set-item (1968 regions)
+[113/485] PASSED fault.http1.scope-websocket-raw-path-set-item (1975 regions)
+[114/485] PASSED fault.http1.scope-websocket-query-string-set-item (1982 regions)
+[115/485] PASSED fault.http1.scope-websocket-root-path-set-item (1991 regions)
+[116/485] PASSED fault.http1.scope-websocket-headers-append (2013 regions)
+[117/485] PASSED fault.http1.scope-websocket-headers-set-item (2025 regions)
+[118/485] PASSED fault.http1.scope-websocket-subprotocols-set-item (2030 regions)
+[119/485] PASSED fault.http1.scope-websocket-client-set-item (2035 regions)
+[120/485] PASSED fault.http1.scope-websocket-server-set-item (2042 regions)
+[121/485] PASSED fault.http1.request-type-set-item (1949 regions)
+[122/485] PASSED fault.http1.request-body-set-item (1953 regions)
+[123/485] PASSED fault.http1.request-more-body-set-item (1960 regions)
+[124/485] PASSED fault.http1.connection-task-service-error (1759 regions)
+[125/485] PASSED fault.http1.connection-task-join-error (1767 regions)
+[126/485] PASSED fault.http1.connection-task-service-await-error (1836 regions)
+[127/485] PASSED fault.http1.connection-task-join-await-error (1843 regions)
+[128/485] PASSED fault.http1.connection-task-service-select-result (1838 regions)
+[129/485] PASSED fault.http1.connection-task-join-select-result (1777 regions)
+[130/485] PASSED fault.http1.request-disconnect-type-set-item (2030 regions)
+[131/485] PASSED fault.http1.immediate-disconnect-message-error (2026 regions)
+[132/485] PASSED fault.http1.response-start-task-wins-select (1783 regions)
+[133/485] PASSED fault.asgi-event-type.http-response-start-eq (1783 regions)
+[134/485] PASSED fault.asgi-event-type.http-response-body-eq (1784 regions)
+[135/485] PASSED fault.asgi-event-type.extract (1793 regions)
+[136/485] PASSED fault.http-asgi-send-type-get-item (1782 regions)
+[137/485] PASSED fault.http-response-body-body-extract (1783 regions)
+[138/485] PASSED fault.http-response-body-body-get-item (1783 regions)
+[139/485] PASSED fault.http-response-body-more-body-extract (1783 regions)
+[140/485] PASSED fault.http-response-body-more-body-get-item (1783 regions)
+[141/485] PASSED fault.http-response-start-headers-extract (1784 regions)
+[142/485] PASSED fault.http-response-start-headers-get-item (1784 regions)
+[143/485] PASSED fault.http-response-start-status-extract (1784 regions)
+[144/485] PASSED fault.http-response-start-status-get-item (1784 regions)
+[145/485] PASSED fault.http1.python-task-starter-import-asyncio (1783 regions)
+[146/485] PASSED fault.http1.python-task-starter-ensure-future (1783 regions)
+[147/485] PASSED fault.http1.python-task-starter-add-done-callback (1801 regions)
+[148/485] PASSED http1.malformed-chunk-body-becomes-asgi-disconnect (1775 regions)
+[149/485] PASSED fault.http1.response-start-channel-closed (1788 regions)
+[150/485] PASSED fault.http1.response-body-channel-closed (1785 regions)
+[151/485] PASSED fault.http1.response-body-consumer-pause-backpressure (1795 regions)
+[152/485] PASSED fault.http1.incomplete-body-consumer-pause-preserves-chunk (1733 regions)
+[153/485] PASSED fault.http1.task-panic-after-final-response-body (1731 regions)
+[154/485] PASSED fault.http1.task-panic-before-final-response-body (1731 regions)
+[155/485] PASSED fault.http1.app-task-panic-before-response-start (1768 regions)
+[156/485] PASSED fault.http1.python-task-starter-task-sender-missing (1833 regions)
+[157/485] PASSED fault.http1.python-task-future-task-receiver-closed (1842 regions)
+[158/485] PASSED fault.http1.python-task-future-starter-allocation (1783 regions)
+[159/485] PASSED fault.http1.python-task-future-context-set-item (1782 regions)
+[160/485] PASSED fault.http1.python-task-future-schedule-call (1815 regions)
+[161/485] PASSED fault.http1.python-task-completion-result-receiver-closed (1792 regions)
+[162/485] PASSED fault.http1.asgi-io-allocation-failure (1783 regions)
+[163/485] PASSED fault.http1.app-invoke-failure (1783 regions)
+[164/485] PASSED fault.http1.python-task-completion-allocation (1783 regions)
+[165/485] PASSED fault.http1.empty-request-channel-closed (1754 regions)
+[166/485] PASSED fault.websocket.scope-state-copy-set-item (1958 regions)
+[167/485] PASSED fault.websocket.scope-state-set-item (1957 regions)
+[168/485] PASSED http1.final-response-completes-before-app-return (1588 regions)
+[169/485] PASSED fault.http1.asgi-receive-borrow-conflict (1768 regions)
+[170/485] PASSED http1.response-burst-queued-after-pending (1606 regions)
+[171/485] PASSED fault.http1.response-burst-queued-after-receiver-pending (1730 regions)
+[172/485] PASSED fault.http1.reset-cancels-before-task-handle-delivery (1838 regions)
+[173/485] PASSED fault.http1.upload-disconnect-during-data-send (1932 regions)
+[174/485] PASSED fault.http1.upload-disconnect-before-final-message (1971 regions)
+[175/485] PASSED fault.http1.upload-disconnect-after-final-message (1987 regions)
+[176/485] PASSED fault.http1.receive-disconnect-before-future-poll (2025 regions)
+[177/485] PASSED fault.http1.python-task-starter-inline-completion (1793 regions)
+[178/485] PASSED fault.http1.python-task-starter-inline-completion-registration-error (1814 regions)
+[179/485] PASSED http.application-task-cleanup-observer-sees-held-task-and-cancellation (1607 regions)
+[180/485] PASSED fault.http1.python-task-starter-inline-completion-borrow-conflict (1803 regions)
+[181/485] PASSED fault.http1.python-task-starter-registration-error-borrow-conflict (1806 regions)
+[182/485] PASSED fault.http1.python-task-starter-registration-success-borrow-conflict (1797 regions)
+[183/485] PASSED fault.http1.python-task-starter-failure-cleanup-schedule-error (1807 regions)
+[184/485] PASSED fault.http1.python-task-starter-prelude-close-error (1787 regions)
+[185/485] PASSED fault.http1.reset-before-body-worker-first-poll (1964 regions)
+[186/485] PASSED support.http1.response-header-capacity-error-recovers (1589 regions)
+[187/485] PASSED http1.early-response-drain-stops-on-malformed-final-chunk (1725 regions)
+[188/485] PASSED fault.http1.malformed-body-error-stop-delivers-disconnect (1925 regions)
+[189/485] PASSED fault.http1.body-pump-reaps-cancelled-task-before-upload (1971 regions)
+[190/485] PASSED fault.http1.body-pump-shutdown-joins-cancelled-task (1875 regions)
+[191/485] PASSED fault.http1.body-pump-shutdown-aborts-hung-pump (1868 regions)
+[192/485] PASSED fault.http1.early-response-body-drain-terminal-frame (1871 regions)
+[193/485] PASSED fault.http1.body-pump-shutdown-completes-task-before-abort (1872 regions)
+[194/485] PASSED support.http1.asgi-http-spec-version-2-5 (1584 regions)
+[195/485] PASSED http1.response-headers-preserve-duplicate-value-order (1581 regions)
+[196/485] PASSED http1-tls.scope-reports-https (1723 regions)
+[197/485] PASSED http1-tls.response-body-incomplete (1725 regions)
+[198/485] PASSED http2.scope-query-header-and-body (1979 regions)
+[199/485] PASSED http2.response-stream-order (1732 regions)
+[200/485] PASSED http2.response-first-chunk-before-app-completion (1753 regions)
+[201/485] PASSED http2.response-stream-reset-cancels-app (1821 regions)
+[202/485] PASSED http2.request-upload-stream (1986 regions)
+[203/485] PASSED http2.empty-final-data-frame-is-ignored (1970 regions)
+[204/485] PASSED http2.request-streaming-progress-before-upload-complete (1969 regions)
+[205/485] PASSED http2.request-trailers-after-streamed-upload (1970 regions)
+[206/485] PASSED http2.asgi-event-type-string-subclass (1739 regions)
+[207/485] PASSED http2.response-burst-backpressure (1753 regions)
+[208/485] PASSED http2.invalid-asgi-event-type-is-not-string (1580 regions)
+[209/485] PASSED http2.invalid-asgi-response-start-missing-status (1595 regions)
+[210/485] PASSED http2.application-error-before-response-start (1570 regions)
+[211/485] PASSED fault.http2.app-task-panic-before-response-start (1478 regions)
+[212/485] PASSED http2.scope-preserves-duplicate-headers (1748 regions)
+[213/485] PASSED http2.scope-raw-uri-authority-and-host (1749 regions)
+[214/485] PASSED http2.scope-host-fallback-without-authority (1739 regions)
+[215/485] PASSED http2.app-returns-before-response-start (1569 regions)
+[216/485] PASSED http2.upload-abandoned-by-early-app-return (1703 regions)
+[217/485] PASSED http2.no-content-status-with-empty-body (1716 regions)
+[218/485] PASSED http2.concurrent-streams-complete-independently (1732 regions)
+[219/485] PASSED http2.final-response-completes-before-app-return (1717 regions)
+[220/485] PASSED fault.http2.connection-disconnect-completes-eof-recheck (2191 regions)
+[221/485] PASSED http2.reset-incomplete-upload-keeps-sibling-stream-healthy (1974 regions)
+[222/485] PASSED http2.reset-after-empty-request-keeps-sibling-stream-healthy (1845 regions)
+[223/485] PASSED http2.reset-after-complete-upload-keeps-sibling-stream-healthy (1997 regions)
+[224/485] PASSED support.http2.asgi-http-spec-version-2-5 (1731 regions)
+[225/485] PASSED http2.response-headers-preserve-duplicate-value-order (1728 regions)
+[226/485] PASSED http3.sequential-responses-one-connection (2076 regions)
+[227/485] PASSED http3.peer-close-h3-no-error (2120 regions)
+[228/485] PASSED http3.peer-close-unknown-zero (2136 regions)
+[229/485] PASSED http3.peer-close-registered-h3-datagram (2145 regions)
+[230/485] PASSED http3.peer-close-registered-h3-general-protocol-error (2146 regions)
+[231/485] PASSED http3.peer-close-registered-qpack-decompression-failed (2147 regions)
+[232/485] PASSED http3.peer-close-reserved-grease (2136 regions)
+[233/485] PASSED http3.peer-close-unknown-above-base-range (2137 regions)
+[234/485] PASSED http3.peer-close-unknown-maximum-u62 (2138 regions)
+[235/485] PASSED fault.http3.peer-close-missing-quic-close-reason (2317 regions)
+[236/485] PASSED http3.request-body-client-abort (2128 regions)
+[237/485] PASSED http3.scope-query-header-and-body (1948 regions)
+[238/485] PASSED http3.response-stream-order (1933 regions)
+[239/485] PASSED http3.asgi-event-type-string-subclass (1939 regions)
+[240/485] PASSED http3.response-burst-backpressure (1983 regions)
+[241/485] PASSED http3.client-cancels-large-response-after-headers (2064 regions)
+[242/485] PASSED http3.post-first-upload-response (2043 regions)
+[243/485] PASSED http3.post-empty-data-frame-before-body (2004 regions)
+[244/485] PASSED http3.application-error-before-response-start (1749 regions)
+[245/485] PASSED fault.http3.app-task-panic-before-response-start (1692 regions)
+[246/485] PASSED http3.response-body-fields-default-empty (1907 regions)
+[247/485] PASSED http3.scope-preserves-duplicate-headers (1948 regions)
+[248/485] PASSED http3.scope-raw-uri-authority-and-host (1949 regions)
+[249/485] PASSED http3.app-returns-before-response-start (1745 regions)
+[250/485] PASSED http3.upload-abandoned-by-early-app-return (1793 regions)
+[251/485] PASSED http3.early-response-with-open-upload (1963 regions)
+[252/485] PASSED http3.no-content-status-with-empty-body (1913 regions)
+[253/485] PASSED http3.upload-body-shorter-than-content-length (2043 regions)
+[254/485] PASSED http3.invalid-asgi-event-type-is-not-string (1759 regions)
+[255/485] PASSED http3.invalid-asgi-response-start-missing-status (1782 regions)
+[256/485] PASSED fault.http3.listener-accept-error-shuts-down-quic (1029 regions)
+[257/485] PASSED http3.invalid-alpn-handshake-recovers (1934 regions)
+[258/485] PASSED fault.http3.connection-task-panic-followup (2099 regions)
+[259/485] PASSED http3.graceful-shutdown-drains-open-connection (1906 regions)
+[260/485] PASSED http3.graceful-shutdown-aborts-held-response (1931 regions)
+[261/485] PASSED fault.http3.shutdown-deadline-aborts-server-task (2049 regions)
+[262/485] PASSED fault.http3.endpoint-bind-error (253 regions)
+[263/485] PASSED fault.http3.connection-create-error (1258 regions)
+[264/485] PASSED fault.http3.connection-accept-error (1305 regions)
+[265/485] PASSED fault.http3.peer-close-unexpected-error-kind (2316 regions)
+[266/485] PASSED fault.http3.request-resolve-error (1347 regions)
+[267/485] PASSED fault.http3.response-builder-error (2030 regions)
+[268/485] PASSED fault.http3.response-send-error (2034 regions)
+[269/485] PASSED fault.http3.response-body-frame-error (2121 regions)
+[270/485] PASSED fault.http3.response-non-data-frame (2134 regions)
+[271/485] PASSED fault.http3.response-body-send-error (2133 regions)
+[272/485] PASSED fault.http3.response-finish-error (2093 regions)
+[273/485] PASSED fault.http3.body-pump-connection-closed (1823 regions)
+[274/485] PASSED fault.http3.body-pump-connection-closed-select (1831 regions)
+[275/485] PASSED fault.http3.body-pump-sender-closed-select (1854 regions)
+[276/485] PASSED fault.http3.body-pump-empty-data-frame-preserves-upload (2219 regions)
+[277/485] PASSED fault.http3.body-pump-send-error-delivers-disconnect (1985 regions)
+[278/485] PASSED fault.http3.body-pump-final-message-closed-select (2203 regions)
+[279/485] PASSED fault.http3.connection-task-panic-during-shutdown (2069 regions)
+[280/485] PASSED fault.http3.connection-task-hang-aborted-during-shutdown (2072 regions)
+[281/485] PASSED fault.http3.endpoint-accept-closed-http1-fallback (1873 regions)
+[282/485] PASSED fault.http3.quic-tls-configuration-error (157 regions)
+[283/485] PASSED fault.http3.request-task-panic (1356 regions)
+[284/485] PASSED fault.http3.request-task-panic-after-response (2203 regions)
+[285/485] PASSED fault.http3.accept-finished-closes-connection (1291 regions)
+[286/485] PASSED fault.http3.body-pump-disconnect-while-sending (1942 regions)
+[287/485] PASSED fault.http3.connection-accept-error-aborts-held-response (2192 regions)
+[288/485] PASSED fault.http3.body-pump-error-stop-disconnect-followup (2302 regions)
+[289/485] PASSED fault.http3.body-pump-reaps-cancelled-task-before-upload (2230 regions)
+[290/485] PASSED support.http3.asgi-http-spec-version-2-5 (1931 regions)
+[291/485] PASSED http3.response-headers-preserve-duplicate-value-order (1928 regions)
+[292/485] PASSED websocket.client-drop-during-pending-upgrade (2181 regions)
+[293/485] PASSED websocket.server-shutdown-during-pending-upgrade (1682 regions)
+[294/485] PASSED websocket.text-and-binary-round-trip (1884 regions)
+[295/485] PASSED websocket.scope-headers-path-query-and-subprotocols (1793 regions)
+[296/485] PASSED websocket.pre-accept-denial (1595 regions)
+[297/485] PASSED websocket.pre-accept-default-close (1589 regions)
+[298/485] PASSED websocket.missing-event-type (1496 regions)
+[299/485] PASSED websocket.unsupported-event-type (1528 regions)
+[300/485] PASSED websocket.server-initiated-close (1886 regions)
+[301/485] PASSED websocket.app-returns-before-handshake (1541 regions)
+[302/485] PASSED websocket.app-error-before-handshake (1487 regions)
+[303/485] PASSED websocket.synchronous-callable-error-before-awaitable (1450 regions)
+[304/485] PASSED websocket.send-before-accept (1501 regions)
+[305/485] PASSED websocket.duplicate-accept (1665 regions)
+[306/485] PASSED websocket.invalid-send-payload-after-accept (1685 regions)
+[307/485] PASSED websocket.server-app-completion-close (1822 regions)
+[308/485] PASSED websocket.immediate-send-and-return (1747 regions)
+[309/485] PASSED websocket.subclass-event-types (1878 regions)
+[310/485] PASSED websocket.outbound-backpressure-burst (1888 regions)
+[311/485] PASSED websocket.client-close-code-and-reason (1731 regions)
+[312/485] PASSED websocket.application-error-after-accept (1661 regions)
+[313/485] PASSED websocket.receive-call-rejects-positional-argument (1661 regions)
+[314/485] PASSED websocket.send-requires-exactly-one-payload (1691 regions)
+[315/485] PASSED websocket.wrong-context-http-response-start-event (1506 regions)
+[316/485] PASSED websocket.wrong-context-http-response-body-event (1506 regions)
+[317/485] PASSED websocket.empty-text-and-binary-payloads (1876 regions)
+[318/485] PASSED websocket.accept-with-custom-asgi-header (1758 regions)
+[319/485] PASSED websocket.invalid-accept-header-rejected (1583 regions)
+[320/485] PASSED websocket.accepted-default-close (1821 regions)
+[321/485] PASSED websocket.close-twice-after-accept (1749 regions)
+[322/485] PASSED websocket.send-after-client-disconnect (1735 regions)
+[323/485] PASSED websocket.receive-after-client-disconnect (1734 regions)
+[324/485] PASSED websocket.control-ping-pong (1747 regions)
+[325/485] PASSED websocket.abrupt-client-disconnect (1718 regions)
+[326/485] PASSED websocket.invalid-accept-header-container (1524 regions)
+[327/485] PASSED websocket.invalid-subprotocol-type (1513 regions)
+[328/485] PASSED websocket.invalid-pre-accept-close-code-type (1508 regions)
+[329/485] PASSED websocket.server-shutdown-cancels-held-session (1734 regions)
+[330/485] PASSED fault.websocket.server-shutdown-aborts-stuck-task (1802 regions)
+[331/485] PASSED fault.websocket.receive-channel-closed (2344 regions)
+[332/485] PASSED fault.websocket.receive-connection-closed (2433 regions)
+[333/485] PASSED fault.websocket.driver-connection-closed (2351 regions)
+[334/485] PASSED fault.websocket.driver-peer-eof (2364 regions)
+[335/485] PASSED fault.websocket.driver-app-task-aborted (2433 regions)
+[336/485] PASSED fault.websocket.driver-incoming-text-receiver-closed (2435 regions)
+[337/485] PASSED fault.websocket.driver-incoming-binary-receiver-closed (2435 regions)
+[338/485] PASSED fault.websocket.driver-outgoing-channel-closed (2427 regions)
+[339/485] PASSED fault.websocket.receive-connect-type-set-item (2109 regions)
+[340/485] PASSED fault.websocket.receive-text-type-set-item (2377 regions)
+[341/485] PASSED fault.websocket.receive-text-value-set-item (2381 regions)
+[342/485] PASSED fault.websocket.receive-binary-type-set-item (2377 regions)
+[343/485] PASSED fault.websocket.receive-binary-value-set-item (2381 regions)
+[344/485] PASSED fault.websocket.receive-disconnect-type-set-item (2375 regions)
+[345/485] PASSED fault.websocket.receive-disconnect-code-set-item (2379 regions)
+[346/485] PASSED fault.websocket.receive-disconnect-reason-set-item (2384 regions)
+[347/485] PASSED fault.websocket.receive-closed-type-set-item (2329 regions)
+[348/485] PASSED fault.websocket.receive-closed-code-set-item (2349 regions)
+[349/485] PASSED fault.websocket.receive-closed-reason-set-item (2341 regions)
+[350/485] PASSED fault.asgi-event-type.websocket-accept-eq (2124 regions)
+[351/485] PASSED fault.asgi-event-type.websocket-close-pre-accept-eq (2124 regions)
+[352/485] PASSED fault.asgi-event-type.websocket-send-eq (2313 regions)
+[353/485] PASSED fault.asgi-event-type.websocket-close-after-accept-eq (2309 regions)
+[354/485] PASSED fault.websocket-asgi-send-type-get-item (2119 regions)
+[355/485] PASSED fault.websocket-accept-subprotocol-get-item (2135 regions)
+[356/485] PASSED fault.websocket-accept-subprotocol-extract (2142 regions)
+[357/485] PASSED fault.websocket-accept-headers-get-item (2147 regions)
+[358/485] PASSED fault.websocket-accept-headers-extract (2152 regions)
+[359/485] PASSED fault.websocket-close-code-get-item (2487 regions)
+[360/485] PASSED fault.websocket-close-code-extract (2494 regions)
+[361/485] PASSED fault.websocket-close-reason-get-item (2499 regions)
+[362/485] PASSED fault.websocket-close-reason-extract (2506 regions)
+[363/485] PASSED fault.websocket-send-text-get-item (2318 regions)
+[364/485] PASSED fault.websocket-send-text-extract (2325 regions)
+[365/485] PASSED fault.websocket-send-bytes-get-item (2401 regions)
+[366/485] PASSED fault.websocket-send-bytes-extract (2408 regions)
+[367/485] PASSED fault.websocket.handshake-mutex-poison-accept (2182 regions)
+[368/485] PASSED fault.websocket.handshake-mutex-poison-close (2181 regions)
+[369/485] PASSED fault.websocket.handshake-already-completed-accept (2245 regions)
+[370/485] PASSED fault.websocket.handshake-already-completed-close (2246 regions)
+[371/485] PASSED fault.websocket.handshake-send-closed-accept (2252 regions)
+[372/485] PASSED fault.websocket.handshake-send-closed-close (2253 regions)
+[373/485] PASSED fault.websocket.outgoing-channel-closed-on-send (2433 regions)
+[374/485] PASSED fault.websocket.outgoing-queue-receiver-closed (2393 regions)
+[375/485] PASSED fault.websocket.driver-send-error-drain-final-frame (2413 regions)
+[376/485] PASSED fault.websocket.driver-drain-send-error-final-frame (2404 regions)
+[377/485] PASSED fault.websocket.driver-send-error-cancels-app (2480 regions)
+[378/485] PASSED fault.websocket.io-allocation-failure (1914 regions)
+[379/485] PASSED fault.websocket.app-invoke-failure (2060 regions)
+[380/485] PASSED fault.websocket.app-task-panic-before-handshake (1912 regions)
+[381/485] PASSED fault.websocket.shutdown-native-task-panic (1782 regions)
+[382/485] PASSED websocket.invalid-accept-header-value-rejected (1652 regions)
+[383/485] PASSED websocket.reserved-accept-header-rejected (1646 regions)
+[384/485] PASSED websocket.invalid-subprotocol-value-rejected (1642 regions)
+[385/485] PASSED fault.websocket.asgi-receive-borrow-conflict (1922 regions)
+[386/485] PASSED fault.websocket.accept-key-header-value-error (2319 regions)
+[387/485] PASSED support.websocket.accept-header-capacity-error-recovers (2056 regions)
+[388/485] PASSED support.websocket.asgi-http-spec-version-2-5 (1792 regions)
+[389/485] PASSED websocket-tls.scope-headers-path-query-and-subprotocols (2406 regions)
+[390/485] PASSED websocket-tls.text-round-trip-with-query-and-subprotocol (2441 regions)
+[391/485] PASSED startup-partial-tls-api.partial-tls-startup-error (73 regions)
+[392/485] PASSED startup-missing-certificate.missing-certificate-startup-error (88 regions)
+[393/485] PASSED startup-invalid-host.invalid-host-startup-error (135 regions)
+[394/485] PASSED startup-empty-certificate.empty-certificate-startup-error (92 regions)
+[395/485] PASSED startup-invalid-certificate-pem.invalid-certificate-pem-startup-error (91 regions)
+[396/485] PASSED startup-missing-private-key.missing-private-key-startup-error (100 regions)
+[397/485] PASSED startup-empty-private-key.empty-private-key-startup-error (102 regions)
+[398/485] PASSED startup-invalid-private-key-pem.invalid-private-key-pem-startup-error (102 regions)
+[399/485] PASSED startup-mismatched-private-key.mismatched-private-key-startup-error (110 regions)
+[400/485] PASSED lifespan.startup-and-shutdown-cancel (1680 regions)
+[401/485] PASSED lifespan.idle-keepalive-connection-closes-on-shutdown (1613 regions)
+[402/485] PASSED lifespan.active-response-stream-drains-on-shutdown (1644 regions)
+[403/485] PASSED lifespan.active-response-reset-during-shutdown (1617 regions)
+[404/485] PASSED lifespan.active-large-response-reset-during-shutdown (1701 regions)
+[405/485] PASSED fault.lifecycle.hyper-connection-write-error-during-shutdown (1822 regions)
+[406/485] PASSED fault.lifecycle.connection-service-error-during-shutdown (1832 regions)
+[407/485] PASSED fault.lifecycle.connection-join-error-during-shutdown (1839 regions)
+[408/485] PASSED fault.lifecycle.cancellation-cancel-method-error (1823 regions)
+[409/485] PASSED fault.lifecycle.cancellation-context-error (1835 regions)
+[410/485] PASSED fault.lifecycle.cancellation-scheduling-error (1843 regions)
+[411/485] PASSED fault.lifespan.pending-task-cancel-on-forced-timeout (1769 regions)
+[412/485] PASSED lifespan.public-server-api-cancels-and-shuts-down (1679 regions)
+[413/485] PASSED lifespan.auto-app-does-not-support-lifespan (1494 regions)
+[414/485] PASSED lifespan.app-returns-while-send-is-retained (1490 regions)
+[415/485] PASSED lifespan-subclass-event-types.complete-events (1562 regions)
+[416/485] PASSED lifespan.auto-app-raises-before-startup (1494 regions)
+[417/485] PASSED fault.lifespan-start-event-channel-closed-after-app-error (1628 regions)
+[418/485] PASSED lifespan.auto-app-raises-after-retaining-send (1494 regions)
+[419/485] PASSED lifespan.receive-call-rejects-positional-argument (1463 regions)
+[420/485] PASSED lifespan-invalid-startup-event.auto-disables-invalid-lifespan (1512 regions)
+[421/485] PASSED lifespan-missing-startup-event-type.auto-disables-invalid-lifespan (1503 regions)
+[422/485] PASSED lifespan-non-string-startup-event-type.auto-disables-invalid-lifespan (1504 regions)
+[423/485] PASSED lifespan-startup-failed.startup-does-not-complete (705 regions)
+[424/485] PASSED lifespan-startup-failed-subclass.startup-does-not-complete (677 regions)
+[425/485] PASSED lifespan-startup-failed-empty.startup-does-not-complete (703 regions)
+[426/485] PASSED lifespan-unexpected-startup-event.startup-does-not-complete (1614 regions)
+[427/485] PASSED lifespan-shutdown-failed.failure-is-reported-during-shutdown (1664 regions)
+[428/485] PASSED lifespan-shutdown-failed-subclass.failure-is-reported-during-shutdown (1661 regions)
+[429/485] PASSED lifespan-shutdown-failed-empty.failure-is-reported-during-shutdown (1662 regions)
+[430/485] PASSED lifespan.lifespan-shutdown-returns (1629 regions)
+[431/485] PASSED lifespan.lifespan-shutdown-returns-while-send-retained (1564 regions)
+[432/485] PASSED lifespan.lifespan-shutdown-raises (1565 regions)
+[433/485] PASSED lifespan.lifespan-shutdown-unexpected-event (1630 regions)
+[434/485] PASSED lifespan.lifespan-startup-complete-then-returns (1551 regions)
+[435/485] PASSED fault.lifespan.scope-asgi-version-set-item (256 regions)
+[436/485] PASSED fault.lifespan.scope-asgi-spec-version-set-item (260 regions)
+[437/485] PASSED fault.lifespan.scope-type-set-item (264 regions)
+[438/485] PASSED fault.lifespan.scope-asgi-set-item (268 regions)
+[439/485] PASSED fault.lifespan.scope-state-set-item (273 regions)
+[440/485] PASSED fault.lifespan.receive-startup-type-set-item (1621 regions)
+[441/485] PASSED fault.lifespan.receive-channel-closed-auto-fallback (1615 regions)
+[442/485] PASSED fault.lifespan.receive-shutdown-type-set-item (1704 regions)
+[443/485] PASSED fault.lifespan.shutdown-task-join-error (1774 regions)
+[444/485] PASSED fault.lifespan-fault-asgi-startup-complete.startup-complete-classification (1660 regions)
+[445/485] PASSED fault.lifespan-fault-asgi-startup-failed.startup-failed-classification (1667 regions)
+[446/485] PASSED fault.lifespan-fault-asgi-shutdown-complete.shutdown-complete-classification (1718 regions)
+[447/485] PASSED fault.lifespan-fault-asgi-shutdown-failed.shutdown-failed-classification (1725 regions)
+[448/485] PASSED fault.lifespan-fault-asgi-startup-failed-message-get-item (1675 regions)
+[449/485] PASSED fault.lifespan-fault-asgi-startup-failed-message-extract (1682 regions)
+[450/485] PASSED fault.lifespan-fault-asgi-startup-event-channel-closed (1679 regions)
+[451/485] PASSED fault.lifespan-fault-asgi-shutdown-send-type-get-item (1707 regions)
+[452/485] PASSED fault.lifespan-fault-asgi-shutdown-failed-message-get-item (1731 regions)
+[453/485] PASSED fault.lifespan-fault-asgi-shutdown-failed-message-extract (1738 regions)
+[454/485] PASSED fault.startup-fault-native-add-class-asgi-io (50 regions)
+[455/485] PASSED fault.startup-fault-native-add-class-websocket-io (54 regions)
+[456/485] PASSED fault.startup-fault-native-add-class-lifespan-io (58 regions)
+[457/485] PASSED fault.lifespan.io-allocation-failure (241 regions)
+[458/485] PASSED fault.lifespan.app-invoke-failure (281 regions)
+[459/485] PASSED fault.lifespan.startup-task-join-error (660 regions)
+[460/485] PASSED fault.lifespan.startup-send-channel-closed (630 regions)
+[461/485] PASSED fault.lifespan.asgi-receive-borrow-conflict (252 regions)
+[462/485] PASSED fault.server.control-shutdown-borrow-conflict (107 regions)
+[463/485] PASSED fault.server.current-python-locals-failure (106 regions)
+[464/485] PASSED fault.server.graceful-timeout-overflow (97 regions)
+[465/485] PASSED fault.server.serve-control-borrow-conflict (121 regions)
+[466/485] PASSED fault.native.runtime-build-error-before-server-export (40 regions)
+[467/485] PASSED fault.startup-fault-native-add-class-server-control (62 regions)
+[468/485] PASSED fault.startup-fault-native-add-function-serve (71 regions)
+[469/485] PASSED fault.native-module.wrap-serve-function (67 regions)
+[470/485] PASSED fault.http1.server-listener-accept-error (904 regions)
+[471/485] PASSED fault.http1.server-local-address-inspection-error (174 regions)
+[472/485] PASSED lifespan.tls-shutdown-cancels-held-request (1810 regions)
+[473/485] PASSED lifespan.active-response-stream-drains-on-tls-shutdown (1775 regions)
+[474/485] PASSED fault.lifecycle-tls.hyper-connection-write-error-during-shutdown (1981 regions)
+[475/485] PASSED lifespan.active-response-reset-during-tls-shutdown (1748 regions)
+[476/485] PASSED lifespan.unfinished-tls-handshake-closes-on-shutdown (1719 regions)
+[477/485] PASSED lifespan.shutdown-complete-then-raises (1585 regions)
+[478/485] PASSED fault.lifespan.shutdown-task-join-after-complete (1797 regions)
+[479/485] PASSED lifespan.post-response-background-task-cancelled-before-server-return (1698 regions)
+[480/485] PASSED fault.lifespan.post-response-completion-receiver-closed-during-forced-shutdown (1850 regions)
+[481/485] PASSED lifespan.state-shallow-copy-does-not-rehash-keys (1584 regions)
+[482/485] PASSED fault.lifespan.eager-lifespan-registration-failure-cleanup (1676 regions)
+[483/485] PASSED fault.lifespan.eager-application-registration-failure-cleanup (1807 regions)
+[484/485] PASSED fault.lifespan.eager-lifespan-timeout-registration-failure-cleanup (1676 regions)
+[485/485] PASSED fault.lifespan.eager-application-registration-failure-cancel-suppressed (1810 regions)
+[matrix 1/3] completed 485/485 (transient infrastructure failures: 1)
+[matrix 2/3] completed 485/485 (transient infrastructure failures: 0)
+[matrix 3/3] completed 485/485 (transient infrastructure failures: 1)
+{
+  "status": "complete",
+  "report": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/2026-10-07/asgi-inventory-485/coverage-report.json",
+  "matrix": {
+    "scope": "complete",
+    "manifest_case_count": 485,
+    "selected": 485,
+    "executed": 485,
+    "passed": 485,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "transient_infrastructure_failures": 2,
+    "oracle_parity": {
+      "selected": 233,
+      "passed": 233,
+      "failed": 0
+    },
+    "fault_contracts": {
+      "selected": 252,
+      "passed": 252,
+      "failed": 0
+    },
+    "verification_runs": [
+      {
+        "run": 1,
+        "status": "completed",
+        "summary": {
+          "executed": 485,
+          "failed": 0,
+          "infrastructure_failed": 0,
+          "not_run": 0,
+          "passed": 485,
+          "selected": 485
+        },
+        "run_id": "6e6185a9a1f34909bfadd7bcce8dcb6f",
+        "artifact": "benchmarks/results/2026-10-07/asgi-inventory-485/artifacts/bb6854f6b3df4168ba0e5906f51cf23e/matrix-runs/run-1/attempt-2/parity-result.json",
+        "sha256": "57591e0f470b9ee092cc147f428171d84bfaf8a41f51439c86d8d7d1f43ec854",
+        "runner_exit_code": 0,
+        "attempts": [
+          {
+            "attempt": 1,
+            "artifact": "benchmarks/results/2026-10-07/asgi-inventory-485/artifacts/bb6854f6b3df4168ba0e5906f51cf23e/matrix-runs/run-1/parity-result.json",
+            "runner_exit_code": 1,
+            "status": "failed",
+            "summary": {
+              "executed": 485,
+              "failed": 0,
+              "infrastructure_failed": 1,
+              "not_run": 0,
+              "passed": 484,
+              "selected": 485
+            },
+            "run_id": "8c2fcf016d3c459dae3502d7ef6cbd54",
+            "sha256": "f1156b0608207be85bb81b1b9ba83763ada7725ae9f794ab2cb11b117a4176c2"
+          },
+          {
+            "attempt": 2,
+            "artifact": "benchmarks/results/2026-10-07/asgi-inventory-485/artifacts/bb6854f6b3df4168ba0e5906f51cf23e/matrix-runs/run-1/attempt-2/parity-result.json",
+            "runner_exit_code": 0,
+            "status": "completed",
+            "summary": {
+              "executed": 485,
+              "failed": 0,
+              "infrastructure_failed": 0,
+              "not_run": 0,
+              "passed": 485,
+              "selected": 485
+            },
+            "run_id": "6e6185a9a1f34909bfadd7bcce8dcb6f",
+            "sha256": "57591e0f470b9ee092cc147f428171d84bfaf8a41f51439c86d8d7d1f43ec854"
+          }
+        ],
+        "transient_infrastructure_failures": 1
+      },
+      {
+        "run": 2,
+        "status": "completed",
+        "summary": {
+          "executed": 485,
+          "failed": 0,
+          "infrastructure_failed": 0,
+          "not_run": 0,
+          "passed": 485,
+          "selected": 485
+        },
+        "run_id": "580c9eb167534d029ae04fcdcd0faa98",
+        "artifact": "benchmarks/results/2026-10-07/asgi-inventory-485/artifacts/bb6854f6b3df4168ba0e5906f51cf23e/matrix-runs/run-2/parity-result.json",
+        "sha256": "97cab4ebfd1051444c049fd0deb989294f1424a70d77e7cb8fbe92850874da8c",
+        "runner_exit_code": 0,
+        "attempts": [
+          {
+            "attempt": 1,
+            "artifact": "benchmarks/results/2026-10-07/asgi-inventory-485/artifacts/bb6854f6b3df4168ba0e5906f51cf23e/matrix-runs/run-2/parity-result.json",
+            "runner_exit_code": 0,
+            "status": "completed",
+            "summary": {
+              "executed": 485,
+              "failed": 0,
+              "infrastructure_failed": 0,
+              "not_run": 0,
+              "passed": 485,
+              "selected": 485
+            },
+            "run_id": "580c9eb167534d029ae04fcdcd0faa98",
+            "sha256": "97cab4ebfd1051444c049fd0deb989294f1424a70d77e7cb8fbe92850874da8c"
+          }
+        ],
+        "transient_infrastructure_failures": 0
+      },
+      {
+        "run": 3,
+        "status": "completed",
+        "summary": {
+          "executed": 485,
+          "failed": 0,
+          "infrastructure_failed": 0,
+          "not_run": 0,
+          "passed": 485,
+          "selected": 485
+        },
+        "run_id": "e8f7d75ac8b6441a8289230fe5347c9f",
+        "artifact": "benchmarks/results/2026-10-07/asgi-inventory-485/artifacts/bb6854f6b3df4168ba0e5906f51cf23e/matrix-runs/run-3/attempt-2/parity-result.json",
+        "sha256": "ba0bbb9333c40f4e4c78e083472a15cecfb9ff2bbc79bc093f1d1ed0d84b455a",
+        "runner_exit_code": 0,
+        "attempts": [
+          {
+            "attempt": 1,
+            "artifact": "benchmarks/results/2026-10-07/asgi-inventory-485/artifacts/bb6854f6b3df4168ba0e5906f51cf23e/matrix-runs/run-3/parity-result.json",
+            "runner_exit_code": 1,
+            "status": "failed",
+            "summary": {
+              "executed": 485,
+              "failed": 0,
+              "infrastructure_failed": 1,
+              "not_run": 0,
+              "passed": 484,
+              "selected": 485
+            },
+            "run_id": "eba828737c1d41ae9d055bcea0c0b6c9",
+            "sha256": "6f3145fc1d57e5bbe316498ec632a932f761eefb59313960de56a3c49aa3327b"
+          },
+          {
+            "attempt": 2,
+            "artifact": "benchmarks/results/2026-10-07/asgi-inventory-485/artifacts/bb6854f6b3df4168ba0e5906f51cf23e/matrix-runs/run-3/attempt-2/parity-result.json",
+            "runner_exit_code": 0,
+            "status": "completed",
+            "summary": {
+              "executed": 485,
+              "failed": 0,
+              "infrastructure_failed": 0,
+              "not_run": 0,
+              "passed": 485,
+              "selected": 485
+            },
+            "run_id": "e8f7d75ac8b6441a8289230fe5347c9f",
+            "sha256": "ba0bbb9333c40f4e4c78e083472a15cecfb9ff2bbc79bc093f1d1ed0d84b455a"
+          }
+        ],
+        "transient_infrastructure_failures": 1
+      }
+    ],
+    "verification_runs_required": 3,
+    "case_attribution_complete": true,
+    "case_results": "485 case rows"
+  },
+  "coverage": {
+    "regions": {
+      "covered": 5106,
+      "total": 5106,
+      "missing": 0
+    },
+    "lines": {
+      "covered": 3606,
+      "total": 3606,
+      "missing": 0
+    }
+  },
+  "coverage_gate": "passed",
+  "uncovered_regions": 0,
+  "attribution_matches_union": true,
+  "source_sha256": "5bdcd7f88eecf8f47f9383dbe401464dce6558dac716fd2e0fcf872ecdccb17e",
+  "native_extension_sha256": "e119bcf50aa15cdd9f6d3462f857c5eda237dfc23fef18aab8f3389408cd8e08"
+}

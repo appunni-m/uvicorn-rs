@@ -1,11 +1,11 @@
 # Architecture and buffer ownership
 
-The current 473-case matrix passes attribution and three full repeats. It
-contains 225 live oracle comparisons and 248 target-only contracts across 70
-input files and 64 operations. Native coverage is 5,106/5,106 regions and
+The current 485-case matrix passes attribution and three full repeats. It
+contains 233 live oracle comparisons and 252 target-only contracts across 70
+input files and 66 operations. Native coverage is 5,106/5,106 regions and
 3,606/3,606 lines, with zero Coverage MCP gaps. The normal wheel passes
-225/225 public parity cases and the 16-check exclusion audit with three
-selected workflows. See the [current source/build receipt](coverage.md#current-full-verification-473-cases).
+233/233 public parity cases and the 16-check exclusion audit with three
+selected workflows. See the [current source/build receipt](coverage.md#current-full-verification-485-cases).
 Older 451- and 448-case results below are historical and do not attest the
 current checkout.
 
@@ -276,7 +276,7 @@ malformed H1 framing, shutdown and healthy sibling/follow-up requests.
 The one-connection HTTP/3 case completes 128 one-byte uploads; its instrumented
 attribution records 128/128 body pumps joined, and each of the three complete
 matrix repeats returns 128/128 responses matching Hypercorn.
-See the [current evidence](coverage.md#current-full-verification-473-cases).
+See the [current evidence](coverage.md#current-full-verification-485-cases).
 
 Lifespan has a dedicated cleanup tracker. Its main native task remains outside
 that tracker while startup and shutdown run, so request cleanup does not wait

@@ -1,0 +1,255 @@
+{
+  "artifacts": [
+    {
+      "bytes": 1370,
+      "path": "coverage-mcp-full-response-isolated.json",
+      "sha256": "8ed965e347cf216e43d243c2bf933394a79ae73c863ed85392cf981c6539d126"
+    },
+    {
+      "bytes": 1214,
+      "path": "coverage-mcp-pages-isolated.json",
+      "sha256": "160768711aa59e07745f33b8b6fc890aee242b5eded7261285c604fac87fddd8"
+    },
+    {
+      "bytes": 1140,
+      "path": "coverage-mcp-receipt-isolated.json",
+      "sha256": "e144b9f05efba237be18466d911b0fec020d91503e367db8af727767ba372089"
+    },
+    {
+      "bytes": 396,
+      "path": "coverage-report-isolated.json.context.json",
+      "sha256": "9f267dc226d018994ceb31f0ed872ecbd1766eaa34660aa5ea44fc4d5a5ae9fb"
+    },
+    {
+      "bytes": 2853186,
+      "path": "coverage-report-isolated.json.gz",
+      "sha256": "1fdb40be69024d0e759c25cd09c285f807d9e98a30fa2b05457ffa21ee823bda"
+    },
+    {
+      "bytes": 20541519,
+      "path": "full-matrix-artifacts-isolated.tar.gz",
+      "sha256": "44fd3ccf61a982923c8bf6c8fd0219f74358e54c228f77da4a758315ffcf98db"
+    },
+    {
+      "bytes": 324051,
+      "path": "normal-exclusion-audit-final.tar.gz",
+      "sha256": "0268d12eee531ddd4a70e7310551932ba72a87682d313123416fc5bb17a869b6"
+    },
+    {
+      "bytes": 36874,
+      "path": "normal-exclusion-receipt-final.json",
+      "sha256": "c209449bc6cac96e3767c61643604e87a6ed169684fd215d472187870f2ef49a"
+    },
+    {
+      "bytes": 32063,
+      "path": "normal-parity-isolated.json.gz",
+      "sha256": "588dbd92209ee83770f9071ce1938aca4cf0fbba0a26bc2ab9b6028eb95d22e0"
+    },
+    {
+      "bytes": 1135,
+      "path": "offline-validation.json",
+      "sha256": "7f7e9cdd70a1ba7099e50ce1ccfa54e31b63ed6a77ab26c937bdd6c1ab56fc0a"
+    },
+    {
+      "bytes": 947,
+      "path": "preliminary-retry-tolerant/attach-coverage-mcp.log",
+      "sha256": "767d294dbf2e746c32d28c7bf608ab7d6f8606d2c90fa3af75b3d11ec2de6805"
+    },
+    {
+      "bytes": 1361,
+      "path": "preliminary-retry-tolerant/coverage-mcp-full-response.json",
+      "sha256": "e48409e3f614844a509e5dfd577e34892d235bbcc440316c145997fba0f2e5ed"
+    },
+    {
+      "bytes": 1205,
+      "path": "preliminary-retry-tolerant/coverage-mcp-receipt.json",
+      "sha256": "1ff58c3a5d51859a5a9c71a2419df2193fee4d9c32071ad3e7ce317c1ff0a7ae"
+    },
+    {
+      "bytes": 396,
+      "path": "preliminary-retry-tolerant/coverage-report.json.context.json",
+      "sha256": "b4501497dbd2d9424ba36e47e9d1bc72b8ac9d290cb433d4128c16ecb690cf69"
+    },
+    {
+      "bytes": 2881645,
+      "path": "preliminary-retry-tolerant/coverage-report.json.gz",
+      "sha256": "5d90842d6bf55297e70d7af8b680d4875bfee5dc9465c35b422a6bb1e530569a"
+    },
+    {
+      "bytes": 44073,
+      "path": "preliminary-retry-tolerant/run.log",
+      "sha256": "bd3e3d26b110fd4e30786c8e0f7fa8525bd0cede8ae29b0ecd13a74b32c6c6bf"
+    },
+    {
+      "bytes": 42800,
+      "path": "run-isolated.log",
+      "sha256": "8be4a910ce43041da1d4f2a88404154beee0a85527d101a0d202bba250d29c41"
+    },
+    {
+      "bytes": 1498,
+      "path": "tls-websocket-isolation-diagnostics.json",
+      "sha256": "53db8b0651c39cbb81657387dccdd9deaf2a38bd8faee4a66446409c397f8390"
+    },
+    {
+      "bytes": 1645,
+      "path": "wheel-consumer-isolated.json",
+      "sha256": "b63e0f32320d313a207ffeef0dd97211f1b384583279bfb3d364abd29bd71692"
+    }
+  ],
+  "checkout": {
+    "dirty": true,
+    "revision": "cc402eeca7adee56ce0a1606d957a4404a250a67"
+  },
+  "coverage_mcp": {
+    "coverage": {
+      "covered": 5106,
+      "metric": "regions",
+      "missing": 0,
+      "total": 5106
+    },
+    "gap_groups": 0,
+    "metric": "regions",
+    "report_sha256_compressed": "1fdb40be69024d0e759c25cd09c285f807d9e98a30fa2b05457ffa21ee823bda",
+    "report_sha256_uncompressed": "457ae9d02ae1bee0f5f6d7a75315fb162b0b9c14c02bb50e721f2ca9fd64067b",
+    "source": "matches_receipt",
+    "status": "measured",
+    "tests": "passed"
+  },
+  "instrumented_build": {
+    "build_id": "b90d8c1eba8f88fb6257796a6ad5759ec2a25776f7dbceb2d7ada1369ae89300",
+    "cargo_llvm_cov": "cargo-llvm-cov 0.8.7",
+    "machine": "arm64",
+    "native_extension_sha256": "e119bcf50aa15cdd9f6d3462f857c5eda237dfc23fef18aab8f3389408cd8e08",
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "python": "3.12.13",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "inventory": {
+    "cases": 485,
+    "input_files": 70,
+    "manifest_sha256": "2f881d611d74dac07568b4b7baa8e769656cb09d78d6cf0f91e86e1ab3feafee",
+    "operations": 66,
+    "oracle_parity_cases": 233,
+    "target_only_contracts": 252
+  },
+  "known_limits": [
+    "The official ASGI conformance suite was not run.",
+    "Cross-name HTTP response header order is a known H1/H2 ASGI deviation; the H3 client exposes HeaderMap iteration rather than raw wire order. Comparisons check repeated values per name.",
+    "This archive is dirty-checkout local evidence, not a clean release baseline.",
+    "It does not establish a performance improvement or complete HTTP security coverage."
+  ],
+  "normal_build_exclusion": {
+    "checks_passed": 16,
+    "checks_total": 16,
+    "native_extension_sha256": "c26e55e15cd290fff44edf3212115577bced7fe2459da83955361fcc1fb1f98b",
+    "parity_ci_evidence_check": "passed for the 233-case public result after comparison-projection fix",
+    "registered_fault_points_absent": 221,
+    "selected_cases": [
+      "http1.scope-query-header-and-body",
+      "support.http1.response-header-capacity-error-recovers",
+      "support.websocket.accept-header-capacity-error-recovers"
+    ],
+    "status": "passed",
+    "workflows": {
+      "live_oracle_parity": 1,
+      "native_injection_fault_contracts": 0,
+      "public_target_support_contracts": 2
+    }
+  },
+  "normal_wheel": {
+    "cli_tls_shutdown_status": "passed",
+    "consumer_status": "passed",
+    "filename": "uvicorn_rs-0.1.0-cp39-abi3-macosx_11_0_arm64.whl",
+    "native_extension_sha256": "c26e55e15cd290fff44edf3212115577bced7fe2459da83955361fcc1fb1f98b",
+    "parity_ci_evidence_check": "passed",
+    "platform": "darwin",
+    "public_parity": {
+      "executed": 233,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 233,
+      "selected": 233
+    },
+    "python": "3.12.13 (main, Jun 23 2026, 15:44:24) [Clang 22.1.3 ]",
+    "wheel_sha256": "8c33d0abccef25d7f07b662d18b01703908707b933f0f705c1adc58ee52fa9e2"
+  },
+  "recorded_at": "2026-10-07T06:02:09.525Z",
+  "schema": "uvicorn-rs-asgi-inventory-evidence@1",
+  "source": {
+    "aggregate_source_input_sha256": "659aa556ae54bbce2849b43a4453176fe5bc06267b1ea224e4393e84072c7885",
+    "scope": "default-feature src/lib.rs with cfg(coverage); Python, dependencies, optional diagnostics, other features and platforms excluded",
+    "src_lib_sha256": "91e022d9fd0154ebe76a2932a23284c23b0521d642f2f9da517b644e7bfaff71",
+    "tracked_input_file_hashes": 83
+  },
+  "status": "passed",
+  "tls_websocket_isolation": "The final three no-retry repeats passed after isolating the TLS WebSocket scope-close case at a fresh server lifetime; focused diagnostic data is preserved separately.",
+  "unified_matrix": {
+    "attribution": {
+      "executed": 485,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 485,
+      "selected": 485
+    },
+    "coverage": {
+      "lines": {
+        "covered": 3606,
+        "missing": 0,
+        "total": 3606
+      },
+      "regions": {
+        "covered": 5106,
+        "missing": 0,
+        "total": 5106
+      }
+    },
+    "profile_union_matches_attribution": true,
+    "repeats": [
+      {
+        "infrastructure_retries": 0,
+        "run": 1,
+        "run_id": "5518af3b5b574f2eac051d0ba139b3f1",
+        "sha256": "fce8894c98e6ea47ba12d93e21b89f2c7b366ce822c0af5516fbecca5ad4d279",
+        "summary": {
+          "executed": 485,
+          "failed": 0,
+          "infrastructure_failed": 0,
+          "not_run": 0,
+          "passed": 485,
+          "selected": 485
+        }
+      },
+      {
+        "infrastructure_retries": 0,
+        "run": 2,
+        "run_id": "5a9df97b44e549c397e4e0eb336d3973",
+        "sha256": "a5b312f6e9e5666301fb3b56f056578ba0c3588a45ecc02980f0578a0aa2a352",
+        "summary": {
+          "executed": 485,
+          "failed": 0,
+          "infrastructure_failed": 0,
+          "not_run": 0,
+          "passed": 485,
+          "selected": 485
+        }
+      },
+      {
+        "infrastructure_retries": 0,
+        "run": 3,
+        "run_id": "efab890791b94896a2e6ba8128f65b88",
+        "sha256": "e3c2e879674721e4fec45cc346d46d2046c5ad633a91814d41dd361329f44704",
+        "summary": {
+          "executed": 485,
+          "failed": 0,
+          "infrastructure_failed": 0,
+          "not_run": 0,
+          "passed": 485,
+          "selected": 485
+        }
+      }
+    ],
+    "repeats_required": 3
+  }
+}

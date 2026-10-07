@@ -490,6 +490,42 @@
       }
     },
     {
+      "case_id": "http1.scope-duplicate-header-order-and-raw-uri",
+      "profile": "http1",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/raw%20space-%C3%A9?tag=second&tag=first&plus=a+b&escaped=%2B",
+        "headers": [
+          [
+            "x-duplicate",
+            "second"
+          ],
+          [
+            "x-duplicate",
+            "first"
+          ],
+          [
+            "x-duplicate",
+            "third"
+          ],
+          [
+            "cookie",
+            "second=2"
+          ],
+          [
+            "cookie",
+            "first=1"
+          ]
+        ],
+        "body_base64": "",
+        "raw_headers": true
+      }
+    },
+    {
       "case_id": "http1.response-body-fields-default-empty",
       "profile": "http1",
       "operation": "http.response-empty-body",
@@ -4883,6 +4919,39 @@
           "c2Vjb25kLWNodW5r"
         ],
         "hold_until_shutdown": true
+      }
+    },
+    {
+      "case_id": "support.http1.asgi-http-spec-version-2-5",
+      "profile": "http1",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "public.asgi-spec-version",
+        "contract": "asgi-spec-version-2.5"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/asgi-version",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.response-headers-preserve-duplicate-value-order",
+      "profile": "http1",
+      "operation": "http.response-headers",
+      "covers": [
+        "http.response-headers"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-headers-order",
+        "headers": [],
+        "body_base64": ""
       }
     }
   ]

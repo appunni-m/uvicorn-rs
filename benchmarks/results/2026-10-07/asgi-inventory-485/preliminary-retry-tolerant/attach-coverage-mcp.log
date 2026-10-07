@@ -1,0 +1,24 @@
+{
+  "report": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/2026-10-07/asgi-inventory-485/coverage-report.json",
+  "coverage_mcp": {
+    "status": "measured",
+    "measurement_path": "benchmarks/results/2026-10-07/asgi-inventory-485/coverage-report.json",
+    "metric": "regions",
+    "source": "matches_receipt",
+    "recorded_revision": "cc402eeca7adee56ce0a1606d957a4404a250a67",
+    "build_id": "b90d8c1eba8f88fb6257796a6ad5759ec2a25776f7dbceb2d7ada1369ae89300",
+    "tests": "passed",
+    "coverage": {
+      "covered": 5106,
+      "metric": "regions",
+      "missing": 0,
+      "total": 5106
+    },
+    "group_count": 0,
+    "groups": [],
+    "location_samples_are_bounded": true,
+    "pages": 1,
+    "receipt_artifact": "benchmarks/results/2026-10-07/asgi-inventory-485/coverage-mcp-receipt.json"
+  },
+  "receipt": "/Users/lazytrot/work/uvicorn-rs/benchmarks/results/2026-10-07/asgi-inventory-485/coverage-report.json.context.json"
+}

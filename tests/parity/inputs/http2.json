@@ -230,14 +230,54 @@
         "headers": [
           [
             "x-duplicate",
+            "second"
+          ],
+          [
+            "x-duplicate",
+            "first"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.scope-raw-uri-authority-and-host",
+      "profile": "http2",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/raw%20space-%C3%A9?tag=second&tag=first&plus=a+b&escaped=%2B",
+        "headers": [
+          [
+            "x-duplicate",
+            "second"
+          ],
+          [
+            "x-duplicate",
             "first"
           ],
           [
             "x-duplicate",
-            "second"
+            "third"
+          ],
+          [
+            "host",
+            "supplied-host.example.test"
+          ],
+          [
+            "cookie",
+            "second=2"
+          ],
+          [
+            "cookie",
+            "first=1"
           ]
         ],
-        "body_base64": ""
+        "body_base64": "",
+        "authority": "supplied-host.example.test"
       }
     },
     {
@@ -410,6 +450,39 @@
         "wait_event": "http.disconnect.waiting-after-complete-upload",
         "wait_event_after_disconnect": "http.disconnect.after-complete-upload:http.disconnect",
         "reset_stream": true
+      }
+    },
+    {
+      "case_id": "support.http2.asgi-http-spec-version-2-5",
+      "profile": "http2",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "public.asgi-spec-version",
+        "contract": "asgi-spec-version-2.5"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/asgi-version",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-headers-preserve-duplicate-value-order",
+      "profile": "http2",
+      "operation": "http.response-headers",
+      "covers": [
+        "http.response-headers"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-headers-order",
+        "headers": [],
+        "body_base64": ""
       }
     }
   ]

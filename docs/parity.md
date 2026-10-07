@@ -1,13 +1,13 @@
 # ASGI server parity suite
 
-The current 473-case matrix passes attribution and three complete repeats with
+The current 485-case matrix passes attribution and three complete repeats with
 zero failures, infrastructure errors, retries, or cases not run. It contains
-225 live oracle comparisons and 248 target-only contracts across 70 input
-files and 64 operations. Native coverage is 5,106/5,106 regions and
+233 live oracle comparisons and 252 target-only contracts across 70 input
+files and 66 operations. Native coverage is 5,106/5,106 regions and
 3,606/3,606 lines; Coverage MCP reports zero gaps with matching source and
-passed test evidence. The normal wheel passes 225/225 public comparisons, and
+passed test evidence. The normal wheel passes 233/233 public comparisons, and
 its normal-build audit passes 16 checks with three selected workflows. See
-[the current source/build receipt](coverage.md#current-full-verification-473-cases).
+[the current source/build receipt](coverage.md#current-full-verification-485-cases).
 Older 451- and 448-case results below are retained as historical evidence and
 do not attest the current source.
 
@@ -25,6 +25,12 @@ version-pinned ASGI server because sockets, protocol state, streaming, and
 lifecycle are part of the contract. Inputs contain stimuli only, not expected
 responses. The Python contract checks validate the matrix and evidence format;
 they are not substitutes for the live behavior comparisons.
+
+The TLS WebSocket scope-close input receives an isolated server lifetime. A
+server-initiated WebSocket close followed by an immediate new TLS connection
+made transport teardown race with the next independent case on both adapters.
+The runner starts a fresh reference and target before this input, so each
+recorded result belongs to the case's own live request sequence.
 
 The historical shared-write inventory contains 448 workflows across 70 input files and 61
 operations: 213 oracle-parity cases and 235 target-only contracts in the
@@ -105,7 +111,7 @@ remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
 The [selected receipt](coverage.md#current-evidence-status) preserves its rich
 observation and identities. The same case passes full attribution and all three
-473-case repeats, and solely covers both formerly missing final-drain spans.
+485-case repeats, and solely covers both formerly missing final-drain spans.
 The `stream_reset` field follows the existing `recv_data` error convention;
 actual remote application close `0x102`, `body_stream_error`,
 `connection_closed` and cleanup establish connection-error termination and
@@ -137,9 +143,9 @@ or deadline-forced shutdown. They assert `http.disconnect` where the ASGI app
 can still receive, exact response outcomes, fault consumption, pump completion
 or forced join, no unexpected panic, and healthy follow-up/sibling requests.
 These contracts use the existing fault-contract envelope and are reported in
-the same unified matrix; they are not oracle-parity cases. The 473-case source
+the same unified matrix; they are not oracle-parity cases. The 485-case source
 passes attribution and all three repeats with 5,106/5,106 regions and
-3,606/3,606 lines covered. The normal wheel separately passes all 225 public
+3,606/3,606 lines covered. The normal wheel separately passes all 233 public
 oracle cases. The fixed [coverage archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
 retains both evidence sets and the Coverage-MCP receipt.
 
@@ -304,6 +310,9 @@ The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
 
+See the [ASGI behavior inventory](asgi-case-inventory.md) for the declared
+surface mapped to concrete public case IDs and explicit gaps.
+
 `tests/parity/manifest.json` indexes input-only case files under
 `tests/parity/inputs/`; a file can hold multiple cases for one profile. Inputs
 contain request methods, paths, headers, body bytes, WebSocket messages,
@@ -316,6 +325,20 @@ adapter uses its `asgi:` selector. Both then execute the same callable under
 the ASGI 3 contract. The profile split keeps protocol-specific stimulus easy
 to review; the runner also checks the indexed-file set against the files on
 disk.
+
+The `http.response-headers` operation records ordered wire fields but compares
+duplicate values in order within each header name. The Rust `http::HeaderMap`
+representation and current HTTP serializers do not retain interleaving between
+different header names. A live interleaved-header probe showed that H1/H2
+differ from their reference; this is a documented ASGI response-ordering gap,
+not a passing full-order conformance claim. See the
+[support matrix](support-matrix.md#supported-behaviors).
+For this operation, manifest `observe` retains the wire order and its optional
+`compare` list selects the normalized fields used for parity; other operations
+compare every observed field by default. The offline CI evidence checker uses
+the same comparison projection while still requiring the full observed fields
+to be present in both live observations.
+
 The previous combined input is retained in `tests/parity/archive/` because an
 older result artifact records its digest.
 

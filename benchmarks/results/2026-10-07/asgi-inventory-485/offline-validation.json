@@ -1,0 +1,30 @@
+{
+  "schema": "uvicorn-rs-offline-evidence-validation@1",
+  "coverage": {
+    "command": "scripts/check_ci_evidence.py --offline coverage",
+    "status": "passed",
+    "cases": 485,
+    "complete_repeats": 3,
+    "native_regions": {"covered": 5106, "total": 5106, "missing": 0},
+    "native_lines": {"covered": 3606, "total": 3606, "missing": 0},
+    "coverage_mcp": "measured",
+    "source_sha256": "659aa556ae54bbce2849b43a4453176fe5bc06267b1ea224e4393e84072c7885"
+  },
+  "normal_parity": {
+    "command": "scripts/check_ci_evidence.py parity",
+    "status": "passed",
+    "cases": 233,
+    "native_sha256": "c26e55e15cd290fff44edf3212115577bced7fe2459da83955361fcc1fb1f98b"
+  },
+  "normal_build_exclusion": {
+    "status": "passed",
+    "checks_passed": 16,
+    "checks_total": 16,
+    "selected_workflows": 3,
+    "registered_fault_points_absent": 221
+  },
+  "limits": [
+    "Coverage evidence was validated offline from the compressed archive after its full matrix artifact bundle was restored at the recorded repository paths.",
+    "The source checkout was dirty; these checks do not establish a clean release candidate."
+  ]
+}

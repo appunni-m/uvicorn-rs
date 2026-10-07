@@ -1,0 +1,36 @@
+{
+  "schema": "uvicorn-rs-tls-websocket-diagnostic@1",
+  "case_order": [
+    "websocket-tls.scope-headers-path-query-and-subprotocols",
+    "websocket-tls.text-round-trip-with-query-and-subprotocol"
+  ],
+  "pre_isolation_observation": {
+    "failure": "The second case intermittently timed out while awaiting the TLS WebSocket handshake response, before its ASGI scope was entered.",
+    "full_matrix": {
+      "repeat_1": "one infrastructure timeout, then the configured retry passed",
+      "repeat_2": "passed without retry",
+      "repeat_3": "one infrastructure timeout, then the configured retry passed"
+    },
+    "both_adapters_observed": "Focused diagnostics recorded a target-side timeout and a Uvicorn-reference-side timeout on separate runs."
+  },
+  "isolation": {
+    "change": "The parity runner gives the server-initiated WebSocket scope-close case a fresh reference and target server lifetime.",
+    "artificial_delay_added": false,
+    "focused_pair_runs": {
+      "count": 5,
+      "cases_per_run": 2,
+      "passed_per_run": 2,
+      "infrastructure_failures": 0
+    }
+  },
+  "final_no_retry_gate": {
+    "cases": 485,
+    "attribution": "485/485",
+    "full_repeats": ["485/485", "485/485", "485/485"],
+    "failures": 0,
+    "infrastructure_errors": 0,
+    "retries": 0,
+    "not_run": 0
+  },
+  "interpretation": "The evidence supports isolating profile-level TLS listener reuse around WebSocket shutdown. It does not show an ASGI behavior mismatch or a target-only defect."
+}

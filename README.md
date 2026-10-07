@@ -8,15 +8,19 @@ asyncio event loop and ASGI tasks.
 This remains an experimental prototype. The last accepted performance report
 measured a 1.59× gain on one fixed WebSocket handshake workload; it does not
 establish a general speedup, and those timings predate the current source.
-Current source correctness is documented in the [473-case report](docs/coverage.md#current-full-verification-473-cases):
-473/473 attributed workflows and three 473/473 repeats pass, with 5,106/5,106
-Rust regions and 3,606/3,606 lines covered. The normal wheel passes all 225
-public oracle cases and its 16-check exclusion audit. The unified report, exact
-Coverage-MCP receipt, normal parity output, and wheel audit are preserved in
-the [evidence archive](benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/evidence-index.json).
+Current source correctness is documented in the [485-case report](docs/coverage.md#current-full-verification-485-cases):
+485/485 attributed workflows and three 485/485 repeats pass, with 5,106/5,106
+Rust regions and 3,606/3,606 lines covered. The matrix contains 233 live oracle
+comparisons and 252 target-only contracts across 70 input files and 66
+operations. The normal wheel passes all 233 public oracle cases and its
+16-check exclusion audit. The unified report, exact Coverage-MCP receipt,
+normal parity output, wheel consumer result, and audit are preserved in the
+[2026-10-07 evidence archive](benchmarks/results/2026-10-07/asgi-inventory-485/evidence-index.json).
 These local results come from a dirty macOS ARM64 checkout; they are not a clean
 release baseline. The complete official ASGI conformance suite and a production
-security review have not been run.
+security review have not been run. The [support matrix](docs/support-matrix.md)
+records the declared limits, the known H1/H2 response-header ordering
+deviation, and the unverified H3 wire-order behavior.
 
 `uvicorn-rs` is the project name used by the supplied GitHub repository and is
 not affiliated with the Uvicorn project. `starlette-rs` is an optional,

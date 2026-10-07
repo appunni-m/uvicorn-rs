@@ -1,6 +1,6 @@
 # ADR 0001: Rust network runtime and Python asyncio bridge
 
-- **Status:** Accepted for the protocol prototype. Historical receive-fast-path measurements remain scoped to their recorded builds. The October 4 matrix was contended, and the October 5 optimization comparison has no accepted general speedup. Current 473-case correctness evidence and 225/225 normal-wheel parity are recorded in the [coverage report](../coverage.md#current-full-verification-473-cases). The source remains experimental and is not approved as a general performance replacement or production server.
+- **Status:** Accepted for the protocol prototype. Historical receive-fast-path measurements remain scoped to their recorded builds. The October 4 matrix was contended, and the October 5 optimization comparison has no accepted general speedup. Current 485-case correctness evidence and 233/233 normal-wheel parity are recorded in the [coverage report](../coverage.md#current-full-verification-485-cases). The source remains experimental and is not approved as a general performance replacement or production server.
 - **Date:** 2026-10-02
 - **Project name:** `uvicorn-rs`, taken from the GitHub repository URL supplied by the owner. The CLI name is `uvicorn-rs` and the Python import name is `uvicorn_rs`. This project is independent and is not affiliated with Uvicorn.
 
@@ -104,8 +104,8 @@ Hypercorn. QUIC transport `CONNECTION_CLOSE` behavior is unverified.
 
 The task-reaping source joins completed H3 request tasks during acceptance and
 retains final draining of owned tasks after an acceptance error. The current
-matrix declares 473 cases across 70 input files and 64 operations: 225 public
-comparisons and 248 target-only contracts. Its held-response accept-error
+matrix declares 485 cases across 70 input files and 66 operations: 233 public
+comparisons and 252 target-only contracts. Its held-response accept-error
 workflow uses the existing point to require remote `0x102`, actual incomplete
 body/stream failure, cancellation diagnostics before the original error,
 Python cleanup and a healthy fresh request. A selected instrumented public
@@ -119,10 +119,10 @@ missing final-drain spans are covered solely by the held-response case. Its
 remote `ApplicationClosed(0x102)`, body-stream error, connection closure and
 cleanup establish connection-error termination/cancellation; `stream_reset`
 alone follows a client error convention and does not identify a QUIC
-`RESET_STREAM` frame. The current normal wheel passes 225/225 public
+`RESET_STREAM` frame. The current normal wheel passes 233/233 public
 comparisons plus all 16 exclusion checks with three selected live cases. Its
 maintained identity remains unchanged after public parity and the audit.
-See [current evidence](../coverage.md#current-full-verification-473-cases).
+See [current evidence](../coverage.md#current-full-verification-485-cases).
 
 The request-body-pump work closes the detached-task ownership gap separately
 from H3 request-task reaping. `ServerContext` owns body pumps in a `JoinSet`;
