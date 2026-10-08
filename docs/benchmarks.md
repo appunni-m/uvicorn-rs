@@ -10,6 +10,8 @@ capacity tests. They measure the combined server, Python ASGI app, event loops,
 protocol implementation, client, and host. Use the same machine, checkout,
 Python environment, workloads, and load parameters for comparisons. Do not run
 other builds, tests, benchmarks, emulators, or CPU-heavy jobs at the same time.
+The automated matrix evaluates each matched candidate/reference pair on one
+system; report results per system and never compare absolute rates across machines.
 Run one category at a time; each runner serializes samples and shuffles server
 configuration order within a repetition using the supplied seed.
 
@@ -40,12 +42,48 @@ results and rerun gate. Do not label candidate-only rows as cross-server wins.
 
 ## Machine and environment
 
-The recorded reference environment is Apple M3 Pro / macOS 15.7.7, CPython
+The historical local reference environment is Apple M3 Pro / macOS 15.7.7, CPython
 3.12.13, Rust 1.98.1, Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0, and
-Hypercorn 0.18.0. It is one data point, not a supported-platform claim. CPU
+Hypercorn 0.18.0. It is one data point, not a supported-platform claim. The
+automated hosted matrix below reports independent Linux x86_64, Linux arm64,
+and macOS arm64 runs. CPU
 percentages are process CPU divided by wall time: 100% is one fully occupied
 logical core. Server and client CPU are reported separately where the runner can
 sample both; loopback load clients can themselves become the bottleneck.
+
+### Automated multi-system matrix
+
+The [ASGI performance matrix workflow](../.github/workflows/benchmark-categories.yml)
+runs on benchmark-harness changes pushed to `main`, weekly, or by manual
+dispatch. Each hosted job builds the same commit with CPython 3.12.13, Rust
+1.98.1, the locked Python dependencies, the normal release server wheel, and the
+same protocol clients. The runners are Ubuntu 24.04 x86_64, Ubuntu 24.04 arm64,
+and macOS 15 arm64. The workflow records the runner image, CPU model and core
+counts, total memory, operating system, architecture, and installed system
+package versions because hosted images and allocations can change.
+
+Each system runs the public parity gate before timed work, then runs all five
+maintained categories sequentially. The default is five repetitions per server;
+the analyzer still requires at least three matching valid repetitions. The
+contention monitor and correctness, process-cleanup, and identity gates remain
+active. Invalid observations are retained and excluded from ratios. If a host
+is noisy, the report shows the missing qualified pairs; rerun the workflow to
+collect a fresh sample set rather than relaxing the gate.
+
+The aggregate validates that all three systems used the same source, harness,
+Python version, and dependency versions. It never averages or ranks rates across
+machines. A separate documentation job opens one update PR containing the
+generated [latest results](benchmark-results.md), a versioned matrix JSON, and
+machine-readable per-system evidence bundles. Repository settings must allow
+the workflow's `GITHUB_TOKEN` to create pull requests. This keeps benchmark
+execution out of ordinary docs builds. Raw workflow artifacts retain detailed logs for 90
+days; the committed bundles retain measurements, analysis, identity, and parity
+receipts for long-term review. A successful correctness-gated run can still
+have zero qualified performance pairs and then makes no speed claim.
+
+Until the first hosted matrix completes, the latest-results page states that
+status explicitly. Historical local measurements below remain tied to their
+own source revisions and must not be read as results for the current commit.
 
 Required tools are `uv`, Python 3.12, Rust/Cargo, a C compiler and `curl-config`
 for the native H1 load client, Node.js for the slow-reader fallback, and
@@ -529,25 +567,30 @@ Run that declared comparison separately:
 Keep a new output path for every attempt. This narrower workload cannot establish
 coverage of the complete H3 benchmark category or remove the earlier failure.
 
-### Manual benchmark CI
+### Hosted benchmark CI
 
-[Manual ASGI category benchmarks](../.github/workflows/benchmark-categories.yml)
-provides the same interface on Ubuntu 24.04 with Python 3.12.13 and Rust 1.98.1.
-It installs stock locked references, builds a normal release server and clients,
-and builds the independent framework wheel at its declared revision outside this
-checkout. It gates the exact binary on every current public parity case before
-timing and uploads preparation, parity and category artifacts even on failure.
-It records hosted image and system package versions; these system dependencies
-are recorded rather than fully pinned. Linux builds receive their own hashes.
+[ASGI performance matrix](../.github/workflows/benchmark-categories.yml)
+runs manually, weekly, and when benchmark-related files change on `main`. It
+uses Linux x86_64, Linux arm64, and macOS arm64 with Python 3.12.13 and Rust
+1.98.1. Each system installs the locked references, builds a normal release
+server and protocol clients, and builds the independent framework wheel at its
+declared revision outside this checkout. It gates the exact binary on every
+current public parity case before timing and uploads preparation, parity, and
+category artifacts even on failure. Hosted image and system package versions
+are recorded, not fully pinned.
 
-The workflow is manual only and has read-only repository permissions. It has
-been added and statically reviewed; hosted execution has not been performed.
-Once registered on the repository's default branch, select **Actions → Manual
-ASGI category benchmarks → Run workflow**, choose the candidate ref and retain
-the downloaded artifact. GitHub's [manual workflow rules](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
-require that registration. Hosted runners provide fresh VMs but do not establish
+After all systems pass their correctness and identity gates, the aggregate job
+checks the source, Python, harness, and dependency identities and keeps platform
+results separate. The documentation job opens or refreshes one PR with the
+generated summary and a versioned evidence archive. Category artifacts retain
+detailed logs for 90 days; the committed evidence bundles retain raw measurement
+rows, analysis, identity, and parity receipts. Hosted VMs do not establish
 dedicated physical hardware or an absence of noisy neighbors; compare servers
-within each run, retaining host contention and client CPU limits.
+within each system and retain host contention and client CPU limits.
+
+To request a run, select **Actions → ASGI performance matrix → Run workflow**
+from `main`. The [results page](benchmark-results.md) links each report to its
+exact workflow run and archived evidence after the docs update PR is merged.
 
 ## Diagnostic counters and profiling
 

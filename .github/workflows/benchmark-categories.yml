@@ -1,6 +1,24 @@
-name: Manual ASGI category benchmarks
+name: ASGI performance matrix
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - pyproject.toml
+      - uv.lock
+      - src/**
+      - python/**
+      - scripts/**
+      - examples/**
+      - tools/http3-probe/**
+      - tests/parity/**
+      - parity/**
+      - .github/workflows/benchmark-categories.yml
+      - docs/benchmarks.md
+  schedule:
+    - cron: "23 3 * * 1"
   workflow_dispatch:
     inputs:
       duration:
@@ -19,8 +37,8 @@ on:
         required: true
         type: string
       repetitions:
-        description: Repetitions per server; at least three are required
-        default: "3"
+        description: Repetitions per server; five are collected and three valid matches are required
+        default: "5"
         required: true
         type: string
       seed:
@@ -33,7 +51,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: manual-asgi-benchmarks-${{ github.ref }}
+  group: asgi-performance-matrix-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -48,9 +66,20 @@ env:
 
 jobs:
   categories:
-    name: Public parity gate and sequential category samples
-    runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    name: ${{ matrix.system.id }} · parity and sequential categories
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        system:
+          - id: linux-x86_64
+            runner: ubuntu-24.04
+          - id: linux-aarch64
+            runner: ubuntu-24.04-arm
+          - id: macos-arm64
+            runner: macos-15
+    runs-on: ${{ matrix.system.runner }}
+    timeout-minutes: 270
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,12 +93,31 @@ jobs:
           enable-cache: true
       - name: Prepare stock benchmark environment and record host tools
         shell: bash
+        env:
+          BENCHMARK_SYSTEM_ID: ${{ matrix.system.id }}
+          BENCHMARK_RUNNER: ${{ matrix.system.runner }}
         run: |
           set -euo pipefail
           mkdir -p target/benchmark-preparation
           exec > >(tee target/benchmark-preparation/environment.log) 2>&1
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcurl4-openssl-dev
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcurl4-openssl-dev
+            dpkg-query -W build-essential pkg-config libssl-dev libcurl4-openssl-dev > target/benchmark-preparation/system-packages.txt
+            lscpu
+            cpu_model="$(lscpu -J | python3 -c 'import json,sys; print(next((item["data"] for item in json.load(sys.stdin)["lscpu"] if item["field"].strip(":") == "Model name"), "unknown"))')"
+          else
+            brew install curl pkg-config openssl@3
+            brew_paths="$(brew --prefix curl)/bin:$(brew --prefix openssl@3)/bin"
+            echo "$brew_paths" | tr ':' '\n' >> "$GITHUB_PATH"
+            export PATH="$brew_paths:$PATH"
+            brew list --versions curl pkg-config openssl@3 > target/benchmark-preparation/system-packages.txt
+            system_profiler SPHardwareDataType
+            cpu_model="$(sysctl -n machdep.cpu.brand_string)"
+            sysctl -n hw.physicalcpu hw.logicalcpu
+          fi
+          export BENCHMARK_CPU_MODEL="$cpu_model"
+          printf 'BENCHMARK_CPU_MODEL=%s\n' "$cpu_model" >> "$GITHUB_ENV"
           uv sync --python "$PYTHON_VERSION" --group benchmark --frozen --no-install-project
           uv --version
           .venv/bin/python --version
@@ -80,16 +128,23 @@ jobs:
           curl-config --version
           openssl version
           uname -a
-          lscpu
-          dpkg-query -W build-essential libssl-dev libcurl4-openssl-dev > target/benchmark-preparation/system-packages.txt
           .venv/bin/python - <<'PY'
           import importlib.metadata as metadata
           import json
           import os
           import platform
+          import psutil
           from pathlib import Path
           names = ("uvicorn", "hypercorn", "aioquic", "uvloop", "httptools", "psutil", "h2", "h11", "websockets", "anyio", "typing-extensions")
-          report = {"python": platform.python_version(), "platform": platform.platform(),
+          report = {"system_id": os.environ["BENCHMARK_SYSTEM_ID"],
+                    "runner_label": os.environ["BENCHMARK_RUNNER"],
+                    "os": platform.system(), "architecture": platform.machine(),
+                    "cpu_model": os.environ.get("BENCHMARK_CPU_MODEL", "unknown"),
+                    "logical_cpu_count": os.cpu_count(),
+                    "physical_cpu_count": psutil.cpu_count(logical=False),
+                    "memory_total_bytes": psutil.virtual_memory().total,
+                    "python": platform.python_version(), "platform": platform.platform(),
+                    "framework_revision": os.environ["FRAMEWORK_REVISION"],
                     "packages": {name: metadata.version(name) for name in names},
                     "hosted_runner": {name: os.environ.get(name) for name in ("ImageOS", "ImageVersion", "RUNNER_ARCH", "RUNNER_NAME")},
                     "limits": ["Fresh hosted VM, not dedicated hardware or an assurance of no noisy neighbors.",
@@ -196,11 +251,11 @@ jobs:
       - name: Run every maintained category sequentially and analyze matching valid repetitions
         shell: bash
         env:
-          BENCHMARK_DURATION: ${{ inputs.duration }}
-          BENCHMARK_WARMUP: ${{ inputs.warmup }}
-          BENCHMARK_CONCURRENCY: ${{ inputs.concurrency }}
-          BENCHMARK_REPETITIONS: ${{ inputs.repetitions }}
-          BENCHMARK_SEED: ${{ inputs.seed }}
+          BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
+          BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
+          BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
+          BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
+          BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_benchmark_categories.py \
@@ -227,9 +282,121 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: asgi-category-benchmarks-${{ github.run_id }}-${{ github.run_attempt }}
+          name: asgi-category-benchmarks-${{ matrix.system.id }}
           path: |
             target/benchmark-preparation/
             target/benchmark-categories/
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 90
+
+  aggregate:
+    name: Validate and render the multi-system evidence
+    needs: categories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: asgi-category-benchmarks-*
+          path: target/benchmark-matrix/artifacts
+          merge-multiple: false
+      - name: Validate identities and keep system results separate
+        run: |
+          set -euo pipefail
+          python scripts/aggregate_benchmark_matrix.py \
+            --artifacts target/benchmark-matrix/artifacts \
+            --output-dir target/benchmark-matrix/aggregate \
+            --commit "$GITHUB_SHA" --repository "$GITHUB_REPOSITORY" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            | tee target/benchmark-matrix/aggregation.json
+          cat target/benchmark-matrix/aggregate/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: asgi-benchmark-matrix-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/benchmark-matrix/aggregate/
+          if-no-files-found: error
+          retention-days: 90
+
+  update-docs:
+    name: Open a docs update with the immutable benchmark snapshot
+    needs: aggregate
+    if: github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+          name: asgi-benchmark-matrix-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/benchmark-matrix/aggregate
+      - name: Add the per-run snapshot and historical evidence bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_key="${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          result_dir="benchmarks/results/hosted/${run_key}"
+          mkdir -p "$result_dir"
+          cp target/benchmark-matrix/aggregate/matrix.json "$result_dir/matrix.json"
+          cp target/benchmark-matrix/aggregate/evidence/*.tar.gz "$result_dir/"
+          cp target/benchmark-matrix/aggregate/report.md docs/benchmark-results.md
+          sed \
+            -e "s#../benchmarks/results/hosted/${run_key}/#./#g" \
+            -e 's#](benchmarks.md)#](../../../../docs/benchmarks.md)#g' \
+            target/benchmark-matrix/aggregate/report.md > "$result_dir/report.md"
+          (cd "$result_dir" && shasum -a 256 matrix.json report.md ./*.tar.gz > SHA256SUMS)
+      - name: Propose the updated results documentation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="automation/benchmark-results"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "+refs/heads/$branch:refs/remotes/origin/$branch" || true
+          git checkout -B "$branch" "$GITHUB_SHA"
+          run_key="${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}"
+          git add docs/benchmark-results.md "benchmarks/results/hosted/${run_key}"
+          git commit -m "docs: archive hosted benchmark results"
+          if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+            previous="$(git rev-parse "refs/remotes/origin/$branch")"
+            git push --force-with-lease="refs/heads/$branch:$previous" origin "HEAD:refs/heads/$branch"
+          else
+            git push origin "HEAD:refs/heads/$branch"
+          fi
+          body="$RUNNER_TEMP/benchmark-results-pr.md"
+          cat > "$body" <<EOF
+          ## Benchmark documentation update
+
+          This updates the generated per-system benchmark summary and archives the machine-readable result bundle for workflow run ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT}, commit ${GITHUB_SHA}.
+
+          The matrix passed the public parity gate on Linux x86_64, Linux arm64, and macOS arm64. Measurements remain separate by system; invalid rows are retained and excluded from qualified comparisons.
+
+          Review [the generated report](docs/benchmark-results.md) and [the archived result index](benchmarks/results/hosted/${GITHUB_RUN_ID}-attempt-${GITHUB_RUN_ATTEMPT}/matrix.json).
+          EOF
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$branch" --base main --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            gh pr edit "$existing" --repo "$GITHUB_REPOSITORY" \
+              --title "docs: refresh multi-system benchmark results" --body-file "$body"
+          else
+            gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+              --title "docs: refresh multi-system benchmark results" --body-file "$body"
+          fi

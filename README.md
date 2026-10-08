@@ -114,6 +114,7 @@ the license texts retain the original Uvicorn and Hypercorn notices.
 - [ASGI support matrix](docs/support-matrix.md)
 - [Input-only server parity suite](docs/parity.md)
 - [Reproducible full benchmark setup and commands](docs/benchmarks.md)
+- [Latest multi-system benchmark results](docs/benchmark-results.md)
 - [Release candidate workflow and artifact checks](docs/releases.md)
 - [Performance feasibility and raw results](docs/feasibility.md)
 - [October 5 performance investigation](docs/performance-investigation-2026-10-05.md)
