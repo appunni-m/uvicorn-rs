@@ -199,7 +199,8 @@ jobs:
             --workloads fastapi-validated-route fastapi-python-cpu \
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
             --concurrency "$BENCHMARK_CONCURRENCY" --repetitions "$BENCHMARK_REPETITIONS" \
-            --seed "$BENCHMARK_SEED" 2>&1 | tee target/benchmark-preparation/fastapi-categories-driver.log
+            --seed "$BENCHMARK_SEED" --category-timeout 5400 \
+            2>&1 | tee target/benchmark-preparation/fastapi-categories-driver.log
       - name: Run every maintained category sequentially and analyze matching valid repetitions
         shell: bash
         env:
@@ -216,7 +217,8 @@ jobs:
             --output-dir target/benchmark-categories \
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
             --concurrency "$BENCHMARK_CONCURRENCY" --repetitions "$BENCHMARK_REPETITIONS" \
-            --seed "$BENCHMARK_SEED" 2>&1 | tee target/benchmark-preparation/categories-driver.log
+            --seed "$BENCHMARK_SEED" --category-timeout 5400 \
+            2>&1 | tee target/benchmark-preparation/categories-driver.log
       - name: Retain or recover analysis for an interrupted category run
         if: always()
         shell: bash

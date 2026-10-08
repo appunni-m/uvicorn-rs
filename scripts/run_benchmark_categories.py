@@ -308,7 +308,10 @@ def main():
     parser.add_argument("--concurrency", type=positive_integer, default=64)
     parser.add_argument("--repetitions", type=positive_integer, default=3)
     parser.add_argument("--seed", type=int, default=20261005)
-    parser.add_argument("--category-timeout", type=positive_seconds, default=1200.0)
+    # Five repeats of the expanded HTTP/1 workload plan can exceed 20 minutes
+    # before host startup, shutdown, and resource sampling overhead is counted.
+    # Keep the category bounded while allowing the planned rows to finish.
+    parser.add_argument("--category-timeout", type=positive_seconds, default=5400.0)
     parser.add_argument("--category", action="append", choices=[label for label, _, _ in CATEGORIES],
                         help="run selected category only; repeat to select more than one (default: all categories)")
     parser.add_argument("--workloads", nargs="+",
