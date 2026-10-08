@@ -26,7 +26,6 @@ from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_c
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv" / "bin" / "python"
-MANIFEST = ROOT / "tools" / "http3-probe" / "Cargo.toml"
 CLIENT = ROOT / "tools" / "http3-probe" / "target" / "release" / "websocket"
 WORKLOADS = {
     "connection-handshake": {
@@ -183,9 +182,8 @@ def main() -> None:
     args = parser.parse_args()
     assert_clean_coverage_environment()
     selected_servers = {name: SERVERS[name] for name in args.servers}
-    subprocess.run(["cargo", "build", "--release", "--manifest-path", str(MANIFEST), "--bin", "websocket"], check=True)
     if not CLIENT.exists():
-        raise SystemExit(f"WebSocket benchmark client was not built: {CLIENT}")
+        raise SystemExit(f"prebuild the WebSocket benchmark client before identity capture: {CLIENT}")
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
         ["scripts/run_websocket_category_bench.py", "tools/http3-probe/src/bin/websocket.rs",

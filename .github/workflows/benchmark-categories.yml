@@ -242,6 +242,7 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_parity.py \
+            --prebuilt-http3-client \
             --output target/benchmark-preparation/parity.json \
             2>&1 | tee target/benchmark-preparation/parity.log
       - name: Run every maintained category sequentially and analyze matching valid repetitions

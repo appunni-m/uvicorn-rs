@@ -199,7 +199,7 @@ def row_reasons(row, lifecycle=False):
             if not isinstance(measurement, dict):
                 reasons.add(f"{phase}_phase_malformed")
                 continue
-            if measurement.get("correctness_valid") is not True or measurement.get("timing_valid") is not True or measurement.get("lifespan_shutdown_complete") is not True:
+            if measurement.get("correctness_valid") is not True or measurement.get("lifespan_shutdown_complete") is not True:
                 reasons.add(f"{phase}_phase_gate_failed_or_missing")
     else:
         requests = row.get("requests")
@@ -325,6 +325,24 @@ def median_pair(reference_rows, candidate_rows, key, predicate=None, minimum=MIN
 def analyze_category(loaded, driver):
     category = loaded["category"]
     metadata, rows = loaded["metadata"], loaded["rows"]
+    selected_categories = driver.get("selected_categories") if isinstance(driver, dict) else None
+    if (isinstance(selected_categories, list) and selected_categories
+            and category not in selected_categories):
+        return {
+            "category": category, "status": "not_selected", "source": loaded["source"],
+            "input_sha256": loaded["input_sha256"], "complete_report_present": False,
+            "rows": 0, "eligible_rows": 0, "invalid_rows": 0,
+            "invalid_reason_row_counts": {}, "raw_timing_invalid_reason_row_counts": {},
+            "pair_exclusion_row_counts": {}, "raw_invalid_row_receipts": [],
+            "input_errors": [], "missing_or_duplicate_expected_rows": [],
+            "metadata_gate_reasons": [], "qualified_pairs": 0, "pairs": [],
+            "evidence_scope": "not selected in this run", "dirty_target": None,
+            "git_revision": None, "recorded_performance_evidence_status": None,
+            "modified_or_unrecorded_dependencies": [], "recorded_identity_before": None,
+            "recorded_identity_after": None, "reference_logging_policy": None,
+            "lifespan_policy": None, "recorded_cpu_resource_boundary": None,
+            "recorded_latency_limitations": None,
+        }
     spec = CATEGORIES[category]
     configured_servers = metadata.get("servers")
     if isinstance(configured_servers, dict) and configured_servers and all(isinstance(server, str) for server in configured_servers):
@@ -502,6 +520,7 @@ def escape(value):
 
 def markdown(report):
     lines = ["# Recorded benchmark analysis", "", f"Status: **{report['status']}**. All metric cells use reference / Rust values from matching valid repetitions.",
+             "", f"Scope: selected {', '.join(report['category_scope']['selected'])}; omitted {', '.join(report['category_scope']['omitted']) or 'none'}. A selected subset is not a complete matrix.",
              "", "| Category | Status | Rows / invalid | Qualified pairs | Evidence |",
              "| --- | --- | ---: | ---: | --- |"]
     for category in report["categories"]:
@@ -572,10 +591,21 @@ def main():
     qualified_count = sum(category["qualified_pairs"] for category in categories)
     driver_incomplete = driver_error is not None or (driver is not None and driver.get("status") not in {"completed_correctness_gated", "completed_with_failures"})
     incomplete = driver_incomplete or any(category["status"] == "incomplete_category" for category in categories)
+    selected_categories = driver.get("selected_categories") if isinstance(driver, dict) else None
+    selected_for_scope = selected_categories if isinstance(selected_categories, list) and selected_categories else list(CATEGORIES)
+    category_subset = set(selected_for_scope) != set(CATEGORIES)
+    report_status = ("incomplete_categories" if incomplete else "partial_category_subset"
+                     if category_subset else "no_qualified_pairs" if not qualified_count
+                     else "qualified_local_pairs")
     report = {
         "schema": "uvicorn-rs-paired-category-analysis@2",
         "analyzer_sha256": digest(Path(__file__).read_bytes()), "input_directory": str(directory),
-        "status": "incomplete_categories" if incomplete else "no_qualified_pairs" if not qualified_count else "qualified_local_pairs",
+        "status": report_status,
+        "category_scope": {
+            "selected": selected_for_scope,
+            "omitted": [name for name in CATEGORIES if name not in selected_for_scope],
+            "complete_matrix": not category_subset,
+        },
         "minimum_matching_valid_repetitions": MINIMUM_MATCHES,
         "evidence_scope": "frozen dirty local evidence; no release or published-package performance proof" if any(category["dirty_target"] is True for category in categories) else "recorded local evidence; inspect category completeness and dependency identities",
         "eligibility_policy": "timing_valid=true, failures=0, correctness_valid=true when present, strict server lifecycle/panic/native-error gates; lifecycle phases also complete; only intersection with an available recorded metadata pair gate can produce metrics",

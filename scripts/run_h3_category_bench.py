@@ -25,7 +25,6 @@ from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_c
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv" / "bin" / "python"
-MANIFEST = ROOT / "tools" / "http3-probe" / "Cargo.toml"
 CLIENT = ROOT / "tools" / "http3-probe" / "target" / "release" / "bench"
 WORKLOADS = {
     "protocol-scope-consumed-request": {
@@ -263,9 +262,8 @@ def main() -> None:
     selected_servers = {name: SERVERS[name] for name in args.servers}
     if not PYTHON.exists():
         raise SystemExit("install the benchmark dependency group before running HTTP/3 cases")
-    subprocess.run(["cargo", "build", "--release", "--manifest-path", str(MANIFEST), "--bin", "bench"], check=True)
     if not CLIENT.exists():
-        raise SystemExit(f"benchmark client was not built: {CLIENT}")
+        raise SystemExit(f"prebuild the HTTP/3 benchmark client before identity capture: {CLIENT}")
 
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,

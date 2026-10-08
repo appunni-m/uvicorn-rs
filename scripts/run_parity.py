@@ -2516,6 +2516,13 @@ def build_h3_client() -> Path:
     return ROOT / "tools" / "http3-probe" / "target" / "release" / "parity-http3"
 
 
+def prebuilt_h3_client() -> Path:
+    client = ROOT / "tools" / "http3-probe" / "target" / "release" / "parity-http3"
+    if not client.is_file():
+        raise ParityError(f"prebuild the HTTP/3 parity client before freezing identity: {client}")
+    return client
+
+
 def start_server(
     server_id: str,
     profile: dict[str, Any],
@@ -7708,6 +7715,11 @@ def main() -> int:
         action="store_true",
         help="include coverage-build-only fault-contract cases in addition to oracle parity",
     )
+    parser.add_argument(
+        "--prebuilt-http3-client",
+        action="store_true",
+        help="use the prebuilt HTTP/3 client without invoking Cargo; required for frozen benchmark identity",
+    )
     args = parser.parse_args()
 
     manifest, inputs, input_paths = load_contract()
@@ -7735,7 +7747,11 @@ def main() -> int:
         )
     environment, target_identity = runtime_identity(manifest)
     started = utc_now()
-    h3_client = build_h3_client() if any(case["profile"] == "http3" for case in selected_cases) else None
+    needs_h3_client = any(case["profile"] == "http3" for case in selected_cases)
+    h3_client = (
+        (prebuilt_h3_client() if args.prebuilt_http3_client else build_h3_client())
+        if needs_h3_client else None
+    )
     h3_client_sha256 = sha256(h3_client) if h3_client is not None else None
     case_results = []
     infrastructure_errors = []

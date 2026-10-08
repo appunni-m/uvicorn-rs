@@ -19,7 +19,7 @@ configuration order within a repetition using the supplied seed.
 
 | Category | Candidate and baseline | Correctness gate |
 |---|---|---|
-| HTTP/1.1 | Rust server with asyncio and uvloop; Uvicorn with asyncio + h11 and uvloop + httptools. Uvicorn uvloop + httptools is the strongest measured H1 baseline. | Every response status and complete body is checked against the workload oracle. |
+| HTTP/1.1 | Rust server with asyncio and uvloop; Uvicorn with httptools under both loops. | Every response status and complete body is checked against the workload oracle. |
 | HTTP/2 | Rust server and Hypercorn, each with asyncio and uvloop. | TLS ALPN must select H2; status and full response body are checked. |
 | HTTP/3 | Rust server and Hypercorn, each with asyncio and uvloop. Hypercorn's upload workload is known to fail; other Hypercorn rows must still pass each run's correctness gate before they can be compared. | QUIC/TLS, status, and full response body are checked. |
 | WebSockets | Rust server with asyncio and uvloop; Uvicorn with its WebSocket implementation and asyncio or uvloop. | Handshake/subprotocol and complete text or binary payload equality are checked. |
@@ -90,8 +90,9 @@ revisions and must not be read as results for the current commit.
 
 Required tools are `uv`, Python 3.12, Rust/Cargo, a C compiler and `curl-config`
 for the native H1 load client, Node.js for the slow-reader fallback, and
-OpenSSL for test certificates. H2, H3, and WebSocket benchmark clients are
-built in release mode by their runners.
+OpenSSL for test certificates. Build the H2, H3, and WebSocket Rust clients
+with the prebuild command below before freezing identity; category runners use
+those exact binaries and do not rebuild them during measurement.
 
 Start from a clean checkout for a release comparison. A dirty checkout can
 produce a local experiment, but its report remains `performance_evidence_status:
@@ -494,6 +495,7 @@ cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bi
 .venv/bin/python scripts/run_benchmark_categories.py \
   --capture-identity target/benchmark-preparation/parity-before.json
 .venv/bin/python scripts/run_parity.py \
+  --prebuilt-http3-client \
   --output target/benchmark-preparation/parity.json
 .venv/bin/python scripts/run_benchmark_categories.py \
   --parity-before-identity target/benchmark-preparation/parity-before.json \
@@ -521,6 +523,14 @@ To analyze existing artifacts without running load:
 .venv/bin/python scripts/analyze_benchmark_categories.py \
   --input-dir target/benchmark-categories/RUN_DIRECTORY
 ```
+
+For local diagnosis, select one or more categories with repeated `--category`
+flags, for example `--category http1 --category websocket`. The wrapper still
+requires the complete public parity gate on the frozen binary, then measures
+only the selected categories. Its report lists omitted categories and marks a
+selected run `partial_category_subset`; this is useful for isolating a failed
+category but does not replace the complete five-category matrix or qualify as
+the full release benchmark.
 
 Each comparison requires three matching valid repetitions. Incomplete categories,
 host contention, modified dependencies, deliberate exception costs and missing

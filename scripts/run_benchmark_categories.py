@@ -280,6 +280,12 @@ def validate_parity(root, before_path, parity_path, current, expected_count):
     if target["native_extension"]["sha256"] != current["native"] or target["cargo_lock_sha256"] != sha256(root / "Cargo.lock") or target["revision"] != current["git_revision"]:
         raise RuntimeError("parity did not execute this exact native binary, Cargo.lock, and Git revision")
     harness = result["run"]["harness"]
+    parity_http3 = harness.get("http3_client")
+    frozen_http3_path = str(root / "tools/http3-probe/target/release/parity-http3")
+    frozen_http3_sha256 = current["snapshot"]["clients"].get(frozen_http3_path)
+    if (not isinstance(parity_http3, dict)
+            or parity_http3.get("sha256") != frozen_http3_sha256):
+        raise RuntimeError("public parity did not use the frozen HTTP/3 client binary")
     checks = [(root / result["run"]["manifest"]["path"], result["run"]["manifest"]["sha256"]),
               (root / harness["runner"], harness["runner_sha256"]),
               (root / harness["fixture_app"], harness["fixture_app_sha256"])]
@@ -309,6 +315,8 @@ def main():
     parser.add_argument("--repetitions", type=positive_integer, default=3)
     parser.add_argument("--seed", type=int, default=20261005)
     parser.add_argument("--category-timeout", type=positive_seconds, default=1200.0)
+    parser.add_argument("--category", action="append", choices=[label for label, _, _ in CATEGORIES],
+                        help="run selected category only; repeat to select more than one (default: all categories)")
     parser.add_argument("--expected-source-sha256", type=sha_argument)
     parser.add_argument("--expected-native-sha256", type=sha_argument)
     parser.add_argument("--expected-public-cases", type=positive_integer)
@@ -321,6 +329,8 @@ def main():
     args = parser.parse_args()
     if args.repetitions < 3:
         parser.error("the full comparison wrapper requires at least three repetitions")
+    if args.category and len(args.category) != len(set(args.category)):
+        parser.error("each category may be selected at most once")
     if args.capture_identity and (args.output_dir or args.parity_before_identity or args.parity_report):
         parser.error("capture mode cannot also run the suite")
     if not args.capture_identity and (not args.parity_before_identity or not args.parity_report):
@@ -339,6 +349,9 @@ def main():
         root, python, BenchmarkEvidence,
         exclude_starlette_rs_route=args.exclude_starlette_rs_route,
     )
+    requested_categories = set(args.category or (label for label, _, _ in CATEGORIES))
+    selected_categories = [label for label, _, _ in CATEGORIES if label in requested_categories]
+    omitted_categories = [label for label, _, _ in CATEGORIES if label not in requested_categories]
     for expected, observed, label in ((args.expected_source_sha256, before["source"], "source"),
                                       (args.expected_native_sha256, before["native"], "native")):
         if expected and expected != observed:
@@ -358,6 +371,8 @@ def main():
     record = {
         "schema": "uvicorn-rs-sequential-category-run@2", "started_at": utc_now(),
         "status": "running_not_proven", "identity_before": before, "category_runs": [],
+        "category_scope": "complete" if not omitted_categories else "selected_subset",
+        "selected_categories": selected_categories, "omitted_categories": omitted_categories,
         "workload_exclusions": [
             {
                 "category": "http1",
@@ -371,7 +386,7 @@ def main():
                        "comparison_pairs": {label: [
                            {"loop": loop, "reference": reference, "candidate": candidate}
                            for loop, reference, candidate in comparisons
-                       ] for label, _, comparisons in CATEGORIES}},
+                       ] for label, _, comparisons in CATEGORIES if label in selected_categories}},
         "tools": {},
     }
     checkpoint = out / "run.json"
@@ -397,6 +412,8 @@ def main():
             record["tools"][name] = checked_tool(command, root).splitlines()[0]
             atomic_json(checkpoint, record)
         for label, name, comparisons in CATEGORIES:
+            if label not in selected_categories:
+                continue
             script = root / "scripts" / name
             output = out / f"{label}.json"
             servers = tuple(dict.fromkeys(

@@ -25,7 +25,6 @@ from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_c
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv" / "bin" / "python"
-MANIFEST = ROOT / "tools" / "http3-probe" / "Cargo.toml"
 CLIENT = ROOT / "tools" / "http3-probe" / "target" / "release" / "http2"
 WORKLOADS = {
     "protocol-scope": {
@@ -274,12 +273,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=ROOT / "benchmarks" / "results" / "http2-categories-2026-10-02.json")
     args = parser.parse_args()
     assert_clean_coverage_environment()
-    subprocess.run(
-        ["cargo", "build", "--release", "--manifest-path", str(MANIFEST), "--bin", "http2"],
-        check=True,
-    )
     if not CLIENT.exists():
-        raise SystemExit(f"HTTP/2 benchmark client was not built: {CLIENT}")
+        raise SystemExit(f"prebuild the HTTP/2 benchmark client before identity capture: {CLIENT}")
     selected_servers = {name: SERVERS[name] for name in args.servers}
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
