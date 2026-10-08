@@ -51,7 +51,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: asgi-performance-matrix-${{ github.ref }}
+  group: asgi-performance-matrix-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 
 env:
@@ -161,9 +161,8 @@ jobs:
             --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
             --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
             2>&1 | tee target/benchmark-preparation/server-build.log
-          mapfile -t wheels < <(find target/benchmark-preparation/server-wheels -maxdepth 1 -type f -name '*.whl')
-          test "${#wheels[@]}" -eq 1
-          uv pip install --python .venv/bin/python --no-deps "${wheels[0]}" \
+          server_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path("target/benchmark-preparation/server-wheels").glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one server wheel"))')"
+          uv pip install --python .venv/bin/python --no-deps "$server_wheel" \
             2>&1 | tee target/benchmark-preparation/server-install.log
       - name: Build and install the independent frozen framework wheel
         shell: bash
@@ -188,9 +187,8 @@ jobs:
                 --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" --out "$wheel_dir"
           ) 2>&1 | tee target/benchmark-preparation/framework-build.log
           test -z "$(git -C "$framework_dir" status --porcelain --untracked-files=no)"
-          mapfile -t wheels < <(find "$wheel_dir" -maxdepth 1 -type f -name '*.whl')
-          test "${#wheels[@]}" -eq 1
-          uv pip install --python .venv/bin/python --no-deps "${wheels[0]}" \
+          framework_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path(sys.argv[1]).glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one framework wheel")' "$wheel_dir")"
+          uv pip install --python .venv/bin/python --no-deps "$framework_wheel" \
             2>&1 | tee target/benchmark-preparation/framework-install.log
           .venv/bin/python - <<'PY'
           import hashlib
