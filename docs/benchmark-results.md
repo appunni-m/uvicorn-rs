@@ -1,8 +1,9 @@
 # Multi-system benchmark results
 
 No completed result from the automated three-system benchmark matrix has been
-archived yet. The first complete run will replace this page through the
-benchmark documentation update PR.
+archived yet. The [latest attempt status](benchmark-status.md) records the
+setup failures encountered so far. The first validated aggregate will replace
+this page through the benchmark documentation update PR.
 
 The automated matrix is configured for Ubuntu 24.04 x86_64, Ubuntu 24.04 arm64,
 and macOS 15 arm64. It runs the public parity gate before measuring HTTP/1.1,

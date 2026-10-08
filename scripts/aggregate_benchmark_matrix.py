@@ -211,6 +211,7 @@ def render_markdown(report: dict) -> str:
         f"Run: [{report['run_id']} (attempt {report['run_attempt']})]({run_url})  ",
         f"Commit: [`{report['commit']}`](https://github.com/{report['repository']}/commit/{report['commit']})  ",
         f"Generated: {report['generated_at']}",
+        "Latest attempt status is tracked separately in [benchmark-status.md](benchmark-status.md).",
         "",
         "The matrix uses independent hosted systems. Results are reported per system; rates and latencies are never averaged across architectures. A row appears below only when its correctness, identity, timing, and matching-repetition gates qualify. No qualified row means the run makes no performance claim for that workload.",
         "",

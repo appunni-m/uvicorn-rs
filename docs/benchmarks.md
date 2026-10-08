@@ -72,18 +72,21 @@ collect a fresh sample set rather than relaxing the gate.
 
 The aggregate validates that all three systems used the same source, harness,
 Python version, and dependency versions. It never averages or ranks rates across
-machines. A separate documentation job opens one update PR containing the
-generated [latest results](benchmark-results.md), a versioned matrix JSON, and
-machine-readable per-system evidence bundles. Repository settings must allow
-the workflow's `GITHUB_TOKEN` to create pull requests. This keeps benchmark
-execution out of ordinary docs builds. Raw workflow artifacts retain detailed logs for 90
-days; the committed bundles retain measurements, analysis, identity, and parity
-receipts for long-term review. A successful correctness-gated run can still
-have zero qualified performance pairs and then makes no speed claim.
+machines. After every main-branch attempt, a documentation job opens or refreshes
+one PR with the [latest run status](benchmark-status.md). A validated aggregate
+also updates the [latest complete results](benchmark-results.md), a versioned
+matrix JSON, and machine-readable per-system evidence bundles. An incomplete or
+failed attempt leaves the previous complete report intact and links to that
+run's artifacts. Repository settings must allow the workflow's `GITHUB_TOKEN`
+to create pull requests. This keeps benchmark execution out of ordinary docs
+builds. Raw workflow artifacts retain detailed logs for 90 days; the committed
+bundles retain measurements, analysis, identity, and parity receipts for
+long-term review. A successful correctness-gated run can still have zero
+qualified performance pairs and then makes no speed claim.
 
-Until the first hosted matrix completes, the latest-results page states that
-status explicitly. Historical local measurements below remain tied to their
-own source revisions and must not be read as results for the current commit.
+The latest attempt status and latest completed measurements are tracked
+separately. Historical local measurements below remain tied to their own source
+revisions and must not be read as results for the current commit.
 
 Required tools are `uv`, Python 3.12, Rust/Cargo, a C compiler and `curl-config`
 for the native H1 load client, Node.js for the slow-reader fallback, and
@@ -589,8 +592,9 @@ dedicated physical hardware or an absence of noisy neighbors; compare servers
 within each system and retain host contention and client CPU limits.
 
 To request a run, select **Actions → ASGI performance matrix → Run workflow**
-from `main`. The [results page](benchmark-results.md) links each report to its
-exact workflow run and archived evidence after the docs update PR is merged.
+from `main`. The [status page](benchmark-status.md) records the latest attempt;
+the [results page](benchmark-results.md) links the latest completed report to
+its exact workflow run and archived evidence after the docs update PR is merged.
 
 ## Diagnostic counters and profiling
 
