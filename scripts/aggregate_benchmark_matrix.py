@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+from html import escape
 import json
 from pathlib import Path
 import re
@@ -19,6 +20,12 @@ EXPECTED_SYSTEMS = {
 }
 SYSTEMS = tuple(EXPECTED_SYSTEMS)
 CATEGORIES = ("http1", "http2", "http3", "websocket", "lifecycle")
+ACCEPTED_DRIVER_STATUSES = {"completed_correctness_gated", "completed_with_failures"}
+ACCEPTED_ANALYSIS_STATUSES = {
+    "qualified_local_pairs",
+    "no_qualified_pairs",
+    "incomplete_categories",
+}
 FASTAPI_WORKLOADS = ("fastapi-validated-route", "fastapi-python-cpu")
 FASTAPI_PAIRS = {
     ("fastapi-validated-route", "uvicorn-asyncio-httptools", "uvicorn-rs-asyncio"),
@@ -49,11 +56,13 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
         raise ValueError(f"{artifact.name}: system ID does not match its artifact name")
     if run.get("schema") != "uvicorn-rs-sequential-category-run@2":
         raise ValueError(f"{artifact.name}: unsupported benchmark driver schema")
-    if run.get("status") != "completed_correctness_gated":
-        raise ValueError(f"{artifact.name}: benchmark driver did not finish behind the correctness gate")
+    if run.get("status") not in ACCEPTED_DRIVER_STATUSES:
+        raise ValueError(f"{artifact.name}: benchmark driver did not reach a correctness-gated terminal state")
     identity = run.get("identity_before")
     if not isinstance(identity, dict) or identity.get("git_revision") != expected_commit:
         raise ValueError(f"{artifact.name}: benchmark source revision differs from the workflow commit")
+    if run.get("identity_after") != identity:
+        raise ValueError(f"{artifact.name}: benchmark identity changed or was not verified after the run")
     if identity.get("dirty_target") is not False:
         raise ValueError(f"{artifact.name}: benchmark target was not a clean checkout")
     if identity.get("optional_workloads", {}).get("fastapi", {}).get("selected") is not True:
@@ -64,8 +73,8 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
         raise ValueError(f"{artifact.name}: public parity gate did not pass")
     if analysis.get("schema") != "uvicorn-rs-paired-category-analysis@2":
         raise ValueError(f"{artifact.name}: unsupported analysis schema")
-    if analysis.get("status") not in {"qualified_local_pairs", "no_qualified_pairs"}:
-        raise ValueError(f"{artifact.name}: analysis is incomplete")
+    if analysis.get("status") not in ACCEPTED_ANALYSIS_STATUSES:
+        raise ValueError(f"{artifact.name}: analysis status is unsupported")
     if analysis.get("driver_record", {}).get("status") != run.get("status"):
         raise ValueError(f"{artifact.name}: analyzer and driver status disagree")
 
@@ -122,9 +131,6 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
     by_name = {item.get("category"): item for item in categories if isinstance(item, dict)}
     if set(by_name) != set(CATEGORIES):
         raise ValueError(f"{artifact.name}: category inventory differs from the maintained matrix")
-    if any(item.get("status") == "incomplete_category" for item in by_name.values()):
-        raise ValueError(f"{artifact.name}: at least one category is incomplete")
-
     runtime = identity.get("python_runtime")
     dependencies = identity.get("dependencies")
     if not isinstance(runtime, dict) or not isinstance(dependencies, dict):
@@ -149,9 +155,28 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
         "optional_workloads": {name: item.get("selected")
                                 for name, item in identity.get("optional_workloads", {}).items()
                                 if isinstance(item, dict)},
+        "matrix_status": (
+            "validated_complete_system"
+            if run.get("status") == "completed_correctness_gated"
+            and analysis.get("status") != "incomplete_categories"
+            and all(item.get("status") != "incomplete_category" for item in by_name.values())
+            else "validated_partial_system"
+        ),
         "driver_status": run.get("status"),
         "analysis_status": analysis.get("status"),
         "qualified_pairs": analysis.get("qualified_pairs"),
+        "category_integrity": {
+            name: {
+                "status": item.get("status"),
+                "rows": item.get("rows"),
+                "eligible_rows": item.get("eligible_rows"),
+                "invalid_rows": item.get("invalid_rows"),
+                "invalid_reason_row_counts": item.get("invalid_reason_row_counts", {}),
+                "missing_or_duplicate_expected_rows": item.get("missing_or_duplicate_expected_rows", []),
+                "input_errors": item.get("input_errors", []),
+            }
+            for name, item in by_name.items()
+        },
         "categories": by_name,
         "fastapi_only": {
             "status": fastapi_analysis.get("status"),
@@ -191,7 +216,7 @@ def archive_system_evidence(artifact: Path, destination: Path) -> None:
     with tarfile.open(destination, "w:gz") as archive:
         for results in (artifact / "benchmark-categories", artifact / "fastapi-only"):
             for path in sorted(results.rglob("*")):
-                if path.is_file() and path.suffix != ".log":
+                if path.is_file():
                     archive.add(path, arcname=path.relative_to(artifact))
         for name in ("environment.json", "system-packages.txt", "parity-before.json",
                      "parity.json"):
@@ -313,6 +338,7 @@ def render_markdown(report: dict) -> str:
         f"Run: [{report['run_id']} (attempt {report['run_attempt']})]({run_url})  ",
         f"Commit: [`{report['commit']}`](https://github.com/{report['repository']}/commit/{report['commit']})  ",
         f"Generated: {report['generated_at']}",
+        f"Evidence status: **{report['status']}**. Partial inputs are shown per system; only individually qualified rows contribute metrics.",
         "Latest attempt status is tracked separately in [benchmark-status.md](benchmark-status.md).",
         "",
         "The matrix uses independent hosted systems. Results are reported per system; rates and latencies are never averaged across architectures. A row appears below only when its correctness, identity, timing, and matching-repetition gates qualify. No qualified row means the run makes no performance claim for that workload.",
@@ -321,7 +347,7 @@ def render_markdown(report: dict) -> str:
         "",
         "## Runner summary",
         "",
-        "| System | Runner | CPU / cores | Memory | Python | Full status / pairs | FastAPI status / pairs | Raw artifact |",
+        "| System | Runner | CPU / cores | Memory | Python | Matrix / driver / pairs | FastAPI status / pairs | Raw artifact |",
         "|---|---|---|---:|---|---|---|---|",
     ]
     for system in report["systems"]:
@@ -332,7 +358,7 @@ def render_markdown(report: dict) -> str:
         lines.append(
             f"| {system['system_id']} ({system['architecture']}) | {system['runner']} | "
             f"{cpu} | {memory_gib:.1f} GiB | {system['python']} | "
-            f"{system['analysis_status']} / {system['qualified_pairs']} | "
+            f"{system['matrix_status']} / {system['driver_status']} / {system['qualified_pairs']} | "
             f"{system['fastapi_only']['http1_status']} / {system['fastapi_only']['qualified_pairs']} | "
             f"`{artifact}` |"
         )
@@ -391,6 +417,44 @@ def render_markdown(report: dict) -> str:
             lines.append(f"| {category} | {item['status']} | {item['qualified_pairs']} |")
         lines += [
             "",
+            "Category input integrity and exclusions:",
+            "",
+            "| Category | Status | Rows | Eligible | Invalid | Missing/duplicate planned rows | Invalid reasons |",
+            "|---|---|---:|---:|---:|---:|---|",
+        ]
+        for category in CATEGORIES:
+            item = system["category_integrity"][category]
+            missing = item["missing_or_duplicate_expected_rows"]
+            missing_count = len(missing) if isinstance(missing, list) else "—"
+            reasons = item["invalid_reason_row_counts"]
+            reason_text = ", ".join(f"{name}: {count}" for name, count in sorted(reasons.items())) or "—"
+            lines.append(
+                f"| {category} | {item['status']} | {item['rows']} | {item['eligible_rows']} | "
+                f"{item['invalid_rows']} | {missing_count} | {reason_text} |"
+            )
+            for error in item["input_errors"]:
+                lines.append(f"- {category} input error: {escape(str(error))}")
+            if missing:
+                missing_json = json.dumps(missing, ensure_ascii=False, sort_keys=True)
+                lines.append(f"- {category} missing or duplicate planned rows: {escape(missing_json)}")
+        lines += ["", "Unqualified workload/reference comparisons:", ""]
+        exclusions = []
+        for category in CATEGORIES:
+            for pair in system["categories"][category].get("pairs", []):
+                if pair.get("qualified") is True:
+                    continue
+                reasons = ", ".join(pair.get("exclusion_reasons", [])) or "not qualified"
+                exclusions.append(
+                    f"- {category}/{pair.get('workload', 'unknown')}/{pair.get('loop', 'unknown')}: "
+                    f"{len(pair.get('matched_repetitions', []))} matching valid repetitions; {reasons}."
+                )
+                reference_details = pair.get("excluded_reference_details")
+                if reference_details:
+                    details = json.dumps(reference_details, ensure_ascii=False, sort_keys=True)
+                    exclusions.append(f"  Reference exclusions recorded: `{escape(details)}`")
+        lines.extend(exclusions or ["No unqualified workload/reference comparisons."])
+        lines += [
+            "",
             "Lifecycle phase measurements:",
             "",
             "| Loop | Reference / Rust | Valid matches | Startup ms ref / Rust | Idle exit ms ref / Rust | Active exit ms ref / Rust | Idle CPU s ref / Rust | Active CPU s ref / Rust | Idle RSS MiB ref / Rust | Active RSS MiB ref / Rust |",
@@ -443,9 +507,15 @@ def main() -> int:
         raise ValueError(f"missing system benchmark artifacts: {missing}")
     systems = [found[name] for name in SYSTEMS]
     assert_common_identity(systems)
+    matrix_status = (
+        "validated_complete_matrix"
+        if all(system["matrix_status"] == "validated_complete_system" for system in systems)
+        else "validated_partial_matrix"
+    )
 
     report = {
         "schema": "uvicorn-rs-benchmark-matrix@1",
+        "status": matrix_status,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "commit": args.commit,
         "repository": args.repository,
@@ -467,7 +537,7 @@ def main() -> int:
             artifact_paths[system["system_id"]],
             evidence_dir / f"{system['system_id']}-evidence.tar.gz",
         )
-    print(json.dumps({"status": "validated", "systems": list(SYSTEMS),
+    print(json.dumps({"status": matrix_status, "systems": list(SYSTEMS),
                       "qualified_pairs_by_system": {item["system_id"]: item["qualified_pairs"] for item in systems},
                       "fastapi_qualified_pairs_by_system": {
                           item["system_id"]: item["fastapi_only"]["qualified_pairs"] for item in systems
