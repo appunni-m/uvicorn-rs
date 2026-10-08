@@ -31,6 +31,21 @@ except ImportError:
     resource = None
 
 
+FASTAPI_BENCHMARK_DISTRIBUTIONS = {
+    "fastapi": ["fastapi"],
+    "starlette": ["starlette"],
+    "pydantic": ["pydantic"],
+    "pydantic-core": ["pydantic_core"],
+    "annotated-doc": ["annotated_doc"],
+    "annotated-types": ["annotated_types"],
+    "typing-inspection": ["typing_inspection"],
+    "typing-extensions": ["typing_extensions"],
+    "opentelemetry-api": ["opentelemetry"],
+    "anyio": ["anyio"],
+    "idna": ["idna"],
+}
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 

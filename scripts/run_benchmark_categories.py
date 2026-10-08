@@ -195,7 +195,8 @@ def source_paths(root):
              ("examples", {".py"}), ("tools/http3-probe/src", {".rs"}), ("tests/parity", {".py", ".json"}))
     for directory, extensions in trees:
         fixed.extend(str(path.relative_to(root)) for path in (root / directory).rglob("*")
-                     if path.is_file() and path.suffix in extensions and "__pycache__" not in path.parts)
+                     if path.is_file() and path.suffix in extensions and "__pycache__" not in path.parts
+                     and str(path.relative_to(root)) != "examples/starlette_rs_asgi.py")
     fixed.append(str(Path(__file__).resolve().relative_to(root)))
     return sorted(set(fixed))
 
@@ -209,49 +210,42 @@ def normal_binary(path):
         raise RuntimeError(f"coverage/fault/diagnostic instrumentation is present: {path}")
 
 
-def capture_identity(root, python, evidence_class, *, exclude_starlette_rs_route=False):
+def capture_identity(root, python, evidence_class):
+    from benchmark_evidence import FASTAPI_BENCHMARK_DISTRIBUTIONS
+
     clients = [root / "tools/http3-probe/target/release" / name for name in PROBE_NAMES]
     for path in clients:
         normal_binary(path)
     extra_dependencies = {"uvicorn-rs": ["uvicorn_rs"]}
-    if exclude_starlette_rs_route:
-        starlette_rs_route_selected = False
-        starlette_rs_route_reason = "excluded by --exclude-starlette-rs-route"
+    try:
+        importlib.metadata.distribution("fastapi")
+    except importlib.metadata.PackageNotFoundError:
+        fastapi_selected = False
+        fastapi_reason = "optional fastapi-benchmark dependency group is not installed"
     else:
-        try:
-            importlib.metadata.distribution("starlette-rs-py")
-        except importlib.metadata.PackageNotFoundError:
-            starlette_rs_route_selected = False
-            starlette_rs_route_reason = "optional starlette-rs-py distribution is not installed"
-        else:
-            starlette_rs_route_selected = True
-            starlette_rs_route_reason = None
-            extra_dependencies["starlette-rs-py"] = ["starlette", "starlette_rs_py"]
+        fastapi_selected = True
+        fastapi_reason = None
+        extra_dependencies.update(FASTAPI_BENCHMARK_DISTRIBUTIONS)
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-benchmark-identity-") as directory:
         evidence = evidence_class(root, python, source_paths(root), clients,
                                   artifacts_dir=Path(directory),
                                   extra_dependencies=extra_dependencies)
         dependencies = evidence.dependencies_before
         required = {"uvicorn", "hypercorn", "h11", "h2", "aioquic", "uvloop", "httptools", "websockets", "uvicorn-rs"}
-        if starlette_rs_route_selected:
-            required.add("starlette-rs-py")
+        if fastapi_selected:
+            required.update(FASTAPI_BENCHMARK_DISTRIBUTIONS)
         if missing := sorted(required - dependencies.keys()):
             raise RuntimeError(f"frozen benchmark dependencies are missing: {missing}")
         modified = [name for name, value in dependencies.items() if name != "uvicorn-rs" and
                     (value["record_content_mismatches"] or value["unrecorded_source_files"] or
                      (value["direct_url"] and value["direct_url"].get("dir_info", {}).get("editable")))]
         if modified:
-            raise RuntimeError(f"stock reference and coherent optional framework wheels required; modified/editable distributions: {modified}")
+            raise RuntimeError(f"stock references and coherent benchmark dependencies required; modified/editable distributions: {modified}")
         snapshot = evidence.before
         return {
             "source": snapshot["source_files"]["src/lib.rs"],
             "native": snapshot["native_extension"]["sha256"],
-            "optional_workloads": {
-                "starlette-rs-route": {
-                    "selected": starlette_rs_route_selected,
-                    "reason": starlette_rs_route_reason,
-                },
-            },
+            "optional_workloads": {"fastapi": {"selected": fastapi_selected, "reason": fastapi_reason}},
             "harness": {name: value for name, value in snapshot["source_files"].items() if name.startswith("scripts/")},
             "examples": {name: value for name, value in snapshot["source_files"].items() if name.startswith("examples/")},
             "snapshot": snapshot, "dependencies": dependencies,
@@ -317,12 +311,12 @@ def main():
     parser.add_argument("--category-timeout", type=positive_seconds, default=1200.0)
     parser.add_argument("--category", action="append", choices=[label for label, _, _ in CATEGORIES],
                         help="run selected category only; repeat to select more than one (default: all categories)")
+    parser.add_argument("--workloads", nargs="+",
+                        help="run only these HTTP/1.1 workloads; requires --category http1")
     parser.add_argument("--expected-source-sha256", type=sha_argument)
     parser.add_argument("--expected-native-sha256", type=sha_argument)
     parser.add_argument("--expected-public-cases", type=positive_integer)
     parser.add_argument("--capture-identity", type=Path, help="capture normal prebuilt identities before public parity; runs no benchmarks")
-    parser.add_argument("--exclude-starlette-rs-route", action="store_true",
-                        help="omit the optional starlette-rs-route HTTP workload and record why")
     parser.add_argument("--parity-before-identity", type=Path)
     parser.add_argument("--parity-report", type=Path)
     parser.add_argument("--skip-analysis", action="store_true", help="retain only category artifacts; default runs the pure-JSON analyzer")
@@ -331,6 +325,13 @@ def main():
         parser.error("the full comparison wrapper requires at least three repetitions")
     if args.category and len(args.category) != len(set(args.category)):
         parser.error("each category may be selected at most once")
+    if args.workloads:
+        if args.category != ["http1"]:
+            parser.error("--workloads requires exactly --category http1")
+        known_workloads = set(workload_names(root / "scripts/run_http_category_bench.py"))
+        unknown_workloads = sorted(set(args.workloads) - known_workloads)
+        if unknown_workloads:
+            parser.error(f"unknown HTTP/1.1 workload names: {unknown_workloads}")
     if args.capture_identity and (args.output_dir or args.parity_before_identity or args.parity_report):
         parser.error("capture mode cannot also run the suite")
     if not args.capture_identity and (not args.parity_before_identity or not args.parity_report):
@@ -345,10 +346,10 @@ def main():
                                     owned_process, stop_owned)
 
     assert_clean_coverage_environment()
-    before = capture_identity(
-        root, python, BenchmarkEvidence,
-        exclude_starlette_rs_route=args.exclude_starlette_rs_route,
-    )
+    before = capture_identity(root, python, BenchmarkEvidence)
+    unavailable_fastapi = args.workloads and any(name.startswith("fastapi-") for name in args.workloads) and not before["optional_workloads"]["fastapi"]["selected"]
+    if unavailable_fastapi:
+        raise RuntimeError("selected FastAPI workloads require the locked fastapi-benchmark dependency group")
     requested_categories = set(args.category or (label for label, _, _ in CATEGORIES))
     selected_categories = [label for label, _, _ in CATEGORIES if label in requested_categories]
     omitted_categories = [label for label, _, _ in CATEGORIES if label not in requested_categories]
@@ -372,14 +373,17 @@ def main():
         "schema": "uvicorn-rs-sequential-category-run@2", "started_at": utc_now(),
         "status": "running_not_proven", "identity_before": before, "category_runs": [],
         "category_scope": "complete" if not omitted_categories else "selected_subset",
+        "workload_scope": "selected_subset" if args.workloads else "all_available",
         "selected_categories": selected_categories, "omitted_categories": omitted_categories,
         "workload_exclusions": [
             {
                 "category": "http1",
-                "workload": "starlette-rs-route",
-                "reason": before["optional_workloads"]["starlette-rs-route"]["reason"],
+                "workload": workload,
+                "reason": before["optional_workloads"]["fastapi"]["reason"],
             }
-        ] if not before["optional_workloads"]["starlette-rs-route"]["selected"] else [],
+            for workload in ("fastapi-validated-route", "fastapi-python-cpu")
+            if not before["optional_workloads"]["fastapi"]["selected"]
+        ],
         "public_parity_gate": parity, "limitations": list(LIMITATIONS),
         "parameters": {"duration": args.duration, "warmup": args.warmup, "concurrency": args.concurrency,
                        "repetitions": args.repetitions, "seed": args.seed, "category_timeout_seconds": args.category_timeout,
@@ -424,8 +428,10 @@ def main():
             workloads = ["lifecycle"]
             if label != "lifecycle":
                 workloads = workload_names(script)
-                if label == "http1" and not before["optional_workloads"]["starlette-rs-route"]["selected"]:
-                    workloads = [workload for workload in workloads if workload != "starlette-rs-route"]
+                if label == "http1" and args.workloads:
+                    workloads = list(dict.fromkeys(args.workloads))
+                elif label == "http1" and not before["optional_workloads"]["fastapi"]["selected"]:
+                    workloads = [workload for workload in workloads if not workload.startswith("fastapi-")]
                 command += ["--workloads", *workloads, "--duration", str(args.duration),
                             "--warmup", str(args.warmup), "--concurrency", str(args.concurrency)]
             planned = expected_rows(
@@ -480,10 +486,7 @@ def main():
                 process = None
                 entry.setdefault("finished_at", utc_now())
                 atomic_json(checkpoint, record)
-            if capture_identity(
-                root, python, BenchmarkEvidence,
-                exclude_starlette_rs_route=args.exclude_starlette_rs_route,
-            ) != before:
+            if capture_identity(root, python, BenchmarkEvidence) != before:
                 raise RuntimeError("source/native/apps/harness/client/dependency identity changed during categories")
             atomic_json(checkpoint, record)
             event({"event": "finished", **entry})
@@ -506,10 +509,7 @@ def main():
                 failed = True
         record["finished_at"] = utc_now()
         try:
-            record["identity_after"] = capture_identity(
-                root, python, BenchmarkEvidence,
-                exclude_starlette_rs_route=args.exclude_starlette_rs_route,
-            )
+            record["identity_after"] = capture_identity(root, python, BenchmarkEvidence)
             if record["identity_after"] != before:
                 record["status"] = "failed_not_proven"
                 failed = True

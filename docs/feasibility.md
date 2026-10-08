@@ -306,12 +306,13 @@ the runtimes. When the bounded response queue fills, `send()` also awaits a
 bridge future. Those operations add work that a small fixed response cannot
 hide and that repeats for every streamed chunk.
 
-The current runtime starts two Tokio worker threads in addition to the
-Python-owned application loop in the [native module initializer](../src/lib.rs#L4084).
-Existing measurements do not isolate whether two workers improve throughput
-enough to offset their scheduling and wakeup cost. Compare one and two Tokio
-workers on the same fixed-response and chunk-stream workloads before changing
-the default.
+The current experiment configures one Tokio worker thread in addition to the
+Python-owned application loop in the
+[native module initializer](../src/lib.rs#L5514). The historical measurements
+below used two Tokio threads and do not isolate
+the effect of reducing that count. The maintained HTTP/1.1 matrix now includes
+upstream FastAPI routes so the Python framework path can be compared with
+Uvicorn on identical requests.
 
 The chunk-heavy CPU and latency pattern is consistent with this extra
 coordination, and earlier queue counters recorded frequent full-channel waits.

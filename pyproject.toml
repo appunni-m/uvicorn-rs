@@ -28,6 +28,7 @@ benchmark = [
     "uvicorn[standard]==0.54.0; python_version >= '3.10'",
     "uvloop==0.23.0; python_version >= '3.10'",
 ]
+fastapi-benchmark = ["fastapi==0.142.4; python_version >= '3.10'"]
 
 [tool.maturin]
 module-name = "uvicorn_rs._native"

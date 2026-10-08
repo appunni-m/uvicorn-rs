@@ -5504,6 +5504,7 @@ fn response(status: StatusCode, body: ResponseBody, headers: HeaderMap) -> Respo
 
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    const TOKIO_WORKER_THREADS: usize = 1;
     // Both success and startup resource failure are process-wide decisions.
     // Retain the runtime without leaking a fresh allocation on reinitialization;
     // a failed build is returned again rather than silently retrying on import.
@@ -5511,7 +5512,9 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         OnceLock::new();
     let runtime = NATIVE_RUNTIME.get_or_init(|| {
         let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
-        runtime_builder.worker_threads(2).enable_all();
+        runtime_builder
+            .worker_threads(TOKIO_WORKER_THREADS)
+            .enable_all();
         #[cfg(coverage)]
         {
             if coverage_fault_take(CoverageFaultPoint::NativeRuntimeBuildError) {

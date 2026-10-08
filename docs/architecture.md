@@ -32,7 +32,7 @@ dispatches ASGI calls back to the captured loop. Application code never runs on
 Tokio workers. The Python bridge wraps Rust-backed `receive()` and `send()`
 operations in the ASGI callable shape; it does not parse HTTP or manage sockets.
 
-The native module builds its Tokio runtime at import with two worker threads
+The native module builds its Tokio runtime at import with one worker thread
 and registers the completed runtime with PyO3's async integration. A
 process-wide `OnceLock<Result<Runtime, io::Error>>` retains either the runtime
 or its construction failure. Construction failures become Python `OSError`
@@ -40,6 +40,11 @@ before the native exports are added; repeated initialization returns the
 cached failure. If the async integration already has a valid registered
 runtime, that runtime remains registered. Runtime construction is fallible,
 and its effect on import/startup cost needs a fresh benchmark.
+
+The maintained HTTP/1.1 matrix includes upstream FastAPI route workloads to
+measure framework routing, validation, response serialization, and Python
+route code on both servers, alongside direct ASGI cases that isolate the
+bridge.
 
 Exact built-in ASGI event names compare against PyO3's interned strings,
 avoiding the classifier's temporary Rust string. Fixed scope/message keys,

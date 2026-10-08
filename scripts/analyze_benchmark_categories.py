@@ -29,7 +29,7 @@ CATEGORIES = {
             "fixed", "large-response", "many-response-chunks", "small-response-chunks",
             "request-upload", "request-upload-small-chunks", "slow-reader-backpressure",
             "scope-32-headers", "contextvars", "sync-callable-awaitable",
-            "exception-to-500", "starlette-rs-route",
+            "exception-to-500", "fastapi-validated-route", "fastapi-python-cpu",
         ],
     },
     "http2": {

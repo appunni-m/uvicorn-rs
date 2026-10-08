@@ -57,7 +57,6 @@ concurrency:
 env:
   PYTHON_VERSION: "3.12.13"
   RUST_TOOLCHAIN: "1.98.1"
-  FRAMEWORK_REVISION: "738c43362938896c268ca29b9a9a2a5942df510c"
   CARGO_TERM_COLOR: never
   RUSTFLAGS: ""
   CARGO_ENCODED_RUSTFLAGS: ""
@@ -118,7 +117,8 @@ jobs:
           fi
           export BENCHMARK_CPU_MODEL="$cpu_model"
           printf 'BENCHMARK_CPU_MODEL=%s\n' "$cpu_model" >> "$GITHUB_ENV"
-          uv sync --python "$PYTHON_VERSION" --group benchmark --frozen --no-install-project
+          uv sync --python "$PYTHON_VERSION" --group benchmark \
+            --group fastapi-benchmark --frozen --no-install-project
           uv --version
           .venv/bin/python --version
           rustc --version --verbose
@@ -135,7 +135,8 @@ jobs:
           import platform
           import psutil
           from pathlib import Path
-          names = ("uvicorn", "hypercorn", "aioquic", "uvloop", "httptools", "psutil", "h2", "h11", "websockets", "anyio", "typing-extensions")
+          names = ("uvicorn", "hypercorn", "aioquic", "uvloop", "httptools", "psutil",
+                   "h2", "h11", "websockets", "anyio", "typing-extensions", "fastapi", "pydantic")
           report = {"system_id": os.environ["BENCHMARK_SYSTEM_ID"],
                     "runner_label": os.environ["BENCHMARK_RUNNER"],
                     "os": platform.system(), "architecture": platform.machine(),
@@ -144,7 +145,6 @@ jobs:
                     "physical_cpu_count": psutil.cpu_count(logical=False),
                     "memory_total_bytes": psutil.virtual_memory().total,
                     "python": platform.python_version(), "platform": platform.platform(),
-                    "framework_revision": os.environ["FRAMEWORK_REVISION"],
                     "packages": {name: metadata.version(name) for name in names},
                     "hosted_runner": {name: os.environ.get(name) for name in ("ImageOS", "ImageVersion", "RUNNER_ARCH", "RUNNER_NAME")},
                     "limits": ["Fresh hosted VM, not dedicated hardware or an assurance of no noisy neighbors.",
@@ -164,70 +164,6 @@ jobs:
           server_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path("target/benchmark-preparation/server-wheels").glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one server wheel")')"
           uv pip install --python .venv/bin/python --no-deps "$server_wheel" \
             2>&1 | tee target/benchmark-preparation/server-install.log
-      - name: Build and install the independent frozen framework wheel
-        shell: bash
-        run: |
-          set -euo pipefail
-          framework_dir="$RUNNER_TEMP/starlette-rs"
-          framework_target="$RUNNER_TEMP/starlette-rs-cargo-target"
-          wheel_dir="$GITHUB_WORKSPACE/target/benchmark-preparation/framework-wheels"
-          mkdir -p "$wheel_dir"
-          git init "$framework_dir"
-          git -C "$framework_dir" remote add origin https://github.com/appunni-m/starlette-rs.git
-          git -C "$framework_dir" fetch --depth 1 origin "$FRAMEWORK_REVISION"
-          git -C "$framework_dir" checkout --detach FETCH_HEAD
-          test "$(git -C "$framework_dir" rev-parse HEAD)" = "$FRAMEWORK_REVISION"
-          git -C "$framework_dir" archive HEAD > target/benchmark-preparation/framework-source.tar
-          git -C "$framework_dir" rev-parse HEAD > target/benchmark-preparation/framework-revision.txt
-          (
-            cd "$framework_dir"
-            env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cap-lints warn" \
-              RUSTUP_TOOLCHAIN="$RUST_TOOLCHAIN" CARGO_TARGET_DIR="$framework_target" \
-              uvx --from maturin==1.14.1 maturin build --release --locked \
-                --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" --out "$wheel_dir"
-          ) 2>&1 | tee target/benchmark-preparation/framework-build.log
-          test -z "$(git -C "$framework_dir" status --porcelain --untracked-files=no)"
-          framework_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path(sys.argv[1]).glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one framework wheel")' "$wheel_dir")"
-          uv pip install --python .venv/bin/python --no-deps "$framework_wheel" \
-            2>&1 | tee target/benchmark-preparation/framework-install.log
-          .venv/bin/python - <<'PY'
-          import hashlib
-          import importlib.metadata as metadata
-          import importlib.util
-          import json
-          import os
-          from pathlib import Path
-          base = Path("target/benchmark-preparation")
-          files = [base / "framework-source.tar", *sorted((base / "framework-wheels").glob("*.whl")),
-                   *sorted((base / "server-wheels").glob("*.whl"))]
-          distributions = {}
-          for name, module in (("starlette-rs-py", "starlette_rs_py._core"), ("uvicorn-rs", "uvicorn_rs._native")):
-              distribution = metadata.distribution(name)
-              native = Path(importlib.util.find_spec(module).origin)
-              record = distribution.read_text("RECORD")
-              distributions[name] = {"version": distribution.version, "native_path": str(native),
-                                     "native_sha256": hashlib.sha256(native.read_bytes()).hexdigest(),
-                                     "record_sha256": hashlib.sha256(record.encode()).hexdigest() if record else None,
-                                     "direct_url": distribution.read_text("direct_url.json")}
-          receipt = {"framework_repository": "https://github.com/appunni-m/starlette-rs.git",
-                     "framework_revision": os.environ["FRAMEWORK_REVISION"],
-                     "build": "maturin 1.14.1, --release --locked, default features; RUSTFLAGS=--cap-lints warn only for this third-party fixture; no framework source edits",
-                     "files": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in files},
-                     "installed_distributions": distributions,
-                     "independence": "Optional benchmark environment wheel only; no uvicorn-rs runtime dependency or bundle."}
-          (base / "wheel-build-record.json").write_text(json.dumps(receipt, indent=2) + "\n")
-          PY
-      - name: Compare the normal wheel with Uvicorn on the frozen starlette-rs app
-        shell: bash
-        run: |
-          set -euo pipefail
-          server_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path("target/benchmark-preparation/server-wheels").glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one server wheel")')"
-          framework_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path("target/benchmark-preparation/framework-wheels").glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one framework wheel")')"
-          .venv/bin/python scripts/probe_starlette_rs.py \
-            --framework starlette-rs \
-            --server-wheel "$server_wheel" \
-            --framework-wheel "$framework_wheel" \
-            --output target/benchmark-preparation/starlette-rs-integration.json
       - name: Prebuild normal protocol clients and freeze the measured identity
         shell: bash
         run: |
@@ -245,6 +181,25 @@ jobs:
             --prebuilt-http3-client \
             --output target/benchmark-preparation/parity.json \
             2>&1 | tee target/benchmark-preparation/parity.log
+      - name: Run a FastAPI-only comparison against Uvicorn
+        shell: bash
+        env:
+          BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
+          BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
+          BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
+          BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
+          BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_benchmark_categories.py \
+            --parity-before-identity target/benchmark-preparation/parity-before.json \
+            --parity-report target/benchmark-preparation/parity.json \
+            --output-dir target/fastapi-only \
+            --category http1 \
+            --workloads fastapi-validated-route fastapi-python-cpu \
+            --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
+            --concurrency "$BENCHMARK_CONCURRENCY" --repetitions "$BENCHMARK_REPETITIONS" \
+            --seed "$BENCHMARK_SEED" 2>&1 | tee target/benchmark-preparation/fastapi-categories-driver.log
       - name: Run every maintained category sequentially and analyze matching valid repetitions
         shell: bash
         env:
@@ -271,6 +226,13 @@ jobs:
             .venv/bin/python scripts/analyze_benchmark_categories.py --input-dir target/benchmark-categories \
               > target/benchmark-preparation/analysis-recovery.log 2>&1
           fi
+          if test -f target/fastapi-only/run.json && ! test -f target/fastapi-only/analysis.json; then
+            .venv/bin/python scripts/analyze_benchmark_categories.py --input-dir target/fastapi-only \
+              > target/benchmark-preparation/fastapi-analysis-recovery.log 2>&1
+          fi
+          if test -f target/fastapi-only/analysis.md; then
+            cat target/fastapi-only/analysis.md >> "$GITHUB_STEP_SUMMARY"
+          fi
           if test -f target/benchmark-categories/analysis.md; then
             cat target/benchmark-categories/analysis.md >> "$GITHUB_STEP_SUMMARY"
           else
@@ -282,6 +244,7 @@ jobs:
           name: asgi-category-benchmarks-${{ matrix.system.id }}
           path: |
             target/benchmark-preparation/
+            target/fastapi-only/
             target/benchmark-categories/
           if-no-files-found: warn
           retention-days: 90

@@ -19,7 +19,7 @@ configuration order within a repetition using the supplied seed.
 
 | Category | Candidate and baseline | Correctness gate |
 |---|---|---|
-| HTTP/1.1 | Rust server with asyncio and uvloop; Uvicorn with httptools under both loops. | Every response status and complete body is checked against the workload oracle. |
+| HTTP/1.1 | Rust server with asyncio and uvloop; Uvicorn with httptools under both loops. When `fastapi-benchmark` is installed, includes upstream FastAPI routes with path/query validation, response-model validation/serialization, and deterministic Python CPU work. | Every response status and complete body is checked against the workload oracle. |
 | HTTP/2 | Rust server and Hypercorn, each with asyncio and uvloop. | TLS ALPN must select H2; status and full response body are checked. |
 | HTTP/3 | Rust server and Hypercorn, each with asyncio and uvloop. Hypercorn's upload workload is known to fail; other Hypercorn rows must still pass each run's correctness gate before they can be compared. | QUIC/TLS, status, and full response body are checked. |
 | WebSockets | Rust server with asyncio and uvloop; Uvicorn with its WebSocket implementation and asyncio or uvloop. | Handshake/subprotocol and complete text or binary payload equality are checked. |
@@ -62,9 +62,11 @@ and macOS 15 arm64. The workflow records the runner image, CPU model and core
 counts, total memory, operating system, architecture, and installed system
 package versions because hosted images and allocations can change.
 
-Each system runs the public parity gate before timed work, then runs all five
-maintained categories sequentially. The default is five repetitions per server;
-the analyzer still requires at least three matching valid repetitions. The
+Each system runs the public parity gate before timed work, then runs a separate
+FastAPI-only HTTP/1.1 comparison followed by all five maintained categories.
+The focused run selects only upstream FastAPI route validation/serialization
+and Python CPU workloads. The default is five repetitions per server; the
+analyzer still requires at least three matching valid repetitions. The
 contention monitor and correctness, process-cleanup, and identity gates remain
 active. Invalid observations are retained and excluded from ratios. If a host
 is noisy, the report shows the missing qualified pairs; rerun the workflow to
@@ -102,47 +104,54 @@ extension before collecting samples:
 
 ```sh
 uv lock --check
-uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs
+uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
 uv run --no-sync python -c 'import uvicorn_rs; print(uvicorn_rs.__file__)'
 ```
 
 The `benchmark` dependency group contains comparison servers and measurement
-tools. None is a runtime dependency of `uvicorn-rs`.
+tools. The optional `fastapi-benchmark` group pins upstream FastAPI 0.142.4.
+The FastAPI benchmark uses FastAPI, its upstream Starlette dependency, and
+Pydantic from the same locked Python environment for Uvicorn and `uvicorn-rs`.
+It does not install or benchmark FastAPI-RS or Starlette-RS. When the optional
+group is absent, the general HTTP/1.1 matrix records those two FastAPI workloads
+as omitted.
 
-The optional `starlette-rs-route` HTTP workload needs the separate framework
-installed in this benchmark environment. That integration is deliberately
-optional and does not add it to this server's dependencies. If the framework
-checkout is adjacent to this repository:
+### Focused FastAPI comparison
 
-Build and install a complete normal wheel from one framework source revision;
-its `starlette` Python package and `starlette_rs_py._core` extension must come
-from that same build. Do not combine copied wrappers with an older native
-extension or use a coverage build for a performance comparison.
+For a Python-heavy application comparison, select only the two upstream FastAPI
+workloads. Both use the same interpreter and installed app stack: one validates
+path/query inputs and serializes a Pydantic response model; the other runs a
+deterministic pure-Python CPU loop in a synchronous FastAPI route. Each response
+status and body must match its oracle before the row is accepted. The four
+server configurations pair Uvicorn and `uvicorn-rs` under asyncio, then again
+under uvloop. The Rust server's Tokio runtime remains at one worker thread in
+both rows; uvloop controls only the Python app event loop.
 
 ```sh
-FRAMEWORK_WHEELS=$(mktemp -d "${TMPDIR:-/tmp}/uvicorn-rs-framework.XXXXXX")
-uv build --wheel ../starlette-rs --out-dir "$FRAMEWORK_WHEELS" \
-  > "$FRAMEWORK_WHEELS/build.log" 2>&1
-uv pip install --python .venv/bin/python --reinstall --no-deps \
-  "$FRAMEWORK_WHEELS"/starlette_rs_py-*.whl
-git -C ../starlette-rs rev-parse HEAD
-shasum -a 256 "$FRAMEWORK_WHEELS"/starlette_rs_py-*.whl
-uv run --no-sync python -c 'import starlette, starlette_rs_py._core as n; print(starlette.__file__); print(n.__file__)'
+uv lock --check
+uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
+cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bins
+.venv/bin/python scripts/run_benchmark_categories.py \
+  --capture-identity target/fastapi-one-tokio/parity-before.json
+.venv/bin/python scripts/run_parity.py \
+  --prebuilt-http3-client \
+  --output target/fastapi-one-tokio/parity.json
+.venv/bin/python scripts/run_benchmark_categories.py \
+  --parity-before-identity target/fastapi-one-tokio/parity-before.json \
+  --parity-report target/fastapi-one-tokio/parity.json \
+  --category http1 \
+  --workloads fastapi-validated-route fastapi-python-cpu \
+  --duration 5 --warmup 1 --concurrency 64 --repetitions 5 --seed 20261008 \
+  --output-dir target/fastapi-one-tokio/results
 ```
 
-Record the framework revision, source changes, wheel digest and build log with
-the run. The selected workload fingerprints both packages and their distribution
-`RECORD`; editable or modified/unrecorded dependency files keep the comparison
-`not_proven`. Fingerprints alone are not an independent build attestation.
-
-Run the commands below with `--no-sync` after installation so an implicit
-environment sync cannot replace the optional framework between samples. If the
-framework is unavailable or cannot pass its live integration probe, omit
-`starlette-rs-route`, record the reason, and report 11 H1 workloads rather than
-all 12. The maintained category wrapper detects a missing `starlette-rs-py`
-distribution and records that omission automatically. If an installed framework
-fails the live gate, preserve the failed run, then use
-`--exclude-starlette-rs-route` during both identity capture and the clean rerun.
+At five repetitions this focused run plans 40 rows (two workloads × four server
+configurations × five repetitions). Read each event-loop pair separately. The
+closed-loop load client and server share the host; keep the contention gate on,
+retain rejected observations, and make no speed claim unless each pair has at
+least three matching timing-valid repetitions. The report fingerprints the
+FastAPI/Starlette/Pydantic distributions, the app and harness sources, the
+normal Rust binary, Python runtime, and load client.
 
 ## Correctness probes
 
@@ -161,10 +170,10 @@ These are targeted black-box cases, not the complete official ASGI conformance
 suite. Save their stdout/stderr as `live-probes.log` in the run's result
 directory. The support matrix lists the exact behaviors covered and known gaps.
 
-The Starlette integration command requires an installed normal uvicorn-rs wheel
-and the separately built starlette-rs wheel. Upstream Starlette uses a
-different environment because both frameworks install the starlette import
-namespace. See [deployment and framework integration](deployment.md#test-starlette-integrations).
+The timed FastAPI rows use only upstream FastAPI and its locked dependencies.
+Separate framework interoperability evidence is documented in
+[deployment and framework integration](deployment.md#test-starlette-integrations);
+that integration is not part of the performance matrix.
 
 ## Evidence required for a comparison
 
@@ -351,7 +360,6 @@ uv run --no-sync python scripts/run_http_category_bench.py \
   --workloads fixed large-response many-response-chunks small-response-chunks \
     request-upload request-upload-small-chunks slow-reader-backpressure \
     scope-32-headers contextvars sync-callable-awaitable exception-to-500 \
-    starlette-rs-route \
   --duration 5 --warmup 1 --concurrency 64 --repetitions 3 --seed 20261005 \
   --output "$RESULTS/http1.json" 2>&1 | tee "$RESULTS/http1.log"
 
@@ -382,8 +390,7 @@ The runners save per-sample rows and per-workload medians in each JSON file;
 the logs retain incremental stdout if a runner stops before writing JSON. The
 HTTP/1.1 runner also checkpoints completed rows in `http1.jsonl`. H3
 slow-reader concurrency is fixed at 2 by the workload; WebSocket handshake
-concurrency is fixed at 1. Record an optional `starlette-rs` commit in
-`environment.txt` when that workload is included.
+concurrency is fixed at 1.
 
 The H3 comparison runner can abort if Hypercorn fails a response check; this
 is a correctness failure, not a performance result. Keep the full log and
@@ -455,8 +462,9 @@ else:
 PY
 ```
 
-If `starlette-rs-route` is omitted, its 12 H1 rows are absent and the expected
-H1 count is 132. H3 has 78 rows rather than 84 because its known-failing
+The FastAPI group adds 24 H1 rows at three repetitions. Without FastAPI, H1 has
+132 rows across its 11 standard ASGI workloads. H3 has 78 rows rather than 84
+because its known-failing
 Hypercorn upload comparison is omitted. A failed/partial run should be retained
 with its failure output and rerun to a new result directory after fixing the
 cause; do not silently drop failed rows. If the Hypercorn H3 correctness gate
@@ -485,9 +493,10 @@ See [the feasibility report](feasibility.md) for historical interpretation and
 maintained HTTP/1.1, HTTP/2, HTTP/3, WebSocket and lifecycle categories sequentially.
 It derives workloads and public parity cases from the maintained matrix, rejects
 coverage/fault/diagnostic binaries, and requires a passing complete public matrix
-on the exact measured normal binary. Prepare the normal release server, coherent
-release protocol clients using the setup above. The separate Starlette-RS wheel
-is optional; see the workload-selection rule above.
+on the exact measured normal binary. Prepare the normal release server and
+coherent release protocol clients using the setup above. The matrix uses
+standard ASGI fixtures and upstream FastAPI; it does not build FastAPI-RS or
+Starlette-RS benchmark wheels.
 
 ```sh
 export RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER=
@@ -505,9 +514,11 @@ cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bi
 
 Every capture file and output directory must be new. Omitting `--output-dir`
 creates a timestamp/UUID directory under `target/benchmark-categories/`. The
-default plan has 354 rows when all optional workloads are available: each
-category includes both loop-matched pairs at three repetitions. Omitting
-`starlette-rs-route` removes its 12 H1 server/repetition rows, leaving 342.
+At three repetitions, the full matrix plans 366 rows with FastAPI and 342
+without it; the FastAPI group adds 24 H1 rows. The hosted workflow's five-repeat
+default plans 610 and 570 rows respectively. The separate FastAPI-only report
+contains 40 rows at five repetitions. Each category includes both loop-matched
+comparison pairs.
 `run.json`, event/checkpoint JSONL, source/binary/dependency hashes, server logs,
 cleanup receipts and raw failures are retained. The wrapper stops on identity
 drift and preserves independent category attempts after an isolated failure.
@@ -586,11 +597,10 @@ coverage of the complete H3 benchmark category or remove the earlier failure.
 runs manually, weekly, and when benchmark-related files change on `main`. It
 uses Linux x86_64, Linux arm64, and macOS arm64 with Python 3.12.13 and Rust
 1.98.1. Each system installs the locked references, builds a normal release
-server and protocol clients, and builds the independent framework wheel at its
-declared revision outside this checkout. It gates the exact binary on every
-current public parity case before timing and uploads preparation, parity, and
-category artifacts even on failure. Hosted image and system package versions
-are recorded, not fully pinned.
+server and protocol clients, and gates the exact binary on every current public
+parity case before timing. It uploads preparation, parity, and category
+artifacts even on failure. Hosted image and system package versions are
+recorded, not fully pinned.
 
 After all systems pass their correctness and identity gates, the aggregate job
 checks the source, Python, harness, and dependency identities and keeps platform
@@ -628,7 +638,7 @@ uv run --no-sync python scripts/run_http_category_bench.py \
   --duration 5 --warmup 1 --concurrency 64 --repetitions 3 --seed 20261005 \
   --require-runtime-diagnostics \
   --output "benchmarks/results/bridge-diagnostics-${RUN_ID}.json"
-uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs
+uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
 ```
 
 The H1 runner stores a `runtime_diagnostics` object on each Rust row and fails

@@ -22,11 +22,23 @@ from pathlib import Path
 
 import psutil
 
-from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_coverage_environment, median_valid, stop_client, owned_process, stop_owned, run_bounded_client, collect_bounded_client, finalize_server)
+from benchmark_evidence import (
+    FASTAPI_BENCHMARK_DISTRIBUTIONS,
+    BenchmarkEvidence,
+    SampleMonitor,
+    assert_clean_coverage_environment,
+    median_valid,
+    stop_client,
+    owned_process,
+    stop_owned,
+    run_bounded_client,
+    collect_bounded_client,
+    finalize_server,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PYTHON = ROOT / ".venv" / "bin" / "python"
+DEFAULT_PYTHON = ROOT / ".venv" / "bin" / "python"
 CLIENT = ROOT / "scripts" / "bench_http_matrix.mjs"
 NATIVE_CLIENT_SOURCE = ROOT / "scripts" / "bench_http_client.c"
 NATIVE_CLIENT: Path | None = None
@@ -126,12 +138,23 @@ WORKLOADS = {
         "timing_rankable": False,
         "timing_exclusion_reason": "unequal_exception_diagnostic_policy",
     },
-    "starlette-rs-route": {
-        "app": "examples.starlette_rs_asgi:app",
+    "fastapi-validated-route": {
+        "app": "examples.bench_fastapi:app",
         "client": {
             "mode": "fixed",
-            "path": "/",
-            "expected_body": "starlette-rs ASGI app",
+            "path": "/items/7?repeat=3",
+            "expected_body": (
+                '{"item_id":21,"name":"item-7","active":true,'
+                '"labels":["python","asgi"]}'
+            ),
+        },
+    },
+    "fastapi-python-cpu": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "fixed",
+            "path": "/cpu/20000",
+            "expected_body": '{"iterations":20000,"checksum":499563}',
         },
     },
 }
@@ -158,10 +181,10 @@ def _port() -> int:
         return sock.getsockname()[1]
 
 
-def _command(server: dict, app: str, port: int) -> list[str]:
+def _command(server: dict, app: str, port: int, python: Path) -> list[str]:
     if server["kind"] == "rust":
         return [
-            str(PYTHON),
+            str(python),
             "-m",
             "uvicorn_rs",
             app,
@@ -173,7 +196,7 @@ def _command(server: dict, app: str, port: int) -> list[str]:
             server["loop"],
         ]
     return [
-        str(PYTHON),
+        str(python),
         "-m",
         "uvicorn",
         app,
@@ -291,6 +314,7 @@ def _sample(
     seconds: float,
     warmup: float,
     concurrency: int,
+    python: Path,
     require_runtime_diagnostics: bool = False,
     evidence: BenchmarkEvidence | None = None,
 ) -> dict:
@@ -301,7 +325,7 @@ def _sample(
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     process = owned_process(
-        _command(server, definition["app"], port),
+        _command(server, definition["app"], port, python),
         cwd=ROOT,
         env=env,
         stdout=log,
@@ -368,7 +392,7 @@ def _sample(
         log.close()
 
 
-def _versions() -> dict:
+def _versions(python: Path) -> dict:
     code = (
         "import importlib.metadata as m, json, platform, sys; "
         "print(json.dumps({'python': sys.version.split()[0], 'implementation': "
@@ -376,7 +400,20 @@ def _versions() -> dict:
         "'uvloop': m.version('uvloop'), 'httptools': m.version('httptools'), "
         "'hypercorn': m.version('hypercorn')}))"
     )
-    return json.loads(subprocess.check_output([str(PYTHON), "-c", code], text=True))
+    versions = json.loads(subprocess.check_output([str(python), "-c", code], text=True))
+    try:
+        versions["fastapi"] = subprocess.check_output(
+            [
+                str(python),
+                "-c",
+                "import importlib.metadata as m; print(m.version('fastapi'))",
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except subprocess.CalledProcessError:
+        versions["fastapi"] = None
+    return versions
 
 
 def _median(rows: list[dict], metric: str):
@@ -402,7 +439,7 @@ def _source_digest(workloads: list[str]) -> str:
         [
             "examples/bench_matrix_asgi.py",
             "examples/bench_sync_asgi.py",
-            "examples/starlette_rs_asgi.py",
+            "examples/bench_fastapi.py",
         ]
     )
     digest = hashlib.sha256()
@@ -425,6 +462,12 @@ def main() -> None:
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--seed", type=int, default=20261002)
     parser.add_argument(
+        "--python",
+        type=Path,
+        default=DEFAULT_PYTHON,
+        help="Python interpreter used for all measured servers (default: checkout .venv)",
+    )
+    parser.add_argument(
         "--require-runtime-diagnostics",
         action="store_true",
         help="require the Rust runtime-diagnostics feature and add its counters to candidate rows",
@@ -435,19 +478,21 @@ def main() -> None:
         default=ROOT / "benchmarks" / "results" / "http-categories-2026-10-02.json",
     )
     args = parser.parse_args()
-    if not PYTHON.exists():
-        raise SystemExit("create .venv and install this project plus the benchmark dependency group first")
+    python = args.python.absolute()
+    if not python.exists():
+        raise SystemExit(f"Python interpreter does not exist: {python}")
     assert_clean_coverage_environment()
     native_client = _build_native_client()
     selected_servers = {name: SERVERS[name] for name in args.servers}
     evidence = BenchmarkEvidence(
-        ROOT, PYTHON,
+        ROOT, python,
         ["scripts/run_http_category_bench.py", "scripts/bench_http_matrix.mjs", "scripts/bench_http_client.c",
-         "examples/bench_matrix_asgi.py", "examples/bench_sync_asgi.py", "examples/starlette_rs_asgi.py"],
+         "examples/bench_matrix_asgi.py", "examples/bench_sync_asgi.py", "examples/bench_fastapi.py"],
         [native_client] if native_client is not None else [],
         allow_runtime_diagnostics=args.require_runtime_diagnostics,
         artifacts_dir=args.output.with_suffix(".artifacts"),
-        extra_dependencies={"starlette-rs-py": ["starlette", "starlette_rs_py"]} if "starlette-rs-route" in args.workloads else None,
+        extra_dependencies=(FASTAPI_BENCHMARK_DISTRIBUTIONS
+                            if any(name.startswith("fastapi-") for name in args.workloads) else None),
     )
 
     rng = random.Random(args.seed)
@@ -474,6 +519,7 @@ def main() -> None:
                         duration,
                         warmup,
                         concurrency,
+                        python,
                         args.require_runtime_diagnostics,
                         evidence,
                     )
@@ -538,7 +584,7 @@ def main() -> None:
             "machine": platform.machine(),
             "logical_cpus": psutil.cpu_count(logical=True),
             "cpu_model": cpu_model,
-            "python_environment": _versions(),
+            "python_environment": _versions(python),
             "node": subprocess.check_output(["node", "--version"], text=True).strip(),
             "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
             "source_sha256": _source_digest(args.workloads),

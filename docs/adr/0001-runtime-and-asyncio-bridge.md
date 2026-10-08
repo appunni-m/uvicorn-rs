@@ -1,6 +1,6 @@
 # ADR 0001: Rust network runtime and Python asyncio bridge
 
-- **Status:** Accepted for the protocol prototype. Historical receive-fast-path measurements remain scoped to their recorded builds. The October 4 matrix was contended, and the October 5 optimization comparison has no accepted general speedup. Current 490-case correctness evidence and 238/238 normal-build parity are recorded in the [coverage report](../coverage.md#current-full-verification-490-cases). The source remains experimental and is not approved as a general performance replacement or production server.
+- **Status:** Accepted for the protocol prototype. Its initial two-thread Tokio setting is superseded by [ADR 0002](0002-worker-process-and-runtime-thread-model.md), which starts measurement with one Tokio worker thread. Historical receive-fast-path measurements remain scoped to their recorded builds. The October 4 matrix was contended, and the October 5 optimization comparison has no accepted general speedup. Current 490-case correctness evidence and 238/238 normal-build parity are recorded in the [coverage report](../coverage.md#current-full-verification-490-cases). The source remains experimental and is not approved as a general performance replacement or production server.
 - **Date:** 2026-10-02
 - **Project name:** `uvicorn-rs`, taken from the GitHub repository URL supplied by the owner. The CLI name is `uvicorn-rs` and the Python import name is `uvicorn_rs`. This project is independent and is not affiliated with Uvicorn.
 
