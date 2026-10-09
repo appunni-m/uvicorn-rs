@@ -1,20 +1,15 @@
 # Implementation review: known gaps
 
-The current local source passes the 491-case attribution matrix and three
-complete 491-case repeats with zero failures, infrastructure errors, retries,
-or cases not run. The matrix has 239 oracle comparisons and 252 target-only
-contracts across 70 input files and 71 operations. Native coverage is
-5,121/5,121 regions and 3,624/3,624 lines, with zero Coverage-MCP gaps. A
-rebuilt normal non-instrumented local build passes 239/239 public comparisons.
-Hosted run [#29](https://github.com/appunni-m/uvicorn-rs/actions/runs/37646875313)
-on the current commit measured 5,121/5,121 regions and 3,624/3,624 lines, but
-its attribution and first repeat had Uvicorn TLS-WebSocket oracle
-infrastructure failures; the installed-wheel parity job passed 237/239 with
-the same failure class and no behavior mismatches. The platform/Python-floor
-jobs were skipped. The earlier installed-wheel exclusion audit applies to a
-prior source snapshot. Hosted verification of the current coverage-only source
-change is still pending. See the
-[current source/build receipt](coverage.md#current-full-verification-491-cases).
+The latest local source passes the 494-case attribution matrix and three
+complete 494-case repeats with zero failures, infrastructure errors, retries,
+or cases not run. The matrix has 240 oracle comparisons and 254 target-only
+contracts. Native coverage is 5,298/5,298 regions and 3,753/3,753 lines, with
+zero Coverage-MCP gaps. A rebuilt normal non-instrumented local build passes
+240/240 public comparisons. This is dirty-checkout macOS evidence, not a clean
+hosted release result. The latest hosted CI run is recorded in
+[benchmark status](benchmark-status.md); exact-source hosted verification
+remains incomplete. See the
+[current source/build receipt](coverage.md#current-full-verification-494-cases).
 The earlier coverage and implementation results below are historical and do
 not attest the current checkout.
 

@@ -43,7 +43,8 @@ def main() -> int:
         raise ReceiptError("report does not contain the unified coverage extension")
     expected_reference = str(report_path.relative_to(ROOT))
 
-    page_data: list[dict[str, Any]] = []
+    page_data: dict[str, list[dict[str, Any]]] = {"regions": [], "lines": []}
+    common_measurement: dict[str, Any] | None = None
     for index, page in enumerate(pages):
         data = page.get("data")
         if not isinstance(data, dict) or data.get("status") != "measured":
@@ -51,44 +52,70 @@ def main() -> int:
         measurement = data.get("measurement", {})
         if measurement.get("ref") != expected_reference:
             raise ReceiptError(f"Coverage-MCP page {index} references another report")
-        page_data.append(data)
+        coverage = measurement.get("coverage", {})
+        metric = coverage.get("metric")
+        if metric not in page_data:
+            raise ReceiptError(f"Coverage-MCP page {index} has unsupported metric {metric!r}")
+        identity = {key: value for key, value in measurement.items() if key != "coverage"}
+        if common_measurement is None:
+            common_measurement = identity
+        elif identity != common_measurement:
+            raise ReceiptError("Coverage-MCP pages refer to inconsistent source/build measurements")
+        page_data[metric].append(data)
 
-    first_measurement = page_data[0]["measurement"]
-    if first_measurement.get("build_id") != digest_json(extension["run"]["build"]):
+    if not page_data["regions"] or common_measurement is None:
+        raise ReceiptError("receipt must include at least one measured region page")
+    expected_coverage = extension["coverage"]["summary"]
+    first_measurements: dict[str, dict[str, Any]] = {}
+    for metric, metric_pages in page_data.items():
+        if not metric_pages:
+            continue
+        first_measurement = metric_pages[0]["measurement"]
+        if first_measurement.get("coverage") != {
+            "covered": expected_coverage[metric]["covered"],
+            "metric": metric,
+            "missing": expected_coverage[metric]["missing"],
+            "total": expected_coverage[metric]["total"],
+        }:
+            raise ReceiptError(f"Coverage-MCP {metric} totals do not match the unified report")
+        if any(data["measurement"] != first_measurement for data in metric_pages[1:]):
+            raise ReceiptError(f"Coverage-MCP {metric} pages refer to inconsistent measurements")
+        first_measurements[metric] = first_measurement
+
+    if common_measurement.get("build_id") != digest_json(extension["run"]["build"]):
         raise ReceiptError("Coverage-MCP build identity does not match the unified report")
-    coverage_summary = extension["coverage"]["summary"]["regions"]
-    if first_measurement.get("coverage") != {
-        "covered": coverage_summary["covered"],
-        "metric": "regions",
-        "missing": coverage_summary["missing"],
-        "total": coverage_summary["total"],
-    }:
-        raise ReceiptError("Coverage-MCP region totals do not match the unified report")
-    if any(data["measurement"] != first_measurement for data in page_data[1:]):
-        raise ReceiptError("Coverage-MCP pages refer to inconsistent source/build measurements")
 
-    group_count = page_data[0]["group_count"]
-    groups = []
-    seen: set[tuple[str, str]] = set()
-    for data in page_data:
-        for group in data.get("groups", []):
-            identity = (group["path"], group["function"])
-            if identity in seen:
-                raise ReceiptError(f"Coverage-MCP returned a duplicate function group: {identity}")
-            seen.add(identity)
-            groups.append({
-                "file": group["path"],
-                "function": group["function"],
-                "missing_observations": group["count"],
-                "sampled_locations": [
-                    {"span": location["span"], "arm": location.get("arm")}
-                    for location in group.get("locations", [])
-                ],
-                "locations_omitted": group.get("locations_omitted", 0),
-                "unmeasured_reason": group.get("unmeasured_reason"),
-            })
-    if len(groups) != group_count:
-        raise ReceiptError(f"Coverage-MCP pagination returned {len(groups)} of {group_count} groups")
+    def collect_groups(metric: str) -> tuple[int, list[dict[str, Any]]]:
+        metric_pages = page_data[metric]
+        group_count = metric_pages[0]["group_count"]
+        groups = []
+        seen: set[tuple[str, str]] = set()
+        for data in metric_pages:
+            for group in data.get("groups", []):
+                identity = (group["path"], group["function"])
+                if identity in seen:
+                    raise ReceiptError(f"Coverage-MCP returned a duplicate function group: {identity}")
+                seen.add(identity)
+                groups.append({
+                    "file": group["path"],
+                    "function": group["function"],
+                    "missing_observations": group["count"],
+                    "sampled_locations": [
+                        {"span": location["span"], "arm": location.get("arm")}
+                        for location in group.get("locations", [])
+                    ],
+                    "locations_omitted": group.get("locations_omitted", 0),
+                    "unmeasured_reason": group.get("unmeasured_reason"),
+                })
+        if len(groups) != group_count:
+            raise ReceiptError(
+                f"Coverage-MCP {metric} pagination returned {len(groups)} of {group_count} groups"
+            )
+        return group_count, groups
+
+    group_count, groups = collect_groups("regions")
+    line_group_count, line_groups = collect_groups("lines") if page_data["lines"] else (0, [])
+    first_measurement = first_measurements["regions"]
 
     span_to_regions: dict[tuple[str, int, int, int, int], list[str]] = {}
     for region in extension["coverage"]["regions"]:
@@ -117,10 +144,16 @@ def main() -> int:
         "build_id": first_measurement.get("build_id"),
         "tests": first_measurement.get("tests"),
         "coverage": first_measurement["coverage"],
+        "line_coverage": (
+            first_measurements["lines"]["coverage"] if "lines" in first_measurements else None
+        ),
         "group_count": group_count,
         "groups": groups,
+        "line_group_count": line_group_count,
+        "line_groups": line_groups,
         "location_samples_are_bounded": True,
-        "pages": len(page_data),
+        "pages": len(page_data["regions"]),
+        "line_pages": len(page_data["lines"]),
         "receipt_artifact": str(receipt_path.relative_to(ROOT)) if receipt_path.is_relative_to(ROOT) else str(receipt_path),
     }
     for region in extension["coverage"]["uncovered_regions"]:

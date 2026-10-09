@@ -585,6 +585,12 @@ async def _app_impl(scope, receive, send):
         if scope["path"] == "/ws-send-and-return":
             await send({"type": "websocket.send", "text": "queued final frame"})
             return
+        if scope["path"] == "/ws-final-frame-drain":
+            await send({"type": "websocket.send", "text": "drain-first"})
+            await send({"type": "websocket.send", "text": "x" * (8 * 1024 * 1024)})
+            await send({"type": "websocket.send", "text": "queued final frame"})
+            _record("websocket.final-frame-enqueued")
+            return
         if scope["path"] == "/ws-send-and-hold":
             await send({"type": "websocket.send", "text": "send before hold"})
             try:

@@ -282,6 +282,22 @@
       }
     },
     {
+      "case_id": "websocket.final-frame-drain",
+      "profile": "websocket",
+      "operation": "websocket.final-frame-drain",
+      "covers": [
+        "websocket.final-frame-drain"
+      ],
+      "websocket": {
+        "path": "/ws-final-frame-drain",
+        "subprotocols": [],
+        "messages": [],
+        "expect_close": true,
+        "wait_for_app_event": "websocket.final-frame-enqueued",
+        "receive_buffer_bytes": 4096
+      }
+    },
+    {
       "case_id": "websocket.subclass-event-types",
       "profile": "websocket",
       "operation": "websocket.server-close",

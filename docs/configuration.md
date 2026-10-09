@@ -1,10 +1,10 @@
 # CLI and Python API
 
-The current source passes 490/490 attribution workflows and three complete
-490-case repeats, with 5,108/5,108 native regions and 3,608/3,608 lines
-covered. The matrix contains 238 public oracle cases and 252 target-only
-contracts. The normal non-instrumented local build passes 238/238 public
-comparisons. See the [current source/build receipt](coverage.md#current-full-verification-490-cases).
+The current source passes 494/494 attribution workflows and three complete
+494-case repeats, with 5,298/5,298 native regions and 3,753/3,753 lines
+covered. The matrix contains 240 public oracle cases and 254 target-only
+contracts. The normal non-instrumented local build passes 240/240 public
+comparisons. See the [current source/build receipt](coverage.md#current-full-verification-494-cases).
 
 ## CLI
 

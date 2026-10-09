@@ -688,6 +688,7 @@ def load_contract(
         "ordered_response_headers", "response_header_values_by_name",
         "streamed_before_completion", "disconnect_event", "followup_response",
         "handshake_status", "handshake_established", "subprotocol", "ordered_messages", "state_response",
+        "ordered_message_payload_bytes", "last_ordered_message",
         "process_terminated", "process_exit_code", "application_events", "close_code", "close_reason",
         "connection_closed", "listener_closed_before_release", "idle_connection_closed",
         "startup_failed", "startup_error_observed", "responses", "pong_received",
@@ -2201,6 +2202,29 @@ def load_contract(
                 websocket_keys.add("followup_path")
                 if not isinstance(websocket["followup_path"], str) or not websocket["followup_path"].startswith("/"):
                     raise ParityError(f"{case_id}: WebSocket followup_path must be origin-form")
+            if "wait_for_app_event" in websocket:
+                websocket_keys.add("wait_for_app_event")
+                if (
+                    not isinstance(websocket["wait_for_app_event"], str)
+                    or not websocket["wait_for_app_event"]
+                    or case.get("profile") != "websocket"
+                    or case.get("operation") != "websocket.final-frame-drain"
+                    or websocket.get("expect_close") is not True
+                    or websocket.get("messages") != []
+                ):
+                    raise ParityError(
+                        f"{case_id}: deferred WebSocket reads require the final-frame drain workflow"
+                    )
+            if "receive_buffer_bytes" in websocket:
+                websocket_keys.add("receive_buffer_bytes")
+                if (
+                    type(websocket["receive_buffer_bytes"]) is not int
+                    or not 1 <= websocket["receive_buffer_bytes"] <= 65535
+                    or "wait_for_app_event" not in websocket
+                ):
+                    raise ParityError(
+                        f"{case_id}: receive_buffer_bytes requires a bounded deferred-read workflow"
+                    )
             exact_keys(websocket, websocket_keys, f"{case_id}.websocket")
             for message in websocket["messages"]:
                 exact_keys(message, {"kind", "value"}, f"{case_id}.websocket message")
@@ -5180,15 +5204,24 @@ def websocket_observation(
             "close_code": client_result["close_code"],
             "close_reason": client_result["close_reason"],
         }
+    client_socket: socket.socket | None = None
     try:
+        receive_buffer_bytes = specification.get("receive_buffer_bytes")
+        if receive_buffer_bytes is not None:
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, receive_buffer_bytes)
+            client_socket.connect(("127.0.0.1", server["port"]))
         with websocket_connect(
             uri,
+            sock=client_socket,
             subprotocols=subprotocols,
             additional_headers=specification.get("headers", []),
             ssl=ssl_context,
             proxy=None,
             open_timeout=20,
             close_timeout=2,
+            max_queue=1 if "wait_for_app_event" in specification else 16,
+            max_size=16 * 1024 * 1024 if "wait_for_app_event" in specification else 1024 * 1024,
             logger=client_logger,
         ) as websocket:
             if specification.get("abrupt_disconnect", False):
@@ -5223,6 +5256,17 @@ def websocket_observation(
                     if not isinstance(echoed, bytes):
                         raise ParityError("binary WebSocket message came back as text")
                     echoes.append({"kind": "binary_base64", "value": base64.b64encode(echoed).decode("ascii")})
+            wait_for_app_event = specification.get("wait_for_app_event")
+            if wait_for_app_event is not None:
+                deadline = time.monotonic() + 10
+                application_events = read_events(events_path)[events_before:]
+                while wait_for_app_event not in application_events and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                    application_events = read_events(events_path)[events_before:]
+                if wait_for_app_event not in application_events:
+                    raise ParityError(
+                        f"WebSocket app did not reach deferred-read event {wait_for_app_event!r}"
+                    )
             observation = {"handshake_status": 101, "subprotocol": websocket.subprotocol, "messages": echoes}
             if pong_received is not None:
                 observation["pong_received"] = pong_received
@@ -5254,6 +5298,15 @@ def websocket_observation(
                         break
                     time.sleep(0.01)
                 observation["application_events"] = application_events
+            observation["message_payload_bytes"] = [
+                len(
+                    message["value"].encode("utf-8")
+                    if message["kind"] == "text"
+                    else base64.b64decode(message["value"], validate=True)
+                )
+                for message in echoes
+            ]
+            observation["last_message"] = echoes[-1] if echoes else None
             return add_fault_followup(
                 observation,
                 wait_for_events=fault_point not in {
@@ -5308,6 +5361,8 @@ def websocket_observation(
             client_handler.close()
         if fault_control_path is not None:
             fault_control_path.write_text("", encoding="utf-8")
+        if client_socket is not None:
+            client_socket.close()
 
 
 def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[str, Any]:
@@ -5336,6 +5391,8 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "pong_received": "pong_received",
         "subprotocol": "subprotocol",
         "ordered_messages": "messages",
+        "ordered_message_payload_bytes": "message_payload_bytes",
+        "last_ordered_message": "last_message",
         "close_code": "close_code",
         "close_reason": "close_reason",
         "state_response": "state_response",

@@ -1,12 +1,12 @@
 # ADR 0001: Rust network runtime and Python asyncio bridge
 
-- **Status:** Accepted for the protocol prototype. Its initial two-thread Tokio setting is superseded by [ADR 0002](0002-worker-process-and-runtime-thread-model.md), which starts measurement with one Tokio worker thread. Historical receive-fast-path measurements remain scoped to their recorded builds. The October 4 matrix was contended, and the October 5 optimization comparison has no accepted general speedup. Current 490-case correctness evidence and 238/238 normal-build parity are recorded in the [coverage report](../coverage.md#current-full-verification-490-cases). The source remains experimental and is not approved as a general performance replacement or production server.
+- **Status:** Accepted architecture for the experimental protocol implementation. The server uses one Tokio core worker per process; Python retains ownership of the ASGI event loop and app tasks. The performance scope was revised on 2026-10-09 after a qualified 11-workload FastAPI comparison found no broad speed advantage. Current local evidence covers 494 black-box workflows and 240 normal-build parity cases in the [coverage report](../coverage.md#current-full-verification-494-cases). This is not a general performance-replacement or production-readiness claim.
 - **Date:** 2026-10-02
 - **Project name:** `uvicorn-rs`, taken from the GitHub repository URL supplied by the owner. The CLI name is `uvicorn-rs` and the Python import name is `uvicorn_rs`. This project is independent and is not affiliated with Uvicorn.
 
 ## Context
 
-The project should host ordinary ASGI 3 applications, including applications built with `starlette-rs`, while keeping `starlette-rs` independent of this server. Keep Python as a thin integration boundary: it resolves `module:app`, owns the app event loop and task creation, and preserves callable, context, and exception behavior at the ASGI boundary. Rust owns the listener, socket handling, protocol implementation, connection and stream state, flow control, and shutdown. The requested HTTP target now includes HTTP/1.1, HTTP/2, and HTTP/3. ASGI requires each HTTP/2 and HTTP/3 request to receive its own scope and its response to stay on the corresponding multiplexed stream; the ASGI `http_version` values are `"1.1"`, `"2"`, and `"3"` respectively ([ASGI HTTP spec](https://asgi.readthedocs.io/en/latest/specs/www.html)). The performance target remains an evidenced improvement over Uvicorn where protocol baselines are comparable, not a claim based on language choice.
+The project should host ordinary ASGI 3 applications, including applications built with `starlette-rs`, while keeping `starlette-rs` independent of this server. Keep Python as a thin integration boundary: it resolves `module:app`, owns the app event loop and task creation, and preserves callable, context, and exception behavior at the ASGI boundary. Rust owns the listener, socket handling, protocol implementation, connection and stream state, flow control, and shutdown. The requested HTTP target includes HTTP/1.1, HTTP/2, and HTTP/3. ASGI requires each HTTP/2 and HTTP/3 request to receive its own scope and its response to stay on the corresponding multiplexed stream; the ASGI `http_version` values are `"1.1"`, `"2"`, and `"3"` respectively ([ASGI HTTP spec](https://asgi.readthedocs.io/en/latest/specs/www.html)). The initial performance goal was to beat Uvicorn on representative workloads. The measured scope is now workload-specific: no general speed advantage is claimed.
 
 ASGI lifespan requires startup and request handling to use the same Python event loop. HTTP and WebSocket bodies are message streams, and server `send()` calls must apply backpressure by flushing data into the transport's send buffer before returning. Disconnects must be visible to the app; sends on closed connections should raise an `OSError` subclass. The lifespan protocol also defines shallow-copied per-request state.
 
@@ -16,7 +16,7 @@ Uvicorn already offers both asyncio and uvloop loop choices, plus multiple HTTP 
 
 ### 1. Rust owns the network data plane
 
-Use a two-worker Tokio multi-thread runtime for accepting sockets and running the Rust protocol data plane. Hyper's auto server connection handles HTTP/1.1 and HTTP/2 parsing, keep-alive, framing, and stream multiplexing. Cleartext HTTP/2 prior knowledge is accepted; TLS TCP advertises `h2` and `http/1.1` via ALPN. HTTPS and QUIC share the configured address, with Quinn and `h3` handling HTTP/3 over TLS 1.3 and ALPN `h3`. The Rust `h3` crate is experimental, so HTTP/3 stays a preview feature until broader interoperability and stress coverage exist. Request streams map to separate ASGI invocations. Hyper and `h3` own protocol flow control, with bounded Rust-to-Python channels preventing whole-body accumulation. WebSockets use Hyper's HTTP/1.1 Upgrade and `tokio-tungstenite`; WebSocket over HTTP/2 or HTTP/3 is unsupported.
+Use one Tokio core worker thread per process for accepting sockets and running the Rust protocol data plane. This is the measured runtime configuration, not a performance result. Tokio's blocking pool and the Python-owned event loop may create additional threads. Hyper's auto server connection handles HTTP/1.1 and HTTP/2 parsing, keep-alive, framing, and stream multiplexing. Cleartext HTTP/2 prior knowledge is accepted; TLS TCP advertises `h2` and `http/1.1` via ALPN. HTTPS and QUIC share the configured address, with Quinn and `h3` handling HTTP/3 over TLS 1.3 and ALPN `h3`. The Rust `h3` crate is experimental, so HTTP/3 stays a preview feature until broader interoperability and stress coverage exist. Request streams map to separate ASGI invocations. Hyper and `h3` own protocol flow control, with bounded Rust-to-Python channels preventing whole-body accumulation. WebSockets use Hyper's HTTP/1.1 Upgrade and `tokio-tungstenite`; WebSocket over HTTP/2 or HTTP/3 is unsupported.
 
 Rust owns connection state, framing, socket reads and writes, bounded buffers, shutdown deadlines, and protocol errors. It does not execute ASGI app code on Tokio worker threads.
 
@@ -73,9 +73,10 @@ Python calls, GIL access, or scheduler handoffs. The event-name optimization
 was not isolated in a clean performance run, so no speed gain is claimed.
 
 The canonical source does not cache fixed ASGI scope/message keys, Python
-method lookups or common HTTP methods. Key/value and one-Tokio-worker builds
-were tested, but every optimization timing was rejected by the host guard;
-common-method caching was drafted only. These experiments remain unaccepted.
+method lookups, or common HTTP methods. One Tokio core worker is the selected
+runtime configuration; it is not an accepted speed optimization. The key/value
+cache and common-method cache experiments remain unaccepted because their
+timings did not qualify.
 HTTP path decoding retains its borrowed
 `Cow<str>` for the common already-decoded case instead of first allocating an
 owned Rust `String`. HTTP methods retain the existing uppercasing path;
@@ -111,7 +112,7 @@ body/stream failure, cancellation diagnostics before the original error,
 Python cleanup and a healthy fresh request. A selected instrumented public
 pair passed the 128-response sequence with GREASE disabled and the clean-close
 case (2/2). The held-response accept-error contract passed its selected
-instrumented case (1/1), then the current 490-case attribution run and three
+instrumented case (1/1), then the 2026-10-08 490-case attribution run and three
 complete repeats passed with zero failures, infrastructure errors, retries or
 cases not run. The instrumented build measures 5,108/5,108 regions and
 3,608/3,608 lines with zero unfiltered source-matched MCP gaps and tests passed.
@@ -121,9 +122,9 @@ remote `ApplicationClosed(0x102)`, body-stream error, connection closure and
 cleanup establish connection-error termination/cancellation; `stream_reset`
 alone follows a client error convention and does not identify a QUIC
 `RESET_STREAM` frame. The current normal non-instrumented local build passes
-238/238 public comparisons. The installed-wheel result and 16-check exclusion
+238/238 public comparisons in that historical snapshot. The installed-wheel result and 16-check exclusion
 audit belong to the preceding source snapshot and have not been repeated for
-this source. See [current evidence](../coverage.md#current-full-verification-490-cases).
+that snapshot. See [the superseded 490-case evidence](../coverage.md#superseded-full-verification-490-cases).
 
 The request-body-pump work closes the detached-task ownership gap separately
 from H3 request-task reaping. `ServerContext` owns body pumps in a `JoinSet`;

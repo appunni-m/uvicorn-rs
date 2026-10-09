@@ -7,22 +7,27 @@ listeners, HTTP/1.1, HTTP/2, experimental HTTP/3, WebSocket transport, flow
 control, and shutdown. Python loads the application and keeps ownership of its
 asyncio event loop and ASGI tasks.
 
-This remains an experimental prototype. The last accepted performance report
-measured a 1.59× gain on one fixed WebSocket handshake workload; it does not
-establish a general speedup, and those timings predate the current source.
-Current source correctness is documented in the [485-case report](docs/coverage.md#current-full-verification-485-cases):
-485/485 attributed workflows and three 485/485 repeats pass, with 5,106/5,106
-Rust regions and 3,606/3,606 lines covered. The matrix contains 233 live oracle
-comparisons and 252 target-only contracts across 70 input files and 66
-operations. The normal wheel passes all 233 public oracle cases and its
-16-check exclusion audit. The unified report, exact Coverage-MCP receipt,
-normal parity output, wheel consumer result, and audit are preserved in the
-[2026-10-07 evidence archive](benchmarks/results/2026-10-07/asgi-inventory-485/evidence-index.json).
-These local results come from a dirty macOS ARM64 checkout; they are not a clean
-release baseline. The complete official ASGI conformance suite and a production
-security review have not been run. The [support matrix](docs/support-matrix.md)
-records the declared limits, the known H1/H2 response-header ordering
-deviation, and the unverified H3 wire-order behavior.
+This remains an experimental prototype, not a demonstrated faster replacement
+for Uvicorn. The latest upstream FastAPI benchmark completed H1, H2, WebSocket,
+and lifecycle correctness and qualified 32 workload/loop comparisons. Results
+vary by workload: ordinary H1 routes, large responses, H2 small-chunk uploads,
+and WebSocket echo regress, while H2 large responses and WebSocket handshakes
+favor the Rust server. A separate default 1 MiB H1 upload measured 0.458× and
+0.563× Uvicorn throughput under asyncio and uvloop. The performance scope has
+been revised; see the [complete results](docs/benchmark-results.md) and
+[feasibility report](docs/feasibility.md).
+
+The latest local black-box evidence covers 494 cases: 240 live oracle
+comparisons and 254 target-only contracts. All attribution cases and three
+complete repeats passed; the report records 5,298/5,298 Rust regions and
+3,753/3,753 lines covered. The normal wheel also passed all 240 public parity
+cases. The exact source-bound evidence and its limits are in the [coverage
+report](docs/coverage.md#current-full-verification-494-cases).
+Hosted package and Python-floor checks passed on commit `a78b4a9`; a verified
+candidate bundle for the current source has not been assembled. The complete
+official ASGI conformance suite and a production security review have not been
+run. The [support matrix](docs/support-matrix.md) records tested behavior,
+known deviations, and exclusions.
 
 `uvicorn-rs` is the project name used by the supplied GitHub repository and is
 not affiliated with the Uvicorn project. `starlette-rs` is an optional,
@@ -91,6 +96,9 @@ guide](docs/parity.md) for its oracle choices, support slice, and result format.
 - This is not a drop-in Uvicorn replacement. Uvicorn CLI parity, reload, worker
   supervision, proxy-header handling, and Unix sockets are outside the current
   scope.
+- The CLI starts one server process with one Tokio core worker. The Python app
+  remains on its owning asyncio or uvloop event loop; Tokio's blocking pool can
+  create additional threads for bridge work.
 - HTTP/2 WebSockets and HTTP/3 WebSockets are unsupported. HTTP/3 remains
   experimental.
 - No wheel or source distribution has been published.

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import os
 from pathlib import Path
@@ -16,10 +17,20 @@ from datetime import datetime, timezone
 from typing import Any
 import uuid
 
-import run_parity
-
-
 ROOT = Path(__file__).resolve().parents[1]
+PYTHON_SOURCE = ROOT / "python"
+PYTHON_SOURCE_TEXT = str(PYTHON_SOURCE)
+_existing_pythonpath = os.environ.get("PYTHONPATH")
+os.environ["PYTHONPATH"] = os.pathsep.join(
+    path for path in (PYTHON_SOURCE_TEXT, _existing_pythonpath) if path
+)
+if PYTHON_SOURCE_TEXT in sys.path:
+    sys.path.remove(PYTHON_SOURCE_TEXT)
+sys.path.insert(0, PYTHON_SOURCE_TEXT)
+
+run_parity = importlib.import_module("run_parity")
+
+
 RUNNER = ROOT / "scripts" / "run_parity.py"
 BUILD_SCRIPT = ROOT / "scripts" / "build_coverage_extension.py"
 RESULT_SCHEMA = "uvicorn-rs-coverage/unified@1"
@@ -333,6 +344,11 @@ def main() -> int:
         extension = ROOT / extension
     if not extension.is_file():
         raise CoverageError(f"instrumented extension does not exist: {extension}")
+    if not extension.resolve().is_relative_to((PYTHON_SOURCE / "uvicorn_rs").resolve()):
+        raise CoverageError(
+            "coverage run imported the native extension outside the source package: "
+            f"{extension}; expected an extension under {PYTHON_SOURCE / 'uvicorn_rs'}"
+        )
     build_identity = {
         "native_extension": str(extension.relative_to(ROOT)),
         "native_extension_sha256": digest_file(extension),

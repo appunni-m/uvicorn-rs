@@ -1,12 +1,12 @@
 # ASGI server parity suite
 
-The current 490-case matrix passes per-case attribution and three complete
+The current 494-case matrix passes per-case attribution and three complete
 repeats with zero failures, infrastructure errors, retries, or cases not run.
-It contains 238 live oracle comparisons and 252 target-only contracts across
-70 input files and 71 operations. Native coverage is 5,108/5,108 regions and
-3,608/3,608 lines; Coverage MCP reports zero gaps with matching source and
-passed test evidence. The normal non-instrumented local build passes all
-238/238 oracle comparisons. See [the current source/build receipt](coverage.md#current-full-verification-490-cases).
+It contains 240 live oracle comparisons and 254 target-only contracts. Native
+coverage is 5,298/5,298 regions and 3,753/3,753 lines; Coverage-MCP reports
+zero gaps with matching source and passed test evidence. The normal
+non-instrumented local build passes all 240/240 oracle comparisons. See [the
+current source/build receipt](coverage.md#current-full-verification-494-cases).
 Earlier source/build and installed-wheel audits below remain historical
 evidence and do not attest this dirty working tree.
 
@@ -142,10 +142,10 @@ or deadline-forced shutdown. They assert `http.disconnect` where the ASGI app
 can still receive, exact response outcomes, fault consumption, pump completion
 or forced join, no unexpected panic, and healthy follow-up/sibling requests.
 These contracts use the existing fault-contract envelope and are reported in
-the same unified matrix; they are not oracle-parity cases. The current 490-case
-source passes attribution and all three repeats with 5,108/5,108 regions and
-3,608/3,608 lines covered. The normal non-instrumented local build separately
-passes all 238 public oracle cases. The fixed [coverage archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
+the same unified matrix; they are not oracle-parity cases. The current 494-case
+source passes attribution and all three repeats with 5,298/5,298 regions and
+3,753/3,753 lines covered. The normal non-instrumented local build separately
+passes all 240 public oracle cases. The fixed [coverage archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
 retains the earlier evidence and its Coverage-MCP receipt.
 
 ## Concurrent load and zero-grace shutdown workflows
@@ -186,7 +186,7 @@ uv run --group benchmark python scripts/run_unified_coverage.py \
   --matrix-repeats 3 --matrix-infra-retries 0 --case-infra-retries 0
 ```
 
-The exact run retained on 2026-10-07 is linked from [coverage evidence](coverage.md#current-full-verification-490-cases).
+The exact run retained on 2026-10-07 is linked from [coverage evidence](coverage.md#superseded-full-verification-490-cases).
 These checks establish fixed-load parity and bounded cleanup on the listed
 workflows. They do not claim high-scale capacity, an absolute memory bound,
 network-loss resilience, or throughput/latency improvement. Only the

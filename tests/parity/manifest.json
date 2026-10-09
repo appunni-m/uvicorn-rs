@@ -1097,6 +1097,29 @@
       ]
     },
     {
+      "id": "websocket.final-frame-drain",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "ordered_message_payload_bytes",
+        "last_ordered_message",
+        "close_code",
+        "close_reason"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "ordered_message_payload_bytes": [
+          11,
+          8388608,
+          18
+        ],
+        "last_ordered_message": {
+          "kind": "text",
+          "value": "queued final frame"
+        }
+      }
+    },
+    {
       "id": "websocket.app-error",
       "kind": "protocol_operation",
       "observe": [

@@ -1,0 +1,101 @@
+{
+  "attribution": {
+    "executed": 494,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "manifest_case_count": 494,
+    "passed": 494,
+    "selected": 494,
+    "transient_infrastructure_failures": 0
+  },
+  "coverage_mcp": {
+    "line_groups": 0,
+    "lines": {
+      "covered": 3753,
+      "metric": "lines",
+      "missing": 0,
+      "total": 3753
+    },
+    "region_groups": 0,
+    "regions": {
+      "covered": 5298,
+      "metric": "regions",
+      "missing": 0,
+      "total": 5298
+    },
+    "source": "matches_receipt",
+    "tests": "passed"
+  },
+  "fault_contracts": {
+    "failed": 0,
+    "passed": 254,
+    "selected": 254
+  },
+  "gate": "passed",
+  "normal_public_parity": {
+    "executed": 240,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 240,
+    "selected": 240
+  },
+  "oracle_parity": {
+    "failed": 0,
+    "passed": 240,
+    "selected": 240
+  },
+  "schema": "uvicorn-rs-coverage-archive/verification-runs@1",
+  "status": "complete",
+  "verification_runs": [
+    {
+      "artifact": "benchmarks/results/2026-10-09/unified-coverage-current-fixed-run2.artifacts/2d2bac970dea439b87bf1fae796cfa04/matrix-runs/run-1/parity-result.json",
+      "run_id": "c30c513aa148474fbd48ca199f8163cc",
+      "runner_exit_code": 0,
+      "sha256": "5c93de35ef1ab6c2b30c8c8ca30f6f8aecee50d26d297a4404ebfb6e8f7421dd",
+      "status": "completed",
+      "summary": {
+        "executed": 494,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 494,
+        "selected": 494
+      },
+      "transient_infrastructure_failures": 0
+    },
+    {
+      "artifact": "benchmarks/results/2026-10-09/unified-coverage-current-fixed-run2.artifacts/2d2bac970dea439b87bf1fae796cfa04/matrix-runs/run-2/parity-result.json",
+      "run_id": "0f94eb6b56664c55babdd8344a06a420",
+      "runner_exit_code": 0,
+      "sha256": "bb0c1d9422280346d22149df4c0241c6b7ca1c5d73b9b9bb558318925bc2333d",
+      "status": "completed",
+      "summary": {
+        "executed": 494,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 494,
+        "selected": 494
+      },
+      "transient_infrastructure_failures": 0
+    },
+    {
+      "artifact": "benchmarks/results/2026-10-09/unified-coverage-current-fixed-run2.artifacts/2d2bac970dea439b87bf1fae796cfa04/matrix-runs/run-3/parity-result.json",
+      "run_id": "ab40b1d6e73a436ea540d7d0c4fc83dd",
+      "runner_exit_code": 0,
+      "sha256": "2a367847716625d0b6c39dd086c2ea9b63109bcbc8f8424c62e79c6d6bee3626",
+      "status": "completed",
+      "summary": {
+        "executed": 494,
+        "failed": 0,
+        "infrastructure_failed": 0,
+        "not_run": 0,
+        "passed": 494,
+        "selected": 494
+      },
+      "transient_infrastructure_failures": 0
+    }
+  ],
+  "verification_runs_required": 3
+}

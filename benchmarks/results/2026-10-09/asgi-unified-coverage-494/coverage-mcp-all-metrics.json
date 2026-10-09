@@ -1,0 +1,72 @@
+[
+  {
+    "context": {
+      "checkout_path": "/Users/lazytrot/work/uvicorn-rs",
+      "repo_key": "/Users/lazytrot/work/uvicorn-rs",
+      "schema_revision": 18,
+      "suite": null
+    },
+    "data": {
+      "group_count": 0,
+      "groups": [],
+      "measurement": {
+        "build_id": "78576a3a519fb09c8d8a54b03166afe77e645d745f98eb7e73bd1974c8822a8c",
+        "coverage": {
+          "covered": 5298,
+          "metric": "regions",
+          "missing": 0,
+          "total": 5298
+        },
+        "format": "llvm",
+        "recorded_revision": "f260d78c71e9266c2b3301ab3915f74de5511fc2",
+        "ref": "benchmarks/results/2026-10-09/unified-coverage-current-fixed-run2.json",
+        "source": "matches_receipt",
+        "tests": "passed"
+      },
+      "next_action": "Use rg and bounded file reads at these locations; test references are not coverage attribution.",
+      "next_offset": null,
+      "ranking": "missing observations, then source location",
+      "status": "measured",
+      "warnings": [
+        "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+      ],
+      "warnings_omitted": 0
+    },
+    "page": null
+  },
+  {
+    "context": {
+      "checkout_path": "/Users/lazytrot/work/uvicorn-rs",
+      "repo_key": "/Users/lazytrot/work/uvicorn-rs",
+      "schema_revision": 18,
+      "suite": null
+    },
+    "data": {
+      "group_count": 0,
+      "groups": [],
+      "measurement": {
+        "build_id": "78576a3a519fb09c8d8a54b03166afe77e645d745f98eb7e73bd1974c8822a8c",
+        "coverage": {
+          "covered": 3753,
+          "metric": "lines",
+          "missing": 0,
+          "total": 3753
+        },
+        "format": "llvm",
+        "recorded_revision": "f260d78c71e9266c2b3301ab3915f74de5511fc2",
+        "ref": "benchmarks/results/2026-10-09/unified-coverage-current-fixed-run2.json",
+        "source": "matches_receipt",
+        "tests": "passed"
+      },
+      "next_action": "Use rg and bounded file reads at these locations; test references are not coverage attribution.",
+      "next_offset": null,
+      "ranking": "missing observations, then source location",
+      "status": "measured",
+      "warnings": [
+        "LLVM JSON segments are normalized to segment start lines; aggregate region coverage is preserved from summaries."
+      ],
+      "warnings_omitted": 0
+    },
+    "page": null
+  }
+]

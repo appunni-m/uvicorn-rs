@@ -1,0 +1,88 @@
+{
+  "schema_version": 2,
+  "profiling_only": true,
+  "measurement": "per-request FastAPI ASGI-call wall time and awaited send/receive time; outside_asgi_io_await includes Python/framework work and any other awaits, so it is not CPU time",
+  "messages_unchanged": true,
+  "paths": {
+    "/chunks/256/4096": {
+      "requests_seen": 2058,
+      "durations_retained": 2058,
+      "retention_limit_per_path": 250000,
+      "per_request": {
+        "asgi_app_wall_ns": {
+          "samples": 2058,
+          "p50": 63210667,
+          "p95": 69024584,
+          "p99": 73756375,
+          "mean": 54750474
+        },
+        "asgi_receive_await_ns": {
+          "samples": 2058,
+          "p50": 31087125,
+          "p95": 37387126,
+          "p99": 43438583,
+          "mean": 28500434
+        },
+        "asgi_send_await_ns": {
+          "samples": 2058,
+          "p50": 641206,
+          "p95": 692752,
+          "p99": 946004,
+          "mean": 667140
+        },
+        "app_outside_asgi_io_await_ns": {
+          "samples": 2058,
+          "p50": 28446999,
+          "p95": 32977535,
+          "p99": 41061993,
+          "mean": 25594674
+        },
+        "receive_calls": {
+          "samples": 2058,
+          "p50": 2,
+          "p95": 2,
+          "p99": 2,
+          "mean": 2
+        },
+        "send_calls": {
+          "samples": 2058,
+          "p50": 258,
+          "p95": 258,
+          "p99": 258,
+          "mean": 258
+        },
+        "request_body_bytes": {
+          "samples": 2058,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "mean": 0
+        },
+        "response_body_bytes": {
+          "samples": 2058,
+          "p50": 1048576,
+          "p95": 1048576,
+          "p99": 1048576,
+          "mean": 1048576
+        }
+      },
+      "p50_ns": 63210667,
+      "p95_ns": 69024584,
+      "p99_ns": 73756375,
+      "mean_ns": 54750474,
+      "totals": {
+        "receive:http.disconnect": 2058,
+        "receive:http.request": 2058,
+        "receive_await_ns": 58653892389,
+        "receive_calls": 4116,
+        "request_body_bytes": 0,
+        "requests_seen": 2058,
+        "response_body_bytes": 2157969408,
+        "send:http.response.body": 528906,
+        "send:http.response.start": 2058,
+        "send_await_ns": 1372974718,
+        "send_calls": 530964
+      }
+    }
+  }
+}

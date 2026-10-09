@@ -5,10 +5,20 @@ WebSockets, and lifespan/shutdown. The runners check each measured response or
 message before recording its metrics. A failed correctness check aborts that
 runner; performance numbers from a failed run must not be compared.
 
+The latest local exact-source run is the
+[FastAPI five-category report](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md):
+520 correctness rows passed across H1, H2, WebSockets, and lifecycle, with 32
+qualified workload/loop pairs. H3 at concurrency 64 stopped on Hypercorn
+reference timeouts. The run uses one configured Tokio async worker and no
+FastAPI-RS or Starlette-RS. See [benchmark status](benchmark-status.md) for the
+latest hosted CI and three-system workflow outcomes.
+
 These are loopback application-server benchmarks, not end-to-end production
 capacity tests. They measure the combined server, Python ASGI app, event loops,
-protocol implementation, client, and host. Use the same machine, checkout,
-Python environment, workloads, and load parameters for comparisons. Do not run
+protocol implementation, client, and host. The maintained cross-category
+comparison uses upstream FastAPI on both servers; it does not benchmark
+FastAPI-RS or Starlette-RS. Use the same machine, checkout, Python environment,
+workloads, and load parameters for comparisons. Do not run
 other builds, tests, benchmarks, emulators, or CPU-heavy jobs at the same time.
 The automated matrix evaluates each matched candidate/reference pair on one
 system; report results per system and never compare absolute rates across machines.
@@ -19,11 +29,11 @@ configuration order within a repetition using the supplied seed.
 
 | Category | Candidate and baseline | Correctness gate |
 |---|---|---|
-| HTTP/1.1 | Rust server with asyncio and uvloop; Uvicorn with httptools under both loops. When `fastapi-benchmark` is installed, includes upstream FastAPI routes with path/query validation, response-model validation/serialization, and deterministic Python CPU work. | Every response status and complete body is checked against the workload oracle. |
-| HTTP/2 | Rust server and Hypercorn, each with asyncio and uvloop. | TLS ALPN must select H2; status and full response body are checked. |
-| HTTP/3 | Rust server and Hypercorn, each with asyncio and uvloop. Hypercorn's upload workload is known to fail; other Hypercorn rows must still pass each run's correctness gate before they can be compared. | QUIC/TLS, status, and full response body are checked. |
-| WebSockets | Rust server with asyncio and uvloop; Uvicorn with its WebSocket implementation and asyncio or uvloop. | Handshake/subprotocol and complete text or binary payload equality are checked. |
-| Lifespan/shutdown | Rust server and Uvicorn with both loop choices. | Lifespan state, graceful lifespan completion, and cancellation of an active request are required. |
+| HTTP/1.1 | Upstream FastAPI on the Rust server with asyncio and uvloop; Uvicorn with httptools under both loops. The maintained matrix covers 15 FastAPI workloads across routes, request bodies, and response streams. | Every response status and complete body is checked against the workload oracle. |
+| HTTP/2 | The same upstream FastAPI app on the Rust server and Hypercorn, each with asyncio and uvloop. | TLS ALPN must select H2; status and full response body are checked. |
+| HTTP/3 | The same upstream FastAPI app on the Rust server and Hypercorn, each with asyncio and uvloop. A Hypercorn consumed-request case has failed under load; that attempt must stay visible and cannot yield a ratio. | QUIC/TLS, status, and full response body are checked. |
+| WebSockets | The upstream FastAPI `/echo` route on the Rust server and Uvicorn, each with asyncio or uvloop. | Handshake/subprotocol and complete text or binary payload equality are checked. |
+| Lifespan/shutdown | A FastAPI app with shared state and a held request on the Rust server and Uvicorn, each with asyncio or uvloop. | Lifespan state, graceful lifespan completion, and cancellation of an active request are required. |
 
 Each comparison matches event loops: asyncio with asyncio and uvloop with
 uvloop. Uvicorn uses `httptools` for both H1 pairs so the asyncio comparison
@@ -32,7 +42,10 @@ separately and does not combine loop profiles into one rate or latency ratio.
 
 Uvicorn has no H2 or H3 server baseline, so those rows compare with Hypercorn
 only. HTTP/3 upload has Rust-only rows because the tested Hypercorn version did
-not return a response after consuming the upload. The historical October 4
+not return a response after consuming the upload. A later FastAPI run also
+recorded a Hypercorn/uvloop timeout on the consumed-request workload at
+concurrency 64; see the [latest full-category report](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md).
+The historical October 4
 two-loop matrix passed 66 H3 comparison rows and is archived with all categories in
 [`full-2026-10-04T113122Z`](../benchmarks/results/full-2026-10-04T113122Z/).
 Its correctness results are valid, but process snapshots show unrelated
@@ -42,7 +55,7 @@ results and rerun gate. Do not label candidate-only rows as cross-server wins.
 
 ## Machine and environment
 
-The historical local reference environment is Apple M3 Pro / macOS 15.7.7, CPython
+The latest local reference environment is Apple M3 Pro / macOS 15.7.7, CPython
 3.12.13, Rust 1.98.1, Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0, and
 Hypercorn 0.18.0. It is one data point, not a supported-platform claim. The
 automated hosted matrix below reports independent Linux x86_64, Linux arm64,
@@ -109,12 +122,11 @@ uv run --no-sync python -c 'import uvicorn_rs; print(uvicorn_rs.__file__)'
 ```
 
 The `benchmark` dependency group contains comparison servers and measurement
-tools. The optional `fastapi-benchmark` group pins upstream FastAPI 0.142.4.
-The FastAPI benchmark uses FastAPI, its upstream Starlette dependency, and
-Pydantic from the same locked Python environment for Uvicorn and `uvicorn-rs`.
-It does not install or benchmark FastAPI-RS or Starlette-RS. When the optional
-group is absent, the general HTTP/1.1 matrix records those two FastAPI workloads
-as omitted.
+tools. The `fastapi-benchmark` group pins upstream FastAPI 0.142.4 and is
+required by the maintained cross-category comparison. FastAPI, its upstream
+Starlette dependency, and Pydantic come from the same locked Python environment
+for Uvicorn and `uvicorn-rs`. The report identity records these versions. The
+full FastAPI comparison has no mode that silently omits FastAPI workloads.
 
 ### Focused FastAPI comparison
 
@@ -152,6 +164,92 @@ retain rejected observations, and make no speed claim unless each pair has at
 least three matching timing-valid repetitions. The report fingerprints the
 FastAPI/Starlette/Pydantic distributions, the app and harness sources, the
 normal Rust binary, Python runtime, and load client.
+
+Older October 8 measurements are historical and tied to an earlier source
+snapshot. Use the [latest exact-source FastAPI results](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md)
+for current workload comparisons.
+
+### Expanded upstream FastAPI workload matrix
+
+The expanded matrix keeps the same upstream FastAPI app, dependency lock,
+CPython, HTTP/1.1 client, and four server configurations while separating
+framework work from transport work. It covers a constant response, validated
+Pydantic route, synchronous Python CPU route, 1 MiB response, large and small
+response chunks, 1 MiB upload, 64 KiB upload sent in 1 KiB writes, a rate-limited
+slow reader, 32 request headers, and an async dependency using `ContextVar`.
+Every status and complete body is checked before a timing row can qualify.
+`uvicorn-rs` uses one Tokio worker; asyncio or uvloop is the Python application
+loop in both servers. No FastAPI-RS or Starlette-RS package or route is used.
+
+Reproduce the matrix after installing the locked benchmark groups and building
+the normal extension as described above:
+
+```sh
+.venv/bin/python scripts/run_benchmark_categories.py \
+  --capture-identity target/fastapi-all/parity-before.json
+.venv/bin/python scripts/run_parity.py \
+  --prebuilt-http3-client \
+  --output target/fastapi-all/parity.json
+.venv/bin/python scripts/run_benchmark_categories.py \
+  --parity-before-identity target/fastapi-all/parity-before.json \
+  --parity-report target/fastapi-all/parity.json \
+  --category http1 \
+  --workloads fastapi-fixed fastapi-validated-route fastapi-python-cpu \
+    fastapi-large-response fastapi-many-response-chunks \
+    fastapi-small-response-chunks fastapi-request-upload \
+    fastapi-request-upload-small-chunks fastapi-slow-reader-backpressure \
+    fastapi-scope-32-headers fastapi-contextvars \
+  --duration 5 --warmup 1 --concurrency 64 --repetitions 5 --seed 20261008 \
+  --output-dir target/fastapi-all/results
+```
+
+If the host gate leaves a workload/loop pair short of three matching valid
+repetitions, keep the frozen identity and parity receipts, then rerun only the
+missing workload names with the same load parameters, a new seed, and a new
+output directory. Analyze each attempt independently; do not pool samples
+across attempts. Do not edit tracked files between identity capture and run
+completion: the suite identity deliberately rejects a worktree change during
+measurement.
+
+Earlier local matrices and retries are historical and tied to their own
+source snapshots. They are not pooled into the latest results. The latest
+exact-source report gives the completed H1, H2, WebSocket, and lifecycle
+categories, the incomplete high-concurrency H3 case, and every retained timing
+exclusion.
+
+### Fixed-size upload write-size sweep
+
+The follow-up upload sweep keeps the FastAPI request body at 1 MiB and changes
+only the client upload callback chunk target: 1 KiB, 16 KiB, 64 KiB, 256 KiB,
+or 1 MiB. It runs with the same Uvicorn/Uvicorn-RS server and loop pairs. This
+isolates body size from the client-side fragmentation setting. The configured
+chunk size is not a TCP packet-size claim; inspect the ASGI receive counts in
+the diagnostic run to see how each server actually presents the body to the
+application.
+
+```sh
+.venv/bin/python scripts/run_http_category_bench.py \
+  --workloads fastapi-upload-1m-write-1k fastapi-upload-1m-write-16k \
+    fastapi-request-upload fastapi-upload-1m-write-256k fastapi-upload-1m-write-1m \
+  --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
+    uvicorn-rs-uvloop uvicorn-uvloop-httptools \
+  --duration 5 --warmup 1 --concurrency 8 --repetitions 5 --seed 20261009 \
+  --output benchmarks/results/fastapi-upload-fragmentation-2026-10-09/performance.json
+```
+
+Collect bridge and ASGI receive diagnostics separately, using the instrumented
+build instructions below and the same workload list. These rows are diagnostic
+only; do not use their latency, throughput, or CPU for performance ranking.
+Compare all five write targets in one report, preserving each run's validity
+receipt and full-body correctness checks. The result can establish whether
+measured ASGI message/future counts and the end-to-end gap move with write-size
+target; it cannot infer TCP segment boundaries or total copy bytes by itself.
+
+The latest exact-source report distinguishes the default 1 MiB upload from a
+1 KiB client-write workload and reports their separate matched outcomes. Its
+[boundary diagnosis](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md)
+contains the receive/future counts; those counters locate work but are not
+normal-build timing evidence.
 
 ## Correctness probes
 
@@ -314,7 +412,14 @@ two busy observed intervals span at least about 100 ms, rather than the nominal
 500 ms of ordinary load samples. Reports retain this category-specific policy.
 These values are lifecycle observations, not sustained request throughput.
 
-## Run the full matrix
+## Run the standalone protocol probe matrix
+
+This older per-category command sequence includes synthetic ASGI HTTP/1.1
+workloads. It is useful for isolating server transport and preserving
+historical probe behavior; it is not the maintained FastAPI-only comparison.
+For user-facing FastAPI performance evidence across all categories, use
+[the complete comparison command](#run-the-complete-comparison-with-one-command-interface)
+below.
 
 Use at least three repetitions, 5-second samples and a 1-second warmup for a
 new comparison. The October 4 archive used shorter 2-second samples and a
@@ -462,9 +567,8 @@ else:
 PY
 ```
 
-The FastAPI group adds 24 H1 rows at three repetitions. Without FastAPI, H1 has
-132 rows across its 11 standard ASGI workloads. H3 has 78 rows rather than 84
-because its known-failing
+This standalone command plans 144 H1 rows for the 12 listed workloads at three
+repetitions. H3 has 78 rows rather than 84 because its known-failing
 Hypercorn upload comparison is omitted. A failed/partial run should be retained
 with its failure output and rerun to a new result directory after fixing the
 cause; do not silently drop failed rows. If the Hypercorn H3 correctness gate
@@ -494,9 +598,9 @@ maintained HTTP/1.1, HTTP/2, HTTP/3, WebSocket and lifecycle categories sequenti
 It derives workloads and public parity cases from the maintained matrix, rejects
 coverage/fault/diagnostic binaries, and requires a passing complete public matrix
 on the exact measured normal binary. Prepare the normal release server and
-coherent release protocol clients using the setup above. The matrix uses
-standard ASGI fixtures and upstream FastAPI; it does not build FastAPI-RS or
-Starlette-RS benchmark wheels.
+coherent release protocol clients using the setup above. The maintained
+cross-category comparison uses upstream FastAPI applications throughout; it
+does not install or benchmark FastAPI-RS or Starlette-RS.
 
 ```sh
 export RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER=
@@ -514,11 +618,13 @@ cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bi
 
 Every capture file and output directory must be new. Omitting `--output-dir`
 creates a timestamp/UUID directory under `target/benchmark-categories/`. The
-At three repetitions, the full matrix plans 366 rows with FastAPI and 342
-without it; the FastAPI group adds 24 H1 rows. The hosted workflow's five-repeat
-default plans 610 and 570 rows respectively. The separate FastAPI-only report
-contains 40 rows at five repetitions. Each category includes both loop-matched
-comparison pairs.
+At three repetitions, the full FastAPI-only matrix plans 390 rows: 180 HTTP/1.1,
+84 HTTP/2, 78 HTTP/3, 36 WebSocket, and 12 lifespan/shutdown rows. The hosted
+workflow's five-repeat default plans 650 rows. H3 can abort on a reference
+correctness failure; a partial run remains incomplete, and completed categories
+do not make it a complete matrix. The separate focused FastAPI-only H1 report
+contains 40 rows at five repetitions. Each category includes the available
+loop-matched reference/candidate pairs.
 `run.json`, event/checkpoint JSONL, source/binary/dependency hashes, server logs,
 cleanup receipts and raw failures are retained. The wrapper stops on identity
 drift and preserves independent category attempts after an isolated failure.
@@ -626,6 +732,18 @@ channel capacity; it includes bridge scheduling as well as queue delay, so do
 not interpret it as pure time resident in the queue. The feature is disabled by
 default and compiled out of normal builds.
 
+For FastAPI diagnosis, the same feature also totals the time from request
+dispatch to acquisition of the Python interpreter for the request callback,
+request dispatch to `http.response.start`, and request dispatch to availability
+of the final ASGI body message. The last boundary is before the response is
+fully written to the client. A task-starter timer runs from before the PyO3
+starter object is created until its Python event-loop callback begins; it
+includes starter construction, context setup, cross-thread scheduling, and
+callback delay, so it is not a queue-only measurement. These are aggregate
+elapsed-time sums and call counts, not histograms. Interpret them alongside
+client latency and Python profiles; the instrumented build must never supply
+performance claims.
+
 Use this only to attribute behavior, not to compare throughput. Build the
 instrumented extension, collect fixed and chunk-heavy H1 rows, then restore the
 default extension build:
@@ -634,8 +752,9 @@ default extension build:
 uv run --with 'maturin>=1.14,<2' maturin develop --release --features runtime-diagnostics
 RUN_ID="$(date -u +%Y-%m-%dT%H%M%SZ)-$(uuidgen)"
 uv run --no-sync python scripts/run_http_category_bench.py \
-  --workloads fixed many-response-chunks \
-  --duration 5 --warmup 1 --concurrency 64 --repetitions 3 --seed 20261005 \
+  --workloads fastapi-validated-route fastapi-python-cpu \
+  --servers uvicorn-rs-asyncio \
+  --duration 3 --warmup 1 --concurrency 32 --repetitions 3 --seed 20261008 \
   --require-runtime-diagnostics \
   --output "benchmarks/results/bridge-diagnostics-${RUN_ID}.json"
 uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
@@ -648,12 +767,50 @@ The server also compiles the counters into HTTP/2, HTTP/3, and WebSocket call
 paths; their corresponding runners do not currently add counter objects to
 their result rows.
 
+For matched per-request ASGI-boundary timings, add
+`--asgi-stage-diagnostics`. The runner substitutes
+`examples.profile_fastapi:app`, which forwards the same messages and records
+FastAPI-call wall time, awaited `receive`/`send` time, ASGI event counts, and
+body bytes for both servers. Rust-only counters add interpreter-attach,
+Python-loop callback scheduling, response-start/final-body, and full response
+queue waits. Every row is marked `timing_valid: false` and
+`performance_evidence_status: diagnostic_only`; the added timers perturb the
+workload. These values are wall time, not CPU time. `send()` wait is also not
+directly comparable across implementations: Uvicorn may wait for transport
+drain, while Rust usually queues the message for Hyper and waits only on its
+bounded body channel.
+
+Run all 11 FastAPI workloads under both loops and all four server settings:
+
+```sh
+uv run --with 'maturin>=1.14,<2' maturin develop --release --features runtime-diagnostics
+RUN_ID="$(date -u +%Y-%m-%dT%H%M%SZ)-$(uuidgen)"
+uv run --no-sync python scripts/run_http_category_bench.py \
+  --workloads fastapi-fixed fastapi-validated-route fastapi-python-cpu \
+    fastapi-large-response fastapi-many-response-chunks fastapi-small-response-chunks \
+    fastapi-request-upload fastapi-request-upload-small-chunks \
+    fastapi-slow-reader-backpressure fastapi-scope-32-headers fastapi-contextvars \
+  --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
+    uvicorn-rs-uvloop uvicorn-uvloop-httptools \
+  --duration 2 --warmup 0 --concurrency 64 --repetitions 3 --seed 20261008 \
+  --require-runtime-diagnostics --asgi-stage-diagnostics \
+  --output "benchmarks/results/bridge-stage-attribution-${RUN_ID}.json"
+uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
+```
+
+The [exact-source boundary diagnosis](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md)
+shows how to interpret current runtime counters. It records receive/future
+counts and response-channel waits for this Rust source. App-boundary timers
+and Rust-only internal counters have different meanings; neither should be
+treated as a CPU-time decomposition.
+
 ## Capture a diagnostic profile on macOS
 
 [`profile_http_workload.py`](../scripts/profile_http_workload.py) runs the
-maintained body-checking H1 client with `fixed`, `large-response` or
-`many-response-chunks`, then captures Apple `sample` stacks. Run this separately
-from normal benchmarks, using the normal server binary. For example:
+maintained body-checking H1 client with fixed, transfer, streaming, or the same
+FastAPI validation and Python-CPU workloads used by the benchmark matrix, then
+captures Apple `sample` stacks. Run this separately from normal benchmarks,
+using the normal server binary. For example:
 
 ```sh
 PROFILE_ID="$(date -u +%Y-%m-%dT%H%M%SZ)-$(uuidgen)"
@@ -665,8 +822,30 @@ uv run --no-sync python scripts/profile_http_workload.py \
 ```
 
 Repeat into a new directory with `--server uvicorn --http httptools` for the
-reference, or change `--workload` to isolate a fixed or streaming path. The
-helper builds its maintained C client before profiling; `--native-client PATH`
+reference, or change `--workload` to isolate another fixed or streaming path.
+The profile accepts all 11 workload names from the upstream FastAPI
+matrix: `fastapi-fixed`, `fastapi-validated-route`, `fastapi-python-cpu`,
+`fastapi-large-response`, `fastapi-many-response-chunks`,
+`fastapi-small-response-chunks`, `fastapi-request-upload`,
+`fastapi-request-upload-small-chunks`, `fastapi-slow-reader-backpressure`,
+`fastapi-scope-32-headers`, and `fastapi-contextvars`. Run each with
+`--server uvicorn-rs --loop asyncio`, then repeat with
+`--server uvicorn --http httptools --loop asyncio` to compare the same upstream
+FastAPI app, loop, and parser workload. Repeat under `uvloop` as a separate
+matched pair. The [exact-source FastAPI diagnosis](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md)
+summarizes the completed local profiles and separates wall-time stack samples
+from on-CPU attribution.
+The profiler also accepts `fastapi-upload-1m-write-1k`,
+`fastapi-upload-1m-write-16k`, `fastapi-upload-1m-write-256k`, and
+`fastapi-upload-1m-write-1m` for the fixed-size upload write-target follow-up.
+The runtime identity records FastAPI, Starlette, and Pydantic versions. The
+FastAPI profile uses a wrapper that records the duration of the inner ASGI call,
+including awaited `send` and `receive` calls, and verifies the unchanged response
+body through the normal client gate. This is a profiling-only metric; it helps
+separate application-plus-bridge time from end-to-end client latency, but is not
+an additive decomposition because the percentile populations and scheduling
+overlap. The wrapper's source and output are retained in the profile receipt.
+The helper builds its maintained C client before profiling; `--native-client PATH`
 reuses an existing executable and records its digest. The output directory must
 not already exist. Load duration must include the sample delay, sample duration
 and at least two seconds after sampling.

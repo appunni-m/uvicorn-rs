@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "profiling_only": true,
+  "measurement": "per-request FastAPI ASGI-call wall time and awaited send/receive time; outside_asgi_io_await includes Python/framework work and any other awaits, so it is not CPU time",
+  "messages_unchanged": true,
+  "paths": {
+    "/items/7": {
+      "requests_seen": 28664,
+      "durations_retained": 28664,
+      "retention_limit_per_path": 250000,
+      "per_request": {
+        "asgi_app_wall_ns": {
+          "samples": 28664,
+          "p50": 56583,
+          "p95": 62125,
+          "p99": 67458,
+          "mean": 56793
+        },
+        "asgi_receive_await_ns": {
+          "samples": 28664,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "mean": 0
+        },
+        "asgi_send_await_ns": {
+          "samples": 28664,
+          "p50": 7167,
+          "p95": 8500,
+          "p99": 10957,
+          "mean": 7379
+        },
+        "app_outside_asgi_io_await_ns": {
+          "samples": 28664,
+          "p50": 49291,
+          "p95": 54125,
+          "p99": 58667,
+          "mean": 49414
+        },
+        "receive_calls": {
+          "samples": 28664,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "mean": 0
+        },
+        "send_calls": {
+          "samples": 28664,
+          "p50": 2,
+          "p95": 2,
+          "p99": 2,
+          "mean": 2
+        },
+        "request_body_bytes": {
+          "samples": 28664,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "mean": 0
+        },
+        "response_body_bytes": {
+          "samples": 28664,
+          "p50": 71,
+          "p95": 71,
+          "p99": 71,
+          "mean": 71
+        }
+      },
+      "p50_ns": 56583,
+      "p95_ns": 62125,
+      "p99_ns": 67458,
+      "mean_ns": 56793,
+      "totals": {
+        "receive_await_ns": 0,
+        "receive_calls": 0,
+        "request_body_bytes": 0,
+        "requests_seen": 28664,
+        "response_body_bytes": 2035144,
+        "send:http.response.body": 28664,
+        "send:http.response.start": 28664,
+        "send_await_ns": 211501525,
+        "send_calls": 57328
+      }
+    }
+  }
+}

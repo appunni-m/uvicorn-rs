@@ -1,0 +1,40 @@
+{
+  "schema": "uvicorn-rs-coverage-archive/manifest@1",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "dc3fce0631de97c6ff89577bd818cdf956271ec64f8c8ad689acb8447162d9ab",
+      "size_bytes": 1891
+    },
+    {
+      "path": "coverage-mcp-all-metrics.json",
+      "sha256": "5fdc390dcfa8fcfba9912d5276d64e1d63ecf8ce9c0ad726f9cd84d035fe509c",
+      "size_bytes": 2407
+    },
+    {
+      "path": "coverage-report.json.context.json",
+      "sha256": "6e9d85c1ddf76de92615756a24786a97246462a40fd5150db80c3b97c05ba208",
+      "size_bytes": 396
+    },
+    {
+      "path": "coverage-report.json.gz",
+      "sha256": "ebea96969fa8702ee8c8bf29ae53c0dea46e5198966d182022341765961acc66",
+      "size_bytes": 3208607
+    },
+    {
+      "path": "normal-public-parity-240.json.gz",
+      "sha256": "1eb9e1f2b932f0d3d09acd0e19521efc2b871dca45c43b47ddd84ebfaf3bafa3",
+      "size_bytes": 45374
+    },
+    {
+      "path": "source-manifest.json",
+      "sha256": "6d38364ea3519c59d80a60bd4cce38e28657ded9cb1d5310bfac4974622f3537",
+      "size_bytes": 17356
+    },
+    {
+      "path": "verification-runs.json",
+      "sha256": "f9f9a9cbc9d4cbc46040cfe2f8c899fdde2df7e4ed43ed0de2734cca1f0ba6f9",
+      "size_bytes": 2853
+    }
+  ]
+}

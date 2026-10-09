@@ -2,32 +2,30 @@
 
 ## Current evidence status
 
-The current local 491-case black-box gate passed on 2026-10-08 after the H2 EOF
-recheck fault contract was strengthened to require proof that its injected
-pause was consumed. The manifest declares 491 workflows across 70 input files
-and 71 operations: 239 live oracle comparisons and 252 target-only contracts.
-Per-case attribution and all three complete 491-case repeats passed with zero
-failures, infrastructure errors, retries, or cases not run. Native coverage is
-**5,121/5,121 regions and 3,624/3,624 lines (100%)**. Coverage-MCP measured the
-attached report with `source: matches_receipt`, `tests: passed`, zero missing
-regions, and zero gap groups. The exact report, Coverage-MCP receipt, repeat
-results, and focused H2 result are in the [current evidence archive](../benchmarks/results/2026-10-08/asgi-eof-recheck-fault-consumption-491/).
+The latest local black-box gate passed **494/494** cases on 2026-10-09:
+240 live oracle comparisons and 254 target-only fault contracts. Per-case
+attribution and all three complete 494-case repeats passed with zero failures,
+infrastructure errors, retries, or cases not run. Native coverage is
+**5,298/5,298 regions and 3,753/3,753 lines (100%)**. Coverage-MCP measured the
+exact report with `source: matches_receipt`, `tests: passed`, and zero missing
+region and line observations. The [494-case evidence archive](../benchmarks/results/2026-10-09/asgi-unified-coverage-494/)
+contains the compressed report, receipts, repeat results, source/build identity,
+and the normal-wheel parity result. The normal non-instrumented extension
+passed all **240/240** public oracle cases.
 
-This is source-bound local macOS ARM64 evidence from a dirty working tree at
-revision `1a72c9b3ab18e01389b1e19efbc76bf569e98730`, not a clean hosted release
-baseline. The measured `src/lib.rs` SHA-256 is
-`1a0c90dbdd08e7f6172a1a6d6f6928f021bd473d74836ee7eeb853e1fb4d55a4`; the
+This is source-bound local macOS ARM64 evidence from a dirty working tree based
+on revision `f260d78c71e9266c2b3301ab3915f74de5511fc2`, not a clean hosted
+release baseline. The measured `src/lib.rs` SHA-256 is
+`56cccea49215b2b96cf7028ec01804c7142b0f364f91bbd957b1114ab13b65fb`; the
 instrumented native SHA-256 is
-`2fcd0eeb88f38d7c07801335e37416837761fd0d4a340d86aab57ba8638dc2d5`. The
+`af499b36fd0d7f104a31bfd2620644ba06a24eb985ed841bfd2b2d58ce00e17e`, and the
+normal native SHA-256 is
+`94c677f0e37a52bd80d81571997443a60d69379c16bb2acdcf9831bddb0499b0`. The
 aggregate source/input SHA-256 is
-`9c52350403f9bee48166ede3230e87d083f845bf134da0f70297120e7feede84`; the
+`3e883be563df034b41347d1694c7734b853abf272228de59068dbd6d9db57455`; the
 Coverage-MCP build ID is
-`93a183b2b3a8330d6ad74e170416c68c456b658d884be7f3a96dc637b0d337dc`. The
-tracked working-tree change measured here is in `scripts/run_parity.py`; the
-Rust source and parity inputs match the preceding local 491-case report. The
-coverage-only HTTP receive contention diagnostic remains excluded from
-production builds. No Rust unit tests were added; the manifest-backed live
-input matrix remains the behavioral evidence system.
+`78576a3a519fb09c8d8a54b03166afe77e645d745f98eb7e73bd1974c8822a8c`. The full
+manifest-backed live input matrix remains the behavioral evidence system.
 
 Hosted Linux failures are separate from this local result. The attached run
 [#23](https://github.com/appunni-m/uvicorn-rs/actions/runs/37603449348), commit
@@ -249,11 +247,85 @@ against the current checkout. That report records revision `1a72c9b` and a
 dirty working tree, so it is source-matched local evidence; hosted run #39 is
 the clean commit-bound result.
 
-## Current full verification (491 cases; EOF fault consumption asserted)
+<a id="previous-full-verification-492-cases"></a>
+## Previous full verification (492 cases; unified matrix)
 
-The new archive is
+The previous 492-case report recorded revision
+`490d9b40f4af46385e8f9e184c569a93004b3d74` from a dirty
+working tree. The unified report SHA-256 is
+`53d1f1bf0d8e7e751531ad7f0db9a1b63b3db9b9d4ee49bb1c269b518cf845e4`; the
+context receipt binds source SHA-256
+`96cbe266b305efd4a75192c80a832577daa664860cf0fafb9db1a6a47b856e72` and
+`src/lib.rs` SHA-256
+`336fb764d63c8e9cd2b24f2e1ec032c9bcf6fb4d0dc27c038e7d7d44a8229c52`.
+
+| Verification | Passed | Failures / infrastructure / retries / not run |
+|---|---:|---|
+| Per-case attribution | 492/492 | 0 / 0 / 0 / 0 |
+| Full repeat 1 | 492/492 | 0 / 0 / 0 / 0 |
+| Full repeat 2 | 492/492 | 0 / 0 / 0 / 0 |
+| Full repeat 3 | 492/492 | 0 / 0 / 0 / 0 |
+| Oracle parity in each repeat | 239/239 | 0 failed |
+| Target-only contracts in each repeat | 253/253 | 0 failed |
+| Native regions | 5,181/5,181 | 0 missing |
+| Native lines | 3,671/3,671 | 0 missing |
+| Coverage-MCP region gap groups | 0 | source matches; tests passed |
+| Normal non-instrumented oracle parity | 239/239 | 0 / 0 / 0 / 0 |
+
+The source-scope report has complete case-to-region attribution and its
+per-case profile union matches the aggregate. Coverage-MCP build ID is
+`97bbf91445ae75a120b93dab1f808b8ede3a803a4aa131bad40a5308da1a228e`.
+Instrumented extension SHA-256 is
+`7406560cdc52cf5f583b7f13307686753fddab1f0fb511377b666dc51e2bac21`.
+The archive retains the compressed full report, its context receipt, exact MCP
+response, all three repeat results, and the normal-build parity receipt. This
+is local source-bound coverage evidence, not a performance result or a claim
+of complete official ASGI conformance.
+
+<a id="current-full-verification-494-cases"></a>
+## Current full verification (494 cases; unified matrix)
+
+The compact current archive is
+[`asgi-unified-coverage-494`](../benchmarks/results/2026-10-09/asgi-unified-coverage-494/).
+It records revision `f260d78c71e9266c2b3301ab3915f74de5511fc2` from a dirty
+working tree. `src/lib.rs` SHA-256 is
+`56cccea49215b2b96cf7028ec01804c7142b0f364f91bbd957b1114ab13b65fb`; the
+aggregate source/input SHA-256 is
+`3e883be563df034b41347d1694c7734b853abf272228de59068dbd6d9db57455`.
+
+| Verification | Passed | Failures / infrastructure / retries / not run |
+|---|---:|---|
+| Per-case attribution | 494/494 | 0 / 0 / 0 / 0 |
+| Full repeat 1 | 494/494 | 0 / 0 / 0 / 0 |
+| Full repeat 2 | 494/494 | 0 / 0 / 0 / 0 |
+| Full repeat 3 | 494/494 | 0 / 0 / 0 / 0 |
+| Oracle parity in each repeat | 240/240 | 0 failed |
+| Target-only contracts in each repeat | 254/254 | 0 failed |
+| Native regions | 5,298/5,298 | 0 missing |
+| Native lines | 3,753/3,753 | 0 missing |
+| Coverage-MCP region gaps | 0 | source matches; tests passed |
+| Coverage-MCP line gaps | 0 | source matches; tests passed |
+| Normal non-instrumented oracle parity | 240/240 | 0 / 0 / 0 / 0 |
+
+The per-case attribution matches the aggregate profile union. Coverage-MCP build
+ID is `78576a3a519fb09c8d8a54b03166afe77e645d745f98eb7e73bd1974c8822a8c`.
+The instrumented native extension SHA-256 is
+`af499b36fd0d7f104a31bfd2620644ba06a24eb985ed841bfd2b2d58ce00e17e`; the
+normal extension SHA-256 is
+`94c677f0e37a52bd80d81571997443a60d69379c16bb2acdcf9831bddb0499b0`. The
+archive retains the compressed report, context receipt, combined Coverage-MCP
+region and line receipts, three repeat summaries, and normal public-parity
+receipt. This local dirty-worktree evidence does not establish hosted
+verification on the same commit, performance, or complete official ASGI
+conformance.
+
+<a id="current-full-verification-491-cases"></a>
+<a id="current-full-verification-491-cases-eof-fault-consumption-asserted"></a>
+## Previous full verification (491 cases; EOF fault consumption asserted)
+
+The previous archive is
 [`asgi-eof-recheck-fault-consumption-491`](../benchmarks/results/2026-10-08/asgi-eof-recheck-fault-consumption-491/).
-It supersedes the previous local 491-case report below. The working tree was
+It records the earlier 491-case report. The working tree was
 dirty at revision `1a72c9b3ab18e01389b1e19efbc76bf569e98730`; the unified report
 SHA-256 is `bc49875bbdbdc0486465de314101b5124a552476a650296871171e9fe79129e1`,
 and its context receipt binds the same source/build identity. The tracked change

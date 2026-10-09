@@ -9,6 +9,17 @@ or create or move tags. The project is licensed under
 
 ## Current state
 
+The latest main-branch gate is
+[run 37885559203](https://github.com/appunni-m/uvicorn-rs/actions/runs/37885559203)
+on `f260d78`. Rust quality and the Rust 1.85 minimum-version job passed;
+installed-wheel parity and unified coverage failed, so package and Python-floor
+jobs were skipped. The latest three-system benchmark
+[run 37885559188](https://github.com/appunni-m/uvicorn-rs/actions/runs/37885559188)
+also failed before producing a validated aggregate. The local 494-case and
+FastAPI performance evidence remains useful for diagnosis, but neither run
+verifies a clean candidate for this exact source. No tag or release was
+created. See [benchmark status](benchmark-status.md) for the recorded details.
+
 The original workflow revisions passed local Actionlint validation; action
 SHAs were checked against their upstream GitHub revisions. Hosted runs #36 and
 #37 confirm the Windows long-path setting lets checkout finish. Commit
@@ -26,10 +37,12 @@ The October 5 release-preparation evidence and hosted runs #35–#38 below are
 historical. The local 2026-10-08 report strengthens the H2 EOF fault-consumption
 assertion and passes 491/491 attribution cases plus three complete repeats with
 full region and line coverage; Coverage-MCP reports zero gaps. Hosted run #39
-on `a78b4a9` now passes the complete CI and platform package gates. Its exact
-results and artifact identities are recorded below. An immutable tagged
-candidate bundle has not been assembled, and representative performance
-superiority remains unproven.
+on `a78b4a9` passed the CI and platform package gates for that commit. The
+later run [#46](https://github.com/appunni-m/uvicorn-rs/actions/runs/37743481915)
+on `f2a0cb3` passed normal installed-wheel parity (239/239) but failed its
+unified coverage gate because one fault contract was not consumed; seven cases
+were not run. An immutable tagged candidate bundle has not been assembled, and
+representative performance superiority remains unproven.
 
 Hosted CI run [37672645704](https://github.com/appunni-m/uvicorn-rs/actions/runs/37672645704)
 on clean commit `1a72c9b` completed with failure. Rust quality and MSRV passed;

@@ -1,31 +1,24 @@
 # Plan: deterministic black-box coverage for the ASGI server
 
-## Current evidence status (2026-10-07)
+## Current evidence status (2026-10-09)
 
 **The current local source passes full attribution, native coverage, and
-normal-build parity.** The manifest declares 491 workflows across 70 input
-files: 239 oracle-parity cases and 252 target-only contracts. All 491
-attribution cases and three complete repeats passed with zero failures,
-infrastructure errors, retries, or cases not run. The report records
-5,121/5,121 native LLVM regions and 3,624/3,624 lines (100%); Coverage-MCP has
-zero gap groups, `source: matches_receipt`, and `tests: passed`. A rebuilt
-normal non-instrumented local build passed all 239 public parity cases. This is
+normal-build parity.** The manifest declares 494 workflows: 240 oracle-parity
+cases and 254 target-only contracts. All 494 attribution cases and three
+complete repeats passed with zero failures, infrastructure errors, retries,
+or cases not run. The report records 5,298/5,298 native LLVM regions and
+3,753/3,753 lines (100%); Coverage-MCP has zero gap groups,
+`source: matches_receipt`, and `tests: passed`. The exact normal
+non-instrumented wheel passed all 240 public parity cases. This is
 default-feature `cfg(coverage)` evidence for `src/lib.rs` on macOS ARM64, not
-all repository code, all features, or complete ASGI conformance. The prior
-installed-wheel exclusion audit must be repeated for
-release verification. Source/build identity and retained receipts are
-documented in [current coverage evidence](coverage.md#current-full-verification-491-cases)
+all repository code, all features/platforms, or complete ASGI conformance.
+The prior installed-wheel fault-exclusion audit must be repeated for release
+verification. Source/build identity and retained receipts are documented in
+[current coverage evidence](coverage.md#current-full-verification-494-cases)
 and the
-[`asgi-coverage-region-fix-491` archive](../benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/).
-Hosted run [#29](https://github.com/appunni-m/uvicorn-rs/actions/runs/37646875313)
-on commit `376ebdf` exercised the coverage fix and measured all 5,121 regions
-and 3,624 lines, but it did not pass the gate: attribution and repeat 1 each
-had a Uvicorn TLS-WebSocket oracle infrastructure timeout; the report was
-incomplete at 490/491 attributed cases. Its normal installed-wheel parity job
-also had a TLS-WebSocket oracle timeout (237/239, zero behavior mismatches),
-so dependent platform/Python-floor jobs were skipped. The retained artifacts
-are listed in [coverage evidence](coverage.md); unauthenticated downloads were
-denied with HTTP 403. A clean hosted parity/coverage pass is still required.
+[`asgi-unified-coverage-494` archive](../benchmarks/results/2026-10-09/asgi-unified-coverage-494/).
+This dirty-source local measurement still needs hosted verification on the
+exact committed source.
 
 The historical 445-case snapshot recorded all 4,719/4,719 regions and 3,329/3,329
 lines, with zero Coverage-MCP gaps and 445 passing attribution cases. Two full
@@ -373,7 +366,7 @@ case change.
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 494-case report.
 
 Before adding failpoints, use true client inputs for any uncovered behavior that can happen on a real deployment. The current matrix covers H1 malformed-final-chunk disconnect, incomplete-upload reset, early-response drain and response-stream reset; H2 partial-upload reset/cancellation and a healthy sibling stream; and H3 body errors, close/cancellation handling and follow-up health. Its H3 one-connection sequence serves 128 requests with 128 request-body pumps joined in each of three full repeats. Remaining candidates must first be reconciled against existing cases and named requirements:
 
@@ -391,7 +384,7 @@ Each candidate must name the missing function/region it targets before it is add
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 494-case report.
 
 
 The largest unreachable-looking groups are scope construction and PyO3 event conversion. Add named fault points around fallible construction/extraction sites in:
@@ -413,7 +406,7 @@ For each operation class, inject representative errors for allocation/constructi
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 494-case report.
 
 
 Use real HTTP workflows first, then targeted failpoints for channel/task states that a client cannot create:
@@ -432,7 +425,7 @@ The live observations should include response status/body or connection closure,
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 494-case report.
 
 
 Build one parameterized WebSocket workflow family covering:
@@ -451,7 +444,7 @@ Use existing raw-wire support or add a low-level WebSocket stimulus adapter only
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 494-case report.
 
 
 Extend the lifecycle matrix around the existing startup/shutdown cases:
@@ -470,7 +463,7 @@ Use external signals/control files or the existing public server API as workflow
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 494-case report.
 
 The historical zero-length HTTP/3 DATA-frame investigation encountered a
 Hypercorn timeout and the pinned `h3` receive API treating an empty frame as
@@ -481,7 +474,7 @@ That target-only result does not establish wire-level empty-frame
 interoperability; an independent wire client is still needed for that claim.
 
 
-The current 490-case report has no missing native regions in its declared Rust source scope. The body-pump slice covers request-body errors, cancellation/close selectors, disconnect delivery, bounded pump joining, and same-connection follow-up behavior. Keep that measured coverage distinct from unresolved transport claims: add an ordinary H3 probe for raw request-stream reset and response-write failure where the client can trigger them; use a named target fault contract only when a real client cannot select the internal error deterministically. Invalid ASGI response handling and endpoint/connection-close behavior remain governed by their existing matrix cases; do not duplicate them without a distinct requirement.
+The current 494-case report has no missing native regions in its declared Rust source scope. The body-pump slice covers request-body errors, cancellation/close selectors, disconnect delivery, bounded pump joining, and same-connection follow-up behavior. Keep that measured coverage distinct from unresolved transport claims: add an ordinary H3 probe for raw request-stream reset and response-write failure where the client can trigger them; use a named target fault contract only when a real client cannot select the internal error deterministically. Invalid ASGI response handling and endpoint/connection-close behavior remain governed by their existing matrix cases; do not duplicate them without a distinct requirement.
 
 Keep Hypercorn as the same-protocol oracle for ordinary H3 inputs. Mark injected endpoint/stream failures as target fault-contract results. Preserve clear separation from Uvicorn performance parity claims.
 
@@ -491,7 +484,7 @@ Keep Hypercorn as the same-protocol oracle for ordinary H3 inputs. Mark injected
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 490-case report.
+The later 447-case report passed attribution, three complete repeats, native coverage, Coverage-MCP, and normal-build exclusion after the correction; it is a historical snapshot superseded by the current 494-case report.
 
 
 Cover the remaining supervisor and adapter error paths:
@@ -509,10 +502,10 @@ Use real occupied-port, reset, and cancellation workflows where deterministic; u
 ## Current gap inventory
 
 **The current report has zero missing native regions, lines, and unfiltered
-Coverage-MCP function groups.** The 491-case report measures 5,121/5,121 regions
-and 3,624/3,624 lines with passing attribution, three complete repeats, and a
+Coverage-MCP function groups.** The 494-case report measures 5,298/5,298 regions
+and 3,753/3,753 lines with passing attribution, three complete repeats, and a
 matching MCP receipt in the retained
-[evidence archive](../benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/).
+[evidence archive](../benchmarks/results/2026-10-09/asgi-unified-coverage-494/).
 The historical 423-case report also recorded zero missing regions and zero
 Coverage-MCP function groups. Its complete one-page receipt is at
 `build/asgi-coverage/unified-423-final-2026-10-05/coverage-mcp-receipt.json`.
@@ -598,7 +591,7 @@ uncovered region and its exact case attribution.
 - Per-case profiling must not silently omit child server processes, module-import subprocesses, or shutdown paths. Isolate profiles by case and target process, verify profile flush/completeness, and reject an aggregate whose profile union does not equal its per-case hit map.
 - Coverage alone does not prove behavior quality. Each injection needs a meaningful external invariant and follow-up cleanup assertion.
 - Rust-generated PyO3 glue and platform-specific error arms may not be controllable after module import. If they remain unreachable after the fault seam is implemented, report the exact residual and do not quietly exclude it.
-- The current report records 5,121/5,121 native regions and 3,624/3,624 lines, with passing attribution, three complete repeats, and matching Coverage-MCP. The normal non-instrumented local build passes all 239 public oracle cases; the installed-wheel exclusion audit applies to the prior source snapshot and must be repeated before release. Historical reports retain their own source/build scope. This does not cover optional diagnostics, every platform, the full ASGI specification, or performance. The measured checkout was dirty, so run the gates on the committed source before using it as a clean release baseline.
+- The current report records 5,298/5,298 native regions and 3,753/3,753 lines, with passing attribution, three complete repeats, and matching Coverage-MCP. The normal non-instrumented local build passes all 240 public oracle cases; the installed-wheel exclusion audit applies to the prior source snapshot and must be repeated before release. Historical reports retain their own source/build scope. This does not cover optional diagnostics, every platform, the full ASGI specification, or performance. The measured checkout was dirty, so run the gates on the committed source before using it as a clean release baseline.
 
 ## Maintenance after completion
 
