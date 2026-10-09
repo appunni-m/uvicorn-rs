@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import http.client
+from importlib.util import find_spec
 import io
 import json
 import os
@@ -29,6 +30,7 @@ from benchmark_evidence import (
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv" / "bin" / "python"
+FASTAPI_LIFECYCLE_APP = "examples.bench_fastapi_lifecycle:app"
 SERVERS = {
     "uvicorn-rs-asyncio": {"kind": "rust", "loop": "asyncio"},
     "uvicorn-rs-uvloop": {"kind": "rust", "loop": "uvloop"},
@@ -212,7 +214,7 @@ def lifecycle_sampling_policy() -> dict:
 
 
 def uvicorn_cancellation_block(lines: list[str], server: dict, evidence) -> tuple[set[int], dict]:
-    """Recognize one specific logged timeout and its exact held-task traceback."""
+    """Recognize the expected Uvicorn timeout through the FastAPI call stack."""
     timeout_line = "ERROR:    Cancel 1 running task(s), timeout graceful shutdown exceeded"
     header = "ERROR:    Exception in ASGI application"
     terminal = "asyncio.exceptions.CancelledError: Task cancelled, timeout graceful shutdown exceeded"
@@ -230,33 +232,58 @@ def uvicorn_cancellation_block(lines: list[str], server: dict, evidence) -> tupl
     package = Path(evidence.dependencies_before["uvicorn"]["modules"]["uvicorn"]["package_roots"][0])
     version = ".".join(evidence.runtime["version"].split()[0].split(".")[:2])
     standard_library = Path(evidence.runtime["python"]).resolve().parent.parent / "lib" / f"python{version}"
-    frames = (
-        (package / "protocols/http" / f"{server['http']}_impl.py", "run_asgi", "result = await app(  # type: ignore[func-returns-value]"),
-        (package / "middleware/proxy_headers.py", "__call__", "return await self.app(scope, receive, send)"),
-        (ROOT / "examples/lifespan_asgi.py", "app", "await asyncio.Event().wait()"),
-        (standard_library / "asyncio/locks.py", "wait", "await fut"),
+    expected_prefix = (
+        (package / "protocols/http" / f"{server['http']}_impl.py", "run_asgi",
+         "result = await app(  # type: ignore[func-returns-value]"),
+        (package / "middleware/proxy_headers.py", "__call__",
+         "return await self.app(scope, receive, send)"),
     )
-    observed_frames = []
-    for expected_path, function, statement in frames:
-        if cursor >= end_index:
-            raise RuntimeError("Uvicorn cancellation traceback ended before its expected frame chain")
+    allowed_roots = [standard_library / "asyncio"]
+    for module in ("fastapi", "starlette"):
+        spec = find_spec(module)
+        if spec is None or spec.submodule_search_locations is None:
+            raise RuntimeError(f"the FastAPI lifecycle measurement cannot locate the {module} package")
+        allowed_roots.extend(Path(root).resolve() for root in spec.submodule_search_locations)
+    app_path = (ROOT / "examples/bench_fastapi_lifecycle.py").resolve()
+    parsed_frames = []
+    while cursor < end_index:
         match = re.fullmatch(r'  File "([^"\n]+)", line ([0-9]+), in ([A-Za-z0-9_]+)', lines[cursor])
-        if match is None or Path(match[1]).resolve() != expected_path.resolve() or match[3] != function:
-            raise RuntimeError("Uvicorn cancellation traceback contains an unexpected frame")
+        if match is None or cursor + 1 >= end_index:
+            raise RuntimeError("Uvicorn cancellation traceback contains an unrecognized frame or diagnostic")
+        path = Path(match[1]).resolve()
         number = int(match[2])
-        source = expected_path.read_text().splitlines()
-        if not 1 <= number <= len(source) or source[number - 1].strip() != statement:
-            raise RuntimeError("Uvicorn cancellation traceback does not match the exact live held-task source line")
-        if cursor + 1 >= end_index or lines[cursor + 1] != "    " + statement:
-            raise RuntimeError("Uvicorn cancellation traceback has unexpected source text")
-        observed_frames.append({"path": str(expected_path), "line": number, "function": function, "source": statement})
+        function = match[3]
+        source_lines = path.read_text().splitlines()
+        if not 1 <= number <= len(source_lines):
+            raise RuntimeError("Uvicorn cancellation traceback points outside a live source file")
+        displayed_source = lines[cursor + 1]
+        if not displayed_source.startswith("    "):
+            raise RuntimeError("Uvicorn cancellation traceback has no source line after a frame")
+        statement = displayed_source[4:].strip()
+        if source_lines[number - 1].strip() != statement:
+            raise RuntimeError("Uvicorn cancellation traceback source differs from the live source file")
+        parsed_frames.append({"path": path, "line": number, "function": function, "source": statement})
         cursor += 2
-        # CPython may show one position indicator under the source line. Only
-        # whitespace/caret/tilde display is normalized; no other text is accepted.
+        # CPython may show one position indicator under the source line.
         if cursor < end_index and re.fullmatch(r"    [ ~^]*[~^][ ~^]*", lines[cursor]):
             cursor += 1
-    if cursor != end_index:
-        raise RuntimeError("Uvicorn cancellation traceback contains an extra frame, exception chain, or diagnostic")
+    if len(parsed_frames) < 4:
+        raise RuntimeError("Uvicorn FastAPI cancellation traceback is unexpectedly short")
+    for observed, (path, function, statement) in zip(parsed_frames[:2], expected_prefix):
+        if observed["path"] != path.resolve() or observed["function"] != function or observed["source"] != statement:
+            raise RuntimeError("Uvicorn cancellation traceback has an unexpected server entry frame")
+    endpoint_frames = [frame for frame in parsed_frames if frame["path"] == app_path]
+    if (len(endpoint_frames) != 1 or endpoint_frames[0]["function"] != "hold"
+            or endpoint_frames[0]["source"] != "await asyncio.Event().wait()"):
+        raise RuntimeError("Uvicorn cancellation traceback does not pass through the exact FastAPI hold route")
+    final = parsed_frames[-1]
+    if (final["path"] != (standard_library / "asyncio/locks.py").resolve()
+            or final["function"] != "wait" or final["source"] != "await fut"):
+        raise RuntimeError("Uvicorn cancellation traceback does not terminate at the held asyncio event wait")
+    for frame in parsed_frames[2:-1]:
+        if not any(frame["path"].is_relative_to(root) for root in allowed_roots) and frame["path"] != app_path:
+            raise RuntimeError("Uvicorn FastAPI cancellation traceback contains a frame outside the known framework/asyncio stack")
+    observed_frames = [{**frame, "path": str(frame["path"])} for frame in parsed_frames]
     block = "\n".join(lines[start_index:end_index + 1])
     return {timeout_index, *range(start_index, end_index + 1)}, {
         "kind": "single deliberately held Uvicorn task timeout and cancellation",
@@ -336,7 +363,7 @@ def measure_phase(server_name: str, server: dict, phase: str, repetition: int, e
     started = time.monotonic()
     exited_at = None
     try:
-        port, process = start(server, "examples.lifespan_asgi:app", log)
+        port, process = start(server, FASTAPI_LIFECYCLE_APP, log)
         # Lifecycle requests run in this observer process. Shared monitor client
         # CPU fields are intentionally discarded; RUSAGE below belongs to the
         # server, the only child created/reaped during this phase.
@@ -426,7 +453,7 @@ def main() -> None:
     selected_servers = {name: SERVERS[name] for name in args.servers}
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
-        ["scripts/run_lifecycle_bench.py", "examples/lifespan_asgi.py"], [],
+        ["scripts/run_lifecycle_bench.py", "examples/bench_fastapi_lifecycle.py"], [],
         artifacts_dir=args.output.with_suffix(".artifacts"),
     )
     checkpoint_path = args.output.with_suffix(".jsonl")

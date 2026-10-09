@@ -98,6 +98,7 @@ FAULT_POINTS = {
     "native.module.wrap-function.serve",
     "native.runtime.build.error",
     "server.websocket-task.shutdown-panic",
+    "server.connection-task.shutdown-hang",
     "http3.request-task.panic",
     "http3.request-task.panic-after-response",
     "http3.connection.accept-finished",
@@ -386,6 +387,7 @@ FAULT_CONTRACTS = {
     "server-shutdown-failure",
     "server-lifespan-task-cancel",
     "server-connection-task-error-during-shutdown",
+    "server-connection-task-shutdown-timeout-abort",
     "server-hyper-connection-error-during-shutdown",
     "websocket-server-shutdown-force-abort",
     "websocket-driver-send-error-followup-200",
@@ -1551,6 +1553,18 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: connection-task shutdown faults require the held-request lifecycle workflow"
+                    )
+            elif fault["contract"] == "server-connection-task-shutdown-timeout-abort":
+                if (
+                    case.get("profile") != "lifecycle"
+                    or case.get("operation") != "lifespan.shutdown-cancellation"
+                    or fault["point"] != "server.connection-task.shutdown-hang"
+                    or case.get("lifecycle", {}).get("state_path") != "/state"
+                    or case.get("lifecycle", {}).get("hold_path") != "/hold"
+                    or case.get("lifecycle", {}).get("graceful_timeout_seconds") != 1
+                ):
+                    raise ParityError(
+                        f"{case_id}: connection-task timeout faults require the bounded held-request shutdown workflow"
                     )
             elif fault["contract"] == "server-hyper-connection-error-during-shutdown":
                 if (
@@ -6232,6 +6246,22 @@ def execute_case(
         fault_control_path = server.get("coverage_fault_control_path") if fault else None
         if fault_control_path is not None:
             fault_control_path.write_text(fault["point"], encoding="utf-8")
+        if (
+            fault is not None
+            and fault["contract"] == "server-connection-task-shutdown-timeout-abort"
+        ):
+            # Complete one connection while the injected select is armed, then
+            # hold a second connection until shutdown exercises its timeout arm.
+            probe = http1_request(server["port"], {
+                "method": "GET",
+                "path": lifecycle["state_path"],
+                "headers": [],
+                "body_base64": "",
+            })
+            if probe.get("status") != 200 or probe.get("body_base64") != "cmVhZHk=":
+                raise ParityError(
+                    "shutdown-timeout fault probe did not complete with the expected state response"
+                )
         if lifecycle.get("unfinished_tls_handshake") is True:
             pending_tls = socket.create_connection(("127.0.0.1", server["port"]), timeout=3)
             try:
@@ -6939,6 +6969,15 @@ def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -
             and "lifespan.shutdown" in events
             and "connection task failed during shutdown" in observation.get("server_log", "")
         )
+    if fault["contract"] == "server-connection-task-shutdown-timeout-abort":
+        events = observation.get("application_events", [])
+        return (
+            observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and "request.cancelled" in events
+            and "lifespan.shutdown" in events
+            and "panicked" not in observation.get("server_log", "")
+        )
     if fault["contract"] == "server-hyper-connection-error-during-shutdown":
         events = observation.get("application_events", [])
         return (
@@ -7398,6 +7437,12 @@ def execute_profile(
                         elif case["fault"]["contract"] == "server-connection-task-error-during-shutdown":
                             fault_observation = {
                                 **target_result,
+                                "server_log": target_raw["server_log"],
+                            }
+                        elif case["fault"]["contract"] == "server-connection-task-shutdown-timeout-abort":
+                            fault_observation = {
+                                **target_result,
+                                "process_exit_code": target_raw["process_exit_code"],
                                 "server_log": target_raw["server_log"],
                             }
                         elif case["fault"]["contract"] == "server-hyper-connection-error-during-shutdown":

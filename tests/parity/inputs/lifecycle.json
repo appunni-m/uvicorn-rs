@@ -134,6 +134,24 @@
       }
     },
     {
+      "case_id": "fault.lifecycle.connection-task-timeout-forced-abort",
+      "profile": "lifecycle",
+      "operation": "lifespan.shutdown-cancellation",
+      "covers": [
+        "lifespan.shutdown-cancellation"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.connection-task.shutdown-hang",
+        "contract": "server-connection-task-shutdown-timeout-abort"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "hold_path": "/hold",
+        "graceful_timeout_seconds": 1
+      }
+    },
+    {
       "case_id": "fault.lifecycle.cancellation-cancel-method-error",
       "profile": "lifecycle",
       "operation": "lifespan.shutdown-cancellation",

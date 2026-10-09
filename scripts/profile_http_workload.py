@@ -27,7 +27,26 @@ from benchmark_evidence import BenchmarkEvidence, assert_clean_coverage_environm
 
 
 ROOT = http_bench.ROOT
-PROFILE_WORKLOADS = ("fixed", "large-response", "many-response-chunks")
+PROFILE_WORKLOADS = (
+    "fixed",
+    "large-response",
+    "many-response-chunks",
+    "fastapi-fixed",
+    "fastapi-validated-route",
+    "fastapi-python-cpu",
+    "fastapi-large-response",
+    "fastapi-many-response-chunks",
+    "fastapi-small-response-chunks",
+    "fastapi-request-upload",
+    "fastapi-upload-1m-write-1k",
+    "fastapi-upload-1m-write-16k",
+    "fastapi-upload-1m-write-256k",
+    "fastapi-upload-1m-write-1m",
+    "fastapi-request-upload-small-chunks",
+    "fastapi-slow-reader-backpressure",
+    "fastapi-scope-32-headers",
+    "fastapi-contextvars",
+)
 SAMPLE = Path("/usr/bin/sample")
 SOURCE_FILES = [
     "scripts/profile_http_workload.py",
@@ -35,6 +54,8 @@ SOURCE_FILES = [
     "scripts/bench_http_client.c",
     "scripts/bench_http_matrix.mjs",
     "examples/bench_matrix_asgi.py",
+    "examples/bench_fastapi.py",
+    "examples/profile_fastapi.py",
 ]
 
 
@@ -142,7 +163,7 @@ for name in ('uvicorn', 'uvloop.loop', 'httptools.parser.parser', 'uvicorn_rs._n
     path = pathlib.Path(module.__file__).resolve()
     modules[name] = {'available': True, 'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
 versions = {}
-for name in ('uvicorn', 'uvloop', 'httptools', 'hypercorn', 'uvicorn-rs'):
+for name in ('uvicorn', 'uvloop', 'httptools', 'hypercorn', 'uvicorn-rs', 'fastapi', 'starlette', 'pydantic'):
     try:
         versions[name] = importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:
@@ -192,23 +213,31 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
     if _sha256(saved_client) != _sha256(native_client):
         raise RuntimeError("HTTP client changed while preserving its executable")
     http_bench.NATIVE_CLIENT = saved_client
-    evidence = BenchmarkEvidence(ROOT, http_bench.PYTHON, SOURCE_FILES, [saved_client])
+    python = http_bench.DEFAULT_PYTHON
+    evidence = BenchmarkEvidence(ROOT, python, SOURCE_FILES, [saved_client])
     receipt["identity_before"] = evidence.before
     receipt["preserved"] = _preserve_identity(evidence, output)
-    receipt["runtime_before"] = _runtime_identity(http_bench.PYTHON)
+    receipt["runtime_before"] = _runtime_identity(python)
     server_definition = {"kind": "rust" if args.server == "uvicorn-rs" else "uvicorn", "loop": args.loop}
     if args.server == "uvicorn":
         server_definition["http"] = args.http
     server_name = f"{args.server}-{args.loop}" + (f"-{args.http}" if args.server == "uvicorn" else "")
     definition = http_bench.WORKLOADS[args.workload]
+    app = definition["app"]
+    asgi_timing_path = None
+    if args.workload.startswith("fastapi-"):
+        app = "examples.profile_fastapi:app"
+        asgi_timing_path = output / "asgi-app-timings.json"
     port = http_bench._port()
-    server_command = http_bench._command(server_definition, definition["app"], port)
+    server_command = http_bench._command(server_definition, app, port, python)
     client_command = http_bench._client_command(port, args.duration, args.concurrency, definition["client"])
     receipt.update(
         {
             "server": server_name,
             "workload": args.workload,
             "workload_definition": definition,
+            "profile_app": app,
+            "asgi_timing_path": str(asgi_timing_path) if asgi_timing_path else None,
             "concurrency": args.concurrency,
             "load_duration_seconds": args.duration,
             "sample_duration_seconds": args.sample_duration,
@@ -224,6 +253,8 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
     client_stdout = output / "client.stdout.json"
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    if asgi_timing_path is not None:
+        env["UVICORN_RS_ASGI_TIMINGS"] = str(asgi_timing_path)
     with (
         server_log.open("w+", encoding="utf-8") as log,
         client_stdout.open("w", encoding="utf-8") as client_out,
@@ -312,7 +343,7 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
             receipt["server_error_diagnostic"] = bool(
                 re.search(r"(?m)(?:panicked at|^Traceback|^ERROR:|^uvicorn-rs: .*failed)", log_text)
             )
-            receipt["runtime_after"] = _runtime_identity(http_bench.PYTHON)
+            receipt["runtime_after"] = _runtime_identity(python)
             receipt["identity_after"] = evidence.snapshot()
             receipt["identity_stable"] = receipt["identity_before"] == receipt["identity_after"]
             receipt["runtime_identity_stable"] = receipt["runtime_before"] == receipt["runtime_after"]
@@ -336,6 +367,10 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
         raise RuntimeError("server emitted an error or panic diagnostic; see server.log")
     if not receipt["identity_stable"] or not receipt["runtime_identity_stable"]:
         raise RuntimeError("source, binary, or Python package identity changed during profiling")
+    if asgi_timing_path is not None:
+        if not asgi_timing_path.is_file():
+            raise RuntimeError("FastAPI ASGI timing output was not written during graceful shutdown")
+        receipt["asgi_app_timings"] = json.loads(asgi_timing_path.read_text(encoding="utf-8"))
 
 
 def main() -> int:
@@ -355,7 +390,7 @@ def main() -> int:
     args = parser.parse_args()
     if platform.system() != "Darwin" or not SAMPLE.is_file():
         parser.error("this diagnostic driver requires macOS /usr/bin/sample")
-    if not http_bench.PYTHON.is_file():
+    if not http_bench.DEFAULT_PYTHON.is_file():
         parser.error("create .venv and install the benchmark dependency group first")
     if (
         not all(math.isfinite(value) for value in (args.duration, args.sample_delay, args.warmup))

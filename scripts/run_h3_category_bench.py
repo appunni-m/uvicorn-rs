@@ -26,32 +26,33 @@ from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_c
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv" / "bin" / "python"
 CLIENT = ROOT / "tools" / "http3-probe" / "target" / "release" / "bench"
+FASTAPI_APP = "examples.bench_fastapi:app"
 WORKLOADS = {
     "protocol-scope-consumed-request": {
-        "app": "examples.bench_h3_consumed_asgi:app",
+        "app": FASTAPI_APP,
         "client": {
             "mode": "fixed", "path": "/protocol-consumed", "expected_body": "http_version=3;bytes=1",
             "h3_grease": False,
         },
     },
     "protocol-scope": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {"mode": "fixed", "path": "/protocol", "expected_body": "http_version=3"},
     },
     "fixed": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {"mode": "fixed", "path": "/fixed"},
     },
     "large-response": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {"mode": "large", "path": "/large/1048576", "response_bytes": 1_048_576},
     },
     "many-response-chunks": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {"mode": "chunks", "path": "/chunks/256/4096", "response_bytes": 1_048_576},
     },
     "request-upload": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {
             "mode": "upload", "path": "/upload/1048576", "upload_bytes": 1_048_576,
         },
@@ -65,7 +66,7 @@ WORKLOADS = {
         },
     },
     "slow-reader-backpressure": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {
             "mode": "chunks", "path": "/chunks/256/4096", "response_bytes": 1_048_576,
             "read_rate_bytes_per_second": 4_194_304,
@@ -235,8 +236,8 @@ def sample(
 def source_digest() -> str:
     files = [
         "scripts/run_h3_category_bench.py", "tools/http3-probe/src/bin/bench.rs",
-        "src/lib.rs", "python/uvicorn_rs/server.py", "examples/bench_matrix_asgi.py",
-        "examples/protocol_asgi.py", "examples/bench_h3_consumed_asgi.py", "pyproject.toml", "uv.lock",
+        "src/lib.rs", "python/uvicorn_rs/server.py", "examples/bench_fastapi.py",
+        "pyproject.toml", "uv.lock",
     ]
     digest = hashlib.sha256()
     for name in files:
@@ -268,8 +269,7 @@ def main() -> None:
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
         ["scripts/run_h3_category_bench.py", "tools/http3-probe/src/bin/bench.rs",
-         "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_matrix_asgi.py",
-         "examples/bench_h3_consumed_asgi.py"],
+         "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         artifacts_dir=args.output.with_suffix(".artifacts"),
     )

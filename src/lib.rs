@@ -208,6 +208,7 @@ enum CoverageFaultPoint {
     ServerConnectionTaskJoinSelectResult,
     ServerConnectionTaskServiceErrorDuringShutdown,
     ServerConnectionTaskJoinErrorDuringShutdown,
+    ServerConnectionTaskShutdownHang,
     ServerConnectionIoPollWriteError,
     HttpAsgiIoAllocate,
     HttpAppInvokeCall,
@@ -487,6 +488,7 @@ impl CoverageFaultPoint {
             Self::ServerConnectionTaskJoinErrorDuringShutdown => {
                 "server.connection-task.join-error-during-shutdown"
             }
+            Self::ServerConnectionTaskShutdownHang => "server.connection-task.shutdown-hang",
             Self::ServerConnectionIoPollWriteError => "server.connection-io.poll-write-error",
             Self::HttpAsgiIoAllocate => "http.asgi-io.allocate",
             Self::HttpAppInvokeCall => "http.asgi.app-invoke",
@@ -738,9 +740,33 @@ struct RuntimeDiagnosticCounters {
     http_response_body_messages: AtomicU64,
     http_response_body_queue_full: AtomicU64,
     http_response_body_full_send_wait_ns: AtomicU64,
+    http_python_attach_calls: AtomicU64,
+    http_python_attach_wait_ns: AtomicU64,
+    http_response_start_latency_calls: AtomicU64,
+    http_response_start_latency_ns: AtomicU64,
+    http_final_body_latency_calls: AtomicU64,
+    http_final_body_latency_ns: AtomicU64,
+    python_task_starter_calls: AtomicU64,
+    python_task_starter_schedule_wait_ns: AtomicU64,
     websocket_receive_bridge_futures: AtomicU64,
     websocket_outgoing_messages: AtomicU64,
     websocket_outgoing_queue_full: AtomicU64,
+    http_request_python_bytes_messages: AtomicU64,
+    http_request_python_bytes_copied: AtomicU64,
+    tcp_read_poll_calls: AtomicU64,
+    tcp_read_pending_calls: AtomicU64,
+    tcp_read_bytes: AtomicU64,
+    tcp_read_poll_ns: AtomicU64,
+    tcp_read_pending_wait_ns: AtomicU64,
+    tcp_write_poll_calls: AtomicU64,
+    tcp_write_pending_calls: AtomicU64,
+    tcp_write_bytes: AtomicU64,
+    tcp_write_poll_ns: AtomicU64,
+    tcp_write_pending_wait_ns: AtomicU64,
+    tcp_flush_poll_calls: AtomicU64,
+    tcp_flush_poll_ns: AtomicU64,
+    tcp_shutdown_poll_calls: AtomicU64,
+    tcp_shutdown_poll_ns: AtomicU64,
 }
 
 impl RuntimeDiagnostics {
@@ -759,6 +785,84 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    fn http_python_attach_wait_started(&self) -> Option<std::time::Instant> {
+        #[cfg(feature = "runtime-diagnostics")]
+        return Some(std::time::Instant::now());
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        None
+    }
+
+    #[inline]
+    fn http_python_attach_wait_finished(&self, started: Option<std::time::Instant>) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(started) = started {
+            self.counters
+                .http_python_attach_calls
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters.http_python_attach_wait_ns.fetch_add(
+                started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                Ordering::Relaxed,
+            );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = started;
+    }
+
+    #[inline]
+    fn http_response_latency_started(&self) -> Option<std::time::Instant> {
+        #[cfg(feature = "runtime-diagnostics")]
+        return Some(std::time::Instant::now());
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        None
+    }
+
+    #[inline]
+    fn http_response_start_latency_finished(&self, started: Option<std::time::Instant>) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(started) = started {
+            self.counters
+                .http_response_start_latency_calls
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters.http_response_start_latency_ns.fetch_add(
+                started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                Ordering::Relaxed,
+            );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = started;
+    }
+
+    #[cfg(feature = "runtime-diagnostics")]
+    #[inline]
+    fn http_final_body_latency_finished(&self, started: Option<std::time::Instant>) {
+        if let Some(started) = started {
+            self.counters
+                .http_final_body_latency_calls
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters.http_final_body_latency_ns.fetch_add(
+                started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                Ordering::Relaxed,
+            );
+        }
+    }
+
+    #[cfg(feature = "runtime-diagnostics")]
+    #[inline]
+    fn python_task_starter_started(&self, started: std::time::Instant) {
+        {
+            self.counters
+                .python_task_starter_calls
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters
+                .python_task_starter_schedule_wait_ns
+                .fetch_add(
+                    started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
+        }
+    }
+
+    #[inline]
     fn http_receive_immediate(&self) {
         #[cfg(feature = "runtime-diagnostics")]
         self.counters
@@ -772,6 +876,139 @@ impl RuntimeDiagnostics {
         self.counters
             .http_receive_bridge_futures
             .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_request_python_bytes_copied(&self, bytes: usize) {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.counters
+                .http_request_python_bytes_messages
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters
+                .http_request_python_bytes_copied
+                .fetch_add(u64::try_from(bytes).unwrap_or(u64::MAX), Ordering::Relaxed);
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = bytes;
+    }
+
+    #[inline]
+    fn tcp_io_poll_started(&self) -> Option<std::time::Instant> {
+        #[cfg(feature = "runtime-diagnostics")]
+        return Some(std::time::Instant::now());
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        None
+    }
+
+    #[inline]
+    fn tcp_read_poll_finished(
+        &self,
+        bytes: usize,
+        pending: bool,
+        started: Option<std::time::Instant>,
+        pending_wait_ns: Option<u64>,
+    ) {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.counters
+                .tcp_read_poll_calls
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters
+                .tcp_read_bytes
+                .fetch_add(u64::try_from(bytes).unwrap_or(u64::MAX), Ordering::Relaxed);
+            if pending {
+                self.counters
+                    .tcp_read_pending_calls
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            if let Some(started) = started {
+                self.counters.tcp_read_poll_ns.fetch_add(
+                    started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
+            }
+            if let Some(wait_ns) = pending_wait_ns {
+                self.counters
+                    .tcp_read_pending_wait_ns
+                    .fetch_add(wait_ns, Ordering::Relaxed);
+            }
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = (bytes, pending, started, pending_wait_ns);
+    }
+
+    #[inline]
+    fn tcp_write_poll_finished(
+        &self,
+        bytes: usize,
+        pending: bool,
+        started: Option<std::time::Instant>,
+        pending_wait_ns: Option<u64>,
+    ) {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.counters
+                .tcp_write_poll_calls
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters
+                .tcp_write_bytes
+                .fetch_add(u64::try_from(bytes).unwrap_or(u64::MAX), Ordering::Relaxed);
+            if pending {
+                self.counters
+                    .tcp_write_pending_calls
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            if let Some(started) = started {
+                self.counters.tcp_write_poll_ns.fetch_add(
+                    started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
+            }
+            if let Some(wait_ns) = pending_wait_ns {
+                self.counters
+                    .tcp_write_pending_wait_ns
+                    .fetch_add(wait_ns, Ordering::Relaxed);
+            }
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = (bytes, pending, started, pending_wait_ns);
+    }
+
+    #[inline]
+    fn tcp_flush_poll_finished(&self, started: Option<std::time::Instant>) {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.counters
+                .tcp_flush_poll_calls
+                .fetch_add(1, Ordering::Relaxed);
+            if let Some(started) = started {
+                self.counters.tcp_flush_poll_ns.fetch_add(
+                    started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
+            }
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = started;
+    }
+
+    #[inline]
+    fn tcp_shutdown_poll_finished(&self, started: Option<std::time::Instant>) {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.counters
+                .tcp_shutdown_poll_calls
+                .fetch_add(1, Ordering::Relaxed);
+            if let Some(started) = started {
+                self.counters.tcp_shutdown_poll_ns.fetch_add(
+                    started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
+            }
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = started;
     }
 
     #[inline]
@@ -858,9 +1095,33 @@ impl RuntimeDiagnostics {
                 "http_response_body_messages={} ",
                 "http_response_body_queue_full={} ",
                 "http_response_body_full_send_wait_ns={} ",
+                "http_python_attach_calls={} ",
+                "http_python_attach_wait_ns={} ",
+                "http_response_start_latency_calls={} ",
+                "http_response_start_latency_ns={} ",
+                "http_final_body_latency_calls={} ",
+                "http_final_body_latency_ns={} ",
+                "python_task_starter_calls={} ",
+                "python_task_starter_schedule_wait_ns={} ",
                 "websocket_receive_bridge_futures={} ",
                 "websocket_outgoing_messages={} ",
-                "websocket_outgoing_queue_full={}"
+                "websocket_outgoing_queue_full={} ",
+                "http_request_python_bytes_messages={} ",
+                "http_request_python_bytes_copied={} ",
+                "tcp_read_poll_calls={} ",
+                "tcp_read_pending_calls={} ",
+                "tcp_read_bytes={} ",
+                "tcp_read_poll_ns={} ",
+                "tcp_read_pending_wait_ns={} ",
+                "tcp_write_poll_calls={} ",
+                "tcp_write_pending_calls={} ",
+                "tcp_write_bytes={} ",
+                "tcp_write_poll_ns={} ",
+                "tcp_write_pending_wait_ns={} ",
+                "tcp_flush_poll_calls={} ",
+                "tcp_flush_poll_ns={} ",
+                "tcp_shutdown_poll_calls={} ",
+                "tcp_shutdown_poll_ns={}"
             ),
             self.counters
                 .asgi_task_schedule_calls
@@ -883,6 +1144,30 @@ impl RuntimeDiagnostics {
                 .http_response_body_full_send_wait_ns
                 .load(Ordering::Relaxed),
             self.counters
+                .http_python_attach_calls
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_python_attach_wait_ns
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_response_start_latency_calls
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_response_start_latency_ns
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_final_body_latency_calls
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_final_body_latency_ns
+                .load(Ordering::Relaxed),
+            self.counters
+                .python_task_starter_calls
+                .load(Ordering::Relaxed),
+            self.counters
+                .python_task_starter_schedule_wait_ns
+                .load(Ordering::Relaxed),
+            self.counters
                 .websocket_receive_bridge_futures
                 .load(Ordering::Relaxed),
             self.counters
@@ -891,6 +1176,34 @@ impl RuntimeDiagnostics {
             self.counters
                 .websocket_outgoing_queue_full
                 .load(Ordering::Relaxed),
+            self.counters
+                .http_request_python_bytes_messages
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_python_bytes_copied
+                .load(Ordering::Relaxed),
+            self.counters.tcp_read_poll_calls.load(Ordering::Relaxed),
+            self.counters.tcp_read_pending_calls.load(Ordering::Relaxed),
+            self.counters.tcp_read_bytes.load(Ordering::Relaxed),
+            self.counters.tcp_read_poll_ns.load(Ordering::Relaxed),
+            self.counters
+                .tcp_read_pending_wait_ns
+                .load(Ordering::Relaxed),
+            self.counters.tcp_write_poll_calls.load(Ordering::Relaxed),
+            self.counters
+                .tcp_write_pending_calls
+                .load(Ordering::Relaxed),
+            self.counters.tcp_write_bytes.load(Ordering::Relaxed),
+            self.counters.tcp_write_poll_ns.load(Ordering::Relaxed),
+            self.counters
+                .tcp_write_pending_wait_ns
+                .load(Ordering::Relaxed),
+            self.counters.tcp_flush_poll_calls.load(Ordering::Relaxed),
+            self.counters.tcp_flush_poll_ns.load(Ordering::Relaxed),
+            self.counters
+                .tcp_shutdown_poll_calls
+                .load(Ordering::Relaxed),
+            self.counters.tcp_shutdown_poll_ns.load(Ordering::Relaxed),
         ));
     }
 }
@@ -1168,9 +1481,11 @@ fn make_http_request_message(
     py: Python<'_>,
     request: Option<RequestMessage>,
     request_disconnected: &AtomicBool,
+    diagnostics: &RuntimeDiagnostics,
 ) -> PyResult<Py<PyAny>> {
     let message = PyDict::new(py);
     if let Some(request) = request.filter(|request| !request.disconnected) {
+        diagnostics.http_request_python_bytes_copied(request.body.len());
         coverage_try!(
             HttpRequestTypeSetItem,
             message.set_item("type", "http.request")
@@ -1201,11 +1516,18 @@ struct PythonTaskStarter {
     completion_signal: watch::Sender<bool>,
     locals: TaskLocals,
     cancellation_tracker: TaskTracker,
+    #[cfg(feature = "runtime-diagnostics")]
+    diagnostics: RuntimeDiagnostics,
+    #[cfg(feature = "runtime-diagnostics")]
+    schedule_started: std::time::Instant,
 }
 
 #[pymethods]
 impl PythonTaskStarter {
     fn __call__(&mut self) -> PyResult<()> {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.diagnostics
+            .python_task_starter_started(self.schedule_started);
         Python::attach(|py| {
             #[cfg(coverage)]
             let prelude_close_error =
@@ -1669,6 +1991,8 @@ fn python_task_future(
         };
     let (result_sender, result_receiver) = oneshot::channel();
     let (completion_signal, completion_receiver) = watch::channel(false);
+    #[cfg(feature = "runtime-diagnostics")]
+    let schedule_started = std::time::Instant::now();
     let starter = coverage_value!(
         PythonTaskFutureStarterAllocation,
         Py::new(
@@ -1680,6 +2004,10 @@ fn python_task_future(
                 completion_signal,
                 locals: locals.clone(),
                 cancellation_tracker: cancellation_tracker.clone(),
+                #[cfg(feature = "runtime-diagnostics")]
+                diagnostics: diagnostics.clone(),
+                #[cfg(feature = "runtime-diagnostics")]
+                schedule_started,
             },
         )
     )?;
@@ -1784,10 +2112,11 @@ impl AsgiIo {
                     "coverage-injected immediate HTTP disconnect message error",
                 ))
             } else {
-                make_http_request_message(py, None, &slf.request_disconnected)
+                make_http_request_message(py, None, &slf.request_disconnected, &slf.diagnostics)
             };
             #[cfg(not(coverage))]
-            let request_message = make_http_request_message(py, None, &slf.request_disconnected);
+            let request_message =
+                make_http_request_message(py, None, &slf.request_disconnected, &slf.diagnostics);
             return Ok(request_message?.into_bound(py));
         }
 
@@ -1819,15 +2148,20 @@ impl AsgiIo {
         };
         if let Some(request) = immediate {
             slf.diagnostics.http_receive_immediate();
-            return Ok(
-                make_http_request_message(py, request, &slf.request_disconnected)?.into_bound(py),
-            );
+            return Ok(make_http_request_message(
+                py,
+                request,
+                &slf.request_disconnected,
+                &slf.diagnostics,
+            )?
+            .into_bound(py));
         }
         let request_messages = Arc::clone(&slf.request_messages);
         let mut connection_closed = slf.connection_closed.clone();
         let request_cancellation = slf.request_cancellation.clone();
         let request_disconnected = Arc::clone(&slf.request_disconnected);
         slf.diagnostics.http_receive_bridge_future();
+        let diagnostics = slf.diagnostics.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             #[cfg(coverage)]
             if coverage_fault_take(CoverageFaultPoint::HttpReceiveDisconnectedBeforeFuturePoll) {
@@ -1849,7 +2183,9 @@ impl AsgiIo {
                     }
                 }
             };
-            Python::attach(|py| make_http_request_message(py, request, &request_disconnected))
+            Python::attach(|py| {
+                make_http_request_message(py, request, &request_disconnected, &diagnostics)
+            })
         })
     }
 
@@ -2000,7 +2336,6 @@ impl AsgiIo {
 struct WebSocketIo {
     incoming: Arc<Mutex<mpsc::Receiver<WebSocketIncoming>>>,
     connect_delivered: AtomicBool,
-    connection_closed: watch::Receiver<bool>,
     state: Arc<AtomicU8>,
     handshake: std::sync::Mutex<Option<oneshot::Sender<WebSocketHandshake>>>,
     outgoing: mpsc::Sender<WebSocketOutgoing>,
@@ -2012,44 +2347,45 @@ impl WebSocketIo {
     fn receive<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let connect = !slf.connect_delivered.swap(true, Ordering::AcqRel);
         let incoming = Arc::clone(&slf.incoming);
-        let mut connection_closed = slf.connection_closed.clone();
         let state = Arc::clone(&slf.state);
         slf.diagnostics.websocket_receive_bridge_future();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let incoming_message = if connect {
                 None
-            } else if state.load(Ordering::Acquire) == 3 || *connection_closed.borrow() {
-                state.store(3, Ordering::Release);
-                Some(WebSocketIncoming::Disconnect {
-                    code: 1005,
-                    reason: String::new(),
-                })
             } else {
-                tokio::select! {
-                    biased;
-                    message = async {
-                        #[cfg(coverage)]
-                        if coverage_fault_is_armed(CoverageFaultPoint::WebSocketReceiveChannelClosed)
-                            || coverage_fault_is_armed(CoverageFaultPoint::WebSocketReceiveClosedTypeSetItem)
-                            || coverage_fault_is_armed(CoverageFaultPoint::WebSocketReceiveClosedCodeSetItem)
-                            || coverage_fault_is_armed(CoverageFaultPoint::WebSocketReceiveClosedReasonSetItem)
-                        {
-                            return None;
+                let queued_message = incoming.lock().await.try_recv();
+                #[cfg(coverage)]
+                let force_closed =
+                    coverage_fault_take(CoverageFaultPoint::WebSocketReceiveConnectionClosed);
+                #[cfg(not(coverage))]
+                let force_closed = false;
+                let state_closed = state.load(Ordering::Acquire) == 3 || force_closed;
+                if state_closed {
+                    state.store(3, Ordering::Release);
+                }
+                match queued_message {
+                    Ok(message) => Some(message),
+                    Err(_) if state_closed => Some(WebSocketIncoming::Disconnect {
+                        code: 1005,
+                        reason: String::new(),
+                    }),
+                    Err(_) => {
+                        async {
+                            #[cfg(coverage)]
+                            if coverage_fault_take(
+                                CoverageFaultPoint::WebSocketReceiveChannelClosed,
+                            ) || coverage_fault_is_armed(
+                                CoverageFaultPoint::WebSocketReceiveClosedTypeSetItem,
+                            ) || coverage_fault_is_armed(
+                                CoverageFaultPoint::WebSocketReceiveClosedCodeSetItem,
+                            ) || coverage_fault_is_armed(
+                                CoverageFaultPoint::WebSocketReceiveClosedReasonSetItem,
+                            ) {
+                                return None;
+                            }
+                            incoming.lock().await.recv().await
                         }
-                        incoming.lock().await.recv().await
-                    } => message,
-                    _ = async {
-                        #[cfg(coverage)]
-                        if coverage_fault_is_armed(CoverageFaultPoint::WebSocketReceiveConnectionClosed) {
-                            return;
-                        }
-                        let _ = connection_closed.changed().await;
-                    } => {
-                        state.store(3, Ordering::Release);
-                        Some(WebSocketIncoming::Disconnect {
-                            code: 1005,
-                            reason: String::new(),
-                        })
+                        .await
                     }
                 }
             };
@@ -2740,10 +3076,18 @@ struct AsgiBody {
     app_task_tracker: TaskTracker,
     defer_completed_app_result_once: bool,
     incomplete_body_result_deferred: bool,
+    #[cfg(feature = "runtime-diagnostics")]
+    response_timing_diagnostics: RuntimeDiagnostics,
+    #[cfg(feature = "runtime-diagnostics")]
+    response_latency_started: Option<std::time::Instant>,
     #[cfg(coverage)]
     body_consumer_pause: Option<Pin<Box<tokio::time::Sleep>>>,
     #[cfg(coverage)]
     body_consumer_pause_started: bool,
+    #[cfg(coverage)]
+    receiver_pending_pause: Pin<Box<tokio::time::Sleep>>,
+    #[cfg(coverage)]
+    receiver_pending_pause_active: bool,
 }
 
 impl Drop for AsgiBody {
@@ -2756,10 +3100,15 @@ impl Drop for AsgiBody {
 
 struct ConnectionIo<I> {
     io: I,
+    diagnostics: RuntimeDiagnostics,
     closed: watch::Sender<bool>,
     active_http_requests: Arc<AtomicUsize>,
     read_eof_waker: Arc<AtomicWaker>,
     read_eof: bool,
+    #[cfg(feature = "runtime-diagnostics")]
+    read_pending_since: Option<std::time::Instant>,
+    #[cfg(feature = "runtime-diagnostics")]
+    write_pending_since: Option<std::time::Instant>,
     #[cfg(coverage)]
     eof_recheck_paused: bool,
 }
@@ -2973,7 +3322,25 @@ impl<I: AsyncRead + Unpin> AsyncRead for ConnectionIo<I> {
         if this.read_eof {
             return this.poll_read_after_eof(cx);
         }
-        match Pin::new(&mut this.io).poll_read(cx, buffer) {
+        let poll_started = this.diagnostics.tcp_io_poll_started();
+        #[cfg(feature = "runtime-diagnostics")]
+        let pending_wait_ns = this
+            .read_pending_since
+            .take()
+            .map(|started| started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let pending_wait_ns = None;
+        let filled_before = buffer.filled().len();
+        let result = Pin::new(&mut this.io).poll_read(cx, buffer);
+        let pending = matches!(&result, Poll::Pending);
+        #[cfg(feature = "runtime-diagnostics")]
+        if pending {
+            this.read_pending_since = Some(std::time::Instant::now());
+        }
+        let bytes_read = buffer.filled().len().saturating_sub(filled_before);
+        this.diagnostics
+            .tcp_read_poll_finished(bytes_read, pending, poll_started, pending_wait_ns);
+        match result {
             Poll::Ready(Ok(())) if buffer.filled().is_empty() => {
                 this.closed.send_replace(true);
                 this.read_eof = true;
@@ -3049,12 +3416,35 @@ impl<I: AsyncWrite + Unpin> ConnectionIo<I> {
                 "coverage-injected connection write error",
             )));
         }
+        let poll_started = self.diagnostics.tcp_io_poll_started();
+        #[cfg(feature = "runtime-diagnostics")]
+        let pending_wait_ns = self
+            .write_pending_since
+            .take()
+            .map(|started| started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let pending_wait_ns = None;
         let result = match buffers {
             WriteBuffers::Scalar(buffer) => Pin::new(&mut self.io).poll_write(cx, buffer),
             WriteBuffers::Vectored(buffers) => {
                 Pin::new(&mut self.io).poll_write_vectored(cx, buffers)
             }
         };
+        let pending = matches!(&result, Poll::Pending);
+        #[cfg(feature = "runtime-diagnostics")]
+        if pending {
+            self.write_pending_since = Some(std::time::Instant::now());
+        }
+        let bytes_written = match &result {
+            Poll::Ready(Ok(bytes)) => *bytes,
+            Poll::Ready(Err(_)) | Poll::Pending => 0,
+        };
+        self.diagnostics.tcp_write_poll_finished(
+            bytes_written,
+            pending,
+            poll_started,
+            pending_wait_ns,
+        );
         match result {
             Poll::Ready(Err(error)) => {
                 self.closed.send_replace(true);
@@ -3091,15 +3481,29 @@ impl<I: AsyncWrite + Unpin> AsyncWrite for ConnectionIo<I> {
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.get_mut().io).poll_flush(cx)
+        let this = self.get_mut();
+        let poll_started = this.diagnostics.tcp_io_poll_started();
+        let result = Pin::new(&mut this.io).poll_flush(cx);
+        this.diagnostics.tcp_flush_poll_finished(poll_started);
+        result
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        Pin::new(&mut self.get_mut().io).poll_shutdown(cx)
+        let this = self.get_mut();
+        let poll_started = this.diagnostics.tcp_io_poll_started();
+        let result = Pin::new(&mut this.io).poll_shutdown(cx);
+        this.diagnostics.tcp_shutdown_poll_finished(poll_started);
+        result
     }
 }
 
 impl AsgiBody {
+    fn record_final_body_available(&mut self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.response_timing_diagnostics
+            .http_final_body_latency_finished(self.response_latency_started.take());
+    }
+
     fn finish_response(&mut self, application: ResponseApplication) {
         // A final ASGI body completes the transport, while the application may
         // still run background work. Transfer that work to the server now so
@@ -3143,6 +3547,7 @@ impl AsgiBody {
         // frame before reporting the app's completion result.
         if let Ok(chunk) = self.receiver.try_recv() {
             if !chunk.more_body {
+                self.record_final_body_available();
                 self.finish_response(ResponseApplication::Completed(task_result));
             } else {
                 self.application = Some(ResponseApplication::Completed(task_result));
@@ -3202,6 +3607,14 @@ impl Body for AsgiBody {
             }
             this.body_consumer_pause = None;
         }
+        #[cfg(coverage)]
+        if this.receiver_pending_pause_active {
+            if this.receiver_pending_pause.as_mut().poll(cx).is_pending() {
+                return Poll::Pending;
+            }
+            this.receiver_pending_pause_active = false;
+            return this.poll_app_task(cx);
+        }
         let Some(application) = this.application.take() else {
             return this.poll_app_task(cx);
         };
@@ -3209,6 +3622,7 @@ impl Body for AsgiBody {
         match this.receiver.poll_recv(cx) {
             Poll::Ready(Some(chunk)) => {
                 if !chunk.more_body {
+                    this.record_final_body_available();
                     this.finish_response(application);
                 } else {
                     this.application = Some(application);
@@ -3223,10 +3637,14 @@ impl Body for AsgiBody {
                 this.application = Some(application);
                 #[cfg(coverage)]
                 if coverage_fault_take(CoverageFaultPoint::HttpResponseBodyPollPendingPause) {
-                    // Force the app task to queue its final body after this
-                    // receive poll returned Pending, exercising the recovery
-                    // path without relying on scheduler luck.
-                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    // Yield to the runtime after the receiver reports Pending,
+                    // then poll app completion before polling the receiver again.
+                    // This exercises queued-body recovery without blocking Tokio.
+                    this.receiver_pending_pause
+                        .as_mut()
+                        .reset(tokio::time::Instant::now() + std::time::Duration::from_millis(100));
+                    this.receiver_pending_pause_active = true;
+                    return Poll::Pending;
                 }
                 this.poll_app_task(cx)
             }
@@ -3520,6 +3938,10 @@ async fn serve_forever(
                     ) || coverage_fault_is_armed(
                         CoverageFaultPoint::ServerConnectionTaskJoinSelectResult,
                     );
+                    #[cfg(coverage)]
+                    let inject_shutdown_hang = coverage_fault_is_armed(
+                        CoverageFaultPoint::ServerConnectionTaskShutdownHang,
+                    );
                     let server_for_task = Arc::clone(&server);
                     #[cfg(coverage)]
                     let cancellation_for_task = server_for_task.cancellation.clone();
@@ -3558,6 +3980,16 @@ async fn serve_forever(
                                 biased;
                                 _ = cancellation_for_task.cancelled() => {
                                     let _ = completed_sender.send(());
+                                    std::future::pending::<Result<(), BoxError>>().await
+                                },
+                                result = serve_connection(stream, peer_addr, server_for_task) => result,
+                            };
+                        }
+                        #[cfg(coverage)]
+                        if inject_shutdown_hang {
+                            return tokio::select! {
+                                biased;
+                                _ = cancellation_for_task.cancelled() => {
                                     std::future::pending::<Result<(), BoxError>>().await
                                 },
                                 result = serve_connection(stream, peer_addr, server_for_task) => result,
@@ -3800,10 +4232,15 @@ async fn serve_connection(
     let read_eof_waker = Arc::new(AtomicWaker::new());
     let stream = ConnectionIo {
         io: stream,
+        diagnostics: server.diagnostics.clone(),
         closed: closed_tx.clone(),
         active_http_requests: Arc::clone(&active_http_requests),
         read_eof_waker: Arc::clone(&read_eof_waker),
         read_eof: false,
+        #[cfg(feature = "runtime-diagnostics")]
+        read_pending_since: None,
+        #[cfg(feature = "runtime-diagnostics")]
+        write_pending_since: None,
         #[cfg(coverage)]
         eof_recheck_paused: false,
     };
@@ -4526,6 +4963,8 @@ async fn handle_request_parts(
     let http_version = parts.version;
     let diagnostics = context.server.diagnostics.clone();
     diagnostics.http_request_started();
+    let response_latency_started = diagnostics.http_response_latency_started();
+    let response_timing_diagnostics = diagnostics.clone();
     let (start_tx, mut start_rx) = mpsc::channel(1);
     let (body_tx, body_rx) = mpsc::channel(RESPONSE_BODY_QUEUE_CAPACITY);
     let response_start_attempted = Arc::new(AtomicBool::new(false));
@@ -4535,12 +4974,16 @@ async fn handle_request_parts(
     let app_task_tracker = context.server.pending_python_tasks.clone();
     let cancellation_tracker = app_task_tracker.clone();
     let force_application_shutdown = context.server.force_application_shutdown.clone();
+    let python_attach_wait_started = diagnostics.http_python_attach_wait_started();
+    let python_attach_wait_diagnostics = diagnostics.clone();
     let app_future = async move {
         #[cfg(coverage)]
         if coverage_fault_take(CoverageFaultPoint::HttpAppTaskPanicBeforeResponseStart) {
             coverage_panic("coverage-injected ASGI request task panic");
         }
         let app_future = Python::attach(move |py| {
+            python_attach_wait_diagnostics
+                .http_python_attach_wait_finished(python_attach_wait_started);
             let io = coverage_value!(
                 HttpAsgiIoAllocate,
                 Py::new(
@@ -4640,6 +5083,7 @@ async fn handle_request_parts(
             (start, ResponseApplication::Completed(result))
         }
     };
+    response_timing_diagnostics.http_response_start_latency_finished(response_latency_started);
     let defer_completed_app_result_once = matches!(application, ResponseApplication::Completed(_));
 
     let body = AsgiBody {
@@ -4648,10 +5092,18 @@ async fn handle_request_parts(
         app_task_tracker,
         defer_completed_app_result_once,
         incomplete_body_result_deferred: false,
+        #[cfg(feature = "runtime-diagnostics")]
+        response_timing_diagnostics,
+        #[cfg(feature = "runtime-diagnostics")]
+        response_latency_started,
         #[cfg(coverage)]
         body_consumer_pause: None,
         #[cfg(coverage)]
         body_consumer_pause_started: false,
+        #[cfg(coverage)]
+        receiver_pending_pause: Box::pin(tokio::time::sleep(std::time::Duration::ZERO)),
+        #[cfg(coverage)]
+        receiver_pending_pause_active: false,
     }
     .boxed_unsync();
     Ok(response(start.status, body, start.headers))
@@ -4799,7 +5251,6 @@ async fn handle_websocket_request_inner(
     let websocket_io = WebSocketIo {
         incoming: Arc::new(Mutex::new(incoming_rx)),
         connect_delivered: AtomicBool::new(false),
-        connection_closed: context.connection_closed.clone(),
         state: Arc::clone(&state),
         handshake: std::sync::Mutex::new(Some(handshake_tx)),
         outgoing: outgoing_tx,
@@ -5064,11 +5515,16 @@ where
                 }
                 wait_for_connection_close(&mut connection_closed).await;
             } => {
+                state.store(2, Ordering::Release);
+                let _ = tokio::time::timeout(
+                    std::time::Duration::from_secs(1),
+                    incoming.send(WebSocketIncoming::Disconnect {
+                        code: 1006,
+                        reason: String::new(),
+                    }),
+                )
+                .await;
                 state.store(3, Ordering::Release);
-                let _ = incoming.try_send(WebSocketIncoming::Disconnect {
-                    code: 1006,
-                    reason: String::new(),
-                });
                 app_task_completed = tokio::time::timeout(
                     std::time::Duration::from_secs(1),
                     &mut app_task,
@@ -5083,11 +5539,12 @@ where
                         reason: "".into(),
                     }))),
                 ).await;
-                state.store(3, Ordering::Release);
+                state.store(2, Ordering::Release);
                 let _ = incoming.try_send(WebSocketIncoming::Disconnect {
                     code: 1012,
                     reason: String::new(),
                 });
+                state.store(3, Ordering::Release);
                 app_task_completed = tokio::time::timeout(
                     std::time::Duration::from_secs(1),
                     &mut app_task,
@@ -5153,8 +5610,9 @@ where
                         let (code, reason) = frame
                             .map(|frame| (u16::from(frame.code), frame.reason.to_string()))
                             .unwrap_or((1005, String::new()));
-                        state.store(3, Ordering::Release);
+                        state.store(2, Ordering::Release);
                         let _ = incoming.send(WebSocketIncoming::Disconnect { code, reason }).await;
+                        state.store(3, Ordering::Release);
                         app_task_completed = tokio::time::timeout(
                             std::time::Duration::from_secs(1),
                             &mut app_task,

@@ -315,7 +315,7 @@ def main():
     parser.add_argument("--category", action="append", choices=[label for label, _, _ in CATEGORIES],
                         help="run selected category only; repeat to select more than one (default: all categories)")
     parser.add_argument("--workloads", nargs="+",
-                        help="run only these HTTP/1.1 workloads; requires --category http1")
+                        help="run only these upstream FastAPI HTTP/1.1 workloads; requires --category http1")
     parser.add_argument("--expected-source-sha256", type=sha_argument)
     parser.add_argument("--expected-native-sha256", type=sha_argument)
     parser.add_argument("--expected-public-cases", type=positive_integer)
@@ -335,6 +335,10 @@ def main():
         unknown_workloads = sorted(set(args.workloads) - known_workloads)
         if unknown_workloads:
             parser.error(f"unknown HTTP/1.1 workload names: {unknown_workloads}")
+        non_fastapi = sorted(name for name in args.workloads if not name.startswith("fastapi-"))
+        if non_fastapi:
+            parser.error("the maintained cross-category comparison accepts upstream FastAPI workloads only: "
+                         + ", ".join(non_fastapi))
     if args.capture_identity and (args.output_dir or args.parity_before_identity or args.parity_report):
         parser.error("capture mode cannot also run the suite")
     if not args.capture_identity and (not args.parity_before_identity or not args.parity_report):
@@ -350,9 +354,8 @@ def main():
 
     assert_clean_coverage_environment()
     before = capture_identity(root, python, BenchmarkEvidence)
-    unavailable_fastapi = args.workloads and any(name.startswith("fastapi-") for name in args.workloads) and not before["optional_workloads"]["fastapi"]["selected"]
-    if unavailable_fastapi:
-        raise RuntimeError("selected FastAPI workloads require the locked fastapi-benchmark dependency group")
+    if not before["optional_workloads"]["fastapi"]["selected"]:
+        raise RuntimeError("the maintained cross-category comparison requires the locked upstream fastapi-benchmark dependency group")
     requested_categories = set(args.category or (label for label, _, _ in CATEGORIES))
     selected_categories = [label for label, _, _ in CATEGORIES if label in requested_categories]
     omitted_categories = [label for label, _, _ in CATEGORIES if label not in requested_categories]
@@ -376,17 +379,16 @@ def main():
         "schema": "uvicorn-rs-sequential-category-run@2", "started_at": utc_now(),
         "status": "running_not_proven", "identity_before": before, "category_runs": [],
         "category_scope": "complete" if not omitted_categories else "selected_subset",
-        "workload_scope": "selected_subset" if args.workloads else "all_available",
+        "workload_scope": "selected_subset" if args.workloads else "upstream_fastapi_only",
+        "application_scope": {
+            "framework": "upstream FastAPI and its locked Starlette/Pydantic dependencies",
+            "http1_websocket_app": "examples.bench_fastapi:app",
+            "lifecycle_app": "examples.bench_fastapi_lifecycle:app",
+            "fastapi_rs": False,
+            "starlette_rs": False,
+        },
         "selected_categories": selected_categories, "omitted_categories": omitted_categories,
-        "workload_exclusions": [
-            {
-                "category": "http1",
-                "workload": workload,
-                "reason": before["optional_workloads"]["fastapi"]["reason"],
-            }
-            for workload in ("fastapi-validated-route", "fastapi-python-cpu")
-            if not before["optional_workloads"]["fastapi"]["selected"]
-        ],
+        "workload_exclusions": [],
         "public_parity_gate": parity, "limitations": list(LIMITATIONS),
         "parameters": {"duration": args.duration, "warmup": args.warmup, "concurrency": args.concurrency,
                        "repetitions": args.repetitions, "seed": args.seed, "category_timeout_seconds": args.category_timeout,
@@ -433,8 +435,8 @@ def main():
                 workloads = workload_names(script)
                 if label == "http1" and args.workloads:
                     workloads = list(dict.fromkeys(args.workloads))
-                elif label == "http1" and not before["optional_workloads"]["fastapi"]["selected"]:
-                    workloads = [workload for workload in workloads if not workload.startswith("fastapi-")]
+                elif label == "http1":
+                    workloads = [workload for workload in workloads if workload.startswith("fastapi-")]
                 command += ["--workloads", *workloads, "--duration", str(args.duration),
                             "--warmup", str(args.warmup), "--concurrency", str(args.concurrency)]
             planned = expected_rows(

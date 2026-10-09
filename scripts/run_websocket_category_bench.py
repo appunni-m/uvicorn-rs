@@ -52,12 +52,12 @@ def free_port() -> int:
 def server_command(server: dict, port: int) -> list[str]:
     if server["kind"] == "rust":
         return [
-            str(PYTHON), "-m", "uvicorn_rs", "examples.bench_matrix_asgi:app", "--host", "127.0.0.1",
+            str(PYTHON), "-m", "uvicorn_rs", "examples.bench_fastapi:app", "--host", "127.0.0.1",
             "--port", str(port), "--loop", server["loop"],
         ]
     return [
-        str(PYTHON), "-m", "uvicorn", "examples.bench_matrix_asgi:app", "--host", "127.0.0.1",
-        "--port", str(port), "--loop", server["loop"], "--http", "httptools" if server["loop"] == "uvloop" else "h11",
+        str(PYTHON), "-m", "uvicorn", "examples.bench_fastapi:app", "--host", "127.0.0.1",
+        "--port", str(port), "--loop", server["loop"], "--http", "httptools",
         "--ws", "websockets", "--interface", "asgi3", "--lifespan", "auto", "--no-access-log",
         "--log-level", "error", "--no-use-colors", "--no-server-header",
     ]
@@ -112,7 +112,7 @@ def source_digest() -> str:
         "tools/http3-probe/src/bin/websocket.rs",
         "src/lib.rs",
         "python/uvicorn_rs/server.py",
-        "examples/bench_matrix_asgi.py",
+        "examples/bench_fastapi.py",
         "pyproject.toml",
         "uv.lock",
     )
@@ -187,7 +187,7 @@ def main() -> None:
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
         ["scripts/run_websocket_category_bench.py", "tools/http3-probe/src/bin/websocket.rs",
-         "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_matrix_asgi.py"],
+         "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         artifacts_dir=args.output.with_suffix(".artifacts"),
     )

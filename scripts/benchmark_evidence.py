@@ -193,7 +193,7 @@ def check_server_alive(server) -> None:
 
 
 def wait_tls_ready(server, port: int, log, certfile: Path, *, seconds: float) -> None:
-    """Verify a complete TLS/H1 HEAD exchange without creating a failed handshake."""
+    """Verify TLS/H1 readiness with the exact shared FastAPI fixed response."""
     context = ssl.create_default_context(cafile=str(certfile))
     context.set_alpn_protocols(["http/1.1"])
     deadline = time.monotonic() + seconds
@@ -208,7 +208,7 @@ def wait_tls_ready(server, port: int, log, certfile: Path, *, seconds: float) ->
             with context.wrap_socket(raw, server_hostname="localhost") as tls:
                 if tls.selected_alpn_protocol() != "http/1.1":
                     raise RuntimeError("TLS readiness did not negotiate HTTP/1.1")
-                tls.sendall(b"HEAD /fixed HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                tls.sendall(b"GET /fixed HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
                 response = bytearray()
                 while True:
                     remaining = deadline - time.monotonic()
@@ -221,8 +221,8 @@ def wait_tls_ready(server, port: int, log, certfile: Path, *, seconds: float) ->
                     response.extend(chunk)
                     if len(response) > 65536:
                         raise RuntimeError("TLS readiness response exceeded the bounded header limit")
-                if not response.startswith(b"HTTP/1.1 200 ") or b"\r\n\r\n" not in response:
-                    raise RuntimeError("TLS readiness HEAD request did not return a complete 200 response")
+                if not response.startswith(b"HTTP/1.1 200 ") or not response.endswith(b"\r\n\r\nHello World!"):
+                    raise RuntimeError("TLS readiness GET did not return the exact FastAPI fixed response")
                 check_server_alive(server)
                 return
     log.flush()

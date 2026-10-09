@@ -149,6 +149,111 @@ WORKLOADS = {
             ),
         },
     },
+    "fastapi-fixed": {
+        "app": "examples.bench_fastapi:app",
+        "client": {"mode": "fixed", "path": "/fixed", "expected_body": "Hello World!"},
+    },
+    "fastapi-large-response": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "large",
+            "path": "/large/1048576",
+            "response_bytes": 1_048_576,
+        },
+    },
+    "fastapi-many-response-chunks": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "chunks",
+            "path": "/chunks/256/4096",
+            "response_bytes": 1_048_576,
+        },
+    },
+    "fastapi-small-response-chunks": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "chunks",
+            "path": "/chunks/128/512",
+            "response_bytes": 65_536,
+        },
+    },
+    "fastapi-request-upload": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "upload",
+            "path": "/upload/1048576",
+            "upload_bytes": 1_048_576,
+            "upload_chunk_bytes": 65_536,
+        },
+    },
+    "fastapi-upload-1m-write-1k": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "upload",
+            "path": "/upload/1048576",
+            "upload_bytes": 1_048_576,
+            "upload_chunk_bytes": 1024,
+        },
+    },
+    "fastapi-upload-1m-write-16k": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "upload",
+            "path": "/upload/1048576",
+            "upload_bytes": 1_048_576,
+            "upload_chunk_bytes": 16_384,
+        },
+    },
+    "fastapi-upload-1m-write-256k": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "upload",
+            "path": "/upload/1048576",
+            "upload_bytes": 1_048_576,
+            "upload_chunk_bytes": 262_144,
+        },
+    },
+    "fastapi-upload-1m-write-1m": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "upload",
+            "path": "/upload/1048576",
+            "upload_bytes": 1_048_576,
+            "upload_chunk_bytes": 1_048_576,
+        },
+    },
+    "fastapi-request-upload-small-chunks": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "upload",
+            "path": "/upload/65536",
+            "upload_bytes": 65_536,
+            "upload_chunk_bytes": 1024,
+        },
+    },
+    "fastapi-slow-reader-backpressure": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "chunks",
+            "path": "/chunks/256/4096",
+            "response_bytes": 1_048_576,
+            "read_rate_bytes_per_second": 4_194_304,
+        },
+        "concurrency": 8,
+    },
+    "fastapi-scope-32-headers": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "scope",
+            "path": "/scope",
+            "expected_body": "scope-ok",
+            "headers": _scope_headers(),
+        },
+    },
+    "fastapi-contextvars": {
+        "app": "examples.bench_fastapi:app",
+        "client": {"mode": "context", "path": "/context"},
+    },
     "fastapi-python-cpu": {
         "app": "examples.bench_fastapi:app",
         "client": {
@@ -317,15 +422,24 @@ def _sample(
     python: Path,
     require_runtime_diagnostics: bool = False,
     evidence: BenchmarkEvidence | None = None,
+    asgi_stage_diagnostics: bool = False,
+    asgi_timings_path: Path | None = None,
 ) -> dict:
     identity_before = evidence.before_sample() if evidence is not None else None
     definition = WORKLOADS[workload]
     port = _port()
+    app = (
+        "examples.profile_fastapi:app"
+        if asgi_stage_diagnostics and workload.startswith("fastapi-")
+        else definition["app"]
+    )
     log = evidence.open_server_log() if evidence is not None else tempfile.NamedTemporaryFile(mode="w+t", suffix="-server.log", delete=False)
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    if asgi_timings_path is not None:
+        env["UVICORN_RS_ASGI_TIMINGS"] = str(asgi_timings_path)
     process = owned_process(
-        _command(server, definition["app"], port, python),
+        _command(server, app, port, python),
         cwd=ROOT,
         env=env,
         stdout=log,
@@ -378,6 +492,17 @@ def _sample(
                     "Rust server did not emit runtime diagnostics; rebuild with "
                     "the `runtime-diagnostics` Cargo feature"
                 )
+        if asgi_stage_diagnostics:
+            if asgi_timings_path is None or not asgi_timings_path.is_file():
+                raise RuntimeError("FastAPI ASGI-stage timing output was not written on graceful shutdown")
+            metrics["asgi_stage_diagnostics"] = json.loads(
+                asgi_timings_path.read_text(encoding="utf-8")
+            )
+            metrics["timing_valid"] = False
+            metrics.setdefault("timing_invalid_reasons", []).append(
+                "instrumented_asgi_stage_diagnostics"
+            )
+            metrics["performance_evidence_status"] = "diagnostic_only"
         return metrics
     except Exception as error:
         log.seek(0)
@@ -421,7 +546,7 @@ def _median(rows: list[dict], metric: str):
     return statistics.median(values) if values else None
 
 
-def _source_digest(workloads: list[str]) -> str:
+def _source_digest(workloads: list[str], asgi_stage_diagnostics: bool = False) -> str:
     paths = [
         "pyproject.toml",
         "uv.lock",
@@ -442,6 +567,8 @@ def _source_digest(workloads: list[str]) -> str:
             "examples/bench_fastapi.py",
         ]
     )
+    if asgi_stage_diagnostics:
+        paths.append("examples/profile_fastapi.py")
     digest = hashlib.sha256()
     for path in paths:
         digest.update(path.encode("utf-8"))
@@ -473,6 +600,14 @@ def main() -> None:
         help="require the Rust runtime-diagnostics feature and add its counters to candidate rows",
     )
     parser.add_argument(
+        "--asgi-stage-diagnostics",
+        action="store_true",
+        help=(
+            "wrap FastAPI with per-request ASGI send/receive timing; diagnostic-only, "
+            "requires --require-runtime-diagnostics and both Rust and Uvicorn servers"
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=ROOT / "benchmarks" / "results" / "http-categories-2026-10-02.json",
@@ -484,10 +619,24 @@ def main() -> None:
     assert_clean_coverage_environment()
     native_client = _build_native_client()
     selected_servers = {name: SERVERS[name] for name in args.servers}
+    if args.asgi_stage_diagnostics:
+        if not args.require_runtime_diagnostics:
+            parser.error("--asgi-stage-diagnostics requires --require-runtime-diagnostics")
+        if not any(name.startswith("uvicorn-rs-") for name in selected_servers) or not any(
+            name.startswith("uvicorn-") for name in selected_servers
+        ):
+            parser.error("--asgi-stage-diagnostics requires at least one Rust and one Uvicorn server")
+        if not all(name.startswith("fastapi-") for name in args.workloads):
+            parser.error("--asgi-stage-diagnostics requires FastAPI workloads only")
+    source_files = [
+        "scripts/run_http_category_bench.py", "scripts/bench_http_matrix.mjs", "scripts/bench_http_client.c",
+        "examples/bench_matrix_asgi.py", "examples/bench_sync_asgi.py", "examples/bench_fastapi.py",
+    ]
+    if args.asgi_stage_diagnostics:
+        source_files.append("examples/profile_fastapi.py")
     evidence = BenchmarkEvidence(
         ROOT, python,
-        ["scripts/run_http_category_bench.py", "scripts/bench_http_matrix.mjs", "scripts/bench_http_client.c",
-         "examples/bench_matrix_asgi.py", "examples/bench_sync_asgi.py", "examples/bench_fastapi.py"],
+        source_files,
         [native_client] if native_client is not None else [],
         allow_runtime_diagnostics=args.require_runtime_diagnostics,
         artifacts_dir=args.output.with_suffix(".artifacts"),
@@ -522,6 +671,12 @@ def main() -> None:
                         python,
                         args.require_runtime_diagnostics,
                         evidence,
+                        args.asgi_stage_diagnostics,
+                        (
+                            evidence.artifacts_dir
+                            / f"{workload}-{server_name}-repeat-{repetition}-asgi.json"
+                            if args.asgi_stage_diagnostics else None
+                        ),
                     )
                 except Exception as error:
                     raise RuntimeError(
@@ -587,7 +742,7 @@ def main() -> None:
             "python_environment": _versions(python),
             "node": subprocess.check_output(["node", "--version"], text=True).strip(),
             "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
-            "source_sha256": _source_digest(args.workloads),
+            "source_sha256": _source_digest(args.workloads, args.asgi_stage_diagnostics),
             "workloads": args.workloads,
             "workload_parameters": {
                 name: {
@@ -612,6 +767,14 @@ def main() -> None:
             "client": "threaded libcurl C workers with persistent HTTP/1.1 connections and complete response-body checks",
             "correctness_gate": "every measured response status and complete body exactly matches the workload oracle",
             "runtime_diagnostics_required": args.require_runtime_diagnostics,
+            "asgi_stage_diagnostics": args.asgi_stage_diagnostics,
+            "diagnostic_only": args.asgi_stage_diagnostics,
+            "diagnostic_interpretation": (
+                "Instrumented wall-time stages are not CPU time or normal benchmark evidence. "
+                "Per-request ASGI send/receive waits are directly comparable at the app boundary; "
+                "Rust-only internal counters include bridge and scheduling work."
+                if args.asgi_stage_diagnostics else None
+            ),
             "native_client": "libcurl C client compiled from scripts/bench_http_client.c" if native_client is not None else "unavailable; Node.js fallback used",
             "fallback_client": "Node.js HTTP/1.1 with full body checking; used for slow-reader backpressure",
             "libcurl": subprocess.check_output(["curl-config", "--version"], text=True).strip() if native_client is not None else None,

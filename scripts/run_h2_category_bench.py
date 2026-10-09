@@ -26,17 +26,18 @@ from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_c
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv" / "bin" / "python"
 CLIENT = ROOT / "tools" / "http3-probe" / "target" / "release" / "http2"
+FASTAPI_APP = "examples.bench_fastapi:app"
 WORKLOADS = {
     "protocol-scope": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {"mode": "fixed", "path": "/protocol", "expected_body": "http_version=2"},
     },
     "fixed": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {"mode": "fixed", "path": "/fixed"},
     },
     "large-response": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {
             "mode": "large",
             "path": "/large/1048576",
@@ -44,7 +45,7 @@ WORKLOADS = {
         },
     },
     "many-response-chunks": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {
             "mode": "chunks",
             "path": "/chunks/256/4096",
@@ -52,7 +53,7 @@ WORKLOADS = {
         },
     },
     "request-upload": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {
             "mode": "upload",
             "path": "/upload/1048576",
@@ -61,7 +62,7 @@ WORKLOADS = {
         },
     },
     "request-upload-small-chunks": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {
             "mode": "upload",
             "path": "/upload/65536",
@@ -70,7 +71,7 @@ WORKLOADS = {
         },
     },
     "slow-reader-backpressure": {
-        "app": "examples.bench_matrix_asgi:app",
+        "app": FASTAPI_APP,
         "client": {
             "mode": "chunks", "path": "/chunks/256/4096", "response_bytes": 1_048_576,
             "read_rate_bytes_per_second": 4_194_304,
@@ -180,7 +181,7 @@ def source_digest() -> str:
         "tools/http3-probe/Cargo.toml",
         "src/lib.rs",
         "python/uvicorn_rs/server.py",
-        "examples/bench_matrix_asgi.py",
+        "examples/bench_fastapi.py",
         "pyproject.toml",
         "uv.lock",
     )
@@ -279,7 +280,7 @@ def main() -> None:
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
         ["scripts/run_h2_category_bench.py", "tools/http3-probe/src/bin/http2.rs",
-         "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_matrix_asgi.py"],
+         "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         artifacts_dir=args.output.with_suffix(".artifacts"),
     )

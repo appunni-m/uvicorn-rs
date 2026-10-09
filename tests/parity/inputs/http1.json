@@ -4346,6 +4346,25 @@
       }
     },
     {
+      "case_id": "fault.http1.response-final-body-queued-after-receiver-pending",
+      "profile": "http1",
+      "operation": "http.response-stream",
+      "covers": [
+        "http.response-stream"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.body-poll.receiver-pending.pause",
+        "contract": "http-response-body-queued-after-receiver-pending"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream-pending-then-complete",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "fault.http1.reset-cancels-before-task-handle-delivery",
       "profile": "http1",
       "operation": "http.response-stream-reset",

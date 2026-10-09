@@ -29,7 +29,11 @@ CATEGORIES = {
             "fixed", "large-response", "many-response-chunks", "small-response-chunks",
             "request-upload", "request-upload-small-chunks", "slow-reader-backpressure",
             "scope-32-headers", "contextvars", "sync-callable-awaitable",
-            "exception-to-500", "fastapi-validated-route", "fastapi-python-cpu",
+            "exception-to-500", "fastapi-fixed", "fastapi-large-response",
+            "fastapi-many-response-chunks", "fastapi-small-response-chunks",
+            "fastapi-request-upload", "fastapi-request-upload-small-chunks",
+            "fastapi-slow-reader-backpressure", "fastapi-scope-32-headers",
+            "fastapi-contextvars", "fastapi-validated-route", "fastapi-python-cpu",
         ],
     },
     "http2": {
