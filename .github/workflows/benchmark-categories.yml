@@ -186,6 +186,93 @@ jobs:
             --prebuilt-http3-client \
             --output target/benchmark-preparation/parity.json \
             2>&1 | tee target/benchmark-preparation/parity.log
+      - name: Summarize exact-binary public parity
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          def workflow_escape(value):
+              return str(value).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          def error_annotation(title, detail):
+              message = " ".join(str(detail).split())[:1000]
+              print("::error title={}::{}".format(workflow_escape(title), workflow_escape(message)))
+
+          def case_detail(case):
+              difference = case.get("difference")
+              if isinstance(difference, str) and difference:
+                  return difference
+              error = case.get("error")
+              if isinstance(error, dict):
+                  return "{}: {}".format(error.get("class", "error"), error.get("message", ""))
+              if isinstance(error, str) and error:
+                  return error
+              return "No structured difference was recorded; inspect parity.log and the artifact."
+
+          result_path = Path("target/benchmark-preparation/parity.json")
+          lines = ["## Exact-binary public parity"]
+          if not result_path.is_file():
+              lines.append("No structured parity result was produced.")
+              error_annotation("Exact-binary parity report unavailable", "No structured parity result was produced.")
+          else:
+              try:
+                  result = json.loads(result_path.read_text(encoding="utf-8"))
+              except (OSError, json.JSONDecodeError):
+                  lines.append("The parity result could not be parsed; inspect the retained parity log.")
+                  error_annotation("Exact-binary parity report invalid", "The parity result could not be parsed; inspect the retained parity log and artifact.")
+              else:
+                  summary = result.get("summary", {})
+                  lines.append(
+                      "Status: `{}`; selected: {}; passed: {}; failed: {}; "
+                      "infrastructure failed: {}; not run: {}.".format(
+                          result.get("status", "unknown"),
+                          summary.get("selected", "unknown"),
+                          summary.get("passed", "unknown"),
+                          summary.get("failed", "unknown"),
+                          summary.get("infrastructure_failed", "unknown"),
+                          summary.get("not_run", "unknown"),
+                      )
+                  )
+                  cases = result.get("cases", [])
+                  nonpassing = [
+                      case for case in cases
+                      if isinstance(case, dict) and case.get("status") != "passed"
+                  ] if isinstance(cases, list) else []
+                  if nonpassing:
+                      lines.append("Cases requiring review:")
+                      for case in nonpassing[:30]:
+                          case_id = case.get("case_id", "unknown")
+                          status = case.get("status", "unknown")
+                          detail = case_detail(case)
+                          lines.append("- `{}`: `{}` — {}".format(case_id, status, " ".join(detail.split())[:500]))
+                          error_annotation("ASGI parity {} ({})".format(case_id, status), detail)
+                      if len(nonpassing) > 30:
+                          lines.append("- {} additional non-passing cases omitted.".format(len(nonpassing) - 30))
+                          error_annotation("Additional ASGI parity failures", "{} more non-passing cases are listed in the retained parity artifact.".format(len(nonpassing) - 30))
+                  infrastructure_errors = result.get("infrastructure_errors", [])
+                  if isinstance(infrastructure_errors, list) and infrastructure_errors:
+                      lines.append("Profile-level infrastructure errors:")
+                      for error in infrastructure_errors[:30]:
+                          if isinstance(error, dict):
+                              detail = "{}: {}".format(error.get("kind", "infrastructure error"), error.get("message", ""))
+                              lines.append(
+                                  "- profile `{}`; kind `{}`; server `{}`".format(
+                                      error.get("profile", "unknown"),
+                                      error.get("kind", "unknown"),
+                                      error.get("server", "unknown"),
+                                  )
+                              )
+                              error_annotation("ASGI parity infrastructure {}".format(error.get("profile", "unknown")), detail)
+                      if len(infrastructure_errors) > 30:
+                          error_annotation("Additional ASGI parity infrastructure errors", "{} more errors are listed in the retained parity artifact.".format(len(infrastructure_errors) - 30))
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as stream:
+              stream.write("\n".join(lines) + "\n")
+          PY
       - name: Run a FastAPI-only comparison against Uvicorn
         shell: bash
         env:
