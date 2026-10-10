@@ -2943,11 +2943,49 @@ def read_events(path: Path) -> list[str]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
-def wait_for_listener_closed(server: dict[str, Any], timeout: float) -> bool:
+def wait_for_listener_closed(
+    server: dict[str, Any],
+    timeout: float,
+    *,
+    tls_context: ssl.SSLContext | None = None,
+) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if server["process"].poll() is not None:
             return False
+        if tls_context is not None:
+            connection = http.client.HTTPSConnection(
+                "127.0.0.1",
+                server["port"],
+                timeout=min(0.5, max(0.05, deadline - time.monotonic())),
+                context=tls_context,
+            )
+            try:
+                # A raw TCP connect followed by close is an invalid TLS
+                # handshake. If accepted during shutdown, it can itself
+                # generate a connection-task error that this case rejects.
+                # Use a harmless, complete HTTPS request so the probe uses a
+                # valid TLS connection and closes its response cleanly.
+                connection.request(
+                    "GET",
+                    "/__parity-readiness",
+                    headers={"Connection": "close"},
+                )
+                response = connection.getresponse()
+                response.read()
+            except ConnectionRefusedError:
+                return True
+            except (
+                http.client.HTTPException,
+                ConnectionError,
+                TimeoutError,
+                ssl.SSLError,
+            ):
+                pass
+            finally:
+                connection.close()
+            time.sleep(0.01)
+            continue
         try:
             probe = socket.create_connection(("127.0.0.1", server["port"]), timeout=0.05)
         except ConnectionRefusedError:
@@ -6135,7 +6173,9 @@ def execute_case(
                     if fault_control_path is None:
                         raise ParityError("instrumented target has no connection-write fault control")
                     server["process"].terminate()
-                    if not wait_for_listener_closed(server, timeout=3):
+                    if not wait_for_listener_closed(
+                        server, timeout=3, tls_context=tls_context
+                    ):
                         raise ParityError("server listener remained open after graceful shutdown began")
                     fault_control_path.write_text(fault["point"], encoding="utf-8")
                     time.sleep(0.1)
@@ -6226,7 +6266,9 @@ def execute_case(
                 server["process"].terminate()
                 # Leave the held stream enough of its three-second grace to
                 # complete even when admission closure is the failed behavior.
-                listener_closed_before_release = wait_for_listener_closed(server, timeout=1)
+                listener_closed_before_release = wait_for_listener_closed(
+                    server, timeout=1, tls_context=tls_context
+                )
                 if server["process"].poll() is not None:
                     raise ParityError("server exited before the held response stream was released")
                 if "response.shutdown.finished" in read_events(server["events"]):
