@@ -171,6 +171,17 @@ follow-up is not an exact source/build or hosted CI gate. See the
 
 ## Latest hosted correctness and release CI
 
+CI [run #61](https://github.com/appunni-m/uvicorn-rs/actions/runs/38079929722)
+completed successfully on commit [`443c5cc`](https://github.com/appunni-m/uvicorn-rs/commit/443c5cc64bbb23f79cfc21edb85f11bcab9199be).
+All eight hosted jobs passed: exact installed-wheel public parity, the full
+parity and fault-contract matrix with 100% native region and line coverage,
+Rust quality and documentation, the Rust minimum, package verification on
+Windows/Linux/macOS, and the declared Python-floor wheel. This establishes
+those gates for that commit; it does not provide a validated performance
+matrix or release-candidate bundle.
+
+## Historical hosted correctness and release CI (CI #54)
+
 CI [run #54](https://github.com/appunni-m/uvicorn-rs/actions/runs/38045596633)
 completed on `a93cdff`. Rust quality, Rust 1.85, and installed-wheel public
 parity passed (240/240). Unified native coverage measured 5,298/5,298 regions
@@ -200,7 +211,7 @@ neighboring HTTP-drain cases, 3/3 neighboring TLS fault cases, and 6/6 runs on
 the current dirty candidate. The hosted cause remains unconfirmed; details and
 receipts are in the [TLS-drain probe follow-up](../benchmarks/results/2026-10-10/ci54-tls-drain-probe-followup/README.md).
 
-## Latest hosted multi-system benchmark
+## Earlier hosted multi-system benchmark (run #11)
 
 The [ASGI performance matrix run #11](https://github.com/appunni-m/uvicorn-rs/actions/runs/38045596557)
 ran on `a93cdff` across Linux x86-64, Linux ARM64, and macOS ARM64. The x86-64
@@ -278,15 +289,35 @@ validated three-system aggregate is recorded. Benchmark #12 is terminal
 without validated timing data: all three system jobs and aggregation failed,
 with the Linux x86-64 parity gate stopping before timing.
 
+## Latest hosted benchmark matrix attempt
+
+ASGI performance matrix [run #16](https://github.com/appunni-m/uvicorn-rs/actions/runs/38079929730)
+ran on clean commit [`443c5cc`](https://github.com/appunni-m/uvicorn-rs/commit/443c5cc64bbb23f79cfc21edb85f11bcab9199be).
+GitHub's run and job-step metadata show that all three system jobs passed
+environment setup, the release-wheel build, identity freeze, the exact-binary
+public-parity gate, and the FastAPI-only comparison. All three then failed in
+the sequential full-category step. The multi-system validation/render job
+succeeded, while the documentation-update job failed when proposing the
+updated results documentation. The available metadata does not identify which
+category or check caused the three category-step failures, so this run does not
+establish a validated multi-system performance result.
+
+GitHub lists the unexpired [macOS ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38079929730/artifacts/11681132542),
+[Linux x86-64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38079929730/artifacts/11681108761),
+[Linux ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38079929730/artifacts/11680829825),
+and [aggregate artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38079929730/artifacts/11681333990).
+Their category logs and analysis are not present in this checkout. Inspect the
+`run.json`, category JSON/logs, and `analysis.json` from these exact artifacts
+before attributing the failure or reporting category timings.
+
 ## Release candidate
 
-No release-candidate bundle is ready. CI #56 passed its full hosted gates on
-clean commit `72dfa51`, but that commit contains only the benchmark diagnostic
-workflow change and does not include the dirty Rust candidate. Benchmark #13
-has one macOS ARM64 parity failure and its two Linux jobs are still measuring
-categories; it has not produced a validated three-system aggregate. Benchmark
-#12 ended without validated timing data. No tag, GitHub Release, crates.io
-publication, or PyPI package was created. See [release status](releases.md).
+No release-candidate bundle is ready. CI #61 passed its eight hosted gates on
+clean commit `443c5cc`, but ASGI performance matrix #16 failed its sequential
+full-category step on all three systems and produced no validated multi-system
+performance result. The available run metadata does not identify the failing
+category or root cause. No tag, GitHub Release, crates.io publication, or PyPI
+package was created. See [release status](releases.md).
 
 ## Reproduction
 
