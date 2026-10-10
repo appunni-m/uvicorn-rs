@@ -1,0 +1,46 @@
+{
+  "artifact": {
+    "artifact_id": 11673441894,
+    "job_id": 114240719626,
+    "run_id": 38061568654,
+    "url": "https://github.com/appunni-m/uvicorn-rs/actions/runs/38061568654/artifacts/11673441894"
+  },
+  "case": {
+    "case_id": "http1.disconnect-before-first-asgi-receive",
+    "difference": "observed public fields differ exactly",
+    "fault": null,
+    "operation": "http.client-disconnect",
+    "oracle_observation": {
+      "disconnect_event": true,
+      "followup_response": {
+        "body_base64": "aHR0cC5kaXNjb25uZWN0",
+        "connection_closed": false,
+        "content_type": "text/plain; charset=utf-8",
+        "ordered_response_headers": [],
+        "response_header_values_by_name": [],
+        "status": 200
+      }
+    },
+    "profile": "http1",
+    "requirements": [
+      "http.client-disconnect"
+    ],
+    "server_exit_codes": {
+      "oracle": null,
+      "target": null
+    },
+    "status": "failed",
+    "target_observation": {
+      "disconnect_event": true,
+      "followup_response": {
+        "body_base64": "aHR0cC5yZXF1ZXN0LGh0dHAuZGlzY29ubmVjdA==",
+        "connection_closed": false,
+        "content_type": "text/plain; charset=utf-8",
+        "ordered_response_headers": [],
+        "response_header_values_by_name": [],
+        "status": 200
+      }
+    },
+    "verification": "oracle-parity"
+  }
+}

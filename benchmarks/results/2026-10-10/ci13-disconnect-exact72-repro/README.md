@@ -1,15 +1,18 @@
-# Hosted benchmark #13 disconnect-case local reproduction
+# Hosted benchmark #13 disconnect-case evidence
 
-This focused reproduction reran the exact-commit normal release wheel on a clean detached checkout of `72dfa51f98a3a3518679ccaf7115d3bae6d8ac5f` after macOS ARM64 benchmark job `114240719626` reported `http1.disconnect-before-first-asgi-receive` with a generic public-field mismatch.
+This evidence compares the exact hosted failure with 60 focused runs of the normal release wheel from a clean detached checkout of `72dfa51f98a3a3518679ccaf7115d3bae6d8ac5f`. The 50 additional local reports were collected after the hosted `parity.json` row was supplied.
 
-## Result
+## Hosted result
 
-The input-only parity case passed **10/10** independent runner invocations on macOS ARM64. Each run matched the oracle and target exactly:
+The artifact row for `http1.disconnect-before-first-asgi-receive` is preserved in [hosted-parity-failure.json](hosted-parity-failure.json). Uvicorn's follow-up body is `http.disconnect`; uvicorn-rs's is `http.request,http.disconnect`. Both observations report a disconnect, status 200, an open keep-alive connection, and successful follow-up response. This is an actual first-event ordering mismatch, not the separate expected missing-certificate startup failure.
 
-- `disconnect_event`: `true`
-- follow-up response: HTTP 200, body `http.disconnect`, connection kept alive
+The hosted run is [benchmark #13](https://github.com/appunni-m/uvicorn-rs/actions/runs/38061568654), artifact `11673441894`, macOS ARM64 job `114240719626`. It failed parity before timing. The hosted source SHA-256 was `56cccea49215b2b96cf7028ec01804c7142b0f364f91bbd957b1114ab13b65fb`; the wheel SHA-256 was `f1ceeb5b9ee97c52535f30369c415fe63068352936c2b87ee910bd9201a3f9bf`. It ran Python 3.12.13, Uvicorn 0.54.0, and uvloop 0.23.0 on a three-CPU macOS 15.7.9 ARM64 virtual M1 runner.
 
-This does not reproduce or explain the hosted mismatch. The hosted annotation does not contain the differing observation values, and the benchmark artifact is not downloadable anonymously. The exact case row was requested so the hosted values can be compared.
+## Local exact-commit repetitions
+
+The same input-only case passed **60/60** independent invocations on local macOS ARM64. Every oracle and target observation matched: `disconnect_event=true`, follow-up status 200, follow-up body `http.disconnect`, and connection kept alive. The first ten runs are `repeat-1.json` through `repeat-10.json`; the additional fifty are `repeat-11.json` through `repeat-60.json`. [repeat-summary-60.json](repeat-summary-60.json) includes every report digest and run ID.
+
+This local evidence does not erase or explain the hosted mismatch. The fixture waits 50 ms after its app-side checkpoint, but that delay does not acknowledge that the Rust connection task observed TCP EOF before the app's first `receive()`. Hyper's HTTP/1 connection is expected to poll for EOF during the request; source inspection has not established why the hosted event order differed. The root cause remains unconfirmed, and no production fix is claimed.
 
 ## Identity
 
@@ -32,4 +35,4 @@ This does not reproduce or explain the hosted mismatch. The hosted annotation do
   --output /tmp/disconnect-parity.json
 ```
 
-The ten raw results are `repeat-1.json` through `repeat-10.json`; `repeat-summary.json` records each run ID and file digest.
+The 60 raw results are `repeat-1.json` through `repeat-60.json`. `repeat-summary-60.json` records all report digests and run IDs. `hosted-parity-failure.json` contains only the relevant row from the user-provided archive; the archive's unrelated contents were not imported.

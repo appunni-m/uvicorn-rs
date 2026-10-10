@@ -1,0 +1,451 @@
+{
+  "case_id": "http1.disconnect-before-first-asgi-receive",
+  "hosted_failure": {
+    "both_disconnect_flags": true,
+    "both_followup_statuses": 200,
+    "oracle_first_receive": "http.disconnect",
+    "path": "hosted-parity-failure.json",
+    "target_first_receive": "http.request",
+    "target_followed_by": "http.disconnect"
+  },
+  "local_reproduction": {
+    "failed": 0,
+    "identity": {
+      "app_sha256": "122691ef690520c5dd681e72913ca8ae2635cd17413118c81510b112a24f4454",
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057",
+      "platform": "macOS-15.7.7-arm64-arm-64bit",
+      "python": "3.12.13",
+      "revision": "72dfa51f98a3a3518679ccaf7115d3bae6d8ac5f",
+      "runner_sha256": "ad87c439762344df83e1156d1e4cf65e5ab8486d654c2d46485ce338aa3977ed",
+      "source_sha256": "56cccea49215b2b96cf7028ec01804c7142b0f364f91bbd957b1114ab13b65fb",
+      "uvicorn": "0.54.0"
+    },
+    "observations_matched": true,
+    "passed": 60,
+    "reports": [
+      {
+        "finished_at": "2026-10-10T15:26:15.005Z",
+        "path": "repeat-1.json",
+        "run_id": "42bfa70dfdaf45b89c60e031efa842f2",
+        "sha256": "b3ba0bd03256776625d597c725d004603496325588273b0c87c31882e20a38db",
+        "started_at": "2026-10-10T15:26:13.973Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:26:15.620Z",
+        "path": "repeat-2.json",
+        "run_id": "07b119207f4a4eaf824b8617d6d32124",
+        "sha256": "e006fd09d073e1e0a522b346bdae71dd92c8bd38f53751678dfd6ecd0369b36b",
+        "started_at": "2026-10-10T15:26:15.200Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:26:16.234Z",
+        "path": "repeat-3.json",
+        "run_id": "091dba9e362b4069bc79eb8e44b1f444",
+        "sha256": "be8731de4349e5cc9d72c2814a148fc33495a27d08fb36ced3475a7514ca0f44",
+        "started_at": "2026-10-10T15:26:15.812Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:26:16.961Z",
+        "path": "repeat-4.json",
+        "run_id": "bc4b139d5f4b49b6807ee9d9d2daaf9d",
+        "sha256": "aebe6bc7ccd472a748f58a8bec4724d464c80a8e812abab0c10516c7505ccfb1",
+        "started_at": "2026-10-10T15:26:16.426Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:26:17.676Z",
+        "path": "repeat-5.json",
+        "run_id": "10f13eb623234fe998812e7c1f6441d1",
+        "sha256": "c46d5dc87323215855b8a8b8351670bc0b6c0112edfce7027318ab0ebb47dfc7",
+        "started_at": "2026-10-10T15:26:17.156Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:26:18.384Z",
+        "path": "repeat-6.json",
+        "run_id": "b005eae615344edd965528f7ccce26fb",
+        "sha256": "fc0c973e8fc013f9f8287e2b7a617c66675c635da9e0eebb02630463aa49307f",
+        "started_at": "2026-10-10T15:26:17.865Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:26:19.127Z",
+        "path": "repeat-7.json",
+        "run_id": "a6aa92c8dfcf49f6a77cfe6be2817959",
+        "sha256": "5ed35bbe504212f7ae6b5995d7fa3f85cb1648b0577d05acfbbb6d51e66a9944",
+        "started_at": "2026-10-10T15:26:18.586Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:26:19.828Z",
+        "path": "repeat-8.json",
+        "run_id": "bc85b5b369c5423788af6d8258ee0252",
+        "sha256": "37a480b72b77a55a48064f0f66b94ebdd9a2d06d56e59e7f00b04e23b5f086e4",
+        "started_at": "2026-10-10T15:26:19.318Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:26:20.557Z",
+        "path": "repeat-9.json",
+        "run_id": "892e4fb8c84d4c50a307c26581fcd1e8",
+        "sha256": "4ec6a8b1e926a01860f9ec064614a48413fc6c275abb4537f29331124f6b1a97",
+        "started_at": "2026-10-10T15:26:20.020Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:26:21.276Z",
+        "path": "repeat-10.json",
+        "run_id": "62c7235132df4faa947273c3678ca193",
+        "sha256": "66ec49c9e95dea8889b79e1487e517cfdc180562b25d12a418b27cb1788456cb",
+        "started_at": "2026-10-10T15:26:20.753Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:18.730Z",
+        "path": "repeat-11.json",
+        "run_id": "b6fb0b1d883a4acb86fabfc7c5dabe03",
+        "sha256": "5573fafe4640ca07ee9105678512674aefd545fd90307da04b8f1ff67b670718",
+        "started_at": "2026-10-10T15:39:18.185Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:19.446Z",
+        "path": "repeat-12.json",
+        "run_id": "0bec6be5f1414a45bc120a6d165b9847",
+        "sha256": "621e1c861cc9451f417d399486c5134d32bc982eca2c8f87455febe0ba095c00",
+        "started_at": "2026-10-10T15:39:18.929Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:20.136Z",
+        "path": "repeat-13.json",
+        "run_id": "658fd088460f4e069a2883b8cd1ca7cb",
+        "sha256": "b7c36e0b52ee55ea33a52b6d26d37890df9b41238417c256decbbb03015e30d7",
+        "started_at": "2026-10-10T15:39:19.637Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:20.843Z",
+        "path": "repeat-14.json",
+        "run_id": "1dce63bb6c654096b41ed4caf769de10",
+        "sha256": "ec7b1cd696408acbf0d884c1f8882ba298867d01eb9556f9caaa98bb2dc78cee",
+        "started_at": "2026-10-10T15:39:20.326Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:21.420Z",
+        "path": "repeat-15.json",
+        "run_id": "c85dc41b824042ef871faf04b4cf297d",
+        "sha256": "7aabd50a25351a286f1320a1a75ec7a2e8ef69f2b97e1e2110df04ee2bfdda88",
+        "started_at": "2026-10-10T15:39:21.035Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:22.137Z",
+        "path": "repeat-16.json",
+        "run_id": "0d62140882a14fec8c84b501611c15a4",
+        "sha256": "eb918e0b51c118f281162879fa531d520a5285fda9698e98fc50e786d78bd2b2",
+        "started_at": "2026-10-10T15:39:21.616Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:22.715Z",
+        "path": "repeat-17.json",
+        "run_id": "e925e699fe2448e7b8bb899c1d51fd4a",
+        "sha256": "89fe84c493f104ce32922613c29cad93ce26d7d9f1fc50c61488abfb25f0131e",
+        "started_at": "2026-10-10T15:39:22.326Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:23.407Z",
+        "path": "repeat-18.json",
+        "run_id": "4b6ef3815d51470b8007c59b8b896b88",
+        "sha256": "d21b5c38574e25b801a55bca3f03e91c12e2b7c891fdc2cdc94dc5d3d2eb25ee",
+        "started_at": "2026-10-10T15:39:22.907Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:23.985Z",
+        "path": "repeat-19.json",
+        "run_id": "b1d3811626a74336be4443999a940b7f",
+        "sha256": "eb06b9ac93e39682071aa0a95c9aa6b2f8ce9e44c2bfb7d157e5d5ef227f02ea",
+        "started_at": "2026-10-10T15:39:23.594Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:24.688Z",
+        "path": "repeat-20.json",
+        "run_id": "9ebb4d4bab7a4da69c229a5c5630556f",
+        "sha256": "193f0d945e443624612c8637eb1b5e4a3ee3ef586c95d03401d41ead3a434abe",
+        "started_at": "2026-10-10T15:39:24.172Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:25.396Z",
+        "path": "repeat-21.json",
+        "run_id": "645880230c6541cea14d2d4205ccc5c2",
+        "sha256": "d4dd2fe7f13d9d09b43827ebc38a0f062687c76b7a7826acf322e96507233d6f",
+        "started_at": "2026-10-10T15:39:24.879Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:25.981Z",
+        "path": "repeat-22.json",
+        "run_id": "9a48c65dc62d4f89a526deceec0fbdb8",
+        "sha256": "f284c0131413781dfdaf6f15a11499116aa5e772419ed6507b920281697998fe",
+        "started_at": "2026-10-10T15:39:25.588Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:26.625Z",
+        "path": "repeat-23.json",
+        "run_id": "2aeae748a4984b9eb0c414eccac3c9f8",
+        "sha256": "80abd063a9b46cab29270ed8c96b34bc8bbe71c42873e6dddbeb3107c1be5c65",
+        "started_at": "2026-10-10T15:39:26.168Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:27.336Z",
+        "path": "repeat-24.json",
+        "run_id": "0808045bcfd548c29fef346142615bbd",
+        "sha256": "af7e60420d6fc6472094a60f07995e35238b11f0ef85d5e8f7eba5d563334761",
+        "started_at": "2026-10-10T15:39:26.823Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:28.019Z",
+        "path": "repeat-25.json",
+        "run_id": "998fb943515a48fc907d44cf58aed2b5",
+        "sha256": "8f9083f930cb596d2120064b1883a5cae3df53b679eb299a6e7007ee6f3a2224",
+        "started_at": "2026-10-10T15:39:27.526Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:28.720Z",
+        "path": "repeat-26.json",
+        "run_id": "c3b5d17f184746fab1271e6d3c0af84d",
+        "sha256": "4a6f3450a295cd12d3c47de8eb558bad6a6d06711d2c37a5f8055178df847113",
+        "started_at": "2026-10-10T15:39:28.204Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:29.321Z",
+        "path": "repeat-27.json",
+        "run_id": "1aba39d9b9f54c03b65d70da9ad49ac8",
+        "sha256": "4a770d47a59259c5ca6485360b74419e9f1e8b54b6d433a36bae1b99f0e4b5c4",
+        "started_at": "2026-10-10T15:39:28.910Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:30.011Z",
+        "path": "repeat-28.json",
+        "run_id": "2dcc28a7e1ce4b8dbef42146819e0b0b",
+        "sha256": "2c46639e018af998e1dade32563e31b5870941bd5fd93e643b56680a2a99df4b",
+        "started_at": "2026-10-10T15:39:29.514Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:30.695Z",
+        "path": "repeat-29.json",
+        "run_id": "05e8fd6666b34b1489186cadc875a347",
+        "sha256": "7fe0bd348fac2760792aab5ab4bb2d14aefcb757a4e87f824218154af6a1e871",
+        "started_at": "2026-10-10T15:39:30.199Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:31.404Z",
+        "path": "repeat-30.json",
+        "run_id": "30bfea5b3292439aa9a608a601138568",
+        "sha256": "88d0685f279ae0f32427aff5da208be8327274f7515f8b0128d96225e3f78f1f",
+        "started_at": "2026-10-10T15:39:30.889Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:31.981Z",
+        "path": "repeat-31.json",
+        "run_id": "bdbf3070f71942c5947e9c760483845d",
+        "sha256": "20a3e742f37595deb9ff0934903d4b4ac2d5050b48a99cc6260c0dc6bba2ee62",
+        "started_at": "2026-10-10T15:39:31.596Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:32.683Z",
+        "path": "repeat-32.json",
+        "run_id": "d8e466dcd87c457eaf92072b2732d3d6",
+        "sha256": "d7977863fbcabb8102f913a57587b684e5a18e1bc6826517135a9d3cda15a25a",
+        "started_at": "2026-10-10T15:39:32.170Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:33.285Z",
+        "path": "repeat-33.json",
+        "run_id": "06dbb32543d0451ebe54af1e16b59e33",
+        "sha256": "0f4317188902a19cbdd900f74268d25a67c6f90ecbf01ad9c03bae293da3022f",
+        "started_at": "2026-10-10T15:39:32.875Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:33.968Z",
+        "path": "repeat-34.json",
+        "run_id": "d9e339d6ac664ef6802fe6e561308719",
+        "sha256": "9dcf8c0e62d6501a8909889c06e7589b349b070c6567095093a6f66094e9e21a",
+        "started_at": "2026-10-10T15:39:33.476Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:34.616Z",
+        "path": "repeat-35.json",
+        "run_id": "7689048d8a694336aa9739bd0270ec65",
+        "sha256": "13c6b8705ea72bce6d658f4568bca18010977fca72d97cbc6216f6a772e779bd",
+        "started_at": "2026-10-10T15:39:34.158Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:35.330Z",
+        "path": "repeat-36.json",
+        "run_id": "79721111e59449d2bb35fc3b3deb6c4e",
+        "sha256": "b6fdded45e591d23cb3709758154d5fb8b1eb2eb171f4fc2fec890fbd113b7e9",
+        "started_at": "2026-10-10T15:39:34.812Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:36.015Z",
+        "path": "repeat-37.json",
+        "run_id": "ff6127ed471d4ae7a47eb1670a3c830a",
+        "sha256": "731039fc28f4c98d65f793f122d8ae3207137f3a057685c6a614f767ffd7b6bc",
+        "started_at": "2026-10-10T15:39:35.519Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:36.704Z",
+        "path": "repeat-38.json",
+        "run_id": "82b2b3c25e4c48c18e26e03482c4d45c",
+        "sha256": "92db679048dcef23d23bf96cc8cc78153339428f305c23a618035c9c3f44053c",
+        "started_at": "2026-10-10T15:39:36.205Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:37.413Z",
+        "path": "repeat-39.json",
+        "run_id": "8a21b7e613514400957324e4f34db72f",
+        "sha256": "f7151ab0b2dcebcca2f7fc2fb38f385d7a82c81af27aa58194fe74e3d6a455d6",
+        "started_at": "2026-10-10T15:39:36.891Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:38.112Z",
+        "path": "repeat-40.json",
+        "run_id": "f6ef25ec3dd44737b5bc3c1139a1df8c",
+        "sha256": "c73902d020fdf4fa5e0b2300c87e233258074bd39ec9187cb621089c156167cb",
+        "started_at": "2026-10-10T15:39:37.602Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:38.695Z",
+        "path": "repeat-41.json",
+        "run_id": "0e998dcf3a674d9c8537a01c5b454a39",
+        "sha256": "cc131c3157fbc0e5d868a865fbc6b866759083664becab7bf7776ea945784ba0",
+        "started_at": "2026-10-10T15:39:38.306Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:39.386Z",
+        "path": "repeat-42.json",
+        "run_id": "22aee96d7853497aa8ea59d2eda07b5b",
+        "sha256": "24b55d7deec85f149e49edf12e1a8b33d43cdcd288e692e5353edd773940ab74",
+        "started_at": "2026-10-10T15:39:38.875Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:39.966Z",
+        "path": "repeat-43.json",
+        "run_id": "da1de0ce6bfc41d4972d983153ef55c7",
+        "sha256": "f9a5e9fdb6bf372d2d11b4d41c7cec9d250af2e00886a67c5fb2ce5f321ecbde",
+        "started_at": "2026-10-10T15:39:39.576Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:40.603Z",
+        "path": "repeat-44.json",
+        "run_id": "d53fd6519a554ee4a4a581b366bf7da7",
+        "sha256": "5d9a37ccad1a7bd16d94a6ec9667f7c526fb3955df6ca64de17cfb3e70245aa5",
+        "started_at": "2026-10-10T15:39:40.152Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:41.187Z",
+        "path": "repeat-45.json",
+        "run_id": "7646c7c974f04aab87655e407bea4fdb",
+        "sha256": "30ce4499ca17b2acc32210b8114c9038d766f6e6166ce1da3d1d0b8a7dd50dcd",
+        "started_at": "2026-10-10T15:39:40.796Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:41.829Z",
+        "path": "repeat-46.json",
+        "run_id": "c8928b1329b146a4ae19c875b6b82386",
+        "sha256": "022176f1b300f49ca22b393c2bc25ee852f36def04e1b5b671b1cda3c38255f5",
+        "started_at": "2026-10-10T15:39:41.375Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:42.534Z",
+        "path": "repeat-47.json",
+        "run_id": "a32f61b0a54542fda9794053e75dda18",
+        "sha256": "52a9712f46f7a9a694297648690c8f033466fe2fc85d2ec3c5d679a25109bad1",
+        "started_at": "2026-10-10T15:39:42.022Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:43.252Z",
+        "path": "repeat-48.json",
+        "run_id": "87772aba97944fa595621d41f18706da",
+        "sha256": "11691439ef25a3649efdffc400b600db706f56c6d1aacc36526791ed451e4b5e",
+        "started_at": "2026-10-10T15:39:42.733Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:43.934Z",
+        "path": "repeat-49.json",
+        "run_id": "93c69d425d564a1299e27d093eaaf108",
+        "sha256": "af4224b2edc9743e5f0e81604af60a91af0eed77d3afe04b795ae55f22a38991",
+        "started_at": "2026-10-10T15:39:43.442Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:44.626Z",
+        "path": "repeat-50.json",
+        "run_id": "71357c9139b44bafa511718e36e8880e",
+        "sha256": "a88e77d93709b3df8bfbe85665230921d17643f40ef245dcf72c4ffc3f15ec47",
+        "started_at": "2026-10-10T15:39:44.113Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:45.312Z",
+        "path": "repeat-51.json",
+        "run_id": "0c8ec261ecd04af9916b6552845274ce",
+        "sha256": "1f33082adcea0e0eb77faed13acfdd8c0974960e62680b490b37bde367fc9fba",
+        "started_at": "2026-10-10T15:39:44.814Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:45.995Z",
+        "path": "repeat-52.json",
+        "run_id": "59f994fc9573469abdcc1ad995e5c404",
+        "sha256": "7d390f20f5629958095ab18c6b908e88572a2f8303b138c342859485c2f155c9",
+        "started_at": "2026-10-10T15:39:45.498Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:46.638Z",
+        "path": "repeat-53.json",
+        "run_id": "543bff0b93ff46eea4f65b7d21696cfb",
+        "sha256": "18ff9a6b131789e5e615ed1168a93ddcda3a7cd907e5297ea09b445eca2b72d2",
+        "started_at": "2026-10-10T15:39:46.185Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:47.321Z",
+        "path": "repeat-54.json",
+        "run_id": "caa2fe7f981247a7b03c6021f09b1532",
+        "sha256": "440c8bdfcd771bec41e7445214d90fa3b639c4a64699beca3c07d2be3b2665f0",
+        "started_at": "2026-10-10T15:39:46.835Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:47.991Z",
+        "path": "repeat-55.json",
+        "run_id": "e18becffd2ce474b998d1f4372c0b40e",
+        "sha256": "4295715c8b570d084d32d996a672d1adfe397af221c2c4da3074a4eeaeff1961",
+        "started_at": "2026-10-10T15:39:47.495Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:48.674Z",
+        "path": "repeat-56.json",
+        "run_id": "542fc04360144cc8b013ef256be408b3",
+        "sha256": "226373ba7f5fa6e24850135e5ea9a3c0cbc789a0384025ae593f9479bbdee5c3",
+        "started_at": "2026-10-10T15:39:48.177Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:49.380Z",
+        "path": "repeat-57.json",
+        "run_id": "4bf3bb60bc21442fbcffefb7340aee03",
+        "sha256": "b24790744985bd77d0d2517832ca3fed6d276ec06dbdfb5411bb98905e08ea3d",
+        "started_at": "2026-10-10T15:39:48.860Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:49.960Z",
+        "path": "repeat-58.json",
+        "run_id": "0c5354b3ce4a4df2af31479b37bc770c",
+        "sha256": "7230b16cde3281d42a64306346faca9a25fd5d04987b006e357f772f4f7c5fe6",
+        "started_at": "2026-10-10T15:39:49.571Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:50.650Z",
+        "path": "repeat-59.json",
+        "run_id": "f1fd4098da1448ebab72408d87bee5bc",
+        "sha256": "1cc1fffbc4303203a67d58b71211091d81569203038c1b43e74cf62fccb61e82",
+        "started_at": "2026-10-10T15:39:50.151Z"
+      },
+      {
+        "finished_at": "2026-10-10T15:39:51.356Z",
+        "path": "repeat-60.json",
+        "run_id": "ebb4c42fcd3944148782214982d5ed0b",
+        "sha256": "b19b798678cf3ee6da835658c7bb227ce7aab5946c984152548ae7c9df995d1e",
+        "started_at": "2026-10-10T15:39:50.840Z"
+      }
+    ],
+    "selected": 60
+  },
+  "root_cause": "unconfirmed; local repeats do not erase the hosted failure",
+  "schema": "uvicorn-rs-ci13-disconnect-reproduction/v1"
+}

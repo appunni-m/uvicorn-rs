@@ -266,11 +266,17 @@ commit. Its macOS ARM64 job failed exact parity at
 Linux ARM64 jobs passed parity and the FastAPI control, then entered sequential
 category measurements. No three-system benchmark aggregate is available yet.
 The [exact-commit local reproduction](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md)
-passed the failing case 10/10 times with matching oracle and target
-observations, so it does not explain the hosted mismatch. The job annotation
-still omits those observations. Benchmark #12 is terminal without validated
-timing data: all three system jobs and aggregation failed, with the Linux
-x86-64 parity gate stopping before timing.
+passed the case 60/60 times with matching oracle and target observations. The
+hosted artifact row is now retained: Uvicorn returned `http.disconnect`, while
+uvicorn-rs returned `http.request` followed by `http.disconnect`; both
+follow-up responses were 200 and both connections remained usable. The fixture
+uses a 50 ms delay, which is not an acknowledgment that the Rust side observed
+TCP EOF before its first ASGI receive. The cause remains unconfirmed. Benchmark
+#13's macOS ARM64 job failed before timing, so it supplies no macOS performance
+result; the last observed Linux jobs entered category measurements, but no
+validated three-system aggregate is recorded. Benchmark #12 is terminal
+without validated timing data: all three system jobs and aggregation failed,
+with the Linux x86-64 parity gate stopping before timing.
 
 ## Release candidate
 

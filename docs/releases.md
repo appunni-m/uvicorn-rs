@@ -57,13 +57,13 @@ package, Python-floor, Rust quality, and MSRV gates on this exact commit.
 Benchmark #13
 ([run 38061568654](https://github.com/appunni-m/uvicorn-rs/actions/runs/38061568654))
 still has no validated aggregate: the macOS ARM64 job failed exact parity on
-`http1.disconnect-before-first-asgi-receive`, while both Linux jobs passed
-parity and began category measurements. A clean local wheel from the same
-commit passed that case 10/10 times; see the
+`http1.disconnect-before-first-asgi-receive` before timing, while the last
+observed Linux jobs passed parity and entered category measurements. The
+hosted artifact shows Uvicorn returned `http.disconnect` and uvicorn-rs returned
+`http.request` followed by `http.disconnect`; the cause remains unconfirmed.
+A clean local wheel from the same commit passed the case 60/60 times. See the
 [reproduction receipt](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md).
-The hosted row-level observations remain unavailable, so the difference is
-unexplained. The checkout remains dirty and no release candidate is ready to
-assemble.
+The checkout remains dirty and no release candidate is ready to assemble.
 
 Local dirty-working-tree evidence is useful but does not qualify a release:
 Coverage-MCP reports 5,532/5,532 regions and 3,974/3,974 lines for its

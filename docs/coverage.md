@@ -39,11 +39,12 @@ successfully. This is hosted evidence for the committed Rust source at that
 revision; it is separate from the dirty local 506-case report above.
 
 The same-commit performance matrix #13 has a macOS ARM64 parity failure before
-timing on `http1.disconnect-before-first-asgi-receive`; its two Linux jobs
-passed parity and proceeded to category measurements. A clean exact-commit
-local reproduction passed the case 10/10 times. The hosted mismatch remains
-unresolved, and the [reproduction receipt](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md)
-records the matching local observations and binary identity.
+timing on `http1.disconnect-before-first-asgi-receive`: Uvicorn returns
+`http.disconnect`, while uvicorn-rs returns `http.request` before
+`http.disconnect`. Both report the disconnect and serve the follow-up request.
+The exact clean local build passed 60 focused repetitions, which does not
+explain or erase the hosted failure. The [reproduction receipt](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md)
+preserves the hosted row, local run identities, and the unresolved cause.
 
 ## Previous local gate (2026-10-09)
 
