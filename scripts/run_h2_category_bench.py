@@ -21,6 +21,7 @@ from pathlib import Path
 import psutil
 
 from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_coverage_environment, median_valid, stop_client, owned_process, stop_owned, run_bounded_client, collect_bounded_client, finalize_server, wait_tls_ready)
+from benchmark_certificates import generate_server_certificate
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,21 +94,6 @@ def free_port() -> int:
         return sock.getsockname()[1]
 
 
-def certificate(directory: Path) -> tuple[Path, Path]:
-    cert, key = directory / "server.pem", directory / "server-key.pem"
-    subprocess.run(
-        [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
-            "-keyout", str(key), "-out", str(cert), "-subj", "/CN=localhost",
-            "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    return cert, key
-
-
 def server_command(
     server: dict, app: str, port: int, cert: Path, key: Path, hypercorn_config: Path
 ) -> list[str]:
@@ -155,11 +141,11 @@ def process_tree_sample(
     return cpu, rss
 
 
-def client(port: int, cert: Path, seconds: float, concurrency: int, case: dict, server) -> dict:
+def client(port: int, ca_certificate: Path, seconds: float, concurrency: int, case: dict, server) -> dict:
     config = {
         "host": "127.0.0.1",
         "port": port,
-        "certfile": str(cert),
+        "certfile": str(ca_certificate),
         "seconds": seconds,
         "concurrency": concurrency,
         "connections": min(4, max(1, concurrency)),
@@ -177,6 +163,7 @@ def client(port: int, cert: Path, seconds: float, concurrency: int, case: dict, 
 def source_digest() -> str:
     paths = (
         "scripts/run_h2_category_bench.py",
+        "scripts/benchmark_certificates.py",
         "tools/http3-probe/src/bin/http2.rs",
         "tools/http3-probe/Cargo.toml",
         "src/lib.rs",
@@ -202,6 +189,7 @@ def sample(
     concurrency: int,
     cert: Path,
     key: Path,
+    ca_certificate: Path,
     hypercorn_config: Path,
     evidence: BenchmarkEvidence,
 ) -> dict:
@@ -218,17 +206,17 @@ def sample(
     )
     load = None
     try:
-        wait_ready(process, port, log, cert)
+        wait_ready(process, port, log, ca_certificate)
         case = definition["client"]
         workload_concurrency = definition.get("concurrency", concurrency)
         if warmup > 0:
-            result = client(port, cert, warmup, workload_concurrency, case, process)
+            result = client(port, ca_certificate, warmup, workload_concurrency, case, process)
             if result["failures"]:
                 raise RuntimeError(f"HTTP/2 warm-up correctness gate failed: {result}")
 
         server_process = psutil.Process(process.pid)
         load_config = {
-            "host": "127.0.0.1", "port": port, "certfile": str(cert),
+            "host": "127.0.0.1", "port": port, "certfile": str(ca_certificate),
             "seconds": seconds, "concurrency": workload_concurrency,
             "connections": min(4, max(1, workload_concurrency)),
             **case,
@@ -279,7 +267,7 @@ def main() -> None:
     selected_servers = {name: SERVERS[name] for name in args.servers}
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
-        ["scripts/run_h2_category_bench.py", "tools/http3-probe/src/bin/http2.rs",
+        ["scripts/run_h2_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/http2.rs",
          "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         artifacts_dir=args.output.with_suffix(".artifacts"),
@@ -291,7 +279,7 @@ def main() -> None:
     rng = random.Random(args.seed)
     rows = []
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-h2-") as directory:
-        cert, key = certificate(Path(directory))
+        ca_certificate, cert, key = generate_server_certificate(Path(directory))
         hypercorn_config = Path(directory) / "hypercorn.toml"
         hypercorn_config.write_text("keep_alive_max_requests = 100000000\ninclude_server_header = false\ninclude_date_header = true\n")
         for workload in args.workloads:
@@ -303,7 +291,7 @@ def main() -> None:
                     try:
                         metrics = sample(
                             selected_servers[name], workload, args.duration, args.warmup,
-                            args.concurrency, cert, key, hypercorn_config, evidence,
+                            args.concurrency, cert, key, ca_certificate, hypercorn_config, evidence,
                         )
                     except Exception as error:
                         raise RuntimeError(

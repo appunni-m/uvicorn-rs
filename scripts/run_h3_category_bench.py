@@ -21,6 +21,7 @@ from pathlib import Path
 import psutil
 
 from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_coverage_environment, median_valid, stop_client, owned_process, stop_owned, run_bounded_client, collect_bounded_client, finalize_server, wait_tls_ready)
+from benchmark_certificates import generate_server_certificate
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -99,18 +100,6 @@ def free_port() -> int:
     raise OSError("could not find a port available for both TCP and UDP")
 
 
-def make_certificate(directory: Path) -> tuple[Path, Path]:
-    cert, key = directory / "server.pem", directory / "server-key.pem"
-    subprocess.run(
-        [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
-            "-keyout", str(key), "-out", str(cert), "-subj", "/CN=localhost",
-            "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    return cert, key
-
-
 def server_command(
     server: dict, app: str, port: int, cert: Path, key: Path, hypercorn_config: Path
 ) -> list[str]:
@@ -157,9 +146,9 @@ def process_tree_sample(
     return cpu, rss
 
 
-def client_command(port: int, cert: Path, seconds: float, concurrency: int, case: dict) -> list[str]:
+def client_command(port: int, ca_certificate: Path, seconds: float, concurrency: int, case: dict) -> list[str]:
     return [
-        str(CLIENT), f"127.0.0.1:{port}", str(cert), str(seconds), str(concurrency),
+        str(CLIENT), f"127.0.0.1:{port}", str(ca_certificate), str(seconds), str(concurrency),
         str(min(4, concurrency)),
         case.get("mode", "fixed"), case.get("path", "/fixed"), str(case.get("response_bytes", 0)),
         str(case.get("upload_bytes", 0)), str(case.get("expected_status", 200)),
@@ -176,6 +165,7 @@ def sample(
     concurrency: int,
     cert: Path,
     key: Path,
+    ca_certificate: Path,
     hypercorn_config: Path,
     evidence: BenchmarkEvidence,
 ) -> dict:
@@ -190,10 +180,10 @@ def sample(
     case = definition["client"]
     load = None
     try:
-        wait_ready(process, port, log, cert)
+        wait_ready(process, port, log, ca_certificate)
         if warmup > 0:
             warm = run_bounded_client(
-                client_command(port, cert, warmup, definition.get("concurrency", concurrency), case),
+                client_command(port, ca_certificate, warmup, definition.get("concurrency", concurrency), case),
                 warmup, process, cwd=ROOT,
             )
             if warm.returncode != 0:
@@ -206,7 +196,7 @@ def sample(
 
         server_process = psutil.Process(process.pid)
         load = owned_process(
-            client_command(port, cert, seconds, definition.get("concurrency", concurrency), case),
+            client_command(port, ca_certificate, seconds, definition.get("concurrency", concurrency), case),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         monitor = SampleMonitor(server_process, psutil.Process(load.pid))
@@ -235,7 +225,7 @@ def sample(
 
 def source_digest() -> str:
     files = [
-        "scripts/run_h3_category_bench.py", "tools/http3-probe/src/bin/bench.rs",
+        "scripts/run_h3_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/bench.rs",
         "src/lib.rs", "python/uvicorn_rs/server.py", "examples/bench_fastapi.py",
         "pyproject.toml", "uv.lock",
     ]
@@ -269,7 +259,7 @@ def main() -> None:
 
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
-        ["scripts/run_h3_category_bench.py", "tools/http3-probe/src/bin/bench.rs",
+        ["scripts/run_h3_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/bench.rs",
          "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         artifacts_dir=args.output.with_suffix(".artifacts"),
@@ -281,7 +271,7 @@ def main() -> None:
     rng = random.Random(args.seed)
     rows = []
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-h3-") as directory:
-        cert, key = make_certificate(Path(directory))
+        ca_certificate, cert, key = generate_server_certificate(Path(directory))
         hypercorn_config = Path(directory) / "hypercorn.toml"
         hypercorn_config.write_text("keep_alive_max_requests = 100000000\ninclude_server_header = false\ninclude_date_header = false\n")
         for workload in args.workloads:
@@ -296,7 +286,7 @@ def main() -> None:
                     try:
                         metrics = sample(
                             selected_servers[name], workload, args.duration, args.warmup,
-                            args.concurrency, cert, key, hypercorn_config, evidence,
+                            args.concurrency, cert, key, ca_certificate, hypercorn_config, evidence,
                         )
                     except Exception as error:
                         raise RuntimeError(
