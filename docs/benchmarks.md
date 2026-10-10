@@ -13,6 +13,11 @@ reference timeouts. The run uses one configured Tokio async worker and no
 FastAPI-RS or Starlette-RS. See [benchmark status](benchmark-status.md) for the
 latest hosted CI and three-system workflow outcomes.
 
+For new comparisons, the wrapper defaults `--h3-concurrency` to 1. Keep it
+separate from `--concurrency`: Hypercorn timed out at H3 concurrency 64, so
+higher H3 load is a separate capacity experiment and must be reported
+separately.
+
 These are loopback application-server benchmarks, not end-to-end production
 capacity tests. They measure the combined server, Python ASGI app, event loops,
 protocol implementation, client, and host. The maintained cross-category

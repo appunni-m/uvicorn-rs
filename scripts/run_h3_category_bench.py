@@ -254,7 +254,8 @@ def main() -> None:
     parser.add_argument("--servers", nargs="+", choices=sorted(SERVERS), default=list(SERVERS))
     parser.add_argument("--duration", type=float, default=3)
     parser.add_argument("--warmup", type=float, default=0.5)
-    parser.add_argument("--concurrency", type=int, default=64)
+    parser.add_argument("--concurrency", type=int, default=1,
+                        help="HTTP/3 comparison concurrency; increase explicitly for a load-capacity experiment")
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--seed", type=int, default=20261002)
     parser.add_argument("--output", type=Path, default=ROOT / "benchmarks" / "results" / "http3-categories-2026-10-02.json")

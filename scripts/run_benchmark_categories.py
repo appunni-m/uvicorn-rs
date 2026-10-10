@@ -53,6 +53,7 @@ LIMITATIONS = (
     "Same-host closed-loop load couples client, server, and observer CPU.",
     "Three matching valid repetitions are descriptive evidence, not statistical significance.",
     "Host contention and incomplete/invalid rows remain excluded; guards are never relaxed.",
+    "HTTP/3 uses its separately recorded low-load concurrency because higher same-host load caused Hypercorn reference timeouts.",
     "Protocol-specific latency/setup/drain clocks cannot be compared across protocols.",
     "H3 uploads have no qualifying Hypercorn performance pair; deliberate exceptions remain unrankable.",
     "Dirty target evidence is local and provisional; no source-to-binary attestation is inferred from hashes alone.",
@@ -306,6 +307,8 @@ def main():
     parser.add_argument("--duration", type=positive_seconds, default=5.0)
     parser.add_argument("--warmup", type=nonnegative_seconds, default=1.0)
     parser.add_argument("--concurrency", type=positive_integer, default=64)
+    parser.add_argument("--h3-concurrency", type=positive_integer, default=1,
+                        help="HTTP/3 comparison concurrency; recorded separately from other categories")
     parser.add_argument("--repetitions", type=positive_integer, default=3)
     parser.add_argument("--seed", type=int, default=20261005)
     # Five repeats of the expanded HTTP/1 workload plan can exceed 20 minutes
@@ -315,7 +318,7 @@ def main():
     parser.add_argument("--category", action="append", choices=[label for label, _, _ in CATEGORIES],
                         help="run selected category only; repeat to select more than one (default: all categories)")
     parser.add_argument("--workloads", nargs="+",
-                        help="run only these upstream FastAPI HTTP/1.1 workloads; requires --category http1")
+                        help="run only these workloads in one selected protocol category")
     parser.add_argument("--expected-source-sha256", type=sha_argument)
     parser.add_argument("--expected-native-sha256", type=sha_argument)
     parser.add_argument("--expected-public-cases", type=positive_integer)
@@ -329,16 +332,23 @@ def main():
     if args.category and len(args.category) != len(set(args.category)):
         parser.error("each category may be selected at most once")
     if args.workloads:
-        if args.category != ["http1"]:
-            parser.error("--workloads requires exactly --category http1")
-        known_workloads = set(workload_names(root / "scripts/run_http_category_bench.py"))
+        if not args.category or len(args.category) != 1:
+            parser.error("--workloads requires exactly one selected --category")
+        selected_category = args.category[0]
+        if selected_category == "lifecycle":
+            parser.error("lifecycle is a single scenario and does not accept --workloads")
+        selected_script = dict((label, name) for label, name, _ in CATEGORIES)[selected_category]
+        known_workloads = set(workload_names(root / "scripts" / selected_script))
         unknown_workloads = sorted(set(args.workloads) - known_workloads)
         if unknown_workloads:
-            parser.error(f"unknown HTTP/1.1 workload names: {unknown_workloads}")
-        non_fastapi = sorted(name for name in args.workloads if not name.startswith("fastapi-"))
-        if non_fastapi:
-            parser.error("the maintained cross-category comparison accepts upstream FastAPI workloads only: "
-                         + ", ".join(non_fastapi))
+            parser.error(f"unknown workload names: {unknown_workloads}")
+        if len(args.workloads) != len(set(args.workloads)):
+            parser.error("--workloads cannot contain duplicates")
+        if selected_category == "http1":
+            non_fastapi = sorted(name for name in args.workloads if not name.startswith("fastapi-"))
+            if non_fastapi:
+                parser.error("the maintained cross-category comparison accepts upstream FastAPI workloads only: "
+                             + ", ".join(non_fastapi))
     if args.capture_identity and (args.output_dir or args.parity_before_identity or args.parity_report):
         parser.error("capture mode cannot also run the suite")
     if not args.capture_identity and (not args.parity_before_identity or not args.parity_report):
@@ -391,6 +401,7 @@ def main():
         "workload_exclusions": [],
         "public_parity_gate": parity, "limitations": list(LIMITATIONS),
         "parameters": {"duration": args.duration, "warmup": args.warmup, "concurrency": args.concurrency,
+                       "h3_concurrency": args.h3_concurrency,
                        "repetitions": args.repetitions, "seed": args.seed, "category_timeout_seconds": args.category_timeout,
                        "comparison_pairs": {label: [
                            {"loop": loop, "reference": reference, "candidate": candidate}
@@ -433,12 +444,13 @@ def main():
             workloads = ["lifecycle"]
             if label != "lifecycle":
                 workloads = workload_names(script)
-                if label == "http1" and args.workloads:
+                if args.workloads and args.category == [label]:
                     workloads = list(dict.fromkeys(args.workloads))
                 elif label == "http1":
                     workloads = [workload for workload in workloads if workload.startswith("fastapi-")]
+                category_concurrency = args.h3_concurrency if label == "http3" else args.concurrency
                 command += ["--workloads", *workloads, "--duration", str(args.duration),
-                            "--warmup", str(args.warmup), "--concurrency", str(args.concurrency)]
+                            "--warmup", str(args.warmup), "--concurrency", str(category_concurrency)]
             planned = expected_rows(
                 script, label, servers, args.repetitions,
                 selected_workloads=workloads if label != "lifecycle" else None,

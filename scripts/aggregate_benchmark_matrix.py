@@ -52,6 +52,14 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
     fastapi_run = read_json(fastapi_results / "run.json")
     fastapi_analysis = read_json(fastapi_results / "analysis.json")
 
+    benchmark_parameters = run.get("parameters", {})
+    if not isinstance(benchmark_parameters, dict):
+        raise ValueError(f"{artifact.name}: benchmark parameters are malformed")
+    benchmark_parameters = {
+        key: benchmark_parameters.get(key)
+        for key in ("duration", "warmup", "concurrency", "h3_concurrency", "repetitions", "seed")
+    }
+
     if environment.get("system_id") != system_id:
         raise ValueError(f"{artifact.name}: system ID does not match its artifact name")
     if run.get("schema") != "uvicorn-rs-sequential-category-run@2":
@@ -155,6 +163,7 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
         "optional_workloads": {name: item.get("selected")
                                 for name, item in identity.get("optional_workloads", {}).items()
                                 if isinstance(item, dict)},
+        "benchmark_parameters": benchmark_parameters,
         "matrix_status": (
             "validated_complete_system"
             if run.get("status") == "completed_correctness_gated"
@@ -343,22 +352,30 @@ def render_markdown(report: dict) -> str:
         "",
         "The matrix uses independent hosted systems. Results are reported per system; rates and latencies are never averaged across architectures. A row appears below only when its correctness, identity, timing, and matching-repetition gates qualify. No qualified row means the run makes no performance claim for that workload.",
         "",
-        "The workflow runs five repetitions by default and requires at least three matching valid repetitions. Invalid or incomplete rows remain in the downloadable raw artifacts and are excluded from ratios. These measurements include the Python ASGI boundary and the closed-loop client; see [benchmark methodology](benchmarks.md) for scope and limitations.",
+        "The workflow runs five repetitions by default and requires at least three matching valid repetitions. The report records general and HTTP/3 concurrency separately because the H3 reference has a lower sustainable same-host load. Invalid or incomplete rows remain in the downloadable raw artifacts and are excluded from ratios. These measurements include the Python ASGI boundary and the closed-loop client; see [benchmark methodology](benchmarks.md) for scope and limitations.",
         "",
         "## Runner summary",
         "",
-        "| System | Runner | CPU / cores | Memory | Python | Matrix / driver / pairs | FastAPI status / pairs | Raw artifact |",
-        "|---|---|---|---:|---|---|---|---|",
+        "| System | Runner | CPU / cores | Memory | Python | Concurrency / H3 | Matrix / driver / pairs | FastAPI status / pairs | Raw artifact |",
+        "|---|---|---|---:|---|---:|---|---|---|",
     ]
     for system in report["systems"]:
         artifact = system["artifact"]
         cpu = (f"{system['cpu_model']} ({system['logical_cpu_count']} logical / "
                f"{system['physical_cpu_count']} physical)")
         memory_gib = system["memory_total_bytes"] / 1024**3
+        parameters = system["benchmark_parameters"]
+        general_concurrency = parameters.get("concurrency")
+        h3_concurrency = parameters.get("h3_concurrency")
+        concurrency_text = (
+            f"{general_concurrency} / H3 {h3_concurrency}"
+            if isinstance(general_concurrency, int) and isinstance(h3_concurrency, int)
+            else "not recorded"
+        )
         lines.append(
             f"| {system['system_id']} ({system['architecture']}) | {system['runner']} | "
             f"{cpu} | {memory_gib:.1f} GiB | {system['python']} | "
-            f"{system['matrix_status']} / {system['driver_status']} / {system['qualified_pairs']} | "
+            f"{concurrency_text} | {system['matrix_status']} / {system['driver_status']} / {system['qualified_pairs']} | "
             f"{system['fastapi_only']['http1_status']} / {system['fastapi_only']['qualified_pairs']} | "
             f"`{artifact}` |"
         )
@@ -370,6 +387,7 @@ def render_markdown(report: dict) -> str:
             f"Runner: `{system['runner']}`; CPU: {system['cpu_model']} "
             f"({system['logical_cpu_count']} logical, {system['physical_cpu_count']} physical); "
             f"memory: {system['memory_total_bytes'] / 1024**3:.1f} GiB; platform: `{system['platform']}`.",
+            f"Load parameters: {system['benchmark_parameters']}.",
             "",
             "FastAPI-only comparison (upstream FastAPI, Starlette, and Pydantic):",
             "",

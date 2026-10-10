@@ -36,6 +36,11 @@ on:
         default: "64"
         required: true
         type: string
+      h3_concurrency:
+        description: HTTP/3 comparison concurrency; higher values may exceed Hypercorn reference capacity
+        default: "1"
+        required: true
+        type: string
       repetitions:
         description: Repetitions per server; five are collected and three valid matches are required
         default: "5"
@@ -207,6 +212,7 @@ jobs:
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
+          BENCHMARK_H3_CONCURRENCY: ${{ inputs.h3_concurrency || '1' }}
           BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
           BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
         run: |
@@ -217,6 +223,7 @@ jobs:
             --output-dir target/benchmark-categories \
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
             --concurrency "$BENCHMARK_CONCURRENCY" --repetitions "$BENCHMARK_REPETITIONS" \
+            --h3-concurrency "$BENCHMARK_H3_CONCURRENCY" \
             --seed "$BENCHMARK_SEED" --category-timeout 5400 \
             2>&1 | tee target/benchmark-preparation/categories-driver.log
       - name: Retain or recover analysis for an interrupted category run
