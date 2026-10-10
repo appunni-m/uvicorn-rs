@@ -1,6 +1,51 @@
 # Black-box parity and Rust source coverage
 
-## Current evidence status
+## Latest local evidence (2026-10-10)
+
+The current dirty source passed the unified 506-case live matrix: 243 oracle
+parity cases and 263 target-only fault contracts. Attribution and all three
+complete 506-case repeats passed with **zero retries**. Unified coverage is
+**5,532/5,532 regions and 3,974/3,974 lines**, with all 506 case attributions
+matching the profile union.
+
+Coverage-MCP measured the same complete report: source `matches_receipt`,
+tests `passed`, and zero missing regions or lines. The [strict full report](../benchmarks/results/2026-10-10/asgi-unified-coverage-strict-1f-20261010/coverage-report.json)
+retains every LLVM region, per-case attribution, and three clean repeat
+receipts. Its JSON whitespace was compacted without dropping fields so the
+full report fits Coverage-MCP's input limit; the original formatted report is
+preserved beside it as `coverage-report.pretty.json`. The
+[Coverage-MCP receipt](../benchmarks/results/2026-10-10/asgi-unified-coverage-strict-1f-20261010/coverage-mcp-receipt.json)
+and [report context](../benchmarks/results/2026-10-10/asgi-unified-coverage-strict-1f-20261010/coverage-report.json.context.json)
+bind the MCP measurement to the report path, source, build, and test run.
+
+This is local evidence on macOS ARM64 from dirty `main` at revision
+`e8148e4e8333da00ff5a2867416b008a9b3dbb29`; `src/lib.rs` SHA-256 is
+`1f222c06c5ecfa4f1c3b22299259ddb69f5d39822427e50c4a9f8b4eebf8f455`. The
+coverage-instrumented native extension SHA-256 is
+`2f8538416e5890d21a57898852eda14c2c9fcfdb405bac23f7bde4826bcc6640`. After
+the run, the normal release extension was rebuilt and restored to SHA-256
+`bf3cb991025074bc416ccd514b836aec31899ca1ce6f0d40bdfa819c9dd07d43`, matching
+the current-source performance matrix. This local receipt does not replace
+hosted exact-commit CI.
+
+## Latest hosted exact-commit gate (2026-10-10)
+
+CI #56 passed on clean commit
+[`72dfa51`](https://github.com/appunni-m/uvicorn-rs/commit/72dfa51f98a3a3518679ccaf7115d3bae6d8ac5f).
+The installed-wheel public parity, unified coverage matrix (all 494 cases,
+5,298/5,298 native regions, and 3,753/3,753 lines), macOS/Linux/Windows
+package jobs, Python-floor wheel, Rust quality, and MSRV jobs completed
+successfully. This is hosted evidence for the committed Rust source at that
+revision; it is separate from the dirty local 506-case report above.
+
+The same-commit performance matrix #13 has a macOS ARM64 parity failure before
+timing on `http1.disconnect-before-first-asgi-receive`; its two Linux jobs
+passed parity and proceeded to category measurements. A clean exact-commit
+local reproduction passed the case 10/10 times. The hosted mismatch remains
+unresolved, and the [reproduction receipt](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md)
+records the matching local observations and binary identity.
+
+## Previous local gate (2026-10-09)
 
 The latest local black-box gate passed **494/494** cases on 2026-10-09:
 240 live oracle comparisons and 254 target-only fault contracts. Per-case

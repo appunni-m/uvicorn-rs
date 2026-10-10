@@ -1,0 +1,317 @@
+{
+  "schema": "uvicorn-rs-local-reproduction@1",
+  "selected": 10,
+  "passed": 10,
+  "results": [
+    {
+      "repeat": 1,
+      "status": "passed",
+      "run_id": "42bfa70dfdaf45b89c60e031efa842f2",
+      "started_at": "2026-10-10T15:26:13.973Z",
+      "finished_at": "2026-10-10T15:26:15.005Z",
+      "result_sha256": "b3ba0bd03256776625d597c725d004603496325588273b0c87c31882e20a38db",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    },
+    {
+      "repeat": 2,
+      "status": "passed",
+      "run_id": "07b119207f4a4eaf824b8617d6d32124",
+      "started_at": "2026-10-10T15:26:15.200Z",
+      "finished_at": "2026-10-10T15:26:15.620Z",
+      "result_sha256": "e006fd09d073e1e0a522b346bdae71dd92c8bd38f53751678dfd6ecd0369b36b",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    },
+    {
+      "repeat": 3,
+      "status": "passed",
+      "run_id": "091dba9e362b4069bc79eb8e44b1f444",
+      "started_at": "2026-10-10T15:26:15.812Z",
+      "finished_at": "2026-10-10T15:26:16.234Z",
+      "result_sha256": "be8731de4349e5cc9d72c2814a148fc33495a27d08fb36ced3475a7514ca0f44",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    },
+    {
+      "repeat": 4,
+      "status": "passed",
+      "run_id": "bc4b139d5f4b49b6807ee9d9d2daaf9d",
+      "started_at": "2026-10-10T15:26:16.426Z",
+      "finished_at": "2026-10-10T15:26:16.961Z",
+      "result_sha256": "aebe6bc7ccd472a748f58a8bec4724d464c80a8e812abab0c10516c7505ccfb1",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    },
+    {
+      "repeat": 5,
+      "status": "passed",
+      "run_id": "10f13eb623234fe998812e7c1f6441d1",
+      "started_at": "2026-10-10T15:26:17.156Z",
+      "finished_at": "2026-10-10T15:26:17.676Z",
+      "result_sha256": "c46d5dc87323215855b8a8b8351670bc0b6c0112edfce7027318ab0ebb47dfc7",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    },
+    {
+      "repeat": 6,
+      "status": "passed",
+      "run_id": "b005eae615344edd965528f7ccce26fb",
+      "started_at": "2026-10-10T15:26:17.865Z",
+      "finished_at": "2026-10-10T15:26:18.384Z",
+      "result_sha256": "fc0c973e8fc013f9f8287e2b7a617c66675c635da9e0eebb02630463aa49307f",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    },
+    {
+      "repeat": 7,
+      "status": "passed",
+      "run_id": "a6aa92c8dfcf49f6a77cfe6be2817959",
+      "started_at": "2026-10-10T15:26:18.586Z",
+      "finished_at": "2026-10-10T15:26:19.127Z",
+      "result_sha256": "5ed35bbe504212f7ae6b5995d7fa3f85cb1648b0577d05acfbbb6d51e66a9944",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    },
+    {
+      "repeat": 8,
+      "status": "passed",
+      "run_id": "bc85b5b369c5423788af6d8258ee0252",
+      "started_at": "2026-10-10T15:26:19.318Z",
+      "finished_at": "2026-10-10T15:26:19.828Z",
+      "result_sha256": "37a480b72b77a55a48064f0f66b94ebdd9a2d06d56e59e7f00b04e23b5f086e4",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    },
+    {
+      "repeat": 9,
+      "status": "passed",
+      "run_id": "892e4fb8c84d4c50a307c26581fcd1e8",
+      "started_at": "2026-10-10T15:26:20.020Z",
+      "finished_at": "2026-10-10T15:26:20.557Z",
+      "result_sha256": "4ec6a8b1e926a01860f9ec064614a48413fc6c275abb4537f29331124f6b1a97",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    },
+    {
+      "repeat": 10,
+      "status": "passed",
+      "run_id": "62c7235132df4faa947273c3678ca193",
+      "started_at": "2026-10-10T15:26:20.753Z",
+      "finished_at": "2026-10-10T15:26:21.276Z",
+      "result_sha256": "66ec49c9e95dea8889b79e1487e517cfdc180562b25d12a418b27cb1788456cb",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "native_extension_sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+    }
+  ]
+}

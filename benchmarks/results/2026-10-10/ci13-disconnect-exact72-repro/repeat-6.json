@@ -1,0 +1,457 @@
+{
+  "cases": [
+    {
+      "case_id": "http1.disconnect-before-first-asgi-receive",
+      "difference": null,
+      "fault": null,
+      "operation": "http.client-disconnect",
+      "oracle_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "profile": "http1",
+      "requirements": [
+        "http.client-disconnect"
+      ],
+      "server_exit_codes": {
+        "oracle": null,
+        "target": null
+      },
+      "status": "passed",
+      "target_observation": {
+        "disconnect_event": true,
+        "followup_response": {
+          "body_base64": "aHR0cC5kaXNjb25uZWN0",
+          "connection_closed": false,
+          "content_type": "text/plain; charset=utf-8",
+          "ordered_response_headers": [],
+          "response_header_values_by_name": [],
+          "status": 200
+        }
+      },
+      "verification": "oracle-parity"
+    }
+  ],
+  "infrastructure_errors": [],
+  "run": {
+    "command": [
+      "/tmp/uvicorn-rs-repro-72dfa51/.venv/bin/python",
+      "/private/tmp/uvicorn-rs-repro-72dfa51/scripts/run_parity.py",
+      "--case-id",
+      "http1.disconnect-before-first-asgi-receive",
+      "--output",
+      "/tmp/uvicorn-rs-exact72-disconnect-6.json"
+    ],
+    "environment": {
+      "dependencies": {
+        "aioquic": "1.3.0",
+        "h11": "0.16.0",
+        "h2": "4.4.1",
+        "httptools": "0.8.0",
+        "hypercorn": "0.18.0",
+        "uvicorn": "0.54.0",
+        "uvloop": "0.23.0",
+        "websockets": "17.1",
+        "wsproto": "1.3.2"
+      },
+      "machine": "arm64",
+      "platform": "macOS-15.7.7-arm64-arm-64bit",
+      "python": "3.12.13",
+      "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+    },
+    "finished_at": "2026-10-10T15:26:18.384Z",
+    "harness": {
+      "fixture_app": "tests/parity/app.py",
+      "fixture_app_sha256": "122691ef690520c5dd681e72913ca8ae2635cd17413118c81510b112a24f4454",
+      "http3_client": null,
+      "runner": "scripts/run_parity.py",
+      "runner_sha256": "ad87c439762344df83e1156d1e4cf65e5ab8486d654c2d46485ce338aa3977ed"
+    },
+    "inputs": [
+      {
+        "path": "tests/parity/inputs/http1.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "0ab368fc6f49057c4dd85bb1215f5c2142563206c7033bb46ad378b5ddf50ed3"
+      },
+      {
+        "path": "tests/parity/inputs/http1-tls.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "8d3c6390852591318ff441a94b5badc3d1e19c22eabd51a08e42707ca40b4075"
+      },
+      {
+        "path": "tests/parity/inputs/http2.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "4e923f1591a5cc65723c64226531a60f516021bbcc58d9a1818ad02f99b191e8"
+      },
+      {
+        "path": "tests/parity/inputs/http3.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "42d8ec39de70ba31bf5875ca3421e31fe0096d79529330dfc3700507915e2b7b"
+      },
+      {
+        "path": "tests/parity/inputs/websocket.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "1f09e443f64ed0ef8584f2c412dc0271e303bf41133a8f8a81582f62a332d677"
+      },
+      {
+        "path": "tests/parity/inputs/websocket-tls.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "32692a231622c94d9ea1299802d3cafee9a770b99958e5099f79e7022867fa77"
+      },
+      {
+        "path": "tests/parity/inputs/startup-partial-tls-api.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "4209dab0c48c0a5f4ced9b5ebb891253910fcd13143fa7b80cad8dbad3975d10"
+      },
+      {
+        "path": "tests/parity/inputs/startup-missing-certificate.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "d3cf81702471e9f24e671fcda20d2dfd0050089d61c40bf4ff719c252f6915a5"
+      },
+      {
+        "path": "tests/parity/inputs/startup-invalid-host.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "1c887c1d32aa18bdf413bf6c3664ec6bcc486f3ca61d0942692a719aa109627b"
+      },
+      {
+        "path": "tests/parity/inputs/startup-empty-certificate.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "759b37e9ccec68a4105401010e545a415f3cc12de138f0db9f5161fa24052bd7"
+      },
+      {
+        "path": "tests/parity/inputs/startup-invalid-certificate-pem.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "4c5af2108e5389bd9b7dc576f0b9893a0fd260ff67b622c12f7c9e02b7493347"
+      },
+      {
+        "path": "tests/parity/inputs/startup-missing-private-key.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "dacbd2b813e78df732117fcf15ce3a740b0bbb240fb7bf9e2af570cff181427b"
+      },
+      {
+        "path": "tests/parity/inputs/startup-empty-private-key.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "3edf405d3a111d8a1ae9613c206852fe1006e8a25d2d9d16ca5da69145d68981"
+      },
+      {
+        "path": "tests/parity/inputs/startup-invalid-private-key-pem.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "05ccae2b1bfd966cc99b1c80f24d6aaf39a3621b5c2e129d126432de94d68b05"
+      },
+      {
+        "path": "tests/parity/inputs/startup-mismatched-private-key.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "ccfe6d122e16f3cc5c5b59c964a09df9d0143f958ab18ea9461711242dd5259f"
+      },
+      {
+        "path": "tests/parity/inputs/lifecycle.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "cd8bd405db105dab74fd1e84b8e325250383d150055518be49e98ff4a18caf3f"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-shutdown-cancel.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "d73d048d85f688d088c010595a819e0048eddf1e17e3e4f0ab65f7e1b43025d1"
+      },
+      {
+        "path": "tests/parity/inputs/lifecycle-server-api.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "b8e97d645081b4062165e15d07c59fa7a46f6e798056e4e67d680bad39a73835"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-no-support.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "e531d524a562be8cda56260e43a1337d42a7c816265b112f58de98d6986d0c93"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-retained-send.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "86854b2785cb5899c260ff48cd5fa78880d35db141f65a534afb4a82575e26db"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-subclass-event-types.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "a5a29dc5d471f4d2f5f0fe6a682970f0962ed3f71997e5433e873c65a9255543"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-no-support-error.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "705f8b7675b282abec62dbf748273404ccedc215f4b7fc119c7560d39dd97347"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-start-event-channel-closed.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "88e68ef4e2676a3662c74ace4c6633c4a5c25c3c3569831ea44d521a22ce3fca"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-no-support-error-retained.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "f0d6f2b73d63632fae71221c12d554734ac55e5a1402ffa3b92fd7bd8cba0a35"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-receive-wrong-signature.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "307485ea3dd305aed757ac820f2608ecb196b2dc65df4edec1c792bbf848bbff"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-invalid-startup-event.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "c59a72df4d2663ece2040a66f0c3eb383d97f76144e8616d5deb83e246ed4744"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-missing-startup-event-type.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "f069b49f23bf62b6b0544a25f3026124e1da7ae05f412a052d0f51f02caa0724"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-non-string-startup-event-type.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "ab05e766ac795690fad53e9657e5f9a8ac027499a8d1275fc87bb11227867624"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-startup-failed.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "4b5f68ffd70349d15aa4e4d45361c5152ac6b30886bb3512c07abd59ed2fb057"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-startup-failed-subclass.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "f792fe72b2a67f2a4ecc38ff1b07f8a290489ad68661ff8bc9e4e1e52c7b7f23"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-startup-failed-empty.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "2b4ef1fee9c7466408802e74440b6c2e04f89a0174db05b8ca0150e05c9a253f"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-unexpected-startup-event.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "b74ae5eef595a0435206309080ef64ef3996c88f84131ba57b4dae20a7362e8e"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-shutdown-failed.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "7d182bd77cef0a9ca0b4bef4750a4653c1e0fe0ed93a08b48985e3b01ad522ae"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-shutdown-failed-subclass.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "c7e48a539634e1558174423c845934710e451d21ccddd48d0b5808a5aa40e461"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-shutdown-failed-empty.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "39d36edd48a921a3572c2c446bedbef7094d57cbe85926ae1ca71453909893a4"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-shutdown-returns.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "1ced873288ee5b63e7d577837979e9b67733404a13f75b1038d027a071e35749"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-shutdown-returns-retained.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "7f04dc45c17340425e36e12c4368065c2da19d418ddfffcb3341fa6676ffb9a5"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-shutdown-raises.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "2c37ec64b394d32995ac7466bfaeeb81f5ec4f9c0102811c5ab494a98d16da4c"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-shutdown-unexpected-event.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "ab59b4956c28b35879f21f74bd43c2831ea5c5738e87ea0ddae8a04dbd33d5cb"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-startup-complete-then-returns.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "9789d8d7d9870beafb16348fd5dd7f69c23aa66b37fedab3b95f3eb0e18da959"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-scope-asgi-version.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "7e636f640f1fb3f052f459e6b9980e2f592dfc7b96c2859603a599f2572342c9"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-scope-asgi-spec-version.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "583b8f5b6144abf5c2dc41cb15ed692917c52bfe2d8f78ae1275978cc693c937"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-scope-type.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "dde532cdac8421516b97d5864f1ccac3f8082d30f40c2e335884bb7e422c691f"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-scope-asgi.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "70646921d553b320929637cfde3fdd82c2f8d3ac2862b0fa67af90c6628830b2"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-scope-state.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "b7cee93238231d15f6457c4f32b1bed87338c6bd8cb3bc7fa384694769176541"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-receive-startup.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "26177e7d834fb7bc70df486515ed2821a1b105e42021af0751413a115eeeb526"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-shutdown-receive.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "d2359d4624c475b44f3216030663ba97cf19432107e9df52b4673e9c6518dd89"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-startup-complete.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "3ac1ca0be289db46b20be5812b895a245c956e3f65f9ffb5b1e87da88e257888"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-startup-failed.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "0bb75381464dbe84a813e0e70d62675780fa3657da5629a929c94b7e982f0019"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-shutdown-complete.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "b66bb0a5895f80ed75e2c9da5e0efe63b884f5b9f6b5583a16b768ec8103165b"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-shutdown-failed.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "5b890e76933d7c63ee7b7cc8366c792b33354296bd97e2ae5f9f40166467b78f"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-startup-failed-message-get-item.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "5aab30aafd9f31f73b0d6468c92357d2173761f54b404e6b78f3513bf20262d4"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-startup-failed-message-extract.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "5707186c1a903884e145315a23d6c722e02858e606b51469a4bb85d04c6e74eb"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-startup-event-channel-closed.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "3c53809dd40a02b004d14c0831936c9f6e5c6e888b85eca2541da8d9a8ed1cc0"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-shutdown-send-type-get-item.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "5d14f7c6f03ae15df7520731a9b23306a6a5d3c4c7a5fedc3921d8f2160d0d57"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-shutdown-failed-message-get-item.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "ae99cd2d7104dce4a94b45a5d7297546307cf67722135020508d1734250e870b"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-shutdown-failed-message-extract.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "3d78cf470ce73230f9b308c15d28956cce4fe5e5d30ca57b0b0a02922bd4f08f"
+      },
+      {
+        "path": "tests/parity/inputs/startup-fault-native-add-class-asgi-io.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "f8bfc553d7d49ff22bd89cba980b28b3d472d4d73c059d5605fa37930f58a60f"
+      },
+      {
+        "path": "tests/parity/inputs/startup-fault-native-add-class-websocket-io.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "8cafc793dd2b2951c185011637f9a715f87a2ba6a89d7afde64dd3dc46bf8873"
+      },
+      {
+        "path": "tests/parity/inputs/startup-fault-native-add-class-lifespan-io.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "76d9083b4a1dbeda6cff8e5f9572a050c09e4aecbdd4293ba60bde569160fd8c"
+      },
+      {
+        "path": "tests/parity/inputs/startup-fault-lifespan-bridge.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "3eadb224f60a541308207ead0652105125ddc39ae2d84928620213c3210585e4"
+      },
+      {
+        "path": "tests/parity/inputs/startup-fault-native-add-class-server-control.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "ec4139a115724e544e37767898d1b571a7de5c1eaf752f905d08cf49bfcee440"
+      },
+      {
+        "path": "tests/parity/inputs/startup-fault-native-add-function-serve.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "94320a4a78063e25d204b9fdc10b9aea9e103fe5b19000df011fdb6dda6e8775"
+      },
+      {
+        "path": "tests/parity/inputs/startup-fault-listener-accept.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "f1715d9d4ae4fbc1f6bd94e8308b740de173e2828a4293328281dbef614737ad"
+      },
+      {
+        "path": "tests/parity/inputs/lifecycle-tls.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "e08bdc54f6738b4cf8b51a800bd9551e58eae38bf9ac6d46e3f80f160e8f8b24"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-shutdown-complete-then-raises.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "19153c75a2ad715ea4b004d615bcb492227461be47149c8d9162cc815a3dcdfd"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-fault-asgi-shutdown-task-join-after-complete.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "6be41daf7b0fbe4e87ef815835074979180a00e7d97dfb8763a213e62ec84b93"
+      },
+      {
+        "path": "tests/parity/inputs/lifecycle-owned-loop.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "e13fb8c825f4faca37baa03651bdcc0dbe4a58987e4417a11322f6acbd897be2"
+      },
+      {
+        "path": "tests/parity/inputs/lifespan-state-copy-rehash.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "27935f8d1652eb7b938d7dc74a5a880085fc1d0a749546ec2c6bbf95e60b3a6e"
+      },
+      {
+        "path": "tests/parity/inputs/lifecycle-owned-loop-eager.json",
+        "schema": "uvicorn-rs-parity/input@7",
+        "sha256": "ab48a7bd260f4326889ba290d9a1d155c705960903473ceaf5dc665f6ed1653c"
+      }
+    ],
+    "manifest": {
+      "path": "tests/parity/manifest.json",
+      "schema": "uvicorn-rs-parity/manifest@2",
+      "sha256": "3d566b997b3624abdb1c98f837de0bc715856781fcb498b8dfccc154663636f3"
+    },
+    "run_id": "b005eae615344edd965528f7ccce26fb",
+    "started_at": "2026-10-10T15:26:17.865Z",
+    "target": {
+      "cargo_lock_sha256": "fe96b9fe3ee9b5175d23152166b121a69a09c7542fd117a69abb118b78e847aa",
+      "dirty": false,
+      "native_extension": {
+        "path": ".venv/lib/python3.12/site-packages/uvicorn_rs/_native.abi3.so",
+        "sha256": "9a4861fffa5e761b41b32c953939f7d29bf8e642363538635a80cf21ca10b057"
+      },
+      "revision": "72dfa51f98a3a3518679ccaf7115d3bae6d8ac5f",
+      "source_sha256": "56cccea49215b2b96cf7028ec01804c7142b0f364f91bbd957b1114ab13b65fb"
+    }
+  },
+  "schema": "uvicorn-rs-parity/result@4",
+  "status": "completed",
+  "summary": {
+    "executed": 1,
+    "failed": 0,
+    "infrastructure_failed": 0,
+    "not_run": 0,
+    "passed": 1,
+    "selected": 1
+  }
+}

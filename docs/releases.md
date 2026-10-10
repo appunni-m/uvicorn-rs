@@ -9,16 +9,69 @@ or create or move tags. The project is licensed under
 
 ## Current state
 
-The latest main-branch gate is
-[run 37885559203](https://github.com/appunni-m/uvicorn-rs/actions/runs/37885559203)
-on `f260d78`. Rust quality and the Rust 1.85 minimum-version job passed;
-installed-wheel parity and unified coverage failed, so package and Python-floor
-jobs were skipped. The latest three-system benchmark
-[run 37885559188](https://github.com/appunni-m/uvicorn-rs/actions/runs/37885559188)
-also failed before producing a validated aggregate. The local 494-case and
-FastAPI performance evidence remains useful for diagnosis, but neither run
-verifies a clean candidate for this exact source. No tag or release was
-created. See [benchmark status](benchmark-status.md) for the recorded details.
+CI #54
+([run 38045596633](https://github.com/appunni-m/uvicorn-rs/actions/runs/38045596633))
+on `a93cdff` passed Rust quality, Rust 1.85, and installed-wheel parity
+(240/240). Unified coverage measured 5,298 regions and 3,753 lines, but its
+first attribution pass ended at 492/494 with one HTTP/3 oracle failure and one
+TLS-shutdown adapter infrastructure failure. Three later complete runs passed
+494/494; the strict aggregate remained incomplete. The latest completed
+three-system benchmark,
+[run #11](https://github.com/appunni-m/uvicorn-rs/actions/runs/38045596557),
+failed its x86-64 and macOS parity gates; ARM64 passed parity but failed
+category analysis. The aggregate and documentation jobs failed, so there is
+no validated system matrix. Artifacts were uploaded, but their contents and
+job logs require authenticated access here.
+
+Follow-up commit
+[`b2ea48bc`](https://github.com/appunni-m/uvicorn-rs/commit/b2ea48bc25835f37eab41a0f408ea8e4072c4e92)
+changes only the TLS listener-closure probe in the parity runner. CI #55
+([run 38058258362](https://github.com/appunni-m/uvicorn-rs/actions/runs/38058258362))
+and benchmark #12
+([run 38058258390](https://github.com/appunni-m/uvicorn-rs/actions/runs/38058258390))
+were triggered on that commit. CI #55 is terminal. Rust quality, MSRV, and
+installed-wheel parity passed (240/240).
+Unified coverage measured all 5,298 regions and 3,753 lines, but repeat 2
+failed: 486 cases passed, `fault.http1.early-response-body-drain-terminal-frame`
+was infrastructure-failed because its request-body fault was not consumed,
+and seven later cases were not run. A focused local reproduction passed this
+case three times on the same `a93cdff` Rust source, but it was a selected-subset
+run and does not clear the full hosted gate. The hosted coverage artifact is
+listed on the run page; detailed artifact access still requires
+authentication.
+
+Benchmark #12
+([run 38058258390](https://github.com/appunni-m/uvicorn-rs/actions/runs/38058258390))
+is terminal with no validated timing data. Its Linux x86-64 job failed the
+exact normal-binary public parity gate before timing; all three system jobs and
+the aggregate job failed. The artifact archive returns 401 without
+authentication and the job-log endpoint returns 403 in this session.
+
+Commit
+[`72dfa51`](https://github.com/appunni-m/uvicorn-rs/commit/72dfa51f98a3a3518679ccaf7115d3bae6d8ac5f)
+adds bounded case-specific benchmark parity annotations and has been pushed
+to `main`. CI #56
+([run 38061568584](https://github.com/appunni-m/uvicorn-rs/actions/runs/38061568584))
+passed the installed-wheel parity, unified 100% native coverage, platform
+package, Python-floor, Rust quality, and MSRV gates on this exact commit.
+Benchmark #13
+([run 38061568654](https://github.com/appunni-m/uvicorn-rs/actions/runs/38061568654))
+still has no validated aggregate: the macOS ARM64 job failed exact parity on
+`http1.disconnect-before-first-asgi-receive`, while both Linux jobs passed
+parity and began category measurements. A clean local wheel from the same
+commit passed that case 10/10 times; see the
+[reproduction receipt](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md).
+The hosted row-level observations remain unavailable, so the difference is
+unexplained. The checkout remains dirty and no release candidate is ready to
+assemble.
+
+Local dirty-working-tree evidence is useful but does not qualify a release:
+Coverage-MCP reports 5,532/5,532 regions and 3,974/3,974 lines for its
+matching current-source receipt, and the stock FastAPI matrix includes
+correctness-gated multi-protocol measurements. These results do not come from
+a clean exact-main candidate with successful hosted gates. No tag or release
+was created. See [coverage](coverage.md) and
+[benchmark status](benchmark-status.md) for evidence and limits.
 
 The original workflow revisions passed local Actionlint validation; action
 SHAs were checked against their upstream GitHub revisions. Hosted runs #36 and
