@@ -1243,10 +1243,14 @@ async def _app_impl(scope, receive, send):
 
     if path == "/disconnect-after-close-before-receive":
         _record("http.disconnect.before-first-receive")
-        # The synchronized client closes while no receive future is pending.
-        # Waiting here lets the connection-close signal reach the Rust side
-        # before the app asks for its first request event.
-        await asyncio.sleep(0.05)
+        # The parity driver closes the client and releases this wait only
+        # after the case's post-close settle interval has elapsed.
+        release_path = Path(os.environ["ASGI_PARITY_DISCONNECT_RELEASE"])
+        deadline = asyncio.get_running_loop().time() + 5
+        while not release_path.exists() and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.005)
+        if not release_path.exists():
+            raise TimeoutError("parity driver did not release the pre-receive disconnect case")
         message = await receive()
         _disconnect_sequence = [message["type"]]
         _record(f"http.disconnect.first:{message['type']}")

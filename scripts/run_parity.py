@@ -1774,6 +1774,20 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: wait_event_after_disconnect must be non-empty text"
                     )
+            if "after_close_delay_ms" in case["disconnect"]:
+                disconnect_keys.add("after_close_delay_ms")
+                delay_ms = case["disconnect"]["after_close_delay_ms"]
+                if (
+                    isinstance(delay_ms, bool)
+                    or not isinstance(delay_ms, int)
+                    or not 1 <= delay_ms <= 5000
+                    or kind != "http1"
+                    or case["disconnect"].get("wait_event")
+                    != "http.disconnect.before-first-receive"
+                ):
+                    raise ParityError(
+                        f"{case_id}: after_close_delay_ms requires the HTTP/1 pre-first-receive case and must be 1..5000"
+                    )
             if "reset" in case["disconnect"]:
                 disconnect_keys.add("reset")
                 if case["disconnect"]["reset"] is not True:
@@ -2586,6 +2600,9 @@ def start_server(
     stream_release_path = events_path.with_suffix(".stream-release")
     stream_release_path.unlink(missing_ok=True)
     env["ASGI_PARITY_STREAM_RELEASE"] = str(stream_release_path)
+    disconnect_release_path = events_path.with_suffix(".disconnect-release")
+    disconnect_release_path.unlink(missing_ok=True)
+    env["ASGI_PARITY_DISCONNECT_RELEASE"] = str(disconnect_release_path)
     if profile_id == "websocket-tls":
         env["ASGI_PARITY_TRACE_WEBSOCKET_SCOPE"] = "1"
     if server_id == "uvicorn-rs" and coverage_profile_dir is not None:
@@ -5970,6 +5987,10 @@ def execute_case(
                         )
         finally:
             client.close()
+            after_close_delay_ms = disconnect.get("after_close_delay_ms", 0)
+            if after_close_delay_ms:
+                time.sleep(after_close_delay_ms / 1000)
+                server["events"].with_suffix(".disconnect-release").touch()
             if disconnect.get("reset"):
                 reset_elapsed_seconds = time.monotonic() - disconnect_started
         after_disconnect_event = disconnect.get("wait_event_after_disconnect")
