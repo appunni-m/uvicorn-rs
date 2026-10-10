@@ -4915,6 +4915,7 @@
           "c2Vjb25kLWNodW5r"
         ],
         "keep_alive": true,
+        "wait_event": "http.body-pump.app-response-finished",
         "send_remaining_after_response": true
       }
     },

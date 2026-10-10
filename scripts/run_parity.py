@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import errno
 import hashlib
 import http.client
 import importlib
@@ -1409,6 +1410,9 @@ def load_contract(
                     or case.get("operation") != "http.request-streaming"
                     or fault["point"] != "http.body-pump.drain.terminal-frame"
                     or stream.get("path") != "/ignore-upload"
+                    or stream.get("wait_event") != "http.body-pump.app-response-finished"
+                    or stream.get("send_remaining_after_response") is not True
+                    or stream.get("keep_alive") is not True
                 ):
                     raise ParityError(
                         f"{case_id}: drain termination requires an HTTP/1.1 early-response upload"
@@ -2999,8 +3003,19 @@ def wait_for_listener_closed(
                 ssl.SSLError,
             ):
                 pass
+            except OSError as error:
+                # On macOS, TLS teardown racing listener shutdown can surface
+                # as bare EINVAL instead of an SSLError. Retry until refusal.
+                if error.errno != errno.EINVAL:
+                    raise ParityError(
+                        f"TLS listener probe failed unexpectedly: {error}"
+                    ) from error
             finally:
-                connection.close()
+                try:
+                    connection.close()
+                except OSError as error:
+                    if error.errno != errno.EINVAL:
+                        raise
             time.sleep(0.01)
             continue
         try:
