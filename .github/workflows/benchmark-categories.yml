@@ -67,6 +67,8 @@ env:
   CARGO_ENCODED_RUSTFLAGS: ""
   RUSTC_WRAPPER: ""
   RUSTC_WORKSPACE_WRAPPER: ""
+  # Capture client and Uvicorn progress if the WSS parity oracle stalls.
+  ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG: "1"
 
 jobs:
   categories:
