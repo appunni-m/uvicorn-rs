@@ -678,6 +678,19 @@ early-response workload is unchanged. If that workload crashes stock Hypercorn,
 retain the failure; measure the consumed-request workload in a separate run
 with its own fixture identity rather than replacing the failed workload.
 
+HTTP specifications are the source of truth for benchmark wire inputs. RFC
+9110 says GET content has no generally defined semantics and clients SHOULD
+NOT generate it without prior agreement; it also says clients SHOULD NOT send
+`Content-Length` when a request has no content and its method does not
+anticipate content. Ordinary GET workloads therefore send no body and omit
+`Content-Length`. The body-consuming workload uses POST with one byte and
+`Content-Length: 1`; the upload workload uses POST with its configured body.
+This is the standards-recommended shape for these fixtures; GET content is not
+categorically forbidden when an explicit agreement gives it meaning. RFCs
+govern wire behavior, the ASGI specification governs the application boundary,
+and server implementations are compatibility references where those specs
+leave choices open.
+
 The consumed-request workload explicitly disables optional H3 GREASE on the
 same client for both servers. Pinned aioquic 1.3.0 can lose the request-end event
 when an unknown trailing frame and FIN share incoming data. Existing workloads

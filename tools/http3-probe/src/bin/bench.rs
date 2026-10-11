@@ -39,6 +39,7 @@ async fn main() -> Result<(), BenchError> {
     let expected_override = args.next().unwrap_or_default();
     let read_rate_bytes_per_second: u64 = args.next().unwrap_or_else(|| "0".to_string()).parse()?;
     let h3_grease: bool = args.next().unwrap_or_else(|| "true".to_string()).parse()?;
+    let request_body_bytes: usize = args.next().unwrap_or_else(|| "0".to_string()).parse()?;
 
     let expected_body = if response_bytes > 0 {
         vec![b'x'; response_bytes]
@@ -64,6 +65,7 @@ async fn main() -> Result<(), BenchError> {
             })
             .collect::<Vec<_>>(),
     );
+    let request_body = Arc::new(Bytes::from(vec![b'a'; request_body_bytes]));
 
     let cert_file = std::fs::File::open(certfile)?;
     let certs = rustls_pemfile::certs(&mut std::io::BufReader::new(cert_file))
@@ -102,6 +104,7 @@ async fn main() -> Result<(), BenchError> {
             let uri = uri.clone();
             let expected_body = Arc::clone(&expected_body);
             let upload_chunks = Arc::clone(&upload_chunks);
+            let request_body = Arc::clone(&request_body);
             async move {
                 let mut latencies = Vec::new();
                 let mut response_bytes = 0_u64;
@@ -110,18 +113,30 @@ async fn main() -> Result<(), BenchError> {
                 let mut failure = None;
                 while Instant::now() < deadline {
                     let request_started = Instant::now();
-                    let method = if upload_bytes > 0 { "POST" } else { "GET" };
-                    let content_length = if upload_bytes > 0 {
-                        upload_bytes.to_string()
+                    // RFC 9110 gives GET content no generally defined semantics
+                    // and advises clients not to send it without prior agreement.
+                    // Use POST for every workload that intentionally sends content.
+                    let method = if upload_bytes > 0 || request_body_bytes > 0 {
+                        "POST"
                     } else {
-                        "1".to_string()
+                        "GET"
                     };
-                    let request = match Request::builder()
-                        .method(method)
-                        .header("content-length", content_length)
-                        .uri(&uri)
-                        .body(())
-                    {
+                    let request_builder = Request::builder().method(method).uri(&uri);
+                    // RFC 9110 §8.6 says a sender SHOULD NOT include
+                    // Content-Length when a request has no content and its
+                    // method semantics do not anticipate content. Keep the
+                    // field only for the POST workloads that send a body.
+                    let request_builder = if upload_bytes > 0 || request_body_bytes > 0 {
+                        let content_length = if upload_bytes > 0 {
+                            upload_bytes.to_string()
+                        } else {
+                            request_body_bytes.to_string()
+                        };
+                        request_builder.header("content-length", content_length)
+                    } else {
+                        request_builder
+                    };
+                    let request = match request_builder.body(()) {
                         Ok(request) => request,
                         Err(error) => {
                             failure = Some(error.to_string());
@@ -146,12 +161,12 @@ async fn main() -> Result<(), BenchError> {
                         if failure.is_some() {
                             break;
                         }
-                    } else {
-                        if let Err(error) = stream.send_data(Bytes::from_static(b"a")).await {
+                    } else if request_body_bytes > 0 {
+                        if let Err(error) = stream.send_data(request_body.as_ref().clone()).await {
                             failure = Some(format!("H3 request body failed: {error}"));
                             break;
                         }
-                        request_bytes += 1;
+                        request_bytes += request_body_bytes as u64;
                     }
                     if let Err(error) = stream.finish().await {
                         failure = Some(format!("H3 request finish failed: {error}"));

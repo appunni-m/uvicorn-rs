@@ -33,7 +33,7 @@ WORKLOADS = {
         "app": FASTAPI_APP,
         "client": {
             "mode": "fixed", "path": "/protocol-consumed", "expected_body": "http_version=3;bytes=1",
-            "h3_grease": False,
+            "h3_grease": False, "request_body_bytes": 1,
         },
     },
     "protocol-scope": {
@@ -154,6 +154,7 @@ def client_command(port: int, ca_certificate: Path, seconds: float, concurrency:
         str(case.get("upload_bytes", 0)), str(case.get("expected_status", 200)),
         case.get("expected_body", ""), str(case.get("read_rate_bytes_per_second", 0)),
         str(case.get("h3_grease", True)).lower(),
+        str(case.get("request_body_bytes", 0)),
     ]
 
 
@@ -334,9 +335,30 @@ def main() -> None:
             **evidence_metadata,
             "slow_reader_rate_bytes_per_second": 4_194_304,
             "remaining_header_difference": "Hypercorn advertises automatic Alt-Svc when QUIC bind is configured; Rust does not. No private baseline monkeypatch removes this behavior.",
-            "h3_client": "Rust quinn/h3, up to four QUIC connections with multiplexed request streams distributed round-robin, full response-body equality; non-upload requests carry a 1-byte body for ASGI compatibility",
+            "h3_client": "Rust quinn/h3, up to four QUIC connections with multiplexed request streams distributed round-robin, full response-body equality; ordinary GET workloads have no content and no Content-Length field, the consumed-request workload is POST with one byte, and upload is POST with its configured body",
             "h3_grease_by_workload": {
                 name: WORKLOADS[name]["client"].get("h3_grease", True)
+                for name in args.workloads
+            },
+            "request_body_bytes_by_workload": {
+                name: WORKLOADS[name]["client"].get("request_body_bytes", 0)
+                for name in args.workloads
+            },
+            "request_method_by_workload": {
+                name: (
+                    "POST"
+                    if WORKLOADS[name]["client"].get("upload_bytes", 0) > 0
+                    or WORKLOADS[name]["client"].get("request_body_bytes", 0) > 0
+                    else "GET"
+                )
+                for name in args.workloads
+            },
+            "request_content_length_header_by_workload": {
+                name: (
+                    WORKLOADS[name]["client"].get("upload_bytes", 0)
+                    or WORKLOADS[name]["client"].get("request_body_bytes", 0)
+                    or None
+                )
                 for name in args.workloads
             },
             "source_sha256": source_digest(), "workloads": args.workloads, "servers": selected_servers,
