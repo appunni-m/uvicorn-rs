@@ -1204,6 +1204,7 @@ async fn main() -> ProbeResult<()> {
         ) || operation.starts_with("native-lifecycle-")
             || operation == "native-http3-alpn-contract"
             || operation == "native-http3-no-common-alpn-recovery"
+            || operation == "native-http3-no-common-alpn-lifecycle-recovery"
             || operation == "native-http1-tls-pending-handshake-shutdown"
         {
             if operation.starts_with("native-lifecycle-") {
@@ -1212,6 +1213,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http3_alpn_case(case).await?;
             } else if operation == "native-http3-no-common-alpn-recovery" {
                 run_isolated_http3_no_common_alpn_case(case).await?;
+            } else if operation == "native-http3-no-common-alpn-lifecycle-recovery" {
+                run_isolated_http3_no_common_alpn_lifecycle_case(case).await?;
             } else if operation == "native-http1-tls-pending-handshake-shutdown" {
                 run_isolated_tls_pending_handshake_shutdown_case(case).await?;
             } else if operation == "graceful-timeout-abort" {
@@ -1472,6 +1475,74 @@ async fn run_isolated_http3_alpn_case(case: &Value) -> ProbeResult<()> {
 }
 
 async fn run_isolated_http3_no_common_alpn_case(case: &Value) -> ProbeResult<()> {
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (app, _) = contract_app_with_state(shutdown_sender.clone());
+    run_http3_no_common_alpn_recovery(
+        case,
+        app,
+        shutdown_sender,
+        shutdown_receiver,
+        uvicorn_rs::ServerConfig::default(),
+    )
+    .await
+}
+
+async fn run_isolated_http3_no_common_alpn_lifecycle_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    let lifecycle: Arc<dyn uvicorn_rs::ApplicationLifecycle> = fixture.hooks.clone();
+    let server_config = uvicorn_rs::ServerConfig {
+        application_lifecycle: Some(lifecycle),
+        ..uvicorn_rs::ServerConfig::default()
+    };
+    run_http3_no_common_alpn_recovery(
+        case,
+        fixture.app.clone(),
+        fixture.shutdown_sender.clone(),
+        fixture.shutdown_receiver.clone(),
+        server_config,
+    )
+    .await?;
+
+    if !fixture.state.startup_completed.load(Ordering::Acquire)
+        || !fixture.state.shutdown_completed.load(Ordering::Acquire)
+    {
+        return Err(io::Error::other(
+            "HTTP/3 lifecycle hooks did not bracket ALPN rejection and recovery",
+        )
+        .into());
+    }
+    let events = fixture
+        .state
+        .events
+        .lock()
+        .map_err(|_| io::Error::other("lifecycle event log was poisoned"))?;
+    if events.as_slice() != ["startup", "shutdown"] {
+        return Err(io::Error::other(format!(
+            "{}: lifecycle events differed: expected [\"startup\", \"shutdown\"], got {events:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn run_http3_no_common_alpn_recovery<S, B>(
+    case: &Value,
+    app: S,
+    shutdown_sender: watch::Sender<bool>,
+    shutdown_receiver: watch::Receiver<bool>,
+    mut server_config: uvicorn_rs::ServerConfig,
+) -> ProbeResult<()>
+where
+    S: Service<Request<uvicorn_rs::Http3RequestBody>, Response = Response<B>>
+        + Clone
+        + Send
+        + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + std::fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<Box<dyn Error + Send + Sync + 'static>> + Send + Sync + 'static,
+{
     let server_alpns = case["server_alpn_protocols"]
         .as_array()
         .ok_or_else(|| {
@@ -1519,8 +1590,6 @@ async fn run_isolated_http3_no_common_alpn_case(case: &Value) -> ProbeResult<()>
 
     let endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
     let address = endpoint.local_addr()?;
-    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
-    let (app, _) = contract_app_with_state(shutdown_sender.clone());
     let observed_errors = Arc::new(Mutex::new(Vec::<(
         ServerErrorPhase,
         Option<SocketAddr>,
@@ -1538,14 +1607,12 @@ async fn run_isolated_http3_no_common_alpn_case(case: &Value) -> ProbeResult<()>
             ));
         }
     });
+    server_config.error_observer = Some(error_observer);
     let server = tokio::spawn(uvicorn_rs::serve_http3(
         endpoint,
         app,
         shutdown_on_change(shutdown_receiver),
-        uvicorn_rs::ServerConfig {
-            error_observer: Some(error_observer),
-            ..uvicorn_rs::ServerConfig::default()
-        },
+        server_config,
     ));
 
     let mut client_endpoint = quinn::Endpoint::client("127.0.0.1:0".parse()?)?;
@@ -2770,6 +2837,7 @@ async fn run_cases(
         ) || operation.starts_with("native-lifecycle-")
             || operation == "native-http3-alpn-contract"
             || operation == "native-http3-no-common-alpn-recovery"
+            || operation == "native-http3-no-common-alpn-lifecycle-recovery"
             || operation == "native-http1-tls-pending-handshake-shutdown"
         {
             continue;

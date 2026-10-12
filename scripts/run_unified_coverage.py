@@ -143,6 +143,15 @@ def load_native_contract() -> tuple[dict[str, Any], list[dict[str, Any]]]:
         raise CoverageError("native-core manifest has an invalid case ID")
     if len(case_ids) != len(set(case_ids)):
         raise CoverageError("native-core manifest contains duplicate case IDs")
+    for case in cases:
+        covers = case.get("covers")
+        if covers is not None and (
+            not isinstance(covers, list)
+            or not covers
+            or any(not isinstance(requirement, str) or not requirement for requirement in covers)
+            or len(covers) != len(set(covers))
+        ):
+            raise CoverageError(f"native-core case {case['id']} has invalid requirement coverage")
     return document, cases
 
 
@@ -602,6 +611,18 @@ def main() -> int:
     manifest, input_document, input_paths = run_parity.load_contract()
     all_cases = input_document["cases"]
     native_manifest, all_native_cases = load_native_contract()
+    shared_requirements = {
+        requirement
+        for case in all_cases
+        for requirement in case.get("covers", [])
+    }
+    for case in all_native_cases:
+        unknown_requirements = set(case.get("covers", [])) - shared_requirements
+        if unknown_requirements:
+            raise CoverageError(
+                f"native-core case {case['id']} references unknown requirements: "
+                f"{sorted(unknown_requirements)}"
+            )
     if args.case_id:
         requested_asgi: set[str] = set()
         requested_native: set[str] = set()
@@ -978,6 +999,7 @@ def main() -> int:
             "case_key": case_key("native", case_id),
             "operation": case.get("operation"),
             "protocol": case.get("protocol"),
+            "requirements": case.get("covers", []),
             "status": status,
             "error": None if status == "passed" else f"native runner exit={exit_code}, pass_ids={passed_ids!r}",
             "runner_exit_code": exit_code,

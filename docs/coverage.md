@@ -1,47 +1,44 @@
 # Black-box parity and Rust source coverage
 
-## Current unified coverage status (2026-10-12)
+## Current unified coverage status (2026-10-13)
 
-The unified v4 acceptance remains open. The manifests define 511 ASGI
-parity/fault-contract cases and 56 Python-free native cases (567 total).
-Acceptance requires three complete repeats of both matrices, 100% region and
-line coverage, and zero-gap region and line results from fully paginated
-Coverage-MCP queries bound to the exact report bytes.
-
-The current full measurement is
-`target/asgi-coverage/2026-10-12-current-source-567/coverage-report.json`.
-All 567 attribution cases passed: 243 oracle-parity cases, 268 fault/support
-contracts, and 56 native contracts. All three ASGI repeats passed 511/511 and
-all three native repeats passed 56/56. One transient infrastructure failure
-recovered during the initial case sweep; there were no behavioral failures or
-permanent infrastructure failures. Coverage is **6,840/6,940 regions
-(98.56%)** and **5,029/5,083 lines (98.94%)**, leaving 100 regions and 54
-lines. The report's source/input digest is
-`b17cebfaddcfad2438b7b6488b497a3f526aa2c4afc76a0f08edbb4b9d7b7771`.
-
-Coverage-MCP fully paged this report for both metrics. It returned 122 region
-gap groups and 49 line gap groups, with `source: matches_receipt`. MCP labels
-`tests: failed` because the aggregate coverage gate is incomplete; this does
-not indicate a failed case in the live matrix. The 100 uncovered regions are
-in `crates/uvicorn-rs/src/http3.rs` (66) and
-`crates/uvicorn-rs/src/lib.rs` (34). The 54 uncovered lines are in those same
-files: 39 in `http3.rs` and 15 in `lib.rs`.
-
-This is source-bound local evidence for dirty working-tree revision
-`3dcaeaa0caf47aca96412d15451ac6a1123ebb04`, not a clean hosted commit. The
-full report and generated logs are ignored by Git. The report supersedes the
-previous 566-case full measurement for this manifest; earlier adapter-only
-and focused reports remain historical subset evidence.
-
-The new native case `http1-tls.shutdown-bounds-incomplete-handshake` checks
-shutdown against a real TCP peer that sends only a partial TLS record. The
-runner/checker/MCP path uses unified schema v4, LLVM
-function-instantiation-aware region identities, indexed `hit_by` attribution,
-per-case profile replay, and exact source/tool/input receipts. Python adapter
-files are bound as harness/input identity; Python line and branch coverage
-remain outside the Rust denominator. The three-repeat correctness gate passed
-for this report; 100% region and line coverage and zero-gap MCP results remain
+The unified v4 acceptance remains open. The current manifests contain 511 ASGI
+parity/fault-contract cases and 67 Python-free native cases (578 total). A
+current-source complete run, three repeats of both matrices, 100% region and
+line coverage, and zero-gap region and line Coverage-MCP results remain
 outstanding.
+
+The latest complete-scope report is
+`target/asgi-coverage/2026-10-12-current-source-575/coverage-report.json`.
+It was generated from clean commit `01d84ce891cd110d9996b89499f4a94719bec876`
+for 511 ASGI plus 64 native cases. Its attribution sweep passed 575/575 with
+zero case or infrastructure failures. It is a single complete-scope
+measurement: the report contains no complete-matrix verification repeats.
+Coverage is **6,853/6,940 regions** and **5,036/5,083 lines**, leaving 87
+regions and 47 lines. Its source/input digest is
+`fccc03e7676b62ac9a36d9994de4c618d3b51df52fed5fcf8058185ae6d75a78`. This
+report predates three native cases and is not current-manifest evidence.
+
+The focused HTTP/3 ALPN pair passed 2/2 on the current dirty source at
+`target/asgi-coverage/2026-10-13-h3-alpn-pair/coverage-report.json`. It covers
+incompatible-ALPN handshake failure, observed QUIC errors, successful H3
+recovery, and the lifecycle-backed service path. The selected report records
+704/6,940 regions and 629/5,083 lines with complete per-case attribution;
+Coverage-MCP verified its source receipt and test status. For `http3.rs`
+lines 241 and 247, the ContractApp and LifecycleApp specializations are
+covered; an uninstantiated generic closure remains in the missing groups.
+This selected result does not establish full-suite coverage or close that
+remaining gap.
+
+The two ALPN cases map to the shared `http3.handshake-recovery` requirement.
+Native receipts now retain declared `covers` labels under
+`matrix.native_case_results[].requirements`, and the unified runner rejects
+unknown shared requirement labels. Existing native cases have not all been
+mapped yet, so requirement attribution remains in progress.
+
+Reports and generated logs remain under Git-ignored `target/`. Python line and
+branch coverage remain outside the Rust denominator. The 2026-10-12 567-case
+report and earlier adapter-only reports are historical evidence.
 
 ## Previous adapter-only evidence (2026-10-12)
 

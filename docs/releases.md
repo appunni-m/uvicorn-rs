@@ -23,10 +23,12 @@ sequential category step, so it produced no complete multi-system performance
 result. Its docs-update job also failed in the final pull-request step; the
 step log requires sign-in, so the exact error remains unknown. See the
 [benchmark status](benchmark-status.md) for the retained evidence. The
-public GitHub API currently lists no [releases](https://github.com/appunni-m/uvicorn-rs/releases)
-or [tags](https://github.com/appunni-m/uvicorn-rs/tags). Locally, `main` is at
-`3dcaeaa0caf47aca96412d15451ac6a1123ebb04`, three commits behind `origin/main` at `9b2d8aaf3216`,
-with a dirty worktree; no release candidate has been assembled from it.
+2026-10-12 checkout snapshot cited in earlier status notes is no longer the
+current `main`; the branch has advanced since then. It has not yet passed a
+new all-gates hosted CI run, and no release candidate has been assembled from
+the current source. A remote tag check on 2026-10-13 returned no tags; the
+GitHub Releases listing could not be verified in this update because the
+unauthenticated API request returned 403.
 
 The following run-by-run notes are historical attempts, not the current
 release-candidate status.
@@ -85,7 +87,8 @@ hosted artifact shows Uvicorn returned `http.disconnect` and uvicorn-rs returned
 `http.request` followed by `http.disconnect`; the cause remains unconfirmed.
 A clean local wheel from the same commit passed the case 60/60 times. See the
 [reproduction receipt](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md).
-The checkout remains dirty and no release candidate is ready to assemble.
+At the time of that historical run, the checkout was dirty; no release
+candidate was assembled from it.
 
 Local dirty-working-tree evidence is useful but does not qualify a release.
 The latest local ASGI coverage receipt records 5,561/5,561 regions and
