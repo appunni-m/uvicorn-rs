@@ -84,7 +84,14 @@ impl Body for Http3RequestBody {
         }
 
         match this.stream.poll_recv_trailers(context) {
-            Poll::Pending => Poll::Pending,
+            Poll::Pending => {
+                // `poll_recv_data` can return `None` at the end of an empty
+                // DATA frame. While trailers are still pending, keep polling
+                // the request body so a later DATA frame is not treated as a
+                // trailer-sequence error.
+                *this.data_finished = false;
+                Poll::Pending
+            }
             Poll::Ready(Err(error)) => {
                 *this.finished = true;
                 Poll::Ready(Some(Err(Box::new(error))))

@@ -420,6 +420,19 @@
       "expected_body": "received=6\n"
     },
     {
+      "id": "http3.empty-data-frame-does-not-end-request-body",
+      "protocol": "http3",
+      "operation": "http3-upload-pending",
+      "covers": ["http.request-upload"],
+      "path": "/http3-pending-consume",
+      "state_path": "/http3-body-pending-state",
+      "empty_data_frame_before_body": true,
+      "body": "h3data",
+      "expected_pending_state": "pending=true\n",
+      "expected_status": 200,
+      "expected_body": "received=6\n"
+    },
+    {
       "id": "http3.request-body-reset-reports-error-and-keeps-connection",
       "protocol": "http3",
       "operation": "http3-upload-reset",

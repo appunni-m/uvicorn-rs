@@ -3606,6 +3606,14 @@ async fn run_http3_upload_pending_case(
     let request = Request::builder().method("POST").uri(uri).body(())?;
     let mut upload = sender.send_request(request).await?;
 
+    if case
+        .get("empty_data_frame_before_body")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        upload.send_data(Bytes::new()).await?;
+    }
+
     let mut state = send_http3_request(
         &mut sender,
         address,
