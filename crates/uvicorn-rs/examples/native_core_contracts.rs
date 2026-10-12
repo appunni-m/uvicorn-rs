@@ -123,6 +123,7 @@ struct LifecycleState {
     startup_hook_dropped: Arc<AtomicBool>,
     shutdown_hook_dropped: Arc<AtomicBool>,
     requests_started: AtomicUsize,
+    readiness_gate: Mutex<ReadinessGate>,
     response_body_dropped: Arc<AtomicBool>,
     shutdown_saw_response_body_drop: AtomicBool,
     active_request: watch::Sender<bool>,
@@ -233,7 +234,47 @@ impl<B> Service<Request<B>> for LifecycleApp {
     type Error = io::Error;
     type Future = AppFutureLifecycle;
 
-    fn poll_ready(&mut self, _context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        let mut readiness = match self.state.readiness_gate.lock() {
+            Ok(readiness) => readiness,
+            Err(_) => {
+                return Poll::Ready(Err(io::Error::other(
+                    "lifecycle readiness state was poisoned",
+                )));
+            }
+        };
+        if readiness.armed {
+            readiness.armed = false;
+            readiness.waiting = true;
+            readiness.released = false;
+            readiness.wake_started = false;
+            readiness.pending_polls = 0;
+            readiness.wakers.clear();
+        }
+        if readiness.waiting && !readiness.released {
+            readiness.pending_polls = readiness.pending_polls.saturating_add(1);
+            readiness.wakers.push(context.waker().clone());
+            if !readiness.wake_started {
+                readiness.wake_started = true;
+                let state = Arc::clone(&self.state);
+                let _wake_task = tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(40)).await;
+                    let wakers = match state.readiness_gate.lock() {
+                        Ok(mut readiness) => {
+                            readiness.waiting = false;
+                            readiness.released = true;
+                            readiness.wake_started = false;
+                            std::mem::take(&mut readiness.wakers)
+                        }
+                        Err(_) => return,
+                    };
+                    for waker in wakers {
+                        waker.wake();
+                    }
+                });
+            }
+            return Poll::Pending;
+        }
         Poll::Ready(Ok(()))
     }
 
@@ -244,6 +285,18 @@ impl<B> Service<Request<B>> for LifecycleApp {
             state.requests_started.fetch_add(1, Ordering::AcqRel);
             if !state.startup_completed.load(Ordering::Acquire) {
                 return Err(io::Error::other("request reached service before startup"));
+            }
+            let readiness_pending = {
+                let readiness = state
+                    .readiness_gate
+                    .lock()
+                    .map_err(|_| io::Error::other("lifecycle readiness state was poisoned"))?;
+                readiness.pending_polls > 0 && !readiness.released
+            };
+            if readiness_pending {
+                return Err(io::Error::other(
+                    "request reached lifecycle service before readiness recovered",
+                ));
             }
             match path.as_str() {
                 "/ready" => lifecycle_response(b"started\n", None),
@@ -1178,6 +1231,7 @@ fn lifecycle_fixture_with_behaviors(
         startup_hook_dropped: Arc::new(AtomicBool::new(false)),
         shutdown_hook_dropped: Arc::new(AtomicBool::new(false)),
         requests_started: AtomicUsize::new(0),
+        readiness_gate: Mutex::new(ReadinessGate::default()),
         response_body_dropped: Arc::new(AtomicBool::new(false)),
         shutdown_saw_response_body_drop: AtomicBool::new(false),
         active_request,
@@ -1259,6 +1313,9 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
         }
         "native-lifecycle-server-and-shutdown-error" => {
             return run_lifecycle_server_and_shutdown_error_case(case).await;
+        }
+        "native-lifecycle-readiness-pending" => {
+            return run_lifecycle_readiness_case(case).await;
         }
         "native-lifecycle-drain" => {}
         operation => {
@@ -1514,6 +1571,174 @@ async fn run_lifecycle_startup_fault_case(
         )?;
     }
     verify_lifecycle_events(case, &fixture.state)
+}
+
+async fn run_lifecycle_readiness_case(case: &Value) -> ProbeResult<()> {
+    match required_str(case, "protocol")? {
+        "http/1.1" => run_lifecycle_readiness_http1_case(case).await,
+        "http3" => run_lifecycle_readiness_http3_case(case).await,
+        protocol => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("unsupported lifecycle readiness protocol {protocol:?}"),
+        )
+        .into()),
+    }
+}
+
+async fn run_lifecycle_readiness_http1_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    arm_lifecycle_readiness(&fixture.state)?;
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let shutdown = fixture.shutdown_receiver.clone();
+    let server = tokio::spawn(uvicorn_rs::serve_tcp(
+        listener,
+        fixture.app.clone(),
+        shutdown_on_change(shutdown),
+        lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
+    ));
+    let workflow = async {
+        let started = Instant::now();
+        let (status, body) = tokio::time::timeout(
+            Duration::from_secs(2),
+            lifecycle_http1_get(address, required_str(case, "ready_path")?),
+        )
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "HTTP/1.1 readiness request timed out",
+            )
+        })??;
+        verify_lifecycle_response(case, b"started\n", status, &body)?;
+        Ok::<_, Box<dyn Error + Send + Sync>>(started.elapsed())
+    }
+    .await;
+    fixture.shutdown_sender.send_replace(true);
+    let server_result = join_lifecycle_server(server).await;
+    let elapsed = workflow?;
+    server_result?;
+    verify_lifecycle_readiness_state(case, &fixture.state, elapsed)
+}
+
+async fn run_lifecycle_readiness_http3_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    arm_lifecycle_readiness(&fixture.state)?;
+    let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+    let endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
+    let address = endpoint.local_addr()?;
+    let shutdown = fixture.shutdown_receiver.clone();
+    let server = tokio::spawn(uvicorn_rs::serve_http3(
+        endpoint,
+        fixture.app.clone(),
+        shutdown_on_change(shutdown),
+        lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
+    ));
+    let workflow = lifecycle_http3_readiness_probe(case, address, &tls_clients.http3).await;
+    fixture.shutdown_sender.send_replace(true);
+    let server_result = join_lifecycle_server(server).await;
+    let elapsed = workflow?;
+    server_result?;
+    verify_lifecycle_readiness_state(case, &fixture.state, elapsed)
+}
+
+async fn lifecycle_http3_readiness_probe(
+    case: &Value,
+    address: SocketAddr,
+    client_config: &quinn::ClientConfig,
+) -> ProbeResult<Duration> {
+    tokio::time::timeout(Duration::from_secs(2), async {
+        let (endpoint, mut sender) = new_http3_client(address, client_config).await?;
+        let started = Instant::now();
+        let request = async {
+            let mut response = send_http3_request(
+                &mut sender,
+                address,
+                "GET",
+                required_str(case, "ready_path")?,
+                b"",
+            )
+            .await?;
+            let (status, body, _) = collect_http3_response(&mut response).await?;
+            verify_lifecycle_response(case, b"started\n", status, &body)?;
+            Ok::<_, Box<dyn Error + Send + Sync>>(started.elapsed())
+        }
+        .await;
+        endpoint.close(
+            quinn::VarInt::from_u32(0),
+            b"HTTP/3 lifecycle readiness case complete",
+        );
+        tokio::time::timeout(Duration::from_millis(250), endpoint.wait_idle())
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "HTTP/3 lifecycle readiness client cleanup timed out",
+                )
+            })?;
+        request
+    })
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 readiness handshake, request, or cleanup timed out",
+        )
+    })?
+}
+
+fn arm_lifecycle_readiness(state: &LifecycleState) -> ProbeResult<()> {
+    state
+        .readiness_gate
+        .lock()
+        .map_err(|_| io::Error::other("lifecycle readiness state was poisoned"))?
+        .armed = true;
+    Ok(())
+}
+
+fn verify_lifecycle_readiness_state(
+    case: &Value,
+    state: &LifecycleState,
+    elapsed: Duration,
+) -> ProbeResult<()> {
+    let minimum_pending_ms = case["minimum_pending_ms"].as_u64().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "minimum_pending_ms is missing")
+    })?;
+    let readiness = state
+        .readiness_gate
+        .lock()
+        .map_err(|_| io::Error::other("lifecycle readiness state was poisoned"))?;
+    if elapsed < Duration::from_millis(minimum_pending_ms)
+        || readiness.pending_polls == 0
+        || !readiness.released
+        || readiness.waiting
+        || readiness.wake_started
+        || !readiness.wakers.is_empty()
+    {
+        return Err(io::Error::other(format!(
+            "{}: lifecycle readiness did not remain Pending and recover; elapsed={}ms, pending_polls={}, released={}, waiting={}, wake_started={}, saved_wakers={}",
+            required_str(case, "id")?,
+            elapsed.as_millis(),
+            readiness.pending_polls,
+            readiness.released,
+            readiness.waiting,
+            readiness.wake_started,
+            readiness.wakers.len()
+        ))
+        .into());
+    }
+    drop(readiness);
+    if !state.startup_completed.load(Ordering::Acquire)
+        || !state.shutdown_completed.load(Ordering::Acquire)
+        || state.requests_started.load(Ordering::Acquire) != 1
+    {
+        return Err(io::Error::other(format!(
+            "{}: readiness request did not run between successful startup and shutdown",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    verify_lifecycle_events(case, state)
 }
 
 async fn run_lifecycle_shutdown_fault_case(
@@ -2075,6 +2300,7 @@ fn verify_lifecycle_events(case: &Value, state: &LifecycleState) -> ProbeResult<
         | "native-lifecycle-startup-timeout"
         | "native-lifecycle-startup-panic" => &["startup"],
         "native-lifecycle-drain"
+        | "native-lifecycle-readiness-pending"
         | "native-lifecycle-shutdown-error"
         | "native-lifecycle-shutdown-timeout"
         | "native-lifecycle-shutdown-panic"

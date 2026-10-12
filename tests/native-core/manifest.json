@@ -591,6 +591,20 @@
       "release_after_shutdown_ms": 25
     },
     {
+      "id": "http1.lifecycle-service-readiness-pending-wakes-and-recovers",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-readiness-pending",
+      "ready_path": "/ready",
+      "minimum_pending_ms": 20
+    },
+    {
+      "id": "http3.lifecycle-service-readiness-pending-wakes-and-recovers",
+      "protocol": "http3",
+      "operation": "native-lifecycle-readiness-pending",
+      "ready_path": "/ready",
+      "minimum_pending_ms": 20
+    },
+    {
       "id": "native.lifecycle-startup-error-prevents-serving",
       "protocol": "http/1.1",
       "operation": "native-lifecycle-startup-error"
