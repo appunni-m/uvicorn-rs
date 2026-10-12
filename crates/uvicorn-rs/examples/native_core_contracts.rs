@@ -132,6 +132,7 @@ struct LifecycleState {
     events: Mutex<Vec<&'static str>>,
     observed_lifecycle_errors: Mutex<Vec<(ServerErrorPhase, String, bool)>>,
     readiness_errors: Mutex<Vec<(ServerErrorPhase, bool, String)>>,
+    application_errors: Mutex<Vec<(ServerErrorPhase, bool, String)>>,
 }
 
 struct LifecycleHooks {
@@ -151,7 +152,7 @@ enum LifecycleHookBehavior {
 struct HookCancellationSignal(Arc<AtomicBool>);
 
 struct LifecycleBody {
-    inner: Pin<Box<Full<Bytes>>>,
+    inner: Pin<Box<dyn Body<Data = Bytes, Error = io::Error> + Send>>,
     drop_flag: Option<Arc<AtomicBool>>,
 }
 
@@ -314,6 +315,33 @@ impl<B> Service<Request<B>> for LifecycleApp {
                     state.readiness_error_armed.store(true, Ordering::Release);
                     lifecycle_response(b"armed\n", None)
                 }
+                "/service-error" => Err(io::Error::other("injected lifecycle service error")),
+                "/body-error" => {
+                    let body = stream::unfold(0_u8, |step| async move {
+                        match step {
+                            0 => Some((
+                                Ok(http_body::Frame::data(Bytes::from_static(b"partial\n"))),
+                                1,
+                            )),
+                            1 => {
+                                tokio::time::sleep(Duration::from_millis(30)).await;
+                                Some((
+                                    Err(io::Error::other("injected lifecycle response body error")),
+                                    2,
+                                ))
+                            }
+                            _ => None,
+                        }
+                    });
+                    let body = LifecycleBody {
+                        inner: Box::pin(StreamBody::new(body)),
+                        drop_flag: Some(Arc::clone(&state.response_body_dropped)),
+                    };
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .body(body)
+                        .map_err(|error| io::Error::other(error.to_string()))
+                }
                 "/ready" => lifecycle_response(b"started\n", None),
                 "/hold" => {
                     state.active_request.send_replace(true);
@@ -344,7 +372,7 @@ type AppFutureLifecycle =
 
 impl Body for LifecycleBody {
     type Data = Bytes;
-    type Error = Infallible;
+    type Error = io::Error;
 
     fn poll_frame(
         self: Pin<&mut Self>,
@@ -375,7 +403,7 @@ fn lifecycle_response(
     drop_flag: Option<Arc<AtomicBool>>,
 ) -> Result<Response<LifecycleBody>, io::Error> {
     let body = LifecycleBody {
-        inner: Box::pin(Full::new(Bytes::copy_from_slice(body))),
+        inner: Box::pin(Full::new(Bytes::copy_from_slice(body)).map_err(|never| match never {})),
         drop_flag,
     };
     Response::builder()
@@ -1271,6 +1299,7 @@ fn lifecycle_fixture_with_behaviors(
         events: Mutex::new(Vec::new()),
         observed_lifecycle_errors: Mutex::new(Vec::new()),
         readiness_errors: Mutex::new(Vec::new()),
+        application_errors: Mutex::new(Vec::new()),
     });
     LifecycleFixture {
         app: LifecycleApp {
@@ -1324,6 +1353,18 @@ fn lifecycle_server_config(
                 }
             }))
         }
+        "native-lifecycle-service-and-response-body-errors" => {
+            let state = Arc::clone(&hooks.state);
+            Some(Arc::new(move |event: ServerErrorEvent<'_>| {
+                if let Ok(mut observations) = state.application_errors.lock() {
+                    observations.push((
+                        event.phase(),
+                        event.error().is::<io::Error>(),
+                        event.error().to_string(),
+                    ));
+                }
+            }))
+        }
         _ => None,
     };
     Ok(uvicorn_rs::ServerConfig {
@@ -1358,6 +1399,9 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
         }
         "native-lifecycle-server-and-shutdown-error" => {
             return run_lifecycle_server_and_shutdown_error_case(case).await;
+        }
+        "native-lifecycle-service-and-response-body-errors" => {
+            return run_lifecycle_service_and_response_body_errors_case(case).await;
         }
         "native-lifecycle-readiness-error" => {
             return run_lifecycle_readiness_error_case(case).await;
@@ -2203,6 +2247,88 @@ async fn run_lifecycle_shutdown_fault_case(
     }
 }
 
+async fn run_lifecycle_service_and_response_body_errors_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let shutdown = fixture.shutdown_receiver.clone();
+    let server = tokio::spawn(uvicorn_rs::serve_tcp(
+        listener,
+        fixture.app.clone(),
+        shutdown_on_change(shutdown),
+        lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
+    ));
+
+    let workflow: ProbeResult<()> = async {
+        let (status, body) =
+            lifecycle_http1_get(address, required_str(case, "service_path")?).await?;
+        if status != required_status(case, "service_status")?
+            || body != required_str(case, "service_body")?.as_bytes()
+        {
+            return Err(io::Error::other(format!(
+                "{}: service error response differed: status={status}, body={body:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        let mut head_response = request(
+            address,
+            "HEAD",
+            required_str(case, "head_error_path")?,
+            b"",
+        )
+        .await?;
+        let (head_status, head_headers) = read_response_head(&mut head_response).await?;
+        let (head_body, head_complete) = read_response_body(&mut head_response, &head_headers).await?;
+        if head_status != required_status(case, "head_error_status")?
+            || !head_body.is_empty()
+            || !head_complete
+        {
+            return Err(io::Error::other(format!(
+                "{}: HEAD service error response differed: status={head_status}, body={head_body:?}, complete={head_complete}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        let mut response = request(
+            address,
+            "GET",
+            required_str(case, "body_error_path")?,
+            b"",
+        )
+        .await?;
+        let (status, headers) = read_response_head(&mut response).await?;
+        let (body, complete) = read_response_body(&mut response, &headers).await?;
+        let expected_complete = case["body_error_complete"].as_bool().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "body_error_complete must be a boolean",
+            )
+        })?;
+        if status != required_status(case, "body_error_status")?
+            || body != required_str(case, "body_error_prefix")?.as_bytes()
+            || complete != expected_complete
+        {
+            return Err(io::Error::other(format!(
+                "{}: response body error differed: status={status}, body={body:?}, complete={complete}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        Ok(())
+    }
+    .await;
+
+    fixture.shutdown_sender.send_replace(true);
+    let server_result = join_lifecycle_server(server).await;
+    workflow?;
+    server_result?;
+    verify_lifecycle_state(case, &fixture.state)?;
+    verify_lifecycle_application_error_observations(case, &fixture.state)
+}
+
 async fn run_lifecycle_server_and_shutdown_error_case(case: &Value) -> ProbeResult<()> {
     let fixture = lifecycle_fixture_with_behaviors(
         LifecycleHookBehavior::Complete,
@@ -2753,6 +2879,7 @@ fn verify_lifecycle_events(case: &Value, state: &LifecycleState) -> ProbeResult<
         | "native-lifecycle-shutdown-panic"
         | "native-lifecycle-server-and-shutdown-error"
         | "native-lifecycle-readiness-error" => &["startup", "shutdown"],
+        "native-lifecycle-service-and-response-body-errors" => &["startup", "shutdown"],
         operation => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -2803,6 +2930,53 @@ fn verify_lifecycle_readiness_error_observation(
             required_str(case, "id")?
         ))
         .into());
+    }
+    Ok(())
+}
+
+fn verify_lifecycle_application_error_observations(
+    case: &Value,
+    state: &LifecycleState,
+) -> ProbeResult<()> {
+    let expected = case["expected_observations"].as_array().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "expected_observations must be an array",
+        )
+    })?;
+    let observations = state
+        .application_errors
+        .lock()
+        .map_err(|_| io::Error::other("application error observations were poisoned"))?;
+    if observations.len() != expected.len() {
+        return Err(io::Error::other(format!(
+            "{}: error observer event count differed: expected {}, got {}: {observations:?}",
+            required_str(case, "id")?,
+            expected.len(),
+            observations.len()
+        ))
+        .into());
+    }
+    for (index, (phase, is_io_error, message)) in observations.iter().enumerate() {
+        let expected = &expected[index];
+        let expected_phase = required_str(expected, "phase")?;
+        let expected_is_io_error = expected["is_io_error"].as_bool().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "expected observation is_io_error must be a boolean",
+            )
+        })?;
+        let expected_message = required_str(expected, "message")?;
+        if server_error_phase_name(*phase) != expected_phase
+            || *is_io_error != expected_is_io_error
+            || message != expected_message
+        {
+            return Err(io::Error::other(format!(
+                "{}: error observer event {index} differed: expected {expected:?}, got {phase:?}/{is_io_error}/{message:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
     }
     Ok(())
 }

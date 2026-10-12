@@ -745,6 +745,42 @@
       "operation": "native-lifecycle-shutdown-timeout",
       "hook_timeout_ms": 25,
       "ready_path": "/ready"
+    },
+    {
+      "id": "native.lifecycle-service-and-response-body-errors-observed",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-service-and-response-body-errors",
+      "service_path": "/service-error",
+      "service_status": 500,
+      "service_body": "",
+      "head_error_path": "/service-error",
+      "head_error_status": 500,
+      "body_error_path": "/body-error",
+      "body_error_status": 200,
+      "body_error_prefix": "partial\n",
+      "body_error_complete": false,
+      "expected_observations": [
+        {
+          "phase": "service",
+          "is_io_error": true,
+          "message": "injected lifecycle service error"
+        },
+        {
+          "phase": "service",
+          "is_io_error": true,
+          "message": "injected lifecycle service error"
+        },
+        {
+          "phase": "response_body",
+          "is_io_error": true,
+          "message": "injected lifecycle response body error"
+        },
+        {
+          "phase": "connection",
+          "is_io_error": false,
+          "message": "HTTP connection failed: error from user's Body stream"
+        }
+      ]
     }
   ]
 }

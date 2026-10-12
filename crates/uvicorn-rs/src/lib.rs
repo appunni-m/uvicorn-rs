@@ -385,9 +385,9 @@ where
                 ))
             }
             Poll::Ready(Err(error)) => {
-                if let Some(mut guard) = this.guard.take() {
+                let _ = this.guard.take().map(|mut guard| {
                     guard.finish(RequestEndReason::ServiceFailed);
-                }
+                });
                 Poll::Ready(Err(error))
             }
         }
@@ -1301,9 +1301,8 @@ pin_project! {
     struct ObservedBody<B> {
         #[pin]
         inner: B,
-        error_observer: ServerErrorObserver,
+        error_observer: Option<ServerErrorObserver>,
         peer_addr: SocketAddr,
-        error_reported: bool,
     }
 }
 
@@ -1311,9 +1310,8 @@ impl<B> ObservedBody<B> {
     fn new(inner: B, error_observer: ServerErrorObserver, peer_addr: SocketAddr) -> Self {
         Self {
             inner,
-            error_observer,
+            error_observer: Some(error_observer),
             peer_addr,
-            error_reported: false,
         }
     }
 }
@@ -1335,15 +1333,14 @@ where
             Poll::Ready(Some(Ok(frame))) => Poll::Ready(Some(Ok(frame))),
             Poll::Ready(Some(Err(error))) => {
                 let error: BoxBodyError = error.into();
-                if !*this.error_reported {
-                    *this.error_reported = true;
+                let _ = this.error_observer.take().map(|error_observer| {
                     observe_error(
-                        Some(this.error_observer),
+                        Some(&error_observer),
                         ServerErrorPhase::ResponseBody,
                         Some(*this.peer_addr),
                         error.as_ref(),
                     );
-                }
+                });
                 Poll::Ready(Some(Err(error)))
             }
             Poll::Ready(None) => Poll::Ready(None),
