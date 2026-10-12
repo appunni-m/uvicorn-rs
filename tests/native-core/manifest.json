@@ -640,6 +640,16 @@
       "expected_dropped_streams": 1
     },
     {
+      "id": "http3.idle-open-connection-shutdown-times-out-while-endpoint-drains",
+      "protocol": "http3",
+      "operation": "native-http3-idle-connection-shutdown-timeout",
+      "covers": ["http3.graceful-shutdown"],
+      "path": "/request-lifetime-hold",
+      "graceful_timeout_ms": 25,
+      "server_wait_ms": 1000,
+      "expected_server_error": "active connections exceeded the graceful-shutdown deadline"
+    },
+    {
       "id": "http1-tls.shutdown-bounds-incomplete-handshake",
       "protocol": "native-core",
       "operation": "native-http1-tls-pending-handshake-shutdown",

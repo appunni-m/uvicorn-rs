@@ -31,7 +31,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::watch,
-    time::{timeout, Instant},
+    time::{sleep, timeout, Instant},
 };
 use tokio_rustls::{
     rustls::{self, pki_types::ServerName},
@@ -1241,6 +1241,7 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http3-no-common-alpn-recovery"
             || operation == "native-http3-no-common-alpn-lifecycle-recovery"
             || operation == "native-http3-endpoint-close-lifecycle"
+            || operation == "native-http3-idle-connection-shutdown-timeout"
             || operation == "native-http1-tls-pending-handshake-shutdown"
         {
             if operation.starts_with("native-lifecycle-") {
@@ -1253,6 +1254,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http3_no_common_alpn_lifecycle_case(case).await?;
             } else if operation == "native-http3-endpoint-close-lifecycle" {
                 run_isolated_http3_endpoint_close_lifecycle_case(case).await?;
+            } else if operation == "native-http3-idle-connection-shutdown-timeout" {
+                run_isolated_http3_idle_connection_shutdown_timeout_case(case).await?;
             } else if operation == "native-http1-tls-pending-handshake-shutdown" {
                 run_isolated_tls_pending_handshake_shutdown_case(case).await?;
             } else if operation == "graceful-timeout-abort" {
@@ -3213,6 +3216,7 @@ async fn run_cases(
             || operation == "native-http3-no-common-alpn-recovery"
             || operation == "native-http3-no-common-alpn-lifecycle-recovery"
             || operation == "native-http3-endpoint-close-lifecycle"
+            || operation == "native-http3-idle-connection-shutdown-timeout"
             || operation == "native-http1-tls-pending-handshake-shutdown"
         {
             continue;
@@ -6280,6 +6284,151 @@ async fn run_isolated_http3_graceful_timeout_case(case: &Value) -> ProbeResult<(
         endpoint.wait_idle().await;
     }
     Ok(())
+}
+
+async fn run_isolated_http3_idle_connection_shutdown_timeout_case(case: &Value) -> ProbeResult<()> {
+    let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+    let server_endpoint =
+        quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
+    let server_endpoint_monitor = server_endpoint.clone();
+    let address = server_endpoint.local_addr()?;
+    let graceful_timeout_ms = case["graceful_timeout_ms"].as_u64().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "graceful_timeout_ms is missing")
+    })?;
+    let server_wait_ms = case["server_wait_ms"]
+        .as_u64()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, state) = contract_app_with_state(shutdown_sender.clone());
+    let mut server = tokio::spawn(uvicorn_rs::serve_http3(
+        server_endpoint,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            max_connections: 8,
+            graceful_shutdown_timeout: Duration::from_millis(graceful_timeout_ms),
+            error_observer: None,
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let mut server_joined = false;
+    let mut client_endpoint = None;
+    let mut client_sender = None;
+    let mut active_stream = None;
+    let workflow = async {
+        let (endpoint, mut sender) = new_http3_client(address, &tls_clients.http3).await?;
+        client_endpoint = Some(endpoint.clone());
+        let active = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "path")?,
+            b"",
+        )
+        .await?;
+        client_sender = Some(sender);
+        active_stream = Some(active);
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while state.request_lifetime_waiters.load(Ordering::Acquire) == 0 {
+                sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "held HTTP/3 request did not reach the service",
+            )
+        })?;
+
+        endpoint.close(
+            quinn::VarInt::from_u32(0),
+            b"client closes held HTTP/3 request",
+        );
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while state.request_connections_closed.load(Ordering::Acquire) == 0 {
+                sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "HTTP/3 connection lifetime did not end after the client close",
+            )
+        })?;
+
+        if server_endpoint_monitor.open_connections() == 0 {
+            return Err(io::Error::other(
+                "server endpoint became idle before the shutdown deadline began",
+            )
+            .into());
+        }
+
+        shutdown_sender.send_replace(true);
+
+        let joined = tokio::time::timeout(Duration::from_millis(server_wait_ms), &mut server)
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "HTTP/3 idle-connection shutdown did not finish within the outer bound",
+                )
+            })?;
+        server_joined = true;
+        let server_result = joined?;
+        let server_error = server_result.err().ok_or_else(|| {
+            io::Error::other("HTTP/3 endpoint shutdown completed despite the open connection")
+        })?;
+        let expected_server_error = required_str(case, "expected_server_error")?;
+        if !matches!(
+            server_error,
+            uvicorn_rs::ServeError::GracefulShutdownTimedOut
+        ) || server_error.to_string() != expected_server_error
+            || server_error.source().is_some()
+        {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/3 idle-connection shutdown error differed: {server_error}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        Ok::<(), Box<dyn Error + Send + Sync>>(())
+    }
+    .await;
+
+    shutdown_sender.send_replace(true);
+    if let Some(endpoint) = client_endpoint.as_ref() {
+        endpoint.close(quinn::VarInt::from_u32(0), b"idle-connection case complete");
+    }
+    drop(active_stream);
+    drop(client_sender);
+    let client_idle = if let Some(endpoint) = client_endpoint {
+        tokio::time::timeout(Duration::from_secs(2), endpoint.wait_idle())
+            .await
+            .is_ok()
+    } else {
+        true
+    };
+    if !server_joined {
+        if tokio::time::timeout(Duration::from_secs(1), &mut server)
+            .await
+            .is_err()
+        {
+            server.abort();
+            let _ = server.await;
+        }
+    }
+    if workflow.is_ok() && !client_idle {
+        return Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 client endpoint did not become idle during test cleanup",
+        )
+        .into());
+    }
+    workflow
 }
 
 async fn run_http2_graceful_drain_case(
