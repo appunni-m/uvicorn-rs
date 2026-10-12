@@ -7,9 +7,12 @@ The exact normal build passed **243/243** parity cases at commit
 (`src/lib.rs` SHA-256
 `ea149b5821a398f62c5a7762a83774040ae15ae0b268c28d921e4c61f3e54f47`),
 normal extension (`8e7a060c5bdd9e1bd5d1c4d5bbcd5136de739208f7eccdbbd80963f235dcc64f`),
-benchmark scripts, and lockfiles are unchanged in the current checkout. This
-receipt applies to the same code inputs; it is not a clean commit-bound run of
-the current documentation and ignore-rule commits.
+benchmark scripts, and lockfiles are unchanged in the current checkout. Since
+parity commit `957143ab5f810be861183bde0c239d558f78fefb`, the Python adapter
+source, extension, dependencies, benchmark scripts, and parity cases are
+unchanged; later commits affect the independent native crate, native contract
+example, manifest, docs, and ignore rules. The 243/243 parity receipt therefore
+still matches the benchmark input without another parity run.
 
 The post-parity host preflight rejected three windows before timing began.
 Unrelated CPU measured 128.7–245.2%, 238.9–268.8%, and 214.7–243.3% across
@@ -17,6 +20,16 @@ the three receipts. No timed rows were produced and no processes were stopped.
 The receipts are in the local-only
 `benchmarks/results/2026-10-13/kata-finish-20261013-1/` directory and are
 excluded from Git.
+
+A new eight-sample preflight on clean `main` commit
+`a851386cc252fed04c95e3c4fbddc342c630351c` also rejected before timing.
+Unrelated aggregate CPU ranged from 35.4% to 156.2%; a Google Chrome Helper
+renderer exceeded 25% for four consecutive intervals and peaked at 104.8%,
+while a Codex renderer reached 25.5%. The receipt records
+`timing_benchmark_started: false`; no process was stopped. Its JSON is
+local-only at
+`target/benchmark-preflight/wh9k-a851386cc-preflight-1.json` and is excluded
+from Git.
 
 The next benchmark work is limited to the underqualified matched pairs once a
 host window passes preflight. The full parity suite does not need to be
