@@ -2286,6 +2286,9 @@ async fn run_cases(
                 .len();
             match operation {
                 "request" => run_http3_request_case(h3_address, &tls_clients.http3, case).await?,
+                "readiness-pending" => {
+                    run_http3_readiness_pending_case(h3_address, &tls_clients.http3, case).await?
+                }
                 "http3-upload-pending" => {
                     run_http3_upload_pending_case(h3_address, &tls_clients.http3, case).await?
                 }
@@ -2740,6 +2743,81 @@ async fn run_http3_request_case(
             "{}: HTTP/3 response mismatch: status={status}, body={:?}",
             required_str(case, "id")?,
             String::from_utf8_lossy(&response_body)
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn run_http3_readiness_pending_case(
+    address: SocketAddr,
+    client_config: &quinn::ClientConfig,
+    case: &Value,
+) -> ProbeResult<()> {
+    let (endpoint, mut sender) = new_http3_client(address, client_config).await?;
+
+    let mut arm = send_http3_request(
+        &mut sender,
+        address,
+        "GET",
+        required_str(case, "arm_path")?,
+        b"",
+    )
+    .await?;
+    let (arm_status, arm_body, _) = collect_http3_response(&mut arm).await?;
+    if arm_status != required_status(case, "arm_status")?
+        || arm_body != required_str(case, "arm_body")?.as_bytes()
+    {
+        return Err(io::Error::other("HTTP/3 readiness gate was not armed").into());
+    }
+
+    let started = Instant::now();
+    let mut pending = send_http3_request(
+        &mut sender,
+        address,
+        "GET",
+        required_str(case, "request_path")?,
+        b"",
+    )
+    .await?;
+    let (status, body, _) = collect_http3_response(&mut pending).await?;
+    let elapsed_ms = started.elapsed().as_millis();
+    let minimum_pending_ms = case["minimum_pending_ms"].as_u64().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "minimum_pending_ms is missing")
+    })?;
+    if status != required_status(case, "expected_status")?
+        || body != required_str(case, "expected_body")?.as_bytes()
+        || elapsed_ms < u128::from(minimum_pending_ms)
+    {
+        return Err(io::Error::other(format!(
+            "{}: HTTP/3 service did not resume after Pending readiness; status={status}, elapsed={elapsed_ms}ms, body={:?}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(&body)
+        ))
+        .into());
+    }
+
+    let mut state = send_http3_request(
+        &mut sender,
+        address,
+        "GET",
+        required_str(case, "state_path")?,
+        b"",
+    )
+    .await?;
+    let (state_status, state_body, _) = collect_http3_response(&mut state).await?;
+    endpoint.close(
+        quinn::VarInt::from_u32(0),
+        b"HTTP/3 readiness case complete",
+    );
+    endpoint.wait_idle().await;
+    if state_status != required_status(case, "state_status")?
+        || state_body != required_str(case, "expected_state_body")?.as_bytes()
+    {
+        return Err(io::Error::other(format!(
+            "{}: HTTP/3 readiness gate did not record Pending and recovery: status={state_status}, body={:?}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(&state_body)
         ))
         .into());
     }

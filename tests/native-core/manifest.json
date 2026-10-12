@@ -138,6 +138,21 @@
       "expected_state_body": "pending=true;released=true\n"
     },
     {
+      "id": "http3.service-readiness-pending-wakes-and-recovers",
+      "protocol": "http3",
+      "operation": "readiness-pending",
+      "arm_path": "/arm-readiness-pending",
+      "arm_status": 200,
+      "arm_body": "armed\n",
+      "request_path": "/ready",
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "minimum_pending_ms": 20,
+      "state_path": "/readiness-pending-state",
+      "state_status": 200,
+      "expected_state_body": "pending=true;released=true\n"
+    },
+    {
       "id": "http1.response-stream-progress-before-application-completion",
       "operation": "stream-progress",
       "method": "GET",
