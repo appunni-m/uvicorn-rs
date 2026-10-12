@@ -34,9 +34,10 @@ PATH="target/release-tool-env-2026-10-05/bin:$PATH" \
   --matrix-repeats 3 --case-infra-retries 0 --matrix-infra-retries 0
 ```
 
-Query Coverage MCP for regions on that exact report. The saved
-`coverage-mcp-full-response.json` contains the structured response and report
-hash. Then validate the retained gate offline:
+Query Coverage MCP for regions on that exact report. The generated full report
+and structured MCP response remain local-only and are not committed; the
+tracked evidence index records the report hash. Then validate the retained
+gate offline:
 
 ```sh
 .venv/bin/python scripts/check_ci_evidence.py --offline coverage \
@@ -47,8 +48,9 @@ hash. Then validate the retained gate offline:
 
 The normal parity report records the imported wheel extension SHA-256 and all
 fixture, runner, dependency, and environment identities. The exclusion bundle
-retains native inspection outputs, logs, the selected workflow result, and its
-receipt; the normal wheel's identity is recorded by SHA-256.
+with generated stdout/stderr logs is local-only and not committed; the tracked
+exclusion receipt records the selected workflow result. The normal wheel's
+identity is recorded by SHA-256.
 
 ## Scope
 

@@ -1,6 +1,6 @@
 # 491-case unified coverage after the EOF recheck contract assertion
 
-Measured on 2026-10-08 from the working tree at revision `1a72c9b3ab18e01389b1e19efbc76bf569e98730`. The archive preserves the exact unified LLVM report and context, the paginated Coverage-MCP response, each full repeat result, and the focused H2 EOF-recheck case result.
+Measured on 2026-10-08 from the working tree at revision `1a72c9b3ab18e01389b1e19efbc76bf569e98730`. The tracked archive preserves the result summary, evidence index, and focused H2 EOF-recheck case result. The repeat bundle, generated unified report, context, Coverage-MCP pages, and logs remain local-only.
 
 ## Result
 
@@ -31,9 +31,7 @@ uv run --python 3.12 --locked --group benchmark python scripts/attach_coverage_m
 
 ## Files
 
-- `coverage-report.json.gz`: full per-case results and region attribution, with Coverage-MCP evidence attached.
-- `coverage-report.json.context.json`: report digest and source/build/test receipt.
-- `coverage-mcp-pages.json`: exact structured Coverage-MCP response.
-- `matrix-repeat-results.tar.gz`: result JSON files from all three complete repeats.
-- `eof-recheck-case/`: focused fault-contract result and logs.
+- Generated unified report (`coverage-report.json.gz`), context receipt, and Coverage-MCP pages are local-only and not committed.
+- Generated repeat bundle (`matrix-repeat-results.tar.gz`) and per-run logs are local-only and not committed.
+- `eof-recheck-case/`: focused fault-contract result; generated logs are local-only.
 - `evidence-index.json`: checksums, environment, identities, and case/repeat totals.

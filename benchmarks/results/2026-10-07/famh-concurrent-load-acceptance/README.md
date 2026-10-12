@@ -56,7 +56,6 @@ No new body-size, byte-queue, or global connection cap is introduced by this acc
 
 - `normal-parity-238.json`: complete normal-build oracle result.
 - `selected-load-cases.json`: compact five-case load and shutdown result.
-- `coverage-report.json.gz` and `coverage-report.json.context.json`: unified report and source/build receipt.
-- `coverage-mcp-pages.json`: exact structured Coverage MCP response.
+- Generated coverage report, context receipt, and Coverage-MCP pages are local-only and not committed.
 - `matrix-repeat-results.tar.gz`: raw result JSON for each of the three complete matrix repeats.
 - `evidence-index.json`: source, build, run, and artifact hashes.

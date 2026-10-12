@@ -11,6 +11,7 @@ target/
 /dist/
 # Generated logs and per-run coverage reports stay local.
 *.log
+*.log.*
 coverage-report*.json*
 *coverage-mcp-*.json*
 # Python coverage data and rendered reports stay local too.

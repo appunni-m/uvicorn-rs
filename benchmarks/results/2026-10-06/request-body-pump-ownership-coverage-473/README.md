@@ -1,9 +1,9 @@
 # Request-body pump ownership evidence (2026-10-06)
 
-This archive binds one dirty-checkout source snapshot to a complete unified
-instrumented run, the exact Coverage-MCP query response, and a normal installed
-wheel run. It records local macOS ARM64 evidence; it is not a clean release
-baseline.
+This tracked summary records one dirty-checkout source snapshot, a complete
+unified instrumented run, a normal installed-wheel run, and local macOS ARM64
+evidence. The generated full report and exact Coverage-MCP query response
+remain local-only. This is not a clean release baseline.
 
 The unified manifest contains 473 workflows: 225 live oracle comparisons and
 248 target-only contracts. Per-case attribution and each of three complete
@@ -15,8 +15,8 @@ regions and zero gap groups.
 The release-mode abi3 wheel passed the same 225 public oracle cases. The normal
 binary exclusion audit passed all 16 checks and its three selected workflows
 (one oracle case and two public capacity contracts). The full coverage report
-is compressed losslessly; its context sidecar, normal parity result and audit
-receipt accompany it. The audit bundle retains inspection outputs.
+and context sidecar remain local-only. The normal parity result and exclusion
+receipt are tracked; the generated audit bundle and its logs are local-only.
 
 `evidence-index.json` records SHA-256 identities, Python/Rust versions,
 platform, manifest, native binaries, case counts and repeat summaries. Historical

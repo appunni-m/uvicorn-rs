@@ -17,11 +17,10 @@ with zero failures, infrastructure retries or cases not run. Native coverage is
 macOS ARM64; Python, dependencies, optional diagnostics, other platforms and
 full official ASGI conformance are outside its denominator.
 
-Reports, consumer receipts, validation outputs and tool logs are retained here.
-Large JSON and source snapshots are compressed without changing their contents.
-The coverage artifact tarball retains all per-case results, logs, raw target
-profiles, merged profiles and complete-repeat results beneath `artifacts/`.
-The original working paths remain recorded in receipts. Failed build/audit/
+Tracked summaries, consumer receipts, and validation outputs are retained here.
+Generated reports, tool logs, and the coverage artifact tarball with per-case
+logs, raw target profiles, merged profiles, and complete-repeat results remain
+local-only. The original working paths remain recorded in receipts. Failed build/audit/
 reader-validation attempts are retained with their scope; none count as passing
 gates. The original development normal extension was restored byte-for-byte.
 

@@ -45,7 +45,7 @@ large-response RSS cause still require a clean profile/allocation trace.
 - HTTP/3 cross-server attempt: aborted before writing a complete comparison
   file. Hypercorn uvloop failed the `protocol-scope` warm-up gate with four
   empty response bodies where 14 bytes were expected. The failed output is in
-  `http3.log`; the failure is not a Rust-only H3 result.
+  the local-only `http3.log` (not committed); the failure is not a Rust-only H3 result.
 - HTTP/3 Rust-only: all 36 rows passed. These are candidate data only, and
   performance is provisional. A Pillow migration/parity process and a Rust
   compile were active during this category; see
@@ -58,7 +58,7 @@ large-response RSS cause still require a clean profile/allocation trace.
   `active_asgi_task_cancelled: true`. Performance timings are provisional due
   to concurrent migration/parity work; see `pre-lifecycle-processes.txt`.
 - The seven targeted probe scripts produced 17 `PASS` results; their complete
-  output is in `live-probes.log`.
+  output is in the local-only `live-probes.log` (not committed).
 
 The standalone category validator confirmed 144 H1, 84 H2, 36 Rust-only H3,
 36 WebSocket, and 20 lifecycle rows, all with zero runner-reported failures.

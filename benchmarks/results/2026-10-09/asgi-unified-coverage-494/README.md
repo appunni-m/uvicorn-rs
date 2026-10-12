@@ -19,8 +19,8 @@ Coverage-MCP reports `source: matches_receipt` and `tests: passed`, build ID `78
 
 ## Evidence files
 
-- [Compressed unified report](coverage-report.json.gz) and [context receipt](coverage-report.json.context.json)
-- [Coverage-MCP region and line receipt](coverage-mcp-all-metrics.json)
+- Compressed unified report (local-only; `coverage-report.json.gz` is generated and not committed) and context receipt (local-only; `coverage-report.json.context.json` is generated and not committed)
+- Coverage-MCP region and line receipt (local-only; `coverage-mcp-all-metrics.json` is generated and not committed)
 - [Normal non-instrumented 240-case public parity result](normal-public-parity-240.json.gz)
 - [Source/build manifest](source-manifest.json) and [three repeat outcomes](verification-runs.json)
 

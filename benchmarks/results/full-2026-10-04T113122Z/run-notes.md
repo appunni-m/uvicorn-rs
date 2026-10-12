@@ -2,7 +2,7 @@
 
 ## Result and decision
 
-All 338 rows passed their response, payload, protocol, or lifecycle correctness gates: HTTP/1.1 132, HTTP/2 84, HTTP/3 66, WebSockets 36, and lifespan/shutdown 20. The live HTTP, streaming, WebSocket, cancellation, and lifespan probes also passed; see [`live-probes.log`](live-probes.log).
+All 338 rows passed their response, payload, protocol, or lifecycle correctness gates: HTTP/1.1 132, HTTP/2 84, HTTP/3 66, WebSockets 36, and lifespan/shutdown 20. The live HTTP, streaming, WebSocket, cancellation, and lifespan probes also passed; see `live-probes.log` (local-only; `live-probes.log` is generated and not committed).
 
 This is a **correctness-complete, performance-provisional** run. Process snapshots show unrelated input generation, parity validation, compatibility-atlas work, mypy, and Rust compilation during the matrix. One Rust compile reached 787% CPU in the snapshot before WebSocket measurements. These samples cannot establish an uncontended or repeatable performance win. Keep them as a diagnosis snapshot; repeat the matrix with background work stopped before publishing a speedup claim.
 
@@ -103,7 +103,7 @@ These counters show where streaming work crosses the boundary: the Python app ca
 - [`environment.txt`](environment.txt) records revision, environment, and package versions.
 - Host snapshots: [`before probes`](processes-before-probes.txt), [`before H1`](processes-before-http1.txt), [`before H2`](processes-before-http2.txt), [`before H3`](processes-before-http3.txt), [`before WebSockets`](processes-before-websocket.txt), [`before lifespan`](processes-before-lifecycle.txt), and [`before bridge diagnostics`](processes-before-bridge-diagnostics.txt). Several contain active unrelated CPU work.
 - [`http1.json`](http1.json), [`http2.json`](http2.json), [`http3.json`](http3.json), [`websocket.json`](websocket.json), and [`lifecycle.json`](lifecycle.json) retain every measured row and source digest; matching logs retain runner output.
-- [`bridge-diagnostics.json`](bridge-diagnostics.json) and [`bridge-diagnostics.log`](bridge-diagnostics.log) contain opt-in counter data, not ordinary performance measurements.
+- [`bridge-diagnostics.json`](bridge-diagnostics.json) and `bridge-diagnostics.log` (local-only; `bridge-diagnostics.log` is generated and not committed) contain opt-in counter data, not ordinary performance measurements.
 - `git rev-parse HEAD` was `cf9bf062133721b094e914f49ed8f54c613eb30f`. The worktree was dirty; inspect the recorded status and per-report source digests before attempting an exact reproduction.
 
 For an acceptance benchmark, repeat the documented commands on the same hardware and locked environment with the concurrent build/parity jobs stopped. Save a fresh process snapshot before each category and defer the run if an unrelated compiler, test, emulator, or workload is active. Large transfer cases should be repeated with a separate client host when client CPU approaches saturation. Require repeated, interleaved candidate/reference results with equivalent workload and protocol before accepting a win. If H1 remains slower or less CPU-efficient after an uncontended rerun, revise the project's performance positioning rather than claiming a general Uvicorn replacement.

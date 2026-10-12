@@ -43,6 +43,11 @@ Coverage-MCP reports `source: matches_receipt` and `tests: passed` for that
 selected input. This is focused contract evidence, not full-matrix acceptance.
 The full 581-case current-source run remains outstanding.
 
+Generated coverage reports, Coverage-MCP payloads, and logs remain in
+Git-ignored local output paths. This document and tracked archive summaries
+retain the recorded counts, identities, and decisions; per-run coverage
+artifacts are not committed.
+
 Earlier focused reports for endpoint shutdown and HTTP/3 ALPN recovery were
 measured before the request-body change and are now historical. Native case
 receipts retain declared `covers` labels under
@@ -185,9 +190,10 @@ infrastructure errors, retries, or cases not run. Native coverage is
 **5,298/5,298 regions and 3,753/3,753 lines (100%)**. Coverage-MCP measured the
 exact report with `source: matches_receipt`, `tests: passed`, and zero missing
 region and line observations. The [494-case evidence archive](../benchmarks/results/2026-10-09/asgi-unified-coverage-494/)
-contains the compressed report, receipts, repeat results, source/build identity,
-and the normal-wheel parity result. The normal non-instrumented extension
-passed all **240/240** public oracle cases.
+keeps its summary, source/build identity, repeat outcomes, and normal-wheel
+parity result in Git. Its generated report, context, and Coverage-MCP payload
+remain local-only. The normal non-instrumented extension passed all **240/240**
+public oracle cases.
 
 This is source-bound local macOS ARM64 evidence from a dirty working tree based
 on revision `f260d78c71e9266c2b3301ab3915f74de5511fc2`, not a clean hosted
@@ -415,13 +421,13 @@ with 5,121/5,121 regions and 3,624/3,624 lines. Its package matrix and Python
 3.9.25 consumer also passed. This is the current hosted commit-bound coverage
 result.
 
-Coverage-MCP also re-reviewed the local full report in the
-[EOF recheck archive](../benchmarks/results/2026-10-08/asgi-eof-recheck-fault-consumption-491/coverage-report.json.gz).
-It reports `source: matches_receipt`, `tests: passed`, 5,121/5,121 regions,
-and zero gap groups. A hash check matched all 83 recorded coverage input files
-against the current checkout. That report records revision `1a72c9b` and a
-dirty working tree, so it is source-matched local evidence; hosted run #39 is
-the clean commit-bound result.
+Coverage-MCP also re-reviewed the local full report for the EOF recheck
+archive. The generated report and MCP response are local-only and not
+committed. That review reported `source: matches_receipt`, `tests: passed`,
+5,121/5,121 regions, and zero gap groups. A hash check matched all 83 recorded
+coverage input files against the checkout used for the report. It records
+revision `1a72c9b` and a dirty working tree, so it is source-matched local
+evidence; hosted run #39 is the clean commit-bound result.
 
 <a id="previous-full-verification-492-cases"></a>
 ## Previous full verification (492 cases; unified matrix)
@@ -453,10 +459,10 @@ per-case profile union matches the aggregate. Coverage-MCP build ID is
 `97bbf91445ae75a120b93dab1f808b8ede3a803a4aa131bad40a5308da1a228e`.
 Instrumented extension SHA-256 is
 `7406560cdc52cf5f583b7f13307686753fddab1f0fb511377b666dc51e2bac21`.
-The archive retains the compressed full report, its context receipt, exact MCP
-response, all three repeat results, and the normal-build parity receipt. This
-is local source-bound coverage evidence, not a performance result or a claim
-of complete official ASGI conformance.
+This tracked document records the result and source/build identity. The
+generated full report, context receipt, Coverage-MCP response, and raw repeat
+outputs remain local-only. This is local source-bound coverage evidence, not a
+performance result or a claim of complete official ASGI conformance.
 
 <a id="current-full-verification-494-cases"></a>
 ## Current full verification (494 cases; unified matrix)
@@ -530,8 +536,9 @@ source.
 The run used CPython 3.12.13, Rust 1.98.1, cargo-llvm-cov 0.8.7, and macOS
 15.7.7 ARM64. The instrumented extension SHA-256 is
 `2fcd0eeb88f38d7c07801335e37416837761fd0d4a340d86aab57ba8638dc2d5`. The
-source file hashes, exact Coverage-MCP page, full report, and repeat outputs
-are retained in the archive. This local result does not establish benchmark
+generated report, context, and exact Coverage-MCP page are local-only; the
+tracked archive keeps the summary, source/build identities, repeat bundle, and
+normal parity result. This local result does not establish benchmark
 performance. Hosted run #37 independently passed the unified gate on the exact
 commit tested there. Run #38 on `226ab13` also passed hosted unified coverage;
 the later `a78b4a9` package-probe fix changes no `src/lib.rs` coverage source.
@@ -540,9 +547,10 @@ the later `a78b4a9` package-probe fix changes no `src/lib.rs` coverage source.
 
 The archive is
 [`asgi-coverage-region-fix-491`](../benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/).
-It contains the compressed unified LLVM report and matching context receipt,
-the exact Coverage-MCP page, three full-matrix repeat results, a normal-build
-oracle result, and an evidence index. The report SHA-256 before compression is
+The tracked archive contains a summary, three full-matrix repeat results, a
+normal-build oracle result, and an evidence index. Its generated compressed
+report, context receipt, and Coverage-MCP page are local-only. The report
+SHA-256 before compression is
 `4478d365b091dc9094462c13903c3e49d2450ff9f90f5dd8f4cf89a8f2e3bf8e`; the
 Coverage-MCP build ID is
 `93a183b2b3a8330d6ad74e170416c68c456b658d884be7f3a96dc637b0d337dc`.
@@ -635,16 +643,15 @@ documented in the archive README and evidence index.
 
 The earlier archive is
 [`asgi-inventory-485`](../benchmarks/results/2026-10-07/asgi-inventory-485/).
-It contains the compressed full LLVM report and matching context receipt, the
-full Coverage-MCP response and structured receipt, all three raw matrix runs
-inside a compressed artifact bundle, the normal-wheel parity result, the wheel
-consumer result, and the normal-build exclusion audit. The exact report SHA-256
-before compression is
-`457ae9d02ae1bee0f5f6d7a75315fb162b0b9c14c02bb50e721f2ca9fd64067b`; the
-compressed report is
-[`coverage-report-isolated.json.gz`](../benchmarks/results/2026-10-07/asgi-inventory-485/coverage-report-isolated.json.gz).
-The Coverage-MCP receipt reports matching source/build identity and `tests:
-passed`. The case-to-region attribution is verified against the profile union.
+Its tracked README and evidence index record run identity and results. The
+compressed LLVM report, context receipt, full Coverage-MCP response,
+structured receipt, generated log, compressed matrix bundle, and normal-build
+exclusion audit bundle are local-only; the bundles contain generated logs. The
+normal-wheel parity result, wheel consumer result, and exclusion receipt
+remain tracked. The report SHA-256 before compression is
+`457ae9d02ae1bee0f5f6d7a75315fb162b0b9c14c02bb50e721f2ca9fd64067b`.
+Coverage-MCP reported matching source/build identity and `tests: passed`.
+Case-to-region attribution is verified against the profile union.
 
 | Verification | Passed | Failures / infrastructure / retries / not run |
 |---|---:|---|
@@ -688,10 +695,10 @@ inventory](asgi-case-inventory.md).
 
 The fixed archive at
 [`request-body-pump-ownership-coverage-473`](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
-retains the lossless compressed unified report, matching context sidecar,
-exact Coverage-MCP response, normal-wheel parity result and normal exclusion
-audit, with an evidence index and file hashes. The uncompressed report
-SHA-256 is `6bc08ebf1be237392e46094d665517179866abb6a40345f7f9530123424697c8`;
+retains a tracked summary and evidence index with artifact hashes, plus the
+normal-wheel parity result and normal exclusion receipt. The generated unified
+report, context sidecar, exact Coverage-MCP response, and audit bundle with
+generated logs are local-only. The uncompressed report SHA-256 is `6bc08ebf1be237392e46094d665517179866abb6a40345f7f9530123424697c8`;
 its context SHA-256 is
 `65a35c22f82a27f78d305ab2d4e215296ac22ddba1ebb34756f1050fb3bd00e2`. Coverage
 MCP build ID is
@@ -739,9 +746,10 @@ server log, and structured three-repeat receipt are in the same archive.
 
 The fixed archive at
 [`http3-peer-close-coverage-460`](../benchmarks/results/2026-10-06/http3-peer-close-coverage-460/)
-retains the lossless compressed unified report, its matching context sidecar,
-the exact Coverage MCP response, the normal-wheel parity result, the normal
-exclusion receipt and audit bundle, and an evidence index with file hashes.
+retains a tracked summary and evidence index with artifact hashes, the
+normal-wheel parity result, and the normal exclusion receipt. The audit bundle
+with generated logs, unified report, context sidecar, and exact Coverage-MCP
+response are local-only.
 The uncompressed report SHA-256 is
 `c45f978fc76174636ecb7d4062d23e68c4084e2fc7355d090aff99823f606d53`; its
 context SHA-256 is
@@ -778,10 +786,10 @@ Its status is `complete` and coverage gate is `passed`. The sibling
 `full-proof-receipt.json` one level above retains source/build identities,
 case observations, attribution artifacts, all three complete-repeat receipts
 and final-drain attribution. The fixed repository archive preserves the
-[lossless report](../benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/coverage-report.json.gz),
-[unfiltered MCP pages](../benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/coverage-mcp-pages.json)
-and [full proof receipt](../benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/full-proof-receipt.json),
-alongside attribution/repeat results, logs and source snapshots. Its source/input fingerprint is
+[full proof receipt](../benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/full-proof-receipt.json),
+attribution/repeat results, and source snapshots. The generated lossless
+report, context sidecar, unfiltered MCP pages, attribution bundle, and logs are
+local-only. Its source/input fingerprint is
 `277319fa41871fbe77d4423c47cdee89ada7990cecc219a164c675428fab79ef`;
 the report SHA-256 after MCP attachment is
 `830e2565823c048d5a1c0c306e151b667c5cfd8d633794e59b538ab70b62fbe1`.
@@ -931,10 +939,9 @@ The authoritative local report is
 `build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/coverage-report.json`.
 Its status is `complete` and coverage gate is `passed`. The repository
 [evidence archive](../benchmarks/results/performance-investigation-2026-10-05/current-coverage/archive-manifest.json)
-preserves a lossless [full report](../benchmarks/results/performance-investigation-2026-10-05/current-coverage/coverage-report.json.gz),
-the [unfiltered MCP receipt](../benchmarks/results/performance-investigation-2026-10-05/current-coverage/coverage-mcp-pages.json),
-source/input snapshots, and all three full-repeat receipts and logs. Native
-binaries and raw profiles remain at the original local paths recorded there.
+preserves source/input snapshots and all three full-repeat receipts. The
+lossless report, unfiltered MCP receipt, repeat logs, native binaries, and raw
+profiles remain at their original local paths and are not committed.
 
 | Verification | Passed | Failures / infrastructure / retries / not run |
 |---|---:|---|
@@ -1679,5 +1686,5 @@ separately passes 214 public comparisons and all 16 normal-exclusion gates with
 three selected live cases. These are dirty-checkout preparation receipts, not
 evidence of successful hosted CI on a release commit. The [release preparation
 archive](../benchmarks/results/release-preparation-2026-10-05/README.md) retains
-reports, context, Coverage-MCP receipt, per-case results/logs/profiles and
-source snapshots.
+tracked release receipts and source snapshots. Generated coverage reports,
+per-case logs and profiles remain local-only.

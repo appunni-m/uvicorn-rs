@@ -112,7 +112,7 @@ are not normal-build CPU attribution or timing comparisons.
   [lifecycle observations](lifecycle.jsonl)
 - [Lifecycle startup/shutdown phases](lifecycle.phases.jsonl)
 - [HTTP/3 partial observations](http3.jsonl) and
-  [HTTP/3 failure log](http3.log)
+  HTTP/3 failure log (local-only; `http3.log` is generated and not committed)
 - [Source/build manifest](../../asgi-unified-coverage-494/source-manifest.json) and
   [240-case normal-wheel parity receipt](../../asgi-unified-coverage-494/normal-public-parity-240.json.gz)
 

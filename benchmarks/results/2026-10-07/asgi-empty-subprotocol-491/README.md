@@ -69,10 +69,7 @@ uv run --group benchmark python scripts/attach_coverage_mcp.py \
 
 ## Files
 
-- `coverage-report.json.gz`: full unified LLVM report with case-to-region
-  attribution and attached Coverage-MCP receipt.
-- `coverage-report.json.context.json`: report, source, build, and test receipt.
-- `coverage-mcp-pages.json`: exact structured Coverage-MCP response.
+- Generated unified report (`coverage-report.json.gz`), context receipt, and Coverage-MCP page are local-only and not committed.
 - `matrix-repeat-results.tar.gz`: three complete repeat results and identities.
 - `normal-parity-239.json`: complete normal-build live oracle result.
 - `evidence-index.json`: artifact hashes, source/build identities, and totals.

@@ -18,11 +18,11 @@ covers the former two missing final-drain spans. The `stream_reset` field uses
 the probe's existing response-read-error convention; it is not packet capture
 of a RESET_STREAM frame.
 
-`coverage-report.json.gz` decompresses to the unchanged post-MCP report.
-The unchanged pre-MCP report is retained separately. `attribution-cases.tar.gz`
-contains every case's original result and logs; its members were hash-checked
-against the originals. All three complete repeat results/logs, frozen inputs,
-sources, preparation failures and selected proof receipts are preserved.
+The generated `coverage-report.json.gz`, pre-MCP report, report context, MCP
+pages, attribution bundle, repeat outputs, and logs remain local-only and are
+not committed. The tracked full proof receipt records the source identity and
+acceptance summary. Frozen inputs, source snapshots, preparation failures, and
+selected proof receipts remain available in the local archive.
 Raw LLVM profiles and native binaries stay at their original local paths.
 
 This is default-feature native `src/lib.rs`, with `cfg(coverage)`, on macOS

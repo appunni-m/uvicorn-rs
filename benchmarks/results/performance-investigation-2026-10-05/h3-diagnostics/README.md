@@ -1,9 +1,11 @@
 # Unmodified Hypercorn HTTP/3 diagnostics
 
-All original directories, empty checkpoints, metadata, complete reports,
-runner logs and server error logs are retained byte for byte. Package source
-and native files were checked against their installed RECORD hashes in the
-original evidence; no edited or editable reference distribution is recorded.
+The local checkout retains original directories, empty checkpoints, metadata,
+complete reports, runner logs, and server error logs byte for byte. Generated
+logs are ignored by Git; the tracked files preserve the summary and available
+evidence. Package source and native files were checked against their installed
+RECORD hashes in the original evidence; no edited or editable reference
+distribution is recorded.
 The reference was Hypercorn 0.18.0 with aioquic 1.3.0 and uvloop 0.23.0.
 
 - `c1-1s-warm0-20261005-a`: sandbox/infrastructure failure finding a numeric
@@ -14,9 +16,9 @@ The reference was Hypercorn 0.18.0 with aioquic 1.3.0 and uvloop 0.23.0.
 - `c16-1s-warm0-20261005-a`: the client timed out awaiting H3 response headers;
   the retained client diagnostic in `runner.log` records 69 completed requests
   and 16 failures. The full
-  post-shutdown server log contains an unhandled UDP-task ExceptionGroup with
-  `KeyError(72)` and the terminal `KeyError: 72`, along with the task-group
-  shutdown error. `72` is the stream key, not a count of 72 errors. The category
+  local-only post-shutdown server log contains an unhandled UDP-task
+  ExceptionGroup with `KeyError(72)` and the terminal `KeyError: 72`, along
+  with the task-group shutdown error. `72` is the stream key, not a count of 72 errors. The category
   deliberately has no successful final report or fabricated successful row.
 
 These functional diagnostics do not prove an upstream root cause and do not

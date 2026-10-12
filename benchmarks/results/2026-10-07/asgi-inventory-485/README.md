@@ -20,31 +20,24 @@ registered fault points absent from the imported wheel.
 
 - [`evidence-index.json`](evidence-index.json) records the run identities,
   environment, counts, and SHA-256 values.
-- [`coverage-report-isolated.json.gz`](coverage-report-isolated.json.gz) is the
-  compressed full unified LLVM report. Its adjacent
-  [`coverage-report-isolated.json.context.json`](coverage-report-isolated.json.context.json)
-  sidecar binds the uncompressed report hash to the source and build.
-- [`coverage-mcp-full-response-isolated.json`](coverage-mcp-full-response-isolated.json)
-  and [`coverage-mcp-pages-isolated.json`](coverage-mcp-pages-isolated.json)
-  preserve the full tool result and the exact structured receipt used to attach
-  Coverage-MCP evidence to the report.
-- [`full-matrix-artifacts-isolated.tar.gz`](full-matrix-artifacts-isolated.tar.gz)
-  preserves per-case profiles and all three matrix-run outputs at their
-  recorded repository paths when extracted from the repository root.
+- The generated report (`coverage-report-isolated.json.gz`), context sidecar,
+  full Coverage-MCP response, and structured receipt remain local-only and are
+  not committed.
+- Generated full-matrix artifact bundle (`full-matrix-artifacts-isolated.tar.gz`)
+  contains per-case logs and profiles; it remains local-only and is not committed.
 - [`normal-parity-isolated.json.gz`](normal-parity-isolated.json.gz) preserves
   the 233-case normal-wheel result.
 - [`wheel-consumer-isolated.json`](wheel-consumer-isolated.json) records the
   installed wheel hash and HTTP, asyncio context, cancellation, TLS, and
   shutdown checks.
-- [`normal-exclusion-audit-final.tar.gz`](normal-exclusion-audit-final.tar.gz)
-  and [`normal-exclusion-receipt-final.json`](normal-exclusion-receipt-final.json)
-  preserve the final 16-check normal-build audit. This audit was repeated after
-  the offline evidence checker was aligned with the manifest's comparison
-  fields.
+- The generated normal-exclusion audit bundle is local-only because it contains
+  logs. The tracked [`normal-exclusion-receipt-final.json`](normal-exclusion-receipt-final.json)
+  records the final 16-check audit, repeated after aligning the offline evidence
+  checker with the manifest's comparison fields.
 - [`offline-validation.json`](offline-validation.json) records successful
-  CI evidence checks run after restoring the compressed matrix artifacts.
-- [`run-isolated.log`](run-isolated.log) contains the no-retry matrix progress
-  and repeat summaries. The focused
+  CI evidence checks run after restoring the local compressed matrix artifacts.
+- The generated `run-isolated.log` remains local-only and is not committed. The
+  focused
   [`TLS WebSocket diagnostic`](tls-websocket-isolation-diagnostics.json)
   records the observed profile-reuse handshake flake and the isolated runs.
 

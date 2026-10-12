@@ -1,5 +1,28 @@
 # Benchmark and release-gate status
 
+## Latest local benchmark preparation (2026-10-13)
+
+The exact normal build passed **243/243** parity cases at commit
+`957143ab5f810be861183bde0c239d558f78fefb`. The measured source
+(`src/lib.rs` SHA-256
+`ea149b5821a398f62c5a7762a83774040ae15ae0b268c28d921e4c61f3e54f47`),
+normal extension (`8e7a060c5bdd9e1bd5d1c4d5bbcd5136de739208f7eccdbbd80963f235dcc64f`),
+benchmark scripts, and lockfiles are unchanged in the current checkout. This
+receipt applies to the same code inputs; it is not a clean commit-bound run of
+the current documentation and ignore-rule commits.
+
+The post-parity host preflight rejected three windows before timing began.
+Unrelated CPU measured 128.7–245.2%, 238.9–268.8%, and 214.7–243.3% across
+the three receipts. No timed rows were produced and no processes were stopped.
+The receipts are in the local-only
+`benchmarks/results/2026-10-13/kata-finish-20261013-1/` directory and are
+excluded from Git.
+
+The next benchmark work is limited to the underqualified matched pairs once a
+host window passes preflight. The full parity suite does not need to be
+repeated unless its code or input identity changes. This preparation
+establishes no repeatable performance gain.
+
 ## Latest hosted ASGI matrix: run 38122909359
 
 The hosted matrix ran on clean commit

@@ -1,6 +1,6 @@
 # 491-case ASGI parity and Rust coverage after the HTTP receive coverage fix
 
-Measured locally on 2026-10-07 from the working tree at revision `dc8cf3f58623b761d7187153d5e96636bbdd77be`. This archive preserves the complete unified LLVM report, its Coverage-MCP receipt, all three verification repeats, and a separate normal-build parity result.
+Measured locally on 2026-10-07 from the working tree at revision `dc8cf3f58623b761d7187153d5e96636bbdd77be`. The tracked archive preserves the result summary, evidence index, and normal-build parity result. The repeat bundle, generated unified report, context, Coverage-MCP payloads, and logs remain local-only.
 
 ## Result
 
@@ -33,7 +33,7 @@ uv run --python 3.12 --locked --group benchmark python scripts/attach_coverage_m
   --receipt target/asgi-coverage/local-coverage-region-fix-retry-2026-10-07/coverage-mcp-receipt.json
 ```
 
-Coverage-MCP was queried with `coverage_gaps` for the exact report, `metric: regions`, `limit: 15`; its structured page is preserved as `coverage-mcp-pages.json` and attached with `scripts/attach_coverage_mcp.py`.
+Coverage-MCP was queried with `coverage_gaps` for the exact report, `metric: regions`, `limit: 15`; its generated structured page remains local-only and was attached with `scripts/attach_coverage_mcp.py`.
 
 ## Additional checks
 
@@ -45,9 +45,7 @@ currently installed extension.
 
 ## Files
 
-- `coverage-report.json.gz`: unified report with per-case results, region attribution, and attached Coverage-MCP evidence.
-- `coverage-report.json.context.json`: report hash, source, build, and test receipt.
-- `coverage-mcp-pages.json`: exact structured Coverage-MCP response.
-- `matrix-repeat-results.tar.gz`: raw result JSON for each of the three complete repeats.
+- Generated unified report (`coverage-report.json.gz`), context receipt, and Coverage-MCP page are local-only and not committed.
+- Generated repeat bundle (`matrix-repeat-results.tar.gz`) with per-run logs is local-only and not committed.
 - `normal-parity-239.json`: full normal-build oracle result.
 - `evidence-index.json`: checksums, environment, source/build identities, and summary totals.
