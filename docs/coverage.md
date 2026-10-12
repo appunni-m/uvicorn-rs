@@ -1,9 +1,9 @@
 # Black-box parity and Rust source coverage
 
-## Current unified coverage status (2026-10-13)
+## Current unified coverage status (2026-10-14)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 67 Python-free native cases (578 total). A
+parity/fault-contract cases and 68 Python-free native cases (579 total). A
 current-source complete run, three repeats of both matrices, 100% region and
 line coverage, and zero-gap region and line Coverage-MCP results remain
 outstanding.
@@ -11,13 +11,27 @@ outstanding.
 The latest complete-scope report is
 `target/asgi-coverage/2026-10-12-current-source-575/coverage-report.json`.
 It was generated from clean commit `01d84ce891cd110d9996b89499f4a94719bec876`
-for 511 ASGI plus 64 native cases. Its attribution sweep passed 575/575 with
+for 511 ASGI plus 64 native cases. The attribution sweep passed 575/575 with
 zero case or infrastructure failures. It is a single complete-scope
 measurement: the report contains no complete-matrix verification repeats.
 Coverage is **6,853/6,940 regions** and **5,036/5,083 lines**, leaving 87
 regions and 47 lines. Its source/input digest is
 `fccc03e7676b62ac9a36d9994de4c618d3b51df52fed5fcf8058185ae6d75a78`. This
-report predates three native cases and is not current-manifest evidence.
+report predates four native cases and is not current-manifest evidence.
+
+The focused case `http3.owner-closes-endpoint-and-lifecycle-shuts-down` passed
+1/1 on the current source. It closes a cloned QUIC endpoint and verifies that
+`serve_http3` exits successfully after running lifecycle hooks in startup then
+shutdown order without serving a request. Its selected report is
+`target/asgi-coverage/2026-10-14-h3-owner-endpoint-close-release/coverage-report.json`;
+it records 215/6,940 regions and 192/5,083 lines, complete attribution, and
+source digest `3e46f02c214720b6d7807da286a2e0429ff7d41e3e68cff39f5914ebb6bed633`.
+Coverage-MCP reports `source: matches_receipt` and `tests: passed` for this
+selection. The report status is still `incomplete` because it contains one
+selected case, not the full matrix. A query for `http3.rs:170` shows no missing
+line group but three remaining region groups: one in the lifecycle
+specialization and others in the ContractApp and generic instantiations. This
+case does not close the full region gap.
 
 The focused HTTP/3 ALPN pair passed 2/2 on the current dirty source at
 `target/asgi-coverage/2026-10-13-h3-alpn-pair/coverage-report.json`. It covers
@@ -31,7 +45,9 @@ This selected result does not establish full-suite coverage or close that
 remaining gap.
 
 The two ALPN cases map to the shared `http3.handshake-recovery` requirement.
-Native receipts now retain declared `covers` labels under
+The endpoint-close case exercises a Rust library API with no corresponding
+ASGI requirement and therefore has no `covers` label. Native receipts retain
+declared `covers` labels under
 `matrix.native_case_results[].requirements`, and the unified runner rejects
 unknown shared requirement labels. Existing native cases have not all been
 mapped yet, so requirement attribution remains in progress.

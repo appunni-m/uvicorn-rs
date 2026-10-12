@@ -389,6 +389,16 @@
       "expected_body": "started\n"
     },
     {
+      "id": "http3.owner-closes-endpoint-and-lifecycle-shuts-down",
+      "protocol": "http3",
+      "operation": "native-http3-endpoint-close-lifecycle",
+      "endpoint_close_code": 0,
+      "endpoint_close_reason": "endpoint closed by owner",
+      "startup_wait_ms": 1000,
+      "server_wait_ms": 1000,
+      "expected_lifecycle_events": ["startup", "shutdown"]
+    },
+    {
       "id": "http3.request-body-is-streamed-to-the-service",
       "protocol": "http3",
       "operation": "request",

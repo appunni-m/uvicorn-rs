@@ -1205,6 +1205,7 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http3-alpn-contract"
             || operation == "native-http3-no-common-alpn-recovery"
             || operation == "native-http3-no-common-alpn-lifecycle-recovery"
+            || operation == "native-http3-endpoint-close-lifecycle"
             || operation == "native-http1-tls-pending-handshake-shutdown"
         {
             if operation.starts_with("native-lifecycle-") {
@@ -1215,6 +1216,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http3_no_common_alpn_case(case).await?;
             } else if operation == "native-http3-no-common-alpn-lifecycle-recovery" {
                 run_isolated_http3_no_common_alpn_lifecycle_case(case).await?;
+            } else if operation == "native-http3-endpoint-close-lifecycle" {
+                run_isolated_http3_endpoint_close_lifecycle_case(case).await?;
             } else if operation == "native-http1-tls-pending-handshake-shutdown" {
                 run_isolated_tls_pending_handshake_shutdown_case(case).await?;
             } else if operation == "graceful-timeout-abort" {
@@ -1519,6 +1522,120 @@ async fn run_isolated_http3_no_common_alpn_lifecycle_case(case: &Value) -> Probe
     if events.as_slice() != ["startup", "shutdown"] {
         return Err(io::Error::other(format!(
             "{}: lifecycle events differed: expected [\"startup\", \"shutdown\"], got {events:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn run_isolated_http3_endpoint_close_lifecycle_case(case: &Value) -> ProbeResult<()> {
+    let startup_wait_ms = case["startup_wait_ms"]
+        .as_u64()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "startup_wait_ms is missing"))?;
+    let close_code = case["endpoint_close_code"].as_u64().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "endpoint_close_code is missing")
+    })?;
+    let close_code = u32::try_from(close_code).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "endpoint_close_code exceeds the QUIC test input range",
+        )
+    })?;
+    let close_reason = required_str(case, "endpoint_close_reason")?;
+    let server_wait_ms = case["server_wait_ms"]
+        .as_u64()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
+    let expected_events = case["expected_lifecycle_events"]
+        .as_array()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "expected_lifecycle_events is missing",
+            )
+        })?
+        .iter()
+        .map(|event| {
+            event.as_str().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "expected lifecycle events must be strings",
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let fixture = lifecycle_fixture();
+    let (_, _, quic_server_config) = test_tls_configs()?;
+    let server_endpoint =
+        quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
+    let owner_endpoint = server_endpoint.clone();
+    let lifecycle: Arc<dyn ApplicationLifecycle> = fixture.hooks.clone();
+    let config = uvicorn_rs::ServerConfig {
+        application_lifecycle: Some(lifecycle),
+        ..uvicorn_rs::ServerConfig::default()
+    };
+    let mut server = tokio::spawn(uvicorn_rs::serve_http3(
+        server_endpoint,
+        fixture.app.clone(),
+        shutdown_on_change(fixture.shutdown_receiver.clone()),
+        config,
+    ));
+
+    let startup = tokio::time::timeout(Duration::from_millis(startup_wait_ms), async {
+        while !fixture.state.startup_completed.load(Ordering::Acquire) {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    })
+    .await;
+    if startup.is_err() {
+        owner_endpoint.close(quinn::VarInt::from_u32(0), b"startup observation timed out");
+        server.abort();
+        let _ = server.await;
+        return Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 lifecycle startup did not complete before endpoint close",
+        )
+        .into());
+    }
+
+    owner_endpoint.close(quinn::VarInt::from_u32(close_code), close_reason.as_bytes());
+
+    match tokio::time::timeout(Duration::from_millis(server_wait_ms), &mut server).await {
+        Ok(Ok(Ok(()))) => {}
+        Ok(Ok(Err(error))) => return Err(error.into()),
+        Ok(Err(error)) => return Err(error.into()),
+        Err(_) => {
+            server.abort();
+            let _ = server.await;
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "closing the HTTP/3 endpoint did not stop the accept loop",
+            )
+            .into());
+        }
+    }
+
+    owner_endpoint.wait_idle().await;
+    if !fixture.state.startup_completed.load(Ordering::Acquire)
+        || !fixture.state.shutdown_completed.load(Ordering::Acquire)
+        || fixture.state.requests_started.load(Ordering::Acquire) != 0
+    {
+        return Err(io::Error::other(
+            "endpoint closure did not complete lifecycle shutdown without serving a request",
+        )
+        .into());
+    }
+
+    let events = fixture
+        .state
+        .events
+        .lock()
+        .map_err(|_| io::Error::other("lifecycle event log was poisoned"))?;
+    let observed_events = events.iter().copied().collect::<Vec<_>>();
+    if observed_events != expected_events {
+        return Err(io::Error::other(format!(
+            "{}: endpoint-close lifecycle events differed: expected {expected_events:?}, got {observed_events:?}",
             required_str(case, "id")?
         ))
         .into());
@@ -2838,6 +2955,7 @@ async fn run_cases(
             || operation == "native-http3-alpn-contract"
             || operation == "native-http3-no-common-alpn-recovery"
             || operation == "native-http3-no-common-alpn-lifecycle-recovery"
+            || operation == "native-http3-endpoint-close-lifecycle"
             || operation == "native-http1-tls-pending-handshake-shutdown"
         {
             continue;

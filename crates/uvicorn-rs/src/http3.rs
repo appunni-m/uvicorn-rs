@@ -124,6 +124,9 @@ impl Body for Http3RequestBody {
 /// disables new endpoint handshakes, sends HTTP/3 GOAWAY on active
 /// connections, drains active request tasks, then closes the endpoint. If the
 /// configured drain deadline expires, active connection tasks are cancelled.
+/// Closing another clone of the endpoint also ends acceptance and starts the
+/// server cleanup path. Use `shutdown` when active connections should receive
+/// GOAWAY and drain before the endpoint is closed.
 ///
 /// # Errors
 ///
