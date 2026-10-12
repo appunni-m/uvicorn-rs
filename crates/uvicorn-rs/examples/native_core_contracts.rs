@@ -11,8 +11,8 @@ use std::{
     net::SocketAddr,
     pin::Pin,
     sync::{
-        Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex,
     },
     task::{Context, Poll, Waker},
     time::Duration,
@@ -24,18 +24,18 @@ use h3::error::Code;
 use h3_quinn::quinn::{self, rustls as quic_rustls};
 use http::{Method, Request, Response, StatusCode};
 use http_body::{Body, SizeHint};
-use http_body_util::{BodyExt, Empty, Full, StreamBody, combinators::UnsyncBoxBody};
+use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Empty, Full, StreamBody};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use serde_json::Value;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::watch,
-    time::{Instant, timeout},
+    time::{timeout, Instant},
 };
 use tokio_rustls::{
-    TlsAcceptor, TlsConnector,
     rustls::{self, pki_types::ServerName},
+    TlsAcceptor, TlsConnector,
 };
 use tower_service::Service;
 use uvicorn_rs::{
@@ -1203,12 +1203,15 @@ async fn main() -> ProbeResult<()> {
                 | "http3-graceful-timeout-abort"
         ) || operation.starts_with("native-lifecycle-")
             || operation == "native-http3-alpn-contract"
+            || operation == "native-http3-no-common-alpn-recovery"
             || operation == "native-http1-tls-pending-handshake-shutdown"
         {
             if operation.starts_with("native-lifecycle-") {
                 run_isolated_lifecycle_case(case).await?;
             } else if operation == "native-http3-alpn-contract" {
                 run_isolated_http3_alpn_case(case).await?;
+            } else if operation == "native-http3-no-common-alpn-recovery" {
+                run_isolated_http3_no_common_alpn_case(case).await?;
             } else if operation == "native-http1-tls-pending-handshake-shutdown" {
                 run_isolated_tls_pending_handshake_shutdown_case(case).await?;
             } else if operation == "graceful-timeout-abort" {
@@ -1466,6 +1469,158 @@ async fn run_isolated_http3_alpn_case(case: &Value) -> ProbeResult<()> {
     valid_endpoint.wait_idle().await;
     shutdown_sender.send_replace(true);
     join_lifecycle_server(server).await
+}
+
+async fn run_isolated_http3_no_common_alpn_case(case: &Value) -> ProbeResult<()> {
+    let server_alpns = case["server_alpn_protocols"]
+        .as_array()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "server_alpn_protocols is missing",
+            )
+        })?
+        .iter()
+        .map(|protocol| {
+            protocol
+                .as_str()
+                .map(str::as_bytes)
+                .map(<[u8]>::to_vec)
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "server ALPN protocol must be a string",
+                    )
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let (_, tls_clients, quic_server_config) = test_tls_configs_with_quic_alpns(server_alpns)?;
+    let client_config = match required_str(case, "client_alpn_protocol")? {
+        "h3" => tls_clients.http3.clone(),
+        "http/1.1" => tls_clients.http3_non_h3.clone(),
+        protocol => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported test client ALPN protocol {protocol:?}"),
+            )
+            .into());
+        }
+    };
+
+    if required_str(case, "expected_server_error_phase")? != "connection"
+        || required_str(case, "expected_server_error_type")? != "quic"
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "no-common-ALPN case has unsupported server error expectations",
+        )
+        .into());
+    }
+
+    let endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
+    let address = endpoint.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (app, _) = contract_app_with_state(shutdown_sender.clone());
+    let observed_errors = Arc::new(Mutex::new(Vec::<(
+        ServerErrorPhase,
+        Option<SocketAddr>,
+        bool,
+        String,
+    )>::new()));
+    let error_log = Arc::clone(&observed_errors);
+    let error_observer: ServerErrorObserver = Arc::new(move |event: ServerErrorEvent<'_>| {
+        if let Ok(mut observations) = error_log.lock() {
+            observations.push((
+                event.phase(),
+                event.peer_addr(),
+                event.error().is::<quinn::ConnectionError>(),
+                event.error().to_string(),
+            ));
+        }
+    });
+    let server = tokio::spawn(uvicorn_rs::serve_http3(
+        endpoint,
+        app,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            error_observer: Some(error_observer),
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let mut client_endpoint = quinn::Endpoint::client("127.0.0.1:0".parse()?)?;
+    client_endpoint.set_default_client_config(client_config);
+    let workflow = async {
+        let connecting = client_endpoint.connect(address, "localhost")?;
+        match tokio::time::timeout(Duration::from_secs(2), connecting).await {
+            Ok(Err(_)) => {}
+            Ok(Ok(connection)) => {
+                connection.close(quinn::VarInt::from_u32(0), b"unexpected ALPN success");
+                return Err(io::Error::other(
+                    "QUIC handshake succeeded despite there being no common ALPN",
+                )
+                .into());
+            }
+            Err(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "no-common-ALPN handshake did not complete with an error",
+                )
+                .into());
+            }
+        }
+
+        let observation = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(observation) = observed_errors
+                    .lock()
+                    .map_err(|_| io::Error::other("HTTP/3 error observation lock was poisoned"))?
+                    .first()
+                    .cloned()
+                {
+                    return Ok::<_, io::Error>(observation);
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await??;
+        if observation.0 != ServerErrorPhase::Connection
+            || observation.1.is_none()
+            || !observation.2
+        {
+            return Err(io::Error::other(format!(
+                "{}: expected an observed QUIC connection error with peer metadata, got {observation:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        client_endpoint.close(quinn::VarInt::from_u32(0), b"no common ALPN");
+        let observations = observed_errors
+            .lock()
+            .map_err(|_| io::Error::other("HTTP/3 error observation lock was poisoned"))?
+            .clone();
+        if observations.is_empty()
+            || observations.iter().any(|(phase, peer_addr, is_quic, _)| {
+                *phase != ServerErrorPhase::Connection || peer_addr.is_none() || !is_quic
+            })
+        {
+            return Err(io::Error::other(format!(
+                "{}: no-common-ALPN attempts produced unexpected server error observations: {observations:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        run_http3_request_case(address, &tls_clients.http3, case).await?;
+        Ok::<_, Box<dyn Error + Send + Sync>>(())
+    }
+    .await;
+
+    client_endpoint.close(quinn::VarInt::from_u32(0), b"ALPN recovery case complete");
+    shutdown_sender.send_replace(true);
+    let server_result = join_lifecycle_server(server).await;
+    workflow?;
+    server_result
 }
 
 async fn run_isolated_tls_pending_handshake_shutdown_case(case: &Value) -> ProbeResult<()> {
@@ -2614,6 +2769,7 @@ async fn run_cases(
                 | "http3-graceful-timeout-abort"
         ) || operation.starts_with("native-lifecycle-")
             || operation == "native-http3-alpn-contract"
+            || operation == "native-http3-no-common-alpn-recovery"
             || operation == "native-http1-tls-pending-handshake-shutdown"
         {
             continue;

@@ -361,6 +361,19 @@
       "expected_body": "transport=quic;tls=true;alpn=h3;version=3\n"
     },
     {
+      "id": "http3.no-common-alpn-handshake-is-observed-and-server-recovers",
+      "protocol": "http3",
+      "operation": "native-http3-no-common-alpn-recovery",
+      "server_alpn_protocols": ["h3"],
+      "client_alpn_protocol": "http/1.1",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "quic",
+      "method": "GET",
+      "path": "/connection-details",
+      "expected_status": 200,
+      "expected_body": "transport=quic;tls=true;alpn=h3;version=3\n"
+    },
+    {
       "id": "http3.request-body-is-streamed-to-the-service",
       "protocol": "http3",
       "operation": "request",
