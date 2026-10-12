@@ -1243,9 +1243,12 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http3-endpoint-close-lifecycle"
             || operation == "native-http3-idle-connection-shutdown-timeout"
             || operation == "native-http1-tls-pending-handshake-shutdown"
+            || operation == "native-http1-connection-slot-reuse"
         {
             if operation.starts_with("native-lifecycle-") {
                 run_isolated_lifecycle_case(case).await?;
+            } else if operation == "native-http1-connection-slot-reuse" {
+                run_isolated_http1_connection_slot_reuse_case(case).await?;
             } else if operation == "native-http3-alpn-contract" {
                 run_isolated_http3_alpn_case(case).await?;
             } else if operation == "native-http3-no-common-alpn-recovery" {
@@ -1434,6 +1437,124 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
         )
         .into()),
     }
+}
+
+async fn run_isolated_http1_connection_slot_reuse_case(case: &Value) -> ProbeResult<()> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let server = tokio::spawn(uvicorn_rs::serve_tcp(
+        listener,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            max_connections: 1,
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let workflow = async {
+        let path = required_str(case, "path")?;
+        let mut first = TcpStream::connect(address).await?;
+        let first_request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        first.write_all(first_request.as_bytes()).await?;
+
+        let (first_status, first_headers) = tokio::time::timeout(
+            Duration::from_secs(2),
+            read_response_head(&mut first),
+        )
+        .await
+        .map_err(|_| {
+            io::Error::new(io::ErrorKind::TimedOut, "first keep-alive response timed out")
+        })??;
+        let (first_body, first_complete) = tokio::time::timeout(
+            Duration::from_secs(2),
+            read_response_body(&mut first, &first_headers),
+        )
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "first keep-alive body timed out"))??;
+        let expected_status = required_status(case, "expected_status")?;
+        let expected_body = required_str(case, "expected_body")?;
+        if first_status != expected_status
+            || first_body != expected_body.as_bytes()
+            || !first_complete
+        {
+            return Err(io::Error::other(format!(
+                "{}: first persistent response did not match the configured contract",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        let mut waiting = TcpStream::connect(address).await?;
+        let waiting_request = format!(
+            "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+        );
+        waiting.write_all(waiting_request.as_bytes()).await?;
+        let blocked_ms = case["blocked_ms"].as_u64().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "blocked_ms is missing")
+        })?;
+        let mut probe = [0_u8; 1];
+        match tokio::time::timeout(Duration::from_millis(blocked_ms), waiting.peek(&mut probe)).await
+        {
+            Err(_) => {}
+            Ok(Ok(0)) => {
+                return Err(io::Error::other(format!(
+                    "{}: waiting client was disconnected while the sole connection slot was occupied",
+                    required_str(case, "id")?
+                ))
+                .into());
+            }
+            Ok(Ok(_)) => {
+                return Err(io::Error::other(format!(
+                    "{}: server responded while max_connections=1 was occupied",
+                    required_str(case, "id")?
+                ))
+                .into());
+            }
+            Ok(Err(error)) => return Err(error.into()),
+        }
+
+        drop(first);
+        let (status, headers) = tokio::time::timeout(
+            Duration::from_secs(2),
+            read_response_head(&mut waiting),
+        )
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "waiting response head timed out"))??;
+        let (body, complete) = tokio::time::timeout(
+            Duration::from_secs(2),
+            read_response_body(&mut waiting, &headers),
+        )
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "waiting response body timed out"))??;
+        if status != expected_status || body != expected_body.as_bytes() || !complete {
+            return Err(io::Error::other(format!(
+                "{}: queued client did not succeed after the keep-alive peer closed",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        shutdown_sender.send_replace(true);
+        Ok::<(), Box<dyn Error + Send + Sync>>(())
+    }
+    .await;
+
+    if workflow.is_err() {
+        shutdown_sender.send_replace(true);
+    }
+    let server_result = tokio::time::timeout(Duration::from_secs(2), server)
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "HTTP/1 slot-reuse server did not stop",
+            )
+        })??;
+    workflow?;
+    server_result?;
+    Ok(())
 }
 
 async fn run_isolated_http3_alpn_case(case: &Value) -> ProbeResult<()> {
@@ -3218,6 +3339,7 @@ async fn run_cases(
             || operation == "native-http3-endpoint-close-lifecycle"
             || operation == "native-http3-idle-connection-shutdown-timeout"
             || operation == "native-http1-tls-pending-handshake-shutdown"
+            || operation == "native-http1-connection-slot-reuse"
         {
             continue;
         }
