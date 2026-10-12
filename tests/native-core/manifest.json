@@ -123,6 +123,23 @@
       "expected_server_error_message": "injected readiness failure"
     },
     {
+      "id": "http3.service-readiness-error-recovers",
+      "protocol": "http3",
+      "operation": "readiness",
+      "arm_path": "/arm-readiness",
+      "arm_status": 200,
+      "arm_body": "armed\n",
+      "fault_path": "/ready",
+      "fault_status": 500,
+      "fault_body": "",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "expected_server_error_phase": "readiness",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected readiness failure"
+    },
+    {
       "id": "http1.service-readiness-pending-wakes-and-recovers",
       "protocol": "http/1.1",
       "operation": "readiness-pending",

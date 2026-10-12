@@ -2512,6 +2512,9 @@ async fn run_cases(
                 .len();
             match operation {
                 "request" => run_http3_request_case(h3_address, &tls_clients.http3, case).await?,
+                "readiness" => {
+                    run_http3_readiness_case(h3_address, &tls_clients.http3, case).await?
+                }
                 "readiness-pending" => {
                     run_http3_readiness_pending_case(h3_address, &tls_clients.http3, case).await?
                 }
@@ -3048,6 +3051,69 @@ async fn run_http3_readiness_pending_case(
         .into());
     }
     Ok(())
+}
+
+async fn run_http3_readiness_case(
+    address: SocketAddr,
+    client_config: &quinn::ClientConfig,
+    case: &Value,
+) -> ProbeResult<()> {
+    tokio::time::timeout(Duration::from_secs(2), async {
+        let (endpoint, mut sender) = new_http3_client(address, client_config).await?;
+        let result = async {
+            for (path_field, status_field, body_field) in [
+                ("arm_path", "arm_status", Some("arm_body")),
+                ("fault_path", "fault_status", Some("fault_body")),
+                ("recovery_path", "recovery_status", Some("recovery_body")),
+            ] {
+                let mut response = send_http3_request(
+                    &mut sender,
+                    address,
+                    "GET",
+                    required_str(case, path_field)?,
+                    b"",
+                )
+                .await?;
+                let (status, body, _) = collect_http3_response(&mut response).await?;
+                let expected_status = required_status(case, status_field)?;
+                let body_matches = body_field.is_none_or(|field| {
+                    case[field]
+                        .as_str()
+                        .is_some_and(|expected| body == expected.as_bytes())
+                });
+                if status != expected_status || !body_matches {
+                    return Err(io::Error::other(format!(
+                        "{}: HTTP/3 {path_field} returned status {status} and body {:?}, expected status {expected_status} and the configured body",
+                        required_str(case, "id")?,
+                        String::from_utf8_lossy(&body)
+                    ))
+                    .into());
+                }
+            }
+            Ok::<_, Box<dyn Error + Send + Sync>>(())
+        }
+        .await;
+        endpoint.close(
+            quinn::VarInt::from_u32(0),
+            b"HTTP/3 readiness error case complete",
+        );
+        tokio::time::timeout(Duration::from_millis(250), endpoint.wait_idle())
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "HTTP/3 readiness error client cleanup timed out",
+                )
+            })?;
+        result
+    })
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 readiness error handshake, requests, or cleanup timed out",
+        )
+    })?
 }
 
 async fn run_http3_upload_pending_case(
