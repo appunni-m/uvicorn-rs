@@ -36,6 +36,21 @@ host window passes preflight. The full parity suite does not need to be
 repeated unless its code or input identity changes. This preparation
 establishes no repeatable performance gain.
 
+### Latest FastAPI HTTP/1 measurement attempt (2026-10-13)
+
+After the host preflight accepted on `cc485f3b4`, one normal-build run measured
+the 15 selected stock-FastAPI HTTP/1 workloads against Uvicorn `httptools` on
+asyncio and uvloop. Each server/workload used three repetitions, five seconds
+per sample, one second warmup, and concurrency 64. All **180/180** rows passed
+response checks and server lifecycle checks; there were no request failures,
+unexpected native errors, or panic events. The per-row CPU guard rejected
+**151/180** timing rows for unrelated host CPU activity. The analyzer found
+**zero qualified workload/loop pairs** with three matching valid repetitions,
+so it emitted no ratios or performance medians. This run provides no evidence
+of a speedup or regression. Raw rows, logs, and analysis remain local under
+`target/benchmark-categories/wh9k-cc485f3b4/` and are excluded from Git. No
+full parity or coverage suite was repeated.
+
 ## Latest hosted ASGI matrix: run 38122909359
 
 The hosted matrix ran on clean commit
