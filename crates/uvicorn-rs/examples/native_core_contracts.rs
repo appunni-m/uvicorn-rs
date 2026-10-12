@@ -11,8 +11,8 @@ use std::{
     net::SocketAddr,
     pin::Pin,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     task::{Context, Poll, Waker},
     time::Duration,
@@ -24,18 +24,18 @@ use h3::error::Code;
 use h3_quinn::quinn::{self, rustls as quic_rustls};
 use http::{Method, Request, Response, StatusCode};
 use http_body::{Body, SizeHint};
-use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Empty, Full, StreamBody};
+use http_body_util::{BodyExt, Empty, Full, StreamBody, combinators::UnsyncBoxBody};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use serde_json::Value;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::watch,
-    time::{timeout, Instant},
+    time::{Instant, timeout},
 };
 use tokio_rustls::{
-    rustls::{self, pki_types::ServerName},
     TlsAcceptor, TlsConnector,
+    rustls::{self, pki_types::ServerName},
 };
 use tower_service::Service;
 use uvicorn_rs::{
@@ -123,6 +123,7 @@ struct LifecycleState {
     startup_hook_dropped: Arc<AtomicBool>,
     shutdown_hook_dropped: Arc<AtomicBool>,
     requests_started: AtomicUsize,
+    readiness_error_armed: AtomicBool,
     readiness_gate: Mutex<ReadinessGate>,
     response_body_dropped: Arc<AtomicBool>,
     shutdown_saw_response_body_drop: AtomicBool,
@@ -130,6 +131,7 @@ struct LifecycleState {
     release_request: watch::Sender<bool>,
     events: Mutex<Vec<&'static str>>,
     observed_lifecycle_errors: Mutex<Vec<(ServerErrorPhase, String, bool)>>,
+    readiness_errors: Mutex<Vec<(ServerErrorPhase, bool, String)>>,
 }
 
 struct LifecycleHooks {
@@ -235,6 +237,15 @@ impl<B> Service<Request<B>> for LifecycleApp {
     type Future = AppFutureLifecycle;
 
     fn poll_ready(&mut self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        if self
+            .state
+            .readiness_error_armed
+            .swap(false, Ordering::AcqRel)
+        {
+            return Poll::Ready(Err(io::Error::other(
+                "injected lifecycle readiness failure",
+            )));
+        }
         let mut readiness = match self.state.readiness_gate.lock() {
             Ok(readiness) => readiness,
             Err(_) => {
@@ -299,6 +310,10 @@ impl<B> Service<Request<B>> for LifecycleApp {
                 ));
             }
             match path.as_str() {
+                "/arm-readiness-error" => {
+                    state.readiness_error_armed.store(true, Ordering::Release);
+                    lifecycle_response(b"armed\n", None)
+                }
                 "/ready" => lifecycle_response(b"started\n", None),
                 "/hold" => {
                     state.active_request.send_replace(true);
@@ -1231,6 +1246,7 @@ fn lifecycle_fixture_with_behaviors(
         startup_hook_dropped: Arc::new(AtomicBool::new(false)),
         shutdown_hook_dropped: Arc::new(AtomicBool::new(false)),
         requests_started: AtomicUsize::new(0),
+        readiness_error_armed: AtomicBool::new(false),
         readiness_gate: Mutex::new(ReadinessGate::default()),
         response_body_dropped: Arc::new(AtomicBool::new(false)),
         shutdown_saw_response_body_drop: AtomicBool::new(false),
@@ -1238,6 +1254,7 @@ fn lifecycle_fixture_with_behaviors(
         release_request,
         events: Mutex::new(Vec::new()),
         observed_lifecycle_errors: Mutex::new(Vec::new()),
+        readiness_errors: Mutex::new(Vec::new()),
     });
     LifecycleFixture {
         app: LifecycleApp {
@@ -1279,6 +1296,18 @@ fn lifecycle_server_config(
                 }
             }))
         }
+        "native-lifecycle-readiness-error" => {
+            let state = Arc::clone(&hooks.state);
+            Some(Arc::new(move |event: ServerErrorEvent<'_>| {
+                if let Ok(mut observations) = state.readiness_errors.lock() {
+                    observations.push((
+                        event.phase(),
+                        event.error().is::<io::Error>(),
+                        event.error().to_string(),
+                    ));
+                }
+            }))
+        }
         _ => None,
     };
     Ok(uvicorn_rs::ServerConfig {
@@ -1313,6 +1342,9 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
         }
         "native-lifecycle-server-and-shutdown-error" => {
             return run_lifecycle_server_and_shutdown_error_case(case).await;
+        }
+        "native-lifecycle-readiness-error" => {
+            return run_lifecycle_readiness_error_case(case).await;
         }
         "native-lifecycle-readiness-pending" => {
             return run_lifecycle_readiness_case(case).await;
@@ -1583,6 +1615,75 @@ async fn run_lifecycle_readiness_case(case: &Value) -> ProbeResult<()> {
         )
         .into()),
     }
+}
+
+async fn run_lifecycle_readiness_error_case(case: &Value) -> ProbeResult<()> {
+    if required_str(case, "protocol")? != "http/1.1" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "lifecycle readiness-error contract requires HTTP/1.1",
+        )
+        .into());
+    }
+
+    let fixture = lifecycle_fixture();
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let server = tokio::spawn(uvicorn_rs::serve_tcp(
+        listener,
+        fixture.app.clone(),
+        shutdown_on_change(fixture.shutdown_receiver.clone()),
+        lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
+    ));
+
+    let workflow = async {
+        for (path_field, status_field, body_field) in [
+            ("arm_path", "arm_status", "arm_body"),
+            ("fault_path", "fault_status", "fault_body"),
+            ("recovery_path", "recovery_status", "recovery_body"),
+        ] {
+            let response = tokio::time::timeout(
+                Duration::from_secs(2),
+                lifecycle_http1_get(address, required_str(case, path_field)?),
+            )
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("HTTP/1.1 lifecycle {path_field} request timed out"),
+                )
+            })??;
+            let expected_status = required_status(case, status_field)?;
+            let expected_body = required_str(case, body_field)?;
+            if response.0 != expected_status || response.1 != expected_body.as_bytes() {
+                return Err(io::Error::other(format!(
+                    "{}: lifecycle {path_field} returned status {} and body {:?}, expected status {expected_status} and body {expected_body:?}",
+                    required_str(case, "id")?,
+                    response.0,
+                    String::from_utf8_lossy(&response.1)
+                ))
+                .into());
+            }
+        }
+        Ok::<_, Box<dyn Error + Send + Sync>>(())
+    }
+    .await;
+
+    fixture.shutdown_sender.send_replace(true);
+    let server_result = join_lifecycle_server(server).await;
+    workflow?;
+    server_result?;
+
+    if !fixture.state.startup_completed.load(Ordering::Acquire)
+        || !fixture.state.shutdown_completed.load(Ordering::Acquire)
+    {
+        return Err(io::Error::other(
+            "lifecycle readiness error prevented successful startup or shutdown",
+        )
+        .into());
+    }
+    verify_lifecycle_events(case, &fixture.state)?;
+    verify_lifecycle_readiness_error_observation(case, &fixture.state)
 }
 
 async fn run_lifecycle_readiness_http1_case(case: &Value) -> ProbeResult<()> {
@@ -2304,7 +2405,8 @@ fn verify_lifecycle_events(case: &Value, state: &LifecycleState) -> ProbeResult<
         | "native-lifecycle-shutdown-error"
         | "native-lifecycle-shutdown-timeout"
         | "native-lifecycle-shutdown-panic"
-        | "native-lifecycle-server-and-shutdown-error" => &["startup", "shutdown"],
+        | "native-lifecycle-server-and-shutdown-error"
+        | "native-lifecycle-readiness-error" => &["startup", "shutdown"],
         operation => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -2320,6 +2422,38 @@ fn verify_lifecycle_events(case: &Value, state: &LifecycleState) -> ProbeResult<
     if actual.as_slice() != expected {
         return Err(io::Error::other(format!(
             "{}: lifecycle events differed: expected {expected:?}, got {actual:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+fn verify_lifecycle_readiness_error_observation(
+    case: &Value,
+    state: &LifecycleState,
+) -> ProbeResult<()> {
+    if required_str(case, "expected_server_error_phase")? != "readiness"
+        || required_str(case, "expected_server_error_type")? != "io"
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "lifecycle readiness-error case has unsupported server error expectations",
+        )
+        .into());
+    }
+    let expected_message = required_str(case, "expected_server_error_message")?;
+    let observations = state
+        .readiness_errors
+        .lock()
+        .map_err(|_| io::Error::other("readiness error observations were poisoned"))?;
+    if observations.len() != 1
+        || observations[0].0 != ServerErrorPhase::Readiness
+        || !observations[0].1
+        || observations[0].2 != expected_message
+    {
+        return Err(io::Error::other(format!(
+            "{}: readiness error observer mismatch: expected one io readiness error {expected_message:?}, got {observations:?}",
             required_str(case, "id")?
         ))
         .into());

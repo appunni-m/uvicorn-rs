@@ -622,6 +622,23 @@
       "minimum_pending_ms": 20
     },
     {
+      "id": "http1.lifecycle-service-readiness-error-recovers",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-readiness-error",
+      "arm_path": "/arm-readiness-error",
+      "arm_status": 200,
+      "arm_body": "armed\n",
+      "fault_path": "/ready",
+      "fault_status": 500,
+      "fault_body": "",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "started\n",
+      "expected_server_error_phase": "readiness",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected lifecycle readiness failure"
+    },
+    {
       "id": "native.lifecycle-startup-error-prevents-serving",
       "protocol": "http/1.1",
       "operation": "native-lifecycle-startup-error"
