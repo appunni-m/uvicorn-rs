@@ -671,6 +671,15 @@
       "covers": ["http3.graceful-shutdown"]
     },
     {
+      "id": "http3.incomplete-request-stream-reset-keeps-connection-usable",
+      "protocol": "http3",
+      "operation": "native-http3-incomplete-request-recovery",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "covers": ["http3.request-task-recovery"]
+    },
+    {
       "id": "http1-tls.shutdown-bounds-incomplete-handshake",
       "protocol": "native-core",
       "operation": "native-http1-tls-pending-handshake-shutdown",
