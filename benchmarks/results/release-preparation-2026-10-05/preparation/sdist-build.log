@@ -1,5 +1,0 @@
-error: unexpected argument '--locked' found
-
-Usage: maturin sdist [OPTIONS]
-
-For more information, try '--help'.
