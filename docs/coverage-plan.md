@@ -1,43 +1,36 @@
 # Plan: unified black-box coverage for the ASGI adapter and Python-free Rust runtime
 
-## Current acceptance status (2026-10-12)
+## Current acceptance status (2026-10-14)
 
 The unified v4 acceptance remains open. The manifests define 511 ASGI
-parity/fault-contract cases and 56 Python-free native cases (567 total).
+parity/fault-contract cases and 70 Python-free native cases (581 total).
 Acceptance requires three complete repeats of both matrices, 100% region and
 line coverage, and zero-gap results from fully paginated Coverage-MCP queries
 bound to the exact report bytes.
 
-The current full measurement is
-`target/asgi-coverage/2026-10-12-current-source-567/coverage-report.json`.
-All 567 attribution cases passed: 243 oracle-parity cases, 268 fault/support
-contracts, and 56 native contracts. All three ASGI repeats passed 511/511 and
-all three native repeats passed 56/56. One transient infrastructure failure
-recovered during the initial case sweep; no behavioral or permanent
-infrastructure failures remain. Coverage is 6,840/6,940 regions (98.56%) and
-5,029/5,083 lines (98.94%), leaving 100 regions and 54 lines. The source/input
-digest is `b17cebfaddcfad2438b7b6488b497a3f526aa2c4afc76a0f08edbb4b9d7b7771`.
+The latest complete-scope report is
+`target/asgi-coverage/2026-10-14-current-579/coverage-report.json`; it covers
+511 ASGI plus 68 native cases (579 total) and predates two HTTP/3 fixes and two
+native cases in the current manifest. It is historical evidence, not current
+acceptance evidence. The selected input
+`http3.service-panic-returns-500-and-keeps-connection` passed 1/1 without
+retry, with a selected report at
+`target/asgi-coverage/2026-10-14-http3-service-panic-recovery-attempt2/coverage-report.json`.
+Coverage-MCP reports `source: matches_receipt` and `tests: passed` for that
+case. The selected report does not establish the full matrix or aggregate
+coverage. The request-body empty-DATA case also passed its selected run; its
+receipt is summarized in [coverage status](coverage.md#current-unified-coverage-status-2026-10-14).
 
-Coverage-MCP fully paged both metrics and returned 122 region groups and 49
-line groups with `source: matches_receipt`. Its `tests: failed` status reflects
-the incomplete aggregate coverage gate, not failed behavioral cases. The
-uncovered regions are in `crates/uvicorn-rs/src/http3.rs` (66) and
-`crates/uvicorn-rs/src/lib.rs` (34); uncovered lines are 39 and 15 in those
-files, respectively. This is dirty local evidence for revision
-`3dcaeaa0caf47aca96412d15451ac6a1123ebb04`, not hosted exact-commit evidence.
-
-Next, classify each uncovered region against its source span and the
-case-to-region attribution. Add an input or named fault contract only when it
-exercises a real public behavior or documented invariant. Refactor a genuinely
-unreachable internal path into a sound representation where that preserves the
-contract; do not suppress or exclude it. After changes, rerun targeted cases
-and the full 567-case matrix, then require 100% regions and lines and zero-gap
-Coverage-MCP results before attaching a passing receipt. The
-`http1-tls.shutdown-bounds-incomplete-handshake` native contract remains in
-the manifest. Schema v4 retains function-instantiation-aware region IDs,
-indexed `hit_by` attribution, per-profile hashes, independent LLVM replay,
-exact artifact checks, and fully paginated MCP row identity. Python line and
-branch coverage remain outside the Rust denominator.
+The current 581-case matrix, three complete repeats, 100% region and line
+coverage, and zero-gap Coverage-MCP results remain outstanding. Classify each
+uncovered region against its source span and case-to-region attribution. Add an
+input or named fault contract only when it exercises a real public behavior or
+documented invariant. Refactor a genuinely unreachable internal path into a
+sound representation where that preserves the contract; do not suppress or
+exclude it. Schema v4 retains function-instantiation-aware region IDs, indexed
+`hit_by` attribution, per-profile hashes, independent LLVM replay, exact
+artifact checks, and fully paginated MCP row identity. Python line and branch
+coverage remain outside the Rust denominator.
 
 ## Goal and decision
 

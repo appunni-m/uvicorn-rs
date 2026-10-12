@@ -449,6 +449,21 @@
       "expected_server_error_message": "injected HTTP/3 request body reset"
     },
     {
+      "id": "http3.service-panic-returns-500-and-keeps-connection",
+      "protocol": "http3",
+      "operation": "http3-service-panic-recovery",
+      "covers": ["http3.request-task-recovery"],
+      "path": "/http3-service-panic",
+      "expected_status": 500,
+      "expected_body": "",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "expected_server_error_phase": "service",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "HTTP/3 application service panicked"
+    },
+    {
       "id": "http3.response-body-error-resets-stream-and-keeps-connection",
       "protocol": "http3",
       "operation": "http3-response-error",

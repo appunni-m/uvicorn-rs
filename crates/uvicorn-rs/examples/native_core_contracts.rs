@@ -864,6 +864,13 @@ where
                     response(StatusCode::OK, body)
                 }
                 "/service-error" => Err(io::Error::other("injected service error")),
+                "/http3-service-panic" => {
+                    // This route exists only in the contract runner so a real
+                    // QUIC request can exercise request-task panic isolation.
+                    std::panic::resume_unwind(Box::new(
+                        "injected HTTP/3 application service panic",
+                    ));
+                }
                 "/body-error" => {
                     let body = stream::unfold(0_u8, |step| async move {
                         match step {
@@ -2988,6 +2995,10 @@ async fn run_cases(
                 .len();
             match operation {
                 "request" => run_http3_request_case(h3_address, &tls_clients.http3, case).await?,
+                "http3-service-panic-recovery" => {
+                    run_http3_service_panic_recovery_case(h3_address, &tls_clients.http3, case)
+                        .await?
+                }
                 "readiness" => {
                     run_http3_readiness_case(h3_address, &tls_clients.http3, case).await?
                 }
@@ -3451,6 +3462,71 @@ async fn run_http3_request_case(
         ))
         .into());
     }
+    Ok(())
+}
+
+async fn run_http3_service_panic_recovery_case(
+    address: SocketAddr,
+    client_config: &quinn::ClientConfig,
+    case: &Value,
+) -> ProbeResult<()> {
+    let (endpoint, mut sender) = new_http3_client(address, client_config).await?;
+    let mut failed = timeout(
+        Duration::from_secs(2),
+        send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "path")?,
+            b"",
+        ),
+    )
+    .await??;
+    let (status, body, _) =
+        timeout(Duration::from_secs(2), collect_http3_response(&mut failed)).await??;
+    if status != required_status(case, "expected_status")?
+        || body != required_str(case, "expected_body")?.as_bytes()
+    {
+        return Err(io::Error::other(format!(
+            "{}: panicking service response differed: status={status}, body={:?}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(&body)
+        ))
+        .into());
+    }
+
+    let mut recovery = timeout(
+        Duration::from_secs(2),
+        send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "recovery_path")?,
+            b"",
+        ),
+    )
+    .await??;
+    let (status, body, _) = timeout(
+        Duration::from_secs(2),
+        collect_http3_response(&mut recovery),
+    )
+    .await??;
+    if status != required_status(case, "recovery_status")?
+        || body != required_str(case, "recovery_body")?.as_bytes()
+    {
+        return Err(io::Error::other(format!(
+            "{}: same-connection recovery response differed: status={status}, body={:?}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(&body)
+        ))
+        .into());
+    }
+
+    endpoint.close(
+        quinn::VarInt::from_u32(0),
+        b"HTTP/3 panic recovery case complete",
+    );
+    endpoint.wait_idle().await;
     Ok(())
 }
 

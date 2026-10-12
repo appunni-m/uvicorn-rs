@@ -5,12 +5,14 @@ use std::{
     fmt,
     future::Future,
     io,
+    panic::AssertUnwindSafe,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
 };
 
 use bytes::{Buf, Bytes};
+use futures_util::FutureExt;
 use h3::error::Code;
 use h3_quinn::quinn;
 use http::{Request, Response, Version};
@@ -447,10 +449,24 @@ where
     futures_util::future::poll_fn(|context| service.poll_ready(context))
         .await
         .map_err(|never| match never {})?;
-    let response = service
-        .call(request)
+    let response = match AssertUnwindSafe(async { service.call(request).await })
+        .catch_unwind()
         .await
-        .map_err(|never| match never {})?;
+    {
+        Ok(Ok(response)) => response,
+        Ok(Err(never)) => match never {},
+        Err(_) => {
+            let error = io::Error::other("HTTP/3 application service panicked");
+            observe_error(
+                error_observer.as_ref(),
+                ServerErrorPhase::Service,
+                Some(peer_addr),
+                &error,
+            );
+            tracing::error!(%error, "HTTP/3 application service panicked before response commitment");
+            super::internal_server_error()
+        }
+    };
     let (mut parts, body) = response.into_parts();
     let mut body = Box::pin(body);
     parts.version = Version::HTTP_3;

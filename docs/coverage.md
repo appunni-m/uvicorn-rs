@@ -3,7 +3,7 @@
 ## Current unified coverage status (2026-10-14)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 69 Python-free native cases (580 total). A
+parity/fault-contract cases and 70 Python-free native cases (581 total). A
 current-source complete run, three repeats of both matrices, 100% region and
 line coverage, and zero-gap region and line Coverage-MCP results remain
 outstanding.
@@ -17,8 +17,8 @@ passed on its allowed retry. It is a single complete-scope measurement, not
 three verification repeats. Coverage is **6,860/6,940 regions** and
 **5,043/5,083 lines**, leaving 80 regions and 40 lines. Its source/input digest
 is `3e46f02c214720b6d7807da286a2e0429ff7d41e3e68cff39f5914ebb6bed633`.
-This report predates the current HTTP/3 source fix and one native case, so it
-is not current-source or current-manifest acceptance evidence.
+This report predates two subsequent HTTP/3 source fixes and two native cases,
+so it is not current-source or current-manifest acceptance evidence.
 
 The new focused case
 `http3.empty-data-frame-does-not-end-request-body` protects request streaming
@@ -31,7 +31,17 @@ has complete attribution for the selected case. Coverage-MCP reports
 `crates/uvicorn-rs/src/http3.rs:87` find no missing region or line groups.
 The selected report records 684/6,941 regions and 604/5,084 lines, with the
 remaining source unmeasured by this one-case selection. It does not establish
-full-suite coverage. The full 580-case current-source run remains outstanding.
+full-suite coverage.
+
+The focused case `http3.service-panic-returns-500-and-keeps-connection`
+checks the Python-free Rust HTTP/3 service boundary: a service panic before
+response commitment produces an empty 500 response, reports a service-phase
+error, and leaves the same QUIC connection able to serve a recovery request.
+The selected run passed 1/1 without retry. Its report is
+`target/asgi-coverage/2026-10-14-http3-service-panic-recovery-attempt2/coverage-report.json`;
+Coverage-MCP reports `source: matches_receipt` and `tests: passed` for that
+selected input. This is focused contract evidence, not full-matrix acceptance.
+The full 581-case current-source run remains outstanding.
 
 Earlier focused reports for endpoint shutdown and HTTP/3 ALPN recovery were
 measured before the request-body change and are now historical. Native case

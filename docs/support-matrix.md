@@ -44,17 +44,22 @@ claiming support for that combined path. A narrower candidate-wheel smoke
 passed on the current source; see the
 [wheel-consumer receipt](../benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
 The Python-free
-`uvicorn-rs` crate has a 36-case live contract manifest covering cleartext
-HTTP/1.1, cleartext HTTP/2 prior knowledge, TLS HTTP/1.1 and HTTP/2, and HTTP/3
-over a caller-configured Quinn endpoint. All 36 cases passed three sequential
-local repeats (108/108) on macOS ARM64; source and input hashes are recorded in
-the [request-lifetime receipt](../benchmarks/results/2026-10-12/native-request-lifetime-live/report.md).
+`uvicorn-rs` crate currently has a 70-case live contract manifest covering
+cleartext HTTP/1.1, cleartext HTTP/2 prior knowledge, TLS HTTP/1.1 and HTTP/2,
+and HTTP/3 over a caller-configured Quinn endpoint. The historical 36-case
+snapshot passed three sequential local repeats (108/108) on macOS ARM64; source
+and input hashes are recorded in the [request-lifetime receipt](../benchmarks/results/2026-10-12/native-request-lifetime-live/report.md).
+That receipt does not cover the current 70-case manifest. The current HTTP/3
+service-panic recovery case passed its selected live run 1/1: it returns an
+empty 500 before response commitment and keeps the same QUIC connection usable
+for a recovery request. The current unified coverage status records its
+[focused receipt and remaining acceptance gates](coverage.md#current-unified-coverage-status-2026-10-14).
 The current set includes an H2 stream-reset lifetime observation and a synchronized
 H1 peer write-half-close case that completes the held response while the
 connection-lifetime handle remains open.
 The earlier 34-case [package-promotion receipt](../benchmarks/results/2026-10-12/native-package-promotion-live/report.md)
 is retained as evidence from the package-move snapshot.
-The seven HTTP/3 cases cover QUIC/TLS/ALPN metadata,
+The seven HTTP/3 cases in that historical receipt cover QUIC/TLS/ALPN metadata,
 streamed request bodies and trailers, response trailers, early response
 streaming, a finite slow-reader backpressure/cancellation workload, and
 graceful drain. Seven lifecycle cases exercise start-before-request ordering,
