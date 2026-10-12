@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "http1.path-query-routing",
+      "protocol": "http/1.1",
+      "operation": "request",
+      "method": "GET",
+      "path": "/items/42?tag=green",
+      "expected_status": 200,
+      "expected_json": {"item_id": 42, "tag": "green"}
+    },
+    {
+      "id": "http1.bodyless-get-omits-content-length",
+      "protocol": "http/1.1",
+      "operation": "request",
+      "method": "GET",
+      "path": "/request-head",
+      "expected_status": 200,
+      "expected_json": {"content_length_present": false}
+    },
+    {
+      "id": "http1.json-body-consumption",
+      "protocol": "http/1.1",
+      "operation": "request",
+      "method": "POST",
+      "path": "/echo",
+      "body": "{\"message\":\"hello\"}",
+      "expected_status": 200,
+      "expected_json": {"message": "hello"}
+    },
+    {
+      "id": "http1.request-stream-progress-before-upload-complete",
+      "protocol": "http/1.1",
+      "operation": "upload-progress",
+      "path": "/stream-upload",
+      "stats_path": "/stats",
+      "first_chunk": "pref",
+      "remaining_body": "ix-data",
+      "declared_content_length": 11,
+      "expected_received_bytes": 11,
+      "expected_status": 200
+    },
+    {
+      "id": "http1.pre-commit-application-error",
+      "protocol": "http/1.1",
+      "operation": "request",
+      "method": "GET",
+      "path": "/failure",
+      "expected_status": 500,
+      "expected_json": {"detail": "native application failure"}
+    },
+    {
+      "id": "http1.first-stream-frame-before-completion",
+      "protocol": "http/1.1",
+      "operation": "stream-progress",
+      "method": "GET",
+      "path": "/stream",
+      "first_chunk": "first\n",
+      "second_chunk": "second\n"
+    },
+    {
+      "id": "http1.partial-upload-observes-disconnect-and-recovers",
+      "protocol": "http/1.1",
+      "operation": "upload-disconnect",
+      "path": "/upload",
+      "partial_body": "partial",
+      "declared_content_length": 1048576,
+      "expected_received_bytes": 7,
+      "expected_body_errors": 1,
+      "expected_cancelled_handlers": 0,
+      "expected_status": 400
+    },
+    {
+      "id": "http1.slow-reader-bounds-polling-and-cancels-producer",
+      "protocol": "http/1.1",
+      "operation": "response-backpressure",
+      "method": "GET",
+      "path": "/backpressure",
+      "stats_path": "/stats",
+      "chunk_size": 32768,
+      "total_chunks": 2048,
+      "max_polled_chunks": 512,
+      "observe_delay_ms": 200,
+      "expected_dropped_streams": 1
+    },
+    {
+      "id": "http2.path-query-routing",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "request",
+      "method": "GET",
+      "path": "/items/7?tag=blue",
+      "expected_status": 200,
+      "expected_json": {"item_id": 7, "tag": "blue"}
+    },
+    {
+      "id": "http2.bodyless-get-omits-content-length",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "request",
+      "method": "GET",
+      "path": "/request-head",
+      "expected_status": 200,
+      "expected_json": {"content_length_present": false}
+    },
+    {
+      "id": "http2.partial-upload-reset-delivers-body-error-and-preserves-connection",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "http2-upload-reset",
+      "path": "/upload",
+      "stats_path": "/stats",
+      "partial_body": "partial",
+      "declared_content_length": 1048576,
+      "expected_received_bytes": 7,
+      "expected_body_error_delta": 1,
+      "expected_cancelled_handlers_delta": 0,
+      "recovery_path": "/items/2?tag=reset-recovery",
+      "expected_recovery_json": {"item_id": 2, "tag": "reset-recovery"}
+    },
+    {
+      "id": "http2.json-body-consumption",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "request",
+      "method": "POST",
+      "path": "/echo",
+      "body": "{\"message\":\"h2\"}",
+      "expected_status": 200,
+      "expected_json": {"message": "h2"}
+    },
+    {
+      "id": "http2.request-stream-progress-before-upload-complete",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "http2-upload-progress",
+      "path": "/stream-upload",
+      "stats_path": "/stats",
+      "first_chunk": "pref",
+      "remaining_body": "ix-data",
+      "declared_content_length": 11,
+      "expected_received_bytes": 11,
+      "expected_status": 200
+    },
+    {
+      "id": "http2.pre-commit-application-error",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "request",
+      "method": "GET",
+      "path": "/failure",
+      "expected_status": 500,
+      "expected_json": {"detail": "native application failure"}
+    },
+    {
+      "id": "http2.slow-reader-bounds-polling-and-resets-producer",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "response-backpressure",
+      "method": "GET",
+      "path": "/backpressure",
+      "stats_path": "/stats",
+      "chunk_size": 32768,
+      "total_chunks": 2048,
+      "max_polled_chunks": 512,
+      "observe_delay_ms": 200,
+      "expected_dropped_streams": 1
+    },
+    {
+      "id": "http1.graceful-shutdown-drains-active-response",
+      "protocol": "http/1.1",
+      "operation": "graceful-drain",
+      "method": "GET",
+      "path": "/drain",
+      "first_chunk": "drain-first\n",
+      "second_chunk": "drain-second\n"
+    },
+    {
+      "id": "http2.graceful-shutdown-drains-active-response",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "graceful-drain",
+      "method": "GET",
+      "path": "/drain",
+      "first_chunk": "drain-first\n",
+      "second_chunk": "drain-second\n"
+    }
+  ]
+}

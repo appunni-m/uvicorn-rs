@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Validate current parity and complete native coverage evidence without rerunning it.
+"""Validate parity and coverage evidence, replaying retained LLVM profiles offline.
 
-Offline validation reads only repository files and retained evidence. It does
-not import the server, protocol clients, reference packages, or coverage tools.
+Offline validation does not import or execute the server, parity clients, or
+reference packages. Coverage validation invokes the exact recorded Rust/LLVM
+toolchain to independently reconstruct each case's covered source regions.
 """
 
 from __future__ import annotations
@@ -14,15 +15,35 @@ from functools import lru_cache
 import hashlib
 import importlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 from typing import Any
+
+from coverage_toolchain import ToolchainError, validate_coverage_tools
 
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests/parity/manifest.json"
+UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@4"
+PRODUCTION_SOURCE_SET = (
+    "src/lib.rs",
+    "crates/uvicorn-rs/src/lib.rs",
+    "crates/uvicorn-rs/src/http3.rs",
+    "crates/native-app-contract/src/lib.rs",
+)
+EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
+NO_COUNTER_SOURCE_SET = (PRODUCTION_SOURCE_SET[-1],)
+PYTHON_SOURCE_SET = (
+    "python/uvicorn_rs/__init__.py",
+    "python/uvicorn_rs/__main__.py",
+    "python/uvicorn_rs/_bridge.py",
+    "python/uvicorn_rs/cli.py",
+    "python/uvicorn_rs/server.py",
+)
 
 
 class EvidenceError(RuntimeError):
@@ -40,6 +61,11 @@ def sha256(path: Path) -> str:
 
 def digest_json(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def coverage_mcp_group_identity(group: dict[str, Any]) -> str:
+    """Use the complete row so distinct null-function line groups stay distinct."""
+    return json.dumps(group, sort_keys=True, separators=(",", ":"))
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -68,7 +94,23 @@ def _literal_constants(path: str, modified: int, size: int) -> dict[str, Any]:
             try:
                 value = ast.literal_eval(statement.value)
             except (ValueError, TypeError):
-                continue
+                node = statement.value
+                if (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
+                        and node.value.id in constants):
+                    try:
+                        subscript = node.slice
+                        if isinstance(subscript, ast.Slice):
+                            lower = ast.literal_eval(subscript.lower) if subscript.lower is not None else None
+                            upper = ast.literal_eval(subscript.upper) if subscript.upper is not None else None
+                            step = ast.literal_eval(subscript.step) if subscript.step is not None else None
+                            subscript = slice(lower, upper, step)
+                        else:
+                            subscript = ast.literal_eval(subscript)
+                        value = constants[node.value.id][subscript]
+                    except (ValueError, TypeError, KeyError, IndexError):
+                        continue
+                else:
+                    continue
             for target in statement.targets:
                 if isinstance(target, ast.Name):
                     constants[target.id] = value
@@ -187,7 +229,7 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
 def validate_parity(
     result: dict[str, Any], *, expected_cases: list[dict[str, Any]] | None = None,
     expected_native_sha256: str | None = None, offline: bool = True,
-    _current_revision: str | None = None,
+    _current_revision: str | None = None, expected_coverage_profile_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Check exact indexed cases; callers may bind evidence to a shipping native hash."""
     manifest, all_cases, input_paths = load_contract()
@@ -205,6 +247,12 @@ def validate_parity(
     require(isinstance(run.get("run_id"), str) and bool(run["run_id"]), "parity run identity is empty")
     require(isinstance(run.get("command"), list) and bool(run["command"])
             and all(isinstance(part, str) for part in run["command"]), "parity command identity is invalid")
+    if expected_coverage_profile_dir is not None:
+        command = run["command"]
+        expected_profile_dir = str(expected_coverage_profile_dir.resolve())
+        require(any(command[index:index + 2] == ["--coverage-profile-dir", expected_profile_dir]
+                    for index in range(len(command) - 1)),
+                "parity result does not use its receipted coverage-profile directory")
     require(run["manifest"] == {"path": "tests/parity/manifest.json", "schema": manifest["schema"],
                                 "sha256": sha256(MANIFEST_PATH)}, "parity manifest identity differs from checkout")
     input_schema = source_constant(ROOT / "scripts/run_parity.py", "INPUT_SCHEMA")
@@ -255,201 +303,852 @@ def validate_parity(
             "scope": "retained current evidence; this check does not publish or establish a clean release"}
 
 
-def llvm_native_regions(report: dict[str, Any], source_digest: str) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
-    """Reconstruct the source region denominator from the retained LLVM export.
+def llvm_source_name(path: Path) -> str | None:
+    """Map only a path inside this checkout to a declared production source."""
+    if not path.is_absolute() or ".." in path.parts:
+        return None
+    try:
+        relative = path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return None
+    return relative if relative in PRODUCTION_SOURCE_SET else None
 
-    Producer paths can belong to a different CI checkout. Bind the one native
-    source file by its suffix, then use that exact producer path throughout.
-    """
+
+def llvm_production_regions(
+    report: dict[str, Any], source_digest: str,
+    *, canonical_functions: dict[tuple[str, int, int], str] | None = None,
+) -> tuple[
+    dict[str, dict[str, Any]],
+    dict[str, dict[str, int]],
+    dict[tuple[str, int, int], str],
+]:
+    """Reconstruct executable source regions and per-file LLVM totals."""
     data = report.get("data")
-    require(isinstance(data, list) and len(data) == 1, "LLVM export must contain one native measurement")
-    files = data[0]["files"]
-    native_files = [item for item in files if Path(item["filename"]).parts[-2:] == ("src", "lib.rs")]
-    require(len(native_files) == 1, "LLVM export must contain exactly one src/lib.rs")
-    native_file = native_files[0]
-    producer_path = Path(native_file["filename"])
-    require(producer_path.is_absolute() and ".." not in producer_path.parts, "invalid LLVM producer source path")
-    producer_root = producer_path.parent.parent
-    require([item["filename"] for item in files if Path(item["filename"]).is_relative_to(producer_root)]
-            == [native_file["filename"]], "LLVM source scope contains additional repository files")
-    regions: dict[str, dict[str, Any]] = {}
-    for function in data[0]["functions"]:
+    require(isinstance(data, list) and len(data) == 1, "LLVM export must contain one unified measurement")
+    files, functions = data[0].get("files"), data[0].get("functions")
+    require(isinstance(files, list) and isinstance(functions, list), "LLVM measurement lacks files/functions")
+    selected: dict[str, dict[str, Any]] = {}
+    for item in files:
+        require(isinstance(item, dict) and isinstance(item.get("filename"), str), "invalid LLVM file row")
+        relative = llvm_source_name(Path(item["filename"]))
+        if relative is not None:
+            require(relative not in selected, f"LLVM export duplicates {relative}")
+            selected[relative] = item
+    require(set(EXECUTABLE_SOURCE_SET) <= set(selected), "LLVM export omits an executable production source")
+
+    summaries = {}
+    for relative in PRODUCTION_SOURCE_SET:
+        item = selected.get(relative)
+        if item is None:
+            summaries[relative] = {"regions": 0, "lines": 0, "regions_total": 0, "lines_total": 0}
+            continue
+        summary = item.get("summary")
+        require(isinstance(summary, dict), f"LLVM summary missing for {relative}")
+        values = {}
+        for metric in ("regions", "lines"):
+            row = summary.get(metric)
+            require(isinstance(row, dict) and type(row.get("covered")) is int
+                    and type(row.get("count")) is int and 0 <= row["covered"] <= row["count"],
+                    f"invalid LLVM {metric} summary for {relative}")
+            values[metric] = row["covered"]
+            values[f"{metric}_total"] = row["count"]
+        summaries[relative] = values
+    for relative in NO_COUNTER_SOURCE_SET:
+        require(not any(summaries[relative].values()), f"no-counter file has LLVM counters: {relative}")
+
+    groups: dict[tuple[str, int, int], list[tuple[str, list[list[int]]]]] = {}
+    for function in functions:
+        require(isinstance(function, dict) and isinstance(function.get("name"), str)
+                and isinstance(function.get("filenames"), list) and isinstance(function.get("regions"), list),
+                "invalid LLVM function row")
+        filenames = function["filenames"]
+        require(all(isinstance(filename, str) for filename in filenames), "invalid LLVM function filenames")
+        by_file: dict[str, list[list[int]]] = {}
         for raw in function["regions"]:
-            require(isinstance(raw, list) and len(raw) == 8 and all(type(item) is int for item in raw),
+            require(isinstance(raw, list) and len(raw) == 8 and all(type(value) is int for value in raw),
                     "invalid raw LLVM region")
-            start_line, start_column, end_line, end_column, count, file_index, _, kind = raw
-            require(0 <= file_index < len(function["filenames"]), "invalid LLVM region file index")
-            if Path(function["filenames"][file_index]) != producer_path:
+            file_index = raw[5]
+            require(0 <= file_index < len(filenames), "invalid LLVM region file index")
+            relative = llvm_source_name(Path(filenames[file_index]))
+            if relative is not None:
+                by_file.setdefault(relative, []).append(raw)
+        for relative, raw_regions in by_file.items():
+            code_regions = [raw for raw in raw_regions if raw[7] == 0]
+            if not code_regions:
                 continue
-            identity = [source_digest, "src/lib.rs", start_line, start_column, end_line, end_column, kind]
+            first_region = raw_regions[0]
+            group_key = (relative, first_region[0], first_region[1])
+            groups.setdefault(group_key, []).append((function["name"], code_regions))
+
+    require(bool(groups), "LLVM export has no executable production function regions")
+    if canonical_functions is not None:
+        require(set(groups) == set(canonical_functions), "case LLVM function groups differ from aggregate")
+    regions: dict[str, dict[str, Any]] = {}
+    reconstructed = {relative: {"regions": 0, "regions_total": 0} for relative in selected}
+    selected_functions: dict[tuple[str, int, int], str] = {}
+    for group_key, instantiations in groups.items():
+        relative, group_line, group_column = group_key
+        symbols = [symbol for symbol, _ in instantiations]
+        require(len(symbols) == len(set(symbols)), f"duplicate LLVM function symbol in group: {group_key}")
+        totals = {symbol: len(code_regions) for symbol, code_regions in instantiations}
+        covered = {
+            symbol: sum(raw[4] > 0 for raw in code_regions)
+            for symbol, code_regions in instantiations
+        }
+        if canonical_functions is None:
+            max_total = max(totals.values())
+            max_covered = max(covered.values())
+            candidates = [
+                symbol for symbol in symbols
+                if totals[symbol] == max_total and covered[symbol] == max_covered
+            ]
+            require(bool(candidates), f"LLVM region maxima have no common instantiation: {group_key}")
+            symbol = min(candidates)
+            reconstructed[relative]["regions"] += max_covered
+            reconstructed[relative]["regions_total"] += max_total
+        else:
+            if group_key not in canonical_functions:
+                require(not any(covered.values()),
+                        f"case profile hit an LLVM function group absent from aggregate: {group_key}")
+                continue
+            symbol = canonical_functions[group_key]
+            require(symbol in totals,
+                    f"case profile is missing aggregate-selected function representative: {group_key}")
+        selected_functions[group_key] = symbol
+        selected_regions = next(raws for candidate, raws in instantiations if candidate == symbol)
+        for raw in selected_regions:
+            start_line, start_col, end_line, end_col, count, _, _, kind = raw
+            identity = [source_digest, relative, group_line, group_column, symbol,
+                        start_line, start_col, end_line, end_col, kind]
             region_id = digest_json(identity)
-            region = regions.setdefault(region_id, {"covered": False, "function_symbols": set()})
-            region["covered"] |= count > 0
-            region["function_symbols"].add(function["name"])
-    require(bool(regions), "LLVM export contains no native function regions")
-    return regions, native_file["summary"]
+            require(region_id not in regions, f"duplicate LLVM function-instantiation region: {region_id}")
+            regions[region_id] = {
+                "file": relative,
+                "function_group": {"line": group_line, "column": group_column},
+                "covered": count > 0,
+                "function_symbols": {symbol},
+            }
+    for relative in EXECUTABLE_SOURCE_SET:
+        if canonical_functions is None:
+            require(reconstructed[relative] == {
+                "regions": summaries[relative]["regions"],
+                "regions_total": summaries[relative]["regions_total"],
+            }, f"LLVM instantiation-group summary differs for {relative}")
+    require(bool(regions), "LLVM export has no executable production regions")
+    return regions, summaries, selected_functions
 
 
-def validate_coverage(report: dict[str, Any], report_path: Path) -> dict[str, Any]:
-    manifest, cases, input_paths = load_contract()
-    extension = report.get("uvicorn_rs_unified", {})
-    require(report.get("type") == "llvm.coverage.json.export" and
-            extension.get("schema") == "uvicorn-rs-coverage/unified@1", "unsupported unified coverage report")
-    require(extension.get("status") == "complete", "coverage report is incomplete")
-    source = extension["run"]["source"]
-    coverage_runner = ROOT / "scripts/run_unified_coverage.py"
-    expected_files = {}
+def resolve_llvm_tools(expected: dict[str, Any]) -> tuple[Path, Path]:
+    try:
+        return validate_coverage_tools(expected)
+    except ToolchainError as error:
+        raise EvidenceError(str(error)) from error
+
+
+def export_llvm_profile(
+    profile_data: Path, *, label: str, llvm_cov: Path, binaries: tuple[Path, Path],
+) -> dict[str, Any]:
+    command = [
+        str(llvm_cov), "export", "--format=text", "--check-binary-ids",
+        f"--instr-profile={profile_data}", "--ignore-filename-regex=.*/\\.cargo/registry/.*",
+        *(f"--object={binary}" for binary in binaries),
+    ]
+    exported = subprocess.run(
+        command, cwd=ROOT, capture_output=True, text=True, timeout=180, check=False,
+    )
+    require(exported.returncode == 0 and not exported.stderr.strip(),
+            f"cannot export LLVM profile for {label}: {(exported.stderr or exported.stdout)[-3000:]}")
+    try:
+        llvm_report = json.loads(exported.stdout)
+    except json.JSONDecodeError as error:
+        raise EvidenceError(f"invalid LLVM export for {label}: {error}") from error
+    require(isinstance(llvm_report, dict) and llvm_report.get("type") == "llvm.coverage.json.export",
+            f"unsupported LLVM profile export for {label}")
+    return llvm_report
+
+
+def case_profile_regions(
+    profile_paths: list[Path], *, label: str, llvm_cov: Path, llvm_profdata: Path,
+    binaries: tuple[Path, Path], source_digest: str,
+    canonical_functions: dict[tuple[str, int, int], str],
+    aggregate_region_ids: set[str],
+) -> set[str]:
+    """Re-export one retained case profile and independently derive its hit set."""
+    with tempfile.TemporaryDirectory(prefix="uvicorn-rs-case-coverage-") as directory:
+        merged = Path(directory) / "case.profdata"
+        merge = subprocess.run(
+            [str(llvm_profdata), "merge", "-sparse", "-failure-mode=all", "-o", str(merged),
+             *map(str, profile_paths)],
+            cwd=ROOT, capture_output=True, text=True, timeout=180, check=False,
+        )
+        require(merge.returncode == 0 and merged.is_file() and merged.stat().st_size > 0,
+                f"cannot merge retained LLVM profiles for {label}: {(merge.stderr or merge.stdout)[-3000:]}")
+        llvm_report = export_llvm_profile(merged, label=label, llvm_cov=llvm_cov, binaries=binaries)
+        regions, _, _ = llvm_production_regions(
+            llvm_report, source_digest, canonical_functions=canonical_functions,
+        )
+        require(set(regions) == aggregate_region_ids,
+                f"case LLVM region identity differs from aggregate for {label}")
+        return {region_id for region_id, region in regions.items() if region["covered"]}
+
+
+def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> dict[str, str]:
+    require(tuple(source_constant(coverage_runner, "PRODUCTION_SOURCE_SET")) == PRODUCTION_SOURCE_SET
+            and tuple(source_constant(coverage_runner, "EXECUTABLE_SOURCE_SET")) == EXECUTABLE_SOURCE_SET
+            and tuple(source_constant(coverage_runner, "NO_COUNTER_SOURCE_SET")) == NO_COUNTER_SOURCE_SET
+            and tuple(source_constant(coverage_runner, "PYTHON_SOURCE_SET")) == PYTHON_SOURCE_SET,
+            "coverage runner production-source classification differs from validator contract")
+    selected: dict[str, str] = {}
     for relative in source_constant(coverage_runner, "SOURCE_PATHS"):
         path = repo_path(relative)
         if path.is_dir():
-            expected_files.update({str(item.relative_to(ROOT)): sha256(item) for item in sorted(path.rglob("*.rs"))})
+            selected.update({str(item.relative_to(ROOT)): sha256(item) for item in sorted(path.rglob("*.rs"))})
         else:
-            expected_files[relative] = sha256(path)
+            require(path.is_file(), f"missing declared source input: {relative}")
+            selected[relative] = sha256(path)
+    discovered = {
+        str(item.relative_to(ROOT))
+        for directory in (ROOT / "src", ROOT / "crates/uvicorn-rs/src", ROOT / "crates/native-app-contract/src")
+        for item in directory.rglob("*.rs")
+    }
+    require(discovered == set(PRODUCTION_SOURCE_SET), "production Rust source inventory is incomplete or unclassified")
+    python_sources = {
+        str(item.relative_to(ROOT)) for item in (ROOT / "python/uvicorn_rs").rglob("*.py")
+    }
+    require(python_sources == set(PYTHON_SOURCE_SET), "Python adapter source inventory is incomplete or unclassified")
+    selected.update({relative: sha256(repo_path(relative)) for relative in PYTHON_SOURCE_SET})
     for relative in source_constant(coverage_runner, "REPORT_INPUT_PATHS"):
-        expected_files[relative] = sha256(repo_path(relative))
-    expected_files.update({str(path.relative_to(ROOT)): sha256(path) for path in input_paths})
+        selected[relative] = sha256(repo_path(relative))
+    selected.update({str(path.relative_to(ROOT)): sha256(path) for path in input_paths})
+    require(set(PRODUCTION_SOURCE_SET) <= set(selected), "source hash receipt omits production files")
+    return selected
+
+
+def case_slug(case_id: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", case_id).strip(".-")
+    return f"{safe[:96]}-{hashlib.sha256(case_id.encode()).hexdigest()[:10]}"
+
+
+def aggregate_source_summary(rows: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    return {
+        metric: {
+            "covered": sum(row["summary"][metric] for row in rows if row["classification"] == "executable"),
+            "total": sum(row["summary"][f"{metric}_total"] for row in rows if row["classification"] == "executable"),
+            "missing": sum(row["summary"][f"{metric}_total"] - row["summary"][metric]
+                           for row in rows if row["classification"] == "executable"),
+        }
+        for metric in ("regions", "lines")
+    }
+
+
+def validate_coverage(
+    report: dict[str, Any], report_path: Path, *, allow_pending_mcp: bool = False,
+) -> dict[str, Any]:
+    manifest, asgi_cases, input_paths = load_contract()
+    native_manifest_path = ROOT / "tests/native-core/manifest.json"
+    native_manifest = read_json(native_manifest_path)
+    native_cases = native_manifest.get("cases")
+    require(isinstance(native_cases, list) and bool(native_cases), "native manifest has no cases")
+    native_ids = [case.get("id") for case in native_cases if isinstance(case, dict)]
+    require(len(native_ids) == len(native_cases) and all(isinstance(item, str) and item.strip() for item in native_ids)
+            and len(native_ids) == len(set(native_ids)), "invalid native case index")
+
+    ext = report.get("uvicorn_rs_unified")
+    require(report.get("type") == "llvm.coverage.json.export" and isinstance(ext, dict)
+            and ext.get("schema") == UNIFIED_SCHEMA, "unsupported unified coverage report")
+    exact_keys(ext, {"schema", "status", "run", "matrix", "coverage", "artifacts"}, "unified coverage")
+    require(ext["status"] == "complete", "coverage report is incomplete")
+    run = ext["run"]
+    exact_keys(run, {"run_id", "started_at", "finished_at", "source", "build", "runner", "artifacts_root"},
+               "coverage run")
+    source = run["source"]
+    exact_keys(source, {"revision", "dirty", "file_sha256", "sha256", "manifest_sha256", "manifest_schema",
+                        "input_manifest_order", "native_manifest_sha256", "native_manifest_schema",
+                        "native_manifest_case_order"}, "coverage source")
+    coverage_runner = ROOT / "scripts/run_unified_coverage.py"
+    expected_files = expected_source_hashes(coverage_runner, input_paths)
     require(source.get("file_sha256") == expected_files and source.get("sha256") == digest_json(expected_files),
-            "coverage source, harness, or input identity differs from checkout")
-    require(source.get("revision") == git_commit() and type(source.get("dirty")) is bool, "coverage commit or source-state flag differs")
-    require(source.get("manifest_sha256") == sha256(MANIFEST_PATH) and source.get("manifest_schema") == manifest["schema"]
-            and source.get("input_manifest_order") == [str(path.relative_to(ROOT)) for path in input_paths],
-            "coverage manifest/input index identity differs")
-    require(extension["run"]["runner"] == {"path": "scripts/run_unified_coverage.py", "sha256": sha256(coverage_runner)},
+            "coverage source/harness/input hashes differ from checkout")
+    require(source.get("revision") == git_commit() and type(source.get("dirty")) is bool,
+            "coverage revision/source-state differs")
+    require(source.get("manifest_sha256") == sha256(MANIFEST_PATH)
+            and source.get("manifest_schema") == manifest["schema"]
+            and source.get("input_manifest_order") == [str(path.relative_to(ROOT)) for path in input_paths]
+            and source.get("native_manifest_sha256") == sha256(native_manifest_path)
+            and source.get("native_manifest_schema") == native_manifest["schema_version"]
+            and source.get("native_manifest_case_order") == native_ids,
+            "coverage manifest identity differs")
+    require(run["runner"] == {"path": "scripts/run_unified_coverage.py", "sha256": sha256(coverage_runner)},
             "coverage runner identity differs")
-    build = extension["run"]["build"]
-    native_sha = valid_digest(build.get("native_extension_sha256"), "coverage native")
-    require(build.get("cargo_lock_sha256") == sha256(ROOT / "Cargo.lock"), "coverage build lockfile identity differs")
-    require(build.get("tools", {}).get("cargo_llvm_cov") == "cargo-llvm-cov 0.8.7", "coverage tool version differs from pinned CI")
-    matrix = extension["matrix"]
-    count = len(cases)
-    require(matrix.get("scope") == "complete" and matrix.get("manifest_case_count") == count
-            and matrix.get("selected") == count and matrix.get("executed") == count and matrix.get("passed") == count,
-            "coverage omitted indexed cases")
-    require(all(matrix.get(field) == 0 for field in ("failed", "infrastructure_failed", "transient_infrastructure_failures"))
-            and matrix.get("case_attribution_complete") is True, "coverage contains failed, retried, or unattributed cases")
-    for label, verification in (("oracle_parity", "oracle-parity"), ("fault_contracts", "fault-contract")):
-        denominator = sum(case.get("verification", "oracle-parity") == verification for case in cases)
-        require(matrix.get(label) == {"selected": denominator, "passed": denominator, "failed": 0},
-                f"coverage {label} denominator differs")
-    expected = {case["case_id"]: case for case in cases}
-    rows = matrix["case_results"]
-    ids = [row.get("case_id") for row in rows]
-    require(len(ids) == len(set(ids)) and set(ids) == set(expected), "coverage case rows differ from the full index")
-    coverage = extension["coverage"]
-    require(coverage.get("gate") == "passed" and coverage.get("source_set") == ["src/lib.rs"]
-            and coverage.get("uncovered_regions") == [], "native coverage gate or source scope differs")
-    attribution = coverage["attribution"]
-    require(attribution.get("per_case_profiles") == count and attribution.get("profile_union_matches_attribution") is True
-            and attribution.get("case_region_ids_verified") is True and attribution.get("case_region_lookup") == "coverage.regions[].hit_by",
-            "coverage profile union/attribution proof is incomplete")
-    hit_counts: Counter[str] = Counter()
-    case_region_ids: dict[str, set[str]] = {case_id: set() for case_id in expected}
-    region_ids = set()
-    raw_regions, raw_summary = llvm_native_regions(report, source["sha256"])
-    for region in coverage["regions"]:
-        require(region.get("file") == "src/lib.rs" and region.get("covered") is True, "uncovered or excluded native region")
-        identity = [source["sha256"], region["file"], region["start"]["line"], region["start"]["column"],
-                    region["end"]["line"], region["end"]["column"], region["kind"]]
-        require(region.get("id") == digest_json(identity) and region["id"] not in region_ids, "invalid or duplicated LLVM region identity")
-        region_ids.add(region["id"])
-        require(region["id"] in raw_regions and raw_regions[region["id"]]["covered"] is True,
-                "attribution region is absent or uncovered in the LLVM union")
-        require(isinstance(region.get("function_symbols"), list)
-                and len(region["function_symbols"]) == len(set(region["function_symbols"]))
-                and set(region["function_symbols"]) == raw_regions[region["id"]]["function_symbols"],
-                "attribution region function symbols differ from LLVM")
-        hits = region.get("hit_by")
-        require(isinstance(hits, list) and bool(hits) and len(hits) == len(set(hits)) and set(hits) <= set(expected),
-                "region lacks exact indexed case attribution")
-        hit_counts.update(hits)
-        for case_id in hits:
-            case_region_ids[case_id].add(region["id"])
-    for metric in ("regions", "lines"):
-        summary = coverage["summary"][metric]
-        require(type(summary.get("total")) is int and summary["total"] > 0 and summary.get("missing") == 0
-                and summary.get("covered") == summary["total"], f"native {metric} coverage is below 100%")
-        require(raw_summary[metric]["count"] == summary["total"] and raw_summary[metric]["covered"] == summary["covered"],
-                f"native {metric} summary differs from raw LLVM denominator")
-    require(region_ids == set(raw_regions) and len(region_ids) == coverage["summary"]["regions"]["total"],
-            "region rows reduced the raw LLVM denominator")
+
+    build = run["build"]
+    exact_keys(build, {"native_extension", "native_extension_sha256", "native_runner", "native_runner_sha256",
+                       "native_runner_profile", "cargo_lock_sha256", "tools", "machine", "platform", "python"},
+               "coverage build")
+    native_sha = valid_digest(build.get("native_extension_sha256"), "native extension")
+    valid_digest(build.get("native_runner_sha256"), "native runner")
+    require(isinstance(build.get("native_extension"), str) and not Path(build["native_extension"]).is_absolute()
+            and ".." not in Path(build["native_extension"]).parts, "invalid extension build path")
+    require(build.get("native_runner") in {
+        "target/asgi-native-coverage/release/examples/native_core_contracts",
+        "target/asgi-native-coverage/release/examples/native_core_contracts.exe",
+    }, "native runner build path differs")
+    require(build.get("native_runner_profile") == "cargo-llvm-cov release profile with workspace crate instrumentation",
+            "native runner coverage profile differs")
+    tools = build.get("tools")
+    cargo_llvm_cov = tools.get("cargo_llvm_cov") if isinstance(tools, dict) else None
+    require(build.get("cargo_lock_sha256") == sha256(ROOT / "Cargo.lock")
+            and isinstance(cargo_llvm_cov, dict)
+            and cargo_llvm_cov.get("version") == "cargo-llvm-cov 0.8.7",
+            "coverage build inputs/tool version differ")
+    require(all(isinstance(build.get(key), str) and build[key] for key in ("machine", "platform", "python")),
+            "coverage environment identity is incomplete")
+    llvm_cov, llvm_profdata = resolve_llvm_tools(build.get("tools"))
+    extension = repo_path(build["native_extension"])
+    native_runner = repo_path(build["native_runner"])
+    require(extension.is_file() and sha256(extension) == native_sha
+            and native_runner.is_file() and sha256(native_runner) == build["native_runner_sha256"],
+            "coverage binaries are missing or differ from the recorded build")
+    coverage_binaries = (extension, native_runner)
+
+    matrix = ext["matrix"]
+    exact_keys(matrix, {"scope", "manifest_case_count", "asgi_manifest_case_count", "native_manifest_case_count",
+                        "selected", "asgi_selected", "native_selected", "executed", "passed", "failed",
+                        "infrastructure_failed", "transient_infrastructure_failures", "oracle_parity",
+                        "fault_contracts", "verification_runs", "native_verification_runs",
+                        "verification_runs_required", "case_attribution_complete", "case_results",
+                        "native_case_results"}, "coverage matrix")
+    ac, nc = len(asgi_cases), len(native_cases)
+    total = ac + nc
+    require(matrix.get("scope") == "complete" and matrix.get("manifest_case_count") == total
+            and matrix.get("asgi_manifest_case_count") == ac and matrix.get("native_manifest_case_count") == nc
+            and matrix.get("selected") == total and matrix.get("asgi_selected") == ac
+            and matrix.get("native_selected") == nc and matrix.get("executed") == total
+            and matrix.get("passed") == total and matrix.get("failed") == 0
+            and matrix.get("infrastructure_failed") == 0 and matrix.get("transient_infrastructure_failures") == 0
+            and matrix.get("case_attribution_complete") is True, "coverage matrix is incomplete or contains retries")
+    for key, policy in (("oracle_parity", "oracle-parity"), ("fault_contracts", "fault-contract")):
+        count = sum(case.get("verification", "oracle-parity") == policy for case in asgi_cases)
+        require(matrix.get(key) == {"selected": count, "passed": count, "failed": 0},
+                f"{key} case denominator differs")
+
+    coverage = ext["coverage"]
+    exact_keys(coverage, {"gate", "source_set", "executable_source_set", "source_files", "summary", "regions",
+                         "uncovered_regions", "attribution", "coverage_mcp"}, "coverage")
+    require(tuple(coverage.get("source_set", [])) == PRODUCTION_SOURCE_SET
+            and tuple(coverage.get("executable_source_set", [])) == EXECUTABLE_SOURCE_SET,
+            "coverage source inventory is not the exact four-file set")
+    source_rows = coverage.get("source_files")
+    require(isinstance(source_rows, list) and len(source_rows) == 4, "per-file source summaries are incomplete")
+    raw_regions, raw_summaries, canonical_functions = llvm_production_regions(report, source["sha256"])
+    for path, row in zip(PRODUCTION_SOURCE_SET, source_rows, strict=True):
+        exact_keys(row, {"path", "classification", "summary"}, f"source summary {path}")
+        classification = "no-executable-counters" if path in NO_COUNTER_SOURCE_SET else "executable"
+        require(row.get("path") == path and row.get("classification") == classification,
+                f"source classification differs: {path}")
+        exact_keys(row.get("summary"), {"regions", "lines", "regions_total", "lines_total"}, f"summary {path}")
+        require(row["summary"] == raw_summaries[path], f"per-file LLVM summary differs: {path}")
+    expected_summary = aggregate_source_summary(source_rows)
+    require(coverage.get("summary") == expected_summary, "aggregate is not the executable source union")
+    for metric, row in expected_summary.items():
+        require(row["total"] > 0 and row["covered"] == row["total"] and row["missing"] == 0,
+                f"unified source {metric} coverage is below 100%")
+    require(coverage.get("gate") == "passed" and coverage.get("uncovered_regions") == [],
+            "coverage gate or uncovered region list differs")
+
     context = read_json(report_path.with_name(report_path.name + ".context.json"))
-    require(context == {"report_sha256": sha256(report_path), "source_hashes": {"src/lib.rs": expected_files["src/lib.rs"]},
-                        "build_id": digest_json(build), "scope": "full", "test_status": "passed",
-                        "recorded_revision": source["revision"]}, "coverage context receipt differs")
-    producer_report = Path(coverage["coverage_mcp"]["measurement_path"])
-    require(not producer_report.is_absolute() and ".." not in producer_report.parts, "invalid producer coverage path")
+    require(context == {
+        "report_sha256": sha256(report_path),
+        "source_hashes": {path: source["file_sha256"][path] for path in PRODUCTION_SOURCE_SET},
+        "build_id": digest_json(build), "scope": "full", "test_status": "passed",
+        "recorded_revision": source["revision"],
+    }, "context receipt does not hash all production source files")
 
-    def artifact(relative: str, digest: str | None = None) -> Path:
+    producer_report = Path(coverage["coverage_mcp"].get("measurement_path", ""))
+    require(not producer_report.is_absolute() and ".." not in producer_report.parts
+            and str(report_path.relative_to(ROOT)) == str(producer_report), "invalid Coverage-MCP report path")
+    root = Path(run["artifacts_root"])
+    require(not root.is_absolute() and ".." not in root.parts and root.is_relative_to(producer_report.parent),
+            "invalid run artifact root")
+    local_root = (report_path.parent / root.relative_to(producer_report.parent)).resolve()
+    require(local_root.is_relative_to(report_path.parent.resolve()), "artifact root escapes report directory")
+
+    def artifact(relative: str, digest: str | None = None, *, inside_run: bool = True) -> Path:
         original = Path(relative)
-        require(not original.is_absolute() and ".." not in original.parts, "unsafe retained artifact path")
+        require(not original.is_absolute() and ".." not in original.parts, "unsafe artifact path")
+        repo_path(relative)  # Validate that the normalized artifact remains within this checkout.
+        if inside_run:
+            require(original.is_relative_to(root), f"artifact is outside its run: {relative}")
         try:
-            remapped = report_path.parent / original.relative_to(producer_report.parent)
+            suffix = original.relative_to(producer_report.parent)
         except ValueError as error:
-            raise EvidenceError("artifact escapes the retained coverage directory") from error
-        path = remapped.resolve()
-        require(path.is_relative_to(report_path.parent.resolve()) and path.is_file(), f"missing retained artifact: {relative}")
+            raise EvidenceError("artifact escapes producer report directory") from error
+        result = (report_path.parent / suffix).resolve()
+        require(result.is_relative_to(report_path.parent.resolve()) and result.is_file(),
+                f"missing retained artifact: {relative}")
+        if inside_run:
+            require(result.is_relative_to(local_root), f"artifact escapes run root: {relative}")
         if digest is not None:
-            require(sha256(path) == valid_digest(digest, relative), f"retained artifact hash differs: {relative}")
-        return path
+            require(sha256(result) == valid_digest(digest, relative), f"artifact hash differs: {relative}")
+        return result
 
-    run_ids = set()
-    retained_profiles = set()
-    for row in rows:
-        case = expected[row["case_id"]]
+    def exact_run_artifact(relative: Any, expected: Path, label: str) -> Path:
+        require(isinstance(relative, str) and Path(relative) == expected,
+                f"{label} is outside its exact run directory")
+        return artifact(relative)
+
+    artifacts = ext["artifacts"]
+    exact_keys(artifacts, {"aggregate_profile_data", "per_case_profiles_root", "native_per_case_profiles_root",
+                          "native_input_manifests_root", "matrix_runs_root", "native_matrix_runs_root"}, "artifacts")
+    expected_artifact_paths = {
+        "aggregate_profile_data": root / "per-case-union.profdata",
+        "per_case_profiles_root": root / "profiles",
+        "native_per_case_profiles_root": root / "native-profiles",
+        "native_input_manifests_root": root / "native-inputs",
+        "matrix_runs_root": root / "matrix-runs",
+        "native_matrix_runs_root": root / "native-matrix-runs",
+    }
+    require({key: Path(value) for key, value in artifacts.items()} == expected_artifact_paths,
+            "retained artifact roots differ from run layout")
+
+    aggregate_profile = artifact(
+        artifacts["aggregate_profile_data"],
+        valid_digest(coverage["attribution"].get("aggregate_profile_data_sha256"), "aggregate LLVM profile"),
+    )
+    require(aggregate_profile.stat().st_size > 0, "aggregate profile union is empty")
+    replayed_llvm = export_llvm_profile(
+        aggregate_profile, label="aggregate", llvm_cov=llvm_cov, binaries=coverage_binaries,
+    )
+    replayed_regions, replayed_summaries, replayed_functions = llvm_production_regions(
+        replayed_llvm, source["sha256"],
+    )
+    require(replayed_regions == raw_regions and replayed_summaries == raw_summaries
+            and replayed_functions == canonical_functions,
+            "embedded aggregate LLVM export differs from retained aggregate profile")
+
+    asgi_by_id = {case["case_id"]: case for case in asgi_cases}
+    native_by_id = {case["id"]: case for case in native_cases}
+    asgi_rows, native_rows = matrix["case_results"], matrix["native_case_results"]
+    require(isinstance(asgi_rows, list) and isinstance(native_rows, list)
+            and {row.get("case_id") for row in asgi_rows} == set(asgi_by_id)
+            and {row.get("case_id") for row in native_rows} == set(native_by_id)
+            and len(asgi_rows) == ac and len(native_rows) == nc,
+            "case result rows differ from input manifests")
+    all_keys = {f"asgi:{item}" for item in asgi_by_id} | {f"native:{item}" for item in native_by_id}
+    attribution = coverage["attribution"]
+    exact_keys(attribution, {"algorithm", "aggregate_profile_data_sha256", "per_case_profiles",
+                             "profile_union_matches_attribution", "case_region_ids_verified",
+                             "case_region_lookup", "case_index"}, "coverage attribution")
+    case_index = attribution.get("case_index")
+    require(attribution.get("per_case_profiles") == total
+            and attribution.get("profile_union_matches_attribution") is True
+            and attribution.get("case_region_ids_verified") is True
+            and isinstance(case_index, list)
+            and case_index == sorted(all_keys)
+            and len(case_index) == len(set(case_index))
+            and attribution.get("algorithm") == (
+                "LLVM instantiation groups with a deterministic aggregate-profile representative; "
+                "region IDs include source hash, file, group start, function symbol, source span, and kind"
+            )
+            and attribution.get("case_region_lookup") == (
+                "coverage.regions[].hit_by -> coverage.attribution.case_index"
+            ),
+            "coverage attribution receipt is incomplete")
+
+    hit_counts: Counter[str] = Counter()
+    case_regions: dict[str, set[str]] = {key: set() for key in all_keys}
+    region_ids = set()
+    for region in coverage["regions"]:
+        exact_keys(region, {"id", "file", "function_group", "start", "end", "kind",
+                            "function_symbols", "covered", "hit_by"},
+                   "region attribution")
+        path = region.get("file")
+        require(path in EXECUTABLE_SOURCE_SET and region.get("covered") is True,
+                "region is uncovered or outside executable source set")
+        exact_keys(region.get("function_group"), {"line", "column"}, "region function group")
+        exact_keys(region.get("start"), {"line", "column"}, "region start")
+        exact_keys(region.get("end"), {"line", "column"}, "region end")
+        symbols = region.get("function_symbols")
+        require(isinstance(symbols, list) and len(symbols) == 1 and isinstance(symbols[0], str),
+                "region must identify exactly one LLVM representative function")
+        identity = [source["sha256"], path, region["function_group"]["line"],
+                    region["function_group"]["column"], symbols[0], region["start"]["line"],
+                    region["start"]["column"], region["end"]["line"], region["end"]["column"], region["kind"]]
+        rid = region.get("id")
+        require(rid == digest_json(identity) and rid not in region_ids, "invalid or duplicate region identity")
+        region_ids.add(rid)
+        raw = raw_regions.get(rid)
+        require(raw is not None and raw["file"] == path and raw["covered"]
+                and raw["function_group"] == region["function_group"],
+                "coverage region is missing or uncovered in LLVM export")
+        require(set(symbols) == raw["function_symbols"],
+                "region function symbols differ from LLVM")
+        hit_indexes = region.get("hit_by")
+        require(isinstance(hit_indexes, list) and bool(hit_indexes)
+                and all(type(item) is int and 0 <= item < len(case_index) for item in hit_indexes)
+                and hit_indexes == sorted(set(hit_indexes)),
+                "region attribution is missing or has invalid case indexes")
+        hits = [case_index[index] for index in hit_indexes]
+        require(set(hits) <= all_keys, "region attribution references an unselected case")
+        hit_counts.update(hits)
+        for key in hits:
+            case_regions[key].add(rid)
+    require(region_ids == set(raw_regions), "attribution rows changed the LLVM denominator")
+
+    seen_runs: set[str] = set()
+    seen_profiles: set[Path] = set()
+
+    def check_profiles(
+        paths: Any, receipts: Any, label: str, *, expected_parent: Path,
+    ) -> list[Path]:
+        require(isinstance(paths, list) and bool(paths) and isinstance(receipts, list)
+                and len(receipts) == len(paths), f"{label} has no complete profile receipts")
+        checked: list[Path] = []
+        for relative, receipt in zip(paths, receipts, strict=True):
+            exact_keys(receipt, {"path", "sha256"}, f"{label} profile receipt")
+            require(receipt.get("path") == relative, f"{label} profile path receipt differs")
+            path = artifact(relative, valid_digest(receipt.get("sha256"), f"{label} profile"))
+            relative_path = Path(relative)
+            require(relative_path.parent == expected_parent
+                    and path.parent == (ROOT / expected_parent).resolve(),
+                    f"{label} profile path is outside its case/attempt directory")
+            require(path.suffix == ".profraw" and path.stat().st_size > 0 and path not in seen_profiles,
+                    f"{label} contains an empty or reused profile")
+            seen_profiles.add(path)
+            checked.append(path)
+        return checked
+
+    for row in asgi_rows:
+        cid = row["case_id"]
+        case = asgi_by_id[cid]
+        require(row.get("case_key") == f"asgi:{cid}", f"ASGI case key is not namespaced: {cid}")
         validate_case_metadata(row, case)
         require(row.get("error") is None and row.get("transient_infrastructure_failures") == 0
-                and row.get("target_extension_sha256") == native_sha, f"invalid attribution result: {case['case_id']}")
-        require(row.get("covered_regions") == hit_counts[case["case_id"]] > 0, f"case hit mapping differs: {case['case_id']}")
-        # The compact report stores the relation once, on each region's hit_by
-        # field. The producer verifies the inverse before omitting its lists.
-        require("hit_region_ids" not in row and len(case_region_ids[case["case_id"]]) == row["covered_regions"],
-                f"compact case-to-region attribution differs: {case['case_id']}")
+                and row.get("target_extension_sha256") == native_sha
+                and type(row.get("covered_regions")) is int
+                and row["covered_regions"] == hit_counts[f"asgi:{cid}"] == len(case_regions[f"asgi:{cid}"]) > 0,
+                f"ASGI case receipt differs: {cid}")
         attempts = row.get("attempts")
         require(isinstance(attempts, list) and len(attempts) == 1 and attempts[0].get("attempt") == 1
-                and attempts[0].get("runner_exit_code") == 0 and attempts[0].get("status") == "passed",
-                f"case contains retries or a failed attempt: {case['case_id']}")
-        require(all(attempts[0].get(field) == row.get(field)
-                    for field in ("result_artifact", "result_sha256", "profile_data_artifacts")),
-                "case attempt artifacts differ from attribution receipt")
+                and attempts[0].get("status") == "passed" and attempts[0].get("runner_exit_code") == 0,
+                f"ASGI case retried or failed: {cid}")
+        attempt = attempts[0]
+        require(all(attempt.get(key) == row.get(key)
+                    for key in ("result_artifact", "result_sha256", "profile_data_artifacts",
+                                "profile_data_receipts", "stdout_artifact", "stderr_artifact")),
+                f"ASGI case artifact receipts differ: {cid}")
+        case_result_dir = root / "cases" / case_slug(cid)
+        exact_run_artifact(row.get("result_artifact"), case_result_dir / "parity-result.json",
+                           f"ASGI case result {cid}")
+        exact_run_artifact(row.get("stdout_artifact"), case_result_dir / "stdout.log",
+                           f"ASGI case stdout {cid}")
+        exact_run_artifact(row.get("stderr_artifact"), case_result_dir / "stderr.log",
+                           f"ASGI case stderr {cid}")
+        exact_run_artifact(attempt.get("stdout_artifact"), case_result_dir / "stdout.log",
+                           f"ASGI case attempt stdout {cid}")
+        exact_run_artifact(attempt.get("stderr_artifact"), case_result_dir / "stderr.log",
+                           f"ASGI case attempt stderr {cid}")
         retained = read_json(artifact(row["result_artifact"], row["result_sha256"]))
-        validate_parity(retained, expected_cases=[case], expected_native_sha256=native_sha, _current_revision=source["revision"])
-        require(row.get("run_id") == retained["run"]["run_id"] and row["run_id"] not in run_ids,
-                "attribution run identity differs or is reused")
-        run_ids.add(row["run_id"])
+        expected_profile_dir = root / "profiles" / case_slug(cid) / "attempt-1"
+        validate_parity(retained, expected_cases=[case], expected_native_sha256=native_sha,
+                        _current_revision=source["revision"],
+                        expected_coverage_profile_dir=ROOT / expected_profile_dir)
+        rid = row.get("run_id")
+        require(isinstance(rid, str) and rid == retained["run"]["run_id"] and rid not in seen_runs,
+                f"ASGI case run identity differs or repeats: {cid}")
+        seen_runs.add(rid)
         observed = retained["cases"][0]
         require(row.get("observations") == {"oracle": observed["oracle_observation"],
-                                             "target": observed["target_observation"], "difference": observed["difference"]},
-                f"attribution observations differ: {case['case_id']}")
-        require(bool(row.get("profile_data_artifacts")), f"case has no retained target profiles: {case['case_id']}")
-        for relative in row["profile_data_artifacts"]:
-            profile = artifact(relative)
-            require(profile.suffix == ".profraw" and profile.stat().st_size > 0 and profile not in retained_profiles,
-                    "empty, reused, or invalid target profile")
-            retained_profiles.add(profile)
+                                             "target": observed["target_observation"],
+                                             "difference": observed["difference"]},
+                f"ASGI observations differ: {cid}")
+        profiles = check_profiles(
+            row.get("profile_data_artifacts"), row.get("profile_data_receipts"), f"ASGI case {cid}",
+            expected_parent=root / "profiles" / case_slug(cid) / "attempt-1" / "target",
+        )
         require(artifact(str(Path(row["result_artifact"]).parent / "target.profdata")).stat().st_size > 0,
-                "case has no retained merged target profile")
-    repeats = matrix.get("verification_runs")
-    require(matrix.get("verification_runs_required") == 3 and isinstance(repeats, list) and len(repeats) >= 3,
-            "coverage requires at least three complete matrix repeats")
-    for index, repeat in enumerate(repeats, 1):
-        require(repeat.get("run") == index and repeat.get("status") == "completed" and repeat.get("runner_exit_code") == 0
-                and repeat.get("transient_infrastructure_failures") == 0, "repeat failed, retried, or is out of order")
-        require_summary(repeat["summary"], count)
-        require(len(repeat.get("attempts", [])) == 1 and repeat["attempts"][0].get("attempt") == 1
-                and repeat["attempts"][0].get("runner_exit_code") == 0, "repeat contains retries or a failed attempt")
-        require(all(repeat["attempts"][0].get(field) == repeat.get(field)
-                    for field in ("artifact", "sha256", "run_id", "summary", "status")),
-                "repeat attempt identity differs from final receipt")
+                f"ASGI merged profile missing: {cid}")
+        verified_hits = case_profile_regions(
+            profiles, label=f"asgi:{cid}", llvm_cov=llvm_cov, llvm_profdata=llvm_profdata,
+            binaries=coverage_binaries, source_digest=source["sha256"],
+            canonical_functions=canonical_functions, aggregate_region_ids=region_ids,
+        )
+        require(verified_hits == case_regions[f"asgi:{cid}"],
+                f"ASGI case-to-region attribution differs from retained profile: {cid}")
+
+    input_root = Path(artifacts["native_input_manifests_root"])
+    for cid, case in native_by_id.items():
+        one_case = read_json(artifact(str(input_root / f"{case_slug(cid)}.json")))
+        expected_one = dict(native_manifest)
+        expected_one["cases"] = [case]
+        require(one_case == expected_one, f"native per-case input differs: {cid}")
+
+    for row in native_rows:
+        cid = row["case_id"]
+        case = native_by_id[cid]
+        key = f"native:{cid}"
+        require(row.get("case_key") == key and row.get("operation") == case.get("operation")
+                and row.get("protocol") == case.get("protocol") and row.get("status") == "passed"
+                and row.get("error") is None and row.get("runner_exit_code") == 0
+                and row.get("expected_pass_ids") == [cid] and row.get("observed_pass_ids") == [cid]
+                and row.get("transient_infrastructure_failures") == 0
+                and type(row.get("covered_regions")) is int
+                and row["covered_regions"] == hit_counts[key] == len(case_regions[key]) > 0,
+                f"native case receipt differs: {cid}")
+        native_result = read_json(artifact(row["result_artifact"], row["result_sha256"]))
+        require(native_result == {
+            "schema": "uvicorn-rs-native-case-result/2", "case_id": cid, "case_key": key,
+            "status": "passed", "runner_exit_code": 0, "expected_pass_ids": [cid],
+            "observed_pass_ids": [cid], "profile_data_artifacts": row["profile_data_artifacts"],
+            "profile_data_receipts": row["profile_data_receipts"],
+        }, f"native result artifact differs: {cid}")
+        attempts = row.get("attempts")
+        require(isinstance(attempts, list) and len(attempts) == 1 and attempts[0] == {
+            "attempt": 1, "status": "passed", "runner_exit_code": 0,
+            "result_artifact": row["result_artifact"], "result_sha256": row["result_sha256"],
+            "stdout_artifact": row["stdout_artifact"], "stderr_artifact": row["stderr_artifact"],
+            "profile_data_artifacts": row["profile_data_artifacts"],
+            "profile_data_receipts": row["profile_data_receipts"],
+        }, f"native case attempt differs: {cid}")
+        native_case_dir = root / "native-cases" / case_slug(cid)
+        exact_run_artifact(row.get("result_artifact"), native_case_dir / "native-result.json",
+                           f"native case result {cid}")
+        exact_run_artifact(row.get("stdout_artifact"), native_case_dir / "stdout.log",
+                           f"native case stdout {cid}")
+        exact_run_artifact(row.get("stderr_artifact"), native_case_dir / "stderr.log",
+                           f"native case stderr {cid}")
+        stdout = artifact(row["stdout_artifact"]).read_text(encoding="utf-8")
+        artifact(row["stderr_artifact"])
+        require([line.removeprefix("PASS ") for line in stdout.splitlines() if line.startswith("PASS ")] == [cid],
+                f"native case stdout does not prove its pass: {cid}")
+        profiles = check_profiles(
+            row.get("profile_data_artifacts"), row.get("profile_data_receipts"), f"native case {cid}",
+            expected_parent=root / "native-profiles" / case_slug(cid),
+        )
+        merged = artifact(row["merged_profile_artifact"])
+        require(merged == artifact(str(Path(row["result_artifact"]).parent / "target.profdata"))
+                and merged.stat().st_size > 0, f"native merged profile missing: {cid}")
+        verified_hits = case_profile_regions(
+            profiles, label=key, llvm_cov=llvm_cov, llvm_profdata=llvm_profdata,
+            binaries=coverage_binaries, source_digest=source["sha256"],
+            canonical_functions=canonical_functions, aggregate_region_ids=region_ids,
+        )
+        require(verified_hits == case_regions[key],
+                f"native case-to-region attribution differs from retained profile: {cid}")
+
+    asgi_repeats, native_repeats = matrix.get("verification_runs"), matrix.get("native_verification_runs")
+    require(matrix.get("verification_runs_required") == 3 and isinstance(asgi_repeats, list)
+            and len(asgi_repeats) == 3 and isinstance(native_repeats, list) and len(native_repeats) == 3,
+            "both ASGI and native matrices require exactly three complete repeats")
+    for index, repeat in enumerate(asgi_repeats, 1):
+        require(repeat.get("run") == index and repeat.get("status") == "completed"
+                and repeat.get("runner_exit_code") == 0 and repeat.get("transient_infrastructure_failures") == 0,
+                f"ASGI repeat failed or out of order: {index}")
+        require_summary(repeat.get("summary"), ac)
+        attempts = repeat.get("attempts")
+        require(isinstance(attempts, list) and len(attempts) == 1 and attempts[0].get("attempt") == 1
+                and attempts[0].get("runner_exit_code") == 0
+                and all(attempts[0].get(key) == repeat.get(key)
+                        for key in ("artifact", "sha256", "run_id", "summary", "status",
+                                    "profile_data_artifacts", "profile_data_receipts",
+                                    "stdout_artifact", "stderr_artifact")),
+                f"ASGI repeat attempt differs: {index}")
+        repeat_dir = root / "matrix-runs" / f"run-{index}"
+        exact_run_artifact(repeat.get("artifact"), repeat_dir / "parity-result.json",
+                           f"ASGI repeat result {index}")
+        exact_run_artifact(repeat.get("stdout_artifact"), repeat_dir / "stdout.log",
+                           f"ASGI repeat stdout {index}")
+        exact_run_artifact(repeat.get("stderr_artifact"), repeat_dir / "stderr.log",
+                           f"ASGI repeat stderr {index}")
+        check_profiles(
+            repeat.get("profile_data_artifacts"), repeat.get("profile_data_receipts"),
+            f"ASGI repeat {index}", expected_parent=root / "matrix-runs" / f"run-{index}",
+        )
         retained = read_json(artifact(repeat["artifact"], repeat["sha256"]))
-        validate_parity(retained, expected_cases=cases, expected_native_sha256=native_sha, _current_revision=source["revision"])
-        require(repeat.get("run_id") == retained["run"]["run_id"] and repeat["run_id"] not in run_ids, "repeat run identities differ or repeat")
-        run_ids.add(repeat["run_id"])
-    require(artifact(extension["artifacts"]["aggregate_profile_data"]).stat().st_size > 0, "empty aggregate profile union")
-    require(source.get("revision") == git_commit(), "checkout commit changed while validating coverage")
-    return {"status": "passed", "cases": count, "full_repeats": len(repeats), "coverage": coverage["summary"],
-            "source_sha256": source["sha256"], "native_sha256": native_sha, "recorded_dirty": source["dirty"],
-            "mcp_status": coverage["coverage_mcp"].get("status"),
-            "scope": "complete current src/lib.rs native regions/lines; MCP verification is separately recorded"}
+        validate_parity(retained, expected_cases=asgi_cases, expected_native_sha256=native_sha,
+                        _current_revision=source["revision"])
+        rid = repeat.get("run_id")
+        require(isinstance(rid, str) and rid == retained["run"]["run_id"] and rid not in seen_runs,
+                f"ASGI repeat identity differs or repeats: {index}")
+        seen_runs.add(rid)
+
+    for index, repeat in enumerate(native_repeats, 1):
+        require(repeat.get("schema") == "uvicorn-rs-native-matrix-result/2" and repeat.get("run") == index
+                and repeat.get("status") == "completed" and repeat.get("runner_exit_code") == 0
+                and repeat.get("selected") == nc and repeat.get("passed") == nc
+                and repeat.get("failed") == 0 and repeat.get("not_run") == 0
+                and repeat.get("expected_case_ids") == native_ids
+                and repeat.get("observed_pass_ids") == native_ids
+                and repeat.get("transient_infrastructure_failures") == 0,
+                f"native repeat failed or out of order: {index}")
+        attempts = repeat.get("attempts")
+        require(isinstance(attempts, list) and len(attempts) == 1 and attempts[0].get("attempt") == 1
+                and attempts[0].get("status") == "completed" and attempts[0].get("runner_exit_code") == 0
+                and attempts[0].get("artifact") == repeat.get("artifact")
+                and attempts[0].get("sha256") == repeat.get("sha256")
+                and attempts[0].get("stdout_artifact") == repeat.get("stdout_artifact")
+                and attempts[0].get("stderr_artifact") == repeat.get("stderr_artifact")
+                and attempts[0].get("profile_data_artifacts") == repeat.get("profile_data_artifacts")
+                and attempts[0].get("profile_data_receipts") == repeat.get("profile_data_receipts"),
+                f"native repeat attempt differs: {index}")
+        stored = read_json(artifact(repeat["artifact"], repeat["sha256"]))
+        result_fields = ("schema", "run", "status", "runner_exit_code", "selected", "passed", "failed", "not_run",
+                         "expected_case_ids", "observed_pass_ids", "stdout_artifact", "stderr_artifact",
+                         "profile_data_artifacts", "profile_data_receipts")
+        require(stored == {field: repeat[field] for field in result_fields},
+                f"native repeat result artifact differs: {index}")
+        repeat_dir = root / "native-matrix-runs" / f"run-{index}"
+        exact_run_artifact(repeat.get("artifact"), repeat_dir / "native-result.json",
+                           f"native repeat result {index}")
+        exact_run_artifact(repeat.get("stdout_artifact"), repeat_dir / "stdout.log",
+                           f"native repeat stdout {index}")
+        exact_run_artifact(repeat.get("stderr_artifact"), repeat_dir / "stderr.log",
+                           f"native repeat stderr {index}")
+        stdout = artifact(repeat["stdout_artifact"]).read_text(encoding="utf-8")
+        artifact(repeat["stderr_artifact"])
+        require([line.removeprefix("PASS ") for line in stdout.splitlines() if line.startswith("PASS ")] == native_ids,
+                f"native repeat stdout differs from manifest order: {index}")
+        check_profiles(
+            repeat.get("profile_data_artifacts"), repeat.get("profile_data_receipts"),
+            f"native repeat {index}", expected_parent=root / "native-matrix-runs" / f"run-{index}",
+        )
+
+    mcp_receipt = coverage["coverage_mcp"]
+    mcp_pending = mcp_receipt.get("status") == "awaiting_query"
+    if allow_pending_mcp and mcp_pending:
+        exact_keys(mcp_receipt, {"status", "measurement_path", "metric", "required_follow_up"},
+                   "pending Coverage-MCP request")
+        require(mcp_receipt == {
+            "status": "awaiting_query",
+            "measurement_path": str(report_path.relative_to(ROOT)),
+            "metric": "regions",
+            "required_follow_up": (
+                "Query and fully paginate both regions and lines for this exact report; require zero groups, "
+                "source=matches_receipt, and tests=passed."
+            ),
+        }, "pending Coverage-MCP request differs from the producer contract")
+    else:
+        validate_coverage_mcp(
+            mcp_receipt, report_path=report_path, report_relative=str(report_path.relative_to(ROOT)),
+            build=build, source=source, summary=expected_summary, artifact=artifact,
+        )
+    return {
+        "status": "passed", "asgi_cases": ac, "native_cases": nc,
+        "full_repeats": {"asgi": len(asgi_repeats), "native": len(native_repeats)},
+        "coverage": expected_summary, "source_sha256": source["sha256"], "native_sha256": native_sha,
+        "recorded_dirty": source["dirty"],
+        "scope": "complete unified Rust production-source regions and lines",
+        "mcp_status": mcp_receipt["status"],
+    }
+
+
+def validate_coverage_mcp(
+    receipt: dict[str, Any], *, report_path: Path, report_relative: str, build: dict[str, Any],
+    source: dict[str, Any], summary: dict[str, dict[str, int]], artifact: Any,
+) -> None:
+    exact_keys(receipt, {"status", "gate", "measurement_path", "metric", "source", "recorded_revision", "build_id",
+                         "tests", "coverage", "line_coverage", "group_count", "groups", "line_group_count",
+                         "line_groups", "location_samples_are_bounded", "pages", "line_pages", "receipt_artifact",
+                         "receipt_sha256"},
+               "Coverage-MCP receipt")
+    build_id = digest_json(build)
+    require(receipt.get("status") == "measured" and receipt.get("gate") == "passed"
+            and receipt.get("measurement_path") == report_relative and receipt.get("metric") == "regions"
+            and receipt.get("source") == "matches_receipt" and receipt.get("tests") == "passed"
+            and receipt.get("recorded_revision") == source["revision"] and receipt.get("build_id") == build_id
+            and receipt.get("group_count") == 0 and receipt.get("groups") == []
+            and receipt.get("line_group_count") == 0 and receipt.get("line_groups") == []
+            and receipt.get("location_samples_are_bounded") is True,
+            "Coverage-MCP did not prove zero gaps for this source/test receipt")
+    region_total = summary["regions"] | {"metric": "regions"}
+    line_total = summary["lines"] | {"metric": "lines"}
+    require(receipt.get("coverage") == region_total and receipt.get("line_coverage") == line_total,
+            "Coverage-MCP totals differ from unified report")
+    require(type(receipt.get("pages")) is int and receipt["pages"] > 0
+            and type(receipt.get("line_pages")) is int and receipt["line_pages"] > 0,
+            "Coverage-MCP region/line pages are missing")
+    receipt_sha = valid_digest(receipt.get("receipt_sha256"), "Coverage-MCP page receipt")
+    pages_path = artifact(receipt["receipt_artifact"], receipt_sha, inside_run=False)
+    pages = json.loads(pages_path.read_text(encoding="utf-8"))
+    require(isinstance(pages, list) and bool(pages), "retained MCP pages are not a non-empty array")
+    by_metric: dict[str, list[dict[str, Any]]] = {"regions": [], "lines": []}
+    common = None
+    for index, page in enumerate(pages):
+        require(isinstance(page, dict) and set(page) == {"request", "response"},
+                f"invalid MCP page receipt {index}")
+        request = page["request"]
+        require(isinstance(request, dict) and set(request) == {
+            "measurement", "metric", "offset", "limit", "query", "line"
+        }, f"invalid MCP request receipt {index}")
+        require(request.get("measurement") == report_relative
+                and type(request.get("offset")) is int and request["offset"] >= 0
+                and type(request.get("limit")) is int and request["limit"] > 0
+                and request.get("query") is None and request.get("line") is None,
+                f"invalid MCP request scope {index}")
+        response = page["response"]
+        require(isinstance(response, dict) and isinstance(response.get("data"), dict),
+                f"invalid MCP response {index}")
+        data = response["data"]
+        require(data.get("status") == "measured" and data.get("group_count") == 0
+                and data.get("groups") == [] and data.get("next_offset") is None,
+                f"MCP page {index} is incomplete or reports gaps")
+        measurement = data.get("measurement")
+        require(isinstance(measurement, dict) and isinstance(measurement.get("coverage"), dict),
+                f"MCP page {index} lacks a measurement")
+        metric = measurement["coverage"].get("metric")
+        require(metric in by_metric and request.get("metric") == metric,
+                f"MCP page {index} has an unsupported metric")
+        expected = region_total if metric == "regions" else line_total
+        require(measurement["coverage"] == expected and measurement.get("ref") == report_relative
+                and measurement.get("source") == "matches_receipt" and measurement.get("tests") == "passed"
+                and measurement.get("recorded_revision") == source["revision"]
+                and measurement.get("build_id") == build_id,
+                f"MCP {metric} page {index} differs from report receipt")
+        identity = {key: value for key, value in measurement.items() if key != "coverage"}
+        if common is None:
+            common = identity
+        else:
+            require(identity == common, "MCP pages refer to different measurements")
+        by_metric[metric].append(page)
+    require(len(by_metric["regions"]) == receipt["pages"] and len(by_metric["lines"]) == receipt["line_pages"]
+            and by_metric["regions"] and by_metric["lines"], "MCP receipt omits region or line pages")
+    for metric, metric_pages in by_metric.items():
+        expected_offset = 0
+        expected_limit = metric_pages[0]["request"]["limit"]
+        seen_groups: set[str] = set()
+        total_groups: int | None = None
+        for index, page in enumerate(metric_pages):
+            request, data = page["request"], page["response"]["data"]
+            require(request.get("metric") == metric and request.get("offset") == expected_offset
+                    and request.get("limit") == expected_limit,
+                    f"MCP {metric} cursor chain or page size is inconsistent at page {index}")
+            group_count = data.get("group_count")
+            require(type(group_count) is int and group_count >= 0
+                    and (total_groups is None or group_count == total_groups),
+                    f"MCP {metric} group total differs across pages")
+            total_groups = group_count
+            groups = data.get("groups")
+            require(isinstance(groups, list), f"MCP {metric} page {index} has invalid groups")
+            for group in groups:
+                require(isinstance(group, dict) and isinstance(group.get("path"), str)
+                        and "function" in group
+                        and (isinstance(group.get("function"), str)
+                             or (metric == "lines" and group.get("function") is None))
+                        and type(group.get("count")) is int and group["count"] >= 0
+                        and isinstance(group.get("locations"), list),
+                        f"MCP {metric} page {index} has an invalid group row")
+                identity = coverage_mcp_group_identity(group)
+                require(identity not in seen_groups, f"MCP {metric} repeats a group row")
+                seen_groups.add(identity)
+            next_offset = data.get("next_offset")
+            require(next_offset is None or (type(next_offset) is int and next_offset > expected_offset),
+                    f"MCP {metric} page {index} has an invalid next offset")
+            require((next_offset is None) == (index == len(metric_pages) - 1),
+                    f"MCP {metric} page order continues after terminal or stops before next page")
+            if next_offset is not None:
+                expected_offset = next_offset
+        require(total_groups == len(seen_groups), f"MCP {metric} pages omit or duplicate groups")
+    require(report_path.is_file(), "coverage report disappeared during MCP receipt validation")
 
 
 def main() -> int:
@@ -458,10 +1157,22 @@ def main() -> int:
     parser.add_argument("report", type=Path)
     parser.add_argument("--offline", action="store_true", help="validate retained evidence without importing the installed native")
     parser.add_argument("--require-clean", action="store_true", help="require evidence produced from a clean source checkout")
+    parser.add_argument(
+        "--allow-pending-mcp",
+        action="store_true",
+        help=("CI-only mode: validate the complete raw LLVM and matrix evidence while Coverage-MCP is pending; "
+              "the default evidence gate still requires an attached zero-gap MCP receipt"),
+    )
     args = parser.parse_args()
+    if args.kind != "coverage" and args.allow_pending_mcp:
+        parser.error("--allow-pending-mcp is valid only for coverage reports")
     path = args.report.resolve()
     result = read_json(path)
-    checked = validate_parity(result, offline=args.offline) if args.kind == "parity" else validate_coverage(result, path)
+    checked = (
+        validate_parity(result, offline=args.offline)
+        if args.kind == "parity"
+        else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp)
+    )
     if args.kind == "coverage" and not args.offline:
         imported = Path(importlib.import_module("uvicorn_rs._native").__file__).resolve()
         require(checked["native_sha256"] == sha256(imported),

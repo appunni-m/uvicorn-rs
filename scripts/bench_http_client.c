@@ -75,6 +75,8 @@ static size_t read_upload(char *buffer, size_t size, size_t count, void *user_da
     if (upload->offset >= upload->bytes || capacity == 0) return 0;
     size_t length = upload->bytes - upload->offset;
     if (length > capacity) length = capacity;
+    /* This caps bytes returned to libcurl per read callback; it does not
+       guarantee the same socket-write or TCP packet boundaries. */
     if (upload->chunk_bytes > 0 && length > upload->chunk_bytes) length = upload->chunk_bytes;
     memcpy(buffer, upload->body + upload->offset, length);
     upload->offset += length;

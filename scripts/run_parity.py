@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@7"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@8"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 # These messages authorize one deliberately injected panic per attempted
 # coverage fault case. They never authorize ordinary target/reference panics
@@ -75,6 +75,12 @@ FAULT_POINTS = {
     "python.task-cancel.context.set-item",
     "python.task-cancel.schedule-call",
     "http.receive.disconnected-before-future-poll",
+    "http.body-pump.batch-limit.one-byte",
+    "http.body-pump.batch-threshold.send-connection-closed",
+    "http.body-pump.oversized.send-connection-closed",
+    "http.body-pump.error.stop-wait",
+    "http.body-pump.error.buffered-send-connection-closed",
+    "http.body-pump.error.buffered-send-continues",
     "http.body-pump.send.connection-closed",
     "http.body-pump.first-poll-pause",
     "http.body-pump.final-send.connection-closed",
@@ -86,6 +92,8 @@ FAULT_POINTS = {
     "http.body-pump.shutdown.cancel-join",
     "http.body-pump.shutdown.hang",
     "http.body-pump.shutdown.complete-task-before-abort",
+    "http.request.body-segment.length-overflow",
+    "http.request.body-segment.out-of-bounds",
     "server.connection-io.eof-recheck.pause",
     "python.asgi-receive.borrow-conflict",
     "server.control.shutdown.borrow-conflict",
@@ -305,7 +313,9 @@ HARNESS_FAULT_POINTS = (
     {"http3.client.abort-after-body"}
     | PUBLIC_INPUT_CONTRACT_POINTS
     | ASGI_SCOPE_SUPPORT_CONTRACT_POINTS
+    | {"public.server-runtime-configuration"}
 )
+MAX_BLOCKING_THREADS_ENV = "UVICORN_RS_MAX_BLOCKING_THREADS"
 PYTHON_TASK_START_ERRORS = {
     "python.task-starter.import-asyncio": "MemoryError: coverage-only injected MemoryError at PythonTaskStarterImportAsyncio",
     "python.task-starter.ensure-future": "MemoryError: coverage-only injected MemoryError at PythonTaskStarterEnsureFuture",
@@ -344,10 +354,13 @@ FAULT_CONTRACTS = {
     "http-body-pump-drain-shutdown-joined",
     "http-body-pump-drain-terminal-frame",
     "http-body-pump-error-stop-disconnect-followup-200",
+    "http-body-pump-send-stopped-without-response",
+    "http-body-pump-oversized-frame-echo",
     "http-body-pump-reaps-cancelled-task",
     "http-body-pump-shutdown-cancelled-join",
     "http-body-pump-shutdown-aborts-hung-pump",
     "http-body-pump-shutdown-completes-task-before-abort",
+    "http-request-body-conversion-error-caught",
     "http-response-header-capacity-recovery-followup-200",
     "websocket-header-capacity-error-followup-200",
     "http-start-error-close-followup-200",
@@ -384,6 +397,8 @@ FAULT_CONTRACTS = {
     "http-disconnect-error-followup-200",
     "http-immediate-disconnect-message-error-followup-200",
     "server-startup-failure",
+    "server-runtime-configuration-accepted",
+    "server-runtime-configuration-rejected",
     "server-lifespan-startup-auto-fallback",
     "server-shutdown-failure",
     "server-lifespan-task-cancel",
@@ -562,8 +577,52 @@ def exact_keys(value: dict[str, Any], required: set[str], label: str) -> None:
 
 def exact_case_keys(value: dict[str, Any], required: set[str], label: str) -> None:
     """Allow versioned case-verification metadata in addition to one stimulus."""
-    metadata = {"verification", "fault"} & set(value)
+    metadata = {"verification", "fault", "target_environment"} & set(value)
     exact_keys(value, required | metadata, label)
+
+
+def validate_target_environment(case: dict[str, Any]) -> None:
+    """Validate a narrowly scoped environment override for target startup cases."""
+    if "target_environment" not in case:
+        return
+    if (
+        case.get("verification") != "fault-contract"
+        or case.get("fault", {}).get("point") != "public.server-runtime-configuration"
+        or case.get("fault", {}).get("contract") not in {
+            "server-runtime-configuration-accepted",
+            "server-runtime-configuration-rejected",
+        }
+    ):
+        raise ParityError(
+            f"{case.get('case_id')}: target_environment requires the declared public runtime-configuration contract"
+        )
+    environment = case["target_environment"]
+    if not isinstance(environment, dict) or set(environment) - {MAX_BLOCKING_THREADS_ENV}:
+        raise ParityError(
+            f"{case.get('case_id')}: target_environment supports only {MAX_BLOCKING_THREADS_ENV}"
+        )
+    value = environment.get(MAX_BLOCKING_THREADS_ENV)
+    if value is None:
+        return
+    if isinstance(value, str):
+        if "\x00" in value:
+            raise ParityError(f"{case['case_id']}: target environment value must not contain NUL")
+        return
+    if isinstance(value, dict):
+        exact_keys(value, {"bytes_hex"}, f"{case['case_id']}.target_environment.{MAX_BLOCKING_THREADS_ENV}")
+        encoded = value["bytes_hex"]
+        if not isinstance(encoded, str):
+            raise ParityError(f"{case['case_id']}: target environment bytes_hex must be a string")
+        try:
+            raw = bytes.fromhex(encoded)
+        except ValueError as error:
+            raise ParityError(f"{case['case_id']}: target environment bytes_hex is invalid") from error
+        if not raw or b"\x00" in raw:
+            raise ParityError(f"{case['case_id']}: target environment bytes must be nonempty and contain no NUL")
+        return
+    raise ParityError(
+        f"{case['case_id']}: target environment value must be a string or bytes_hex descriptor"
+    )
 
 
 def validate_load_input(case: dict[str, Any], kind: str) -> None:
@@ -800,6 +859,7 @@ def load_contract(
                 raise ParityError(f"{case_id}: fault point is not allow-listed: {fault['point']!r}")
             if not isinstance(fault["contract"], str) or fault["contract"] not in FAULT_CONTRACTS:
                 raise ParityError(f"{case_id}: unsupported fault contract: {fault['contract']!r}")
+            validate_target_environment(case)
             if fault["contract"] == "http-response-header-capacity-recovery-followup-200":
                 requests = case.get("request_sequence", [])
                 if (
@@ -1375,21 +1435,107 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: delayed body-worker reset requires an incomplete upload and real disconnect follow-up"
                     )
+            elif fault["contract"] == "http-request-body-conversion-error-caught":
+                stream = case.get("request_stream", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.request-streaming"
+                    or fault["point"] not in {
+                        "http.request.body-segment.length-overflow",
+                        "http.request.body-segment.out-of-bounds",
+                    }
+                    or stream.get("path") != "/request-body-error-probe"
+                    or stream.get("send_all_before_read") is not True
+                    or len(stream.get("chunks_base64", [])) < 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: request-body conversion errors require the segmented-body ASGI probe"
+                    )
             elif fault["contract"] == "http-body-pump-error-stop-disconnect-followup-200":
                 disconnect = case.get("disconnect", {})
                 if (
                     case.get("profile") != "http1"
                     or case.get("operation") != "http.client-disconnect"
-                    or fault["point"] != "http.body-pump.error.request-stop"
+                    or fault["point"] not in {
+                        "http.body-pump.error.request-stop",
+                        "http.body-pump.error.stop-wait",
+                        "http.body-pump.error.buffered-send-connection-closed",
+                        "http.body-pump.error.buffered-send-continues",
+                    }
                     or disconnect.get("path") != "/disconnect-read-twice"
                     or disconnect.get("followup_path") != "/disconnect-status"
-                    or disconnect.get("malformed_chunk") is not True
+                    or not (
+                        disconnect.get("malformed_chunk") is True
+                        or (
+                            fault["point"]
+                            == "http.body-pump.error.buffered-send-connection-closed"
+                            and disconnect.get("reset") is True
+                        )
+                    )
                     or disconnect.get("wait_event") != "http.disconnect.waiting"
                     or disconnect.get("wait_event_after_disconnect")
                     != "http.disconnect.second:http.disconnect"
+                    or (
+                        fault["point"] in {
+                            "http.body-pump.error.buffered-send-connection-closed",
+                            "http.body-pump.error.buffered-send-continues",
+                        }
+                        and not isinstance(disconnect.get("partial_body_base64"), str)
+                    )
+                    or (
+                        fault["point"] in {
+                            "http.body-pump.error.buffered-send-connection-closed",
+                            "http.body-pump.error.buffered-send-continues",
+                        }
+                        and disconnect.get("reset") is True
+                        and "content_length" not in disconnect
+                    )
+                    or (
+                        fault["point"] == "http.body-pump.error.stop-wait"
+                        and "partial_body_base64" in disconnect
+                    )
+                    or (
+                        fault["point"] == "http.body-pump.error.request-stop"
+                        and not isinstance(disconnect.get("partial_body_base64"), str)
+                    )
                 ):
                     raise ParityError(
-                        f"{case_id}: malformed-body stop requires a synchronized ASGI disconnect and follow-up"
+                        f"{case_id}: malformed-body stop requires buffered body data, a synchronized ASGI disconnect, and follow-up"
+                    )
+            elif fault["contract"] == "http-body-pump-send-stopped-without-response":
+                stream = case.get("request_stream", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.request-streaming"
+                    or fault["point"] not in {
+                        "http.body-pump.send.connection-closed",
+                        "http.body-pump.batch-threshold.send-connection-closed",
+                        "http.body-pump.oversized.send-connection-closed",
+                    }
+                    or stream.get("path") != "/upload-pump-disconnect"
+                    or stream.get("followup_path") != "/state?coverage-fault=followup"
+                    or not (
+                        len(stream.get("chunks_base64", [])) >= 1
+                        or len(stream.get("generated_chunks", [])) >= 1
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: body-pump send stop requires a streamed /upload-pump-disconnect request"
+                    )
+            elif fault["contract"] == "http-body-pump-oversized-frame-echo":
+                stream = case.get("request_stream", {})
+                generated_chunks = stream.get("generated_chunks", [])
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.request-streaming"
+                    or fault["point"] != "http.body-pump.batch-limit.one-byte"
+                    or stream.get("path") != "/upload-stream"
+                    or stream.get("send_all_before_read") is not True
+                    or len(generated_chunks) != 2
+                    or any(chunk.get("size_bytes") != 2 for chunk in generated_chunks)
+                ):
+                    raise ParityError(
+                        f"{case_id}: oversized-frame probe requires two small echoed frames under the injected one-byte limit"
                     )
             elif fault["contract"] == "http-body-pump-drain-shutdown-joined":
                 stream = case.get("request_stream", {})
@@ -1509,6 +1655,60 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: lifespan startup faults require the startup-failure workflow"
                     )
+            elif fault["contract"] in {
+                "server-runtime-configuration-accepted",
+                "server-runtime-configuration-rejected",
+            }:
+                environment = case.get("target_environment")
+                value = (
+                    environment.get(MAX_BLOCKING_THREADS_ENV)
+                    if isinstance(environment, dict)
+                    else None
+                )
+                if (
+                    fault["point"] != "public.server-runtime-configuration"
+                    or case.get("profile") != "startup-runtime-configuration"
+                    or "target_environment" not in case
+                ):
+                    raise ParityError(
+                        f"{case_id}: runtime configuration contracts require the isolated public configuration profile"
+                    )
+                if fault["contract"] == "server-runtime-configuration-accepted":
+                    positive_limit = False
+                    if isinstance(value, str) and value.isascii() and value.isdigit():
+                        positive_limit = 0 < int(value) <= (1 << (8 * struct.calcsize("P"))) - 1
+                    if (
+                        case.get("operation") != "http.scope-and-body"
+                        or case.get("request", {}).get("path") != "/"
+                        or "startup_failure" in case
+                        or (value is not None and not positive_limit)
+                    ):
+                        raise ParityError(
+                            f"{case_id}: accepted runtime configuration requires the default or a positive thread limit and a live HTTP request"
+                        )
+                else:
+                    invalid_unicode = False
+                    invalid_value = False
+                    if isinstance(value, dict):
+                        try:
+                            bytes.fromhex(value["bytes_hex"]).decode("utf-8")
+                        except UnicodeDecodeError:
+                            invalid_unicode = True
+                    elif isinstance(value, str):
+                        try:
+                            parsed = int(value)
+                        except ValueError:
+                            invalid_value = True
+                        else:
+                            invalid_value = parsed <= 0 or parsed > (1 << (8 * struct.calcsize("P"))) - 1
+                    if (
+                        case.get("operation") != "lifespan.runtime-configuration-failure"
+                        or case.get("startup_failure", {}).get("expect_failed") is not True
+                        or not (invalid_unicode or invalid_value)
+                    ):
+                        raise ParityError(
+                            f"{case_id}: rejected runtime configuration requires malformed, non-Unicode, zero, or overflowing input and an expected startup failure"
+                        )
             elif fault["contract"] == "server-lifespan-startup-auto-fallback":
                 if (
                     not (
@@ -1665,6 +1865,7 @@ def load_contract(
                 )
         else:
             raise ParityError(f"{case_id}: unsupported verification mode {verification!r}")
+        validate_target_environment(case)
         for field in case:
             if field.startswith("expected") or field in {"oracle_output", "target_output"}:
                 raise ParityError(f"{case_id}: parity inputs may not contain observed results")
@@ -1796,7 +1997,7 @@ def load_contract(
                 disconnect_keys.add("reset")
                 if case["disconnect"]["reset"] is not True:
                     raise ParityError(f"{case_id}: reset must be true when present")
-            if "content_length" in case["disconnect"] or "partial_body_base64" in case["disconnect"]:
+            if "content_length" in case["disconnect"]:
                 disconnect_keys.update({"content_length", "partial_body_base64"})
                 if not isinstance(case["disconnect"]["content_length"], int) or case["disconnect"]["content_length"] <= 0:
                     raise ParityError(f"{case_id}: incomplete request content length must be positive")
@@ -1806,6 +2007,18 @@ def load_contract(
                     raise ParityError(f"{case_id}: invalid partial disconnect body base64") from error
                 if len(partial_body) >= case["disconnect"]["content_length"]:
                     raise ParityError(f"{case_id}: disconnect body prefix must be shorter than content_length")
+            elif "partial_body_base64" in case["disconnect"]:
+                disconnect_keys.add("partial_body_base64")
+                if not case["disconnect"].get("malformed_chunk"):
+                    raise ParityError(
+                        f"{case_id}: a partial body without content-length is supported only before malformed chunk framing"
+                    )
+                try:
+                    partial_body = base64.b64decode(case["disconnect"]["partial_body_base64"], validate=True)
+                except (ValueError, TypeError) as error:
+                    raise ParityError(f"{case_id}: invalid partial malformed-chunk body base64") from error
+                if not partial_body:
+                    raise ParityError(f"{case_id}: malformed-chunk body prefix must be nonempty")
             if case["disconnect"].get("reset") and "content_length" not in case["disconnect"]:
                 raise ParityError(f"{case_id}: reset disconnect requires an incomplete fixed-length body")
             if case["disconnect"].get("malformed_chunk") and (
@@ -1828,9 +2041,27 @@ def load_contract(
             if kind == "http3":
                 raise ParityError(f"{case_id}: request streaming has no declared H3 reference workflow")
             stream = case["request_stream"]
-            stream_keys = {"method", "path", "headers", "chunks_base64"}
+            stream_keys = {"method", "path", "headers"}
+            has_encoded_chunks = "chunks_base64" in stream
+            has_generated_chunks = "generated_chunks" in stream
+            if has_encoded_chunks == has_generated_chunks:
+                raise ParityError(
+                    f"{case_id}: request streaming requires exactly one chunk source"
+                )
+            if has_encoded_chunks:
+                stream_keys.add("chunks_base64")
+            if has_generated_chunks:
+                stream_keys.add("generated_chunks")
+                if kind != "http1":
+                    raise ParityError(
+                        f"{case_id}: generated request chunks are supported only for HTTP/1.1"
+                    )
             if "trailers" in stream:
                 stream_keys.add("trailers")
+            if "followup_path" in stream:
+                stream_keys.add("followup_path")
+                if not isinstance(stream["followup_path"], str) or not stream["followup_path"].startswith("/"):
+                    raise ParityError(f"{case_id}: request-stream followup_path must be an origin-form path")
             if "send_all_before_read" in stream:
                 stream_keys.add("send_all_before_read")
                 if stream["send_all_before_read"] is not True:
@@ -1879,13 +2110,45 @@ def load_contract(
                         f"{case_id}: malformed final chunk input is supported only for HTTP/1.1"
                     )
             exact_keys(stream, stream_keys, f"{case_id}.request_stream")
-            if len(stream["chunks_base64"]) < 2:
-                raise ParityError(f"{case_id}: request streaming requires at least two input chunks")
-            try:
-                for chunk in stream["chunks_base64"]:
-                    base64.b64decode(chunk, validate=True)
-            except (ValueError, TypeError) as error:
-                raise ParityError(f"{case_id}: invalid request-stream base64") from error
+            if has_encoded_chunks:
+                if not isinstance(stream["chunks_base64"], list) or len(stream["chunks_base64"]) < 2:
+                    raise ParityError(f"{case_id}: request streaming requires at least two input chunks")
+                try:
+                    for chunk in stream["chunks_base64"]:
+                        base64.b64decode(chunk, validate=True)
+                except (ValueError, TypeError) as error:
+                    raise ParityError(f"{case_id}: invalid request-stream base64") from error
+            else:
+                chunks = stream["generated_chunks"]
+                if not isinstance(chunks, list) or not 2 <= len(chunks) <= 16:
+                    raise ParityError(
+                        f"{case_id}: generated request streaming requires 2 to 16 chunks"
+                    )
+                total_bytes = 0
+                for index, chunk in enumerate(chunks):
+                    if not isinstance(chunk, dict):
+                        raise ParityError(
+                            f"{case_id}: generated chunk {index} must be an object"
+                        )
+                    exact_keys(chunk, {"byte_value", "size_bytes"}, f"{case_id}.generated_chunks[{index}]")
+                    byte_value = chunk["byte_value"]
+                    size_bytes = chunk["size_bytes"]
+                    if (
+                        not isinstance(byte_value, int)
+                        or isinstance(byte_value, bool)
+                        or not 0 <= byte_value <= 255
+                        or not isinstance(size_bytes, int)
+                        or isinstance(size_bytes, bool)
+                        or not 1 <= size_bytes <= 1_048_576
+                    ):
+                        raise ParityError(
+                            f"{case_id}: generated chunk {index} has an invalid byte or size"
+                        )
+                    total_bytes += size_bytes
+                if total_bytes > 2_097_152:
+                    raise ParityError(
+                        f"{case_id}: generated request body exceeds the 2 MiB input limit"
+                    )
             if "trailers" in stream and (
                 not isinstance(stream["trailers"], list)
                 or any(
@@ -2594,9 +2857,20 @@ def start_server(
     lifespan_mode_override: str | None = None,
     async_cleanup_delay_seconds: float = 0.5,
     observe_connection_errors: bool = False,
+    target_environment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     profile_id = profile["id"]
     env = os.environ.copy()
+    if server_id == "uvicorn-rs":
+        # Keep this process-wide runtime setting deterministic across host
+        # environments and apply only values declared by the selected case.
+        env.pop(MAX_BLOCKING_THREADS_ENV, None)
+        if target_environment is not None:
+            value = target_environment.get(MAX_BLOCKING_THREADS_ENV)
+            if isinstance(value, dict):
+                env[MAX_BLOCKING_THREADS_ENV] = os.fsdecode(bytes.fromhex(value["bytes_hex"]))
+            elif isinstance(value, str):
+                env[MAX_BLOCKING_THREADS_ENV] = value
     # Shutdown workflows restart a profile in the same temporary directory.
     # Readiness and request checkpoints must belong to the new process.
     events_path.write_text("", encoding="utf-8")
@@ -3386,6 +3660,16 @@ def read_http1_chunk(reader) -> bytes | None:
     return data
 
 
+def request_stream_chunks(specification: dict[str, Any]) -> list[bytes]:
+    """Decode explicit or compact deterministic chunks from one input case."""
+    if "generated_chunks" in specification:
+        return [
+            bytes([chunk["byte_value"]]) * chunk["size_bytes"]
+            for chunk in specification["generated_chunks"]
+        ]
+    return [base64.b64decode(item, validate=True) for item in specification["chunks_base64"]]
+
+
 def http1_body_pump_shutdown_workflow(
     server: dict[str, Any], specification: dict[str, Any], fault: dict[str, Any]
 ) -> dict[str, Any]:
@@ -3393,7 +3677,7 @@ def http1_body_pump_shutdown_workflow(
     fault_control_path = server.get("coverage_fault_control_path")
     if fault_control_path is None:
         raise ParityError("body-pump shutdown workflow requires the instrumented target")
-    chunks = [base64.b64decode(item, validate=True) for item in specification["chunks_base64"]]
+    chunks = request_stream_chunks(specification)
     if not chunks:
         raise ParityError("body-pump shutdown workflow requires a nonempty first chunk")
 
@@ -3472,9 +3756,13 @@ def http1_body_pump_shutdown_workflow(
 
 
 def http1_streaming_request(
-    port: int, specification: dict[str, Any], events_path: Path
+    port: int,
+    specification: dict[str, Any],
+    events_path: Path,
+    *,
+    allow_nonchunked_response: bool = False,
 ) -> dict[str, Any]:
-    chunks = [base64.b64decode(item, validate=True) for item in specification["chunks_base64"]]
+    chunks = request_stream_chunks(specification)
     client = socket.create_connection(("127.0.0.1", port), timeout=10)
     client.settimeout(10)
     reader = client.makefile("rb")
@@ -3537,6 +3825,28 @@ def http1_streaming_request(
                 raise ParityError("HTTP/1.1 response ended before its headers were complete")
             name, value = line.decode("latin-1").split(":", maxsplit=1)
             response_headers.append((name.strip().lower(), value.strip()))
+
+        is_chunked = any(
+            name == "transfer-encoding" and "chunked" in value.lower()
+            for name, value in response_headers
+        )
+        if allow_nonchunked_response and not is_chunked:
+            content_length = next(
+                (value for name, value in response_headers if name == "content-length"),
+                None,
+            )
+            try:
+                response_body = (
+                    reader.read(int(content_length))
+                    if content_length is not None
+                    else reader.read()
+                )
+            except ConnectionResetError:
+                response_body = b""
+            result = response_observation(status, response_headers, response_body)
+            result["early_body_base64"] = base64.b64encode(response_body).decode("ascii")
+            result["connection_closed"] = True
+            return result
 
         early_body = read_http1_chunk(reader)
         if early_body is None:
@@ -4147,7 +4457,7 @@ def http2_response_reset_request(
 
 
 def http2_streaming_request(port: int, specification: dict[str, Any]) -> dict[str, Any]:
-    chunks = [base64.b64decode(item, validate=True) for item in specification["chunks_base64"]]
+    chunks = request_stream_chunks(specification)
     context = ssl._create_unverified_context()
     context.set_alpn_protocols(["h2"])
     raw_socket = socket.create_connection(("127.0.0.1", port), timeout=10)
@@ -5679,8 +5989,37 @@ def execute_case(
                 fault_control_path.write_text(fault["point"], encoding="utf-8")
             try:
                 observation = http1_streaming_request(
-                    server["port"], case["request_stream"], server["events"]
+                    server["port"],
+                    case["request_stream"],
+                    server["events"],
+                    allow_nonchunked_response=(
+                        fault is not None
+                        and fault["contract"] == "http-body-pump-send-stopped-without-response"
+                    ),
                 )
+                if fault is not None and fault["contract"] == "http-request-body-conversion-error-caught":
+                    observation["fault_consumed"] = (
+                        fault_control_path.read_text(encoding="utf-8").strip()
+                        != fault["point"]
+                    )
+                if fault is not None and fault["contract"] in {
+                    "http-body-pump-send-stopped-without-response",
+                    "http-body-pump-oversized-frame-echo",
+                }:
+                    observation["fault_consumed"] = (
+                        fault_control_path.read_text(encoding="utf-8").strip()
+                        != fault["point"]
+                    )
+                if fault is not None and fault["contract"] == "http-body-pump-send-stopped-without-response":
+                    observation["followup_response"] = http1_request(
+                        server["port"],
+                        {
+                            "method": "GET",
+                            "path": case["request_stream"]["followup_path"],
+                            "headers": [],
+                            "body_base64": "",
+                        },
+                    )
                 if (
                     fault is not None
                     and fault["contract"] in {
@@ -5864,6 +6203,7 @@ def execute_case(
         return {
             "startup_failed": server["startup_failed"],
             "application_events": read_events(server["events"]),
+            "server_log": server.get("startup_output", ""),
         }
     if "startup_fallback" in case:
         deadline = time.monotonic() + 8
@@ -5923,9 +6263,18 @@ def execute_case(
         reset_elapsed_seconds = None
         try:
             if disconnect.get("malformed_chunk"):
+                prefix = base64.b64decode(
+                    disconnect.get("partial_body_base64", ""), validate=True
+                )
+                valid_prefix = (
+                    f"{len(prefix):x}\r\n".encode("ascii") + prefix + b"\r\n"
+                    if prefix
+                    else b""
+                )
                 client.sendall(
                     f"POST {disconnect['path']} HTTP/1.1\r\nHost: localhost\r\n"
-                    "Transfer-Encoding: chunked\r\n\r\nnot-a-size\r\nabc\r\n0\r\n\r\n".encode()
+                    "Transfer-Encoding: chunked\r\n\r\n".encode()
+                    + valid_prefix + b"not-a-size\r\nabc\r\n0\r\n\r\n"
                 )
                 deadline = time.monotonic() + 3
                 while (
@@ -6984,6 +7333,28 @@ def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -
             and "coverage observed concurrent HTTP receive lock contention"
             in observation.get("server_log", "")
         )
+    if fault["contract"] == "http-request-body-conversion-error-caught":
+        return (
+            observation.get("status") == 200
+            and observation.get("ordered_body_bytes")
+            == base64.b64encode(b"request-body-error-caught").decode("ascii")
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http-body-pump-send-stopped-without-response":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("status") in {None, 500}
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http-body-pump-oversized-frame-echo":
+        return (
+            observation.get("status") == 200
+            and observation.get("ordered_body_bytes")
+            == base64.b64encode(b"aabb").decode("ascii")
+            and observation.get("fault_consumed") is True
+        )
     if fault["contract"] == "http-task-completion-error-followup-200":
         responses = observation.get("responses")
         return (
@@ -7047,6 +7418,17 @@ def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -
             and isinstance(events, list)
             and "http.disconnect" in events
             and "http.disconnect.repeat-error:MemoryError" in events
+        )
+    if fault["contract"] == "server-runtime-configuration-accepted":
+        return (
+            observation.get("status") == 200
+            and observation.get("body_bytes") == base64.b64encode(b"ok").decode("ascii")
+        )
+    if fault["contract"] == "server-runtime-configuration-rejected":
+        return (
+            observation.get("startup_failed") is True
+            and "lifespan.startup" not in observation.get("application_events", [])
+            and "could not initialize Tokio runtime:" in observation.get("server_log", "")
         )
     if fault["contract"] == "server-startup-failure":
         if fault["point"] in {
@@ -7224,6 +7606,12 @@ def start_profile_servers(
         (case["lifecycle"]["graceful_timeout_seconds"] for case in cases if "lifecycle" in case),
         1,
     )
+    environment_cases = [case for case in cases if "target_environment" in case]
+    if environment_cases and len(cases) != 1:
+        raise ParityError("target environment cases must start in an isolated server process")
+    target_environment = (
+        environment_cases[0]["target_environment"] if environment_cases else None
+    )
     expect_startup_failure = any(
         "startup_failure" in case and case["startup_failure"]["expect_failed"]
         for case in cases
@@ -7312,6 +7700,7 @@ def start_profile_servers(
                     case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}
                     for case in cases
                 ),
+                target_environment=target_environment,
             )
     except Exception:
         for server in servers.values():
@@ -7330,6 +7719,7 @@ def execute_profile(
     startup_cases = [
         case for case in cases
         if "startup_failure" in case or "startup_fallback" in case
+        or "target_environment" in case
         or case.get("fault", {}).get("contract") in {
             "server-eager-lifespan-registration-cleanup",
             "server-eager-lifespan-registration-cleanup-timeout",
@@ -7508,6 +7898,19 @@ def execute_profile(
                             }
                         elif case["fault"]["contract"] == "http-body-pump-drain-shutdown-joined":
                             fault_observation = {**target_result, **target_raw}
+                        elif case["fault"]["contract"] in {
+                            "http-request-body-conversion-error-caught",
+                            "http-body-pump-send-stopped-without-response",
+                            "http-body-pump-oversized-frame-echo",
+                        }:
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                            if case["fault"]["contract"] == "http-body-pump-send-stopped-without-response":
+                                fault_observation["followup_response"] = target_raw.get(
+                                    "followup_response"
+                                )
                         elif case["fault"]["contract"] in {
                             "http-body-pump-error-stop-disconnect-followup-200",
                             "http-body-pump-drain-terminal-frame",

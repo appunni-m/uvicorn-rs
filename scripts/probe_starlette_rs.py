@@ -119,10 +119,10 @@ def _identity(framework: str, server_wheel: Path, framework_wheel) -> dict[str, 
                 "imported uvicorn-rs extension does not match --server-wheel"
             )
 
-    server_distribution = importlib.metadata.distribution("uvicorn-rs")
+    server_distribution = importlib.metadata.distribution("uvicorn-rs-py")
     requirements = list(server_distribution.requires or [])
     if any("starlette" in requirement.lower() for requirement in requirements):
-        raise RuntimeError("uvicorn-rs declares a Starlette runtime dependency")
+        raise RuntimeError("uvicorn-rs-py declares a Starlette runtime dependency")
     installed_files = [str(path) for path in (server_distribution.files or [])]
     if any(
         path.startswith(("starlette/", "starlette_rs_py/")) for path in installed_files

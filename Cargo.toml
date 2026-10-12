@@ -1,17 +1,26 @@
 [package]
-name = "uvicorn-rs"
+name = "uvicorn-rs-py"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
 publish = false
 license = "BSD-3-Clause OR MIT"
-description = "Rust network runtime for Python ASGI applications"
+description = "Python ASGI adapter for the Rust-native Uvicorn-RS server"
 repository = "https://github.com/appunni-m/uvicorn-rs"
 readme = "README.md"
 
+[workspace]
+members = [
+    "crates/native-app-contract",
+    "crates/uvicorn-rs",
+    "tools/http3-probe",
+]
+default-members = [".", "crates/uvicorn-rs"]
+resolver = "2"
+
 [lib]
 name = "uvicorn_rs"
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
 [features]
 runtime-diagnostics = []

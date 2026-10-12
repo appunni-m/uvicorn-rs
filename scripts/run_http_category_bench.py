@@ -45,6 +45,24 @@ NATIVE_CLIENT: Path | None = None
 _CLIENT_TEMP: tempfile.TemporaryDirectory | None = None
 
 
+class _BenchmarkCaseFailure(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        identity_result: dict | None = None,
+        partial_client_metrics: dict | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.identity_result = identity_result
+        self.partial_client_metrics = partial_client_metrics
+
+
+class _HttpClientFailure(RuntimeError):
+    def __init__(self, message: str, partial_client_metrics: dict | None) -> None:
+        super().__init__(message)
+        self.partial_client_metrics = partial_client_metrics
+
+
 def _scope_headers() -> list[list[str]]:
     return [[f"x-bench-{index}", "value"] for index in range(32)]
 
@@ -408,7 +426,16 @@ def _client(port: int, seconds: float, concurrency: int, case: dict, server) -> 
         seconds, server, cwd=ROOT,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"HTTP client failed ({result.returncode}):\n{result.stdout}\n{result.stderr}")
+        try:
+            partial_client_metrics = json.loads(result.stdout)
+        except (json.JSONDecodeError, TypeError):
+            partial_client_metrics = None
+        if not isinstance(partial_client_metrics, dict):
+            partial_client_metrics = None
+        raise _HttpClientFailure(
+            f"HTTP client failed ({result.returncode}):\n{result.stdout}\n{result.stderr}",
+            partial_client_metrics,
+        )
     return json.loads(result.stdout)
 
 
@@ -426,6 +453,7 @@ def _sample(
     asgi_timings_path: Path | None = None,
 ) -> dict:
     identity_before = evidence.before_sample() if evidence is not None else None
+    identity_result = None
     definition = WORKLOADS[workload]
     port = _port()
     app = (
@@ -479,10 +507,10 @@ def _sample(
                 "ranking": "disabled; raw correctness-passing operational sample only",
             }
         if evidence is not None:
-            identity = evidence.after_sample(identity_before)
-            metrics["timing_valid"] = metrics["timing_valid"] and identity["timing_valid"]
-            metrics["timing_invalid_reasons"].extend(identity["timing_invalid_reasons"])
-            metrics["measurement_identity"] = identity["measurement_identity"]
+            identity_result = evidence.after_sample(identity_before)
+            metrics["timing_valid"] = metrics["timing_valid"] and identity_result["timing_valid"]
+            metrics["timing_invalid_reasons"].extend(identity_result["timing_invalid_reasons"])
+            metrics["measurement_identity"] = identity_result["measurement_identity"]
         if server_name.startswith("uvicorn-rs-"):
             diagnostics = _runtime_diagnostics(log)
             if diagnostics is not None:
@@ -507,9 +535,20 @@ def _sample(
     except Exception as error:
         log.seek(0)
         server_output = log.read()
-        raise RuntimeError(
+        if evidence is not None and identity_before is not None and identity_result is None:
+            try:
+                identity_result = evidence.after_sample(identity_before)
+            except Exception:
+                identity_result = {
+                    "timing_valid": False,
+                    "timing_invalid_reasons": ["failed_sample_identity_capture"],
+                    "measurement_identity": None,
+                }
+        raise _BenchmarkCaseFailure(
             f"{server_name} {workload} failed: {error}\n"
-            f"server output (last 4000 characters):\n{server_output[-4000:]}"
+            f"server output (last 4000 characters):\n{server_output[-4000:]}",
+            identity_result,
+            getattr(error, "partial_client_metrics", None),
         ) from error
     finally:
         stop_client(client)
@@ -587,6 +626,15 @@ def main() -> None:
     parser.add_argument("--warmup", type=float, default=1)
     parser.add_argument("--concurrency", type=int, default=64)
     parser.add_argument("--repetitions", type=int, default=3)
+    parser.add_argument(
+        "--max-consecutive-failures",
+        type=int,
+        default=4,
+        help=(
+            "record failed samples and continue, stopping only after this many "
+            "consecutive failures (default: 4)"
+        ),
+    )
     parser.add_argument("--seed", type=int, default=20261002)
     parser.add_argument(
         "--python",
@@ -613,6 +661,8 @@ def main() -> None:
         default=ROOT / "benchmarks" / "results" / "http-categories-2026-10-02.json",
     )
     args = parser.parse_args()
+    if args.max_consecutive_failures < 1:
+        parser.error("--max-consecutive-failures must be positive")
     python = args.python.absolute()
     if not python.exists():
         raise SystemExit(f"Python interpreter does not exist: {python}")
@@ -646,6 +696,10 @@ def main() -> None:
 
     rng = random.Random(args.seed)
     rows = []
+    failed_cases = []
+    consecutive_failures = 0
+    stopped_after_consecutive_failures = False
+    planned_rows = len(args.workloads) * len(selected_servers) * args.repetitions
     checkpoint_path = args.output.with_suffix(".jsonl")
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint_file = checkpoint_path.open("x")
@@ -679,10 +733,80 @@ def main() -> None:
                         ),
                     )
                 except Exception as error:
-                    raise RuntimeError(
-                        f"benchmark case failed: workload={workload}, server={server_name}, "
-                        f"repetition={repetition}: {error}"
-                    ) from error
+                    identity_result = getattr(error, "identity_result", None)
+                    partial_client_metrics = getattr(
+                        error, "partial_client_metrics", None
+                    )
+                    if not isinstance(partial_client_metrics, dict):
+                        partial_client_metrics = None
+                    reported_failures = (
+                        partial_client_metrics.get("failures")
+                        if partial_client_metrics is not None
+                        else None
+                    )
+                    failure_count = (
+                        max(1, reported_failures)
+                        if isinstance(reported_failures, int)
+                        and not isinstance(reported_failures, bool)
+                        else 1
+                    )
+                    timing_invalid_reasons = ["benchmark_case_failed"]
+                    if identity_result is not None:
+                        timing_invalid_reasons.extend(
+                            identity_result.get("timing_invalid_reasons", [])
+                        )
+                    row = {
+                        "workload": workload,
+                        "server": server_name,
+                        "repetition": repetition,
+                        "concurrency": concurrency,
+                        "duration_seconds_target": duration,
+                        "warmup_seconds_target": warmup,
+                        "requests": (
+                            partial_client_metrics.get("requests")
+                            if partial_client_metrics is not None
+                            else None
+                        ),
+                        "requests_per_second": None,
+                        "application_bytes_per_second": None,
+                        "p50_ms": None,
+                        "p95_ms": None,
+                        "p99_ms": None,
+                        "failures": failure_count,
+                        "correctness_valid": False,
+                        "server_lifecycle_gate": "not_assessed",
+                        "timing_valid": False,
+                        "timing_invalid_reasons": timing_invalid_reasons,
+                        "benchmark_error_type": type(error).__name__,
+                        "benchmark_error": str(error),
+                        "partial_client_metrics": partial_client_metrics,
+                    }
+                    if identity_result is not None:
+                        row["measurement_identity"] = identity_result.get(
+                            "measurement_identity"
+                        )
+                    rows.append(row)
+                    failed_cases.append(
+                        {
+                            "workload": workload,
+                            "server": server_name,
+                            "repetition": repetition,
+                            "error_type": type(error).__name__,
+                        }
+                    )
+                    print(json.dumps(row), flush=True)
+                    checkpoint_file.write(json.dumps(row) + "\n")
+                    checkpoint_file.flush()
+                    print(
+                        f"FAILED {workload} / {server_name} / repetition {repetition}: {error}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    consecutive_failures += 1
+                    if consecutive_failures >= args.max_consecutive_failures:
+                        stopped_after_consecutive_failures = True
+                        break
+                    continue
                 row = {
                     "workload": workload,
                     "server": server_name,
@@ -696,6 +820,11 @@ def main() -> None:
                 print(json.dumps(row), flush=True)
                 checkpoint_file.write(json.dumps(row) + "\n")
                 checkpoint_file.flush()
+                consecutive_failures = 0
+            if stopped_after_consecutive_failures:
+                break
+        if stopped_after_consecutive_failures:
+            break
 
     evidence_metadata = evidence.finish(rows)
     summaries = {}
@@ -733,6 +862,13 @@ def main() -> None:
     except (OSError, subprocess.CalledProcessError):
         cpu_model = platform.processor()
     report = {
+        "status": (
+            "stopped_after_consecutive_failures"
+            if stopped_after_consecutive_failures
+            else "completed_with_failures"
+            if failed_cases
+            else "completed"
+        ),
         "metadata": {
             "date": date.today().isoformat(),
             "platform": platform.platform(),
@@ -744,6 +880,12 @@ def main() -> None:
             "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
             "source_sha256": _source_digest(args.workloads, args.asgi_stage_diagnostics),
             "workloads": args.workloads,
+            "runtime_configuration": {
+                "uvicorn_rs_max_blocking_threads": os.environ.get(
+                    "UVICORN_RS_MAX_BLOCKING_THREADS"
+                ),
+                "unset_uses_tokio_default": True,
+            },
             "workload_parameters": {
                 name: {
                     "concurrency": WORKLOADS[name].get("concurrency", args.concurrency),
@@ -778,6 +920,11 @@ def main() -> None:
             "native_client": "libcurl C client compiled from scripts/bench_http_client.c" if native_client is not None else "unavailable; Node.js fallback used",
             "fallback_client": "Node.js HTTP/1.1 with full body checking; used for slow-reader backpressure",
             "libcurl": subprocess.check_output(["curl-config", "--version"], text=True).strip() if native_client is not None else None,
+            "planned_rows": planned_rows,
+            "recorded_rows": len(rows),
+            "not_run_rows": planned_rows - len(rows),
+            "max_consecutive_failures": args.max_consecutive_failures,
+            "case_failures": failed_cases,
         },
         "summaries_median": summaries,
         "rows": rows,
@@ -786,6 +933,8 @@ def main() -> None:
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     checkpoint_file.close()
     print(f"Wrote {args.output}")
+    if failed_cases:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

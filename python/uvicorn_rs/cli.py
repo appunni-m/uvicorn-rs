@@ -24,7 +24,7 @@ def _load_app(import_string):
 
 
 def _parse_args(argv=None):
-    parser = argparse.ArgumentParser(prog="uvicorn-rs")
+    parser = argparse.ArgumentParser(prog="uvicorn-rs-py")
     parser.add_argument("app", help="ASGI application as module:app")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
@@ -38,12 +38,12 @@ def _parse_args(argv=None):
 def main(argv=None):
     args = _parse_args(argv)
     if bool(args.certfile) != bool(args.keyfile):
-        print("uvicorn-rs: --certfile and --keyfile must be provided together", file=sys.stderr)
+        print("uvicorn-rs-py: --certfile and --keyfile must be provided together", file=sys.stderr)
         raise SystemExit(2)
     try:
         app = _load_app(args.app)
     except (ImportError, ValueError) as exc:
-        print(f"uvicorn-rs: {exc}", file=sys.stderr)
+        print(f"uvicorn-rs-py: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
 
     loop_factory = None
@@ -51,7 +51,7 @@ def main(argv=None):
         try:
             import uvloop
         except ImportError as exc:
-            print("uvicorn-rs: --loop uvloop requires uvloop to be installed", file=sys.stderr)
+            print("uvicorn-rs-py: --loop uvloop requires uvloop to be installed", file=sys.stderr)
             raise SystemExit(2) from exc
         loop_factory = uvloop.new_event_loop
 

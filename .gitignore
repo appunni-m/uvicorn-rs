@@ -9,6 +9,14 @@ __pycache__/
 *.profdata
 target/
 /dist/
+# Generated logs and per-run coverage reports stay local.
+*.log
+coverage-report*.json*
+*coverage-mcp-*.json*
+# Benchmark runs write raw measurements, logs, and coverage artifacts here.
+# Existing curated evidence already tracked by Git remains available; new run
+# outputs require an explicit force-add when they are intentionally published.
+/benchmarks/results/
 /.pytest_cache/
 /build/
 /.coverage-mcp/

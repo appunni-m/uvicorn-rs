@@ -173,6 +173,7 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
         ),
         "driver_status": run.get("status"),
         "analysis_status": analysis.get("status"),
+        "driver_execution_errors": analysis.get("driver_execution_errors", []),
         "qualified_pairs": analysis.get("qualified_pairs"),
         "category_integrity": {
             name: {
@@ -183,6 +184,7 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
                 "invalid_reason_row_counts": item.get("invalid_reason_row_counts", {}),
                 "missing_or_duplicate_expected_rows": item.get("missing_or_duplicate_expected_rows", []),
                 "input_errors": item.get("input_errors", []),
+                "execution": item.get("driver_execution"),
             }
             for name, item in by_name.items()
         },
@@ -455,6 +457,60 @@ def render_markdown(report: dict) -> str:
             if missing:
                 missing_json = json.dumps(missing, ensure_ascii=False, sort_keys=True)
                 lines.append(f"- {category} missing or duplicate planned rows: {escape(missing_json)}")
+        lines += ["", "Category runner failures:", ""]
+        execution_failures = []
+        for error in system.get("driver_execution_errors", []):
+            detail = error.get("detail", error.get("message", error.get("exit_code", "failed")))
+            execution_failures.append(
+                f"- Suite {error.get('stage', 'execution')}: {escape(str(detail))}"
+            )
+        for category in CATEGORIES:
+            item = system["category_integrity"][category]
+            execution = item.get("execution")
+            if not isinstance(execution, dict):
+                if item["status"] == "incomplete_category":
+                    execution_failures.append(
+                        f"- **{category}**: runner execution receipt unavailable."
+                    )
+                continue
+            if execution.get("selected") is False:
+                continue
+            reasons = execution.get("gate_reasons", [])
+            if not reasons and item["status"] != "incomplete_category":
+                continue
+            parts = []
+            if not execution.get("receipt_present"):
+                parts.append("driver receipt missing or duplicated")
+            if execution.get("exit_code") is not None:
+                parts.append(f"exit code {execution['exit_code']}")
+            if execution.get("rows") is not None or execution.get("expected_rows") is not None:
+                row_detail = (
+                    f"rows {execution.get('rows', 'unknown')}/{execution.get('expected_rows', 'unknown')}"
+                )
+                if execution.get("rows_source") == "retained_category_checkpoint":
+                    row_detail += " from retained checkpoint"
+                parts.append(row_detail)
+            if execution.get("correctness_failures") is not None:
+                parts.append(f"correctness failures {execution['correctness_failures']}")
+            if execution.get("log"):
+                parts.append(f"log `{execution['log']}`")
+            if reasons:
+                parts.append("gates: " + ", ".join(reasons))
+            for key, label in (("error", "runner error"), ("cleanup_error", "cleanup error")):
+                if execution.get(key):
+                    detail = json.dumps(execution[key], ensure_ascii=False, sort_keys=True)
+                    parts.append(f"{label}: {escape(detail)}")
+            cleanup = execution.get("process_cleanup")
+            if isinstance(cleanup, dict) and (
+                cleanup.get("forced") is True
+                or cleanup.get("owned_live_process_count") not in (None, 0)
+            ):
+                detail = json.dumps(cleanup, sort_keys=True)
+                parts.append("process cleanup: " + escape(detail))
+            execution_failures.append(
+                f"- **{category}**: " + "; ".join(parts) + "."
+            )
+        lines.extend(execution_failures or ["No category runner failures or incomplete receipts were recorded."])
         lines += ["", "Unqualified workload/reference comparisons:", ""]
         exclusions = []
         for category in CATEGORIES:

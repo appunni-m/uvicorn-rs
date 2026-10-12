@@ -19,6 +19,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import threading
 import time
@@ -376,8 +377,24 @@ def main():
             timeout=20,
             check=True,
         )
+        script_name = "uvicorn-rs-py.exe" if os.name == "nt" else "uvicorn-rs-py"
+        console_script = Path(sysconfig.get_path("scripts")) / script_name
+        if not console_script.is_file():
+            raise RuntimeError(
+                "installed wheel did not expose the uvicorn-rs-py console script"
+            )
+        console_cli = subprocess.run(
+            [str(console_script), "--help"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=True,
+        )
     if "module:app" not in cli.stdout:
         raise RuntimeError("installed wheel CLI help does not describe module:app")
+    if "module:app" not in console_cli.stdout:
+        raise RuntimeError("installed uvicorn-rs-py help does not describe module:app")
     evidence = {
         "schema": "uvicorn-rs-installed-wheel-consumer@1",
         "python": sys.version,
@@ -385,13 +402,26 @@ def main():
         "consumer_probe_sha256": hashlib.sha256(
             Path(__file__).read_bytes()
         ).hexdigest(),
-        "version": importlib.metadata.version("uvicorn-rs"),
+        "build_inputs_sha256": {
+            relative_path: hashlib.sha256(
+                (Path(__file__).resolve().parents[1] / relative_path).read_bytes()
+            ).hexdigest()
+            for relative_path in (
+                "Cargo.toml",
+                "Cargo.lock",
+                "pyproject.toml",
+                "src/lib.rs",
+            )
+        },
+        "version": importlib.metadata.version("uvicorn-rs-py"),
         "wheel": str(args.wheel.resolve()),
         "wheel_sha256": hashlib.sha256(args.wheel.read_bytes()).hexdigest(),
         "native_path": str(native),
         "native_sha256": hashlib.sha256(data).hexdigest(),
         "package_path": str(package),
         "cli_help": "passed",
+        "console_script": "uvicorn-rs-py",
+        "console_script_help": "passed",
         "cli_tls_and_shutdown": probe_installed_cli_tls_and_shutdown(),
         "live_asgi": asyncio.run(consume_wheel()),
         "scope": "actual package-consumer HTTP/lifespan/context/cancellation and POSIX CLI/TLS/shutdown smoke; not full oracle parity",

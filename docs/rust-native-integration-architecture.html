@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Current and proposed Rust-native architecture for integrating uvicorn-rs with Starlette-RS and FastAPI-RS.">
+  <title>Rust-native framework integration — uvicorn-rs</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f4f7fb;
+      --surface: #ffffff;
+      --ink: #172235;
+      --muted: #536177;
+      --line: #d5deea;
+      --rust: #e7f3ff;
+      --rust-line: #1767a5;
+      --python: #fff0e7;
+      --python-line: #b84f18;
+      --contract: #e9f7f0;
+      --contract-line: #24754d;
+      --optional: #f2edff;
+      --optional-line: #7050a8;
+      --warning: #fff8df;
+      --warning-line: #a97900;
+      --code: #eef2f7;
+      --shadow: 0 10px 28px rgba(31, 52, 78, .08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --page: #111824;
+        --surface: #182232;
+        --ink: #e8eef7;
+        --muted: #a9b7ca;
+        --line: #36465a;
+        --rust: #192d40;
+        --rust-line: #74baff;
+        --python: #35251e;
+        --python-line: #ff9c67;
+        --contract: #1d332c;
+        --contract-line: #7dd6a8;
+        --optional: #2a2440;
+        --optional-line: #b7a0f4;
+        --warning: #332d1b;
+        --warning-line: #e4bd58;
+        --code: #202c3b;
+        --shadow: 0 10px 28px rgba(0, 0, 0, .18);
+      }
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    a { color: var(--rust-line); text-underline-offset: 3px; }
+    a:hover { text-decoration-thickness: 2px; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code { padding: .08rem .3rem; border-radius: 4px; background: var(--code); font-size: .93em; }
+    .shell { width: min(1280px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 64px; }
+    .eyebrow { margin: 0 0 8px; color: var(--rust-line); font-size: .78rem; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    h1, h2, h3 { line-height: 1.18; letter-spacing: -.025em; }
+    h1 { max-width: 900px; margin: 0; font-size: clamp(2rem, 4vw, 3.25rem); }
+    h2 { margin: 0 0 12px; font-size: clamp(1.45rem, 2.5vw, 2rem); }
+    h3 { margin: 0 0 8px; font-size: 1.08rem; }
+    p { margin: 0 0 12px; }
+    .lede { max-width: 920px; margin: 16px 0 22px; color: var(--muted); font-size: 1.1rem; }
+    .snapshot { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
+    .tag { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); font-size: .82rem; }
+    .tag strong { color: var(--ink); }
+    .notice { margin: 20px 0 26px; padding: 14px 16px; border-left: 4px solid var(--warning-line); border-radius: 8px; background: var(--warning); }
+    .notice strong { display: block; margin-bottom: 3px; }
+    .notice p:last-child { margin-bottom: 0; }
+    .jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 30px; }
+    .jump a { padding: 7px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); font-size: .88rem; text-decoration: none; }
+    .jump a:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid var(--rust-line); outline-offset: 3px; }
+    section { margin: 38px 0; scroll-margin-top: 20px; }
+    .section-intro { max-width: 950px; margin-bottom: 18px; color: var(--muted); }
+    .diagram { padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+    .diagram-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+    .diagram-head p { max-width: 720px; margin: 0; color: var(--muted); }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; }
+    .legend-item { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: .82rem; }
+    .swatch { width: 12px; height: 12px; border: 2px solid currentColor; border-radius: 3px; }
+    .swatch.rust { color: var(--rust-line); background: var(--rust); }
+    .swatch.python { color: var(--python-line); background: var(--python); }
+    .swatch.contract { color: var(--contract-line); background: var(--contract); }
+    .swatch.optional { color: var(--optional-line); background: var(--optional); }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr));
+      gap: 16px;
+      align-items: stretch;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .node {
+      position: relative;
+      min-width: 0;
+      min-height: 168px;
+      padding: 14px 13px 13px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--surface);
+    }
+    .node:not(:last-child)::after {
+      position: absolute;
+      z-index: 2;
+      top: 45%;
+      right: -17px;
+      width: 18px;
+      content: "→";
+      color: var(--muted);
+      font-size: 1.18rem;
+      font-weight: 700;
+      text-align: center;
+    }
+    .node.rust { border-color: var(--rust-line); background: var(--rust); }
+    .node.python { border-color: var(--python-line); background: var(--python); }
+    .node.contract { border-color: var(--contract-line); background: var(--contract); }
+    .node.optional { border-color: var(--optional-line); background: var(--optional); }
+    .step { display: block; margin-bottom: 9px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .node h3 { font-size: .98rem; }
+    .node p { margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.43; }
+    .node .kind { display: inline-block; margin-top: 11px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .roundtrip { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 10px; margin-top: 18px; padding: 13px 14px; border: 1px dashed var(--python-line); border-radius: 10px; background: var(--python); }
+    .roundtrip div { min-width: 0; }
+    .roundtrip strong { display: block; font-size: .89rem; }
+    .roundtrip span { display: block; color: var(--muted); font-size: .8rem; }
+    .roundtrip .arrow { color: var(--python-line); font-size: 1.25rem; font-weight: 800; }
+    .callout-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+    .callout { padding: 14px; border-left: 3px solid var(--line); background: var(--page); }
+    .callout h3 { font-size: .94rem; }
+    .callout p { margin: 0; color: var(--muted); font-size: .88rem; }
+    .target-banner { margin-bottom: 16px; padding: 13px 15px; border-left: 4px solid var(--contract-line); border-radius: 8px; background: var(--contract); }
+    .target-banner strong { display: block; }
+    .target-banner p { margin: 3px 0 0; color: var(--muted); }
+    .branches { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, .37fr); gap: 14px; margin-top: 18px; }
+    .branch { padding: 15px; border: 1px dashed var(--optional-line); border-radius: 10px; background: var(--optional); }
+    .branch h3 { margin-bottom: 6px; }
+    .branch p { margin: 0; color: var(--muted); font-size: .89rem; }
+    .ledger { width: 100%; border-collapse: collapse; margin: 14px 0 0; }
+    .ledger th, .ledger td { padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .ledger th { color: var(--muted); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
+    .ledger td { font-size: .91rem; }
+    .ledger td:first-child { width: 22%; font-weight: 650; }
+    .ledger td:nth-child(2) { width: 37%; }
+    .table-wrap { overflow-x: auto; }
+    .package-map { display: grid; grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr); gap: 14px; align-items: stretch; }
+    .package-column { display: grid; gap: 12px; align-content: start; }
+    .package { padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+    .package.rust { border-color: var(--rust-line); background: var(--rust); }
+    .package.python { border-color: var(--python-line); background: var(--python); }
+    .package.contract { border-color: var(--contract-line); background: var(--contract); }
+    .package.optional { border-color: var(--optional-line); background: var(--optional); }
+    .package p { margin: 0; color: var(--muted); font-size: .88rem; }
+    .package h3 { margin-bottom: 5px; }
+    .dependency-arrow { display: grid; place-content: center; gap: 13px; color: var(--muted); text-align: center; font-size: .82rem; }
+    .dependency-arrow strong { color: var(--ink); font-size: 1.2rem; }
+    .stack-note { margin-top: 14px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); }
+    .stack-note strong { color: var(--ink); }
+    .options { display: grid; gap: 12px; }
+    .section-subhead { margin-top: 22px; }
+    .flow-5 { --cols: 5; }
+    .flow-7 { --cols: 7; }
+    .option { padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+    .option.recommended { border-color: var(--contract-line); background: var(--contract); }
+    .option h3 { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+    .recommend-label { color: var(--contract-line); font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; }
+    .option p { margin: 0; color: var(--muted); font-size: .91rem; }
+    .option .fit { margin-top: 8px; color: var(--ink); }
+    .contract-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .contract-card { padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+    .contract-card h3 { margin-bottom: 6px; }
+    .contract-card p { margin: 0; color: var(--muted); font-size: .9rem; }
+    .contract-card code { white-space: normal; overflow-wrap: anywhere; }
+    .mode-lanes { display: grid; gap: 12px; }
+    .mode-lane { display: grid; grid-template-columns: minmax(190px, .34fr) minmax(0, 1fr); gap: 14px; padding: 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+    .mode-lane.asgi { border-color: var(--python-line); background: var(--python); }
+    .mode-lane.hybrid { border-color: var(--optional-line); background: var(--optional); }
+    .mode-lane.hosted { border-color: var(--contract-line); background: var(--contract); }
+    .mode-lane.native { border-color: var(--rust-line); background: var(--rust); }
+    .mode-lane h3 { margin: 0 0 5px; }
+    .mode-lane .status { display: block; color: var(--muted); font-size: .76rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+    .mode-detail { min-width: 0; }
+    .mode-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-bottom: 8px; }
+    .mode-step { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: .82rem; font-weight: 650; }
+    .mode-arrow { color: var(--muted); font-weight: 800; }
+    .mode-detail p { margin: 0; color: var(--muted); font-size: .89rem; }
+    .mode-detail p + p { margin-top: 7px; }
+    .migration { counter-reset: phase; display: grid; gap: 0; margin: 18px 0 0; padding: 0; list-style: none; }
+    .migration li { position: relative; margin-left: 15px; padding: 0 0 20px 34px; border-left: 2px solid var(--line); }
+    .migration li:last-child { border-left-color: transparent; padding-bottom: 0; }
+    .migration li::before { position: absolute; top: 0; left: -14px; width: 26px; height: 26px; display: grid; place-items: center; border: 2px solid var(--rust-line); border-radius: 50%; background: var(--surface); color: var(--rust-line); font-size: .78rem; font-weight: 700; counter-increment: phase; content: counter(phase); }
+    .migration strong { display: block; margin-bottom: 3px; }
+    .migration span { color: var(--muted); }
+    .decision { margin: 12px 0; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+    .decision summary { padding: 12px 14px; cursor: pointer; font-weight: 650; }
+    .decision div { padding: 0 14px 14px; color: var(--muted); }
+    .decision div p:last-child { margin-bottom: 0; }
+    .sources { padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: .88rem; }
+    .sources ul { margin: 8px 0 0; padding-left: 20px; }
+    .sources li { margin: 6px 0; }
+    .small { color: var(--muted); font-size: .85rem; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    @media (max-width: 980px) {
+      .flow { grid-template-columns: 1fr; gap: 12px; }
+      .node { min-height: 0; }
+      .node:not(:last-child)::after { top: auto; right: auto; bottom: -16px; left: 50%; width: auto; content: "↓"; }
+      .package-map { grid-template-columns: 1fr; }
+      .dependency-arrow { grid-template-columns: 1fr auto 1fr; align-items: center; }
+      .dependency-arrow strong { transform: rotate(90deg); }
+      .branches { grid-template-columns: 1fr; }
+      .mode-lane { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      .shell { width: min(100% - 24px, 1280px); padding-top: 24px; }
+      .diagram { padding: 14px; }
+      .roundtrip { grid-template-columns: 1fr; gap: 5px; }
+      .roundtrip .arrow { transform: rotate(90deg); justify-self: center; }
+      .callout-grid, .contract-grid { grid-template-columns: 1fr; }
+      .ledger th, .ledger td { padding: 9px 8px; }
+    }
+    @media print {
+      :root { color-scheme: light; --page: #fff; --surface: #fff; --ink: #111; --muted: #333; --line: #aaa; }
+      body { font-size: 11pt; }
+      .shell { width: 100%; padding: 0; }
+      .diagram { box-shadow: none; break-inside: avoid; }
+      .jump { display: none; }
+      .flow { grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr)); }
+      .node { min-height: 0; }
+      .decision div { display: block; }
+      a { color: #111; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <p class="eyebrow">Architecture status · 12 October 2026</p>
+      <h1>Native <code>uvicorn-rs</code> with a thin Python compatibility client</h1>
+      <p class="lede">Ship two modes side by side: <code>uvicorn-rs</code> is the Rust server/library, and <code>uvicorn-rs-py</code> is its separate thin client for Python ASGI applications. Rust applications compose <code>fastapi-rs</code> over <code>starlette-rs</code> directly, with one typed Rust request path from the server through the handler and back.</p>
+      <div class="snapshot" role="group" aria-label="Architecture status">
+        <span class="tag"><strong>Native server</strong> <code>uvicorn-rs</code></span>
+        <span class="tag"><strong>Python client</strong> <code>uvicorn-rs-py</code></span>
+        <span class="tag"><strong>Framework stack</strong> <code>fastapi-rs</code> → <code>starlette-rs</code></span>
+        <span class="tag"><strong>Status</strong> Native prototypes; transport adapter integration open</span>
+      </div>
+      <div class="notice">
+        <strong>Package names and language boundary</strong>
+        <p><code>uvicorn-rs</code> itself is the native server; there is no separate <code>uvicorn-rs-native</code> product. <code>uvicorn-rs-py</code> is a distinct Python compatibility client that can be installed and used alongside the native package. This is a greenfield package layout: the former Python distribution, import path, Cargo shape, and CLI are not compatibility constraints. Standard Python ASGI apps still execute in Python and cross the ASGI bridge; the Rust-native FastAPI-RS/Starlette-RS path has no Python request boundary.</p>
+      </div>
+      <nav class="jump" aria-label="Architecture sections">
+        <a href="#current">Current path</a>
+        <a href="#target">Rust-native request path</a>
+        <a href="#dependencies">Crate and package graph</a>
+        <a href="#contract">Service contract</a>
+        <a href="#execution-modes">Python boundary options</a>
+        <a href="#rollout">Migration and decision gates</a>
+      </nav>
+    </header>
+
+    <section id="current">
+      <p class="eyebrow">01 · Today</p>
+      <h2>Current architecture: Rust owns the wire, Python owns the ASGI application</h2>
+      <p class="section-intro">The target package split is already explicit: <code>uvicorn-rs</code> is the Rust-native server, while <code>uvicorn-rs-py</code> is the Python ASGI compatibility client. In the current implementation, the Python extension still contains an overlapping network stack and does not call the native crate, so the client is not yet thin. The migration consolidates protocol ownership in <code>uvicorn-rs</code>; <code>uvicorn-rs-py</code> then owns Python app loading, asyncio/PyO3 bridging, and ASGI adaptation.</p>
+      <div class="diagram">
+        <div class="diagram-head">
+          <p>Request direction runs left to right. The response and each body/message event travel back through the same Rust–Python bridge.</p>
+          <div class="legend" role="group" aria-label="Diagram legend">
+            <span class="legend-item"><i class="swatch rust"></i> Rust code</span>
+            <span class="legend-item"><i class="swatch python"></i> Python code</span>
+            <span class="legend-item"><i class="swatch optional"></i> Language boundary</span>
+          </div>
+        </div>
+        <ol class="flow flow-5">
+          <li class="node">
+            <span class="step">Wire</span>
+            <h3>Client</h3>
+            <p>TCP/TLS for HTTP/1.1 and HTTP/2; QUIC/TLS for HTTP/3.</p>
+            <span class="kind">External peer</span>
+          </li>
+          <li class="node rust">
+            <span class="step">Rust data plane</span>
+            <h3>Tokio + protocol stack</h3>
+            <p>Listeners, HTTP framing, TLS/QUIC integration, connection tasks, flow control, WebSocket frames, and shutdown.</p>
+            <span class="kind">One Tokio worker is configured</span>
+          </li>
+          <li class="node optional">
+            <span class="step">Per-request boundary</span>
+            <h3>PyO3 ASGI adapter</h3>
+            <p>Builds Python scope/message objects, invokes the Python bridge, and maps ASGI events to Rust I/O.</p>
+            <span class="kind">GIL + object conversion</span>
+          </li>
+          <li class="node python">
+            <span class="step">Python scheduler</span>
+            <h3>asyncio or uvloop</h3>
+            <p>The event loop that called <code>serve()</code> remains the owner of application tasks, context, and loop-bound resources.</p>
+            <span class="kind">Separate from Tokio</span>
+          </li>
+          <li class="node python">
+            <span class="step">Application</span>
+            <h3>Python ASGI callable</h3>
+            <p>FastAPI, Starlette, or another ASGI 3 application executes with Python semantics and Python exception behavior.</p>
+            <span class="kind">Python code and GIL</span>
+          </li>
+        </ol>
+        <div class="roundtrip" role="group" aria-label="ASGI callbacks cross the runtime boundary">
+          <div><strong>Python calls <code>receive()</code></strong><span>Request chunks and disconnects flow from Rust to Python.</span></div>
+          <span class="arrow" aria-hidden="true">↔</span>
+          <div><strong>Rust-backed ASGI I/O</strong><span>PyO3 futures connect Python awaits to bounded Rust channels and transport flow control.</span></div>
+          <span class="arrow" aria-hidden="true">↔</span>
+          <div><strong>Python calls <code>send(message)</code></strong><span>Response start/body and WebSocket messages return to Rust; errors and cancellation are observed across the bridge.</span></div>
+        </div>
+        <div class="callout-grid">
+          <div class="callout">
+            <h3>What stays in Rust</h3>
+            <p>Socket readiness, protocol parsing, network writes, stream flow control, and connection lifecycle.</p>
+          </div>
+          <div class="callout">
+            <h3>What crosses for Python ASGI</h3>
+            <p>Scope creation, app invocation, each receive/send call, Python message dictionaries, and Python exceptions.</p>
+          </div>
+          <div class="callout">
+            <h3>What uvloop changes</h3>
+            <p>It can replace the Python asyncio loop. It does not replace Tokio or remove calls between Python and Rust.</p>
+          </div>
+        </div>
+      </div>
+      <details class="decision">
+        <summary>Current ownership and copy notes</summary>
+        <div>
+          <p>The <code>uvicorn-rs-py</code> extension still uses one Tokio worker for its existing Python ASGI server. Python application code runs on the Python loop selected by the caller; it does not run on that Tokio worker. Incoming body chunks must become Python <code>bytes</code> for ASGI. Immutable Python response <code>bytes</code> can be retained through PyO3’s owner-backed <code>Bytes</code> extraction, but that does not eliminate dictionary creation, callback scheduling, or the Python boundary.</p>
+          <p>The native <code>uvicorn-rs</code> crate provides Python-free Tower service entry points over cleartext HTTP/1.1, HTTP/2, TLS-over-TCP with ALPN, and HTTP/3 over a caller-configured Quinn endpoint. Its opt-in <code>ServerErrorObserver</code> exposes readiness, service, committed-body, and connection errors with phase, peer address, and the original borrowed error chain; the observer is disabled by default. The current 36-case native contract matrix passed three sequential runs (108/108); its receipt includes the H1 peer write-half-close case alongside the H2 reset case. See the <a href="../benchmarks/results/2026-10-12/native-request-lifetime-live/report.md">request-lifetime receipt</a>. The earlier 34-case package-promotion result is historical. This finite set does not establish full RFC 9114 conformance. The local <a href="../examples/native-starlette-server/README.md">Uvicorn-RS + Starlette-RS example</a> uses an unpinned dirty sibling source. An archived FastAPI-native receipt references a sibling crate absent from the checked-out source, so that composition is not reproducible. The native crate is not wired into the Python ASGI CLI; WebSocket transport remains open. Native lifecycle hooks are not ASGI lifespan or framework integration. The local <a href="architecture.md">architecture and buffer ownership document</a> records bridge ownership and copy behavior. Implementation entry points are <a href="../python/uvicorn_rs/server.py">server.py</a>, <a href="../python/uvicorn_rs/_bridge.py">_bridge.py</a>, <a href="../python/uvicorn_rs/cli.py">cli.py</a>, <a href="../src/lib.rs">the PyO3 adapter extension</a>, and <a href="../crates/uvicorn-rs/src/lib.rs">the Rust-native server</a>. The earlier pre-promotion result remains in the <a href="../benchmarks/results/2026-10-12/native-core-lifecycle-live/report.md">historical lifecycle receipt</a>.</p>
+        </div>
+      </details>
+
+      <h3 class="section-subhead">Current framework and server crate graph</h3>
+      <p class="section-intro">The checked FastAPI-RS source is its PyO3 compatibility core; it does not currently contain a <code>fastapi-rs-native</code> manifest. An archived receipt describes a prior all-Rust H1/H2 composition on a dirty sibling snapshot, but the checked-out example points to that missing sibling crate and cannot currently reproduce the result. The Python ASGI distribution is <code>uvicorn-rs-py</code> and still uses its earlier transport implementation; <code>uvicorn-rs</code> is a distinct Python-free crate that is not wired into that adapter.</p>
+      <div class="diagram">
+        <div class="package-map" role="group" aria-label="Current Rust crate relationships">
+          <div class="package-column">
+            <article class="package contract">
+              <h3>FastAPI-RS · current</h3>
+              <p>The checked compatibility core depends on <code>starlette-rs</code> and PyO3 and stores Python values and endpoint callables. The name <code>fastapi-rs-native</code> appears in an earlier dirty sibling snapshot and archived composition receipt; that crate is absent from the currently checked-out sibling source. The current tree therefore has no reproducible Rust-native FastAPI layer.</p>
+            </article>
+            <article class="package rust">
+              <h3>Starlette-RS · current</h3>
+              <p>The core crate is separate from <code>starlette-rs-py</code> and has no direct PyO3 or Uvicorn-RS dependency. In addition to the bounded prebuilt-response <code>Starlette::call</code> API, the local prototype exposes <code>NativeApplication</code>: a Tower service with generic request bodies, Rust endpoint closures, route/query/header access, Tower layers, and streamed response bodies. Its in-process routing and body probes are now joined by a real-socket H1/H2 example using the Uvicorn core. That example consumes the current dirty Starlette-RS worktree; exact source pinning, explicit transport cancellation context, WebSockets, and lifespan remain open.</p>
+            </article>
+          </div>
+          <div class="dependency-arrow" role="group" aria-label="Current native server integration status">
+            <span>FastAPI-RS → Starlette-RS is a Rust crate dependency</span><strong aria-hidden="true">→</strong>
+            <span>Archived receipt: FastAPI-native → Starlette-RS → Uvicorn core; not currently reproducible</span><strong aria-hidden="true">→</strong>
+          </div>
+          <div class="package-column">
+            <article class="package python">
+              <h3>Uvicorn-RS packages · current</h3>
+              <p><code>uvicorn-rs-py</code> is the root PyO3 extension and now builds a <code>cdylib</code>; it still owns the earlier Python ASGI network implementation and does not depend on native <code>uvicorn-rs</code>. The distinct <code>uvicorn-rs</code> workspace crate has no PyO3 dependency and exposes Tower service entry points over cleartext HTTP/1.1, HTTP/2, TLS-over-TCP, and HTTP/3 over a caller-configured Quinn endpoint. The current 36-case contract matrix passed three sequential runs (108/108); its evidence is linked above. The local Starlette-RS example uses the native crate over H1/H2; a separate archived FastAPI-native receipt describes a prior composition that cannot currently be reproduced from the checked-out sibling source. H3 is not composed through the frameworks. The native API now exposes request- and connection-lifetime handles. Its H2 case observes a generic ServiceFutureDropped reason, connection survival, same-connection recovery, and later connection closure; it does not identify the drop cause or establish ASGI http.disconnect. Independent H3 idle-reset notification and HTTP/1 Upgrade session tracking remain open. Native WebSockets remain open. The package rename is complete; shared transport integration is not.</p>
+            </article>
+            <article class="package optional">
+              <h3>Partial native vertical slice</h3>
+              <p>An archived 17-input live socket receipt records three repeats (51/51) for a prior local composition of the provisional Uvicorn core, Starlette-RS service, and FastAPI-native route layer. Inputs covered H1/H2 request-body progress before upload completion, routing, bodyless GET framing, JSON bodies, errors, upload disconnect/reset with same-connection recovery, bounded slow-reader polling, producer cancellation, and graceful drain. The receipt records a normal graph without PyO3 or Python. The current manifest refers to a sibling <code>fastapi-rs-native</code> crate absent from the checked-out source, so this composition cannot currently be rebuilt; these are historical results, not a current integration claim. Python FastAPI parity, TLS in the composed stack, composed H3, WebSockets, native lifespan, and performance remain open.</p>
+            </article>
+          </div>
+        </div>
+        <div class="stack-note"><strong>Implication:</strong> linking native <code>uvicorn-rs</code> does not add Python dependencies, but it also does not make FastAPI Python callables into Rust handlers. Python hosting currently goes through <code>uvicorn-rs-py</code>, which still has its own transport implementation. An archived receipt describes a previous binary that composed a separate <code>fastapi-rs-native</code> crate, the provisional Starlette service, and <code>uvicorn-rs</code>; that sibling crate is absent from the checked-out source, so the composition is not currently reproducible. The target is to complete the native implementation in the sole <code>fastapi-rs</code> core, compose it with Starlette-RS, pin source revisions, and re-establish the live composition. Do not restore a duplicate FastAPI behavior crate.</div>
+      </div>
+    </section>
+
+    <section id="target">
+      <p class="eyebrow">02 · Target</p>
+      <h2>Rust-native architecture: a direct service call, no Python request path</h2>
+      <p class="section-intro"><code>uvicorn-rs</code> is the single native server package and accepts Rust services; it is not a native variant alongside another Rust server package. FastAPI-RS composes Starlette-RS as its Rust framework layer and passes the resulting service to Uvicorn-RS. The separate <code>uvicorn-rs-py</code>, <code>starlette-rs-py</code>, and <code>fastapi-rs-py</code> clients bridge Python integrations and supported upstream-version differences. The current 36-case native contract matrix passes three times (108/108); the H2 reset and H1 peer write-half-close inputs provide generic request and connection lifetime observations, not ASGI disconnect semantics. An archived 17-case FastAPI-native H1/H2 receipt belongs to an earlier dirty sibling snapshot; its example currently references a missing sibling crate and is not reproducible from the checked-out sources. Native transport integration into <code>uvicorn-rs-py</code>, composed H3/TLS, pinned sources, Python FastAPI parity, WebSocket sessions, framework lifecycle integration, and performance remain open.</p>
+      <div class="target-banner">
+        <strong>FastAPI-RS builds on Starlette-RS; Uvicorn-RS hosts the composed Rust service.</strong>
+        <p>FastAPI-RS uses Starlette-RS by default. A Rust application can depend directly on both the framework and server; FastAPI-RS may also expose an opt-in Cargo feature for Uvicorn-RS. Starlette-RS remains server-neutral and does not depend on or bundle Uvicorn-RS.</p>
+      </div>
+      <div class="target-banner">
+        <strong><code>uvicorn-rs</code> is native; <code>uvicorn-rs-py</code> uses it for Python ASGI hosting.</strong>
+        <p>The native server and Rust framework crates have no PyO3 or Python runtime dependency. The planned <code>uvicorn-rs-py</code> integration uses the native transport while keeping Python app loading, event-loop ownership, and ASGI conversion in the thin client; that connection is not implemented yet. <code>fastapi-rs-py</code> and <code>starlette-rs-py</code> provide corresponding Python compatibility surfaces. Each client publishes tested version combinations for the Python packages it integrates with; these are separate compatibility profiles and do not promise full Uvicorn CLI/API compatibility. The Python clients are separate installable packages and stay out of the Rust-native dependency graph. A Python ASGI callable still runs in Python and uses the GIL where required.</p>
+      </div>
+      <div class="diagram">
+        <div class="diagram-head">
+          <p>In the all-Rust case, the request stays in Rust from socket acceptance through the handler and back to the socket. Response bodies remain streams, so demand and cancellation can propagate directly.</p>
+          <div class="legend" role="group" aria-label="Diagram legend">
+            <span class="legend-item"><i class="swatch rust"></i> Runtime/server</span>
+            <span class="legend-item"><i class="swatch contract"></i> Rust app/framework</span>
+            <span class="legend-item"><i class="swatch optional"></i> Optional adapter</span>
+          </div>
+        </div>
+        <ol class="flow flow-7">
+          <li class="node rust">
+            <span class="step">1 · Accept</span>
+            <h3>Network runtime</h3>
+            <p>Tokio listener, TLS/QUIC, connection ownership, graceful shutdown, and protocol selection.</p>
+            <span class="kind">Uvicorn-RS</span>
+          </li>
+          <li class="node rust">
+            <span class="step">2 · Parse</span>
+            <h3>HTTP / WebSocket transport</h3>
+            <p>HTTP/1.1, HTTP/2, HTTP/3, flow control, disconnects, and WebSocket frame handling.</p>
+            <span class="kind">Uvicorn-RS</span>
+          </li>
+          <li class="node contract">
+            <span class="step">3 · Adapt once</span>
+            <h3>Native request context</h3>
+            <p>Typed request head, incoming body stream, peer/TLS data, extensions, tracing context, and cancellation handle.</p>
+            <span class="kind">No Python scope dict</span>
+          </li>
+          <li class="node contract">
+            <span class="step">4 · Compose</span>
+            <h3>Starlette-RS pipeline</h3>
+            <p>Target: full request/body handling, middleware, routing, streaming responses, WebSocket sessions, and lifecycle on the current Rust primitives.</p>
+            <span class="kind">Expand current bounded slice</span>
+          </li>
+          <li class="node contract">
+            <span class="step">5 · Extend</span>
+            <h3>FastAPI-RS layer</h3>
+            <p>FastAPI-style routes, dependencies, parameter extraction, validation, serialization, and OpenAPI behavior.</p>
+            <span class="kind">Built on Starlette-RS</span>
+          </li>
+          <li class="node contract">
+            <span class="step">6 · Execute</span>
+            <h3>Rust handler</h3>
+            <p>Handler, dependency providers, validators, serializers, and middleware are Rust code for the no-GIL path.</p>
+            <span class="kind">No Python callback</span>
+          </li>
+          <li class="node rust">
+            <span class="step">7 · Write</span>
+            <h3>Response stream</h3>
+            <p>Typed status/headers and body frames flow back through the transport’s existing backpressure and cancellation.</p>
+            <span class="kind">No ASGI send loop</span>
+          </li>
+        </ol>
+        <div class="branches">
+          <div class="branch">
+            <h3>Python ASGI client: <code>uvicorn-rs-py</code></h3>
+            <p>This thin client loads <code>module:app</code>, preserves the app's owning asyncio loop, and adapts ASGI calls to the native server service. Standard Python FastAPI/Starlette apps still cross Python for ASGI callbacks; that path uses the GIL as required.</p>
+          </div>
+          <div class="branch">
+            <h3>Framework clients: <code>fastapi-rs-py</code> and <code>starlette-rs-py</code></h3>
+            <p>These optional clients hold Python object conversion and upstream-package version shims. Their compatibility matrix is separate from the native Rust framework APIs and they are not linked into the all-Rust request path.</p>
+          </div>
+        </div>
+        <div class="target-banner">
+          <strong>Where the native request handoff happens</strong>
+          <p>Uvicorn-RS calls the FastAPI-RS service once per request with a Rust request and body stream. FastAPI-RS then calls Starlette-RS routing, middleware, validation, and the Rust handler as ordinary Rust code. “Once” describes the server-to-service call; it does not describe one Python callback. A Python handler or standard ASGI callable still crosses into Python and uses the GIL.</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="ledger">
+          <caption class="sr-only">Where work and language boundaries occur in the current and proposed architectures</caption>
+          <thead><tr><th>Stage</th><th>Python client mode (`uvicorn-rs-py`)</th><th>Rust-native mode (`uvicorn-rs`)</th></tr></thead>
+          <tbody>
+            <tr><td>Request input</td><td>Rust parses wire data, then builds Python ASGI scope and event objects.</td><td>Rust parses wire data into typed Rust request/context values.</td></tr>
+            <tr><td>Routing and middleware</td><td>Python app callable runs on Python’s event loop.</td><td>Starlette-RS and FastAPI-RS run directly as Rust services.</td></tr>
+            <tr><td>Handler and validation</td><td>Python handlers, dependencies, validators, and serializers use the interpreter/GIL as needed.</td><td>All handlers, dependencies, validators, and serializers must be Rust-native to avoid the Python boundary.</td></tr>
+            <tr><td>Streaming and WebSockets</td><td>ASGI receive/send messages cross between Python and Rust; bounded Rust queues provide backpressure.</td><td>Rust streams, session frames, flow control, and cancellation are passed directly.</td></tr>
+            <tr><td>Lifespan and shutdown</td><td>Python lifespan messages are bridged to the Rust server lifecycle.</td><td>Rust lifecycle hooks and cancellation tokens are awaited by the server directly.</td></tr>
+            <tr><td>GIL and Python loop</td><td>Required because the application is a Python ASGI callable.</td><td>Absent on the request path if app state and callbacks do not retain or call Python objects.</td></tr>
+          </tbody>
+        </table>
+      </div>
+        <div class="stack-note"><strong>Two explicit paths:</strong> a Rust application builds its own executable, links <code>uvicorn-rs</code>, <code>starlette-rs</code>, and optionally <code>fastapi-rs</code>, and runs without Python. The planned <code>uvicorn-rs-py</code> adapter will use the native server for Python ASGI apps and own the <code>module:app</code> command; this integration is not implemented yet. A standalone native launcher needs an explicit compiled-service registration model; it is not the Python module loader. The former Python distribution, import, and CLI names are not migration constraints.</div>
+    </section>
+
+    <section id="dependencies">
+      <p class="eyebrow">03 · Dependency direction</p>
+      <h2>Keep frameworks cohesive and the network runtime replaceable</h2>
+      <p class="section-intro">The useful cohesion is shared Rust request/response semantics and native composition. It does not require Starlette-RS to depend on or bundle Uvicorn-RS. A framework should still be usable in tests, a different server, or an embedded host.</p>
+      <div class="diagram">
+        <div class="package-map" role="group" aria-label="Proposed crate dependency graph">
+          <div class="package-column">
+            <article class="package rust">
+              <h3>FastAPI-RS native core</h3>
+              <p>Routes, dependencies, validation, serialization, and OpenAPI. It uses Starlette-RS primitives and has no PyO3 dependency in the target graph.</p>
+            </article>
+            <article class="package contract">
+              <h3>Starlette-RS core</h3>
+              <p>Reusable web toolkit: middleware, request/response, routing, WebSocket, lifespan, and streaming. Keep it server-neutral and free of Python bindings.</p>
+            </article>
+            <article class="package python">
+              <h3>Thin Python compatibility clients</h3>
+              <p><code>fastapi-rs-py</code>, <code>starlette-rs-py</code>, and <code>uvicorn-rs-py</code> own Python loading/conversion and any version-specific glue for supported Python package releases. They stay outside the native Rust dependency graph.</p>
+            </article>
+          </div>
+          <div class="dependency-arrow" role="group" aria-label="Dependency direction">
+            <span>FastAPI-RS uses Starlette-RS</span><strong aria-hidden="true">→</strong>
+            <span>Application host composes service with server</span><strong aria-hidden="true">←</strong>
+          </div>
+          <div class="package-column">
+            <article class="package contract">
+              <h3>Generic Rust service contract</h3>
+              <p>Prefer established <code>http</code>, <code>http-body</code>, and Tower <code>Service</code> interfaces. Add a small neutral extension only for WebSocket sessions or lifecycle semantics they do not express.</p>
+            </article>
+            <article class="package rust">
+              <h3><code>uvicorn-rs</code> native server</h3>
+              <p>Consumes the generic service; owns listeners, HTTP/1.1, HTTP/2, HTTP/3, TLS/QUIC, WebSocket transport, backpressure, cancellation, and shutdown. No PyO3 dependency.</p>
+            </article>
+            <article class="package optional">
+              <h3><code>uvicorn-rs-py</code> ASGI adapter</h3>
+              <p>Depends on the native server plus a thin asyncio/PyO3 bridge. It hosts standard Python ASGI apps and keeps callbacks on the application-owned Python event loop.</p>
+            </article>
+            <article class="package contract">
+              <h3>Optional native integration</h3>
+              <p>An application binary or a small <code>fastapi-rs-uvicorn</code> crate composes the Rust service with the Rust server. The server never imports framework internals.</p>
+            </article>
+          </div>
+        </div>
+        <div class="stack-note"><strong>Recommended ownership:</strong> FastAPI-RS depends on Starlette-RS as its default Rust framework layer. Starlette-RS depends on reusable HTTP/service primitives, never on Uvicorn-RS. The native <code>uvicorn-rs</code> server consumes those primitives and never imports framework internals. A Rust application composes FastAPI-RS with Uvicorn-RS directly; FastAPI-RS may offer a disabled-by-default server feature. The <code>*-py</code> clients own Python compatibility and remain absent from native binaries.</div>
+      </div>
+
+      <h3 class="section-subhead">Where should the optional Uvicorn-RS integration live?</h3>
+      <div class="options">
+        <article class="option recommended">
+          <h3>Direct Rust dependency with an optional FastAPI-RS feature <span class="recommend-label">User-approved option</span></h3>
+          <p>FastAPI-RS can depend optionally on the native <code>uvicorn-rs</code> crate and expose a feature such as <code>server-uvicorn</code> for <code>serve(app)</code>. Keep the feature disabled by default. A standalone application can also depend on FastAPI-RS and Uvicorn-RS directly.</p>
+          <p class="fit"><strong>Why:</strong> direct Rust-level integration is cohesive while the default FastAPI-RS and Starlette-RS graph remains usable without the server.</p>
+        </article>
+        <article class="option">
+          <h3>Optional Cargo feature on FastAPI-RS</h3>
+          <p>The optional Cargo dependency is the Rust-native integration. It may re-export a convenience runner without pulling in PyO3 or any Python compatibility client.</p>
+          <p class="fit"><strong>Cost:</strong> feature combinations and semver/MSRV coordination move into FastAPI-RS CI and release policy. Keep it disabled by default and do not let Starlette-RS inherit it.</p>
+        </article>
+        <article class="option">
+          <h3>Application binary composes both directly</h3>
+          <p>A Rust application depends on FastAPI-RS and Uvicorn-RS and passes its router/service into the server. This has the fewest hidden dependencies and is the clearest first native prototype.</p>
+          <p class="fit"><strong>Cost:</strong> each app owns a small amount of bootstrap code until an optional integration crate exists.</p>
+        </article>
+      </div>
+      <details class="decision">
+        <summary>How do Python extras differ from native server features?</summary>
+        <div>
+          <p>A Cargo feature on native <code>fastapi-rs</code> may enable its optional Rust dependency on <code>uvicorn-rs</code>. A Python extra on <code>fastapi-rs-py</code> may install <code>uvicorn-rs-py</code> and other Python distributions; it does not itself enable a Cargo feature or remove Python from that process. Exact Python extra names remain a packaging decision.</p>
+          <p>Keep the controls distinct: Rust applications link <code>fastapi-rs</code>, <code>starlette-rs</code>, and <code>uvicorn-rs</code> without Python clients. Python applications use the <code>*-py</code> clients and cross the Python boundary. Any extra intended to ship a native binary must explicitly package that binary and document that it is a separate execution mode.</p>
+        </div>
+      </details>
+    </section>
+
+    <section id="contract">
+      <p class="eyebrow">04 · Rust boundary</p>
+      <h2>Define the seam around streams and connection lifetime</h2>
+      <p class="section-intro">A request/response type alone is not enough for this server. The boundary must carry streaming bodies, WebSocket sessions, cancellation, lifespan, and connection metadata without recreating ASGI’s Python message loop.</p>
+      <div class="diagram">
+        <div class="contract-grid">
+          <article class="contract-card">
+            <h3>HTTP request and response</h3>
+            <p>The prototype dispatches <code>http::Request&lt;hyper::body::Incoming&gt;</code> through Tower <code>Service</code> and accepts a response body implementing <code>http_body::Body&lt;Data = Bytes&gt;</code>. Starlette-RS's local <code>NativeApplication</code> implements its service over generic request bodies and erases heterogeneous response bodies to <code>UnsyncBoxBody</code> at its route boundary. Its prebuilt-response fallback copies bytes from <code>Vec&lt;u8&gt;</code>; native owned <code>Bytes</code> frames pass through without collection. Sharing <code>http</code> types alone does not make parsing, TLS, or serialization zero-copy. The cross-repository bounds remain provisional.</p>
+          </article>
+          <article class="contract-card">
+            <h3>Body streaming and backpressure</h3>
+            <p>Use a frame/body trait such as <code>http_body::Body</code>. Polling and bounded capacity must reflect downstream demand; dropping a body or request must cancel its owned work.</p>
+          </article>
+          <article class="contract-card">
+            <h3>WebSocket session</h3>
+            <p>Expose a typed session with text, binary, close code/reason, negotiated subprotocol, and stream-scoped cancellation. The transport handles RFC 6455 Upgrade for H1 and Extended CONNECT for H2/H3; its adapter owns framing and Ping/Pong.</p>
+          </article>
+          <article class="contract-card">
+            <h3>Lifespan and graceful shutdown</h3>
+            <p>Startup runs before accepting requests. Shutdown stops accepting, drains requests and sessions to the deadline, cancels and joins remaining work, then runs the application shutdown hook within the remaining budget.</p>
+          </article>
+          <article class="contract-card">
+            <h3>Context and observability</h3>
+            <p>Pass peer address, TLS/protocol metadata, request ID, extensions, tracing span, and cancellation token as Rust values. Rust does not implicitly inherit Python <code>contextvars</code>.</p>
+          </article>
+          <article class="contract-card">
+            <h3>Errors and response commitment</h3>
+            <p>Use typed Rust <code>Result</code> errors. Before headers commit, map an application failure to an HTTP error response; after commit, terminate/reset the stream and preserve the original cause for diagnostics.</p>
+          </article>
+        </div>
+        <div class="target-banner">
+          <strong>Grow the first live contract into a tested vertical slice</strong>
+          <p>The generic Tower service now has a 36-case real-socket contract over cleartext H1/H2, TLS H1/H2, H3, and native lifecycle hooks, passed three sequential local repeats (108/108). The added H2 reset case observes ServiceFutureDropped while confirming the connection remains usable; it does not determine the cause or establish ASGI http.disconnect. The H1 case completes a held response after client write-side shutdown while the connection lifetime remains open, consistent with RFC 9112 §9.6. Seven inputs cover startup state, drain ordering, typed hook errors, and timeout cancellation. H3 cases verify QUIC metadata, streamed request and response frames, trailers, first data before app completion, finite slow-reader backpressure with producer cancellation, and graceful drain. This evidence is isolated to the core: the local composed Starlette/FastAPI examples still use H1/H2, and the H3 API expects the caller to configure Quinn and TLS. These cases do not claim full RFC 9114 conformance. Keep errors as Rust <code>Result</code> values. This branch does not serialize native requests into ASGI dictionaries.</p>
+        </div>
+        <div class="stack-note"><strong>Keep the first contract small.</strong> Pin the <code>http</code>, <code>http-body</code>, and Tower versions in a shared workspace policy or compatible release range. Avoid a Uvicorn-named type dependency in Starlette-RS. <a href="adr/0004-native-websocket-lifecycle-contract.md">ADR 0004 records</a> a tiny runtime-neutral contract crate. Its lifecycle hooks are implemented provisionally in the core and are not API-stable; WebSocket sessions remain proposed.</div>
+      </div>
+    </section>
+
+    <section id="boundary">
+      <p class="eyebrow">05 · Boundary truth</p>
+      <h2>“One last application-layer crossing” is only possible for a narrower Python API</h2>
+      <div class="diagram">
+        <p>A Python ASGI callable may await many times, receive multiple upload chunks, send streamed response chunks, accept or close a WebSocket, and run lifespan events. Those operations are separate interactions with its Python event loop. A Rust server cannot turn them into one FFI call and still preserve general ASGI behavior.</p>
+        <p>For a Python endpoint that accepts one fully buffered request and returns one fully buffered response, a dedicated synchronous or coarse-grained RPC-style adapter could cross once per request. That is a different contract: it changes streaming, cancellation, WebSocket, and async semantics, and it still uses the GIL while Python code runs.</p>
+        <div class="target-banner">
+          <strong>The robust zero-boundary condition</strong>
+          <p>The server, framework, route handlers, dependencies, validators, serializers, middleware, and relevant app state must all remain Rust-native for the full request lifecycle. A single Python callback reintroduces interpreter work and the GIL for that callback.</p>
+        </div>
+        <details class="decision">
+          <summary>Python model definitions and Pydantic</summary>
+          <div>
+            <p>FastAPI-RS currently documents Pydantic’s public model API as a compatibility requirement and Pydantic v2’s Rust <code>pydantic-core</code> as the validation/serialization engine. Rust validation can reduce Python execution, but Python class construction, custom validators/serializers, Python callbacks, and Python model objects remain boundary work. Decide whether the native Rust API uses Rust model types, accepts a Python model as an explicit compatibility bridge, or supports both modes with a clear cost.</p>
+            <p>Keep this distinction visible in benchmarks: “Rust transport + Python route” measures the compatibility stack, while “Rust transport + Rust FastAPI-RS/Starlette-RS route” measures the no-Python path.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section id="execution-modes">
+      <p class="eyebrow">06 · Python boundary profiles</p>
+      <h2>Choose whether Python is a compatibility path, a leaf callback, or absent</h2>
+      <p class="section-intro">“One interaction at the application layer” can describe a coarse Python handler call, a one-time Python bootstrap, or a Rust-only request path. They have different runtime guarantees. Keep them as explicit modes instead of describing all three as Python-free.</p>
+      <div class="diagram">
+        <div class="target-banner">
+          <strong>The strict goal has no Python application call.</strong>
+          <p>A Python leaf callback can reduce the number of crossings for a custom hybrid API, but it still enters Python and acquires the GIL. To remove Python and the GIL from the process, use Rust handlers in a Rust binary. To keep Python involved only during setup, construct a Rust service once and ensure it holds no Python-owned state on its request path.</p>
+        </div>
+        <div class="mode-lanes" role="group" aria-label="Four supported or proposed Python boundary profiles">
+          <article class="mode-lane asgi">
+            <div><span class="status">Target Python compatibility mode</span><h3>Python ASGI application</h3></div>
+            <div class="mode-detail">
+              <div class="mode-flow" role="group" aria-label="Request goes from Rust transport through PyO3 and asyncio to the Python ASGI callable">
+                <span class="mode-step">Rust transport</span><span class="mode-arrow" aria-hidden="true">→</span>
+                <span class="mode-step">uvicorn-rs-py adapter</span><span class="mode-arrow" aria-hidden="true">↔</span>
+                <span class="mode-step">asyncio / uvloop</span><span class="mode-arrow" aria-hidden="true">→</span>
+                <span class="mode-step">Python ASGI callable</span>
+              </div>
+              <p><code>uvicorn-rs-py module:app</code> supports standard Python ASGI applications. Scope creation, callable invocation, every awaited <code>receive()</code>/<code>send()</code> operation, messages, cancellation, and exceptions use the Python bridge. The Python loop owns app tasks and context. Its matrix declares Python/runtime and ASGI support, plus exact upstream Uvicorn versions only for integrations the client actually implements. Accepting <code>module:app</code> does not imply full Uvicorn CLI/API compatibility.</p>
+              <p><strong>Guarantee:</strong> Python and the GIL are required for Python code. The old <code>uvicorn-rs</code> import and CLI layout is not part of this compatibility promise.</p>
+            </div>
+          </article>
+
+          <article class="mode-lane hybrid">
+            <div><span class="status">Optional migration mode</span><h3>Rust pipeline with a Python leaf handler</h3></div>
+            <div class="mode-detail">
+              <div class="mode-flow" role="group" aria-label="Rust request pipeline invokes one Python endpoint and returns to Rust">
+                <span class="mode-step">Rust server</span><span class="mode-arrow" aria-hidden="true">→</span>
+                <span class="mode-step">Rust routing / middleware</span><span class="mode-arrow" aria-hidden="true">→</span>
+                <span class="mode-step">Python handler call</span><span class="mode-arrow" aria-hidden="true">→</span>
+                <span class="mode-step">Rust response path</span>
+              </div>
+              <p>A separate typed endpoint adapter could call a Python handler once at the route leaf for a simple request/response API. It is not standard ASGI. Python code still runs under the GIL; an <code>async def</code> handler still needs the Python event loop and may require scheduler handoffs across awaits. Streaming, disconnect cancellation, WebSockets, lifespan, Python context, and Python exceptions need explicit contracts.</p>
+              <p><strong>Guarantee:</strong> fewer boundary calls may be possible for selected synchronous handlers, but neither “one FFI transition” nor zero-GIL execution is guaranteed. Treat this as an opt-in migration adapter and benchmark it separately.</p>
+            </div>
+          </article>
+
+          <article class="mode-lane hosted">
+            <div><span class="status">Proposed embedded mode</span><h3>Python bootstraps a Rust-native service</h3></div>
+            <div class="mode-detail">
+              <div class="mode-flow" role="group" aria-label="Python configures a Rust service once, then Rust handles requests without Python callbacks">
+                <span class="mode-step">Python configuration</span><span class="mode-arrow" aria-hidden="true">→ one setup</span>
+                <span class="mode-step">Rust service handle</span><span class="mode-arrow" aria-hidden="true">→</span>
+                <span class="mode-step">Rust server + Rust handlers</span>
+              </div>
+              <p>A Python package could construct/register Rust route state at startup and hand a Python-free service handle to the Rust server. Requests then stay in Tokio and the Rust framework pipeline; do not retain Python callables, objects, or loop-bound state in handlers, middleware, validators, or response bodies.</p>
+              <p><strong>Guarantee:</strong> no Python work on the request path if the service graph is truly Python-free. Because the host is Python, the interpreter and GIL still exist in the process. Startup/shutdown hosting and cancellation semantics need a prototype.</p>
+            </div>
+          </article>
+
+          <article class="mode-lane native">
+            <div><span class="status">Target for zero Python runtime</span><h3>Standalone Rust-native process</h3></div>
+            <div class="mode-detail">
+              <div class="mode-flow" role="group" aria-label="All request handling remains in Rust from the network through frameworks to the handler and response">
+                <span class="mode-step">Rust binary</span><span class="mode-arrow" aria-hidden="true">→</span>
+                <span class="mode-step">uvicorn-rs native server</span><span class="mode-arrow" aria-hidden="true">→</span>
+                <span class="mode-step">FastAPI-RS → Starlette-RS</span><span class="mode-arrow" aria-hidden="true">→</span>
+                <span class="mode-step">Rust handler</span>
+              </div>
+              <p>The binary links native <code>uvicorn-rs</code> and Python-free FastAPI-RS/Starlette-RS crates. Typed requests, streaming bodies, middleware, routing, validation, serialization, WebSockets, cancellation, and shutdown remain Rust values and futures end to end.</p>
+              <p><strong>Guarantee:</strong> no Python interpreter, Python event loop, PyO3 dependency, or GIL in the process. A Python ASGI application is not accepted in this mode.</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="table-wrap">
+          <table class="ledger">
+            <caption class="sr-only">Python runtime and request-boundary guarantees by integration mode</caption>
+            <thead><tr><th>Mode</th><th>Python per request</th><th>Python runtime in process</th><th>ASGI compatibility</th></tr></thead>
+            <tbody>
+              <tr><td><code>uvicorn-rs-py</code> ASGI</td><td>Yes, through ASGI calls and events</td><td>Required; GIL used by Python app work</td><td>Yes, subject to the Python-client support matrix</td></tr>
+              <tr><td>Python leaf handler</td><td>Yes; one coarse call only for a restricted synchronous contract</td><td>Required; handler work uses the GIL</td><td>No; this is a different endpoint contract</td></tr>
+              <tr><td>Python-hosted Rust service</td><td>No, if every registered component is Python-free</td><td>Present; avoid acquiring the GIL on requests</td><td>No ASGI calls on this native service path</td></tr>
+              <tr><td>Standalone Rust binary</td><td>No</td><td>Absent</td><td>No; it accepts a Rust service API</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="stack-note"><strong>Reading the goal precisely:</strong> “one Python interaction at the leaf” is a possible hybrid contract; “all internal interactions in Rust” is the Rust-hosted or standalone native service path; “the GIL does not exist” requires the standalone Rust binary. These are separate claims with separate acceptance tests.</div>
+      </div>
+
+      <h3 class="section-subhead">Which optional installation control does what?</h3>
+      <div class="options">
+        <article class="option recommended">
+          <h3>FastAPI-RS with an optional native server feature <span class="recommend-label">Recommended option</span></h3>
+          <p>Native <code>fastapi-rs</code> may add an optional Cargo dependency on <code>uvicorn-rs</code> and expose a convenience <code>serve(app)</code>. Rust applications may instead depend on both crates directly. Neither choice adds a server dependency to Starlette-RS.</p>
+          <p class="fit"><strong>Best for:</strong> direct Rust-level composition with an optional server installation and independent use of the framework.</p>
+        </article>
+        <article class="option">
+          <h3>Optional Rust dependency or Cargo feature on FastAPI-RS</h3>
+          <p>The optional Cargo feature enables only native <code>uvicorn-rs</code> and a small <code>serve()</code> convenience API. It must not pull in PyO3 or any Python client.</p>
+          <p class="fit"><strong>Trade-off:</strong> simpler Rust API discovery, but FastAPI-RS now owns feature-matrix, server-version, MSRV, and coordinated-release testing.</p>
+        </article>
+        <article class="option">
+          <h3>Optional Python-client installation</h3>
+          <p>A Python distribution or extra may install <code>uvicorn-rs-py</code> for ASGI hosting alongside <code>fastapi-rs-py</code> or <code>starlette-rs-py</code>. This keeps Python in the process. Python packaging does not enable a Cargo feature or build the native Rust server into a standalone application; exact extra names remain a packaging decision.</p>
+          <p class="fit"><strong>Rule:</strong> name and document the Python-client path separately from the native Rust Cargo feature; <code>module:app</code> always invokes a Python ASGI application.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="rollout">
+      <p class="eyebrow">07 · Migration plan</p>
+      <h2>Build the seam first, then move one vertical slice at a time</h2>
+      <div class="diagram">
+        <ol class="migration">
+          <li><strong>Lock external contracts, not internal compatibility.</strong><span>Keep HTTP RFCs as the wire source of truth and define the ASGI/Python version support matrix. Do not preserve the current root import path, Cargo crate shape, or CLI as a migration constraint.</span></li>
+          <li><strong>Consolidate the native server and isolate its Python client.</strong><span>Package identities are split, but root <code>src/lib.rs</code> in <code>uvicorn-rs-py</code> and native <code>uvicorn-rs</code> still contain overlapping network implementations. Compare their protocol behavior and migrate required capabilities into one canonical transport. The generic H2 request-lifetime signal is implemented; before routing ASGI traffic, prove ASGI disconnect delivery while receive is pending, independent H3 idle-reset notification, and upgraded H1 session tracking under the graceful-shutdown deadline. Make <code>uvicorn-rs-py</code> a thin ASGI adapter that calls that transport; package metadata and CLI renaming are already complete. Start with the selected single Tokio worker and define runtime ownership for embedded Rust applications.</span></li>
+          <li><strong>Validate separate Python compatibility surfaces.</strong><span>Publish Python/runtime and standard ASGI profiles for <code>uvicorn-rs-py</code>, and list exact upstream Uvicorn versions only for integrations the client actually implements; do not imply full CLI/API compatibility. Publish tested Python/Starlette combinations for <code>starlette-rs-py</code> and Python/FastAPI/Starlette combinations for <code>fastapi-rs-py</code>. Treat upstream oracle versions as evidence inputs, not automatic support promises; list tested combinations rather than a Cartesian product.</span></li>
+          <li><strong>Extend the Starlette-RS service prototype.</strong><span>The local <code>NativeApplication</code> consumes request bodies and produces streamed responses through a server-neutral Tower API. The generic Uvicorn core has socket-level backpressure, disconnect, and error-commit inputs; propagate equivalent evidence through Starlette and FastAPI, then define native WebSocket and lifespan contracts without depending on Uvicorn-RS.</span></li>
+          <li><strong>Complete the native FastAPI-RS core.</strong><span>The checked sibling source does not contain the separate <code>fastapi-rs-native</code> crate referenced by the archived composition receipt. Complete the Rust-native implementation in the sole <code>fastapi-rs</code> core, compose it with Starlette-RS, pin both source revisions, and rerun the live composition from clean sources. Keep Python Pydantic classes and callbacks in <code>fastapi-rs-py</code>; do not add a second FastAPI behavior crate.</span></li>
+          <li><strong>Keep Rust integration optional at the framework boundary.</strong><span>FastAPI-RS may offer an opt-in Cargo feature on native <code>uvicorn-rs</code>; a Rust application can also compose both directly. Starlette-RS never depends on or bundles the server. Python extras install <code>*-py</code> clients and do not imply a Python-free process.</span></li>
+          <li><strong>Gate release and performance claims.</strong><span>Run live contract cases for H1/H2/H3, streaming, WebSockets, lifespan, disconnects, error behavior, and shutdown. Benchmark Python ASGI and Rust-native FastAPI workloads separately on matched hosts and dependency versions.</span></li>
+        </ol>
+      </div>
+
+      <h3 class="section-subhead">Decision gates before public API stabilization</h3>
+      <div class="table-wrap">
+        <table class="ledger">
+          <thead><tr><th>Gate</th><th>Evidence required</th><th>Decision</th></tr></thead>
+          <tbody>
+            <tr><td>Service contract</td><td>Can the same Rust service type run under Uvicorn-RS and a test harness without depending on server internals?</td><td>Keep service types framework-neutral; version the HTTP/body contract.</td></tr>
+            <tr><td>WebSocket/lifespan</td><td>Can one app support HTTP/1.1 upgrades, HTTP/2/3 session semantics, startup, shutdown, and cancellation with bounded memory?</td><td>Add only the smallest shared extensions that the standard HTTP/Tower traits do not cover.</td></tr>
+            <tr><td>Python compatibility</td><td>Does <code>uvicorn-rs-py</code> pass the declared ASGI cases for each supported Python/runtime profile and exact upstream Uvicorn integration versions? Do the framework clients pass their own tested version combinations?</td><td>Publish separate version matrices for the server and framework clients; list Uvicorn CLI/API compatibility only when explicit cases establish it, and do not infer all cross-version combinations. Keep Python event-loop, context, error, streaming, and cancellation behavior in the adapter contract. The former <code>uvicorn-rs</code> import/CLI is not a compatibility gate.</td></tr>
+            <tr><td>Package graph</td><td>Can Starlette-RS compile and run without Uvicorn-RS? Can FastAPI-RS compile without the optional server feature?</td><td>Require both answers to be yes for the default dependency graph.</td></tr>
+            <tr><td>No-Python build</td><td>Does the Rust binary dependency tree contain PyO3, a Python binding crate, or a Python runtime dependency?</td><td>Require none in the standalone Rust server/framework path; keep them behind Python adapter packages.</td></tr>
+            <tr><td>Performance</td><td>Does the all-Rust path reduce per-request CPU and latency with representative FastAPI-RS workloads, while staying correct under streaming and slow readers?</td><td>Publish results by workload and mode; do not infer a speedup from Rust transport alone.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="invariants">
+      <p class="eyebrow">08 · Architecture rules</p>
+      <h2>Keep these boundaries stable as the implementation grows</h2>
+      <div class="diagram">
+        <div class="callout-grid">
+          <div class="callout"><h3>Server owns transport</h3><p>Uvicorn-RS owns sockets, protocol state, TLS/QUIC, flow control, transport cancellation, and graceful shutdown.</p></div>
+          <div class="callout"><h3>Starlette owns portable web primitives</h3><p>Starlette-RS owns reusable application-level behavior and never requires one particular server.</p></div>
+          <div class="callout"><h3>FastAPI owns higher-level API behavior</h3><p>FastAPI-RS composes Starlette-RS at the Rust API level instead of duplicating a second web runtime.</p></div>
+          <div class="callout"><h3>Python is an explicit compatibility mode</h3><p>The <code>*_py</code> clients are intended to stay thin and isolated; the current <code>uvicorn-rs-py</code> still duplicates transport until migration. Python mode keeps the event loop, GIL, and ASGI semantics.</p></div>
+          <div class="callout"><h3>Do not serialize native calls as ASGI dictionaries</h3><p>Rust-native routes use typed request, response, body, and session values from the server to the handler.</p></div>
+          <div class="callout"><h3>Compose; do not bundle</h3><p>Applications select and link the server. Framework crates remain independently testable and portable.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="sources">
+      <h2>Source snapshot and references</h2>
+      <p>This page records local partial prototypes and the remaining target architecture; it does not claim a complete native framework stack. The three repositories were inspected in dirty working trees on 12 October 2026. Their base revisions are recorded in the ADR, but the native-service additions are uncommitted and the local examples use sibling path dependencies; the repository links below do not pin those changes.</p>
+      <ul>
+        <li><a href="architecture.md">Uvicorn-RS current architecture and buffer ownership</a>; local implementation: <a href="../python/uvicorn_rs/server.py">Python server API</a>, <a href="../python/uvicorn_rs/_bridge.py">ASGI bridge</a>, <a href="../python/uvicorn_rs/cli.py">CLI</a>, and <a href="../src/lib.rs">PyO3 and Rust runtime</a>.</li>
+        <li><a href="https://github.com/appunni-m/starlette-rs#readme">Starlette-RS README</a>, <a href="https://github.com/appunni-m/starlette-rs/blob/f6ea3907521e9aaede7e649a9a53a8455c3a02e7/starlette-rs/Cargo.toml">baseline core manifest</a>, and <a href="https://github.com/appunni-m/starlette-rs/blob/f6ea3907521e9aaede7e649a9a53a8455c3a02e7/starlette-rs/src/application.rs">prebuilt-response application slice</a>: the baseline core is separate from its PyO3 package. The local uncommitted prototype adds a distinct <code>NativeApplication</code> API and is not represented by those pinned links.</li>
+        <li><a href="https://github.com/appunni-m/fastapi-rs#readme">FastAPI-RS README</a>, <a href="https://github.com/appunni-m/fastapi-rs/blob/4a00087b914f003b28bb1210227ed4c72b9c6f8d/fastapi-rs/Cargo.toml">compatibility core manifest</a>, <a href="https://github.com/appunni-m/fastapi-rs/blob/4a00087b914f003b28bb1210227ed4c72b9c6f8d/fastapi-rs-py/Cargo.toml">Python binding manifest</a>, and <a href="https://github.com/appunni-m/fastapi-rs/blob/4a00087b914f003b28bb1210227ed4c72b9c6f8d/fastapi-rs/src/application_runtime.rs">compatibility application runtime</a>: the compatibility path still uses PyO3 and Python values. An earlier dirty sibling snapshot contained a separate <code>fastapi-rs-native</code> prototype recorded by an archived receipt; that crate is absent from the currently checked-out sibling source.</li>
+        <li><a href="../crates/uvicorn-rs/src/lib.rs"><code>uvicorn-rs</code> native crate</a> implements Tower service entry points for cleartext H1/H2, TLS-over-TCP, and HTTP/3 over caller-configured Quinn. The current 36-input live native contract matrix passed three sequential runs (108/108), including the H1 peer write-half-close case; see the <a href="../benchmarks/results/2026-10-12/native-request-lifetime-live/report.md">request-lifetime receipt</a>. This does not establish Python adapter integration or full HTTP conformance. <a href="https://docs.rs/tower-service/0.3.3/tower_service/trait.Service.html"><code>tower_service::Service</code></a> and <a href="https://docs.rs/http-body/1.1.0/http_body/trait.Body.html"><code>http_body::Body</code></a> form its provisional request/response seam; <a href="https://docs.rs/bytes/1.12.1/bytes/struct.Bytes.html"><code>Bytes</code></a> carries owned frame data.</li>
+        <li>Wire behavior follows the applicable IETF specifications: <a href="https://www.rfc-editor.org/rfc/rfc9110.html">RFC 9110</a>, <a href="https://www.rfc-editor.org/rfc/rfc9112.html">RFC 9112</a>, <a href="https://www.rfc-editor.org/rfc/rfc9113.html">RFC 9113</a>, and <a href="https://www.rfc-editor.org/rfc/rfc9114.html">RFC 9114</a>. Where an oracle observation conflicts with an HTTP requirement, the RFC takes precedence; see <a href="adr/0003-rust-native-service-contract.md">ADR 0003</a>.</li>
+      </ul>
+      <p class="small">The HTTP crate families, versions, prototype evidence, and remaining gates are recorded in <a href="adr/0003-rust-native-service-contract.md">ADR 0003</a>; the proposed WebSocket/lifecycle boundary is in <a href="adr/0004-native-websocket-lifecycle-contract.md">ADR 0004</a>. The service contract and three-layer composition remain provisional; pinned source integration, full-stack parity, H3 composition through the frameworks, TLS in the composed example, WebSocket transport, framework lifecycle integration and ASGI lifespan, performance evidence, and release ownership remain open.</p>
+    </footer>
+  </main>
+</body>
+</html>

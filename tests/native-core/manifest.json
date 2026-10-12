@@ -1,0 +1,621 @@
+{
+  "schema_version": 1,
+  "protocols": ["http/1.1", "h2c-prior-knowledge", "https/1.1", "h2-tls", "http3"],
+  "cases": [
+    {
+      "id": "api.server-config-zero-connection-limit-error",
+      "operation": "server-config-validation",
+      "invalid_configuration": "zero-connection-limit",
+      "expected_error": "invalid-connection-limit",
+      "expected_error_display": "max_connections must be greater than zero"
+    },
+    {
+      "id": "api.server-config-graceful-timeout-overflow-error",
+      "operation": "server-config-validation",
+      "invalid_configuration": "graceful-timeout-overflow",
+      "expected_error": "invalid-graceful-shutdown-timeout",
+      "expected_error_display": "graceful shutdown timeout exceeds the runtime clock range"
+    },
+    {
+      "id": "api.server-config-lifecycle-timeout-overflow-error",
+      "operation": "server-config-validation",
+      "invalid_configuration": "lifecycle-timeout-overflow",
+      "expected_error": "invalid-application-lifecycle-timeout",
+      "expected_error_display": "application lifecycle timeout exceeds the runtime clock range"
+    },
+    {
+      "id": "api.public-server-error-display-source-and-config-debug-contract",
+      "operation": "public-error-contract",
+      "expected_default_config_debug": "ServerConfig { max_connections: 1024, graceful_shutdown_timeout: 30s, application_startup_timeout: 30s, application_shutdown_timeout: 30s, application_lifecycle_configured: false, error_observer_configured: false }",
+      "expected_configured_config_debug": "ServerConfig { max_connections: 8, graceful_shutdown_timeout: 250ms, application_startup_timeout: 125ms, application_shutdown_timeout: 175ms, application_lifecycle_configured: true, error_observer_configured: true }",
+      "errors": [
+        { "variant": "invalid-connection-limit", "display": "max_connections must be greater than zero", "source": "none", "shutdown_failures": null },
+        { "variant": "invalid-graceful-shutdown-timeout", "display": "graceful shutdown timeout exceeds the runtime clock range", "source": "none", "shutdown_failures": null },
+        { "variant": "invalid-application-lifecycle-timeout", "display": "application lifecycle timeout exceeds the runtime clock range", "source": "none", "shutdown_failures": null },
+        { "variant": "startup-failed", "display": "application startup hook failed: startup sentinel", "source": "startup sentinel", "shutdown_failures": null },
+        { "variant": "shutdown-failed", "display": "application shutdown hook failed: shutdown sentinel", "source": "shutdown sentinel", "shutdown_failures": null },
+        { "variant": "startup-panicked", "display": "application startup hook panicked", "source": "none", "shutdown_failures": null },
+        { "variant": "shutdown-panicked", "display": "application shutdown hook panicked", "source": "none", "shutdown_failures": null },
+        { "variant": "startup-timed-out", "display": "application startup hook exceeded its deadline", "source": "none", "shutdown_failures": null },
+        { "variant": "shutdown-timed-out", "display": "application shutdown hook exceeded its deadline", "source": "none", "shutdown_failures": null },
+        {
+          "variant": "server-and-application-shutdown",
+          "display": "server stopped with could not accept a TCP connection: accept sentinel; application shutdown hook failed: shutdown sentinel also failed",
+          "source": "could not accept a TCP connection: accept sentinel",
+          "shutdown_failures": [
+            "could not accept a TCP connection: accept sentinel",
+            "application shutdown hook failed: shutdown sentinel"
+          ]
+        },
+        { "variant": "accept-failed", "display": "could not accept a TCP connection: accept sentinel", "source": "accept sentinel", "shutdown_failures": null },
+        { "variant": "graceful-shutdown-timed-out", "display": "active connections exceeded the graceful-shutdown deadline", "source": "none", "shutdown_failures": null }
+      ]
+    },
+    {
+      "id": "api.server-error-observer-panic-is-contained",
+      "protocol": "http/1.1",
+      "operation": "server-error-observer-panic",
+      "method": "GET",
+      "path": "/service-error",
+      "expected_status": 500,
+      "expected_body": "",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
+    },
+    {
+      "id": "http1.cleartext-connection-has-no-tls-metadata",
+      "operation": "request",
+      "method": "GET",
+      "path": "/connection-security",
+      "expected_status": 200,
+      "expected_body": "tls=false;alpn=none\n"
+    },
+    {
+      "id": "http1.empty-successful-response",
+      "operation": "request",
+      "method": "GET",
+      "path": "/empty",
+      "expected_status": 200,
+      "expected_body": ""
+    },
+    {
+      "id": "http1.request-includes-typed-peer-address-extension",
+      "operation": "peer-address",
+      "method": "GET",
+      "path": "/peer-address"
+    },
+    {
+      "id": "http1.request-body-consumption",
+      "operation": "request",
+      "method": "POST",
+      "path": "/consume",
+      "body": "abc",
+      "expected_status": 200,
+      "expected_body": "received=3\n"
+    },
+    {
+      "id": "http1.disconnect-during-partial-request-upload",
+      "operation": "request-upload-disconnect",
+      "method": "POST",
+      "path": "/upload-cancel",
+      "partial_body": "partial",
+      "declared_content_length": 1048576,
+      "state_path": "/upload-cancel-state",
+      "expected_received_bytes": 7,
+      "expected_body_errors": 1,
+      "expected_dropped_tasks": 1,
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
+    },
+    {
+      "id": "http1.service-readiness-error-recovers",
+      "operation": "readiness",
+      "arm_path": "/arm-readiness",
+      "fault_path": "/ready",
+      "recovery_path": "/ready",
+      "arm_status": 200,
+      "fault_status": 500,
+      "recovery_status": 200,
+      "expected_server_error_phase": "readiness",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected readiness failure"
+    },
+    {
+      "id": "http1.service-readiness-pending-wakes-and-recovers",
+      "protocol": "http/1.1",
+      "operation": "readiness-pending",
+      "arm_path": "/arm-readiness-pending",
+      "arm_status": 200,
+      "arm_body": "armed\n",
+      "request_path": "/ready",
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "minimum_pending_ms": 20,
+      "state_path": "/readiness-pending-state",
+      "state_status": 200,
+      "expected_state_body": "pending=true;released=true\n"
+    },
+    {
+      "id": "http1.response-stream-progress-before-application-completion",
+      "operation": "stream-progress",
+      "method": "GET",
+      "path": "/stream",
+      "state_path": "/stream-state",
+      "first_chunk": "first\n",
+      "pending_state": "pending\n",
+      "second_chunk": "second\n",
+      "first_chunk_deadline_ms": 300
+    },
+    {
+      "id": "http1.service-error-before-response-commitment",
+      "operation": "request",
+      "method": "GET",
+      "path": "/service-error",
+      "expected_status": 500,
+      "expected_body": "",
+      "expected_server_error_phase": "service",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected service error"
+    },
+    {
+      "id": "http1.response-body-error-after-commitment",
+      "operation": "incomplete-response",
+      "method": "GET",
+      "path": "/body-error",
+      "expected_status": 200,
+      "body_prefix": "partial\n",
+      "expected_server_error_phase": "response_body",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected response body error"
+    },
+    {
+      "id": "http1.client-disconnect-drops-response-body",
+      "operation": "disconnect",
+      "method": "GET",
+      "path": "/disconnect",
+      "state_path": "/cancel-count",
+      "first_chunk": "first\n",
+      "expected_count": 1
+    },
+    {
+      "id": "http1.peer-write-half-close-preserves-response-lifetime",
+      "operation": "http1-write-half-close",
+      "method": "GET",
+      "path": "/peer-write-half-close",
+      "state_path": "/peer-write-half-close-state",
+      "expected_started_state": "started=true\n",
+      "release_path": "/peer-write-half-close-release",
+      "release_body": "released\n",
+      "expected_status": 200,
+      "expected_body": "connection_open=true\n"
+    },
+    {
+      "id": "http1.slow-reader-bounds-response-polling-and-cancels-producer",
+      "operation": "response-backpressure",
+      "method": "GET",
+      "path": "/backpressure",
+      "state_path": "/backpressure-state",
+      "chunk_size": 32768,
+      "total_chunks": 2048,
+      "max_polled_chunks": 512,
+      "observe_delay_ms": 200,
+      "expected_dropped_streams": 1
+    },
+    {
+      "id": "http2.request-includes-typed-peer-address-extension",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "peer-address",
+      "method": "GET",
+      "path": "/peer-address"
+    },
+    {
+      "id": "http2.cleartext-connection-has-no-tls-metadata",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "request",
+      "method": "GET",
+      "path": "/connection-security",
+      "expected_status": 200,
+      "expected_body": "tls=false;alpn=none\n"
+    },
+    {
+      "id": "http2.request-body-consumption",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "request",
+      "method": "POST",
+      "path": "/consume",
+      "body": "http2",
+      "expected_status": 200,
+      "expected_body": "received=5\n"
+    },
+    {
+      "id": "http2.service-error-before-response-commitment-preserves-cause",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "request",
+      "method": "GET",
+      "path": "/service-error",
+      "expected_status": 500,
+      "expected_body": "",
+      "expected_server_error_phase": "service",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected service error"
+    },
+    {
+      "id": "http2.stream-reset-drops-response-producer",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "http2-disconnect",
+      "method": "GET",
+      "path": "/h2-disconnect",
+      "state_path": "/h2-disconnect-count",
+      "first_chunk": "first\n",
+      "expected_count": 1
+    },
+    {
+      "id": "http2.stream-reset-ends-request-lifetime-and-preserves-connection",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "http2-request-lifetime",
+      "path": "/request-lifetime-hold",
+      "state_path": "/request-lifetime-state",
+      "expected_start_state": "started=1;dropped=0;connection_open=0;connection_closed=0;reason_checks=1\n",
+      "expected_end_state": "started=1;dropped=1;connection_open=1;connection_closed=0;reason_checks=2\n",
+      "expected_closed_state": "started=1;dropped=1;connection_open=1;connection_closed=1;reason_checks=2\n",
+      "recovery_path": "/ready",
+      "recovery_body": "ready\n"
+    },
+    {
+      "id": "http2.slow-reader-bounds-response-polling-and-resets-producer",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "http2-backpressure",
+      "method": "GET",
+      "path": "/backpressure",
+      "state_path": "/backpressure-state",
+      "chunk_size": 32768,
+      "total_chunks": 2048,
+      "max_polled_chunks": 512,
+      "observe_delay_ms": 200,
+      "expected_dropped_streams": 1
+    },
+    {
+      "id": "http2.graceful-shutdown-drains-active-stream",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "http2-graceful-drain",
+      "method": "GET",
+      "path": "/slow",
+      "first_chunk": "first\n",
+      "second_chunk": "second\n",
+      "shutdown_path": "/shutdown",
+      "shutdown_body": "shutting down\n"
+    },
+    {
+      "id": "http1-tls.negotiated-alpn-in-connection-metadata",
+      "protocol": "https/1.1",
+      "operation": "connection-security",
+      "expected_status": 200,
+      "expected_body": "tls=true;alpn=http/1.1\n"
+    },
+    {
+      "id": "http1-tls.malformed-handshake-reports-and-recovers",
+      "protocol": "https/1.1",
+      "operation": "tls-invalid-handshake-recovery",
+      "invalid_tls_bytes": "not TLS",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "io",
+      "expected_status": 200,
+      "expected_body": "tls=true;alpn=http/1.1\n"
+    },
+    {
+      "id": "http2-tls.negotiated-alpn-in-connection-metadata",
+      "protocol": "h2-tls",
+      "operation": "connection-security",
+      "expected_status": 200,
+      "expected_body": "tls=true;alpn=h2\n"
+    },
+    {
+      "id": "http3.connection-info-reports-quic-tls-alpn-and-http-version",
+      "protocol": "http3",
+      "operation": "request",
+      "method": "GET",
+      "path": "/connection-details",
+      "expected_status": 200,
+      "expected_body": "transport=quic;tls=true;alpn=h3;version=3\n"
+    },
+    {
+      "id": "http3.non-h3-alpn-is-observed-and-server-recovers",
+      "protocol": "http3",
+      "operation": "native-http3-alpn-contract",
+      "path": "/connection-details",
+      "expected_status": 200,
+      "expected_body": "transport=quic;tls=true;alpn=h3;version=3\n"
+    },
+    {
+      "id": "http3.request-body-is-streamed-to-the-service",
+      "protocol": "http3",
+      "operation": "request",
+      "method": "POST",
+      "path": "/consume",
+      "body": "h3body",
+      "expected_status": 200,
+      "expected_body": "received=6\n"
+    },
+    {
+      "id": "http3.request-body-pending-resumes-after-client-data",
+      "protocol": "http3",
+      "operation": "http3-upload-pending",
+      "path": "/http3-pending-consume",
+      "state_path": "/http3-body-pending-state",
+      "body": "h3data",
+      "expected_pending_state": "pending=true\n",
+      "expected_status": 200,
+      "expected_body": "received=6\n"
+    },
+    {
+      "id": "http3.request-body-reset-reports-error-and-keeps-connection",
+      "protocol": "http3",
+      "operation": "http3-upload-reset",
+      "path": "/http3-reset-consume",
+      "state_path": "/http3-body-pending-state",
+      "recovery_path": "/http3-body-error-state",
+      "expected_pending_state": "pending=true\n",
+      "expected_status": 500,
+      "expected_body": "",
+      "recovery_status": 200,
+      "recovery_body": "errors=1\n",
+      "expected_server_error_phase": "service",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected HTTP/3 request body reset"
+    },
+    {
+      "id": "http3.response-body-error-resets-stream-and-keeps-connection",
+      "protocol": "http3",
+      "operation": "http3-response-error",
+      "path": "/http3-response-error",
+      "first_chunk": "before-error\n",
+      "expected_status": 200,
+      "recovery_path": "/ready",
+      "recovery_body": "ready\n",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "response body failed: injected HTTP/3 response body error"
+    },
+    {
+      "id": "http3.request-body-size-hint-and-end-stream-state",
+      "protocol": "http3",
+      "operation": "request",
+      "method": "POST",
+      "path": "/body-state",
+      "body": "x",
+      "expected_status": 200,
+      "expected_body": "initially_ended=false;size_lower=0;size_upper=None;ended=true;received=1\n"
+    },
+    {
+      "id": "http3.request-trailers-follow-streamed-request-body",
+      "protocol": "http3",
+      "operation": "http3-request-trailers",
+      "method": "POST",
+      "path": "/consume-trailers",
+      "body": "h3up",
+      "expected_status": 200,
+      "expected_body": "received=4;trailer=verified\n"
+    },
+    {
+      "id": "http3.data-after-request-trailers-is-connection-error",
+      "protocol": "http3",
+      "operation": "http3-invalid-trailer-sequence",
+      "method": "POST",
+      "path": "/consume",
+      "body": "before-trailer",
+      "trailer_value": "verified",
+      "data_after_trailers": "after-trailer",
+      "expected_connection_error_code": 261,
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
+    },
+    {
+      "id": "http3.data-frame-on-control-stream-closes-connection-and-recovers",
+      "protocol": "http3",
+      "operation": "http3-invalid-control-frame",
+      "expected_connection_error_code": 261,
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "h3",
+      "expected_server_error_h3_code": 261
+    },
+    {
+      "id": "http3.response-trailers-follow-streamed-data",
+      "protocol": "http3",
+      "operation": "request",
+      "method": "GET",
+      "path": "/response-trailers",
+      "expected_status": 200,
+      "expected_body": "body\n",
+      "expected_trailer": "complete"
+    },
+    {
+      "id": "http3.response-first-chunk-arrives-before-app-completion",
+      "protocol": "http3",
+      "operation": "http3-stream-progress",
+      "method": "GET",
+      "path": "/stream",
+      "state_path": "/stream-state",
+      "first_chunk": "first\n",
+      "pending_state": "pending\n",
+      "second_chunk": "second\n"
+    },
+    {
+      "id": "http3.slow-reader-bounds-polling-and-cancels-response-producer",
+      "protocol": "http3",
+      "operation": "http3-backpressure",
+      "method": "GET",
+      "path": "/backpressure",
+      "state_path": "/backpressure-state",
+      "observe_delay_ms": 200,
+      "max_polled_chunks": 512,
+      "expected_dropped_streams": 1
+    },
+    {
+      "id": "http3.connection-close-cancels-held-response-and-recovers",
+      "protocol": "http3",
+      "operation": "http3-connection-close",
+      "method": "GET",
+      "path": "/http3-disconnect",
+      "expected_status": 200,
+      "first_chunk": "first\n",
+      "state_path": "/http3-disconnect-count",
+      "expected_dropped_streams": 1,
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
+    },
+    {
+      "id": "http3.graceful-shutdown-drains-active-response",
+      "protocol": "http3",
+      "operation": "http3-graceful-drain",
+      "method": "GET",
+      "path": "/slow",
+      "first_chunk": "first\n",
+      "second_chunk": "second\n",
+      "shutdown_path": "/shutdown",
+      "shutdown_body": "shutting down\n"
+    },
+    {
+      "id": "http1.graceful-shutdown-drains-active-response",
+      "operation": "graceful-drain",
+      "method": "GET",
+      "path": "/slow",
+      "shutdown_path": "/shutdown",
+      "first_chunk": "first\n",
+      "second_chunk": "second\n",
+      "shutdown_body": "shutting down\n"
+    },
+    {
+      "id": "http1.graceful-shutdown-timeout-aborts-held-response",
+      "protocol": "http/1.1",
+      "operation": "graceful-timeout-abort",
+      "path": "/graceful-timeout-hold",
+      "expected_status": 200,
+      "first_chunk": "held\n",
+      "graceful_timeout_ms": 100,
+      "server_wait_ms": 1000,
+      "expected_server_error": "active connections exceeded the graceful-shutdown deadline",
+      "expected_dropped_streams": 1
+    },
+    {
+      "id": "http1.zero-deadline-aborts-held-response",
+      "protocol": "http/1.1",
+      "operation": "graceful-timeout-abort",
+      "path": "/graceful-timeout-hold",
+      "expected_status": 200,
+      "first_chunk": "held\n",
+      "graceful_timeout_ms": 0,
+      "server_wait_ms": 1000,
+      "expected_server_error": "active connections exceeded the graceful-shutdown deadline",
+      "expected_dropped_streams": 1
+    },
+    {
+      "id": "http3.zero-deadline-aborts-held-response",
+      "protocol": "http3",
+      "operation": "http3-graceful-timeout-abort",
+      "method": "GET",
+      "path": "/graceful-timeout-hold",
+      "expected_status": 200,
+      "first_chunk": "held\n",
+      "graceful_timeout_ms": 0,
+      "server_wait_ms": 1000,
+      "expected_server_error": "active connections exceeded the graceful-shutdown deadline",
+      "expected_dropped_streams": 1
+    },
+    {
+      "id": "http3.positive-deadline-aborts-held-response",
+      "protocol": "http3",
+      "operation": "http3-graceful-timeout-abort",
+      "method": "GET",
+      "path": "/graceful-timeout-hold",
+      "expected_status": 200,
+      "first_chunk": "held\n",
+      "graceful_timeout_ms": 100,
+      "server_wait_ms": 1000,
+      "expected_server_error": "active connections exceeded the graceful-shutdown deadline",
+      "expected_dropped_streams": 1
+    },
+    {
+      "id": "http1-tls.shutdown-bounds-incomplete-handshake",
+      "protocol": "native-core",
+      "operation": "native-http1-tls-pending-handshake-shutdown",
+      "partial_tls_record_bytes": [22, 3, 1, 0, 100],
+      "pending_handshake_settle_ms": 50,
+      "graceful_timeout_ms": 40,
+      "server_wait_ms": 1000,
+      "expected_server_error": "active connections exceeded the graceful-shutdown deadline"
+    },
+    {
+      "id": "http1.application-lifecycle-startup-and-drain-order",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-drain",
+      "ready_path": "/ready",
+      "path": "/hold",
+      "release_after_shutdown_ms": 25
+    },
+    {
+      "id": "http2.application-lifecycle-startup-and-drain-order",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "native-lifecycle-drain",
+      "ready_path": "/ready",
+      "path": "/hold",
+      "release_after_shutdown_ms": 25
+    },
+    {
+      "id": "http3.application-lifecycle-startup-and-drain-order",
+      "protocol": "http3",
+      "operation": "native-lifecycle-drain",
+      "ready_path": "/ready",
+      "path": "/hold",
+      "release_after_shutdown_ms": 25
+    },
+    {
+      "id": "native.lifecycle-startup-error-prevents-serving",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-startup-error"
+    },
+    {
+      "id": "native.lifecycle-startup-timeout-cancels-hook",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-startup-timeout",
+      "hook_timeout_ms": 25
+    },
+    {
+      "id": "native.lifecycle-startup-panic-is-observed",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-startup-panic"
+    },
+    {
+      "id": "native.lifecycle-shutdown-error-preserves-source",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-shutdown-error",
+      "ready_path": "/ready"
+    },
+    {
+      "id": "native.lifecycle-shutdown-panic-is-observed",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-shutdown-panic",
+      "ready_path": "/ready"
+    },
+    {
+      "id": "native.lifecycle-server-and-shutdown-errors-preserved",
+      "protocol": "http3",
+      "operation": "native-lifecycle-server-and-shutdown-error",
+      "path": "/hold",
+      "graceful_timeout_ms": 25
+    },
+    {
+      "id": "native.lifecycle-shutdown-timeout-cancels-hook",
+      "protocol": "http3",
+      "operation": "native-lifecycle-shutdown-timeout",
+      "hook_timeout_ms": 25,
+      "ready_path": "/ready"
+    }
+  ]
+}

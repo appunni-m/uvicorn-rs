@@ -1,14 +1,15 @@
 # ASGI server parity suite
 
-The current 494-case matrix passes per-case attribution and three complete
-repeats with zero failures, infrastructure errors, retries, or cases not run.
-It contains 240 live oracle comparisons and 254 target-only contracts. Native
-coverage is 5,298/5,298 regions and 3,753/3,753 lines; Coverage-MCP reports
-zero gaps with matching source and passed test evidence. The normal
-non-instrumented local build passes all 240/240 oracle comparisons. See [the
-current source/build receipt](coverage.md#current-full-verification-494-cases).
-Earlier source/build and installed-wheel audits below remain historical
-evidence and do not attest this dirty working tree.
+The latest local source matrix is dated 2026-10-12. It passed all 511 indexed
+cases in attribution and in each of three complete repeats: 243 live oracle
+comparisons plus 268 target-only contracts, with zero failures or transient
+infrastructure failures. The unified report records 5,561/5,561 regions and
+3,997/3,997 lines. Coverage-MCP independently found zero missing groups on a
+compact projection and matched its source/build receipt. See the
+[current coverage evidence](coverage.md#latest-local-evidence-2026-10-12).
+This is dirty macOS ARM64 evidence for the PyO3 adapter's `src/lib.rs`; it does
+not establish hosted release readiness, full ASGI conformance, coverage of the
+Python-free crate, or performance improvement.
 
 ## Correctness gate
 
@@ -16,6 +17,17 @@ The behavior gate is the manifest-backed, live source/target matrix, not a unit
 test count. The live matrix observes the server boundary by starting real
 reference and target server processes and replaying the same indexed network
 workflows against each.
+
+For HTTP wire behavior, the applicable IETF specification is authoritative;
+ASGI requirements govern the Python application boundary. If a live oracle
+observation conflicts with an HTTP RFC or the ASGI specification, preserve the
+observed difference as a mismatch and follow the normative requirement. Do not
+change the target or expected contract merely to reproduce an oracle quirk.
+HTTP/1.1, HTTP/2, and HTTP/3 claims use the applicable
+[RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html),
+[RFC 9112](https://www.rfc-editor.org/rfc/rfc9112.html),
+[RFC 9113](https://www.rfc-editor.org/rfc/rfc9113.html), and
+[RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html) requirements.
 
 This follows the fixture-matrix approach used by `image-slash-star`/Pillow-RS,
 adapted to a network server. Pillow-RS compares Rust operations with pinned
@@ -54,7 +66,7 @@ on macOS ARM64. The same source's normal build independently passes 213/213
 public oracle comparisons, every exclusion check and three selected live cases:
 one HTTP oracle comparison and both public capacity support contracts.
 No unit tests were added; these cases use the same black-box workflow matrix.
-The [historical shared-write receipt](coverage.md#current-full-verification-448-cases)
+The [historical shared-write receipt](coverage.md#historical-full-verification-448-cases-shared-write-source)
 preserves matching source/native artifacts and links the normal audit and
 defending evidence. That normal build was restored at the time of its audit.
 
@@ -86,7 +98,7 @@ the enabled arm timed out receiving headers for the first reference request.
 The selected pair also enables full-profile HTTPS readiness after lifespan
 startup and public reference ERROR logging. The input controls the client,
 defaults to `true` when omitted, and adds no server option. See the
-[current source-bound evidence](coverage.md#current-evidence-status).
+[latest recorded source-bound evidence](coverage.md#latest-local-evidence-2026-10-12).
 
 The target-only `http3.request-task-drain-on-accept-error` operation starts
 `/stream-cancel-until-reset` and receives a real status-200 `first/` body chunk.
@@ -108,9 +120,10 @@ original `fault.http3.connection-accept-error` first-accept case remains intact.
 This new workflow passed its selected instrumented case (1/1), with actual
 remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
-The [selected receipt](coverage.md#current-evidence-status) preserves its rich
-observation and identities. The same case passes full attribution and all three
-490-case repeats, and solely covers both formerly missing final-drain spans.
+The [current unified report](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-report.json)
+preserves its observation and source identities. The case passes full
+attribution and all three 511-case repeats. The report's region map records
+which cases cover the final-drain spans.
 The `stream_reset` field follows the existing `recv_data` error convention;
 actual remote application close `0x102`, `body_stream_error`,
 `connection_closed` and cleanup establish connection-error termination and
@@ -123,11 +136,15 @@ handlers no longer leave these network tasks detached from `Server.serve()`.
 Pumps stop on the server token, connection closure or request cancellation, and
 completed entries are reaped when later requests are registered. HTTP/1.1
 continues draining an upload after the app has returned so request framing can
-finish and a keep-alive connection can serve another request. H2 request-stream
-reset is checked after the complete upload while a multiplexed sibling remains
-healthy; incomplete resets and request receive disconnects are covered too.
-H3 early response with an open upload, body-stream error, cancellation and
-follow-up health use real HTTP/3 client/server traffic.
+finish and a keep-alive connection can serve another request. In the existing
+PyO3 ASGI path, H2 reset cases cover complete and incomplete uploads, require
+`http.disconnect` for the reset request, and keep a multiplexed sibling healthy;
+a separate response-stream reset case checks app cancellation. These results do
+not establish a native Tower disconnect event: Hyper cancels that request
+service future on `RST_STREAM`, and the native service API has no equivalent
+per-request signal yet. H3 early response with an open upload, body-stream
+error, cancellation and follow-up health use real HTTP/3 client/server traffic
+through the PyO3 path; native H3 disconnect delivery remains unverified.
 
 The one-connection HTTP/3 sequence sends 128 one-byte POST requests. Each of
 the three complete matrix repeats receives 128/128 target responses matching
@@ -142,10 +159,11 @@ or deadline-forced shutdown. They assert `http.disconnect` where the ASGI app
 can still receive, exact response outcomes, fault consumption, pump completion
 or forced join, no unexpected panic, and healthy follow-up/sibling requests.
 These contracts use the existing fault-contract envelope and are reported in
-the same unified matrix; they are not oracle-parity cases. The current 494-case
-source passes attribution and all three repeats with 5,298/5,298 regions and
-3,753/3,753 lines covered. The normal non-instrumented local build separately
-passes all 240 public oracle cases. The fixed [coverage archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
+the same unified matrix; they are not oracle-parity cases. The earlier
+506-case source passed attribution and all three repeats with 5,532/5,532
+regions and 3,971/3,971 lines covered. That record is historical; the current
+511-case source receipt is linked above. The normal build for the recorded
+506-case source separately passed all 243 public oracle cases. The fixed [coverage archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
 retains the earlier evidence and its Coverage-MCP receipt.
 
 ## Concurrent load and zero-grace shutdown workflows
@@ -178,7 +196,7 @@ Run the normal oracle set with the default runner, then run attribution and
 three complete matrix repeats with the unified coverage runner:
 
 ```sh
-uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs
+uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs-py
 uv run --group benchmark python scripts/run_parity.py --output target/parity-normal.json
 uv run --group benchmark python scripts/run_unified_coverage.py \
   --output build/asgi-coverage/current/coverage-report.json \
@@ -278,7 +296,7 @@ Build the local extension and sync the pinned reference-server dependencies,
 then execute the live parity input set:
 
 ```sh
-uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs
+uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs-py
 uv run --group benchmark python scripts/run_parity.py
 ```
 
@@ -332,12 +350,18 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 
 | Profile group | Cases | Reference | Why |
 |---|---:|---|---|
-| HTTP/1.1, including TLS | 88 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, and WebSocket-upgrade validation. |
-| WebSocket, including TLS | 41 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, and shutdown cases. |
+| HTTP/1.1, including TLS | 95 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, and WebSocket-upgrade validation. |
+| WebSocket, including TLS | 46 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, and shutdown cases. |
 | Startup configuration | 9 | Uvicorn 0.54.0 and the public `uvicorn_rs.Server` API | Same invalid-host and TLS startup configurations on both implementations. |
-| Lifespan and shutdown | 34 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
-| HTTP/2 | 20 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Uvicorn does not provide an HTTP/2 server profile. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
-| HTTP/3 | 22 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Uvicorn does not provide an HTTP/3 server profile. Includes the 128-response sequence, explicit typed H3 clean close and a fresh connection afterward. |
+| Lifespan and shutdown | 35 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
+| HTTP/2 | 26 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
+| HTTP/3 | 32 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, explicit typed H3 clean close and a fresh connection afterward. |
+
+These six groups account for all 243 oracle-parity cases. The other 268 cases
+are target-only fault/support contracts. Five of those exercise
+`UVICORN_RS_MAX_BLOCKING_THREADS`; they are described in the
+[ASGI behavior inventory](asgi-case-inventory.md#declared-behavior-map), not
+counted as oracle parity.
 
 The H2/H3 rows are same-protocol ASGI observations against Hypercorn. They are
 not described as Uvicorn parity. Server versions and protocol components are
@@ -349,7 +373,7 @@ digests for the target.
 ## Scope and comparison rules
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@7`; live artifacts use
+`uvicorn-rs-parity/input@8`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -373,10 +397,17 @@ disk.
 The `http.response-headers` operation records ordered wire fields but compares
 duplicate values in order within each header name. The Rust `http::HeaderMap`
 representation and current HTTP serializers do not retain interleaving between
-different header names. A live interleaved-header probe showed that H1/H2
-differ from their reference; this is a documented ASGI response-ordering gap,
-not a passing full-order conformance claim. See the
-[support matrix](support-matrix.md#supported-behaviors).
+different header names. The focused live result shows that H1/H2 target wire
+order differs from Uvicorn, while same-name value order matches. RFC 9110 §5.3
+states that order across different field names is not significant to HTTP
+semantics; the ASGI HTTP 2.5 response-start contract is stricter and requires
+preserving the application order. The current behavior is therefore an
+explicit ASGI response-order limitation, not an HTTP semantic mismatch. H3's
+client observation passes through `http::HeaderMap` and does not prove raw wire
+order. See [RFC 9110 §5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3),
+the [ASGI HTTP specification](https://asgi.readthedocs.io/en/latest/specs/www.html),
+the [focused receipt](../benchmarks/results/2026-10-12/psm2-response-header-order/README.md),
+and the [support matrix](support-matrix.md#supported-behaviors).
 For this operation, manifest `observe` retains the wire order and its optional
 `compare` list selects the normalized fields used for parity; other operations
 compare every observed field by default. The offline CI evidence checker uses

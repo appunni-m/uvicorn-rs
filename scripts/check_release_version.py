@@ -15,25 +15,49 @@ VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
 
 
 def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str, str]:
-    """Return synchronized versions, or reject missing/ambiguous metadata."""
+    """Return synchronized versions for the Python adapter and native crate."""
     documents = {
         name: tomllib.loads((root / name).read_text(encoding="utf-8"))
-        for name in ("Cargo.toml", "pyproject.toml", "Cargo.lock", "uv.lock")
+        for name in (
+            "Cargo.toml",
+            "crates/uvicorn-rs/Cargo.toml",
+            "pyproject.toml",
+            "Cargo.lock",
+            "uv.lock",
+        )
     }
     cargo = documents["Cargo.toml"]["package"]
+    native = documents["crates/uvicorn-rs/Cargo.toml"]["package"]
     python = documents["pyproject.toml"]["project"]
-    if cargo["name"] != "uvicorn-rs" or python["name"] != "uvicorn-rs":
-        raise ValueError("Cargo and Python package names must both be uvicorn-rs")
-    versions = {"Cargo.toml": cargo["version"], "pyproject.toml": python["version"]}
-    for name in ("Cargo.lock", "uv.lock"):
+    if cargo["name"] != "uvicorn-rs-py" or python["name"] != "uvicorn-rs-py":
+        raise ValueError("root Cargo and Python distributions must both be uvicorn-rs-py")
+    if native["name"] != "uvicorn-rs":
+        raise ValueError("crates/uvicorn-rs must define the Python-free uvicorn-rs package")
+
+    def locked_package(lock_name: str, package_name: str, *, editable: bool = False) -> dict:
         rows = [
-            package for package in documents[name]["package"]
-            if package["name"] in {"uvicorn-rs", "uvicorn_rs"}
-            and (name != "uv.lock" or package.get("source", {}).get("editable") == ".")
+            package
+            for package in documents[lock_name]["package"]
+            if package["name"] == package_name
+            and (
+                not editable
+                or package.get("source", {}).get("editable") == "."
+            )
         ]
         if len(rows) != 1:
-            raise ValueError(f"{name}: expected one locked project entry, found {len(rows)}")
-        versions[name] = rows[0]["version"]
+            raise ValueError(
+                f"{lock_name}: expected one locked {package_name} entry, found {len(rows)}"
+            )
+        return rows[0]
+
+    versions = {
+        "Cargo.toml": cargo["version"],
+        "crates/uvicorn-rs/Cargo.toml": native["version"],
+        "pyproject.toml": python["version"],
+        "Cargo.lock:uvicorn-rs-py": locked_package("Cargo.lock", "uvicorn-rs-py")["version"],
+        "Cargo.lock:uvicorn-rs": locked_package("Cargo.lock", "uvicorn-rs")["version"],
+        "uv.lock": locked_package("uv.lock", "uvicorn-rs-py", editable=True)["version"],
+    }
     expected = expected if expected is not None else versions["Cargo.toml"]
     if not isinstance(expected, str) or VERSION.fullmatch(expected) is None:
         raise ValueError("version must use canonical MAJOR.MINOR.PATCH")
@@ -57,7 +81,10 @@ def main() -> int:
     if args.json:
         print(json.dumps({"version": versions["Cargo.toml"], "sources": versions}, sort_keys=True))
     else:
-        print(f"release version {versions['Cargo.toml']} matches Cargo.toml, pyproject.toml, Cargo.lock, and uv.lock")
+        print(
+            f"release version {versions['Cargo.toml']} matches the uvicorn-rs-py "
+            "Python adapter and uvicorn-rs native crate manifests and locks"
+        )
     return 0
 
 

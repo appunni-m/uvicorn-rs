@@ -1,42 +1,161 @@
 # Black-box parity and Rust source coverage
 
-## Latest local evidence (2026-10-10)
+## Current unified coverage status (2026-10-12)
 
-The current dirty source passed the unified 506-case live matrix: 243 oracle
-parity cases and 263 target-only fault contracts. Attribution and all three
-complete 506-case repeats passed with **zero retries**. Unified coverage is
-**5,532/5,532 regions and 3,974/3,974 lines**, with all 506 case attributions
-matching the profile union.
+The unified v4 acceptance remains open. The manifests define 511 ASGI
+parity/fault-contract cases and 56 Python-free native cases (567 total).
+Acceptance requires three complete repeats of both matrices, 100% region and
+line coverage, and zero-gap region and line results from fully paginated
+Coverage-MCP queries bound to the exact report bytes.
 
-Coverage-MCP measured the same complete report: source `matches_receipt`,
-tests `passed`, and zero missing regions or lines. The [strict full report](../benchmarks/results/2026-10-10/asgi-unified-coverage-strict-1f-20261010/coverage-report.json)
-retains every LLVM region, per-case attribution, and three clean repeat
-receipts. Its JSON whitespace was compacted without dropping fields so the
-full report fits Coverage-MCP's input limit; the original formatted report is
-preserved beside it as `coverage-report.pretty.json`. The
-[Coverage-MCP receipt](../benchmarks/results/2026-10-10/asgi-unified-coverage-strict-1f-20261010/coverage-mcp-receipt.json)
-and [report context](../benchmarks/results/2026-10-10/asgi-unified-coverage-strict-1f-20261010/coverage-report.json.context.json)
-bind the MCP measurement to the report path, source, build, and test run.
+The current full measurement is
+`target/asgi-coverage/2026-10-12-current-source-567/coverage-report.json`.
+All 567 attribution cases passed: 243 oracle-parity cases, 268 fault/support
+contracts, and 56 native contracts. All three ASGI repeats passed 511/511 and
+all three native repeats passed 56/56. One transient infrastructure failure
+recovered during the initial case sweep; there were no behavioral failures or
+permanent infrastructure failures. Coverage is **6,840/6,940 regions
+(98.56%)** and **5,029/5,083 lines (98.94%)**, leaving 100 regions and 54
+lines. The report's source/input digest is
+`b17cebfaddcfad2438b7b6488b497a3f526aa2c4afc76a0f08edbb4b9d7b7771`.
 
-This is local evidence on macOS ARM64 from dirty `main` at revision
-`e8148e4e8333da00ff5a2867416b008a9b3dbb29`; `src/lib.rs` SHA-256 is
-`1f222c06c5ecfa4f1c3b22299259ddb69f5d39822427e50c4a9f8b4eebf8f455`. The
-coverage-instrumented native extension SHA-256 is
-`2f8538416e5890d21a57898852eda14c2c9fcfdb405bac23f7bde4826bcc6640`. After
-the run, the normal release extension was rebuilt and restored to SHA-256
-`bf3cb991025074bc416ccd514b836aec31899ca1ce6f0d40bdfa819c9dd07d43`, matching
-the current-source performance matrix. This local receipt does not replace
-hosted exact-commit CI.
+Coverage-MCP fully paged this report for both metrics. It returned 122 region
+gap groups and 49 line gap groups, with `source: matches_receipt`. MCP labels
+`tests: failed` because the aggregate coverage gate is incomplete; this does
+not indicate a failed case in the live matrix. The 100 uncovered regions are
+in `crates/uvicorn-rs/src/http3.rs` (66) and
+`crates/uvicorn-rs/src/lib.rs` (34). The 54 uncovered lines are in those same
+files: 39 in `http3.rs` and 15 in `lib.rs`.
 
-## Latest hosted exact-commit gate (2026-10-10)
+This is source-bound local evidence for dirty working-tree revision
+`3dcaeaa0caf47aca96412d15451ac6a1123ebb04`, not a clean hosted commit. The
+full report and generated logs are ignored by Git. The report supersedes the
+previous 566-case full measurement for this manifest; earlier adapter-only
+and focused reports remain historical subset evidence.
+
+The new native case `http1-tls.shutdown-bounds-incomplete-handshake` checks
+shutdown against a real TCP peer that sends only a partial TLS record. The
+runner/checker/MCP path uses unified schema v4, LLVM
+function-instantiation-aware region identities, indexed `hit_by` attribution,
+per-case profile replay, and exact source/tool/input receipts. Python adapter
+files are bound as harness/input identity; Python line and branch coverage
+remain outside the Rust denominator. The three-repeat correctness gate passed
+for this report; 100% region and line coverage and zero-gap MCP results remain
+outstanding.
+
+## Previous adapter-only evidence (2026-10-12)
+
+The dirty working tree passed the complete 511-case live matrix: 243
+oracle-parity cases and 268 target-only fault/support contracts. Per-case
+attribution and all three complete repeats passed with zero behavior,
+infrastructure, transient-infrastructure failures, or retries. Coverage was
+5,561/5,561 regions and 3,997/3,997 lines for `src/lib.rs` only.
+
+The [full report](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-report.json)
+retains case-to-region attribution, matrix receipts, and source/build identity.
+Coverage-MCP measured the
+[compact projection](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-mcp-input.json)
+and found zero region or line groups; it reported `source: matches_receipt`
+and `tests: passed`. The
+[Coverage-MCP receipt](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-mcp-receipt.json)
+binds those totals to that adapter-only report.
+
+The run used CPython 3.12.13, Rust 1.98.1, and macOS 15.7.7 ARM64 at dirty
+working-tree revision `3dcaeaa0caf47aca96412d15451ac6a1123ebb04`. The measured
+source/input digest was `cfc3aac2ed6f62e3466c3e2418dfb6498377d11045f056723fe2adc9ba688b63`;
+the `src/lib.rs` SHA-256 was
+`ea149b5821a398f62c5a7762a83774040ae15ae0b268c28d921e4c61f3e54f47`, and the
+instrumented extension SHA-256 was
+`e9e97bea9d2bec8f9d7df0aec7bc978a9c454cb2d29fa2b249db9fa69a6cf4d7`.
+This is dirty local evidence for the recorded adapter source, not a clean
+release checkout or hosted commit. The instrumented extension is for coverage
+only and must not be used for performance timing. The report excludes the
+Python-free `uvicorn-rs` crate and other feature sets or platforms; it is not
+the current unified acceptance report.
+
+The five added target-only cases exercise `UVICORN_RS_MAX_BLOCKING_THREADS`:
+unset and positive values start and serve an HTTP request; non-Unicode,
+malformed, and zero values fail before ASGI lifespan startup. They establish
+configuration acceptance and rejection paths, not the effective blocking-pool
+concurrency limit. The related public setting and limits are documented in
+[configuration](configuration.md#tokio-blocking-pool-limit) and the
+[support matrix](support-matrix.md#supported-behaviors).
+
+### Previous local evidence (2026-10-11)
+
+The dirty working tree recorded on 2026-10-11 passed the complete 506-case live matrix:
+243 oracle parity cases and 263 target-only fault contracts. Per-case
+attribution and all three complete 506-case repeats passed with **zero
+failures, infrastructure failures, transient infrastructure failures, or
+retries**. Each repeat passed 506/506 cases. Native coverage is
+**5,532/5,532 regions and 3,971/3,971 lines**, and case attribution matches the
+profile union.
+
+The [full report](../benchmarks/results/2026-10-11/unified-coverage-current-5532-regions-after-h3-fix.json)
+contains per-case region attribution, the complete matrix receipts, and source
+and build SHA-256 values. Coverage-MCP found zero missing regions using its
+[compact input projection](../benchmarks/results/2026-10-11/unified-coverage-current-5532-regions-after-h3-fix-mcp.json).
+The projection retains the LLVM coverage data and runner receipts while
+omitting duplicated per-case and per-region attribution arrays from the full
+report. Coverage-MCP reports `source: unverified` and `tests: unknown` for
+this LLVM export; source and test identity are established by the runner's
+receipts in the full report, not by Coverage-MCP.
+
+This local macOS 15.7.7 ARM64 measurement used Python 3.12.13 and Rust
+1.98.1, on dirty working tree revision
+`3dcaeaa0caf47aca96412d15451ac6a1123ebb04`. The measured `src/lib.rs`
+SHA-256 is
+`5ecbf23cbd9cb430be9af6c9f69399bc4c835eb4441c8f8794f4e3c881beca7d`; the
+instrumented extension SHA-256 is
+`11bb6e665ad0d98dd9d239836b93277277d4eff9388b394685ceb6adcd87fdf4`.
+After coverage collection, the normal release extension was rebuilt and
+installed with `maturin develop --release --locked`; its SHA-256 is
+`5c23a4e33006b6183f3a0bba89b2506c3866be2d293b9cd49ebffb037c47b028`. No
+post-rebuild parity run was performed. Do not use the instrumented coverage
+build for timing. This local receipt does not replace hosted exact-commit CI.
+The current checkout's `src/lib.rs` hash differs from the measured hash above,
+so this 506-case result is historical for the recorded source, not a full
+parity or coverage pass on the present working tree. The current renamed wheel
+has a separate, narrower [consumer smoke receipt](../benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
+
+#### Previous local evidence (same date, earlier source)
+
+The earlier local run on this revision measured 5,532/5,532 regions and
+3,974/3,974 lines, with a different dirty `src/lib.rs` hash
+(`1f222c06c5ecfa4f1c3b22299259ddb69f5d39822427e50c4a9f8b4eebf8f455`) and
+extension build. Coverage-MCP reported `source: matches_receipt` and
+`tests: passed`, with zero missing regions or lines for that report. Its [full
+report](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-report.json),
+[Coverage-MCP receipt](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-mcp-receipt.json),
+[report context](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-report.json.context.json),
+and [evidence README](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/README.md)
+remain available. Before that earlier coverage run, its normal non-instrumented
+extension passed 243/243 public parity cases (SHA-256
+`bf3cb991025074bc416ccd514b836aec31899ca1ce6f0d40bdfa819c9dd07d43`); its
+coverage extension hash was
+`2f8538416e5890d21a57898852eda14c2c9fcfdb405bac23f7bde4826bcc6640`. Those
+receipts apply only to the earlier source and must not be carried forward to
+the current report.
+
+## Latest hosted exact-commit gate (2026-10-11)
+
+CI [run 38087300590](https://github.com/appunni-m/uvicorn-rs/actions/runs/38087300590)
+passed on clean commit
+[`16ed349`](https://github.com/appunni-m/uvicorn-rs/commit/16ed349f0d1528b8e6f42536b3d406ce17799915).
+All eight hosted jobs passed, including installed-wheel public parity, the
+unified parity/fault-contract and 100% native coverage gate, Rust quality and
+MSRV, the Windows/Linux/macOS package jobs, and the declared Python-floor
+wheel. This is hosted evidence for that committed source; it is separate from
+the dirty local 506-case report above.
+
+## Previous hosted exact-commit gate (2026-10-10)
 
 CI #56 passed on clean commit
 [`72dfa51`](https://github.com/appunni-m/uvicorn-rs/commit/72dfa51f98a3a3518679ccaf7115d3bae6d8ac5f).
 The installed-wheel public parity, unified coverage matrix (all 494 cases,
 5,298/5,298 native regions, and 3,753/3,753 lines), macOS/Linux/Windows
 package jobs, Python-floor wheel, Rust quality, and MSRV jobs completed
-successfully. This is hosted evidence for the committed Rust source at that
-revision; it is separate from the dirty local 506-case report above.
+successfully. This remains hosted evidence for that earlier revision.
 
 The same-commit performance matrix #13 has a macOS ARM64 parity failure before
 timing on `http1.disconnect-before-first-asgi-receive`: Uvicorn returns
@@ -1475,14 +1594,43 @@ instead of duplicating every region hash in every case row. The report retains
 all observations and attribution while fitting Coverage-MCP's ingestion size
 limit. `coverage.attribution.case_region_lookup` records this lookup path.
 
-For Coverage-MCP, query `coverage_gaps` against the exact report with
-`metric: "regions"` and `limit: 15`, following `next_offset` until all groups
-are returned. Preserve each structured page object in one JSON array. Current
-reports omit the redundant inverse attribution arrays and can be queried
-directly. Run `scripts/attach_coverage_mcp.py` against that exact report and
-saved page array. Require matching region totals,
-`source: matches_receipt`, `tests: passed`, and complete pagination before
-updating the documented result.
+For Coverage-MCP, query `coverage_gaps` against the exact report for both
+`metric: "regions"` and `metric: "lines"`, with `limit: 15`, following
+`next_offset` until each metric is complete. Save each page together with the
+exact request used to obtain it. The receipt array uses this shape:
+
+```json
+{
+  "request": {
+    "measurement": "build/asgi-coverage/unified/coverage-report.json",
+    "metric": "regions",
+    "offset": 0,
+    "limit": 15,
+    "query": null,
+    "line": null
+  },
+  "response": {"context": {}, "data": {}, "page": null}
+}
+```
+
+For the next page, set `request.offset` to the prior response's
+`data.next_offset`. Preserve every wrapped page in one JSON array. The
+attachment script and strict checker verify that each chain starts at offset
+zero, continues at exactly the returned offset with a stable limit and no
+filters, has no duplicate groups or repeated terminal pages, and ends at
+`next_offset: null`. Current reports omit redundant inverse attribution arrays
+and can be queried directly. Run `scripts/attach_coverage_mcp.py` against the
+report and saved page array. Require matching totals for both metrics, zero
+groups, `source: matches_receipt`, `tests: passed`, and complete pagination
+before strict validation:
+
+```sh
+uv run --python 3.12 --locked --group benchmark python scripts/check_ci_evidence.py coverage \
+  build/asgi-coverage/unified/coverage-report.json
+```
+
+CI uses `--allow-pending-mcp` only to validate the raw report while the MCP
+query is pending; it does not satisfy the strict acceptance gate.
 
 ## Measure an incremental case
 

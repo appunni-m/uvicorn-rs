@@ -888,7 +888,7 @@ standard = [
 ]
 
 [[package]]
-name = "uvicorn-rs"
+name = "uvicorn-rs-py"
 version = "0.1.0"
 source = { editable = "." }
 

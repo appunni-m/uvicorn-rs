@@ -1,18 +1,20 @@
 # CLI and Python API
 
-The current source passes 494/494 attribution workflows and three complete
-494-case repeats, with 5,298/5,298 native regions and 3,753/3,753 lines
-covered. The matrix contains 240 public oracle cases and 254 target-only
-contracts. The normal non-instrumented local build passes 240/240 public
-comparisons. See the [current source/build receipt](coverage.md#current-full-verification-494-cases).
+The latest local ASGI-adapter matrix is dated 2026-10-12. All 511 indexed cases
+passed attribution and each of three full repeats: 243 oracle-parity cases and
+268 target-only contracts. The report records 5,561/5,561 native regions and
+3,997/3,997 lines. This is dirty macOS ARM64 source evidence, not hosted release
+evidence or full ASGI conformance; see the
+[coverage report](coverage.md#latest-local-evidence-2026-10-12) and the
+[current candidate-wheel smoke](../benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
 
 ## CLI
 
-The executable is `uvicorn-rs`. It imports an object by `module:attribute` and
-serves that ASGI application:
+The Python executable is `uvicorn-rs-py`. It imports an object by
+`module:attribute` and serves that ASGI application:
 
 ```sh
-uv run uvicorn-rs examples.hello_asgi:app --host 127.0.0.1 --port 8000
+uv run uvicorn-rs-py examples.hello_asgi:app --host 127.0.0.1 --port 8000
 ```
 
 | Argument | Default | Meaning |
@@ -29,6 +31,22 @@ TLS TCP advertises HTTP/2 and HTTP/1.1 using ALPN. QUIC serves experimental
 HTTP/3 on the same port. Without certificate/key files, the server accepts
 cleartext HTTP/1.1 and HTTP/2 prior-knowledge (h2c). It does not support h2c
 upgrade.
+
+## Tokio blocking-pool limit
+
+The PyO3 extension reads the optional `UVICORN_RS_MAX_BLOCKING_THREADS`
+environment variable when the native module initializes. When unset, Tokio's
+default blocking-pool limit is used. When set, the value must be a positive
+integer representable as `usize`; a non-Unicode value, malformed integer, or
+zero fails extension initialization before ASGI lifespan startup. This
+target-specific environment variable sets the maximum size of Tokio's blocking
+pool; the Tokio core runtime still uses one worker thread, and Python ASGI code
+continues to run on its owning asyncio loop. The live inputs verify accepted
+and rejected configuration paths, not the effective concurrency limit. This
+is not a Uvicorn CLI option.
+
+The CLI runs the Python ASGI implementation in `uvicorn-rs-py`. The separately
+packaged native `uvicorn-rs` server is not yet its transport backend.
 
 Ctrl-C and SIGTERM initiate shutdown. The server runs ASGI lifespan startup
 before serving and lifespan shutdown after draining/cancelling active work.
@@ -84,7 +102,7 @@ exceed it. Fallible header assembly rejects excess capacity through the error
 channel. Both target-only support cases passed the historical shared-write 448-case attribution
 and all three full repeats, plus the same source's selected normal-build audit.
 These declared capacity contracts are separate from the 213 public oracle
-comparisons. See the [source/build receipt](coverage.md#current-full-verification-448-cases) and
+comparisons. See the [source/build receipt](coverage.md#historical-full-verification-448-cases-shared-write-source) and
 [support matrix](support-matrix.md).
 
 The class currently has no documented hot-reload, worker, or reconfiguration

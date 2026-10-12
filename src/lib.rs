@@ -83,6 +83,12 @@ enum CoverageFaultPoint {
     PythonTaskCancelScheduleCall,
     HttpReceiveDisconnectedBeforeFuturePoll,
     HttpBodyPumpFirstPollPause,
+    HttpBodyPumpBatchLimitOneByte,
+    HttpBodyPumpBatchThresholdSendConnectionClosed,
+    HttpBodyPumpOversizedSendConnectionClosed,
+    HttpBodyPumpErrorStopWait,
+    HttpBodyPumpErrorBufferedSendConnectionClosed,
+    HttpBodyPumpErrorBufferedSendContinues,
     HttpBodyPumpSendConnectionClosed,
     HttpBodyPumpFinalSendConnectionClosed,
     HttpBodyPumpAfterFinalConnectionClosed,
@@ -93,6 +99,8 @@ enum CoverageFaultPoint {
     HttpBodyPumpShutdownCancelJoin,
     HttpBodyPumpShutdownHang,
     HttpBodyPumpShutdownCompleteTaskBeforeAbort,
+    HttpRequestBodySegmentLengthOverflow,
+    HttpRequestBodySegmentOutOfBounds,
     ConnectionIoEofRecheckPause,
     PythonAsgiReceiveBorrowConflict,
     ServerControlShutdownBorrowConflict,
@@ -313,6 +321,20 @@ impl CoverageFaultPoint {
                 "http.receive.disconnected-before-future-poll"
             }
             Self::HttpBodyPumpFirstPollPause => "http.body-pump.first-poll-pause",
+            Self::HttpBodyPumpBatchLimitOneByte => "http.body-pump.batch-limit.one-byte",
+            Self::HttpBodyPumpBatchThresholdSendConnectionClosed => {
+                "http.body-pump.batch-threshold.send-connection-closed"
+            }
+            Self::HttpBodyPumpOversizedSendConnectionClosed => {
+                "http.body-pump.oversized.send-connection-closed"
+            }
+            Self::HttpBodyPumpErrorStopWait => "http.body-pump.error.stop-wait",
+            Self::HttpBodyPumpErrorBufferedSendConnectionClosed => {
+                "http.body-pump.error.buffered-send-connection-closed"
+            }
+            Self::HttpBodyPumpErrorBufferedSendContinues => {
+                "http.body-pump.error.buffered-send-continues"
+            }
             Self::HttpBodyPumpSendConnectionClosed => "http.body-pump.send.connection-closed",
             Self::HttpBodyPumpFinalSendConnectionClosed => {
                 "http.body-pump.final-send.connection-closed"
@@ -329,6 +351,10 @@ impl CoverageFaultPoint {
             Self::HttpBodyPumpShutdownCompleteTaskBeforeAbort => {
                 "http.body-pump.shutdown.complete-task-before-abort"
             }
+            Self::HttpRequestBodySegmentLengthOverflow => {
+                "http.request.body-segment.length-overflow"
+            }
+            Self::HttpRequestBodySegmentOutOfBounds => "http.request.body-segment.out-of-bounds",
             Self::ConnectionIoEofRecheckPause => "server.connection-io.eof-recheck.pause",
             Self::PythonAsgiReceiveBorrowConflict => "python.asgi-receive.borrow-conflict",
             Self::ServerControlShutdownBorrowConflict => "server.control.shutdown.borrow-conflict",
@@ -718,6 +744,10 @@ type RequestBodyTasks = Arc<Mutex<tokio::task::JoinSet<()>>>;
 // available slots synchronously; a full queue returns an awaitable so Tokio
 // can apply backpressure. This is bounded by message count, not body bytes.
 const RESPONSE_BODY_QUEUE_CAPACITY: usize = 16;
+// Coalesce already-arrived Hyper data frames into bounded ASGI body messages.
+// The time limit keeps slow or streaming uploads from waiting for a full batch.
+const HTTP_REQUEST_BODY_BATCH_BYTES: usize = 256 * 1024;
+const HTTP_REQUEST_BODY_BATCH_MAX_WAIT: std::time::Duration = std::time::Duration::from_millis(1);
 
 /// Optional counters for attributing Python/Rust bridge work in diagnostic builds.
 ///
@@ -753,6 +783,8 @@ struct RuntimeDiagnosticCounters {
     websocket_outgoing_queue_full: AtomicU64,
     http_request_python_bytes_messages: AtomicU64,
     http_request_python_bytes_copied: AtomicU64,
+    http_request_python_bytes_materialization_calls: AtomicU64,
+    http_request_python_bytes_materialization_ns: AtomicU64,
     tcp_read_poll_calls: AtomicU64,
     tcp_read_pending_calls: AtomicU64,
     tcp_read_bytes: AtomicU64,
@@ -891,6 +923,35 @@ impl RuntimeDiagnostics {
         }
         #[cfg(not(feature = "runtime-diagnostics"))]
         let _ = bytes;
+    }
+
+    #[inline]
+    fn http_request_python_bytes_materialization_started(&self) -> Option<std::time::Instant> {
+        #[cfg(feature = "runtime-diagnostics")]
+        return Some(std::time::Instant::now());
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        None
+    }
+
+    #[inline]
+    fn http_request_python_bytes_materialization_finished(
+        &self,
+        started: Option<std::time::Instant>,
+    ) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(started) = started {
+            self.counters
+                .http_request_python_bytes_materialization_calls
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters
+                .http_request_python_bytes_materialization_ns
+                .fetch_add(
+                    started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = started;
     }
 
     #[inline]
@@ -1108,6 +1169,8 @@ impl RuntimeDiagnostics {
                 "websocket_outgoing_queue_full={} ",
                 "http_request_python_bytes_messages={} ",
                 "http_request_python_bytes_copied={} ",
+                "http_request_python_bytes_materialization_calls={} ",
+                "http_request_python_bytes_materialization_ns={} ",
                 "tcp_read_poll_calls={} ",
                 "tcp_read_pending_calls={} ",
                 "tcp_read_bytes={} ",
@@ -1181,6 +1244,12 @@ impl RuntimeDiagnostics {
                 .load(Ordering::Relaxed),
             self.counters
                 .http_request_python_bytes_copied
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_python_bytes_materialization_calls
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_python_bytes_materialization_ns
                 .load(Ordering::Relaxed),
             self.counters.tcp_read_poll_calls.load(Ordering::Relaxed),
             self.counters.tcp_read_pending_calls.load(Ordering::Relaxed),
@@ -1471,8 +1540,85 @@ struct BodyChunk {
     more_body: bool,
 }
 
+enum RequestBody {
+    Single(Bytes),
+    Segments { segments: Vec<Bytes>, len: usize },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RequestBodySendMode {
+    Regular,
+    Final,
+    #[cfg(coverage)]
+    ContinueAfterStop,
+}
+
+impl RequestBody {
+    fn from_segments(segments: Vec<Bytes>, len: usize) -> Self {
+        let single_segment: Result<[Bytes; 1], Vec<Bytes>> = segments.try_into();
+        match single_segment {
+            Ok([body]) => Self::Single(body),
+            Err(segments) => Self::Segments { segments, len },
+        }
+    }
+
+    fn take_batch(segments: &mut Vec<Bytes>, len: &mut usize) -> Self {
+        Self::from_segments(std::mem::take(segments), std::mem::take(len))
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Self::Single(body) => body.len(),
+            Self::Segments { len, .. } => *len,
+        }
+    }
+
+    fn into_py_bytes<'py>(self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        match self {
+            Self::Single(body) => Ok(PyBytes::new(py, &body)),
+            Self::Segments { segments, len } => PyBytes::new_with(py, len, |output| {
+                let mut offset: usize = {
+                    #[cfg(coverage)]
+                    {
+                        if coverage_fault_take(
+                            CoverageFaultPoint::HttpRequestBodySegmentLengthOverflow,
+                        ) {
+                            usize::MAX
+                        } else if coverage_fault_take(
+                            CoverageFaultPoint::HttpRequestBodySegmentOutOfBounds,
+                        ) {
+                            len
+                        } else {
+                            0
+                        }
+                    }
+                    #[cfg(not(coverage))]
+                    {
+                        0
+                    }
+                };
+                for segment in &segments {
+                    let Some(end) = offset.checked_add(segment.len()) else {
+                        return Err(PyValueError::new_err(
+                            "request body segment length overflowed",
+                        ));
+                    };
+                    let Some(destination) = output.get_mut(offset..end) else {
+                        return Err(PyValueError::new_err(
+                            "request body segment exceeded its Python bytes allocation",
+                        ));
+                    };
+                    destination.copy_from_slice(segment);
+                    offset = end;
+                }
+                Ok(())
+            }),
+        }
+    }
+}
+
 struct RequestMessage {
-    body: Bytes,
+    body: RequestBody,
     more_body: bool,
     disconnected: bool,
 }
@@ -1490,10 +1636,13 @@ fn make_http_request_message(
             HttpRequestTypeSetItem,
             message.set_item("type", "http.request")
         );
-        coverage_try!(
-            HttpRequestBodySetItem,
-            message.set_item("body", PyBytes::new(py, &request.body))
-        );
+        let body_materialization_started =
+            diagnostics.http_request_python_bytes_materialization_started();
+        let body = request.body.into_py_bytes(py);
+        diagnostics
+            .http_request_python_bytes_materialization_finished(body_materialization_started);
+        let body = body?;
+        coverage_try!(HttpRequestBodySetItem, message.set_item("body", body));
         coverage_try!(
             HttpRequestMoreBodySetItem,
             message.set_item("more_body", request.more_body)
@@ -3126,6 +3275,31 @@ async fn pump_http_request_body(
         // then resume at the known-stop guard.
         wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
     }
+    #[cfg(coverage)]
+    let body_batch_limit = if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpBatchLimitOneByte)
+        || coverage_fault_is_armed(CoverageFaultPoint::HttpBodyPumpOversizedSendConnectionClosed)
+    {
+        1
+    } else {
+        HTTP_REQUEST_BODY_BATCH_BYTES
+    };
+    #[cfg(not(coverage))]
+    let body_batch_limit = HTTP_REQUEST_BODY_BATCH_BYTES;
+    #[cfg(coverage)]
+    let body_batch_max_wait = if coverage_fault_is_armed(
+        CoverageFaultPoint::HttpBodyPumpBatchThresholdSendConnectionClosed,
+    ) || coverage_fault_is_armed(
+        CoverageFaultPoint::HttpBodyPumpErrorBufferedSendConnectionClosed,
+    ) {
+        std::time::Duration::from_secs(1)
+    } else {
+        HTTP_REQUEST_BODY_BATCH_MAX_WAIT
+    };
+    #[cfg(not(coverage))]
+    let body_batch_max_wait = HTTP_REQUEST_BODY_BATCH_MAX_WAIT;
+    let mut body_segments = Vec::new();
+    let mut body_len = 0usize;
+    let mut body_started = None;
     loop {
         if *connection_closed.borrow()
             || cancellation.is_cancelled()
@@ -3133,6 +3307,7 @@ async fn pump_http_request_body(
         {
             return;
         }
+        let flush_deadline = body_started.map(|started| started + body_batch_max_wait);
         let frame = tokio::select! {
             biased;
             _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
@@ -3160,47 +3335,142 @@ async fn pump_http_request_body(
                 drain_http_request_body(&mut body, &mut connection_closed, &cancellation, &request_cancellation).await;
                 return;
             }
-            frame = body.frame() => frame,
+            _ = async {
+                if let Some(deadline) = flush_deadline {
+                    tokio::time::sleep_until(deadline).await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            } => None,
+            frame = body.frame() => Some(frame),
+        };
+        let Some(frame) = frame else {
+            let message = RequestMessage {
+                body: RequestBody::take_batch(&mut body_segments, &mut body_len),
+                more_body: true,
+                disconnected: false,
+            };
+            body_started = None;
+            if !send_http_request_message(
+                &mut body,
+                &sender,
+                &mut connection_closed,
+                &cancellation,
+                &request_cancellation,
+                message,
+                RequestBodySendMode::Regular,
+            )
+            .await
+            {
+                return;
+            }
+            continue;
         };
 
         match frame {
             Some(Ok(frame)) => {
                 if let Ok(data) = frame.into_data() {
                     if !data.is_empty() {
-                        let message = RequestMessage {
-                            body: data,
-                            more_body: true,
-                            disconnected: false,
-                        };
-                        tokio::select! {
-                            biased;
-                            _ = async {
-                                #[cfg(coverage)]
-                                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpSendConnectionClosed) {
-                                    return;
-                                }
-                                wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
-                            } => return,
-                            result = sender.send(message) => {
-                                if result.is_err() {
-                                    drain_http_request_body(&mut body, &mut connection_closed, &cancellation, &request_cancellation).await;
-                                    return;
-                                }
+                        if !body_segments.is_empty()
+                            && body_len.saturating_add(data.len()) > body_batch_limit
+                        {
+                            let message = RequestMessage {
+                                body: RequestBody::take_batch(&mut body_segments, &mut body_len),
+                                more_body: true,
+                                disconnected: false,
+                            };
+                            body_started = None;
+                            if !send_http_request_message(
+                                &mut body,
+                                &sender,
+                                &mut connection_closed,
+                                &cancellation,
+                                &request_cancellation,
+                                message,
+                                RequestBodySendMode::Regular,
+                            )
+                            .await
+                            {
+                                return;
                             }
                         }
+                        if data.len() > body_batch_limit {
+                            let message = RequestMessage {
+                                body: RequestBody::Single(data),
+                                more_body: true,
+                                disconnected: false,
+                            };
+                            if !send_http_request_message(
+                                &mut body,
+                                &sender,
+                                &mut connection_closed,
+                                &cancellation,
+                                &request_cancellation,
+                                message,
+                                RequestBodySendMode::Regular,
+                            )
+                            .await
+                            {
+                                return;
+                            }
+                            continue;
+                        }
+                        if body_segments.is_empty() {
+                            body_started = Some(tokio::time::Instant::now());
+                        }
+                        body_len = body_len.saturating_add(data.len());
+                        body_segments.push(data);
                     }
                 }
             }
             Some(Err(_)) => {
                 #[cfg(coverage)]
-                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpErrorStop) {
+                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpErrorStop)
+                    || coverage_fault_take(CoverageFaultPoint::HttpBodyPumpErrorStopWait)
+                {
                     request_cancellation.cancel();
+                }
+                if !body_segments.is_empty() {
+                    let message = RequestMessage {
+                        body: RequestBody::take_batch(&mut body_segments, &mut body_len),
+                        more_body: true,
+                        disconnected: false,
+                    };
+                    let send_mode = {
+                        #[cfg(coverage)]
+                        {
+                            if coverage_fault_take(
+                                CoverageFaultPoint::HttpBodyPumpErrorBufferedSendContinues,
+                            ) {
+                                RequestBodySendMode::ContinueAfterStop
+                            } else {
+                                RequestBodySendMode::Regular
+                            }
+                        }
+                        #[cfg(not(coverage))]
+                        {
+                            RequestBodySendMode::Regular
+                        }
+                    };
+                    if !send_http_request_message(
+                        &mut body,
+                        &sender,
+                        &mut connection_closed,
+                        &cancellation,
+                        &request_cancellation,
+                        message,
+                        send_mode,
+                    )
+                    .await
+                    {
+                        return;
+                    }
                 }
                 tokio::select! {
                     biased;
                     _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
                     _ = sender.send(RequestMessage {
-                        body: Bytes::new(),
+                        body: RequestBody::Single(Bytes::new()),
                         more_body: false,
                         disconnected: true,
                     }) => {}
@@ -3208,25 +3478,43 @@ async fn pump_http_request_body(
                 return;
             }
             None => {
-                let message = RequestMessage {
-                    body: Bytes::new(),
+                if !body_segments.is_empty() {
+                    let message = RequestMessage {
+                        body: RequestBody::take_batch(&mut body_segments, &mut body_len),
+                        more_body: true,
+                        disconnected: false,
+                    };
+                    if !send_http_request_message(
+                        &mut body,
+                        &sender,
+                        &mut connection_closed,
+                        &cancellation,
+                        &request_cancellation,
+                        message,
+                        RequestBodySendMode::Regular,
+                    )
+                    .await
+                    {
+                        return;
+                    }
+                }
+                let final_message = RequestMessage {
+                    body: RequestBody::Single(Bytes::new()),
                     more_body: false,
                     disconnected: false,
                 };
-                tokio::select! {
-                    biased;
-                    _ = async {
-                        #[cfg(coverage)]
-                        if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFinalSendConnectionClosed) {
-                            return;
-                        }
-                        wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
-                    } => return,
-                    result = sender.send(message) => {
-                        if result.is_err() {
-                            return;
-                        }
-                    }
+                if !send_http_request_message(
+                    &mut body,
+                    &sender,
+                    &mut connection_closed,
+                    &cancellation,
+                    &request_cancellation,
+                    final_message,
+                    RequestBodySendMode::Final,
+                )
+                .await
+                {
+                    return;
                 }
                 tokio::select! {
                     _ = async {
@@ -3241,6 +3529,53 @@ async fn pump_http_request_body(
             }
         }
     }
+}
+
+async fn send_http_request_message(
+    body: &mut Incoming,
+    sender: &mpsc::Sender<RequestMessage>,
+    connection_closed: &mut watch::Receiver<bool>,
+    cancellation: &CancellationToken,
+    request_cancellation: &CancellationToken,
+    message: RequestMessage,
+    _send_mode: RequestBodySendMode,
+) -> bool {
+    let result = tokio::select! {
+        biased;
+        _ = async {
+            #[cfg(coverage)]
+            if _send_mode == RequestBodySendMode::ContinueAfterStop {
+                std::future::pending::<()>().await;
+            }
+            #[cfg(coverage)]
+            if _send_mode == RequestBodySendMode::Final {
+                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFinalSendConnectionClosed) {
+                    return;
+                }
+            } else if coverage_fault_take(
+                CoverageFaultPoint::HttpBodyPumpBatchThresholdSendConnectionClosed,
+            ) {
+                return;
+            } else if coverage_fault_take(
+                CoverageFaultPoint::HttpBodyPumpOversizedSendConnectionClosed,
+            ) {
+                return;
+            } else if coverage_fault_take(
+                CoverageFaultPoint::HttpBodyPumpErrorBufferedSendConnectionClosed,
+            ) {
+                return;
+            } else if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpSendConnectionClosed) {
+                return;
+            }
+            wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
+        } => return false,
+        result = sender.send(message) => result,
+    };
+    if result.is_err() {
+        drain_http_request_body(body, connection_closed, cancellation, request_cancellation).await;
+        return false;
+    }
+    true
 }
 
 async fn drain_http_request_body(
@@ -4778,7 +5113,7 @@ async fn pump_h3_request_body(
                     continue;
                 }
                 let message = RequestMessage {
-                    body: chunk,
+                    body: RequestBody::Single(chunk),
                     more_body: true,
                     disconnected: false,
                 };
@@ -4800,7 +5135,7 @@ async fn pump_h3_request_body(
                     } => {
                         if result.is_err() {
                             let _ = sender.try_send(RequestMessage {
-                                body: Bytes::new(),
+                                body: RequestBody::Single(Bytes::new()),
                                 more_body: false,
                                 disconnected: true,
                             });
@@ -4811,7 +5146,7 @@ async fn pump_h3_request_body(
             }
             Ok(None) => {
                 let message = RequestMessage {
-                    body: Bytes::new(),
+                    body: RequestBody::Single(Bytes::new()),
                     more_body: false,
                     disconnected: false,
                 };
@@ -4823,7 +5158,7 @@ async fn pump_h3_request_body(
                             CoverageFaultPoint::Http3BodyPumpFinalMessageConnectionClosedSelect,
                         ) {
                             let _ = sender.send(RequestMessage {
-                                body: Bytes::new(),
+                                body: RequestBody::Single(Bytes::new()),
                                 more_body: false,
                                 disconnected: false,
                             }).await;
@@ -4851,7 +5186,7 @@ async fn pump_h3_request_body(
                     biased;
                     _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
                     _ = sender.send(RequestMessage {
-                        body: Bytes::new(),
+                        body: RequestBody::Single(Bytes::new()),
                         more_body: false,
                         disconnected: true,
                     }) => {}
@@ -4911,7 +5246,7 @@ async fn handle_request_inner(
         coverage_runtime_result!(
             HttpEmptyRequestChannelClosed,
             request_tx.try_send(RequestMessage {
-                body: Bytes::new(),
+                body: RequestBody::Single(Bytes::new()),
                 more_body: false,
                 disconnected: false,
             })
@@ -5960,6 +6295,33 @@ fn response(status: StatusCode, body: ResponseBody, headers: HeaderMap) -> Respo
     response
 }
 
+fn max_blocking_threads_from_environment() -> Result<Option<usize>, std::io::Error> {
+    const VARIABLE: &str = "UVICORN_RS_MAX_BLOCKING_THREADS";
+    let value = match std::env::var(VARIABLE) {
+        Ok(value) => value,
+        Err(std::env::VarError::NotPresent) => return Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("{VARIABLE} must be valid Unicode"),
+            ));
+        }
+    };
+    let maximum = value.parse::<usize>().map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{VARIABLE} must be a positive integer"),
+        )
+    })?;
+    if maximum == 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{VARIABLE} must be a positive integer"),
+        ));
+    }
+    Ok(Some(maximum))
+}
+
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     const TOKIO_WORKER_THREADS: usize = 1;
@@ -5973,6 +6335,9 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         runtime_builder
             .worker_threads(TOKIO_WORKER_THREADS)
             .enable_all();
+        if let Some(maximum) = max_blocking_threads_from_environment()? {
+            runtime_builder.max_blocking_threads(maximum);
+        }
         #[cfg(coverage)]
         {
             if coverage_fault_take(CoverageFaultPoint::NativeRuntimeBuildError) {

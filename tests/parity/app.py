@@ -1166,6 +1166,30 @@ async def _app_impl(scope, receive, send):
                 await send({"type": "http.response.body", "body": b"", "more_body": False})
                 return
 
+    if path == "/request-body-error-probe":
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        try:
+            await receive()
+        except Exception as error:
+            _record(f"http.request-body-error:{type(error).__name__}")
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b"request-body-error-caught",
+                    "more_body": True,
+                }
+            )
+            await send({"type": "http.response.body", "body": b"", "more_body": False})
+            return
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b"request-body-error-not-raised",
+                "more_body": False,
+            }
+        )
+        return
+
     if path == "/disconnect-send-body":
         await send({"type": "http.response.start", "status": 200, "headers": []})
         _record("http.disconnect.body.waiting")

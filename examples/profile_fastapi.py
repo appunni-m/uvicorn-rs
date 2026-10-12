@@ -2,7 +2,8 @@
 
 This wrapper keeps the ASGI messages unchanged. Its measurements are
 diagnostic-only: timing calls around every send and receive perturb the
-request path and must not be used as ordinary performance results.
+request path and must not be used as ordinary performance results. HTTP rows
+represent requests; WebSocket rows represent whole connections (sessions).
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ from pathlib import Path
 from time import perf_counter_ns
 
 from examples.bench_fastapi import app as fastapi_app
-
 
 _MAX_RETAINED_PER_PATH = 250_000
 _DURATION_FIELDS = (
@@ -47,8 +47,9 @@ def _path_stats(path: str) -> tuple[Counter, dict[str, array]]:
 
 
 async def app(scope, receive, send):
-    """Time FastAPI and each awaited ASGI send/receive call without rewriting messages."""
-    if scope.get("type") != "http":
+    """Time FastAPI and awaited ASGI calls without rewriting messages."""
+    scope_type = scope.get("type")
+    if scope_type not in {"http", "websocket"}:
         await fastapi_app(scope, receive, send)
         return
 
@@ -77,6 +78,12 @@ async def app(scope, receive, send):
                 request["message_types"][f"receive:{message_type}"] += 1
             if message_type == "http.request":
                 request["request_body_bytes"] += len(message.get("body", b""))
+            elif message_type == "websocket.receive":
+                body = message.get("bytes")
+                if body is not None:
+                    request["request_body_bytes"] += len(body)
+                else:
+                    request["request_body_bytes"] += len(message.get("text", "").encode("utf-8"))
         return message
 
     async def timed_send(message):
@@ -87,6 +94,12 @@ async def app(scope, receive, send):
                 request["message_types"][f"send:{message_type}"] += 1
             if message_type == "http.response.body":
                 request["response_body_bytes"] += len(message.get("body", b""))
+            elif message_type == "websocket.send":
+                body = message.get("bytes")
+                if body is not None:
+                    request["response_body_bytes"] += len(body)
+                else:
+                    request["response_body_bytes"] += len(message.get("text", "").encode("utf-8"))
         started = perf_counter_ns()
         try:
             await send(message)
@@ -177,7 +190,8 @@ def _write_timings() -> None:
                     "outside_asgi_io_await includes Python/framework work and any other awaits, "
                     "so it is not CPU time"
                 ),
-                "messages_unchanged": True,
+        "messages_unchanged": True,
+        "request_unit": "one HTTP request or one WebSocket connection; WebSocket timing totals span the full connection",
                 "paths": paths,
             },
             indent=2,

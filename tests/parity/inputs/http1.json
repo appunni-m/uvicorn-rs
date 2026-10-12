@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@7",
+  "schema": "uvicorn-rs-parity/input@8",
   "cases": [
     {
       "case_id": "http1.scope-query-header-and-body",
@@ -4822,6 +4822,7 @@
         "path": "/disconnect-read-twice",
         "followup_path": "/disconnect-status",
         "malformed_chunk": true,
+        "partial_body_base64": "YQ==",
         "wait_event": "http.disconnect.waiting",
         "wait_event_after_disconnect": "http.disconnect.second:http.disconnect"
       }
@@ -4997,6 +4998,314 @@
         "pause_before_read_ms": 100,
         "chunks": 32,
         "chunk_bytes": 2048
+      }
+    },
+    {
+      "case_id": "http1.request-body-batch-threshold-stream",
+      "profile": "http1",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "generated_chunks": [
+          {
+            "byte_value": 97,
+            "size_bytes": 131072
+          },
+          {
+            "byte_value": 98,
+            "size_bytes": 131072
+          },
+          {
+            "byte_value": 99,
+            "size_bytes": 131072
+          }
+        ],
+        "send_all_before_read": true
+      }
+    },
+    {
+      "case_id": "http1.request-body-batch-oversized-frame",
+      "profile": "http1",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "generated_chunks": [
+          {
+            "byte_value": 120,
+            "size_bytes": 524288
+          },
+          {
+            "byte_value": 121,
+            "size_bytes": 1
+          }
+        ],
+        "send_all_before_read": true
+      }
+    },
+    {
+      "case_id": "http1.request-body-batch-early-response-drain",
+      "profile": "http1",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "request_stream": {
+        "method": "POST",
+        "path": "/read-first-upload",
+        "headers": [],
+        "generated_chunks": [
+          {
+            "byte_value": 97,
+            "size_bytes": 196608
+          },
+          {
+            "byte_value": 98,
+            "size_bytes": 196608
+          },
+          {
+            "byte_value": 99,
+            "size_bytes": 196608
+          },
+          {
+            "byte_value": 100,
+            "size_bytes": 196608
+          }
+        ],
+        "send_all_before_read": true
+      }
+    },
+    {
+      "case_id": "fault.http1.request-body-segment-length-overflow-caught",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.request.body-segment.length-overflow",
+        "contract": "http-request-body-conversion-error-caught"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/request-body-error-probe",
+        "headers": [],
+        "chunks_base64": [
+          "YQ==",
+          "Yg=="
+        ],
+        "send_all_before_read": true
+      }
+    },
+    {
+      "case_id": "fault.http1.request-body-segment-out-of-bounds-caught",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.request.body-segment.out-of-bounds",
+        "contract": "http-request-body-conversion-error-caught"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/request-body-error-probe",
+        "headers": [],
+        "chunks_base64": [
+          "YQ==",
+          "Yg=="
+        ],
+        "send_all_before_read": true
+      }
+    },
+    {
+      "case_id": "fault.http1.request-body-batch-timer-send-stopped",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.send.connection-closed",
+        "contract": "http-body-pump-send-stopped-without-response"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-pump-disconnect",
+        "followup_path": "/state?coverage-fault=followup",
+        "headers": [],
+        "chunks_base64": [
+          "YQ==",
+          "Yg=="
+        ]
+      }
+    },
+    {
+      "case_id": "fault.http1.request-body-batch-threshold-send-stopped",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.batch-threshold.send-connection-closed",
+        "contract": "http-body-pump-send-stopped-without-response"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-pump-disconnect",
+        "followup_path": "/state?coverage-fault=followup",
+        "headers": [],
+        "generated_chunks": [
+          {
+            "byte_value": 97,
+            "size_bytes": 131072
+          },
+          {
+            "byte_value": 98,
+            "size_bytes": 131072
+          },
+          {
+            "byte_value": 99,
+            "size_bytes": 131072
+          }
+        ],
+        "send_all_before_read": true
+      }
+    },
+    {
+      "case_id": "fault.http1.request-body-oversized-frame-send-stopped",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.oversized.send-connection-closed",
+        "contract": "http-body-pump-send-stopped-without-response"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-pump-disconnect",
+        "followup_path": "/state?coverage-fault=followup",
+        "headers": [],
+        "generated_chunks": [
+          {
+            "byte_value": 97,
+            "size_bytes": 2
+          },
+          {
+            "byte_value": 98,
+            "size_bytes": 2
+          }
+        ],
+        "send_all_before_read": true
+      }
+    },
+    {
+      "case_id": "fault.http1.request-body-oversized-frame-echo",
+      "profile": "http1",
+      "operation": "http.request-streaming",
+      "covers": [
+        "http.request-streaming"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.batch-limit.one-byte",
+        "contract": "http-body-pump-oversized-frame-echo"
+      },
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "generated_chunks": [
+          {
+            "byte_value": 97,
+            "size_bytes": 2
+          },
+          {
+            "byte_value": 98,
+            "size_bytes": 2
+          }
+        ],
+        "send_all_before_read": true
+      }
+    },
+    {
+      "case_id": "fault.http1.malformed-body-stop-wait-cancel",
+      "profile": "http1",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.error.stop-wait",
+        "contract": "http-body-pump-error-stop-disconnect-followup-200"
+      },
+      "disconnect": {
+        "path": "/disconnect-read-twice",
+        "followup_path": "/disconnect-status",
+        "malformed_chunk": true,
+        "wait_event": "http.disconnect.waiting",
+        "wait_event_after_disconnect": "http.disconnect.second:http.disconnect"
+      }
+    },
+    {
+      "case_id": "fault.http1.malformed-body-buffered-send-stopped",
+      "profile": "http1",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.error.buffered-send-connection-closed",
+        "contract": "http-body-pump-error-stop-disconnect-followup-200"
+      },
+      "disconnect": {
+        "path": "/disconnect-read-twice",
+        "followup_path": "/disconnect-status",
+        "malformed_chunk": true,
+        "partial_body_base64": "YQ==",
+        "wait_event": "http.disconnect.waiting",
+        "wait_event_after_disconnect": "http.disconnect.second:http.disconnect"
+      }
+    },
+    {
+      "case_id": "fault.http1.malformed-body-buffered-send-continues",
+      "profile": "http1",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.body-pump.error.buffered-send-continues",
+        "contract": "http-body-pump-error-stop-disconnect-followup-200"
+      },
+      "disconnect": {
+        "path": "/disconnect-read-twice",
+        "followup_path": "/disconnect-status",
+        "malformed_chunk": true,
+        "partial_body_base64": "YQ==",
+        "wait_event": "http.disconnect.waiting",
+        "wait_event_after_disconnect": "http.disconnect.second:http.disconnect"
       }
     }
   ]

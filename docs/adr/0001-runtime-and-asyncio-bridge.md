@@ -1,8 +1,8 @@
 # ADR 0001: Rust network runtime and Python asyncio bridge
 
-- **Status:** Accepted architecture for the experimental protocol implementation. The server uses one Tokio core worker per process; Python retains ownership of the ASGI event loop and app tasks. The performance scope was revised on 2026-10-09 after a qualified 11-workload FastAPI comparison found no broad speed advantage. Current local evidence covers 494 black-box workflows and 240 normal-build parity cases in the [coverage report](../coverage.md#current-full-verification-494-cases). This is not a general performance-replacement or production-readiness claim.
+- **Status:** Accepted for the existing ASGI bridge and experimental protocol implementation. The server uses one Tokio core worker per process; Python retains ownership of the ASGI event loop and app tasks. ADR 0003 supersedes this record for package names, crate boundaries, and the greenfield native product direction. The current Python module/CLI names below are a snapshot, not a backward-compatibility requirement. The performance scope was revised on 2026-10-09 after a qualified 11-workload FastAPI comparison found no broad speed advantage. The latest local coverage receipt records 511 cases across three repeats, with 5,561/5,561 regions and 3,997/3,997 lines for the dirty macOS ARM64 PyO3 adapter source. It does not verify a clean release build, the Python-free crate, the official ASGI suite, or performance. See the [coverage report](../coverage.md#latest-local-evidence-2026-10-12). This is not a general performance-replacement or production-readiness claim.
 - **Date:** 2026-10-02
-- **Project name:** `uvicorn-rs`, taken from the GitHub repository URL supplied by the owner. The CLI name is `uvicorn-rs` and the Python import name is `uvicorn_rs`. This project is independent and is not affiliated with Uvicorn.
+- **Project name at this ADR's date:** `uvicorn-rs`, taken from the GitHub repository URL supplied by the owner. At that time the CLI was `uvicorn-rs` and the Python import was `uvicorn_rs`; these current implementation details are not a future package contract. The project is independent and is not affiliated with Uvicorn.
 
 ## Context
 
@@ -28,11 +28,18 @@ Each ASGI invocation runs inside an asyncio `Task` on the loop captured by `Serv
 
 The bridge must preserve the original Python exception object and traceback when reporting app failures. When a request is cancelled or its connection is lost, the corresponding Python task must receive cancellation and be joined or otherwise observed; a dropped Rust future alone is not accepted as proof of cancellation. These behaviors are prototype gates before protocol expansion.
 
+The HTTP/2 disconnect behavior described by the current implementation and
+parity evidence belongs to the PyO3 ASGI path. It retains the ASGI task long
+enough to deliver `http.disconnect` after a request reset. The separate native
+Tower service does not yet provide that signal: Hyper cancels its request
+service future on `RST_STREAM`. Native ASGI integration must close this gap;
+see [ADR 0004](0004-native-websocket-lifecycle-contract.md).
+
 ### 3. Backpressure and streaming are end-to-end
 
 Request bodies are exposed as incremental `http.request` events, not accumulated before the app starts. The HTTP request channel holds at most one pending body item and the current HTTP response channel holds at most sixteen; WebSocket channels hold at most eight messages. Awaiting ASGI `send()` waits for capacity in that bounded writer path. A slow peer therefore applies backpressure to the Python producer instead of growing an unbounded queue. Diagnostics first motivated increasing the response capacity from one to four, and it has since been raised to sixteen. The latest instrumented run still recorded about 14.9 full sends per 256-chunk response; this measurement includes bridge scheduling and does not establish a performance win over Uvicorn.
 
-HTTP response framing, content length, chunked transfer encoding, and connection reuse belong to the Rust HTTP implementation. The server ignores an app-provided `Transfer-Encoding` header and chooses valid framing itself. It preserves duplicate header fields and their order.
+HTTP response framing, content length, chunked transfer encoding, and connection reuse belong to the Rust HTTP implementation. The server ignores an app-provided `Transfer-Encoding` header and chooses valid framing itself. It preserves the input order of repeated values for each header name. It does not preserve ordering across different response header names; RFC 9110 §5.3 makes that order insignificant to HTTP semantics, but the ASGI HTTP 2.5 response-start contract is stricter. This remains a documented ASGI conformance limitation; see the [support matrix](../support-matrix.md#supported-behaviors).
 
 ### 4. Lifespan and shutdown stay on the app loop
 
@@ -60,7 +67,7 @@ Python `bytes` objects and copies payloads. This design keeps
 copy threshold was rejected after its fixed and chunked H1 cases regressed in
 the recorded focused run; the selected path always uses direct extraction for
 immutable `bytes`. See the [buffer ownership ledger](../architecture.md#buffer-ownership-and-copies)
-and [optimization results](../feasibility.md#pyo3-buffer-ownership-optimization).
+and [performance evidence and scope](../feasibility.md#where-the-measured-overhead-is).
 
 For event dispatch, exact built-in Python `str` values are compared with
 cached interned ASGI event names, avoiding a temporary Rust `String` for common
@@ -145,7 +152,7 @@ These are historical source-bound local macOS ARM64 native results; they do
 not attest the changed checkout. The earlier generic helper
 had aggregate 100% coverage but seven MCP function observations; its receipt
 is retained without exclusions or profile merging. See
-[coverage evidence](../coverage.md#current-full-verification-448-cases) and
+[coverage evidence](../coverage.md#historical-full-verification-448-cases-shared-write-source) and
 [the performance investigation](../performance-investigation-2026-10-05.md).
 
 ## Alternatives considered
@@ -178,7 +185,7 @@ Rejected for the MVP. A mature HTTP implementation reduces protocol and request-
 
 ### Feasibility outcome
 
-The historical October 4 full matrix contains 132 H1, 84 H2, 66 H3, 36 WebSocket, and 20 lifecycle rows with all represented correctness checks passing; the optional `starlette-rs` H1 route was omitted. Its saved process snapshots show unrelated parity, Python, and Rust build work, including a compiler at about 787% CPU; treat performance values as diagnostic. Uvicorn does not provide H2/H3 baselines, so those protocols compare only to Hypercorn. H3's represented Hypercorn cases passed; its upload cases remain excluded after prior correctness failures. The scope remains a protocol/interoperability prototype; further performance work requires valid paired measurements. See [the historical category report](../feasibility.md), [October 4 raw run](../../benchmarks/results/full-2026-10-04T113122Z/), and [October 5 investigation](../performance-investigation-2026-10-05.md). Earlier measurements retain their own source/build scope.
+The historical October 4 full matrix contains 132 H1, 84 H2, 66 H3, 36 WebSocket, and 20 lifecycle rows; its represented response checks passed, and the optional `starlette-rs` H1 route was omitted. The H3 metadata says non-upload requests carried a one-byte body, including ordinary GET workloads. Those H3 results are input-specific historical observations, not RFC-aligned GET correctness or comparable performance evidence. The saved process snapshots also show unrelated parity, Python, and Rust build work, including a compiler at about 787% CPU; treat performance values as diagnostic. Uvicorn does not provide H2/H3 baselines, so those protocols compare only to Hypercorn. H3 upload cases remain excluded after prior correctness failures. The scope remains a protocol/interoperability prototype; further performance work requires valid paired measurements. See [the historical category report](../feasibility.md), [October 4 raw run](../../benchmarks/results/full-2026-10-04T113122Z/), and [October 5 investigation](../performance-investigation-2026-10-05.md). Earlier measurements retain their own source/build scope.
 
 ## References
 

@@ -1,17 +1,16 @@
 # Implementation review: known gaps
 
-The latest local source passes the 494-case attribution matrix and three
-complete 494-case repeats with zero failures, infrastructure errors, retries,
-or cases not run. The matrix has 240 oracle comparisons and 254 target-only
-contracts. Native coverage is 5,298/5,298 regions and 3,753/3,753 lines, with
-zero Coverage-MCP gaps. A rebuilt normal non-instrumented local build passes
-240/240 public comparisons. This is dirty-checkout macOS evidence, not a clean
-hosted release result. The latest hosted CI run is recorded in
-[benchmark status](benchmark-status.md); exact-source hosted verification
-remains incomplete. See the
-[current source/build receipt](coverage.md#current-full-verification-494-cases).
-The earlier coverage and implementation results below are historical and do
-not attest the current checkout.
+The latest recorded local source matrix is the 511-case run from 2026-10-12:
+243 oracle comparisons, 268 target-only contracts, 5,561/5,561 regions, and
+3,997/3,997 lines. It passed attribution and three full repeats with no
+failures or transient infrastructure errors, and Coverage-MCP matched the
+source/build receipt with no missing groups. This is dirty macOS evidence, not
+a clean hosted release result; a normal-build parity and fault-control
+exclusion audit remains to be run on this exact source. The latest hosted CI
+run is recorded in [benchmark status](benchmark-status.md); exact
+current-source hosted verification remains incomplete. See the
+[latest source/build receipt](coverage.md#latest-local-evidence-2026-10-12).
+Earlier coverage and implementation results below are historical snapshots.
 
 This page separates measured failures from risks that still need targeted
 evidence.
@@ -26,7 +25,7 @@ That instrumented source passes 448/448 attribution and three complete
 not run. It measures 4,763/4,763 regions and 3,360/3,360 lines with zero
 unfiltered MCP gap groups, a matching source receipt and tests passed. The
 same source's normal exclusion audit passes all checks and its three selected
-live cases. [Coverage evidence](coverage.md#current-full-verification-448-cases)
+live cases. [Coverage evidence](coverage.md#historical-full-verification-448-cases-shared-write-source)
 names exact source/build identities and preserves the local dirty-checkout
 scope; it does not establish a release baseline or full ASGI conformance.
 
@@ -134,7 +133,7 @@ run and a fresh quiet-host performance run remain unverified.
 | Python-heavy H1 workloads remain behind Uvicorn. | Provisional rate ratios were 0.74× for 32-header scope, 0.51× for contextvars, 0.55× for the synchronous-callable/awaitable case, and 0.43× for exception-to-500. | Attribute task scheduling, loop notifications, PyO3 calls, and message construction on an idle fixed workload. |
 | Cross-runtime streaming waits are measurable. | The queue-16 instrumented run saw about 14.9 full sends per 256-chunk response and 24–31 ms accumulated send-wait per request. The timer includes bridge scheduling as well as channel delay; instrumented throughput is not comparable to ordinary runs. | Keep ASGI send ordering and backpressure. Profile bridge wakeups and channel occupancy before considering batching. |
 | Large H1 response sampled RSS remains high after owner-backed extraction. | The 1 MiB response row's median sampled peak RSS was 127 MiB for Rust and 33.9 MiB for Uvicorn. Loopback clients used several CPU cores. | Collect allocation/lifetime profiles and move large-transfer clients off-host; RSS alone does not identify retained allocations. |
-| H3 fixed-response sampled RSS is high. | The Rust+uvloop row's median sampled peak was 252.3 MiB at concurrency 4; the Hypercorn reference was 89.7 MiB. All H3 rows passed correctness, but the host was busy. | Profile connection/stream and buffer lifetimes on a quiet host before treating this as a leak or stable memory requirement. |
+| H3 fixed-response sampled RSS is high. | The Rust+uvloop row's median sampled peak was 252.3 MiB at concurrency 4; the Hypercorn reference was 89.7 MiB. The archived response checks passed on their recorded inputs, but the H3 metadata says non-upload requests carried one byte, including ordinary GET workloads. Those GET inputs are superseded and do not establish RFC-aligned correctness or comparable performance; the host was also busy. | Re-run bodyless GET workloads with request identities matched across servers, then profile connection/stream and buffer lifetimes on a quiet host before treating RSS as a leak or stable memory requirement. |
 | WebSocket text echo consumes more CPU and is slower than Uvicorn in this run. | Rust+uvloop measured 60,525 messages/s at 244% CPU; Uvicorn uvloop measured 73,207/s at 94% CPU. The 64 KiB binary echo favored Rust in rate but also used more CPU. | Profile the PyO3 message bridge and frame path separately; retain full-message parity gates. |
 
 The [October 4 run notes](../benchmarks/results/full-2026-10-04T113122Z/run-notes.md)
@@ -249,9 +248,12 @@ hook checks remain enabled.
   unsupported. See the [support matrix](support-matrix.md) for per-feature
   status.
 - The HTTP/3 implementation depends on experimental `h3` APIs. The October 4
-  correctness-gated matrix passed 66 comparison rows against Hypercorn for its
-  represented workloads; Hypercorn upload remains excluded. This is not a
-  Uvicorn comparison, and broader interoperability remains unverified.
+  archive records 66 response-check rows against Hypercorn, but its metadata
+  says non-upload requests carried one byte, including ordinary GET workloads.
+  Those rows are input-specific historical observations, not RFC-aligned GET
+  correctness or comparable performance evidence. Hypercorn upload remains
+  excluded. This is not a Uvicorn comparison, and broader interoperability
+  remains unverified.
 
 ## Code and operations
 
@@ -278,10 +280,16 @@ hook checks remain enabled.
   starting its ASGI application. Pumps select on server shutdown, connection
   closure and per-request cancellation, and completed pumps are reaped while
   new requests arrive. H1 keeps draining after the app stops receiving so
-  request framing can finish on a reusable connection. H2 stream cancellation
-  reaches the pump token and can surface as `http.disconnect` on the owning
-  ASGI loop. H3 body errors and a closed request receiver terminate that
-  stream's pump. Shutdown joins pumps within the remaining transport grace
+  request framing can finish on a reusable connection. In the current PyO3
+  ASGI path, H2 stream cancellation reaches the pump token and the parity cases
+  verify `http.disconnect` on the owning ASGI loop. The separate native Tower
+  service now exposes request- and connection-lifetime handles. Its H2 reset
+  contract observes `ServiceFutureDropped`, sibling connection survival, and
+  same-connection recovery; the generic reason does not identify the reset
+  cause or deliver ASGI `http.disconnect`. H3 body errors and a closed request
+  receiver terminate that stream's pump in the PyO3 path; native H3
+  idle-reset delivery and HTTP/1 Upgrade session tracking remain unverified.
+  Shutdown joins pumps within the remaining transport grace
   period; if the period expires, it logs, aborts and drains the join set before
   `Server.serve()` returns. The 490-case unified matrix passes three repeats,
   and the normal non-instrumented local build passes all 238 public

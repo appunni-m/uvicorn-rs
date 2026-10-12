@@ -3,11 +3,11 @@ requires = ["maturin>=1.14,<2"]
 build-backend = "maturin"
 
 [project]
-name = "uvicorn-rs"
+name = "uvicorn-rs-py"
 version = "0.1.0"
 license = "BSD-3-Clause OR MIT"
 license-files = ["LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT"]
-description = "Rust network runtime for Python ASGI applications"
+description = "Python ASGI client for the Rust-native Uvicorn-RS server"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
@@ -18,7 +18,7 @@ Documentation = "https://github.com/appunni-m/uvicorn-rs#readme"
 Issues = "https://github.com/appunni-m/uvicorn-rs/issues"
 
 [project.scripts]
-uvicorn-rs = "uvicorn_rs.cli:main"
+uvicorn-rs-py = "uvicorn_rs.cli:main"
 
 [dependency-groups]
 benchmark = [

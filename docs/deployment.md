@@ -1,7 +1,7 @@
 # Deployment and framework integration
 
-uvicorn-rs is an experimental single-process ASGI server. It loads an
-importable module:attribute; it does not create application factories,
+`uvicorn-rs-py` is an experimental single-process Python ASGI adapter. It
+loads an importable module:attribute; it does not create application factories,
 supervise workers, reload code, or configure proxy headers. The project has not
 published a package. Build and install a wheel into the same environment as the
 application and its Python dependencies.
@@ -9,7 +9,7 @@ application and its Python dependencies.
 ## Start an application
 
 ```sh
-uv run uvicorn-rs myapp.asgi:app --host 127.0.0.1 --port 8000
+uv run uvicorn-rs-py myapp.asgi:app --host 127.0.0.1 --port 8000
 ```
 
 Run the command from a directory where myapp.asgi is importable. For a
@@ -24,6 +24,15 @@ server has no separate flag to disable QUIC while retaining TLS.
 The current CLI and its defaults are listed in the
 [configuration reference](configuration.md#cli).
 
+The PyO3 extension also accepts the optional
+`UVICORN_RS_MAX_BLOCKING_THREADS` environment variable to set the maximum
+Tokio blocking-pool size. Use a positive integer; an invalid value prevents
+native module initialization before the application receives ASGI lifespan
+startup. The Tokio core remains a single worker, and Python application code
+remains on its asyncio event loop. This setting is specific to `uvicorn-rs-py`;
+the documented cases cover startup acceptance and rejection, not a measured
+concurrency effect. See [configuration](configuration.md#tokio-blocking-pool-limit).
+
 ## Service-manager example
 
 This example shows the documented process boundary for a Linux systemd
@@ -33,7 +42,7 @@ The persistent unit below is an example; CI does not install it into a host.
 
 ```ini
 [Unit]
-Description=Python ASGI application served by uvicorn-rs
+Description=Python ASGI application served by uvicorn-rs-py
 After=network.target
 
 [Service]
@@ -42,7 +51,7 @@ User=asgi
 Group=asgi
 WorkingDirectory=/srv/myapp
 Environment=PYTHONPATH=/srv/myapp
-ExecStart=/srv/myapp/.venv/bin/uvicorn-rs myapp.asgi:app --host 0.0.0.0 --port 8000 --graceful-timeout 10
+ExecStart=/srv/myapp/.venv/bin/uvicorn-rs-py myapp.asgi:app --host 0.0.0.0 --port 8000 --graceful-timeout 10
 Restart=on-failure
 KillSignal=SIGTERM
 TimeoutStopSec=60
@@ -114,7 +123,7 @@ mkdir -p "$WORK/wheels"
 
 uvx --from maturin==1.14.1 maturin build --release --locked \
   --interpreter .venv/bin/python --out "$WORK/wheels"
-SERVER_WHEEL=$(find "$WORK/wheels" -maxdepth 1 -name 'uvicorn_rs-*.whl' -print -quit)
+SERVER_WHEEL=$(find "$WORK/wheels" -maxdepth 1 -name 'uvicorn_rs_py-*.whl' -print -quit)
 
 git init "$WORK/starlette-rs"
 git -C "$WORK/starlette-rs" remote add origin https://github.com/appunni-m/starlette-rs.git
@@ -165,7 +174,7 @@ comparisons, passed the transient systemd stop path, and completed the public
 parity and normal fault-seam exclusion checks. These results are also listed in
 the evidence index. The manual category workflow runs the starlette-rs
 comparison before performance sampling. See
-[the support matrix](support-matrix.md#framework-and-deployment-evidence) for
+[the support matrix](support-matrix.md#supported-behaviors) for
 the current recorded results and limits.
 
 The pinned starlette-rs snapshot denies an `unused_mut` lint that is emitted

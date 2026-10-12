@@ -115,7 +115,7 @@ def verify(root: Path, version: str, commit: str, evidence: Path | None) -> dict
     sdists = [path for path in paths if path.name.endswith(".tar.gz")]
     if len(wheels) != 3 or len(sdists) != 1 or len(paths) != 12:
         raise ValueError(f"expected exactly three wheels, one sdist and eight evidence files; found {len(wheels)} wheels, {len(sdists)} sdists, {len(paths)} files")
-    expected = {path.name for path in wheels} | {f"uvicorn_rs-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json"}
+    expected = {path.name for path in wheels} | {f"uvicorn_rs_py-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json"}
     expected |= {f"build-manifest-{platform}.json" for platform in PLATFORMS}
     expected |= {f"consumer-{platform}.json" for platform in PLATFORMS}
     if {path.name for path in paths} != expected:

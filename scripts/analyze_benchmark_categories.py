@@ -314,6 +314,82 @@ def driver_category_reasons(loaded, driver):
     return sorted(set(reasons))
 
 
+def driver_execution_receipt(loaded, driver):
+    """Return concise runner fields used to diagnose category failures."""
+    if not isinstance(driver, dict):
+        return None
+    category = loaded["category"]
+    selected = driver.get("selected_categories")
+    if isinstance(selected, list) and selected and category not in selected:
+        return {"selected": False, "receipt_present": False, "gate_reasons": []}
+    entries = driver.get("category_runs")
+    matches = [entry for entry in entries if isinstance(entry, dict)
+               and entry.get("category") == category] if isinstance(entries, list) else []
+    if len(matches) != 1:
+        return {
+            "selected": True,
+            "receipt_present": False,
+            "gate_reasons": ["driver_category_receipt_missing_or_duplicate"],
+        }
+    entry = matches[0]
+    cleanup = entry.get("owned_process_cleanup")
+    cleanup_summary = None
+    if isinstance(cleanup, dict):
+        live_pids = cleanup.get("owned_live_pids")
+        cleanup_summary = {
+            "forced": cleanup.get("forced"),
+            "owned_live_process_count": len(live_pids) if isinstance(live_pids, list) else None,
+            "verification": cleanup.get("cleanup_verification"),
+        }
+    log_path = entry.get("log")
+    recorded_rows = entry.get("rows")
+    rows_source = "driver_receipt"
+    if type(recorded_rows) is not int:
+        recorded_rows = len(loaded["rows"])
+        rows_source = "retained_category_checkpoint"
+    return {
+        "selected": True,
+        "receipt_present": True,
+        "exit_code": entry.get("exit_code"),
+        "rows": recorded_rows,
+        "rows_source": rows_source,
+        "expected_rows": entry.get("expected_rows"),
+        "correctness_failures": entry.get("correctness_failures"),
+        "exact_planned_rows_present": entry.get("exact_planned_rows_present"),
+        "category_identity_stable": entry.get("category_identity_stable"),
+        "report_state": entry.get("report_state"),
+        "error": entry.get("error"),
+        "cleanup_error": entry.get("cleanup_error"),
+        "process_cleanup": cleanup_summary,
+        "log": Path(str(log_path)).name if isinstance(log_path, str) and log_path else None,
+        "gate_reasons": driver_category_reasons(loaded, driver),
+    }
+
+
+def driver_execution_errors(driver, driver_error):
+    """Expose suite-level failures recorded by the category wrapper."""
+    errors = []
+    if driver_error:
+        errors.append({"stage": "read run.json", "message": driver_error})
+    if not isinstance(driver, dict):
+        return errors
+    for key, stage in (
+        ("error", "category suite"),
+        ("final_cleanup_error", "final process cleanup"),
+        ("post_run_identity_error", "post-run identity capture"),
+    ):
+        value = driver.get(key)
+        if value:
+            errors.append({"stage": stage, "detail": value})
+    analysis = driver.get("analysis")
+    if isinstance(analysis, dict):
+        if analysis.get("error"):
+            errors.append({"stage": "category analysis", "detail": analysis["error"]})
+        if analysis.get("exit_code") not in (None, 0):
+            errors.append({"stage": "category analysis", "exit_code": analysis["exit_code"]})
+    return errors
+
+
 def median_pair(reference_rows, candidate_rows, key, predicate=None, minimum=MINIMUM_MATCHES):
     available = [number for number in sorted(reference_rows.keys() & candidate_rows.keys())
                  if numeric(reference_rows[number].get(key)) and numeric(candidate_rows[number].get(key))
@@ -346,6 +422,7 @@ def analyze_category(loaded, driver):
             "recorded_identity_after": None, "reference_logging_policy": None,
             "lifespan_policy": None, "recorded_cpu_resource_boundary": None,
             "recorded_latency_limitations": None,
+            "driver_execution": driver_execution_receipt(loaded, driver),
         }
     spec = CATEGORIES[category]
     configured_servers = metadata.get("servers")
@@ -506,6 +583,7 @@ def analyze_category(loaded, driver):
         "lifespan_policy": metadata.get("lifespan_policy"),
         "recorded_cpu_resource_boundary": metadata.get("resource_boundary"),
         "recorded_latency_limitations": metadata.get("latency_limitations"),
+        "driver_execution": driver_execution_receipt(loaded, driver),
     }
 
 
@@ -529,6 +607,49 @@ def markdown(report):
              "| --- | --- | ---: | ---: | --- |"]
     for category in report["categories"]:
         lines.append(f"| {category['category']} | {category['status']} | {category['rows']} / {category['invalid_rows']} | {category['qualified_pairs']} | {escape(category['evidence_scope'])} |")
+    lines += ["", "## Runner execution diagnostics", ""]
+    execution_details = []
+    for error in report.get("driver_execution_errors", []):
+        detail = json.dumps(error, ensure_ascii=False, sort_keys=True)
+        execution_details.append(f"- Suite execution: {escape(detail)}")
+    for category in report["categories"]:
+        execution = category.get("driver_execution")
+        if category.get("status") == "not_selected":
+            continue
+        if not isinstance(execution, dict):
+            if category.get("status") == "incomplete_category":
+                execution_details.append(f"- **{category['category']}**: runner execution receipt unavailable.")
+            continue
+        reasons = execution.get("gate_reasons", [])
+        if not reasons and category.get("status") != "incomplete_category":
+            continue
+        parts = []
+        if not execution.get("receipt_present"):
+            parts.append("driver receipt missing or duplicated")
+        if execution.get("exit_code") is not None:
+            parts.append(f"exit code {execution['exit_code']}")
+        if execution.get("rows") is not None or execution.get("expected_rows") is not None:
+            row_detail = f"rows {execution.get('rows', 'unknown')}/{execution.get('expected_rows', 'unknown')}"
+            if execution.get("rows_source") == "retained_category_checkpoint":
+                row_detail += " from retained checkpoint"
+            parts.append(row_detail)
+        if execution.get("correctness_failures") is not None:
+            parts.append(f"correctness failures {execution['correctness_failures']}")
+        if execution.get("log"):
+            parts.append(f"log {execution['log']}")
+        if reasons:
+            parts.append("gates: " + ", ".join(reasons))
+        for key, label in (("error", "runner error"), ("cleanup_error", "cleanup error")):
+            if execution.get(key):
+                parts.append(f"{label}: {escape(json.dumps(execution[key], ensure_ascii=False, sort_keys=True))}")
+        cleanup = execution.get("process_cleanup")
+        if isinstance(cleanup, dict) and (
+            cleanup.get("forced") is True
+            or cleanup.get("owned_live_process_count") not in (None, 0)
+        ):
+            parts.append("process cleanup: " + escape(json.dumps(cleanup, sort_keys=True)))
+        execution_details.append(f"- **{category['category']}**: " + "; ".join(parts) + ".")
+    lines.extend(execution_details or ["No category runner failures or incomplete receipts were recorded."])
     lines += ["", "## Matched throughput and latency", "",
               "HTTP rate is requests/s; WebSocket rate is completed messages/s or handshakes/s. Latency cells are p50 / p95 / p99 in ms, separately for each server.",
               "", "| Category / workload / loop | Pairs | Rate ref / Rust | Latency ref | Latency Rust | Rust/ref rate |",
@@ -621,6 +742,7 @@ def main():
                           "input_error": driver_error, "identity_before": driver.get("identity_before") if driver else None,
                           "identity_after": driver.get("identity_after") if driver else None,
                           "public_parity_gate": driver.get("public_parity_gate") if driver else None},
+        "driver_execution_errors": driver_execution_errors(driver, driver_error),
         "qualified_pairs": qualified_count, "categories": categories, "limitations": LIMITATIONS,
     }
     outputs = (args.output_json or directory / "analysis.json", args.output_markdown or directory / "analysis.md")

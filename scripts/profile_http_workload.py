@@ -1,9 +1,9 @@
-"""Capture macOS server stacks under the maintained, body-checked HTTP load.
+"""Capture macOS server profiles under the maintained, body-checked HTTP load.
 
-These are diagnostic runs. Apple ``sample`` changes scheduling, so their raw
-client timing fields must never contribute to benchmark medians or speed claims.
-The default is ten seconds of load, with six seconds of sampling at one
-millisecond after the first second. Run profiles separately from benchmarks.
+These diagnostic runs never contribute client timings to benchmark medians or
+speed claims. Apple sample captures wall-time stacks. Samply captures profiles
+from server launch; use the analyzer to restrict CPU attribution to the active
+load interval. Run profiles separately from benchmarks.
 """
 
 from __future__ import annotations
@@ -19,8 +19,11 @@ import shutil
 import signal
 import subprocess
 import time
+import gzip
 from datetime import datetime, timezone
 from pathlib import Path
+
+import psutil
 
 import run_http_category_bench as http_bench
 from benchmark_evidence import BenchmarkEvidence, assert_clean_coverage_environment
@@ -48,6 +51,7 @@ PROFILE_WORKLOADS = (
     "fastapi-contextvars",
 )
 SAMPLE = Path("/usr/bin/sample")
+SAMPLY = shutil.which("samply")
 SOURCE_FILES = [
     "scripts/profile_http_workload.py",
     "scripts/run_http_category_bench.py",
@@ -150,6 +154,134 @@ def _sample_summary(path: Path, pid: int, interval_ms: int) -> dict:
     }
 
 
+def _samply_summary(path: Path, target_pid: int) -> dict:
+    """Validate a saved Samply Firefox profile and summarize its sample rows."""
+    with gzip.open(path, "rt", encoding="utf-8") as profile_file:
+        profile = json.load(profile_file)
+    if not isinstance(profile, dict) or not isinstance(profile.get("threads"), list):
+        raise RuntimeError("Samply output is not a Firefox Profiler profile")
+    threads = [thread for thread in profile["threads"] if isinstance(thread, dict)]
+    target_threads = [
+        thread for thread in threads if str(thread.get("pid")) == str(target_pid)
+    ]
+    if not target_threads:
+        raise RuntimeError("Samply profile does not contain the ASGI server process")
+    sampled_threads = []
+    sample_count = 0
+    for thread in target_threads:
+        samples = thread.get("samples", {})
+        length = samples.get("length", 0) if isinstance(samples, dict) else 0
+        if not isinstance(length, int) or length < 0:
+            raise RuntimeError("Samply profile contains an invalid sample count")
+        sample_count += length
+        sampled_threads.append(
+            {
+                "name": thread.get("name"),
+                "tid": thread.get("tid"),
+                "sample_count": length,
+            }
+        )
+    if sample_count == 0:
+        raise RuntimeError("Samply profile contains no samples for the ASGI server")
+    return {
+        "profile_path": str(path),
+        "profile_bytes": path.stat().st_size,
+        "format": "Firefox Profiler JSON (gzip)",
+        "target_pid": target_pid,
+        "sample_count": sample_count,
+        "threads": sampled_threads,
+        "sample_units": profile.get("meta", {}).get("sampleUnits", {}),
+        "symbolicated_in_file": profile.get("meta", {}).get("symbolicated"),
+        "interpretation": (
+            "Samply records on-CPU and off-CPU samples on macOS. Open this retained profile "
+            "with `samply load` to inspect function stacks. Profile samples are diagnostic "
+            "and do not qualify throughput, latency, or CPU-per-request results."
+        ),
+    }
+
+
+def _find_profiled_python(supervisor: subprocess.Popen, python: Path) -> psutil.Process:
+    """Find the Python server child launched under Samply."""
+    expected_executable = python.resolve()
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if supervisor.poll() is not None:
+            raise RuntimeError(
+                f"Samply exited before its server child was found ({supervisor.returncode})"
+            )
+        try:
+            children = psutil.Process(supervisor.pid).children(recursive=True)
+        except psutil.Error:
+            children = []
+        for child in children:
+            try:
+                executable = Path(child.exe()).resolve()
+                command = child.cmdline()
+            except (psutil.Error, OSError):
+                continue
+            if executable == expected_executable and any(
+                "uvicorn" in argument or "uvicorn_rs" in argument for argument in command
+            ):
+                return child
+        time.sleep(0.05)
+    raise TimeoutError("could not identify the Python ASGI server spawned by Samply")
+
+
+def _stop_samply_server(
+    supervisor: subprocess.Popen | None,
+    app_process: psutil.Process | None,
+) -> dict | None:
+    """Gracefully stop the ASGI child, then wait for Samply to save its profile."""
+    if supervisor is None:
+        return None
+    signals_sent = []
+    app_returncode = None
+    app_graceful = False
+    if app_process is not None:
+        try:
+            if app_process.is_running():
+                app_process.send_signal(signal.SIGINT)
+                signals_sent.append("SIGINT")
+                try:
+                    app_returncode = app_process.wait(timeout=12)
+                    app_graceful = app_returncode == 0
+                except psutil.TimeoutExpired:
+                    app_process.send_signal(signal.SIGTERM)
+                    signals_sent.append("SIGTERM")
+                    try:
+                        app_returncode = app_process.wait(timeout=3)
+                    except psutil.TimeoutExpired:
+                        app_process.kill()
+                        signals_sent.append("SIGKILL")
+                        app_returncode = app_process.wait(timeout=3)
+        except psutil.NoSuchProcess:
+            app_returncode = None
+    if supervisor.poll() is None:
+        try:
+            supervisor.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            _stop(supervisor)
+    app_stopped = app_process is None
+    if app_process is not None:
+        try:
+            app_stopped = not app_process.is_running()
+        except psutil.NoSuchProcess:
+            app_stopped = True
+    if app_returncode is None and supervisor.returncode is not None:
+        # Samply is the app's parent; the profiling driver cannot reap its grandchild.
+        app_returncode = supervisor.returncode
+    app_graceful = (
+        app_graceful
+        or ("SIGINT" in signals_sent and app_stopped and supervisor.returncode == 0)
+    )
+    return {
+        "returncode": app_returncode,
+        "signals": signals_sent,
+        "graceful": app_graceful,
+        "samply_returncode": supervisor.returncode,
+    }
+
+
 def _runtime_identity(python: Path) -> dict:
     code = """
 import hashlib, importlib, importlib.metadata, json, pathlib, platform, sys
@@ -231,6 +363,27 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
     port = http_bench._port()
     server_command = http_bench._command(server_definition, app, port, python)
     client_command = http_bench._client_command(port, args.duration, args.concurrency, definition["client"])
+    server_profile_path = output / "server.profile.json.gz"
+    sampler_version = (
+        subprocess.check_output([str(SAMPLY), "--version"], text=True).strip()
+        if args.sampler == "samply"
+        else None
+    )
+    if args.sampler == "samply":
+        server_launch_command = [
+            str(SAMPLY),
+            "record",
+            "--save-only",
+            "--no-open",
+            "--duration",
+            str(args.sample_duration),
+            "--output",
+            str(server_profile_path),
+            "--",
+            *server_command,
+        ]
+    else:
+        server_launch_command = server_command
     receipt.update(
         {
             "server": server_name,
@@ -242,12 +395,24 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
             "load_duration_seconds": args.duration,
             "sample_duration_seconds": args.sample_duration,
             "sample_delay_seconds": args.sample_delay,
+            "profile_capture_window": (
+                "server launch through profile duration; includes startup and warmup"
+                if args.sampler == "samply"
+                else "Apple sample starts after the configured delay following load start"
+            ),
             "sample_interval_ms": args.interval_ms,
             "warmup_duration_seconds": args.warmup,
-            "commands": {"server": server_command, "client": client_command},
+            "commands": {
+                "server": server_command,
+                "server_launch": server_launch_command,
+                "client": client_command,
+            },
+            "sampler": args.sampler,
+            "sampler_version": sampler_version,
         }
     )
     server = client = sampler = None
+    app_server = None
     server_log = output / "server.log"
     sample_path = output / "server.sample.txt"
     client_stdout = output / "client.stdout.json"
@@ -263,10 +428,23 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
         (output / "sample.stderr.log").open("w", encoding="utf-8") as sample_err,
     ):
         try:
+            if args.sampler == "samply":
+                receipt["sample_started_at"] = _now()
             server = subprocess.Popen(
-                server_command, cwd=ROOT, env=env, stdout=log, stderr=log, text=True, start_new_session=True
+                server_launch_command,
+                cwd=ROOT,
+                env=env,
+                stdout=log,
+                stderr=log,
+                text=True,
+                start_new_session=True,
             )
-            receipt["server_pid"] = server.pid
+            if args.sampler == "samply":
+                app_server = _find_profiled_python(server, python)
+                receipt["server_supervisor_pid"] = server.pid
+                receipt["server_pid"] = app_server.pid
+            else:
+                receipt["server_pid"] = server.pid
             http_bench._wait_ready(server, port, log)
             if args.warmup:
                 command = http_bench._client_command(port, args.warmup, args.concurrency, definition["client"])
@@ -290,30 +468,33 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
                 client_command, cwd=ROOT, stdout=client_out, stderr=client_err,
                 text=True, start_new_session=True,
             )
-            time.sleep(args.sample_delay)
+            if args.sampler == "apple":
+                time.sleep(args.sample_delay)
             if server.poll() is not None or client.poll() is not None:
                 raise RuntimeError("server or load client exited before sampling began")
-            sample_command = [
-                str(SAMPLE), str(server.pid), str(args.sample_duration), str(args.interval_ms), "-file", str(sample_path)
-            ]
-            receipt["commands"]["sample"] = sample_command
-            receipt["sample_started_at"] = _now()
-            sampler = subprocess.Popen(
-                sample_command, cwd=ROOT, stdout=sample_out, stderr=sample_err,
-                text=True, start_new_session=True,
-            )
-            deadline = time.monotonic() + args.sample_duration + 15
-            while sampler.poll() is None:
-                if server.poll() is not None or client.poll() is not None:
-                    raise RuntimeError("server or load client exited before Apple sample completed")
-                if time.monotonic() > deadline:
-                    raise TimeoutError("Apple sample did not finish within its diagnostic deadline")
-                time.sleep(0.1)
-            receipt["sample_finished_at"] = _now()
-            receipt["sample_returncode"] = sampler.returncode
-            if sampler.returncode != 0:
-                raise RuntimeError("Apple sample returned nonzero; see sample.stderr.log")
-            receipt["sample_summary"] = _sample_summary(sample_path, server.pid, args.interval_ms)
+            if args.sampler == "apple":
+                sample_command = [
+                    str(SAMPLE), str(server.pid), str(args.sample_duration), str(args.interval_ms),
+                    "-file", str(sample_path),
+                ]
+                receipt["commands"]["sample"] = sample_command
+                receipt["sample_started_at"] = _now()
+                sampler = subprocess.Popen(
+                    sample_command, cwd=ROOT, stdout=sample_out, stderr=sample_err,
+                    text=True, start_new_session=True,
+                )
+                deadline = time.monotonic() + args.sample_duration + 15
+                while sampler.poll() is None:
+                    if server.poll() is not None or client.poll() is not None:
+                        raise RuntimeError("server or load client exited before Apple sample completed")
+                    if time.monotonic() > deadline:
+                        raise TimeoutError("Apple sample did not finish within its diagnostic deadline")
+                    time.sleep(0.1)
+                receipt["sample_finished_at"] = _now()
+                receipt["sample_returncode"] = sampler.returncode
+                if sampler.returncode != 0:
+                    raise RuntimeError("Apple sample returned nonzero; see sample.stderr.log")
+                receipt["sample_summary"] = _sample_summary(sample_path, server.pid, args.interval_ms)
             client.wait(timeout=args.duration + 20)
             client_out.flush()
             receipt["load_finished_at"] = _now()
@@ -330,11 +511,18 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
                 raise RuntimeError("source, native extension, or load client changed during profiling")
         finally:
             cleanup_errors = []
-            for name, process in (("sample", sampler), ("client", client), ("server", server)):
+            for name, process in (("sample", sampler), ("client", client)):
                 try:
                     receipt.setdefault("cleanup", {})[name] = _stop(process, graceful=name == "server")
                 except (OSError, subprocess.SubprocessError) as error:
                     cleanup_errors.append(f"{name}: {type(error).__name__}: {error}")
+            try:
+                if args.sampler == "samply":
+                    receipt.setdefault("cleanup", {})["server"] = _stop_samply_server(server, app_server)
+                else:
+                    receipt.setdefault("cleanup", {})["server"] = _stop(server, graceful=True)
+            except (OSError, subprocess.SubprocessError, psutil.Error) as error:
+                cleanup_errors.append(f"server: {type(error).__name__}: {error}")
             if cleanup_errors:
                 receipt["cleanup_errors"] = cleanup_errors
             log.flush()
@@ -358,9 +546,24 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
                 for path in sorted(output.glob("*"))
                 if path.is_file() and path.name != "profile-receipt.json"
             }
+            if args.sampler == "samply" and server_profile_path.is_file():
+                try:
+                    receipt["sample_summary"] = _samply_summary(
+                        server_profile_path,
+                        int(receipt["server_pid"]),
+                    )
+                    receipt["sample_finished_at"] = _now()
+                except (OSError, RuntimeError, json.JSONDecodeError, gzip.BadGzipFile) as error:
+                    receipt["profile_validation_error"] = f"{type(error).__name__}: {error}"
     shutdown = receipt.get("cleanup", {}).get("server")
     if shutdown is None or not shutdown["graceful"]:
         raise RuntimeError("server did not exit successfully after its initial SIGINT")
+    if args.sampler == "samply" and (
+        shutdown.get("samply_returncode") != 0
+        or receipt.get("profile_validation_error")
+        or not receipt.get("sample_summary", {}).get("sample_count")
+    ):
+        raise RuntimeError("Samply did not produce a valid profile; see profile-receipt.json")
     if receipt.get("cleanup_errors"):
         raise RuntimeError("a profiling subprocess could not be reaped")
     if receipt["server_error_diagnostic"]:
@@ -380,25 +583,44 @@ def main() -> int:
     parser.add_argument("--http", choices=("h11", "httptools"), default="httptools", help="Uvicorn HTTP implementation")
     parser.add_argument("--workload", choices=PROFILE_WORKLOADS, default="fixed")
     parser.add_argument("--duration", type=float, default=10.0, help="load duration in seconds")
-    parser.add_argument("--sample-duration", type=int, default=6, help="Apple sample duration in seconds")
-    parser.add_argument("--sample-delay", type=float, default=1.0, help="delay after load starts, in seconds")
+    parser.add_argument("--sample-duration", type=int, default=6, help="profile capture duration in seconds")
+    parser.add_argument(
+        "--sample-delay",
+        type=float,
+        default=1.0,
+        help="Apple sample delay after load starts; Samply records from server launch",
+    )
     parser.add_argument("--interval-ms", type=int, default=1, help="Apple sample interval in milliseconds")
+    parser.add_argument(
+        "--sampler",
+        choices=("apple", "samply"),
+        default="apple",
+        help="Apple sample (wall-time stacks) or Samply (on/off-CPU profile; requires samply)",
+    )
     parser.add_argument("--warmup", type=float, default=1.0)
     parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--native-client", type=Path, help="existing maintained HTTP client; skip compilation")
     parser.add_argument("--output-dir", type=Path, required=True, help="new directory for receipt and diagnostic artifacts")
     args = parser.parse_args()
-    if platform.system() != "Darwin" or not SAMPLE.is_file():
-        parser.error("this diagnostic driver requires macOS /usr/bin/sample")
+    if platform.system() != "Darwin":
+        parser.error("this diagnostic driver currently requires macOS")
+    if args.sampler == "apple" and not SAMPLE.is_file():
+        parser.error("the Apple sampler requires macOS /usr/bin/sample")
+    if args.sampler == "samply" and SAMPLY is None:
+        parser.error("--sampler samply requires the Samply profiler on PATH")
     if not http_bench.DEFAULT_PYTHON.is_file():
         parser.error("create .venv and install the benchmark dependency group first")
     if (
         not all(math.isfinite(value) for value in (args.duration, args.sample_delay, args.warmup))
         or args.sample_duration < 1 or args.interval_ms < 1 or args.concurrency < 1
         or args.sample_delay < 0 or args.warmup < 0
-        or args.duration < args.sample_delay + args.sample_duration + 2
+        or (args.sampler == "apple" and args.duration < args.sample_delay + args.sample_duration + 2)
+        or (args.sampler == "samply" and args.sample_duration < args.duration + args.warmup + 3)
     ):
-        parser.error("use finite nonnegative delays, positive sample/concurrency values, and at least two seconds of load after sampling")
+        parser.error(
+            "Apple sample needs two seconds of load after its capture; Samply capture duration "
+            "must cover load duration, warmup, and three seconds for server startup"
+        )
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=False)
     receipt_path = output / "profile-receipt.json"
@@ -410,7 +632,7 @@ def main() -> int:
         "timing_valid": False,
         "performance_evidence_status": "not_applicable",
         "note": (
-            "Apple sample perturbs scheduling. Raw client JSON timing fields are retained "
+            "Sampling perturbs scheduling. Raw client JSON timing fields are retained "
             "only as diagnostic artifacts and must not enter benchmark summaries or speed claims."
         ),
         "correctness_gate": "every response status and complete payload exactly matches the maintained workload oracle",

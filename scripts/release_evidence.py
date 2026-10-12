@@ -188,7 +188,7 @@ def wheel_platform(tag: str) -> str:
 
 def package_metadata(data: bytes, version: str) -> object:
     metadata = BytesParser(policy=policy.default).parsebytes(data)
-    for key, expected in (("Name", "uvicorn-rs"), ("Version", version),
+    for key, expected in (("Name", "uvicorn-rs-py"), ("Version", version),
                           ("License-Expression", LICENSE_EXPRESSION), ("Requires-Python", ">=3.9")):
         if metadata.get_all(key) != [expected]:
             raise ValueError(f"package metadata {key} must be exactly {expected!r}")
@@ -202,13 +202,13 @@ def package_metadata(data: bytes, version: str) -> object:
 
 
 def inspect_wheel(path: Path, version: str, expected_platform: str | None = None) -> dict:
-    match = re.fullmatch(r"uvicorn_rs-([0-9.]+)-cp39-abi3-(.+)\.whl", path.name)
+    match = re.fullmatch(r"uvicorn_rs_py-([0-9.]+)-cp39-abi3-(.+)\.whl", path.name)
     if match is None or match[1] != version:
         raise ValueError(f"unexpected wheel name/version/ABI floor: {path.name}")
     platform_name = wheel_platform(match[2])
     if expected_platform is not None and platform_name != expected_platform:
         raise ValueError(f"wheel platform differs from requested producer: {path.name}")
-    prefix = f"uvicorn_rs-{version}.dist-info"
+    prefix = f"uvicorn_rs_py-{version}.dist-info"
     with zipfile.ZipFile(path) as archive:
         entries = archive.infolist()
         names = [safe_member(entry.filename) for entry in entries]
@@ -276,9 +276,9 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
 
 
 def inspect_sdist(path: Path, version: str) -> dict:
-    if path.name != f"uvicorn_rs-{version}.tar.gz":
+    if path.name != f"uvicorn_rs_py-{version}.tar.gz":
         raise ValueError(f"unexpected source archive name: {path.name}")
-    prefix = f"uvicorn_rs-{version}/"
+    prefix = f"uvicorn_rs_py-{version}/"
     contents = {}
     seen = set()
     with tarfile.open(path, "r:gz") as archive:
@@ -394,8 +394,8 @@ def record(args: argparse.Namespace) -> None:
     expected = {wheel["filename"], f"consumer-{args.platform}.json"}
     packages = {wheel["filename"]: wheel}
     if args.platform == "linux-x86_64":
-        expected |= {f"uvicorn_rs-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json"}
-        sdist = inspect_sdist(directory / f"uvicorn_rs-{version}.tar.gz", version)
+        expected |= {f"uvicorn_rs_py-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json"}
+        sdist = inspect_sdist(directory / f"uvicorn_rs_py-{version}.tar.gz", version)
         packages[sdist["filename"]] = sdist
         validate_source_consumer(load_json(directory / "consumer-sdist.json"), version, sdist)
         validate_packaged_parity(directory / "parity-linux-x86_64.json", wheel["native"]["sha256"])

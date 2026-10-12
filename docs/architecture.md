@@ -1,12 +1,25 @@
 # Architecture and buffer ownership
 
-The current 494-case matrix passes attribution and three full repeats. It
-contains 240 live oracle comparisons and 254 target-only contracts. Native
-coverage is 5,298/5,298 regions and 3,753/3,753 lines, with zero Coverage-MCP
-gaps. The normal non-instrumented local build passes all 240 public parity
-cases. See the [current source/build receipt](coverage.md#current-full-verification-494-cases). Older 485-, 451-,
-and 448-case results below are historical and do not attest the current
-checkout.
+This document describes the current PyO3/ASGI implementation distributed as
+`uvicorn-rs-py`. The separate `uvicorn-rs` crate is Python-free and is not yet
+used by this Python server path; the adapter still carries its earlier network
+implementation. ADR 0003 records the target transport consolidation. The
+previous root Python distribution and CLI names are not compatibility
+requirements.
+
+For the proposed Rust-native integration with Starlette-RS and FastAPI-RS, see
+the [detailed architecture diagram](rust-native-integration-architecture.html).
+
+The latest local full ASGI-adapter matrix is dated 2026-10-12. It contains
+243 live oracle comparisons and 268 target-only fault/support contracts; the
+current dirty source passed attribution and three full repeats with
+5,561/5,561 regions and 3,997/3,997 lines. This verifies the recorded current
+`src/lib.rs` hash, but not a clean hosted release or the separate native crate.
+No normal-build parity run was included. See the
+[coverage evidence](coverage.md#latest-local-evidence-2026-10-12) and the
+[current candidate-wheel smoke](../benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
+Older 506-, 494-, 485-, 451-, and 448-case results below are historical and do not
+attest the current checkout.
 
 ## Runtime boundary
 
@@ -25,7 +38,7 @@ flowchart LR
     A -->|receive / send| B
 ```
 
-The CLI imports `module:attribute`, selects asyncio or optional uvloop, and
+The `uvicorn-rs-py` CLI imports `module:attribute`, selects asyncio or optional uvloop, and
 starts the Rust server from that event loop. PyO3's asyncio integration
 dispatches ASGI calls back to the captured loop. Application code never runs on
 Tokio workers. The Python bridge wraps Rust-backed `receive()` and `send()`
@@ -129,7 +142,7 @@ allocation, dynamic dispatch or unsafe Rust. It does not change ASGI message
 ordering, Python task/context ownership or backpressure. TLS still encrypts
 and buffers data; forwarding vectored capability does not make TLS copy-free.
 See [the investigation](performance-investigation-2026-10-05.md) and the
-[source-bound coverage receipt](coverage.md#current-full-verification-448-cases).
+[source-bound coverage receipt](coverage.md#historical-full-verification-448-cases-shared-write-source).
 
 ## Streaming and backpressure
 
@@ -238,7 +251,7 @@ matrix's fresh full verification covers both through this case and passes all
 termination/cancellation; the probe's `stream_reset` error convention alone
 does not identify a QUIC `RESET_STREAM` frame. See the
 [workflow contract](parity.md#current-http3-workflows) and
-[source-bound status](coverage.md#current-evidence-status).
+[source-bound status](coverage.md#latest-local-evidence-2026-10-12).
 
 ## Shutdown ownership and stages
 
@@ -268,9 +281,23 @@ HTTP request-body readers have their own server-owned `JoinSet`; H1, H2 and H3
 handlers register a pump before starting the corresponding ASGI request task.
 Each pump observes server shutdown, connection closure and its request-scoped
 cancellation token. H1 drains remaining frames after the ASGI receive channel
-closes so the connection can finish request framing and remain reusable. H2
-request cancellation signals the token so the bridge can expose
-`http.disconnect`; H3 stream errors and closed receivers end the request pump.
+closes so the connection can finish request framing and remain reusable. In
+the existing PyO3 ASGI path, H2 request cancellation signals the token so the
+bridge can expose `http.disconnect`; the H2 reset parity cases exercise that
+behavior. The separate native Tower service now exposes a request-scoped
+`RequestLifetime` and connection-scoped `ConnectionLifetime`. Its H2 live case
+observes `ServiceFutureDropped` after a reset, confirms the connection remains
+open, and serves a recovery request on that connection. A separate H1 case
+half-closes only the peer's write side, then verifies the response body arrives
+while the connection-lifetime handle remains open. Hyper's HTTP/1
+`half_close(true)` setting is enabled. This case is consistent with
+[the note in RFC 9112 §9.6](https://www.rfc-editor.org/rfc/rfc9112.html#section-9.6)
+that a client-side write-half-close does not mean it no longer wants the
+response; it does not exercise the server's staged teardown procedure. This generic reason
+does not identify whether a peer reset, connection error, or server
+cancellation dropped the service future, and it is not ASGI `http.disconnect`.
+H3 idle-reset delivery and HTTP/1 Upgrade session tracking remain open gates.
+H3 stream errors and closed receivers end the request pump in the PyO3 path.
 The server joins all remaining pumps within the unused transport grace period.
 If that deadline expires, it logs the timeout, aborts the pumps, and drains
 their join results before returning from `Server.serve()`. The upload channel
@@ -279,8 +306,9 @@ early responses, abandoned and partial uploads, body errors, disconnects,
 malformed H1 framing, shutdown and healthy sibling/follow-up requests.
 The one-connection HTTP/3 case completes 128 one-byte uploads; its instrumented
 attribution records 128/128 body pumps joined, and each of the three complete
-matrix repeats returns 128/128 responses matching Hypercorn.
-See the [current evidence](coverage.md#current-full-verification-494-cases).
+matrix repeats returns 128/128 responses matching Hypercorn in the recorded
+source snapshot. The current 511-case matrix passes these recorded ASGI
+workflows; see [latest local evidence](coverage.md#latest-local-evidence-2026-10-12).
 
 Lifespan has a dedicated cleanup tracker. Its main native task remains outside
 that tracker while startup and shutdown run, so request cleanup does not wait

@@ -82,6 +82,25 @@ def atomic_json(path, value):
     temporary.replace(path)
 
 
+def bounded_log_excerpt(path, *, max_bytes=8192, max_lines=40):
+    """Return a bounded tail of a failed category log for its run receipt."""
+    try:
+        size_bytes = path.stat().st_size
+        with path.open("rb") as log:
+            log.seek(max(0, size_bytes - max_bytes))
+            tail = log.read(max_bytes).decode("utf-8", errors="replace")
+    except OSError as error:
+        return {"error": f"{type(error).__name__}: {error}"}
+
+    lines = tail.splitlines()[-max_lines:]
+    if size_bytes > max_bytes:
+        lines.insert(0, f"[log tail truncated; showing at most {max_bytes} bytes]")
+    return {
+        "size_bytes": size_bytes,
+        "tail": "\n".join(lines),
+    }
+
+
 def positive_seconds(value):
     number = float(value)
     if not math.isfinite(number) or number <= 0:
@@ -217,7 +236,7 @@ def capture_identity(root, python, evidence_class):
     clients = [root / "tools/http3-probe/target/release" / name for name in PROBE_NAMES]
     for path in clients:
         normal_binary(path)
-    extra_dependencies = {"uvicorn-rs": ["uvicorn_rs"]}
+    extra_dependencies = {"uvicorn-rs-py": ["uvicorn_rs"]}
     try:
         importlib.metadata.distribution("fastapi")
     except importlib.metadata.PackageNotFoundError:
@@ -232,12 +251,12 @@ def capture_identity(root, python, evidence_class):
                                   artifacts_dir=Path(directory),
                                   extra_dependencies=extra_dependencies)
         dependencies = evidence.dependencies_before
-        required = {"uvicorn", "hypercorn", "h11", "h2", "aioquic", "uvloop", "httptools", "websockets", "uvicorn-rs"}
+        required = {"uvicorn", "hypercorn", "h11", "h2", "aioquic", "uvloop", "httptools", "websockets", "uvicorn-rs-py"}
         if fastapi_selected:
             required.update(FASTAPI_BENCHMARK_DISTRIBUTIONS)
         if missing := sorted(required - dependencies.keys()):
             raise RuntimeError(f"frozen benchmark dependencies are missing: {missing}")
-        modified = [name for name, value in dependencies.items() if name != "uvicorn-rs" and
+        modified = [name for name, value in dependencies.items() if name != "uvicorn-rs-py" and
                     (value["record_content_mismatches"] or value["unrecorded_source_files"] or
                      (value["direct_url"] and value["direct_url"].get("dir_info", {}).get("editable")))]
         if modified:
@@ -500,6 +519,21 @@ def main():
                 except Exception as caught:
                     entry["cleanup_error"] = {"type": type(caught).__name__, "message": str(caught)}
                     failed = True
+                cleanup = entry.get("owned_process_cleanup", {})
+                category_failed = (
+                    entry.get("exit_code") not in (None, 0)
+                    or "error" in entry
+                    or "cleanup_error" in entry
+                    or entry.get("correctness_failures", 0) > 0
+                    or entry.get("exact_planned_rows_present") is False
+                    or entry.get("category_identity_stable") is False
+                    or str(entry.get("report_state", "")).startswith("incomplete")
+                    or cleanup.get("forced") is True
+                    or cleanup.get("returncode") not in (None, 0)
+                    or bool(cleanup.get("owned_live_pids"))
+                )
+                if category_failed:
+                    entry["failure_log_excerpt"] = bounded_log_excerpt(out / f"{label}.log")
                 process = None
                 entry.setdefault("finished_at", utc_now())
                 atomic_json(checkpoint, record)

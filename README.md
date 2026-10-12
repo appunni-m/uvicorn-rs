@@ -2,37 +2,86 @@
 
 [![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-DB61A2?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/appunni-m)
 
-An independent Rust network server for Python ASGI 3 applications. Rust handles
-listeners, HTTP/1.1, HTTP/2, experimental HTTP/3, WebSocket transport, flow
-control, and shutdown. Python loads the application and keeps ownership of its
-asyncio event loop and ASGI tasks.
+The target product is a Rust-native server crate named `uvicorn-rs`, with an
+optional thin Python compatibility client named `uvicorn-rs-py`. Native
+FastAPI-RS applications should compose FastAPI-RS → Starlette-RS → Uvicorn-RS
+entirely in Rust. Python ASGI applications use `uvicorn-rs-py`; their callables
+remain on the Python event loop and cross the Python boundary as ASGI requires.
+
+The Cargo workspace now has distinct package identities: the Python extension
+is `uvicorn-rs-py`, and the Python-free Tower server library is `uvicorn-rs`.
+This is an intermediate migration step, not completion of the thin-client
+architecture: the Python extension still contains its earlier network stack
+and is not yet routed through the native server. The next implementation gate
+is to converge on one transport and make `uvicorn-rs-py` only the ASGI bridge.
+There is no requirement to preserve the old `uvicorn-rs` Python distribution,
+import path, Cargo shape, or CLI name.
 
 This remains an experimental prototype, not a demonstrated faster replacement
-for Uvicorn. The latest upstream FastAPI benchmark completed H1, H2, WebSocket,
-and lifecycle correctness and qualified 32 workload/loop comparisons. Results
-vary by workload: ordinary H1 routes, large responses, H2 small-chunk uploads,
-and WebSocket echo regress, while H2 large responses and WebSocket handshakes
-favor the Rust server. A separate default 1 MiB H1 upload measured 0.458× and
-0.563× Uvicorn throughput under asyncio and uvloop. The performance scope has
-been revised; see the [complete results](docs/benchmark-results.md) and
+for Uvicorn. The latest completed full upstream FastAPI comparison is the
+2026-10-09 run: it qualified 32 workload/loop comparisons across H1, H2,
+WebSockets, and lifecycle. Results vary by workload: ordinary H1 routes, large
+responses, H2 small-chunk uploads, and WebSocket echo regress, while H2 large
+responses and WebSocket handshakes favor the Rust server. A separate default
+1 MiB H1 upload measured 0.458× and 0.563× Uvicorn throughput under asyncio
+and uvloop. Later source-bound batches and the 2026-10-12 hosted matrix remain
+partial, so they do not establish a complete current-source multi-system
+result. See the [complete results](docs/benchmark-results.md),
+[benchmark status](docs/benchmark-status.md), and
 [feasibility report](docs/feasibility.md).
 
-The latest local black-box evidence covers 494 cases: 240 live oracle
-comparisons and 254 target-only contracts. All attribution cases and three
-complete repeats passed; the report records 5,298/5,298 Rust regions and
-3,753/3,753 lines covered. The normal wheel also passed all 240 public parity
-cases. The exact source-bound evidence and its limits are in the [coverage
-report](docs/coverage.md#current-full-verification-494-cases).
-Hosted package and Python-floor checks passed on commit `a78b4a9`; a verified
-candidate bundle for the current source has not been assembled. The complete
-official ASGI conformance suite and a production security review have not been
-run. The [support matrix](docs/support-matrix.md) records tested behavior,
-known deviations, and exclusions.
+The latest local ASGI-adapter evidence is dated 2026-10-12: 511 cases,
+comprising 243 live oracle comparisons and 268 target-only contracts, passed
+attribution and three complete repeats. The dirty source snapshot measured
+5,561/5,561 Rust regions and 3,997/3,997 lines; Coverage-MCP found zero missing
+groups with matching source/build and test receipts. This is local evidence,
+not a clean hosted release result, and covers `src/lib.rs` only. The separate
+Python-free `uvicorn-rs` crate is not yet the Python adapter's transport
+backend. See the [support matrix](docs/support-matrix.md) and
+[coverage report](docs/coverage.md). A narrower `uvicorn-rs-py` candidate-wheel
+smoke passed; see its [receipt](benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
+The Python-free `uvicorn-rs` crate has body-aware Tower service entry points for
+HTTP/1.1, HTTP/2, TLS over TCP, and HTTP/3 over a caller-configured Quinn
+endpoint. The current 36-case live contract passed three sequential runs
+(108/108) on macOS ARM64; see the [request-lifetime receipt](benchmarks/results/2026-10-12/native-request-lifetime-live/report.md).
+It includes HTTP/3 request/response trailers, streaming, finite slow-reader
+backpressure, graceful drain, provisional native startup/shutdown hooks, an
+HTTP/2 request-lifetime signal case, and an HTTP/1 client half-close case.
+The earlier [package-promotion receipt](benchmarks/results/2026-10-12/native-package-promotion-live/report.md)
+retains the 34-case package-move result.
+These are target-only native-server contracts, not full protocol conformance or
+performance results. An archived 17-input FastAPI-native → Starlette-RS →
+earlier Uvicorn-RS core receipt records
+three repeats (51/51) on an earlier dirty, path-linked sibling snapshot,
+including request-body progress before upload completion over cleartext H1 and
+H2. The current example refers to a sibling `fastapi-rs-native` crate that is
+absent from the checked-out source, so that composition is not currently
+reproducible. This is historical target-only evidence, not Python FastAPI
+parity or a speed result. The native prototype is now the `uvicorn-rs` Cargo
+package, and the Python extension is distributed as `uvicorn-rs-py`. The
+Python adapter still has its earlier transport implementation and is not yet
+backed by the native server. See the
+[promoted-package live contract receipt](benchmarks/results/2026-10-12/native-package-promotion-live/report.md),
+[historical pre-promotion receipt](benchmarks/results/2026-10-12/native-core-http3-live/report.json),
+[native composition receipt](benchmarks/results/2026-10-12/native-fastapi-h2-streaming-composition/report.md),
+[coverage report](docs/coverage.md#latest-local-evidence-2026-10-12), and
+[support matrix](docs/support-matrix.md).
+Hosted CI run [38087300590](https://github.com/appunni-m/uvicorn-rs/actions/runs/38087300590)
+passed all eight gates on clean commit `16ed349`, before the current dirty core
+prototype. The complete official ASGI conformance suite and production
+security review have not been run.
 
 `uvicorn-rs` is the project name used by the supplied GitHub repository and is
-not affiliated with the Uvicorn project. `starlette-rs` is an optional,
-separately installed ASGI application; this server neither depends on nor
-bundles it.
+not affiliated with the Uvicorn project. The native server will remain
+independent of Starlette-RS. Rust applications compose the two through the
+server-neutral service contract; optional `uvicorn-rs-py`, `starlette-rs-py`,
+and `fastapi-rs-py` clients own Python compatibility and version-specific
+adaptation. Each client will publish its own tested version combinations:
+`uvicorn-rs-py` for Python/runtime and ASGI support, `starlette-rs-py` for
+Starlette integration, and `fastapi-rs-py` for FastAPI/Starlette integration.
+Uvicorn CLI/API compatibility is separate from accepting standard ASGI apps;
+oracle versions do not imply a drop-in API guarantee, and the matrices will
+list tested combinations rather than every possible version pairing.
 
 ## Try it locally
 
@@ -44,7 +93,7 @@ checks are still pending. From a checkout:
 
 ```sh
 uv sync --python 3.12
-uv run uvicorn-rs examples.hello_asgi:app --host 127.0.0.1 --port 8000
+uv run uvicorn-rs-py examples.hello_asgi:app --host 127.0.0.1 --port 8000
 ```
 
 In another terminal:
@@ -53,7 +102,9 @@ In another terminal:
 curl http://127.0.0.1:8000/
 ```
 
-The CLI loads an importable `module:attribute` and serves one ASGI application.
+This command exercises the current Python ASGI adapter. It loads an importable
+`module:attribute` and serves one ASGI application. Its transport has not yet
+been consolidated with the native `uvicorn-rs` server crate.
 HTTPS and HTTP/3 are enabled together when both `--certfile` and `--keyfile` are
 provided. For all supported arguments, defaults, API behavior, and signal
 handling, see [configuration](docs/configuration.md). See
@@ -63,6 +114,14 @@ guidance and isolated Starlette compatibility probes.
 ## What is implemented
 
 - HTTP/1.1, HTTP/2, and experimental HTTP/3 over TCP/TLS and QUIC.
+- A Python-free service prototype, now packaged as `uvicorn-rs`, for HTTP/1.1,
+  HTTP/2, TCP/TLS, and HTTP/3 over a caller-configured Quinn endpoint. It has
+  a local Rust-native Starlette/FastAPI example over H1/H2, including request
+  body progress before upload completion on both protocols. It is not
+  integrated with the Python ASGI CLI; sibling-source examples are not pinned
+  release artifacts. The optional native lifecycle hook is a provisional Rust
+  contract, not ASGI lifespan. See the [composition receipt](benchmarks/results/2026-10-12/native-fastapi-h2-streaming-composition/report.md)
+  and [lifecycle receipt](benchmarks/results/2026-10-12/native-core-lifecycle-live/report.md).
 - HTTP request and response streaming with bounded message queues.
 - HTTP/1.1 WebSocket upgrade and ASGI WebSocket messages.
 - ASGI lifespan, request disconnect events, task cancellation, and graceful
@@ -116,6 +175,7 @@ the license texts retain the original Uvicorn and Hypercorn notices.
 ## Documentation map
 
 - [Architecture decision record](docs/adr/0001-runtime-and-asyncio-bridge.md)
+- [Rust-native service contract ADR](docs/adr/0003-rust-native-service-contract.md)
 - [Architecture and memory ownership](docs/architecture.md)
 - [CLI and Python API reference](docs/configuration.md)
 - [Deployment and framework integration](docs/deployment.md)

@@ -9,6 +9,28 @@ or create or move tags. The project is licensed under
 
 ## Current state
 
+**Latest all-gates passing CI state (2026-10-11).** Hosted CI
+[run 38087300590](https://github.com/appunni-m/uvicorn-rs/actions/runs/38087300590)
+passed all eight jobs on clean commit `16ed349f0d1528b8e6f42536b3d406ce17799915`:
+Rust quality and docs, the exact Rust minimum, installed-wheel parity, unified
+parity/fault contracts and 100% native coverage, Linux/macOS/Windows package
+jobs, and the declared Python-floor wheel.
+
+The latest hosted ASGI performance matrix,
+[38122909359](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359),
+validated only a partial matrix: all three platform jobs stopped during the
+sequential category step, so it produced no complete multi-system performance
+result. Its docs-update job also failed in the final pull-request step; the
+step log requires sign-in, so the exact error remains unknown. See the
+[benchmark status](benchmark-status.md) for the retained evidence. The
+public GitHub API currently lists no [releases](https://github.com/appunni-m/uvicorn-rs/releases)
+or [tags](https://github.com/appunni-m/uvicorn-rs/tags). Locally, `main` is at
+`3dcaeaa0caf47aca96412d15451ac6a1123ebb04`, three commits behind `origin/main` at `9b2d8aaf3216`,
+with a dirty worktree; no release candidate has been assembled from it.
+
+The following run-by-run notes are historical attempts, not the current
+release-candidate status.
+
 CI #54
 ([run 38045596633](https://github.com/appunni-m/uvicorn-rs/actions/runs/38045596633))
 on `a93cdff` passed Rust quality, Rust 1.85, and installed-wheel parity
@@ -65,13 +87,18 @@ A clean local wheel from the same commit passed the case 60/60 times. See the
 [reproduction receipt](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md).
 The checkout remains dirty and no release candidate is ready to assemble.
 
-Local dirty-working-tree evidence is useful but does not qualify a release:
-Coverage-MCP reports 5,532/5,532 regions and 3,974/3,974 lines for its
-matching current-source receipt, and the stock FastAPI matrix includes
-correctness-gated multi-protocol measurements. These results do not come from
-a clean exact-main candidate with successful hosted gates. No tag or release
-was created. See [coverage](coverage.md) and
-[benchmark status](benchmark-status.md) for evidence and limits.
+Local dirty-working-tree evidence is useful but does not qualify a release.
+The latest local ASGI coverage receipt records 5,561/5,561 regions and
+3,997/3,997 lines for the dirty 2026-10-12 source, with three complete 511-case
+repeats and no Coverage-MCP gaps. It does not provide hosted or clean-commit
+release evidence, and no normal-build parity run was included. A 2026-10-12
+`uvicorn-rs-py` candidate wheel passed a narrower local consumer smoke, recorded
+in the [wheel receipt](../benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
+The stock FastAPI matrix also includes correctness-gated multi-protocol
+measurements. These results do not come from a clean exact-main candidate with
+successful hosted gates. No tag or release was created. See
+[coverage](coverage.md) and [benchmark status](benchmark-status.md) for
+evidence and limits.
 
 The original workflow revisions passed local Actionlint validation; action
 SHAs were checked against their upstream GitHub revisions. Hosted runs #36 and

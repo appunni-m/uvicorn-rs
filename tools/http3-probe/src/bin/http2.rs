@@ -10,6 +10,7 @@ use h2::client::SendRequest;
 use http::{Request, Uri};
 use serde_json::{json, Value};
 use tokio::net::TcpStream;
+use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 use tokio_rustls::rustls::{self, pki_types::ServerName};
 use tokio_rustls::TlsConnector;
@@ -149,7 +150,7 @@ async fn connect_h2(
     host: &str,
     port: u16,
     connector: &TlsConnector,
-) -> Result<SendRequest<Bytes>, BenchError> {
+) -> Result<(SendRequest<Bytes>, JoinHandle<Result<(), h2::Error>>), BenchError> {
     let socket = TcpStream::connect(SocketAddr::new(host.parse()?, port)).await?;
     let tls = connector
         .connect(ServerName::try_from("localhost")?, socket)
@@ -158,10 +159,8 @@ async fn connect_h2(
         return Err("TLS did not negotiate HTTP/2 with ALPN".into());
     }
     let (sender, connection) = h2::client::handshake(tls).await?;
-    tokio::spawn(async move {
-        let _ = connection.await;
-    });
-    Ok(sender)
+    let driver = tokio::spawn(connection);
+    Ok((sender, driver))
 }
 
 async fn run(config: Value) -> Result<Value, BenchError> {
@@ -221,8 +220,11 @@ async fn run(config: Value) -> Result<Value, BenchError> {
     tls_config.alpn_protocols = vec![b"h2".to_vec()];
     let connector = TlsConnector::from(Arc::new(tls_config));
     let mut senders = Vec::with_capacity(connections);
+    let mut connection_drivers = Vec::with_capacity(connections);
     for _ in 0..connections {
-        senders.push(connect_h2(host, port, &connector).await?);
+        let (sender, driver) = connect_h2(host, port, &connector).await?;
+        senders.push(sender);
+        connection_drivers.push(driver);
     }
 
     let deadline = Instant::now() + Duration::from_secs_f64(seconds);
@@ -292,6 +294,24 @@ async fn run(config: Value) -> Result<Value, BenchError> {
         response_bytes += received;
         response_data_frames += worker_data_frames;
         failures.extend(worker_failures);
+    }
+    // Let h2 observe that all request senders are gone so it can send GOAWAY,
+    // flush TLS shutdown, and report any connection error before the runtime exits.
+    drop(senders);
+    for mut driver in connection_drivers {
+        match timeout(Duration::from_secs(5), &mut driver).await {
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(error))) => {
+                failures.push(format!("HTTP/2 connection driver failed: {error}"))
+            }
+            Ok(Err(error)) => {
+                failures.push(format!("HTTP/2 connection driver task failed: {error}"))
+            }
+            Err(_) => {
+                driver.abort();
+                failures.push("HTTP/2 connection driver did not shut down after sender drop".into())
+            }
+        }
     }
     latencies.sort_by(f64::total_cmp);
     let requests = latencies.len();
