@@ -747,6 +747,14 @@
       "ready_path": "/ready"
     },
     {
+      "id": "native.lifecycle-server-timeout-still-completes-successful-shutdown",
+      "protocol": "http3",
+      "operation": "native-lifecycle-server-timeout",
+      "path": "/hold",
+      "graceful_timeout_ms": 25,
+      "expected_error_display": "active connections exceeded the graceful-shutdown deadline"
+    },
+    {
       "id": "native.lifecycle-service-and-response-body-errors-observed",
       "protocol": "http/1.1",
       "operation": "native-lifecycle-service-and-response-body-errors",

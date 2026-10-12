@@ -1400,6 +1400,9 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
         "native-lifecycle-server-and-shutdown-error" => {
             return run_lifecycle_server_and_shutdown_error_case(case).await;
         }
+        "native-lifecycle-server-timeout" => {
+            return run_lifecycle_server_timeout_case(case).await;
+        }
         "native-lifecycle-service-and-response-body-errors" => {
             return run_lifecycle_service_and_response_body_errors_case(case).await;
         }
@@ -2428,6 +2431,78 @@ async fn run_lifecycle_server_and_shutdown_error_case(case: &Value) -> ProbeResu
     verify_lifecycle_events(case, &fixture.state)
 }
 
+async fn run_lifecycle_server_timeout_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+    let endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
+    let address = endpoint.local_addr()?;
+    let shutdown = fixture.shutdown_receiver.clone();
+    let server = tokio::spawn(uvicorn_rs::serve_http3(
+        endpoint,
+        fixture.app.clone(),
+        shutdown_on_change(shutdown),
+        lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
+    ));
+    let (client_endpoint, mut sender) = new_http3_client(address, &tls_clients.http3).await?;
+    let response_stream = send_http3_request(
+        &mut sender,
+        address,
+        "GET",
+        required_str(case, "path")?,
+        b"",
+    )
+    .await?;
+    let mut active_request = fixture.state.active_request.subscribe();
+    wait_for_lifecycle_signal(
+        &mut active_request,
+        "held HTTP/3 request did not reach the service",
+    )
+    .await?;
+
+    fixture.shutdown_sender.send_replace(true);
+    let server_result = tokio::time::timeout(Duration::from_secs(4), server)
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "HTTP/3 lifecycle timeout server did not stop",
+            )
+        })??;
+    let error = server_result.err().ok_or_else(|| {
+        io::Error::other("HTTP/3 held request did not exceed the shutdown deadline")
+    })?;
+    let expected_display = required_str(case, "expected_error_display")?;
+    if !matches!(&error, uvicorn_rs::ServeError::GracefulShutdownTimedOut)
+        || error.to_string() != expected_display
+        || error.source().is_some()
+    {
+        return Err(io::Error::other(format!(
+            "{}: server timeout error differed: display={:?}, source={:?}",
+            required_str(case, "id")?,
+            error.to_string(),
+            error.source()
+        ))
+        .into());
+    }
+    if !fixture.state.startup_completed.load(Ordering::Acquire)
+        || !fixture.state.shutdown_completed.load(Ordering::Acquire)
+        || fixture.state.requests_started.load(Ordering::Acquire) != 1
+    {
+        return Err(io::Error::other(
+            "HTTP/3 server timeout did not complete application shutdown after cancelling the held request",
+        )
+        .into());
+    }
+
+    client_endpoint.close(
+        quinn::VarInt::from_u32(0),
+        b"lifecycle timeout case complete",
+    );
+    client_endpoint.wait_idle().await;
+    drop(response_stream);
+    verify_lifecycle_events(case, &fixture.state)
+}
+
 async fn run_lifecycle_shutdown_http1_case(
     case: &Value,
     behavior: LifecycleHookBehavior,
@@ -2878,6 +2953,7 @@ fn verify_lifecycle_events(case: &Value, state: &LifecycleState) -> ProbeResult<
         | "native-lifecycle-shutdown-timeout"
         | "native-lifecycle-shutdown-panic"
         | "native-lifecycle-server-and-shutdown-error"
+        | "native-lifecycle-server-timeout"
         | "native-lifecycle-readiness-error" => &["startup", "shutdown"],
         "native-lifecycle-service-and-response-body-errors" => &["startup", "shutdown"],
         operation => {
