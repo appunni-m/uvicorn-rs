@@ -13,6 +13,12 @@ target/
 *.log
 coverage-report*.json*
 *coverage-mcp-*.json*
+# Python coverage data and rendered reports stay local too.
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+coverage.json
 # Benchmark runs write raw measurements, logs, and coverage artifacts here.
 # Existing curated evidence already tracked by Git remains available; new run
 # outputs require an explicit force-add when they are intentionally published.
