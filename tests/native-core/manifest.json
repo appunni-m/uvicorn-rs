@@ -659,6 +659,18 @@
       "expected_server_error": "active connections exceeded the graceful-shutdown deadline"
     },
     {
+      "id": "http3.peer-goaway-drains-cleanly-and-server-remains-available",
+      "protocol": "http3",
+      "operation": "native-http3-peer-goaway-drain",
+      "path": "/ready",
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "covers": ["http3.graceful-shutdown"]
+    },
+    {
       "id": "http1-tls.shutdown-bounds-incomplete-handshake",
       "protocol": "native-core",
       "operation": "native-http1-tls-pending-handshake-shutdown",

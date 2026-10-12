@@ -1242,6 +1242,7 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http3-no-common-alpn-lifecycle-recovery"
             || operation == "native-http3-endpoint-close-lifecycle"
             || operation == "native-http3-idle-connection-shutdown-timeout"
+            || operation == "native-http3-peer-goaway-drain"
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
         {
@@ -1259,6 +1260,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http3_endpoint_close_lifecycle_case(case).await?;
             } else if operation == "native-http3-idle-connection-shutdown-timeout" {
                 run_isolated_http3_idle_connection_shutdown_timeout_case(case).await?;
+            } else if operation == "native-http3-peer-goaway-drain" {
+                run_isolated_http3_peer_goaway_case(case).await?;
             } else if operation == "native-http1-tls-pending-handshake-shutdown" {
                 run_isolated_tls_pending_handshake_shutdown_case(case).await?;
             } else if operation == "graceful-timeout-abort" {
@@ -3338,6 +3341,7 @@ async fn run_cases(
             || operation == "native-http3-no-common-alpn-lifecycle-recovery"
             || operation == "native-http3-endpoint-close-lifecycle"
             || operation == "native-http3-idle-connection-shutdown-timeout"
+            || operation == "native-http3-peer-goaway-drain"
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
         {
@@ -6406,6 +6410,157 @@ async fn run_isolated_http3_graceful_timeout_case(case: &Value) -> ProbeResult<(
         endpoint.wait_idle().await;
     }
     Ok(())
+}
+
+async fn run_isolated_http3_peer_goaway_case(case: &Value) -> ProbeResult<()> {
+    let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+    let server_endpoint =
+        quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
+    let address = server_endpoint.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let server = tokio::spawn(uvicorn_rs::serve_http3(
+        server_endpoint,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            graceful_shutdown_timeout: Duration::from_secs(1),
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let workflow = async {
+        let mut endpoint = quinn::Endpoint::client("127.0.0.1:0".parse::<SocketAddr>()?)?;
+        endpoint.set_default_client_config(tls_clients.http3.clone());
+        let connection = tokio::time::timeout(
+            Duration::from_secs(2),
+            endpoint.connect(address, "localhost")?,
+        )
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "HTTP/3 peer did not connect"))??;
+        let (mut driver, mut sender) =
+            h3::client::new(h3_quinn::Connection::new(connection.clone())).await?;
+        let (goaway_sender, goaway_receiver) = tokio::sync::oneshot::channel();
+        let (goaway_ack_sender, goaway_ack_receiver) = tokio::sync::oneshot::channel();
+        let client_driver = tokio::spawn(async move {
+            let result: ProbeResult<()> = tokio::select! {
+                terminal = std::future::poll_fn(|context| driver.poll_close(context)) => {
+                    Err(io::Error::other(format!(
+                        "HTTP/3 client connection ended before the test sent GOAWAY: {terminal}"
+                    )).into())
+                }
+                requested = goaway_receiver => {
+                    requested.map_err(|_| io::Error::other("HTTP/3 GOAWAY request was cancelled"))?;
+                    driver.shutdown(0).await?;
+                    let _ = goaway_ack_sender.send(());
+                    let _terminal = std::future::poll_fn(|context| driver.poll_close(context)).await;
+                    Ok(())
+                }
+            };
+            result
+        });
+
+        let mut request = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "path")?,
+            b"",
+        )
+        .await?;
+        let (status, body, _) = collect_http3_response(&mut request).await?;
+        if status != required_status(case, "expected_status")?
+            || body != required_str(case, "expected_body")?.as_bytes()
+        {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/3 request did not complete before peer GOAWAY",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        drop(request);
+
+        goaway_sender
+            .send(())
+            .map_err(|_| io::Error::other("HTTP/3 client driver stopped before GOAWAY"))?;
+        tokio::time::timeout(Duration::from_secs(2), goaway_ack_receiver)
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "HTTP/3 GOAWAY was not sent"))?
+            .map_err(|_| io::Error::other("HTTP/3 client driver did not acknowledge GOAWAY"))?;
+
+        let peer_close = tokio::time::timeout(Duration::from_secs(2), connection.closed())
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "server did not close the HTTP/3 connection after peer GOAWAY",
+                )
+            })?;
+        match peer_close {
+            quinn::ConnectionError::ApplicationClosed(close)
+                if close.error_code == quinn::VarInt::from_u32(0) => {}
+            error => {
+                return Err(io::Error::other(format!(
+                    "{}: HTTP/3 peer GOAWAY did not produce a clean connection close: {error:?}",
+                    required_str(case, "id")?
+                ))
+                .into());
+            }
+        }
+
+        tokio::time::timeout(Duration::from_secs(2), client_driver)
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "HTTP/3 client driver did not finish after the clean close",
+                )
+            })???;
+        drop(sender);
+        endpoint.wait_idle().await;
+
+        let (recovery_endpoint, mut recovery_sender) =
+            new_http3_client(address, &tls_clients.http3).await?;
+        let mut recovery = send_http3_request(
+            &mut recovery_sender,
+            address,
+            "GET",
+            required_str(case, "recovery_path")?,
+            b"",
+        )
+        .await?;
+        let (recovery_status, recovery_body, _) = collect_http3_response(&mut recovery).await?;
+        if recovery_status != required_status(case, "recovery_status")?
+            || recovery_body != required_str(case, "recovery_body")?.as_bytes()
+        {
+            return Err(io::Error::other(format!(
+                "{}: a fresh HTTP/3 connection did not recover after peer GOAWAY",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        recovery_endpoint.close(
+            quinn::VarInt::from_u32(0),
+            b"HTTP/3 peer GOAWAY recovery complete",
+        );
+        recovery_endpoint.wait_idle().await;
+        Ok::<(), Box<dyn Error + Send + Sync>>(())
+    }
+    .await;
+
+    shutdown_sender.send_replace(true);
+    let server_result = tokio::time::timeout(Duration::from_secs(4), server).await;
+    workflow?;
+    match server_result {
+        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Err(error))) => Err(error.into()),
+        Ok(Err(error)) => Err(error.into()),
+        Err(_) => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 peer GOAWAY server did not stop",
+        )
+        .into()),
+    }
 }
 
 async fn run_isolated_http3_idle_connection_shutdown_timeout_case(case: &Value) -> ProbeResult<()> {
