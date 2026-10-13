@@ -180,18 +180,25 @@ contract above:
   it has no independent request-close future for an application waiting on an
   unrelated await. A bounded request driver or lower-level stream hook is
   needed; ordinary end-of-body must not be treated as a disconnect.
-- Hyper-util 0.1.21 can hand off HTTP/1 upgrades, but the connection future
-  completes at that handoff. The server then stops accounting for the upgraded
-  session unless it registers and joins that session separately. Graceful
-  shutdown must include upgraded sessions in the same bounded drain/cancel
-  policy before HTTP/1 WebSocket support is claimed.
+- Hyper-util 0.1.21 hands off HTTP/1 upgrades by completing the connection
+  future. The native core now uses `serve_connection_with_upgrades` and exposes
+  `ConnectionUpgrade` on HTTP/1.1 requests. Applications register their
+  `OnUpgrade` task through that handle; the connection task joins registered
+  sessions, signals them at graceful shutdown, and cancels stragglers at the
+  existing server deadline. A focused real-socket case verifies a `101`
+  handoff, data exchange after handoff, an open connection-lifetime signal,
+  shutdown notification, and transport close. This generic upgrade lifecycle
+  case passed once on the local dirty source; it is not WebSocket handshake,
+  framing, protocol conformance, or aggregate coverage evidence. HTTP/1
+  WebSocket support remains unimplemented.
 
 The generic H2 request/connection lifetime signal and its sibling-isolation
-case are implemented. ASGI mapping and task semantics, independent H3 idle-reset
-notification, and tracked HTTP/1 upgraded-session shutdown remain feasibility
-gates, not support claims. Do not route Python ASGI traffic through the native
-transport until the pending-receive disconnect, response-after-EOF, and
-upgraded-session shutdown cases pass the live black-box matrix.
+case are implemented. The native core now has a selected generic HTTP/1
+upgrade-session lifecycle case, but no WebSocket protocol API or ASGI mapping.
+ASGI task semantics and independent H3 idle-reset notification remain
+feasibility gates, not support claims. Do not route Python ASGI traffic through
+the native transport until pending-receive disconnect, response-after-EOF,
+ASGI WebSocket, and upgraded-session shutdown cases pass the live matrix.
 
 ## Alternatives considered
 

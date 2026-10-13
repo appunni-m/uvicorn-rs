@@ -3,21 +3,28 @@
 ## Current acceptance status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests define 511 ASGI
-parity/fault-contract cases and 84 Python-free native cases (595 total).
+parity/fault-contract cases and 85 Python-free native cases (596 total).
 Acceptance requires three complete repeats of both matrices, 100% region and
 line coverage, and zero-gap results from fully paginated Coverage-MCP queries
 bound to the exact report bytes.
 
-The latest full-matrix report is
-`target/asgi-coverage/2026-10-13-current-593-single/coverage-report.json`. It
-was generated from clean commit `4b4abb1003bb98293a721963bed0068c52afe5ad`,
-before the current empty-body case and request-body simplification. All 593
-selected cases passed once, with complete attribution and no failed or
-infrastructure cases. It measured 6,896/6,960 regions and 5,058/5,092 lines;
-one pass does not satisfy the three-repeat gate. Fully paginated
-Coverage-MCP queries matched the report receipt and found 64 missing regions
-and 34 missing lines. Its `tests=failed` status reflects the incomplete
-coverage gate, not a failed matrix case.
+The latest complete-scope report before the shutdown and upgrade changes is
+`target/asgi-coverage/2026-10-14-current-595-single/coverage-report.json`.
+It covers the then-current 511 ASGI and 84 native cases, all passing once with
+complete attribution and no case or infrastructure failures. It measured
+6,900/6,960 regions and 5,061/5,093 lines. Coverage-MCP retrieved all 111
+region groups and 30 line groups with `source=matches_receipt`; it reported
+`tests=failed` because the report has 60 region and 32 line gaps. Three full
+repeats are required and none has been run. This is an incomplete diagnostic,
+not a coverage pass.
+
+After that report, the redundant per-connection graceful-shutdown timer was
+removed; its existing held-response case passed in a focused run. The native
+manifest also gained `http1.upgrade-session-keeps-lifetime-and-drains`, which
+passed one focused real-socket run. Those selected reports do not establish
+coverage for the current 596-case manifest. The current-source full matrix,
+three repeats, 100% regions and lines, and final zero-gap Coverage-MCP receipt
+remain open.
 
 The HTTP/3 request-body source was then measured with the selected case
 `http3.empty-request-body-is-consumed-through-eof` in
@@ -32,7 +39,7 @@ the body returns `Pending` and polls data again on the next call. The empty-body
 input separately verifies the public request-body EOF and size-hint behavior.
 The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
-The full 594-case aggregate, three repeats, and zero-gap acceptance remain
+The full 596-case aggregate, three repeats, and zero-gap acceptance remain
 outstanding.
 
 The latest selected report is

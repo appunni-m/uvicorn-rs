@@ -13,8 +13,10 @@
 //! plus HTTP/3 over a caller-configured QUIC endpoint. An optional
 //! [`ApplicationLifecycle`] hook brackets server startup and shutdown; it is a
 //! native framework hook, not an implementation of the ASGI lifespan message
-//! protocol. WebSockets and integration with the existing Python ASGI adapter
-//! are not implemented by this crate.
+//! protocol. HTTP/1.1 applications can register upgraded-session futures so
+//! the server keeps them in its connection drain and cancellation policy. The
+//! application still owns the upgrade handshake and wire protocol; this crate
+//! does not implement WebSocket semantics or integrate the Python ASGI adapter.
 //!
 //! Each request receives [`ConnectionInfo`], [`ConnectionLifetime`], and
 //! [`RequestLifetime`] values in its [`http::Extensions`]. The connection
@@ -49,6 +51,7 @@ use http::{Request, Response, StatusCode};
 use http_body::Body;
 use http_body_util::Empty;
 use hyper::body::Incoming;
+use hyper::upgrade::{OnUpgrade, Upgraded};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto,
@@ -62,7 +65,7 @@ use pin_project_lite::pin_project;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpListener,
-    sync::{watch, OwnedSemaphorePermit, Semaphore},
+    sync::{mpsc, watch, OwnedSemaphorePermit, Semaphore},
     task::{JoinError, JoinSet},
     time::Instant,
 };
@@ -242,6 +245,91 @@ impl ConnectionLifetime {
         }
     }
 }
+
+/// Registers an HTTP/1.1 protocol-upgrade session with its connection.
+///
+/// The native server owns registered sessions until they finish. On graceful
+/// shutdown, [`wait_for_shutdown`](Self::wait_for_shutdown) resolves so the
+/// application can close its upgraded protocol cleanly. If a session does not
+/// finish before the server's connection-drain deadline, the server cancels
+/// it with the connection task.
+///
+/// This handle is inserted into HTTP/1.1 request extensions. It is not
+/// inserted for HTTP/2 or HTTP/3 requests. Applications must still perform
+/// their protocol handshake and framing; the handle only provides lifecycle
+/// ownership for the upgraded stream.
+#[derive(Clone)]
+pub struct ConnectionUpgrade {
+    sessions: mpsc::UnboundedSender<UpgradeSessionFuture>,
+    shutdown: watch::Receiver<bool>,
+}
+
+impl ConnectionUpgrade {
+    /// Registers a future that owns the stream returned by an HTTP upgrade.
+    ///
+    /// Call this before returning the response that completes the upgrade.
+    /// The session future starts when the response upgrade is accepted. Its
+    /// error is reported through the configured server error observer.
+    ///
+    /// Returns [`ConnectionUpgradeClosed`] if the HTTP connection has already
+    /// ended and cannot own another upgraded session.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ConnectionUpgradeClosed`] when the server has stopped
+    /// accepting upgrade sessions for this connection.
+    pub fn register<F, Fut, E>(
+        &self,
+        on_upgrade: OnUpgrade,
+        handler: F,
+    ) -> Result<(), ConnectionUpgradeClosed>
+    where
+        F: FnOnce(TokioIo<Upgraded>) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<(), E>> + Send + 'static,
+        E: Error + Send + Sync + 'static,
+    {
+        let session = Box::pin(async move {
+            let upgraded = on_upgrade
+                .await
+                .map_err(|error| Box::new(error) as BoxBodyError)?;
+            handler(TokioIo::new(upgraded))
+                .await
+                .map_err(|error| Box::new(error) as BoxBodyError)
+        });
+        self.sessions
+            .send(session)
+            .map_err(|_| ConnectionUpgradeClosed)
+    }
+
+    /// Waits for the server to begin graceful shutdown for this connection.
+    ///
+    /// The method also resolves if the server drops its internal signal while
+    /// tearing down the connection.
+    pub async fn wait_for_shutdown(&self) {
+        let mut shutdown = self.shutdown.clone();
+        while !*shutdown.borrow_and_update() {
+            if shutdown.changed().await.is_err() {
+                return;
+            }
+        }
+    }
+}
+
+/// The HTTP connection ended before another upgrade session could be
+/// registered.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ConnectionUpgradeClosed;
+
+impl fmt::Display for ConnectionUpgradeClosed {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("HTTP connection ended before upgrade registration")
+    }
+}
+
+impl Error for ConnectionUpgradeClosed {}
+
+type UpgradeSessionFuture =
+    Pin<Box<dyn Future<Output = Result<(), BoxBodyError>> + Send + 'static>>;
 
 /// The terminal state observed for a request's service and response body.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -738,7 +826,11 @@ async fn run_lifecycle_hook(
 /// service error before response commitment is logged and becomes an empty 500
 /// response; a response-body error after commitment terminates that response
 /// stream. Each request receives [`ConnectionInfo`] in its extensions with
-/// the accepted TCP peer address. TLS metadata is `None` on this entry point.
+/// the accepted TCP peer address. HTTP/1.1 requests also receive
+/// [`ConnectionUpgrade`] so the application can register upgraded protocol
+/// sessions with the connection's graceful-shutdown lifecycle. The crate
+/// leaves handshake validation and protocol framing to the application. TLS
+/// metadata is `None` on this entry point.
 ///
 /// The `shutdown` future should resolve when the process wants to stop
 /// accepting requests. Active connections then receive protocol graceful
@@ -954,32 +1046,91 @@ where
 {
     let peer_addr = connection_info.peer_addr;
     let (connection_lifetime, _connection_lifetime_guard) = ConnectionLifetimeGuard::new();
+    let (upgrade_sender, mut upgrade_receiver) = mpsc::unbounded_channel();
+    let (upgrade_shutdown_sender, upgrade_shutdown_receiver) = watch::channel(false);
+    let connection_upgrade = ConnectionUpgrade {
+        sessions: upgrade_sender,
+        shutdown: upgrade_shutdown_receiver,
+    };
     let mut builder = auto::Builder::new(TokioExecutor::new());
     // RFC 9112 §9.6: a client-side TCP half-close does not mean the client has
     // stopped waiting for its response. Hyper disables this behavior by default.
     builder.http1().half_close(true).max_buf_size(64 * 1024);
     let application = ServiceErrorResponse::new(
-        ConnectionInfoService::<S, Incoming, B>::new(service, connection_info, connection_lifetime),
+        ConnectionInfoService::<S, Incoming, B>::new(
+            service,
+            connection_info,
+            connection_lifetime,
+            Some(connection_upgrade),
+        ),
         error_observer.cloned(),
         peer_addr,
     );
     let service = TowerToHyperService::new(application);
-    let connection = builder.serve_connection(TokioIo::new(stream), service);
+    let connection = builder.serve_connection_with_upgrades(TokioIo::new(stream), service);
     tokio::pin!(connection);
 
-    tokio::select! {
-        result = &mut connection => result.map_err(ConnectionError::Http),
-        _ = shutdown.changed() => {
-            connection.as_mut().graceful_shutdown();
-            connection.await.map_err(ConnectionError::Http)
+    let mut connection_result = None;
+    let mut upgrade_sessions = JoinSet::new();
+    let mut upgrade_receiver_open = true;
+    let mut shutdown_started = false;
+    let mut upgrade_error = None;
+
+    loop {
+        if connection_result.is_some() && upgrade_sessions.is_empty() && !upgrade_receiver_open {
+            break;
+        }
+
+        tokio::select! {
+            result = &mut connection, if connection_result.is_none() => {
+                connection_result = Some(result.map_err(ConnectionError::Http));
+                upgrade_receiver.close();
+                while let Ok(session) = upgrade_receiver.try_recv() {
+                    upgrade_sessions.spawn(session);
+                }
+                upgrade_receiver_open = false;
+            }
+            session = upgrade_receiver.recv(), if upgrade_receiver_open => match session {
+                Some(session) => {
+                    upgrade_sessions.spawn(session);
+                }
+                None => upgrade_receiver_open = false,
+            },
+            joined = upgrade_sessions.join_next(), if !upgrade_sessions.is_empty() => {
+                match joined {
+                    Some(Ok(Ok(()))) | None => {}
+                    Some(Ok(Err(error))) => {
+                        if upgrade_error.is_none() {
+                            upgrade_error = Some(ConnectionError::Upgrade(error));
+                        }
+                    }
+                    Some(Err(error)) => {
+                        observe_connection_task_error(error, false);
+                    }
+                }
+            }
+            _ = shutdown.changed(), if !shutdown_started => {
+                shutdown_started = true;
+                upgrade_shutdown_sender.send_replace(true);
+                if connection_result.is_none() {
+                    connection.as_mut().graceful_shutdown();
+                }
+            }
         }
     }
+
+    if let Some(error) = upgrade_error {
+        return Err(error);
+    }
+
+    connection_result.unwrap_or(Ok(()))
 }
 
 struct ConnectionInfoService<S, RequestBody, B> {
     inner: S,
     connection_info: ConnectionInfo,
     connection_lifetime: ConnectionLifetime,
+    connection_upgrade: Option<ConnectionUpgrade>,
     _types: std::marker::PhantomData<fn(RequestBody) -> B>,
 }
 
@@ -992,6 +1143,7 @@ where
             inner: self.inner.clone(),
             connection_info: self.connection_info.clone(),
             connection_lifetime: self.connection_lifetime.clone(),
+            connection_upgrade: self.connection_upgrade.clone(),
             _types: std::marker::PhantomData,
         }
     }
@@ -1002,11 +1154,13 @@ impl<S, RequestBody, B> ConnectionInfoService<S, RequestBody, B> {
         inner: S,
         connection_info: ConnectionInfo,
         connection_lifetime: ConnectionLifetime,
+        connection_upgrade: Option<ConnectionUpgrade>,
     ) -> Self {
         Self {
             inner,
             connection_info,
             connection_lifetime,
+            connection_upgrade,
             _types: std::marker::PhantomData,
         }
     }
@@ -1032,6 +1186,11 @@ where
         request
             .extensions_mut()
             .insert(self.connection_lifetime.clone());
+        if request.version() == http::Version::HTTP_11 {
+            if let Some(connection_upgrade) = &self.connection_upgrade {
+                request.extensions_mut().insert(connection_upgrade.clone());
+            }
+        }
         let (request_lifetime, guard) = RequestLifetimeGuard::new();
         request.extensions_mut().insert(request_lifetime);
         RequestLifetimeFuture::new(self.inner.call(request), guard)
@@ -1041,6 +1200,7 @@ where
 #[derive(Debug)]
 enum ConnectionError {
     Http(Box<dyn Error + Send + Sync>),
+    Upgrade(BoxBodyError),
     Tls(io::Error),
 }
 
@@ -1048,6 +1208,7 @@ impl Error for ConnectionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Http(error) => Some(error.as_ref()),
+            Self::Upgrade(error) => Some(error.as_ref()),
             Self::Tls(error) => Some(error),
         }
     }
@@ -1057,6 +1218,7 @@ impl fmt::Display for ConnectionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Http(error) => write!(formatter, "HTTP connection failed: {error}"),
+            Self::Upgrade(error) => write!(formatter, "upgraded session failed: {error}"),
             Self::Tls(error) => write!(formatter, "TLS handshake failed: {error}"),
         }
     }

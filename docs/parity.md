@@ -121,7 +121,9 @@ This new workflow passed its selected instrumented case (1/1), with actual
 remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
 The maintained [coverage summary](coverage.md) records the historical
-511-case adapter result and the latest unified 595-case status. Generated
+511-case adapter result and the latest complete-scope 595-case baseline. The
+current manifest has 596 cases after adding a native HTTP/1 upgrade-session
+input; that selected input is not a full-matrix result. Generated
 per-run reports remain local and Git-ignored. The case passes full attribution
 and all three 511-case repeats; the historical report's region map records
 which cases cover the final-drain spans.

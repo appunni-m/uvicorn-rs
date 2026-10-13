@@ -3,7 +3,7 @@
 ## Current unified coverage status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 84 Python-free native cases (595 total).
+parity/fault-contract cases and 85 Python-free native cases (596 total).
 Acceptance requires three complete repeats, 100% region and line coverage,
 and zero-gap results from fully paginated Coverage-MCP queries bound to the
 exact report bytes.
@@ -34,6 +34,14 @@ source change also reduced the executable coverage denominator. This focused
 result verifies the shutdown contract only: the 595-case report above was
 collected before this edit and does not establish full-matrix parity or
 coverage for the updated source. The full matrix was not rerun.
+
+The native HTTP/1 upgrade-session case
+`http1.upgrade-session-keeps-lifetime-and-drains` passed once on the focused
+unified runner. It checks the `101` handoff, post-handoff data exchange,
+connection lifetime, shutdown notification, and transport close. The selected
+report measured 533/7,075 regions and 438/5,180 lines; it is not aggregate
+coverage evidence and does not establish WebSocket handshake/framing or ASGI
+WebSocket support.
 
 The HTTP/3 request-body change was measured separately with
 `target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.

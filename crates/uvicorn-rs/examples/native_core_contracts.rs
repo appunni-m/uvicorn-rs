@@ -39,8 +39,9 @@ use tokio_rustls::{
 use tower_service::Service;
 use uvicorn_rs::{
     ApplicationLifecycle, ApplicationLifecycleError, ApplicationLifecycleFuture,
-    ApplicationLifecycleStage, ConnectionInfo, ConnectionLifetime, RequestEndReason,
-    RequestLifetime, ServerErrorEvent, ServerErrorObserver, ServerErrorPhase, TransportKind,
+    ApplicationLifecycleStage, ConnectionInfo, ConnectionLifetime, ConnectionUpgrade,
+    RequestEndReason, RequestLifetime, ServerErrorEvent, ServerErrorObserver, ServerErrorPhase,
+    TransportKind,
 };
 
 type AppBody = UnsyncBoxBody<Bytes, io::Error>;
@@ -608,11 +609,12 @@ where
         }
     }
 
-    fn call(&mut self, request: Request<B>) -> Self::Future {
+    fn call(&mut self, mut request: Request<B>) -> Self::Future {
         let path = request.uri().path().to_owned();
         let connection_info = request.extensions().get::<ConnectionInfo>().cloned();
         let request_lifetime = request.extensions().get::<RequestLifetime>().cloned();
         let connection_lifetime = request.extensions().get::<ConnectionLifetime>().cloned();
+        let connection_upgrade = request.extensions().get::<ConnectionUpgrade>().cloned();
         let peer_address = connection_info.as_ref().map(ConnectionInfo::peer_addr);
         let connection_security = connection_info.as_ref().map(|info| {
             let alpn = info
@@ -702,6 +704,39 @@ where
                 "/peer-write-half-close-release" => {
                     state.peer_write_half_close_release.send_replace(true);
                     response(StatusCode::OK, b"released\n")
+                }
+                "/upgrade-session" => {
+                    let (Some(connection_upgrade), Some(connection_lifetime)) =
+                        (connection_upgrade, connection_lifetime)
+                    else {
+                        return Err(io::Error::other(
+                            "HTTP/1 upgrade or connection lifetime extension is missing",
+                        ));
+                    };
+                    let on_upgrade = hyper::upgrade::on(&mut request);
+                    let session_shutdown = connection_upgrade.clone();
+                    connection_upgrade
+                        .register(on_upgrade, move |mut stream| async move {
+                            let mut input = [0; 4];
+                            stream.read_exact(&mut input).await?;
+                            if input != *b"ping" {
+                                return Err(io::Error::other("unexpected upgraded-session input"));
+                            }
+                            let response = format!(
+                                "pong;connection-open={}\n",
+                                !connection_lifetime.is_closed()
+                            );
+                            stream.write_all(response.as_bytes()).await?;
+                            session_shutdown.wait_for_shutdown().await;
+                            let response = format!(
+                                "shutdown;connection-open={}\n",
+                                !connection_lifetime.is_closed()
+                            );
+                            stream.write_all(response.as_bytes()).await?;
+                            Ok::<(), io::Error>(())
+                        })
+                        .map_err(|error| io::Error::other(error.to_string()))?;
+                    upgrade_response()
                 }
                 "/ready" => response(StatusCode::OK, b"ready\n"),
                 "/arm-readiness-pending" => {
@@ -1334,6 +1369,18 @@ fn empty_response() -> Result<Response<AppBody>, io::Error> {
         .map_err(|error| io::Error::other(error.to_string()))
 }
 
+fn upgrade_response() -> Result<Response<AppBody>, io::Error> {
+    let body = Empty::<Bytes>::new()
+        .map_err(|never| match never {})
+        .boxed_unsync();
+    Response::builder()
+        .status(StatusCode::SWITCHING_PROTOCOLS)
+        .header(http::header::CONNECTION, "upgrade")
+        .header(http::header::UPGRADE, "uvicorn-rs-test")
+        .body(body)
+        .map_err(|error| io::Error::other(error.to_string()))
+}
+
 fn stream_response<S>(body: S) -> Result<Response<AppBody>, io::Error>
 where
     S: futures_util::Stream<Item = Result<http_body::Frame<Bytes>, io::Error>> + Send + 'static,
@@ -1502,6 +1549,7 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
             || operation == "native-http1-service-panic-recovery"
+            || operation == "native-http1-upgrade-session"
         {
             if operation.starts_with("native-lifecycle-") {
                 run_isolated_lifecycle_case(case).await?;
@@ -1509,6 +1557,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http1_connection_slot_reuse_case(case).await?;
             } else if operation == "native-http1-service-panic-recovery" {
                 run_isolated_http1_service_panic_recovery_case(case).await?;
+            } else if operation == "native-http1-upgrade-session" {
+                run_isolated_http1_upgrade_session_case(case).await?;
             } else if operation == "native-http3-alpn-contract" {
                 run_isolated_http3_alpn_case(case).await?;
             } else if operation == "native-http3-no-common-alpn-recovery" {
@@ -1907,6 +1957,111 @@ async fn run_isolated_http1_service_panic_recovery_case(case: &Value) -> ProbeRe
         Ok(Err(error)) => Err(error.into()),
         Err(error) => Err(error.into()),
     }
+}
+
+async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let server = tokio::spawn(uvicorn_rs::serve_tcp(
+        listener,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            graceful_shutdown_timeout: Duration::from_millis(500),
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let workflow: ProbeResult<()> = async {
+        let mut client = tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address))
+            .await??;
+        let request = format!(
+            "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: uvicorn-rs-test\r\n\r\n",
+            required_str(case, "path")?
+        );
+        client.write_all(request.as_bytes()).await?;
+
+        let (status, headers) = tokio::time::timeout(
+            Duration::from_secs(2),
+            read_response_head(&mut client),
+        )
+        .await??;
+        let expected_status = required_status(case, "expected_status")?;
+        let expected_upgrade = required_str(case, "expected_upgrade")?;
+        let accepted_upgrade = headers
+            .get("upgrade")
+            .is_some_and(|value| value.eq_ignore_ascii_case(expected_upgrade));
+        let accepted_connection = headers
+            .get("connection")
+            .is_some_and(|value| value.eq_ignore_ascii_case("upgrade"));
+        if status != expected_status || !accepted_upgrade || !accepted_connection {
+            return Err(io::Error::other(format!(
+                "{}: server did not accept the configured HTTP/1 upgrade",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        client.write_all(b"ping").await?;
+        let expected_pong = required_str(case, "expected_pong")?.as_bytes();
+        let mut pong = vec![0; expected_pong.len()];
+        tokio::time::timeout(Duration::from_secs(2), client.read_exact(&mut pong)).await??;
+        if pong != expected_pong {
+            return Err(io::Error::other(format!(
+                "{}: upgraded session did not echo its live connection state",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        shutdown_sender.send_replace(true);
+        let expected_shutdown = required_str(case, "expected_shutdown")?.as_bytes();
+        let mut shutdown = vec![0; expected_shutdown.len()];
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            client.read_exact(&mut shutdown),
+        )
+        .await??;
+        if shutdown != expected_shutdown {
+            return Err(io::Error::other(format!(
+                "{}: upgraded session did not observe graceful shutdown while its connection remained open",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        let mut trailing = [0; 1];
+        let read = tokio::time::timeout(Duration::from_secs(2), client.read(&mut trailing)).await??;
+        if read != 0 {
+            return Err(io::Error::other(format!(
+                "{}: upgraded transport remained open after the registered session ended",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        Ok(())
+    }
+    .await;
+
+    if workflow.is_err() {
+        shutdown_sender.send_replace(true);
+    }
+    let wait_ms = case["server_wait_ms"]
+        .as_u64()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
+    let server_result = tokio::time::timeout(Duration::from_millis(wait_ms), server)
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "HTTP/1 upgraded-session server did not stop",
+            )
+        })??;
+    workflow?;
+    server_result?;
+    Ok(())
 }
 
 async fn run_isolated_http3_alpn_case(case: &Value) -> ProbeResult<()> {
@@ -4040,6 +4195,7 @@ async fn run_cases(
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
             || operation == "native-http1-service-panic-recovery"
+            || operation == "native-http1-upgrade-session"
         {
             continue;
         }
