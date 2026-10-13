@@ -11,7 +11,7 @@ use std::{
     pin::Pin,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc, Mutex,
+        Arc, Condvar, Mutex,
     },
     task::{Context, Poll, Waker},
     time::Duration,
@@ -1630,6 +1630,9 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
         }
         "native-lifecycle-http3-connection-init-failure-recovery" => {
             return run_lifecycle_http3_connection_init_failure_case(case).await;
+        }
+        "native-lifecycle-http3-pending-handshake-shutdown" => {
+            return run_lifecycle_http3_pending_handshake_shutdown_case(case).await;
         }
         "native-lifecycle-readiness-error" => {
             return run_lifecycle_readiness_error_case(case).await;
@@ -3314,6 +3317,151 @@ async fn run_lifecycle_http3_connection_init_failure_case(case: &Value) -> Probe
     verify_lifecycle_startup_shutdown(case, &fixture.state)
 }
 
+async fn run_lifecycle_http3_pending_handshake_shutdown_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    let (_, _, quic_server_config) = test_tls_configs()?;
+    let server_endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
+    let address = server_endpoint.local_addr()?;
+    let shutdown = fixture.shutdown_receiver.clone();
+    let mut server = tokio::spawn(uvicorn_rs::serve_http3(
+        server_endpoint,
+        fixture.app.clone(),
+        shutdown_on_change(shutdown),
+        lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
+    ));
+
+    let server_wait_ms = case["server_wait_ms"]
+        .as_u64()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
+    let (handshake_started_sender, handshake_started_receiver) = tokio::sync::oneshot::channel();
+    let release_gate = Arc::new((Mutex::new(false), Condvar::new()));
+    let client_config =
+        blocking_http3_client_config(handshake_started_sender, Arc::clone(&release_gate))?;
+    let client_thread = std::thread::Builder::new()
+        .name("uvicorn-rs-pending-h3-handshake".into())
+        .spawn(move || -> ProbeResult<()> {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            runtime.block_on(async move {
+                let mut endpoint = quinn::Endpoint::client("127.0.0.1:0".parse()?)?;
+                endpoint.set_default_client_config(client_config);
+                let connecting = endpoint.connect(address, "localhost")?;
+                let handshake = timeout(Duration::from_millis(server_wait_ms), connecting).await;
+                endpoint.close(
+                    quinn::VarInt::from_u32(0),
+                    b"pending HTTP/3 handshake shutdown probe complete",
+                );
+                timeout(Duration::from_secs(2), endpoint.wait_idle())
+                    .await
+                    .map_err(|_| {
+                        io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            "pending HTTP/3 client endpoint did not become idle",
+                        )
+                    })?;
+                match handshake {
+                    // The server's shutdown result is observed before this
+                    // verifier is released. Once released, a final handshake
+                    // flight can race with the endpoint close packet, so both
+                    // transport outcomes are valid for this probe.
+                    Ok(Err(_)) | Ok(Ok(_)) => Ok(()),
+                    Err(_) => Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "HTTP/3 handshake did not observe server shutdown",
+                    )
+                    .into()),
+                }
+            })
+        })?;
+
+    let handshake_started = timeout(
+        Duration::from_millis(server_wait_ms),
+        handshake_started_receiver,
+    )
+    .await;
+    fixture.shutdown_sender.send_replace(true);
+    let server_before_client_release =
+        timeout(Duration::from_millis(server_wait_ms), &mut server).await;
+    let stopped_while_handshake_pending = matches!(&server_before_client_release, Ok(Ok(_)));
+    release_blocking_handshake_verifier(&release_gate);
+
+    let server_result: ProbeResult<Result<(), uvicorn_rs::ServeError>> =
+        match server_before_client_release {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(error)) => Err(error.into()),
+            Err(_) => match timeout(Duration::from_secs(2), &mut server).await {
+                Ok(Ok(result)) => Ok(result),
+                Ok(Err(error)) => Err(error.into()),
+                Err(_) => {
+                    server.abort();
+                    Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "HTTP/3 server did not stop after releasing the pending handshake",
+                    )
+                    .into())
+                }
+            },
+        };
+    let client_result = timeout(
+        Duration::from_secs(3),
+        tokio::task::spawn_blocking(move || client_thread.join()),
+    )
+    .await;
+
+    if !matches!(handshake_started, Ok(Ok(()))) {
+        return Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "client did not reach server certificate verification during the HTTP/3 handshake",
+        )
+        .into());
+    }
+    if !stopped_while_handshake_pending {
+        return Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 server did not return while the client handshake was held pending",
+        )
+        .into());
+    }
+    match server_result? {
+        Err(uvicorn_rs::ServeError::GracefulShutdownTimedOut)
+            if required_str(case, "expected_server_error")?
+                == "active connections exceeded the graceful-shutdown deadline" => {}
+        Ok(()) => {
+            return Err(io::Error::other(
+                "HTTP/3 server drained a handshake while the peer verifier was still blocked",
+            )
+            .into())
+        }
+        Err(error) => {
+            return Err(io::Error::other(format!(
+                "pending HTTP/3 handshake produced unexpected server error: {error}"
+            ))
+            .into())
+        }
+    }
+    match client_result {
+        Ok(Ok(Ok(Ok(())))) => {}
+        Ok(Ok(Ok(Err(error)))) => return Err(error),
+        Ok(Ok(Err(_))) => {
+            return Err(io::Error::other("HTTP/3 client probe thread panicked").into())
+        }
+        Ok(Err(error)) => return Err(error.into()),
+        Err(error) => return Err(error.into()),
+    }
+    verify_lifecycle_startup_shutdown(case, &fixture.state)
+}
+
+fn release_blocking_handshake_verifier(gate: &Arc<(Mutex<bool>, Condvar)>) {
+    let (released, condition) = &**gate;
+    let mut released = match released.lock() {
+        Ok(released) => released,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    *released = true;
+    condition.notify_all();
+}
+
 async fn wait_for_lifecycle_http3_connection_error(
     state: &LifecycleState,
     case: &Value,
@@ -3462,7 +3610,8 @@ fn verify_lifecycle_events(case: &Value, state: &LifecycleState) -> ProbeResult<
         | "native-lifecycle-server-and-shutdown-error"
         | "native-lifecycle-server-timeout"
         | "native-lifecycle-readiness-error" => &["startup", "shutdown"],
-        "native-lifecycle-http3-connection-init-failure-recovery" => &["startup", "shutdown"],
+        "native-lifecycle-http3-connection-init-failure-recovery"
+        | "native-lifecycle-http3-pending-handshake-shutdown" => &["startup", "shutdown"],
         "native-lifecycle-service-and-response-body-errors" => &["startup", "shutdown"],
         operation => {
             return Err(io::Error::new(
@@ -3588,6 +3737,104 @@ async fn join_lifecycle_server(
         )
         .into()),
     }
+}
+
+#[derive(Debug)]
+struct BlockingServerCertVerifier {
+    inner: Arc<dyn quic_rustls::client::danger::ServerCertVerifier>,
+    handshake_started: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    release_gate: Arc<(Mutex<bool>, Condvar)>,
+}
+
+impl quic_rustls::client::danger::ServerCertVerifier for BlockingServerCertVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &quic_rustls::pki_types::CertificateDer<'_>,
+        intermediates: &[quic_rustls::pki_types::CertificateDer<'_>],
+        server_name: &quic_rustls::pki_types::ServerName<'_>,
+        ocsp_response: &[u8],
+        now: quic_rustls::pki_types::UnixTime,
+    ) -> Result<quic_rustls::client::danger::ServerCertVerified, quic_rustls::Error> {
+        let verified = self.inner.verify_server_cert(
+            end_entity,
+            intermediates,
+            server_name,
+            ocsp_response,
+            now,
+        )?;
+        let handshake_started = self
+            .handshake_started
+            .lock()
+            .map_err(|_| quic_rustls::Error::General("handshake signal lock poisoned".into()))?
+            .take();
+        if let Some(handshake_started) = handshake_started {
+            let _ = handshake_started.send(());
+        }
+
+        let (released, condition) = &*self.release_gate;
+        let mut released = released
+            .lock()
+            .map_err(|_| quic_rustls::Error::General("handshake release lock poisoned".into()))?;
+        while !*released {
+            released = condition.wait(released).map_err(|_| {
+                quic_rustls::Error::General("handshake release lock poisoned".into())
+            })?;
+        }
+        Ok(verified)
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &quic_rustls::pki_types::CertificateDer<'_>,
+        dss: &quic_rustls::DigitallySignedStruct,
+    ) -> Result<quic_rustls::client::danger::HandshakeSignatureValid, quic_rustls::Error> {
+        self.inner.verify_tls12_signature(message, cert, dss)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &quic_rustls::pki_types::CertificateDer<'_>,
+        dss: &quic_rustls::DigitallySignedStruct,
+    ) -> Result<quic_rustls::client::danger::HandshakeSignatureValid, quic_rustls::Error> {
+        self.inner.verify_tls13_signature(message, cert, dss)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<quic_rustls::SignatureScheme> {
+        self.inner.supported_verify_schemes()
+    }
+}
+
+fn blocking_http3_client_config(
+    handshake_started: tokio::sync::oneshot::Sender<()>,
+    release_gate: Arc<(Mutex<bool>, Condvar)>,
+) -> ProbeResult<quinn::ClientConfig> {
+    let certificate_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/native-core/tls");
+    let certificate_file = std::fs::File::open(certificate_dir.join("localhost-cert.pem"))?;
+    let certificates = rustls_pemfile::certs(&mut std::io::BufReader::new(certificate_file))
+        .collect::<Result<Vec<_>, _>>()?;
+    if certificates.is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "test certificate is empty").into());
+    }
+    let mut roots = quic_rustls::RootCertStore::empty();
+    for certificate in certificates {
+        roots.add(certificate)?;
+    }
+    let inner = quic_rustls::client::WebPkiServerVerifier::builder(Arc::new(roots)).build()?;
+    let verifier = BlockingServerCertVerifier {
+        inner,
+        handshake_started: Mutex::new(Some(handshake_started)),
+        release_gate,
+    };
+    let mut tls = quic_rustls::ClientConfig::builder()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(verifier))
+        .with_no_client_auth();
+    tls.alpn_protocols = vec![b"h3".to_vec()];
+    let crypto = quinn::crypto::rustls::QuicClientConfig::try_from(tls)?;
+    Ok(quinn::ClientConfig::new(Arc::new(crypto)))
 }
 
 fn test_tls_configs() -> ProbeResult<(TlsAcceptor, TlsClients, quinn::ServerConfig)> {

@@ -749,6 +749,15 @@
       "expected_server_error": "active connections exceeded the graceful-shutdown deadline"
     },
     {
+      "id": "http3.lifecycle-shutdown-bounds-pending-handshake",
+      "protocol": "http3",
+      "operation": "native-lifecycle-http3-pending-handshake-shutdown",
+      "covers": ["http3.graceful-shutdown"],
+      "expected_server_error": "active connections exceeded the graceful-shutdown deadline",
+      "graceful_timeout_ms": 1000,
+      "server_wait_ms": 2000
+    },
+    {
       "id": "http1.application-lifecycle-startup-and-drain-order",
       "protocol": "http/1.1",
       "operation": "native-lifecycle-drain",

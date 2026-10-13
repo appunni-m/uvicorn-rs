@@ -1,36 +1,47 @@
 # Plan: unified black-box coverage for the ASGI adapter and Python-free Rust runtime
 
-## Current acceptance status (2026-10-14)
+## Current acceptance status (2026-10-13)
 
-The unified v4 acceptance remains open. The manifests define 511 ASGI
-parity/fault-contract cases and 70 Python-free native cases (581 total).
+The unified v4 acceptance remains open. The current manifests define 511 ASGI
+parity/fault-contract cases and 82 Python-free native cases (593 total).
 Acceptance requires three complete repeats of both matrices, 100% region and
 line coverage, and zero-gap results from fully paginated Coverage-MCP queries
 bound to the exact report bytes.
 
-The latest complete-scope report is
-`target/asgi-coverage/2026-10-14-current-579/coverage-report.json`; it covers
-511 ASGI plus 68 native cases (579 total) and predates two HTTP/3 fixes and two
-native cases in the current manifest. It is historical evidence, not current
-acceptance evidence. The selected input
-`http3.service-panic-returns-500-and-keeps-connection` passed 1/1 without
-retry, with a selected report at
-`target/asgi-coverage/2026-10-14-http3-service-panic-recovery-attempt2/coverage-report.json`.
-Coverage-MCP reports `source: matches_receipt` and `tests: passed` for that
-case. The selected report does not establish the full matrix or aggregate
-coverage. The request-body empty-DATA case also passed its selected run; its
-receipt is summarized in [coverage status](coverage.md#current-unified-coverage-status-2026-10-14).
+No complete 593-case report exists for the current manifest. The latest
+complete-scope report available locally is
+`target/asgi-coverage/2026-10-13-current-584/coverage-report.json`; it covers
+511 ASGI plus 73 native cases (584 total), with 584/584 cases passing once and
+no failed or infrastructure cases. It records 6,887/6,960 regions and
+5,055/5,092 lines, with all three verification repeats still outstanding.
+The executable Rust source hashes match the current checkout, but the report's
+manifest and runner receipts are older, so it is diagnostic coverage evidence
+only.
 
-The current 581-case matrix, three complete repeats, 100% region and line
-coverage, and zero-gap Coverage-MCP results remain outstanding. Classify each
-uncovered region against its source span and case-to-region attribution. Add an
-input or named fault contract only when it exercises a real public behavior or
-documented invariant. Refactor a genuinely unreachable internal path into a
-sound representation where that preserves the contract; do not suppress or
-exclude it. Schema v4 retains function-instantiation-aware region IDs, indexed
-`hit_by` attribution, per-profile hashes, independent LLVM replay, exact
-artifact checks, and fully paginated MCP row identity. Python line and branch
-coverage remain outside the Rust denominator.
+The two focused native cases for a peer close during HTTP/3 connection
+creation passed together in
+`target/asgi-coverage/current-h3-init-close-final/coverage-report.json` with no
+retry or infrastructure failure. The selected report is useful for its input
+and source attribution; it does not establish aggregate coverage. The next
+work is to classify remaining gaps by concrete public behavior and add only
+input-driven cases or named fault contracts that exercise those behaviors.
+The new
+`http3.lifecycle-shutdown-bounds-pending-handshake` case passed 1/1 without a
+retry in
+`target/asgi-coverage/current-http3-pending-handshake-shutdown-final/coverage-report.json`.
+The client verifier remains blocked until the server returns
+`GracefulShutdownTimedOut`; lifecycle shutdown completes, and the peer is then
+released and joined. Coverage-MCP reports `source: matches_receipt` and
+`tests: passed`; the concrete lifecycle specialization has no missing regions
+at the endpoint-idle shutdown path. This selected case does not establish the
+full matrix or aggregate coverage.
+Do not add cases for uninstantiated generic placeholders or private
+implementation lines. The full current-manifest matrix, three repeats, 100%
+regions and lines, and fully paginated zero-gap Coverage-MCP results remain
+outstanding. Schema v4 retains function-instantiation-aware region IDs,
+indexed `hit_by` attribution, per-profile hashes, independent LLVM replay,
+exact artifact checks, and fully paginated MCP row identity. Python line and
+branch coverage remain outside the Rust denominator.
 
 ## Goal and decision
 

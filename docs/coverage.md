@@ -1,63 +1,57 @@
 # Black-box parity and Rust source coverage
 
-## Current unified coverage status (2026-10-14)
+## Current unified coverage status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 70 Python-free native cases (581 total). A
-current-source complete run, three repeats of both matrices, 100% region and
-line coverage, and zero-gap region and line Coverage-MCP results remain
-outstanding.
+parity/fault-contract cases and 82 Python-free native cases (593 total). No
+complete 593-case report or three-repeat verification has been recorded for
+this manifest.
 
-The latest complete-scope report is
-`target/asgi-coverage/2026-10-14-current-579/coverage-report.json`. It was
-generated from clean commit `87897fdc65829520d351e6e19e843e1e1ec6191c` for
-511 ASGI plus 68 native cases. All 579 cases passed with complete attribution;
-one transient infrastructure failure in the WebSocket text round-trip case
-passed on its allowed retry. It is a single complete-scope measurement, not
-three verification repeats. Coverage is **6,860/6,940 regions** and
-**5,043/5,083 lines**, leaving 80 regions and 40 lines. Its source/input digest
-is `3e46f02c214720b6d7807da286a2e0429ff7d41e3e68cff39f5914ebb6bed633`.
-This report predates two subsequent HTTP/3 source fixes and two native cases,
-so it is not current-source or current-manifest acceptance evidence.
+The latest complete-scope report available locally is
+`target/asgi-coverage/2026-10-13-current-584/coverage-report.json`. It records
+clean commit `3a0a5149c8635afa69ce38cc984cda05a050136e` and covers 511 ASGI plus
+73 native cases (584 total). All 584 passed once with no failures or
+infrastructure retries. The report has no verification runs; three are
+required. It records **6,887/6,960 regions** and **5,055/5,092 lines**, leaving
+73 regions and 37 lines. Its executable Rust source hashes match the current
+checkout, so it remains useful as a gap-discovery baseline. Its older case
+manifest and runner receipts mean it is not acceptance evidence for the
+current 593-case matrix.
 
-The new focused case
-`http3.empty-data-frame-does-not-end-request-body` protects request streaming
-when an empty DATA frame arrives before later body bytes. The case reproduced
-a 500 response before the fix and passed 1/1 after it. Its selected report is
-`target/asgi-coverage/2026-10-14-http3-empty-data-frame-current/coverage-report.json`;
-the result has no retry, records the `http.request-upload` requirement, and
-has complete attribution for the selected case. Coverage-MCP reports
-`source: matches_receipt` and `tests: passed`; queries at
-`crates/uvicorn-rs/src/http3.rs:87` find no missing region or line groups.
-The selected report records 684/6,941 regions and 604/5,084 lines, with the
-remaining source unmeasured by this one-case selection. It does not establish
-full-suite coverage.
+The focused cases
+`http3.peer-close-during-server-connection-creation-recovers` and
+`native.lifecycle-http3-peer-close-during-server-connection-creation-recovers`
+exercise peer closure during native HTTP/3 connection creation, check the
+connection error observation, and verify listener recovery. Both passed in
+the selected report
+`target/asgi-coverage/current-h3-init-close-final/coverage-report.json` with
+zero retries or infrastructure failures. Coverage-MCP reports
+`source: matches_receipt` and `tests: passed` for that selection. At
+`crates/uvicorn-rs/src/http3.rs:336`, the concrete `ContractApp` and
+`LifecycleApp` instantiations have no missing regions; only the uninstantiated
+generic placeholder remains. This selected report does not establish full
+matrix coverage.
 
-The focused case `http3.service-panic-returns-500-and-keeps-connection`
-checks the Python-free Rust HTTP/3 service boundary: a service panic before
-response commitment produces an empty 500 response, reports a service-phase
-error, and leaves the same QUIC connection able to serve a recovery request.
-The selected run passed 1/1 without retry. Its report is
-`target/asgi-coverage/2026-10-14-http3-service-panic-recovery-attempt2/coverage-report.json`;
-Coverage-MCP reports `source: matches_receipt` and `tests: passed` for that
-selected input. This is focused contract evidence, not full-matrix acceptance.
-The full 581-case current-source run remains outstanding.
+`http3.lifecycle-shutdown-bounds-pending-handshake` holds a real QUIC/TLS peer
+inside certificate verification, requests server shutdown, and checks that
+`serve_http3` returns the documented `GracefulShutdownTimedOut` result before
+the peer is released. The application shutdown hook still completes. Once the
+gate is released, either TLS completion or connection closure is accepted: the
+peer's final handshake flight can race with the endpoint close packet. The
+selected run passed 1/1 without retry in
+`target/asgi-coverage/current-http3-pending-handshake-shutdown-final/coverage-report.json`.
+Coverage-MCP reports `source: matches_receipt` and `tests: passed`. At
+`crates/uvicorn-rs/src/http3.rs:228`, the concrete lifecycle specialization
+has no missing endpoint-drain regions; remaining selected-report gaps there
+belong to an uninstantiated generic placeholder. This confirms the bounded
+shutdown path for this input, not aggregate coverage or full-matrix acceptance.
 
-Generated coverage reports, Coverage-MCP payloads, and logs remain in
-Git-ignored local output paths. This document and tracked archive summaries
-retain the recorded counts, identities, and decisions; per-run coverage
-artifacts are not committed.
-
-Earlier focused reports for endpoint shutdown and HTTP/3 ALPN recovery were
-measured before the request-body change and are now historical. Native case
-receipts retain declared `covers` labels under
-`matrix.native_case_results[].requirements`, and the unified runner rejects
-unknown shared requirement labels. Requirement attribution for the existing
-native cases remains in progress.
-
-Reports and generated logs remain under Git-ignored `target/`. Python line and
-branch coverage remain outside the Rust denominator. The 2026-10-12 567-case
-report and earlier adapter-only reports are historical evidence.
+The acceptance gates still require a complete current-manifest run, three
+complete repeats, 100% region and line coverage, and fully paginated zero-gap
+Coverage-MCP results tied to the exact final report. Python line and branch
+coverage remain outside the Rust denominator. Generated reports, profiles,
+Coverage-MCP payloads, and logs stay under Git-ignored local output paths; the
+per-run artifacts are not committed.
 
 ## Previous adapter-only evidence (2026-10-12)
 
