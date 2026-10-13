@@ -3,7 +3,7 @@
 ## Current unified coverage status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 83 Python-free native cases (594 total).
+parity/fault-contract cases and 84 Python-free native cases (595 total).
 Acceptance requires three complete repeats, 100% region and line coverage,
 and zero-gap results from fully paginated Coverage-MCP queries bound to the
 exact report bytes.
@@ -32,7 +32,7 @@ pending, the body returns `Pending` and polls data again next time. The new
 input independently asserts the public empty-request-body state and EOF result.
 The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
-A complete current 594-case report and three-repeat verification remain
+A complete current 595-case report and three-repeat verification remain
 outstanding.
 
 The latest selected report is
@@ -48,6 +48,19 @@ ordinary connection joins and abort draining while preserving their distinct
 error log messages. The run was captured from the working tree immediately
 before commit `b3abb4e3a`; the report records `dirty=true` and binds the exact
 source files by receipt.
+
+The native case `http3.response-cancel-before-finish-keeps-connection-usable`
+holds an empty response body after headers, sends a real QUIC
+`STOP_SENDING`, releases the app body, then checks the connection error and
+same-connection recovery through both harness apps. It passed 1/1 with complete
+attribution and no retries or infrastructure failures. Its selected report is
+`target/asgi-coverage/current-http3-response-cancel-before-finish/coverage-report.json`
+and remains Git-ignored with the other per-run artifacts. The attribution
+report marks `crates/uvicorn-rs/src/http3.rs:489-491` as hit by this case, but
+the raw LLVM segment has zero count at line 491 and the focused Coverage-MCP
+query returns one group at the same span. Treat the `finish().await` gap as
+unresolved until these source-level views agree. This selected report measures
+703/6,960 regions and 621/5,093 lines; it is not aggregate evidence.
 
 The focused cases
 `http3.peer-close-during-server-connection-creation-recovers` and

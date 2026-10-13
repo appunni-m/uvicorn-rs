@@ -3,7 +3,7 @@
 ## Current acceptance status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests define 511 ASGI
-parity/fault-contract cases and 83 Python-free native cases (594 total).
+parity/fault-contract cases and 84 Python-free native cases (595 total).
 Acceptance requires three complete repeats of both matrices, 100% region and
 line coverage, and zero-gap results from fully paginated Coverage-MCP queries
 bound to the exact report bytes.
@@ -72,6 +72,18 @@ outstanding. Schema v4 retains function-instantiation-aware region IDs,
 indexed `hit_by` attribution, per-profile hashes, independent LLVM replay,
 exact artifact checks, and fully paginated MCP row identity. Python line and
 branch coverage remain outside the Rust denominator.
+
+The added native case
+`http3.response-cancel-before-finish-keeps-connection-usable` passed once with
+complete attribution and no retries or infrastructure failures. It exercises
+the empty response body after headers, QUIC `STOP_SENDING`, body release, error
+observation, and same-connection recovery in both harness apps. Its selected
+report remains Git-ignored at
+`target/asgi-coverage/current-http3-response-cancel-before-finish/coverage-report.json`.
+The attribution map marks the region at `http3.rs:489-491` as hit, while the
+raw LLVM segment reports zero on line 491 and Coverage-MCP returns one group at
+that span. Keep the finish-await gap open until this discrepancy is resolved;
+the selected report is not aggregate evidence.
 
 ## Goal and decision
 

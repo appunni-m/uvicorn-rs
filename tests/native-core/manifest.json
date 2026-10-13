@@ -750,6 +750,22 @@
       "recovery_body": "ready\n"
     },
     {
+      "id": "http3.response-cancel-before-finish-keeps-connection-usable",
+      "protocol": "native-core",
+      "operation": "native-http3-response-send-cancel",
+      "cancel_phase": "before-finish",
+      "request_path": "/http3-response-hold-before-finish",
+      "expected_status": 200,
+      "pending_path": "/http3-response-cancel-pending",
+      "pending_state": "waiting\n",
+      "release_path": "/http3-response-cancel-release",
+      "release_status": 200,
+      "release_body": "released\n",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
+    },
+    {
       "id": "http1-tls.shutdown-bounds-incomplete-handshake",
       "protocol": "native-core",
       "operation": "native-http1-tls-pending-handshake-shutdown",

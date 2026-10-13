@@ -439,6 +439,39 @@ impl<B> Service<Request<B>> for LifecycleApp {
                         .body(body)
                         .map_err(|error| io::Error::other(error.to_string()))
                 }
+                "/http3-response-hold-before-finish" => {
+                    let release = state.http3_response_cancel_release.subscribe();
+                    let response_state = Arc::clone(&state);
+                    let body = stream::unfold((), move |_| {
+                        let mut release = release.clone();
+                        let response_state = Arc::clone(&response_state);
+                        async move {
+                            response_state
+                                .http3_response_cancel_pending
+                                .store(true, Ordering::Release);
+                            while !*release.borrow_and_update() {
+                                if release.changed().await.is_err() {
+                                    response_state
+                                        .http3_response_cancel_pending
+                                        .store(false, Ordering::Release);
+                                    return None::<(Result<http_body::Frame<Bytes>, io::Error>, ())>;
+                                }
+                            }
+                            response_state
+                                .http3_response_cancel_pending
+                                .store(false, Ordering::Release);
+                            None::<(Result<http_body::Frame<Bytes>, io::Error>, ())>
+                        }
+                    });
+                    let body = LifecycleBody {
+                        inner: Box::pin(StreamBody::new(body)),
+                        drop_flag: None,
+                    };
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .body(body)
+                        .map_err(|error| io::Error::other(error.to_string()))
+                }
                 "/hold" => {
                     state.active_request.send_replace(true);
                     let mut release = state.release_request.subscribe();
@@ -1168,6 +1201,35 @@ where
                             }
                         },
                     );
+                    stream_response(body)
+                }
+                "/http3-response-hold-before-finish" => {
+                    let release = state.http3_response_cancel_release.subscribe();
+                    let response_state = Arc::clone(&state);
+                    let body = stream::unfold((), move |_| {
+                        let mut release = release.clone();
+                        let response_state = Arc::clone(&response_state);
+                        async move {
+                            response_state
+                                .http3_response_cancel_pending
+                                .store(true, Ordering::Release);
+                            while !*release.borrow_and_update() {
+                                if release.changed().await.is_err() {
+                                    response_state
+                                        .http3_response_cancel_pending
+                                        .store(false, Ordering::Release);
+                                    return None::<(
+                                        Result<http_body::Frame<Bytes>, io::Error>,
+                                        (),
+                                    )>;
+                                }
+                            }
+                            response_state
+                                .http3_response_cancel_pending
+                                .store(false, Ordering::Release);
+                            None::<(Result<http_body::Frame<Bytes>, io::Error>, ())>
+                        }
+                    });
                     stream_response(body)
                 }
                 "/backpressure" => {
@@ -7616,6 +7678,36 @@ async fn run_http3_response_send_cancel_client(
                 {
                     return Err(io::Error::other(format!(
                         "{}: response did not reach the pre-trailers checkpoint",
+                        required_str(case, "id")?
+                    ))
+                    .into());
+                }
+                wait_http3_response_cancel_state(&mut sender, address, case).await?;
+                let error_code = quinn::VarInt::from_u64(Code::H3_REQUEST_CANCELLED.value())?;
+                response_receive.stop(error_code)?;
+                drop(request_send);
+            }
+            "before-finish" => {
+                let (mut request_send, mut response_receive) = connection.open_bi().await?;
+                let request = encode_raw_http3_get_request(
+                    &format!("localhost:{}", address.port()),
+                    required_str(case, "request_path")?,
+                )?;
+                request_send.write_all(&request).await?;
+                request_send.finish()?;
+
+                let mut response_buffer = Vec::new();
+                let (headers_type, response_headers) = tokio::time::timeout(
+                    Duration::from_secs(2),
+                    read_raw_http3_frame(&mut response_receive, &mut response_buffer),
+                )
+                .await??;
+                if headers_type != 0x01
+                    || raw_http3_static_status(&response_headers)
+                        != Some(required_status(case, "expected_status")?)
+                {
+                    return Err(io::Error::other(format!(
+                        "{}: response did not reach the pre-finish checkpoint",
                         required_str(case, "id")?
                     ))
                     .into());
