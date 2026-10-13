@@ -124,6 +124,8 @@ struct LifecycleState {
     startup_hook_dropped: Arc<AtomicBool>,
     shutdown_hook_dropped: Arc<AtomicBool>,
     requests_started: AtomicUsize,
+    http3_response_cancel_pending: AtomicBool,
+    http3_response_cancel_release: watch::Sender<bool>,
     readiness_error_armed: AtomicBool,
     readiness_gate: Mutex<ReadinessGate>,
     response_body_dropped: Arc<AtomicBool>,
@@ -344,6 +346,98 @@ impl<B> Service<Request<B>> for LifecycleApp {
                         .map_err(|error| io::Error::other(error.to_string()))
                 }
                 "/ready" => lifecycle_response(b"started\n", None),
+                "/http3-response-cancel-pending" => lifecycle_response(
+                    if state.http3_response_cancel_pending.load(Ordering::Acquire) {
+                        b"waiting\n"
+                    } else {
+                        b"ready\n"
+                    },
+                    None,
+                ),
+                "/http3-response-cancel-release" => {
+                    state
+                        .http3_response_cancel_pending
+                        .store(false, Ordering::Release);
+                    state.http3_response_cancel_release.send_replace(true);
+                    lifecycle_response(b"released\n", None)
+                }
+                "/http3-response-hold-before-headers" => {
+                    let mut release = state.http3_response_cancel_release.subscribe();
+                    state
+                        .http3_response_cancel_pending
+                        .store(true, Ordering::Release);
+                    while !*release.borrow_and_update() {
+                        release.changed().await.map_err(|_| {
+                            io::Error::other("HTTP/3 response release channel closed")
+                        })?;
+                    }
+                    state
+                        .http3_response_cancel_pending
+                        .store(false, Ordering::Release);
+                    lifecycle_response(b"released response\n", None)
+                }
+                "/http3-response-hold-before-trailers" => {
+                    let release = state.http3_response_cancel_release.subscribe();
+                    let response_state = Arc::clone(&state);
+                    let body = stream::unfold(
+                        (0_u8, release, response_state),
+                        |(step, mut release, response_state)| async move {
+                            match step {
+                                0 => Some((
+                                    Ok(http_body::Frame::data(Bytes::from_static(
+                                        b"before-trailers\n",
+                                    ))),
+                                    (1, release, response_state),
+                                )),
+                                1 => {
+                                    response_state
+                                        .http3_response_cancel_pending
+                                        .store(true, Ordering::Release);
+                                    while !*release.borrow_and_update() {
+                                        if release.changed().await.is_err() {
+                                            response_state
+                                                .http3_response_cancel_pending
+                                                .store(false, Ordering::Release);
+                                            return Some((
+                                                Err(io::Error::other(
+                                                    "HTTP/3 trailer release channel closed",
+                                                )),
+                                                (2, release, response_state),
+                                            ));
+                                        }
+                                    }
+                                    response_state
+                                        .http3_response_cancel_pending
+                                        .store(false, Ordering::Release);
+                                    let mut trailers = http::HeaderMap::new();
+                                    let value = match http::HeaderValue::from_bytes(b"complete") {
+                                        Ok(value) => value,
+                                        Err(error) => {
+                                            return Some((
+                                                Err(io::Error::other(error.to_string())),
+                                                (2, release, response_state),
+                                            ));
+                                        }
+                                    };
+                                    trailers.insert("x-contract-trailer", value);
+                                    Some((
+                                        Ok(http_body::Frame::trailers(trailers)),
+                                        (2, release, response_state),
+                                    ))
+                                }
+                                _ => None,
+                            }
+                        },
+                    );
+                    let body = LifecycleBody {
+                        inner: Box::pin(StreamBody::new(body)),
+                        drop_flag: None,
+                    };
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .body(body)
+                        .map_err(|error| io::Error::other(error.to_string()))
+                }
                 "/hold" => {
                     state.active_request.send_replace(true);
                     let mut release = state.release_request.subscribe();
@@ -999,6 +1093,9 @@ where
                     },
                 ),
                 "/http3-response-cancel-release" => {
+                    state
+                        .http3_response_cancel_pending
+                        .store(false, Ordering::Release);
                     state.http3_response_cancel_release.send_replace(true);
                     response(StatusCode::OK, b"released\n")
                 }
@@ -1395,6 +1492,7 @@ fn lifecycle_fixture_with_behaviors(
 ) -> LifecycleFixture {
     let (active_request, _) = watch::channel(false);
     let (release_request, _) = watch::channel(false);
+    let (http3_response_cancel_release, _) = watch::channel(false);
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     let state = Arc::new(LifecycleState {
         startup_completed: AtomicBool::new(false),
@@ -1402,6 +1500,8 @@ fn lifecycle_fixture_with_behaviors(
         startup_hook_dropped: Arc::new(AtomicBool::new(false)),
         shutdown_hook_dropped: Arc::new(AtomicBool::new(false)),
         requests_started: AtomicUsize::new(0),
+        http3_response_cancel_pending: AtomicBool::new(false),
+        http3_response_cancel_release,
         readiness_error_armed: AtomicBool::new(false),
         readiness_gate: Mutex::new(ReadinessGate::default()),
         response_body_dropped: Arc::new(AtomicBool::new(false)),
@@ -6850,6 +6950,11 @@ async fn run_isolated_http3_incomplete_request_recovery_case(case: &Value) -> Pr
 }
 
 async fn run_isolated_http3_response_send_cancel_case(case: &Value) -> ProbeResult<()> {
+    run_http3_response_send_cancel_contract_app(case).await?;
+    run_http3_response_send_cancel_lifecycle_app(case).await
+}
+
+async fn run_http3_response_send_cancel_contract_app(case: &Value) -> ProbeResult<()> {
     let (_, tls_clients, quic_server_config) = test_tls_configs()?;
     let server_endpoint =
         quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
@@ -6874,9 +6979,109 @@ async fn run_isolated_http3_response_send_cancel_case(case: &Value) -> ProbeResu
         },
     ));
 
+    let workflow = run_http3_response_send_cancel_client(
+        case,
+        address,
+        &tls_clients.http3,
+        &observed_phases,
+        required_str(case, "recovery_body")?.as_bytes(),
+    )
+    .await;
+
+    shutdown_sender.send_replace(true);
+    let server_result = tokio::time::timeout(Duration::from_secs(4), server).await;
+    workflow?;
+    match server_result {
+        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Err(error))) => Err(error.into()),
+        Ok(Err(error)) => Err(error.into()),
+        Err(_) => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 response cancellation server did not stop",
+        )
+        .into()),
+    }
+}
+
+async fn run_http3_response_send_cancel_lifecycle_app(case: &Value) -> ProbeResult<()> {
+    let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+    let server_endpoint =
+        quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
+    let address = server_endpoint.local_addr()?;
+    let fixture = lifecycle_fixture();
+    let observed_phases = Arc::new(Mutex::new(Vec::<ServerErrorPhase>::new()));
+    let phase_log = Arc::clone(&observed_phases);
+    let mut config = lifecycle_server_config(Arc::clone(&fixture.hooks), case)?;
+    config.error_observer = Some(Arc::new(move |event: ServerErrorEvent<'_>| {
+        if let Ok(mut phases) = phase_log.lock() {
+            phases.push(event.phase());
+        }
+    }));
+    let server = tokio::spawn(uvicorn_rs::serve_http3(
+        server_endpoint,
+        fixture.app.clone(),
+        shutdown_on_change(fixture.shutdown_receiver.clone()),
+        config,
+    ));
+
+    let workflow = run_http3_response_send_cancel_client(
+        case,
+        address,
+        &tls_clients.http3,
+        &observed_phases,
+        b"started\n",
+    )
+    .await;
+
+    fixture.shutdown_sender.send_replace(true);
+    let server_result = tokio::time::timeout(Duration::from_secs(4), server).await;
+    workflow?;
+    match server_result {
+        Ok(Ok(Ok(()))) => {}
+        Ok(Ok(Err(error))) => return Err(error.into()),
+        Ok(Err(error)) => return Err(error.into()),
+        Err(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "HTTP/3 response cancellation lifecycle server did not stop",
+            )
+            .into());
+        }
+    }
+
+    if !fixture.state.startup_completed.load(Ordering::Acquire)
+        || !fixture.state.shutdown_completed.load(Ordering::Acquire)
+    {
+        return Err(io::Error::other(
+            "HTTP/3 response cancellation did not complete application lifespan",
+        )
+        .into());
+    }
+    let events = fixture
+        .state
+        .events
+        .lock()
+        .map_err(|_| io::Error::other("lifecycle event log was poisoned"))?;
+    if events.as_slice() != ["startup", "shutdown"] {
+        return Err(io::Error::other(format!(
+            "HTTP/3 response cancellation produced unexpected lifecycle events: {events:?}"
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn run_http3_response_send_cancel_client(
+    case: &Value,
+    address: SocketAddr,
+    client_config: &quinn::ClientConfig,
+    observed_phases: &Mutex<Vec<ServerErrorPhase>>,
+    expected_recovery_body: &[u8],
+) -> ProbeResult<()> {
+    let mut endpoint = quinn::Endpoint::client("127.0.0.1:0".parse::<SocketAddr>()?)?;
+    endpoint.set_default_client_config(client_config.clone());
+    let mut client_driver = None;
     let workflow: ProbeResult<()> = async {
-        let mut endpoint = quinn::Endpoint::client("127.0.0.1:0".parse::<SocketAddr>()?)?;
-        endpoint.set_default_client_config(tls_clients.http3.clone());
         let connection = tokio::time::timeout(
             Duration::from_secs(2),
             endpoint.connect(address, "localhost")?,
@@ -6885,9 +7090,9 @@ async fn run_isolated_http3_response_send_cancel_case(case: &Value) -> ProbeResu
         .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "HTTP/3 peer did not connect"))??;
         let (mut driver, mut sender) =
             h3::client::new(h3_quinn::Connection::new(connection.clone())).await?;
-        let client_driver = tokio::spawn(async move {
+        client_driver = Some(tokio::spawn(async move {
             let _ = std::future::poll_fn(|context| driver.poll_close(context)).await;
-        });
+        }));
 
         match required_str(case, "cancel_phase")? {
             "before-headers" => {
@@ -6912,7 +7117,7 @@ async fn run_isolated_http3_response_send_cancel_case(case: &Value) -> ProbeResu
                 request_send.finish()?;
 
                 let mut response_buffer = Vec::new();
-                let (headers_type, _) = tokio::time::timeout(
+                let (headers_type, response_headers) = tokio::time::timeout(
                     Duration::from_secs(2),
                     read_raw_http3_frame(&mut response_receive, &mut response_buffer),
                 )
@@ -6923,6 +7128,8 @@ async fn run_isolated_http3_response_send_cancel_case(case: &Value) -> ProbeResu
                 )
                 .await??;
                 if headers_type != 0x01
+                    || raw_http3_static_status(&response_headers)
+                        != Some(required_status(case, "expected_status")?)
                     || data_type != 0x00
                     || first_chunk != required_str(case, "expected_first_chunk")?.as_bytes()
                 {
@@ -6965,7 +7172,24 @@ async fn run_isolated_http3_response_send_cancel_case(case: &Value) -> ProbeResu
             .into());
         }
 
-        wait_http3_connection_error(&observed_phases, case).await?;
+        let mut pending = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "pending_path")?,
+            b"",
+        )
+        .await?;
+        let (pending_status, pending_body, _) = collect_http3_response(&mut pending).await?;
+        if pending_status != StatusCode::OK.as_u16() || pending_body != b"ready\n" {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/3 response cancellation release did not clear the pending state",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        wait_http3_connection_error(observed_phases, case).await?;
 
         let mut recovery = send_http3_request(
             &mut sender,
@@ -6976,9 +7200,7 @@ async fn run_isolated_http3_response_send_cancel_case(case: &Value) -> ProbeResu
         )
         .await?;
         let (status, body, _) = collect_http3_response(&mut recovery).await?;
-        if status != required_status(case, "recovery_status")?
-            || body != required_str(case, "recovery_body")?.as_bytes()
-        {
+        if status != required_status(case, "recovery_status")? || body != expected_recovery_body {
             return Err(io::Error::other(format!(
                 "{}: HTTP/3 connection did not recover after response cancellation",
                 required_str(case, "id")?
@@ -6986,35 +7208,63 @@ async fn run_isolated_http3_response_send_cancel_case(case: &Value) -> ProbeResu
             .into());
         }
 
-        endpoint.close(
-            quinn::VarInt::from_u32(0),
-            b"HTTP/3 response cancellation case complete",
-        );
-        endpoint.wait_idle().await;
+        Ok(())
+    }
+    .await;
+
+    endpoint.close(
+        quinn::VarInt::from_u32(0),
+        b"HTTP/3 response cancellation case complete",
+    );
+    let idle_result = tokio::time::timeout(Duration::from_secs(2), endpoint.wait_idle())
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "HTTP/3 response cancellation endpoint did not become idle",
+            )
+        });
+    let driver_result = if let Some(client_driver) = client_driver {
         tokio::time::timeout(Duration::from_secs(2), client_driver)
             .await
             .map_err(|_| {
                 io::Error::new(
                     io::ErrorKind::TimedOut,
-                    "HTTP/3 response cancellation client did not stop",
+                    "HTTP/3 response cancellation client driver did not stop",
                 )
-            })??;
+            })?
+            .map_err(io::Error::other)
+    } else {
         Ok(())
-    }
-    .await;
+    };
 
-    shutdown_sender.send_replace(true);
-    let server_result = tokio::time::timeout(Duration::from_secs(4), server).await;
     workflow?;
-    match server_result {
-        Ok(Ok(Ok(()))) => Ok(()),
-        Ok(Ok(Err(error))) => Err(error.into()),
-        Ok(Err(error)) => Err(error.into()),
-        Err(_) => Err(io::Error::new(
-            io::ErrorKind::TimedOut,
-            "HTTP/3 response cancellation server did not stop",
-        )
-        .into()),
+    idle_result?;
+    driver_result?;
+    Ok(())
+}
+
+fn raw_http3_static_status(field_section: &[u8]) -> Option<u16> {
+    if field_section.len() < 3 || field_section[0] != 0 || field_section[1] != 0 {
+        return None;
+    }
+    let first_field = *field_section.get(2)?;
+    if first_field & 0xc0 != 0xc0 {
+        return None;
+    }
+    match first_field & 0x3f {
+        25 => Some(200),
+        27 => Some(404),
+        28 => Some(503),
+        64 => Some(204),
+        65 => Some(206),
+        66 => Some(302),
+        67 => Some(400),
+        68 => Some(403),
+        69 => Some(421),
+        70 => Some(425),
+        71 => Some(500),
+        _ => None,
     }
 }
 
