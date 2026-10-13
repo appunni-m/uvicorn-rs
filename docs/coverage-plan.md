@@ -3,7 +3,7 @@
 ## Current acceptance status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests define 511 ASGI
-parity/fault-contract cases and 85 Python-free native cases (596 total).
+parity/fault-contract cases and 88 Python-free native cases (599 total).
 Acceptance requires three complete repeats of both matrices, 100% region and
 line coverage, and zero-gap results from fully paginated Coverage-MCP queries
 bound to the exact report bytes.
@@ -20,11 +20,19 @@ not a coverage pass.
 
 After that report, the redundant per-connection graceful-shutdown timer was
 removed; its existing held-response case passed in a focused run. The native
-manifest also gained `http1.upgrade-session-keeps-lifetime-and-drains`, which
-passed one focused real-socket run. Those selected reports do not establish
-coverage for the current 596-case manifest. The current-source full matrix,
-three repeats, 100% regions and lines, and final zero-gap Coverage-MCP receipt
-remain open.
+manifest gained four HTTP/1 upgrade-session cases covering a successful
+handoff/drain, handler error, unavailable upgrade, and registration after
+connection close. They passed 4/4 in one selected unified run at
+`target/asgi-coverage/2026-10-13-native-upgrade-contracts-refactor/coverage-report.json`;
+the selected result has 673/7,072 regions, 550/5,177 lines, and complete case
+attribution. Its source SHA-256 is
+`2c3558737f2f4643c4848b3c0d0438a1f245dcf1b4d2835b65b0282cfbaf0a3f`. The exact
+report's uncovered-region list has no `ConnectionUpgrade` function symbols,
+while a matching-source Coverage-MCP query returns five groups for that API;
+resolve this discrepancy before claiming zero gaps. These selected reports do
+not establish coverage for the current 599-case manifest. The current-source
+full matrix, three repeats, 100% regions and lines, and final zero-gap
+Coverage-MCP receipt remain open.
 
 The HTTP/3 request-body source was then measured with the selected case
 `http3.empty-request-body-is-consumed-through-eof` in
@@ -39,7 +47,7 @@ the body returns `Pending` and polls data again on the next call. The empty-body
 input separately verifies the public request-body EOF and size-hint behavior.
 The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
-The full 596-case aggregate, three repeats, and zero-gap acceptance remain
+The full 599-case aggregate, three repeats, and zero-gap acceptance remain
 outstanding.
 
 The latest selected report is

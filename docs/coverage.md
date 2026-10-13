@@ -3,7 +3,7 @@
 ## Current unified coverage status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 85 Python-free native cases (596 total).
+parity/fault-contract cases and 88 Python-free native cases (599 total).
 Acceptance requires three complete repeats, 100% region and line coverage,
 and zero-gap results from fully paginated Coverage-MCP queries bound to the
 exact report bytes.
@@ -35,13 +35,19 @@ result verifies the shutdown contract only: the 595-case report above was
 collected before this edit and does not establish full-matrix parity or
 coverage for the updated source. The full matrix was not rerun.
 
-The native HTTP/1 upgrade-session case
-`http1.upgrade-session-keeps-lifetime-and-drains` passed once on the focused
-unified runner. It checks the `101` handoff, post-handoff data exchange,
-connection lifetime, shutdown notification, and transport close. The selected
-report measured 533/7,075 regions and 438/5,180 lines; it is not aggregate
-coverage evidence and does not establish WebSocket handshake/framing or ASGI
-WebSocket support.
+Four HTTP/1 upgrade-session inputs passed 4/4 in the focused unified runner:
+the successful `101` handoff/drain, session-handler error, unavailable upgrade,
+and registration after connection close. The selected report is
+`target/asgi-coverage/2026-10-13-native-upgrade-contracts-refactor/coverage-report.json`;
+it records 673/7,072 regions and 550/5,177 lines for the selected subset, with
+complete attribution and no case, infrastructure, or retry failures. Its
+source SHA-256 is `2c3558737f2f4643c4848b3c0d0438a1f245dcf1b4d2835b65b0282cfbaf0a3f`.
+Coverage-MCP reports a matching source receipt and passed case status. Its
+`ConnectionUpgrade` query still returns five function groups, although the
+report's uncovered-region list contains no `ConnectionUpgrade` symbols; resolve
+that query discrepancy before claiming zero gaps. This selected report is not
+aggregate coverage evidence and does not establish WebSocket handshake,
+framing, or ASGI WebSocket support.
 
 The HTTP/3 request-body change was measured separately with
 `target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.

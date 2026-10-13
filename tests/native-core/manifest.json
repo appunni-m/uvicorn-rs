@@ -45,11 +45,45 @@
       "id": "http1.upgrade-session-keeps-lifetime-and-drains",
       "protocol": "native-core",
       "operation": "native-http1-upgrade-session",
+      "scenario": "graceful-session",
       "path": "/upgrade-session",
       "expected_status": 101,
       "expected_upgrade": "uvicorn-rs-test",
       "expected_pong": "pong;connection-open=true\n",
       "expected_shutdown": "shutdown;connection-open=true\n",
+      "server_wait_ms": 1000
+    },
+    {
+      "id": "http1.upgrade-session-handler-error-is-observed",
+      "protocol": "native-core",
+      "operation": "native-http1-upgrade-session",
+      "scenario": "session-handler-error",
+      "path": "/upgrade-session-handler-error",
+      "expected_status": 101,
+      "expected_upgrade": "uvicorn-rs-test",
+      "expected_session_error": "upgrade handler sentinel",
+      "server_wait_ms": 1000
+    },
+    {
+      "id": "http1.upgrade-registration-without-upgrade-is-observed",
+      "protocol": "native-core",
+      "operation": "native-http1-upgrade-session",
+      "scenario": "upgrade-not-available",
+      "path": "/upgrade-session-not-accepted",
+      "expected_status": 200,
+      "expected_response_body": "upgrade was not accepted\n",
+      "expected_session_error": "no upgrade available",
+      "server_wait_ms": 1000
+    },
+    {
+      "id": "http1.upgrade-registration-after-close-is-rejected",
+      "protocol": "native-core",
+      "operation": "native-http1-upgrade-session",
+      "scenario": "registration-after-close",
+      "path": "/upgrade-registration-after-close",
+      "expected_status": 200,
+      "expected_response_body": "registration deferred\n",
+      "expected_registration_error": "HTTP connection ended before upgrade registration",
       "server_wait_ms": 1000
     },
     {

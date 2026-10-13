@@ -185,16 +185,16 @@ contract above:
   `ConnectionUpgrade` on HTTP/1.1 requests. Applications register their
   `OnUpgrade` task through that handle; the connection task joins registered
   sessions, signals them at graceful shutdown, and cancels stragglers at the
-  existing server deadline. A focused real-socket case verifies a `101`
-  handoff, data exchange after handoff, an open connection-lifetime signal,
-  shutdown notification, and transport close. This generic upgrade lifecycle
-  case passed once on the local dirty source; it is not WebSocket handshake,
-  framing, protocol conformance, or aggregate coverage evidence. HTTP/1
-  WebSocket support remains unimplemented.
+  existing server deadline. Four focused real-socket inputs pass 4/4 for a
+  successful `101` handoff/drain, session-handler error reporting, registration
+  without an available upgrade, and registration after connection close. This
+  generic upgrade lifecycle evidence is not WebSocket handshake, framing,
+  protocol conformance, or aggregate coverage evidence. HTTP/1 WebSocket
+  support remains unimplemented.
 
 The generic H2 request/connection lifetime signal and its sibling-isolation
-case are implemented. The native core now has a selected generic HTTP/1
-upgrade-session lifecycle case, but no WebSocket protocol API or ASGI mapping.
+case are implemented. The native core now has selected generic HTTP/1
+upgrade-session lifecycle cases, but no WebSocket protocol API or ASGI mapping.
 ASGI task semantics and independent H3 idle-reset notification remain
 feasibility gates, not support claims. Do not route Python ASGI traffic through
 the native transport until pending-receive disconnect, response-after-EOF,

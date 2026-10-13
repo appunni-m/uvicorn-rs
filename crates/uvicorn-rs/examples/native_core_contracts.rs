@@ -94,6 +94,12 @@ struct AppState {
     http3_response_cancel_release: watch::Sender<bool>,
     upload_tasks_dropped: Arc<AtomicUsize>,
     shutdown: watch::Sender<bool>,
+    upgrade_registration_outcome: watch::Sender<Option<String>>,
+}
+
+enum UpgradeSessionBehavior {
+    Graceful(ConnectionLifetime),
+    HandlerError,
 }
 
 #[derive(Default)]
@@ -714,29 +720,68 @@ where
                         ));
                     };
                     let on_upgrade = hyper::upgrade::on(&mut request);
-                    let session_shutdown = connection_upgrade.clone();
-                    connection_upgrade
-                        .register(on_upgrade, move |mut stream| async move {
-                            let mut input = [0; 4];
-                            stream.read_exact(&mut input).await?;
-                            if input != *b"ping" {
-                                return Err(io::Error::other("unexpected upgraded-session input"));
-                            }
-                            let response = format!(
-                                "pong;connection-open={}\n",
-                                !connection_lifetime.is_closed()
-                            );
-                            stream.write_all(response.as_bytes()).await?;
-                            session_shutdown.wait_for_shutdown().await;
-                            let response = format!(
-                                "shutdown;connection-open={}\n",
-                                !connection_lifetime.is_closed()
-                            );
-                            stream.write_all(response.as_bytes()).await?;
-                            Ok::<(), io::Error>(())
-                        })
+                    register_contract_upgrade_session(
+                        connection_upgrade,
+                        on_upgrade,
+                        UpgradeSessionBehavior::Graceful(connection_lifetime),
+                    )
                         .map_err(|error| io::Error::other(error.to_string()))?;
                     upgrade_response()
+                }
+                "/upgrade-session-handler-error" => {
+                    let Some(connection_upgrade) = connection_upgrade else {
+                        return Err(io::Error::other(
+                            "HTTP/1 upgrade extension is missing",
+                        ));
+                    };
+                    let on_upgrade = hyper::upgrade::on(&mut request);
+                    register_contract_upgrade_session(
+                        connection_upgrade,
+                        on_upgrade,
+                        UpgradeSessionBehavior::HandlerError,
+                    )
+                        .map_err(|error| io::Error::other(error.to_string()))?;
+                    upgrade_response()
+                }
+                "/upgrade-session-not-accepted" => {
+                    let Some(connection_upgrade) = connection_upgrade else {
+                        return Err(io::Error::other(
+                            "HTTP/1 upgrade extension is missing",
+                        ));
+                    };
+                    let on_upgrade = hyper::upgrade::on(&mut request);
+                    register_contract_upgrade_session(
+                        connection_upgrade,
+                        on_upgrade,
+                        UpgradeSessionBehavior::HandlerError,
+                    )
+                        .map_err(|error| io::Error::other(error.to_string()))?;
+                    response(StatusCode::OK, b"upgrade was not accepted\n")
+                }
+                "/upgrade-registration-after-close" => {
+                    let (Some(connection_upgrade), Some(mut connection_lifetime)) =
+                        (connection_upgrade, connection_lifetime)
+                    else {
+                        return Err(io::Error::other(
+                            "HTTP/1 upgrade or connection lifetime extension is missing",
+                        ));
+                    };
+                    let on_upgrade = hyper::upgrade::on(&mut request);
+                    let registration_outcome = state.upgrade_registration_outcome.clone();
+                    let _registration_task = tokio::spawn(async move {
+                        connection_lifetime.wait_until_closed().await;
+                        connection_upgrade.wait_for_shutdown().await;
+                        let outcome = match register_contract_upgrade_session(
+                            connection_upgrade,
+                            on_upgrade,
+                            UpgradeSessionBehavior::HandlerError,
+                        ) {
+                            Ok(()) => "registration unexpectedly succeeded".to_owned(),
+                            Err(error) => error.to_string(),
+                        };
+                        registration_outcome.send_replace(Some(outcome));
+                    });
+                    response(StatusCode::OK, b"registration deferred\n")
                 }
                 "/ready" => response(StatusCode::OK, b"ready\n"),
                 "/arm-readiness-pending" => {
@@ -1381,6 +1426,40 @@ fn upgrade_response() -> Result<Response<AppBody>, io::Error> {
         .map_err(|error| io::Error::other(error.to_string()))
 }
 
+fn register_contract_upgrade_session(
+    connection_upgrade: ConnectionUpgrade,
+    on_upgrade: hyper::upgrade::OnUpgrade,
+    behavior: UpgradeSessionBehavior,
+) -> Result<(), uvicorn_rs::ConnectionUpgradeClosed> {
+    let session_shutdown = connection_upgrade.clone();
+    connection_upgrade.register(on_upgrade, move |mut stream| async move {
+        match behavior {
+            UpgradeSessionBehavior::HandlerError => {
+                Err(io::Error::other("upgrade handler sentinel"))
+            }
+            UpgradeSessionBehavior::Graceful(connection_lifetime) => {
+                let mut input = [0; 4];
+                stream.read_exact(&mut input).await?;
+                if input != *b"ping" {
+                    return Err(io::Error::other("unexpected upgraded-session input"));
+                }
+                let response = format!(
+                    "pong;connection-open={}\n",
+                    !connection_lifetime.is_closed()
+                );
+                stream.write_all(response.as_bytes()).await?;
+                session_shutdown.wait_for_shutdown().await;
+                let response = format!(
+                    "shutdown;connection-open={}\n",
+                    !connection_lifetime.is_closed()
+                );
+                stream.write_all(response.as_bytes()).await?;
+                Ok(())
+            }
+        }
+    })
+}
+
 fn stream_response<S>(body: S) -> Result<Response<AppBody>, io::Error>
 where
     S: futures_util::Stream<Item = Result<http_body::Frame<Bytes>, io::Error>> + Send + 'static,
@@ -1960,94 +2039,66 @@ async fn run_isolated_http1_service_panic_recovery_case(case: &Value) -> ProbeRe
 }
 
 async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()> {
+    let scenario = required_str(case, "scenario")?;
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
-    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let (application, state) = contract_app_with_state(shutdown_sender.clone());
+    let observed_errors = Arc::new(Mutex::new(Vec::<ObservedServerError>::new()));
+    let error_log = Arc::clone(&observed_errors);
+    let error_observer: ServerErrorObserver = Arc::new(move |event: ServerErrorEvent<'_>| {
+        if let Ok(mut observations) = error_log.lock() {
+            observations.push(ObservedServerError {
+                phase: event.phase(),
+                peer_addr: event.peer_addr(),
+                is_io_error: event.error().is::<io::Error>(),
+                h3_error_code: None,
+                message: event.error().to_string(),
+            });
+        }
+    });
+    let mut server_config = uvicorn_rs::ServerConfig {
+        graceful_shutdown_timeout: Duration::from_millis(500),
+        ..uvicorn_rs::ServerConfig::default()
+    };
+    server_config.error_observer = Some(error_observer);
     let server = tokio::spawn(uvicorn_rs::serve_tcp(
         listener,
         application,
         shutdown_on_change(shutdown_receiver),
-        uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_millis(500),
-            ..uvicorn_rs::ServerConfig::default()
-        },
+        server_config,
     ));
+    let mut registration_outcome = state.upgrade_registration_outcome.subscribe();
 
     let workflow: ProbeResult<()> = async {
-        let mut client = tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address))
-            .await??;
-        let request = format!(
-            "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: uvicorn-rs-test\r\n\r\n",
-            required_str(case, "path")?
-        );
-        client.write_all(request.as_bytes()).await?;
-
-        let (status, headers) = tokio::time::timeout(
-            Duration::from_secs(2),
-            read_response_head(&mut client),
-        )
-        .await??;
-        let expected_status = required_status(case, "expected_status")?;
-        let expected_upgrade = required_str(case, "expected_upgrade")?;
-        let accepted_upgrade = headers
-            .get("upgrade")
-            .is_some_and(|value| value.eq_ignore_ascii_case(expected_upgrade));
-        let accepted_connection = headers
-            .get("connection")
-            .is_some_and(|value| value.eq_ignore_ascii_case("upgrade"));
-        if status != expected_status || !accepted_upgrade || !accepted_connection {
-            return Err(io::Error::other(format!(
-                "{}: server did not accept the configured HTTP/1 upgrade",
-                required_str(case, "id")?
-            ))
-            .into());
+        match scenario {
+            "graceful-session" => {
+                run_http1_graceful_upgrade_case(address, case, &shutdown_sender).await
+            }
+            "session-handler-error" => {
+                run_http1_upgrade_error_case(address, case, &observed_errors, true).await
+            }
+            "upgrade-not-available" => {
+                run_http1_upgrade_error_case(address, case, &observed_errors, false).await
+            }
+            "registration-after-close" => {
+                run_http1_upgrade_registration_after_close_case(
+                    address,
+                    case,
+                    &mut registration_outcome,
+                )
+                .await
+            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("unknown HTTP/1 upgrade scenario: {scenario}"),
+            )
+            .into()),
         }
-
-        client.write_all(b"ping").await?;
-        let expected_pong = required_str(case, "expected_pong")?.as_bytes();
-        let mut pong = vec![0; expected_pong.len()];
-        tokio::time::timeout(Duration::from_secs(2), client.read_exact(&mut pong)).await??;
-        if pong != expected_pong {
-            return Err(io::Error::other(format!(
-                "{}: upgraded session did not echo its live connection state",
-                required_str(case, "id")?
-            ))
-            .into());
-        }
-
-        shutdown_sender.send_replace(true);
-        let expected_shutdown = required_str(case, "expected_shutdown")?.as_bytes();
-        let mut shutdown = vec![0; expected_shutdown.len()];
-        tokio::time::timeout(
-            Duration::from_secs(2),
-            client.read_exact(&mut shutdown),
-        )
-        .await??;
-        if shutdown != expected_shutdown {
-            return Err(io::Error::other(format!(
-                "{}: upgraded session did not observe graceful shutdown while its connection remained open",
-                required_str(case, "id")?
-            ))
-            .into());
-        }
-
-        let mut trailing = [0; 1];
-        let read = tokio::time::timeout(Duration::from_secs(2), client.read(&mut trailing)).await??;
-        if read != 0 {
-            return Err(io::Error::other(format!(
-                "{}: upgraded transport remained open after the registered session ended",
-                required_str(case, "id")?
-            ))
-            .into());
-        }
-        Ok(())
     }
     .await;
 
-    if workflow.is_err() {
-        shutdown_sender.send_replace(true);
-    }
+    shutdown_sender.send_replace(true);
     let wait_ms = case["server_wait_ms"]
         .as_u64()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
@@ -2061,6 +2112,259 @@ async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()
         })??;
     workflow?;
     server_result?;
+    Ok(())
+}
+
+async fn open_http1_upgrade_case_connection(
+    address: SocketAddr,
+    case: &Value,
+    request_upgrade: bool,
+) -> ProbeResult<(TcpStream, u16, std::collections::HashMap<String, String>)> {
+    let mut client =
+        tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
+    let request = if request_upgrade {
+        format!(
+            "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: uvicorn-rs-test\r\n\r\n",
+            required_str(case, "path")?
+        )
+    } else {
+        format!(
+            "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            required_str(case, "path")?
+        )
+    };
+    client.write_all(request.as_bytes()).await?;
+    let (status, headers) =
+        tokio::time::timeout(Duration::from_secs(2), read_response_head(&mut client)).await??;
+    Ok((client, status, headers))
+}
+
+fn verify_http1_upgrade_headers(
+    case: &Value,
+    status: u16,
+    headers: &std::collections::HashMap<String, String>,
+) -> ProbeResult<()> {
+    let expected_status = required_status(case, "expected_status")?;
+    let expected_upgrade = required_str(case, "expected_upgrade")?;
+    let accepted_upgrade = headers
+        .get("upgrade")
+        .is_some_and(|value| value.eq_ignore_ascii_case(expected_upgrade));
+    let accepted_connection = headers
+        .get("connection")
+        .is_some_and(|value| value.eq_ignore_ascii_case("upgrade"));
+    if status != expected_status || !accepted_upgrade || !accepted_connection {
+        return Err(io::Error::other(format!(
+            "{}: server did not accept the configured HTTP/1 upgrade",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn run_http1_graceful_upgrade_case(
+    address: SocketAddr,
+    case: &Value,
+    shutdown_sender: &watch::Sender<bool>,
+) -> ProbeResult<()> {
+    let (mut client, status, headers) =
+        open_http1_upgrade_case_connection(address, case, true).await?;
+    verify_http1_upgrade_headers(case, status, &headers)?;
+
+    client.write_all(b"ping").await?;
+    let expected_pong = required_str(case, "expected_pong")?.as_bytes();
+    let mut pong = vec![0; expected_pong.len()];
+    tokio::time::timeout(Duration::from_secs(2), client.read_exact(&mut pong)).await??;
+    if pong != expected_pong {
+        return Err(io::Error::other(format!(
+            "{}: upgraded session did not echo its live connection state",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    shutdown_sender.send_replace(true);
+    let expected_shutdown = required_str(case, "expected_shutdown")?.as_bytes();
+    let mut shutdown = vec![0; expected_shutdown.len()];
+    tokio::time::timeout(Duration::from_secs(2), client.read_exact(&mut shutdown)).await??;
+    if shutdown != expected_shutdown {
+        return Err(io::Error::other(format!(
+            "{}: upgraded session did not observe graceful shutdown while its connection remained open",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    let mut trailing = [0; 1];
+    let read = tokio::time::timeout(Duration::from_secs(2), client.read(&mut trailing)).await??;
+    if read != 0 {
+        return Err(io::Error::other(format!(
+            "{}: upgraded transport remained open after the registered session ended",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn run_http1_upgrade_error_case(
+    address: SocketAddr,
+    case: &Value,
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+    request_upgrade: bool,
+) -> ProbeResult<()> {
+    let (mut client, status, headers) =
+        open_http1_upgrade_case_connection(address, case, request_upgrade).await?;
+    let expected_status = required_status(case, "expected_status")?;
+    if status != expected_status {
+        return Err(io::Error::other(format!(
+            "{}: expected status {expected_status}, got {status}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    if request_upgrade {
+        verify_http1_upgrade_headers(case, status, &headers)?;
+        let mut trailing = Vec::new();
+        tokio::time::timeout(Duration::from_secs(2), client.read_to_end(&mut trailing)).await??;
+        if !trailing.is_empty() {
+            return Err(io::Error::other(format!(
+                "{}: failed upgrade session wrote unexpected bytes: {:?}",
+                required_str(case, "id")?,
+                trailing
+            ))
+            .into());
+        }
+    } else {
+        let (body, complete) = tokio::time::timeout(
+            Duration::from_secs(2),
+            read_response_body(&mut client, &headers),
+        )
+        .await??;
+        let expected_body = required_str(case, "expected_response_body")?.as_bytes();
+        if !complete || body != expected_body {
+            return Err(io::Error::other(format!(
+                "{}: non-upgrade response body mismatch: complete={complete}, body={:?}",
+                required_str(case, "id")?,
+                String::from_utf8_lossy(&body)
+            ))
+            .into());
+        }
+    }
+
+    let expected_error = required_str(case, "expected_session_error")?;
+    let observation = wait_for_http1_upgrade_error(observed_errors, expected_error).await?;
+    if observation.phase != ServerErrorPhase::Connection || observation.peer_addr.is_none() {
+        return Err(io::Error::other(format!(
+            "{}: expected a connection-phase upgrade error, got {observation:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    verify_http1_upgrade_listener_recovers(address, case).await
+}
+
+async fn wait_for_http1_upgrade_error(
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+    expected_message: &str,
+) -> ProbeResult<ObservedServerError> {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let observed = observed_errors
+            .lock()
+            .map_err(|_| io::Error::other("upgrade error-observation lock was poisoned"))?
+            .iter()
+            .find(|error| {
+                error.phase == ServerErrorPhase::Connection
+                    && error.message.contains(expected_message)
+            })
+            .cloned();
+        if let Some(observed) = observed {
+            return Ok(observed);
+        }
+        if Instant::now() >= deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!("no connection error contained {expected_message:?}"),
+            )
+            .into());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+async fn verify_http1_upgrade_listener_recovers(
+    address: SocketAddr,
+    case: &Value,
+) -> ProbeResult<()> {
+    let mut client =
+        tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
+    client
+        .write_all(b"GET /ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await?;
+    let (status, headers) =
+        tokio::time::timeout(Duration::from_secs(2), read_response_head(&mut client)).await??;
+    let (body, complete) = tokio::time::timeout(
+        Duration::from_secs(2),
+        read_response_body(&mut client, &headers),
+    )
+    .await??;
+    if status != 200 || body != b"ready\n" || !complete {
+        return Err(io::Error::other(format!(
+            "{}: listener failed recovery request after upgrade error: status={status}, body={:?}, complete={complete}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(&body)
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn run_http1_upgrade_registration_after_close_case(
+    address: SocketAddr,
+    case: &Value,
+    registration_outcome: &mut watch::Receiver<Option<String>>,
+) -> ProbeResult<()> {
+    let (mut client, status, headers) =
+        open_http1_upgrade_case_connection(address, case, false).await?;
+    let expected_status = required_status(case, "expected_status")?;
+    let (body, complete) = tokio::time::timeout(
+        Duration::from_secs(2),
+        read_response_body(&mut client, &headers),
+    )
+    .await??;
+    let expected_body = required_str(case, "expected_response_body")?.as_bytes();
+    if status != expected_status || !complete || body != expected_body {
+        return Err(io::Error::other(format!(
+            "{}: registration setup response mismatch: status={status}, complete={complete}, body={:?}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(&body)
+        ))
+        .into());
+    }
+
+    let outcome = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(outcome) = registration_outcome.borrow_and_update().clone() {
+                return Ok::<_, io::Error>(outcome);
+            }
+            registration_outcome
+                .changed()
+                .await
+                .map_err(|_| io::Error::other("registration outcome channel closed"))?;
+        }
+    })
+    .await??;
+    let expected_outcome = required_str(case, "expected_registration_error")?;
+    if outcome != expected_outcome {
+        return Err(io::Error::other(format!(
+            "{}: late upgrade registration result mismatch: {outcome:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
     Ok(())
 }
 
@@ -4131,6 +4435,7 @@ fn contract_app(shutdown: watch::Sender<bool>) -> ContractApp {
 fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<AppState>) {
     let (peer_write_half_close_release, _) = watch::channel(false);
     let (http3_response_cancel_release, _) = watch::channel(false);
+    let (upgrade_registration_outcome, _) = watch::channel(None);
     let state = Arc::new(AppState {
         fail_next_readiness: AtomicBool::new(false),
         readiness_gate: Mutex::new(ReadinessGate::default()),
@@ -4156,6 +4461,7 @@ fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<A
         http3_response_cancel_release,
         upload_tasks_dropped: Arc::new(AtomicUsize::new(0)),
         shutdown,
+        upgrade_registration_outcome,
     });
     (
         ContractApp {
