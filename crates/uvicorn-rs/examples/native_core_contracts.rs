@@ -4,7 +4,6 @@
 //! real TCP, TLS, and QUIC workflows or public server-API results.
 
 use std::{
-    convert::Infallible,
     error::Error,
     future::Future,
     io::{self, Write as _},
@@ -899,6 +898,14 @@ where
                         "injected HTTP/3 application service panic",
                     ));
                 }
+                "/http1-service-panic" => {
+                    // Keep this fault inside the contract runner: the
+                    // connection task must unwind without taking down the
+                    // listener that accepts subsequent requests.
+                    std::panic::resume_unwind(Box::new(
+                        "injected HTTP/1 application service panic",
+                    ));
+                }
                 "/body-error" => {
                     let body = stream::unfold(0_u8, |step| async move {
                         match step {
@@ -1246,11 +1253,14 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http3-incomplete-request-recovery"
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
+            || operation == "native-http1-service-panic-recovery"
         {
             if operation.starts_with("native-lifecycle-") {
                 run_isolated_lifecycle_case(case).await?;
             } else if operation == "native-http1-connection-slot-reuse" {
                 run_isolated_http1_connection_slot_reuse_case(case).await?;
+            } else if operation == "native-http1-service-panic-recovery" {
+                run_isolated_http1_service_panic_recovery_case(case).await?;
             } else if operation == "native-http3-alpn-contract" {
                 run_isolated_http3_alpn_case(case).await?;
             } else if operation == "native-http3-no-common-alpn-recovery" {
@@ -1561,6 +1571,74 @@ async fn run_isolated_http1_connection_slot_reuse_case(case: &Value) -> ProbeRes
     workflow?;
     server_result?;
     Ok(())
+}
+
+async fn run_isolated_http1_service_panic_recovery_case(case: &Value) -> ProbeResult<()> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let server = tokio::spawn(uvicorn_rs::serve_tcp(
+        listener,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig::default(),
+    ));
+
+    let workflow: ProbeResult<()> = async {
+        let mut failed_connection =
+            tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
+        let fault_request = format!(
+            "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            required_str(case, "path")?
+        );
+        failed_connection
+            .write_all(fault_request.as_bytes())
+            .await?;
+
+        let mut fault_response = Vec::new();
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            failed_connection.read_to_end(&mut fault_response),
+        )
+        .await??;
+        if !fault_response.is_empty() {
+            return Err(io::Error::other(format!(
+                "{}: panicking service unexpectedly wrote an HTTP response: {:?}",
+                required_str(case, "id")?,
+                String::from_utf8_lossy(&fault_response)
+            ))
+            .into());
+        }
+
+        let (status, body) = tokio::time::timeout(
+            Duration::from_secs(2),
+            lifecycle_http1_get(address, required_str(case, "recovery_path")?),
+        )
+        .await??;
+        let expected_status = required_status(case, "recovery_status")?;
+        let expected_body = required_str(case, "recovery_body")?;
+        if status != expected_status || body != expected_body.as_bytes() {
+            return Err(io::Error::other(format!(
+                "{}: listener failed to recover after service panic: status={status}, body={:?}",
+                required_str(case, "id")?,
+                String::from_utf8_lossy(&body)
+            ))
+            .into());
+        }
+        Ok(())
+    }
+    .await;
+
+    shutdown_sender.send_replace(true);
+    let shutdown_result = tokio::time::timeout(Duration::from_secs(3), server).await;
+    workflow?;
+    match shutdown_result {
+        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Err(error))) => Err(error.into()),
+        Ok(Err(error)) => Err(error.into()),
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn run_isolated_http3_alpn_case(case: &Value) -> ProbeResult<()> {
@@ -3348,6 +3426,7 @@ async fn run_cases(
             || operation == "native-http3-incomplete-request-recovery"
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
+            || operation == "native-http1-service-panic-recovery"
         {
             continue;
         }
