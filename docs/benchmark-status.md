@@ -2,6 +2,29 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Latest hosted ASGI matrix: run #24 (2026-10-13)
+
+The matrix
+[38354960306](https://github.com/appunni-m/uvicorn-rs/actions/runs/38354960306)
+produced no parity or timing rows on Linux x86-64, Linux ARM64, or macOS
+ARM64. Each system failed during normal protocol-client prebuild because the
+runner expected `tools/http3-probe/target/release/http2`; the root Cargo
+workspace writes that binary to repository `target/release/http2`.
+
+The parity and category scripts now look in the workspace output directory for
+the HTTP/3 parity, HTTP/2, HTTP/3 benchmark, and WebSocket clients. A focused
+locked `cargo build --release --manifest-path tools/http3-probe/Cargo.toml
+--bins` succeeded locally and produced all four binaries at those paths. The
+changed Python scripts also passed `py_compile` under Python 3.9. The corrected
+paths have not yet passed hosted parity or a benchmark matrix. Therefore run
+#24 has no usable performance evidence and the path correction remains
+unverified in CI.
+
+The benchmark documentation job also failed to create a PR because the
+repository's Actions policy blocks `gh pr create`; the workflow cannot update
+the docs automatically under current permissions. Maintainers must review and
+commit the documentation update through the normal repository workflow.
+
 ## Latest local benchmark preparation (2026-10-13)
 
 The exact normal build passed **243/243** parity cases at commit
@@ -53,7 +76,7 @@ of a speedup or regression. Raw rows, logs, and analysis remain local under
 `target/benchmark-categories/wh9k-cc485f3b4/` and are excluded from Git. No
 full parity or coverage suite was repeated.
 
-## Latest hosted ASGI matrix: run 38122909359
+## Previous hosted ASGI matrix: run 38122909359
 
 The hosted matrix ran on clean commit
 [`9b2d8aaf`](https://github.com/appunni-m/uvicorn-rs/commit/9b2d8aaf321666eb365b1fa69d39029233d0ece0).

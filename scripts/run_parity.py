@@ -2826,17 +2826,17 @@ def build_h3_client() -> Path:
     subprocess.run(
         [
             "cargo", "build", "--quiet", "--release", "--manifest-path",
-            "tools/http3-probe/Cargo.toml", "--bin", "parity-http3",
+            "tools/http3-probe/Cargo.toml", "--bin", "parity-http3", "--locked",
         ],
         cwd=ROOT,
         check=True,
         timeout=300,
     )
-    return ROOT / "tools" / "http3-probe" / "target" / "release" / "parity-http3"
+    return ROOT / "target" / "release" / "parity-http3"
 
 
 def prebuilt_h3_client() -> Path:
-    client = ROOT / "tools" / "http3-probe" / "target" / "release" / "parity-http3"
+    client = ROOT / "target" / "release" / "parity-http3"
     if not client.is_file():
         raise ParityError(f"prebuild the HTTP/3 parity client before freezing identity: {client}")
     return client

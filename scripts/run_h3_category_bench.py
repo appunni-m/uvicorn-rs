@@ -26,7 +26,7 @@ from benchmark_certificates import generate_server_certificate
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv" / "bin" / "python"
-CLIENT = ROOT / "tools" / "http3-probe" / "target" / "release" / "bench"
+CLIENT = ROOT / "target" / "release" / "bench"
 FASTAPI_APP = "examples.bench_fastapi:app"
 WORKLOADS = {
     "protocol-scope-consumed-request": {

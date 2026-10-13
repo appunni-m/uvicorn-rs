@@ -583,9 +583,3 @@ impl Error for Http3RequestStreamError {
         }
     }
 }
-
-impl From<Http3RequestStreamError> for io::Error {
-    fn from(error: Http3RequestStreamError) -> Self {
-        io::Error::other(error)
-    }
-}

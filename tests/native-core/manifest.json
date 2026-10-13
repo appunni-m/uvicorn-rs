@@ -54,6 +54,18 @@
       "server_wait_ms": 1000
     },
     {
+      "id": "http1.upgrade-session-registers-before-response-completion",
+      "protocol": "native-core",
+      "operation": "native-http1-upgrade-session",
+      "scenario": "graceful-session",
+      "path": "/upgrade-session-pending-response",
+      "expected_status": 101,
+      "expected_upgrade": "uvicorn-rs-test",
+      "expected_pong": "pong;connection-open=true\n",
+      "expected_shutdown": "shutdown;connection-open=true\n",
+      "server_wait_ms": 1000
+    },
+    {
       "id": "http1.upgrade-session-handler-error-is-observed",
       "protocol": "native-core",
       "operation": "native-http1-upgrade-session",
@@ -62,6 +74,7 @@
       "expected_status": 101,
       "expected_upgrade": "uvicorn-rs-test",
       "expected_session_error": "upgrade handler sentinel",
+      "expected_source_io_error": true,
       "server_wait_ms": 1000
     },
     {
@@ -70,6 +83,18 @@
       "operation": "native-http1-upgrade-session",
       "scenario": "upgrade-not-available",
       "path": "/upgrade-session-not-accepted",
+      "expected_status": 200,
+      "expected_response_body": "upgrade was not accepted\n",
+      "expected_session_error": "no upgrade available",
+      "server_wait_ms": 1000
+    },
+    {
+      "id": "http1.upgrade-session-errors-are-drained-on-keep-alive",
+      "protocol": "native-core",
+      "operation": "native-http1-upgrade-session",
+      "scenario": "upgrade-not-available",
+      "path": "/upgrade-session-not-accepted",
+      "request_count": 2,
       "expected_status": 200,
       "expected_response_body": "upgrade was not accepted\n",
       "expected_session_error": "no upgrade available",
@@ -130,6 +155,18 @@
       "covers": ["websocket.protocol-error"]
     },
     {
+      "id": "http1.native-websocket-without-upgrade-capability-is-rejected",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "missing-upgrade-capability",
+      "path": "/native-websocket-missing-upgrade-capability",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 400,
+      "expected_error": "WebSocket Upgrade is supported only on HTTP/1.1",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
       "id": "http1.native-websocket-unoffered-subprotocol-is-rejected",
       "protocol": "native-core",
       "operation": "native-http1-websocket",
@@ -167,6 +204,144 @@
       "expected_error": "Sec-WebSocket-Version must be 13",
       "expected_response_header_name": "sec-websocket-version",
       "expected_response_header_value": "13",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-missing-version-header-is-rejected",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "missing-version-header",
+      "path": "/native-websocket-echo",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_version_values": [],
+      "expected_status": 400,
+      "expected_error": "invalid WebSocket handshake: Sec-WebSocket-Version",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-duplicate-version-header-is-rejected",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "duplicate-version-header",
+      "path": "/native-websocket-echo",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_version_values": ["13", "13"],
+      "expected_status": 400,
+      "expected_error": "a required handshake header occurred more than once",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-missing-key-header-is-rejected",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "missing-key-header",
+      "path": "/native-websocket-echo",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_key_values": [],
+      "expected_status": 400,
+      "expected_error": "invalid WebSocket handshake: Sec-WebSocket-Key",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-duplicate-key-header-is-rejected",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "duplicate-key-header",
+      "path": "/native-websocket-echo",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_key_values": [
+        "dGhlIHNhbXBsZSBub25jZQ==",
+        "dGhlIHNhbXBsZSBub25jZQ=="
+      ],
+      "expected_status": 400,
+      "expected_error": "a required handshake header occurred more than once",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-rfc-token-whitespace-is-trimmed",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "message-exchange",
+      "path": "/native-websocket-token-trim",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "connection_header": "keep-alive, Upgrade \t",
+      "offered_subprotocol": "native.echo.v1 \t, Native+Echo",
+      "expected_subprotocol": "Native+Echo",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "text_payload": "native text",
+      "binary_payload": [0, 255, 110, 97, 116, 105, 118, 101],
+      "ping_payload": "ping probe",
+      "expected_close_code": 1000,
+      "expected_close_reason": "case complete",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.message-exchange", "websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-custom-header-capacity-is-reported",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "header-capacity",
+      "path": "/native-websocket-header-capacity",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 400,
+      "expected_error": "WebSocket response header capacity exceeded",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-final-header-capacity-is-reported",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "accept-header-capacity",
+      "path": "/native-websocket-accept-header-capacity",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 400,
+      "expected_error": "WebSocket response header capacity exceeded",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-echo-handler-final-header-capacity-is-reported",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "accept-header-capacity",
+      "path": "/native-websocket-echo-accept-header-capacity",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 400,
+      "expected_error": "WebSocket response header capacity exceeded",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-accept-after-connection-close-is-reported",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "accept-after-close",
+      "path": "/native-websocket-accept-after-close",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 200,
+      "expected_response_body": "deferred WebSocket accept\n",
+      "expected_error": "HTTP connection ended before upgrade registration",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error", "websocket.upgrade-shutdown-cancellation"]
+    },
+    {
+      "id": "http1.native-websocket-malformed-client-frame-preserves-source",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "malformed-client-frame",
+      "path": "/native-websocket-malformed-frame",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "offered_subprotocol": "native.echo.v1",
+      "expected_status": 101,
+      "expected_error_prefix": "WebSocket session failed:",
+      "expected_error_source": true,
       "server_wait_ms": 1000,
       "covers": ["websocket.protocol-error"]
     },
@@ -216,6 +391,19 @@
       "path": "/native-websocket-empty-subprotocol-token",
       "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
       "offered_subprotocol": "native.echo.v1,,native.other.v1",
+      "expected_status": 400,
+      "expected_error": "Sec-WebSocket-Protocol must contain non-empty tokens",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
+      "id": "http1.native-websocket-invalid-offered-subprotocol-token-is-rejected",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "invalid-subprotocol-token",
+      "path": "/native-websocket-invalid-subprotocol-token",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "offered_subprotocol": "native;echo",
       "expected_status": 400,
       "expected_error": "Sec-WebSocket-Protocol must contain non-empty tokens",
       "server_wait_ms": 1000,
@@ -496,6 +684,18 @@
       "expected_body": "tls=false;alpn=none\n"
     },
     {
+      "id": "http2.websocket-upgrade-rejected-on-http2",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "request",
+      "covers": [
+        "websocket.protocol-error"
+      ],
+      "method": "GET",
+      "path": "/native-websocket-echo",
+      "expected_status": 400,
+      "expected_body": "WebSocket Upgrade is supported only on HTTP/1.1"
+    },
+    {
       "id": "http2.request-body-consumption",
       "protocol": "h2c-prior-knowledge",
       "operation": "request",
@@ -581,6 +781,16 @@
       "expected_body": "tls=true;alpn=http/1.1\n"
     },
     {
+      "id": "http1-tls.upgrade-session-error-is-observed",
+      "protocol": "https/1.1",
+      "operation": "native-https-upgrade-session-error",
+      "path": "/upgrade-session-handler-error-pending-response",
+      "expected_status": 101,
+      "expected_upgrade": "uvicorn-rs-test",
+      "expected_session_error": "upgrade handler sentinel",
+      "expected_source_io_error": true
+    },
+    {
       "id": "http2-tls.negotiated-alpn-in-connection-metadata",
       "protocol": "h2-tls",
       "operation": "connection-security",
@@ -595,6 +805,18 @@
       "path": "/connection-details",
       "expected_status": 200,
       "expected_body": "transport=quic;tls=true;alpn=h3;version=3\n"
+    },
+    {
+      "id": "http3.websocket-upgrade-rejected-on-http3",
+      "protocol": "http3",
+      "operation": "request",
+      "covers": [
+        "websocket.protocol-error"
+      ],
+      "method": "GET",
+      "path": "/native-websocket-echo",
+      "expected_status": 400,
+      "expected_body": "WebSocket Upgrade is supported only on HTTP/1.1"
     },
     {
       "id": "http3.non-h3-alpn-is-observed-and-server-recovers",
@@ -1019,6 +1241,36 @@
       "release_after_shutdown_ms": 25
     },
     {
+      "id": "http1-tls.application-lifecycle-startup-and-drain-order",
+      "protocol": "https/1.1",
+      "operation": "native-lifecycle-drain",
+      "ready_path": "/ready",
+      "path": "/hold",
+      "release_after_shutdown_ms": 25
+    },
+    {
+      "id": "http1.lifecycle-websocket-handshake-message-and-lifecycle",
+      "protocol": "http/1.1",
+      "operation": "native-lifecycle-websocket",
+      "ready_path": "/ready",
+      "path": "/lifecycle-websocket",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "text_payload": "lifecycle websocket"
+    },
+    {
+      "id": "http1-tls.lifecycle-websocket-handshake-message-and-lifecycle",
+      "protocol": "https/1.1",
+      "operation": "native-lifecycle-websocket",
+      "ready_path": "/ready",
+      "path": "/lifecycle-websocket",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "text_payload": "lifecycle websocket"
+    },
+    {
       "id": "http2.application-lifecycle-startup-and-drain-order",
       "protocol": "h2c-prior-knowledge",
       "operation": "native-lifecycle-drain",
@@ -1068,6 +1320,11 @@
     {
       "id": "native.lifecycle-startup-error-prevents-serving",
       "protocol": "http/1.1",
+      "operation": "native-lifecycle-startup-error"
+    },
+    {
+      "id": "native.lifecycle-http3-startup-error-prevents-serving",
+      "protocol": "http3",
       "operation": "native-lifecycle-startup-error"
     },
     {

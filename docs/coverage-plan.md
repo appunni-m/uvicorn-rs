@@ -3,20 +3,75 @@
 ## Current acceptance status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests define 511 ASGI
-parity/fault-contract cases and 101 Python-free native cases (612 total).
+parity/fault-contract cases and 122 Python-free native cases (633 total).
 Acceptance requires three complete repeats of both matrices, 100% region and
 line coverage, and zero-gap results from fully paginated Coverage-MCP queries
 bound to the exact report bytes.
 
-The latest complete-scope report before the shutdown and upgrade changes is
+The last full-manifest diagnostic ran all 633 cases once. Its Git-ignored
+report is
+`build/asgi-coverage/2026-10-13-current-633-diagnostic-retry/coverage-report.json`,
+and records SHA-256
+`68d20ea68f17f9fcbe48b05cb570c6fbf79772c5a5dec62d76ff4445918e8da1` at
+`b5719e8` with a dirty working tree. A later source-hash audit found that
+`crates/uvicorn-rs/examples/native_core_contracts.rs` and
+`crates/uvicorn-rs/src/websocket.rs` no longer match this report; Coverage-MCP
+now identifies its source as changed. Treat this report as a historical
+diagnostic, not evidence for the current checkout. On that earlier snapshot,
+all 633 cases passed with complete attribution and zero case or infrastructure
+failures: 243/243 oracle parity, 268/268 fault-contract, and 122/122 native.
+It measured 7,324/7,382 regions and 5,383/5,417 lines (58 regions and 34 lines
+missing). The original Coverage-MCP query paginated 173 region groups and 29
+line groups and matched the report at the time. A fresh single-pass report
+bound to current source, plus a matching Coverage-MCP receipt, is required
+before interpreting current gaps. Three complete repeats and 100% region and
+line coverage remain formal gates. An initial attempt stopped during
+attribution when the native LLVM runner disappeared; a runner snapshot let the
+retry finish attribution.
+
+### Audit of the current gaps
+
+The following gap audit is historical and applies only to the report snapshot
+above; it is not validated for the current source because two recorded source
+hashes changed. It inspected 58 missing regions (34 source lines) and found no
+additional deterministic public-input case for that snapshot. The 21 `lib.rs` regions include internal channel and
+semaphore invariants, OS-dependent accept failure, late clock-boundary
+handling, uninhabited `Infallible` paths, and task-join reporting that requires
+a panic. The 31 HTTP/3 regions include closed-admission or impossible join
+states, late shutdown/clock paths, uninhabited service errors, panic-only task
+joins, and internal error formatting. The 6 WebSocket regions include
+`HeaderValue` conversions for a Base64-generated accept key and a selected
+subprotocol that has passed token validation, plus close-reply flush failure
+that depends on peer failure and timing. The current `http_body::Frame` API only constructs DATA and trailer
+frames, so the unsupported-frame branch has no public stimulus.
+
+Do not add a case whose only purpose is to execute a private region. A named
+fault contract is justified only when it verifies an externally observable
+error or cleanup guarantee. The strict 100% region/line requirement remains in
+force; the historical audit neither reduces the denominator nor waives the
+gate.
+
+The manifest includes
+`native.lifecycle-http3-startup-error-prevents-serving`: an input-driven H3
+startup failure case that verifies the listener does not begin serving when
+the application startup hook fails. It passed in the full 633-case diagnostic
+as well as its selected unified run at
+`target/asgi-coverage/2026-10-13-h3-lifecycle-startup-selected/coverage-report.json`.
+
+The current manifest also includes active TCP/TLS HTTP/1 upgrade-registration
+cases and lifecycle-enabled WebSocket handshake/message cases over TCP and
+TLS. The two lifecycle/WebSocket cases passed together in the selected report
+`target/asgi-coverage/2026-10-13-lifecycle-websocket-selected/coverage-report.json`.
+Focused reports do not close the full-source coverage gate.
+
+An earlier complete-scope report before the shutdown and upgrade changes is
 `target/asgi-coverage/2026-10-14-current-595-single/coverage-report.json`.
 It covers the then-current 511 ASGI and 84 native cases, all passing once with
 complete attribution and no case or infrastructure failures. It measured
 6,900/6,960 regions and 5,061/5,093 lines. Coverage-MCP retrieved all 111
 region groups and 30 line groups with `source=matches_receipt`; it reported
-`tests=failed` because the report has 60 region and 32 line gaps. Three full
-repeats are required and none has been run. This is an incomplete diagnostic,
-not a coverage pass.
+`tests=failed` because that older report had 60 region and 32 line gaps. This is
+an incomplete historical diagnostic, not a coverage pass.
 
 After that report, the redundant per-connection graceful-shutdown timer was
 removed; its existing held-response case passed in a focused run. The native
@@ -29,10 +84,11 @@ attribution. Its source SHA-256 is
 `2c3558737f2f4643c4848b3c0d0438a1f245dcf1b4d2835b65b0282cfbaf0a3f`. The exact
 report's uncovered-region list has no `ConnectionUpgrade` function symbols,
 while a matching-source Coverage-MCP query returns five groups for that API;
-resolve this discrepancy before claiming zero gaps. These selected reports do
-not establish coverage for the current 612-case manifest. The current-source
-full matrix, three repeats, 100% regions and lines, and final zero-gap
-Coverage-MCP receipt remain open.
+resolve this discrepancy before claiming zero gaps. These selected reports
+predate the current 633-case report above, which still has 58 region and 34
+line gaps.
+Three repeats, 100% regions and lines, and final zero-gap Coverage-MCP results
+remain open.
 
 The HTTP/3 request-body source was then measured with the selected case
 `http3.empty-request-body-is-consumed-through-eof` in
@@ -47,8 +103,9 @@ the body returns `Pending` and polls data again on the next call. The empty-body
 input separately verifies the public request-body EOF and size-hint behavior.
 The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
-The full 612-case aggregate, three repeats, and zero-gap acceptance remain
-outstanding.
+The historical 629-case matrix ran once with one infrastructure failure and
+59 region / 34 line gaps. It predates the current 633-case report above. Three
+complete repeats and zero-gap acceptance remain outstanding.
 
 The initial four native HTTP/1.1 WebSocket inputs passed in a selected unified
 run at `target/asgi-coverage/2026-10-13-native-websocket-h1-final/coverage-report.json`.
@@ -113,9 +170,9 @@ released and joined. Coverage-MCP reports `source: matches_receipt` and
 at the endpoint-idle shutdown path. This selected case does not establish the
 full matrix or aggregate coverage.
 Do not add cases for uninstantiated generic placeholders or private
-implementation lines. The full current-manifest matrix, three repeats, 100%
-regions and lines, and fully paginated zero-gap Coverage-MCP results remain
-outstanding. Schema v4 retains function-instantiation-aware region IDs,
+implementation lines. The current-manifest matrix has passed once, but three
+repeats, 100% regions and lines, and fully paginated zero-gap Coverage-MCP
+results remain outstanding. Schema v4 retains function-instantiation-aware region IDs,
 indexed `hit_by` attribution, per-profile hashes, independent LLVM replay,
 exact artifact checks, and fully paginated MCP row identity. Python line and
 branch coverage remain outside the Rust denominator.

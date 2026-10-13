@@ -30,7 +30,7 @@ use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Empty, Full, StreamBod
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use serde_json::Value;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::watch,
     time::{sleep, timeout, Instant},
@@ -44,8 +44,8 @@ use uvicorn_rs::{
     ApplicationLifecycle, ApplicationLifecycleError, ApplicationLifecycleFuture,
     ApplicationLifecycleStage, ConnectionInfo, ConnectionLifetime, ConnectionUpgrade,
     RequestEndReason, RequestLifetime, ServerErrorEvent, ServerErrorObserver, ServerErrorPhase,
-    TransportKind, WebSocketCloseCode, WebSocketCloseFrame, WebSocketMessage, WebSocketUpgrade,
-    WebSocketUpgradeError,
+    TransportKind, WebSocketCloseCode, WebSocketCloseFrame, WebSocketError, WebSocketMessage,
+    WebSocketSession, WebSocketUpgrade, WebSocketUpgradeError,
 };
 
 type AppBody = UnsyncBoxBody<Bytes, io::Error>;
@@ -99,6 +99,7 @@ struct AppState {
     upload_tasks_dropped: Arc<AtomicUsize>,
     shutdown: watch::Sender<bool>,
     upgrade_registration_outcome: watch::Sender<Option<String>>,
+    websocket_error_observation: watch::Sender<Option<String>>,
 }
 
 enum UpgradeSessionBehavior {
@@ -305,8 +306,13 @@ impl<B> Service<Request<B>> for LifecycleApp {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, request: Request<B>) -> Self::Future {
+    fn call(&mut self, mut request: Request<B>) -> Self::Future {
         let path = request.uri().path().to_owned();
+        let websocket_upgrade = (path == "/lifecycle-websocket").then(|| {
+            WebSocketUpgrade::from_request(&mut request)
+                .map_err(|error| io::Error::other(error.to_string()))
+        });
+        drop(request);
         let state = Arc::clone(&self.state);
         Box::pin(async move {
             state.requests_started.fetch_add(1, Ordering::AcqRel);
@@ -358,6 +364,25 @@ impl<B> Service<Request<B>> for LifecycleApp {
                         .map_err(|error| io::Error::other(error.to_string()))
                 }
                 "/ready" => lifecycle_response(b"started\n", None),
+                "/lifecycle-websocket" => {
+                    let upgrade = websocket_upgrade
+                        .ok_or_else(|| io::Error::other("WebSocket request was not prepared"))??;
+                    let body = lifecycle_response(b"", None)?.into_body();
+                    upgrade
+                        .accept(body, |mut session| async move {
+                            while let Some(message) = session.receive().await? {
+                                match message {
+                                    WebSocketMessage::Text(text) => {
+                                        session.send(WebSocketMessage::Text(text)).await?;
+                                    }
+                                    WebSocketMessage::Close(_) => break,
+                                    _ => {}
+                                }
+                            }
+                            Ok::<(), WebSocketError>(())
+                        })
+                        .map_err(|error| io::Error::other(error.to_string()))
+                }
                 "/http3-response-cancel-pending" => lifecycle_response(
                     if state.http3_response_cancel_pending.load(Ordering::Acquire) {
                         b"waiting\n"
@@ -715,7 +740,7 @@ where
                     state.peer_write_half_close_release.send_replace(true);
                     response(StatusCode::OK, b"released\n")
                 }
-                "/upgrade-session" => {
+                "/upgrade-session" | "/upgrade-session-pending-response" => {
                     let (Some(connection_upgrade), Some(connection_lifetime)) =
                         (connection_upgrade, connection_lifetime)
                     else {
@@ -730,9 +755,13 @@ where
                         UpgradeSessionBehavior::Graceful(connection_lifetime),
                     )
                         .map_err(|error| io::Error::other(error.to_string()))?;
+                    if path == "/upgrade-session-pending-response" {
+                        tokio::task::yield_now().await;
+                    }
                     upgrade_response()
                 }
-                "/upgrade-session-handler-error" => {
+                "/upgrade-session-handler-error"
+                | "/upgrade-session-handler-error-pending-response" => {
                     let Some(connection_upgrade) = connection_upgrade else {
                         return Err(io::Error::other(
                             "HTTP/1 upgrade extension is missing",
@@ -745,6 +774,9 @@ where
                         UpgradeSessionBehavior::HandlerError,
                     )
                         .map_err(|error| io::Error::other(error.to_string()))?;
+                    if path == "/upgrade-session-handler-error-pending-response" {
+                        tokio::task::yield_now().await;
+                    }
                     upgrade_response()
                 }
                 "/upgrade-session-not-accepted" => {
@@ -787,9 +819,19 @@ where
                     });
                     response(StatusCode::OK, b"registration deferred\n")
                 }
+                "/native-websocket-accept-after-close" => {
+                    native_websocket_accept_after_close(&mut request, &state)
+                }
                 "/native-websocket-echo"
                 | "/native-websocket-unoffered-subprotocol"
                 | "/native-websocket-invalid-method"
+                | "/native-websocket-missing-upgrade-capability"
+                | "/native-websocket-token-trim"
+                | "/native-websocket-header-capacity"
+                | "/native-websocket-accept-header-capacity"
+                | "/native-websocket-echo-accept-header-capacity"
+                | "/native-websocket-malformed-frame"
+                | "/native-websocket-invalid-subprotocol-token"
                 | "/native-websocket-invalid-version"
                 | "/native-websocket-invalid-key-size"
                 | "/native-websocket-missing-upgrade-token"
@@ -798,6 +840,9 @@ where
                 | "/native-websocket-reserved-response-header"
                 | "/native-websocket-duplicate-subprotocol"
                 | "/native-websocket-custom-response-header" => {
+                    if request.uri().path() == "/native-websocket-missing-upgrade-capability" {
+                        request.extensions_mut().remove::<ConnectionUpgrade>();
+                    }
                     let behavior = match request.uri().path() {
                         "/native-websocket-reserved-response-header" => {
                             NativeWebSocketBehavior::ReservedHeader
@@ -808,11 +853,32 @@ where
                         "/native-websocket-custom-response-header" => {
                             NativeWebSocketBehavior::EchoWithHeader
                         }
+                        "/native-websocket-header-capacity" => {
+                            NativeWebSocketBehavior::HeaderCapacity
+                        }
+                        "/native-websocket-accept-header-capacity" => {
+                            NativeWebSocketBehavior::AcceptHeaderCapacity
+                        }
+                        "/native-websocket-echo-accept-header-capacity" => {
+                            NativeWebSocketBehavior::EchoAcceptHeaderCapacity
+                        }
+                        "/native-websocket-malformed-frame" => {
+                            NativeWebSocketBehavior::ObserveReceiveError(
+                                state.websocket_error_observation.clone(),
+                            )
+                        }
                         _ => NativeWebSocketBehavior::Echo,
+                    };
+                    let subprotocol = match request.uri().path() {
+                        "/native-websocket-token-trim" => Some("Native+Echo"),
+                        "/native-websocket-accept-header-capacity"
+                        | "/native-websocket-echo-accept-header-capacity"
+                        | "/native-websocket-malformed-frame" => None,
+                        _ => Some("native.echo.v1"),
                     };
                     native_websocket_route(
                         &mut request,
-                        Some("native.echo.v1"),
+                        subprotocol,
                         behavior,
                     )
                 }
@@ -1443,6 +1509,10 @@ enum NativeWebSocketBehavior {
     ReservedHeader,
     DuplicateSubprotocol,
     Shutdown,
+    HeaderCapacity,
+    AcceptHeaderCapacity,
+    EchoAcceptHeaderCapacity,
+    ObserveReceiveError(watch::Sender<Option<String>>),
 }
 
 fn native_websocket_route<B>(
@@ -1454,7 +1524,7 @@ fn native_websocket_route<B>(
         Ok(upgrade) => upgrade,
         Err(error) => return websocket_bad_request(error),
     };
-    let upgrade = match behavior {
+    let upgrade = match &behavior {
         NativeWebSocketBehavior::EchoWithHeader => upgrade.with_header(
             HeaderName::from_static("x-native-websocket"),
             HeaderValue::from_static("native"),
@@ -1463,6 +1533,10 @@ fn native_websocket_route<B>(
             SEC_WEBSOCKET_ACCEPT,
             HeaderValue::from_static("application-override"),
         ),
+        NativeWebSocketBehavior::HeaderCapacity => {
+            let error = native_websocket_header_capacity_error(upgrade)?;
+            return websocket_bad_request(error);
+        }
         _ => Ok(upgrade),
     };
     let upgrade = match upgrade {
@@ -1476,7 +1550,7 @@ fn native_websocket_route<B>(
         },
         None => upgrade,
     };
-    let upgrade = if matches!(behavior, NativeWebSocketBehavior::DuplicateSubprotocol) {
+    let upgrade = if matches!(&behavior, NativeWebSocketBehavior::DuplicateSubprotocol) {
         let Some(subprotocol) = subprotocol else {
             return websocket_bad_request(WebSocketUpgradeError::InvalidSubprotocol);
         };
@@ -1490,22 +1564,7 @@ fn native_websocket_route<B>(
 
     match behavior {
         NativeWebSocketBehavior::Echo | NativeWebSocketBehavior::EchoWithHeader => upgrade
-            .accept(empty_body(), |mut session| async move {
-                while let Some(message) = session.receive().await? {
-                    match message {
-                        WebSocketMessage::Text(text) => {
-                            session.send(WebSocketMessage::Text(text)).await?;
-                        }
-                        WebSocketMessage::Binary(bytes) => {
-                            session.send(WebSocketMessage::Binary(bytes)).await?;
-                        }
-                        WebSocketMessage::Close(_) => break,
-                        WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => {}
-                        WebSocketMessage::Frame(_) => {}
-                    }
-                }
-                Ok::<(), uvicorn_rs::WebSocketError>(())
-            })
+            .accept(empty_body(), echo_websocket_session)
             .map_err(|error| io::Error::other(error.to_string())),
         NativeWebSocketBehavior::Shutdown => upgrade
             .accept(empty_body(), |mut session| async move {
@@ -1524,6 +1583,25 @@ fn native_websocket_route<B>(
                 Ok::<(), uvicorn_rs::WebSocketError>(())
             })
             .map_err(|error| io::Error::other(error.to_string())),
+        NativeWebSocketBehavior::AcceptHeaderCapacity => {
+            native_websocket_accept_header_capacity(upgrade)
+        }
+        NativeWebSocketBehavior::EchoAcceptHeaderCapacity => {
+            native_websocket_echo_accept_header_capacity(upgrade)
+        }
+        NativeWebSocketBehavior::HeaderCapacity => Err(io::Error::other(
+            "WebSocket header-capacity check unexpectedly reached acceptance",
+        )),
+        NativeWebSocketBehavior::ObserveReceiveError(observation) => upgrade
+            .accept(empty_body(), move |mut session| async move {
+                let outcome = match session.receive().await {
+                    Err(error) => format!("{};source={}", error, Error::source(&error).is_some()),
+                    Ok(message) => format!("unexpected receive result: {message:?};source=false"),
+                };
+                observation.send_replace(Some(outcome));
+                Ok::<(), io::Error>(())
+            })
+            .map_err(|error| io::Error::other(error.to_string())),
         NativeWebSocketBehavior::ReservedHeader => {
             websocket_bad_request(WebSocketUpgradeError::ReservedResponseHeader)
         }
@@ -1531,6 +1609,143 @@ fn native_websocket_route<B>(
             websocket_bad_request(WebSocketUpgradeError::SubprotocolAlreadySelected)
         }
     }
+}
+
+async fn echo_websocket_session(mut session: WebSocketSession) -> Result<(), WebSocketError> {
+    while let Some(message) = session.receive().await? {
+        match message {
+            WebSocketMessage::Text(text) => session.send(WebSocketMessage::Text(text)).await?,
+            WebSocketMessage::Binary(bytes) => {
+                session.send(WebSocketMessage::Binary(bytes)).await?;
+            }
+            WebSocketMessage::Close(_) => break,
+            WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) | WebSocketMessage::Frame(_) => {}
+        }
+    }
+    Ok(())
+}
+
+fn native_websocket_header_capacity_error(
+    mut upgrade: WebSocketUpgrade,
+) -> Result<WebSocketUpgradeError, io::Error> {
+    for index in 0..(1_usize << 15) {
+        let name = native_websocket_capacity_header_name(index)?;
+        match upgrade.with_header(name, HeaderValue::from_static("v")) {
+            Ok(next) => upgrade = next,
+            Err(error @ WebSocketUpgradeError::HeaderCapacity) => return Ok(error),
+            Err(error) => {
+                return Err(io::Error::other(format!(
+                    "unexpected WebSocket header setup error: {error}"
+                )))
+            }
+        }
+    }
+    Err(io::Error::other(
+        "WebSocket response headers did not reach their finite capacity",
+    ))
+}
+
+fn native_websocket_accept_header_capacity(
+    mut upgrade: WebSocketUpgrade,
+) -> Result<Response<AppBody>, io::Error> {
+    let capacity = native_websocket_header_map_capacity()?;
+    let response_headers_before_overflow = capacity.saturating_sub(2);
+    for index in 0..response_headers_before_overflow {
+        let name = native_websocket_capacity_header_name(index)?;
+        upgrade = upgrade
+            .with_header(name, HeaderValue::from_static("v"))
+            .map_err(|error| {
+                io::Error::other(format!(
+                    "WebSocket custom headers reached capacity before accept: {error}"
+                ))
+            })?;
+    }
+
+    match upgrade.accept(empty_body(), |_| async { Ok::<(), io::Error>(()) }) {
+        Err(error @ WebSocketUpgradeError::HeaderCapacity) => websocket_bad_request(error),
+        Err(error) => Err(io::Error::other(format!(
+            "unexpected WebSocket accept setup error: {error}"
+        ))),
+        Ok(_) => Err(io::Error::other(
+            "WebSocket accept did not reach final response header capacity",
+        )),
+    }
+}
+
+fn native_websocket_echo_accept_header_capacity(
+    mut upgrade: WebSocketUpgrade,
+) -> Result<Response<AppBody>, io::Error> {
+    let capacity = native_websocket_header_map_capacity()?;
+    let response_headers_before_overflow = capacity.saturating_sub(2);
+    for index in 0..response_headers_before_overflow {
+        let name = native_websocket_capacity_header_name(index)?;
+        upgrade = upgrade
+            .with_header(name, HeaderValue::from_static("v"))
+            .map_err(|error| {
+                io::Error::other(format!(
+                    "WebSocket custom headers reached capacity before accept: {error}"
+                ))
+            })?;
+    }
+
+    match upgrade.accept(empty_body(), echo_websocket_session) {
+        Err(error @ WebSocketUpgradeError::HeaderCapacity) => websocket_bad_request(error),
+        Err(error) => Err(io::Error::other(format!(
+            "unexpected WebSocket accept setup error: {error}"
+        ))),
+        Ok(_) => Err(io::Error::other(
+            "WebSocket accept did not reach final response header capacity",
+        )),
+    }
+}
+
+fn native_websocket_header_map_capacity() -> Result<usize, io::Error> {
+    let mut headers = http::HeaderMap::new();
+    for index in 0..(1_usize << 15) {
+        let name = native_websocket_capacity_header_name(index)?;
+        match headers.try_append(name, HeaderValue::from_static("v")) {
+            Ok(_) => {}
+            Err(_) => return Ok(index),
+        }
+    }
+    Err(io::Error::other(
+        "HTTP HeaderMap capacity probe did not reach its finite limit",
+    ))
+}
+
+fn native_websocket_capacity_header_name(index: usize) -> Result<HeaderName, io::Error> {
+    HeaderName::from_bytes(format!("x-native-capacity-{index}").as_bytes())
+        .map_err(|error| io::Error::other(error.to_string()))
+}
+
+fn native_websocket_accept_after_close<B>(
+    request: &mut Request<B>,
+    state: &Arc<AppState>,
+) -> Result<Response<AppBody>, io::Error> {
+    let upgrade = match WebSocketUpgrade::from_request(request) {
+        Ok(upgrade) => upgrade,
+        Err(error) => return websocket_bad_request(error),
+    };
+    let Some(mut connection_lifetime) = request.extensions().get::<ConnectionLifetime>().cloned()
+    else {
+        return Err(io::Error::other(
+            "HTTP connection lifetime extension is missing",
+        ));
+    };
+    let Some(connection_upgrade) = request.extensions().get::<ConnectionUpgrade>().cloned() else {
+        return Err(io::Error::other("HTTP upgrade extension is missing"));
+    };
+    let outcome = state.upgrade_registration_outcome.clone();
+    let _accept_task = tokio::spawn(async move {
+        connection_lifetime.wait_until_closed().await;
+        connection_upgrade.wait_for_shutdown().await;
+        let result = match upgrade.accept(empty_body(), echo_websocket_session) {
+            Ok(_) => "WebSocket acceptance unexpectedly succeeded".to_owned(),
+            Err(error) => error.to_string(),
+        };
+        outcome.send_replace(Some(result));
+    });
+    response(StatusCode::OK, b"deferred WebSocket accept\n")
 }
 
 fn websocket_bad_request(error: WebSocketUpgradeError) -> Result<Response<AppBody>, io::Error> {
@@ -1981,6 +2196,7 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
         "native-lifecycle-http3-pending-handshake-shutdown" => {
             return run_lifecycle_http3_pending_handshake_shutdown_case(case).await;
         }
+        "native-lifecycle-websocket" => return run_lifecycle_websocket_case(case).await,
         "native-lifecycle-readiness-error" => {
             return run_lifecycle_readiness_error_case(case).await;
         }
@@ -1998,6 +2214,7 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
     }
     match required_str(case, "protocol")? {
         "http/1.1" => run_lifecycle_http1_case(case).await,
+        "https/1.1" => run_lifecycle_https_case(case).await,
         "h2c-prior-knowledge" => run_lifecycle_http2_case(case).await,
         "http3" => run_lifecycle_http3_case(case).await,
         protocol => Err(io::Error::new(
@@ -2203,11 +2420,20 @@ async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()
     let observed_errors = Arc::new(Mutex::new(Vec::<ObservedServerError>::new()));
     let error_log = Arc::clone(&observed_errors);
     let error_observer: ServerErrorObserver = Arc::new(move |event: ServerErrorEvent<'_>| {
+        let mut cause: Option<&(dyn Error + 'static)> = Some(event.error());
+        let mut is_io_error = false;
+        while let Some(error) = cause {
+            if error.is::<io::Error>() {
+                is_io_error = true;
+                break;
+            }
+            cause = error.source();
+        }
         if let Ok(mut observations) = error_log.lock() {
             observations.push(ObservedServerError {
                 phase: event.phase(),
                 peer_addr: event.peer_addr(),
-                is_io_error: event.error().is::<io::Error>(),
+                is_io_error,
                 h3_error_code: None,
                 message: event.error().to_string(),
             });
@@ -2276,6 +2502,14 @@ async fn open_http1_upgrade_case_connection(
     case: &Value,
     request_upgrade: bool,
 ) -> ProbeResult<(TcpStream, u16, std::collections::HashMap<String, String>)> {
+    let request_count = required_request_count(case)?;
+    if request_upgrade && request_count != 1 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "upgraded HTTP/1 cases must send exactly one request",
+        )
+        .into());
+    }
     let mut client =
         tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
     let request = if request_upgrade {
@@ -2284,8 +2518,13 @@ async fn open_http1_upgrade_case_connection(
             required_str(case, "path")?
         )
     } else {
+        let connection = if request_count > 1 {
+            "keep-alive"
+        } else {
+            "close"
+        };
         format!(
-            "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: {connection}\r\n\r\n",
             required_str(case, "path")?
         )
     };
@@ -2393,19 +2632,49 @@ async fn run_http1_upgrade_error_case(
             .into());
         }
     } else {
-        let (body, complete) = tokio::time::timeout(
-            Duration::from_secs(2),
-            read_response_body(&mut client, &headers),
-        )
-        .await??;
+        let request_count = required_request_count(case)?;
         let expected_body = required_str(case, "expected_response_body")?.as_bytes();
-        if !complete || body != expected_body {
-            return Err(io::Error::other(format!(
-                "{}: non-upgrade response body mismatch: complete={complete}, body={:?}",
-                required_str(case, "id")?,
-                String::from_utf8_lossy(&body)
-            ))
-            .into());
+        let mut response = Some((status, headers));
+        for request_index in 0..request_count {
+            let (response_status, response_headers) = match response.take() {
+                Some(response) => response,
+                None => {
+                    let connection = if request_index + 1 == request_count {
+                        "close"
+                    } else {
+                        "keep-alive"
+                    };
+                    let request = format!(
+                        "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: {connection}\r\n\r\n",
+                        required_str(case, "path")?
+                    );
+                    client.write_all(request.as_bytes()).await?;
+                    tokio::time::timeout(Duration::from_secs(2), read_response_head(&mut client))
+                        .await??
+                }
+            };
+            if response_status != expected_status {
+                return Err(io::Error::other(format!(
+                    "{}: request {} expected status {expected_status}, got {response_status}",
+                    required_str(case, "id")?,
+                    request_index + 1
+                ))
+                .into());
+            }
+            let (body, complete) = tokio::time::timeout(
+                Duration::from_secs(2),
+                read_response_body(&mut client, &response_headers),
+            )
+            .await??;
+            if !complete || body != expected_body {
+                return Err(io::Error::other(format!(
+                    "{}: non-upgrade response {} body mismatch: complete={complete}, body={:?}",
+                    required_str(case, "id")?,
+                    request_index + 1,
+                    String::from_utf8_lossy(&body)
+                ))
+                .into());
+            }
         }
     }
 
@@ -2418,8 +2687,94 @@ async fn run_http1_upgrade_error_case(
         ))
         .into());
     }
+    if let Some(expected_source_io_error) = case.get("expected_source_io_error") {
+        let expected_source_io_error = expected_source_io_error.as_bool().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "expected_source_io_error must be a boolean",
+            )
+        })?;
+        if observation.is_io_error != expected_source_io_error {
+            return Err(io::Error::other(format!(
+                "{}: upgrade error source-chain contract differed: expected io error={expected_source_io_error}, observed={observation:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+    }
 
     verify_http1_upgrade_listener_recovers(address, case).await
+}
+
+async fn run_tls_http1_upgrade_session_error_case(
+    address: SocketAddr,
+    tls_clients: &TlsClients,
+    case: &Value,
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+) -> ProbeResult<()> {
+    let mut client = connect_tls_http1(address, &tls_clients.http1).await?;
+    let request = format!(
+        "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: uvicorn-rs-test\r\n\r\n",
+        required_str(case, "path")?
+    );
+    client.write_all(request.as_bytes()).await?;
+    let (status, headers) =
+        tokio::time::timeout(Duration::from_secs(2), read_response_head(&mut client)).await??;
+    verify_http1_upgrade_headers(case, status, &headers)?;
+
+    let mut trailing = Vec::new();
+    match tokio::time::timeout(Duration::from_secs(2), client.read_to_end(&mut trailing)).await {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) if error.kind() == io::ErrorKind::UnexpectedEof => {}
+        Ok(Err(error)) => return Err(error.into()),
+        Err(error) => return Err(error.into()),
+    }
+    if !trailing.is_empty() {
+        return Err(io::Error::other(format!(
+            "{}: failed TLS upgrade session wrote unexpected bytes: {:?}",
+            required_str(case, "id")?,
+            trailing
+        ))
+        .into());
+    }
+
+    let expected_error = required_str(case, "expected_session_error")?;
+    let observation = wait_for_http1_upgrade_error(observed_errors, expected_error).await?;
+    if observation.phase != ServerErrorPhase::Connection || observation.peer_addr.is_none() {
+        return Err(io::Error::other(format!(
+            "{}: expected a TLS connection-phase upgrade error, got {observation:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    let expected_source_io_error = case["expected_source_io_error"].as_bool().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "expected_source_io_error must be a boolean",
+        )
+    })?;
+    if observation.is_io_error != expected_source_io_error {
+        return Err(io::Error::other(format!(
+            "{}: TLS upgrade error source-chain contract differed: expected io error={expected_source_io_error}, observed={observation:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn connect_tls_http1(
+    address: SocketAddr,
+    connector: &TlsConnector,
+) -> ProbeResult<tokio_rustls::client::TlsStream<TcpStream>> {
+    let tcp_stream =
+        tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
+    let server_name = ServerName::try_from("localhost".to_owned())?;
+    Ok(tokio::time::timeout(
+        Duration::from_secs(2),
+        connector.connect(server_name, tcp_stream),
+    )
+    .await??)
 }
 
 async fn wait_for_http1_upgrade_error(
@@ -2529,7 +2884,7 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
-    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let (application, state) = contract_app_with_state(shutdown_sender.clone());
     let server = tokio::spawn(uvicorn_rs::serve_tcp(
         listener,
         application,
@@ -2540,20 +2895,46 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
         },
     ));
 
+    let mut registration_outcome = state.upgrade_registration_outcome.subscribe();
+    let mut websocket_error_observation = state.websocket_error_observation.subscribe();
     let workflow: ProbeResult<()> = async {
         match scenario {
             "message-exchange" => run_native_websocket_exchange_case(address, case).await,
+            "malformed-client-frame" => {
+                run_native_websocket_malformed_frame_case(
+                    address,
+                    case,
+                    &mut websocket_error_observation,
+                )
+                .await
+            }
+            "accept-after-close" => {
+                run_native_websocket_accept_after_close_case(
+                    address,
+                    case,
+                    &mut registration_outcome,
+                )
+                .await
+            }
             "graceful-shutdown" => {
                 run_native_websocket_shutdown_case(address, case, &shutdown_sender).await
             }
             "invalid-key"
             | "unoffered-subprotocol"
             | "invalid-method"
+            | "missing-upgrade-capability"
             | "invalid-version"
+            | "missing-version-header"
+            | "duplicate-version-header"
             | "invalid-key-size"
+            | "missing-key-header"
+            | "duplicate-key-header"
+            | "header-capacity"
+            | "accept-header-capacity"
             | "missing-upgrade-token"
             | "wrong-upgrade-token"
             | "empty-subprotocol-token"
+            | "invalid-subprotocol-token"
             | "reserved-response-header"
             | "duplicate-subprotocol" => run_native_websocket_rejection_case(address, case).await,
             _ => Err(io::Error::new(
@@ -2603,13 +2984,24 @@ async fn open_native_websocket_handshake(
         .get("request_websocket_version")
         .and_then(Value::as_str)
         .unwrap_or("13");
+    let key_values = input_string_values(case, "request_websocket_key_values", key)?;
+    let version_values =
+        input_string_values(case, "request_websocket_version_values", websocket_version)?;
+    let key_headers = key_values
+        .iter()
+        .map(|value| format!("Sec-WebSocket-Key: {value}\r\n"))
+        .collect::<String>();
+    let version_headers = version_values
+        .iter()
+        .map(|value| format!("Sec-WebSocket-Version: {value}\r\n"))
+        .collect::<String>();
     let protocol = case
         .get("offered_subprotocol")
         .and_then(Value::as_str)
         .map(|protocol| format!("Sec-WebSocket-Protocol: {protocol}\r\n"))
         .unwrap_or_default();
     let request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: {connection_header}\r\nUpgrade: {upgrade_header}\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: {websocket_version}\r\n{protocol}\r\n"
+        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: {connection_header}\r\nUpgrade: {upgrade_header}\r\n{key_headers}{version_headers}{protocol}\r\n"
     );
     client.write_all(request.as_bytes()).await?;
     let (status, headers) =
@@ -2621,7 +3013,10 @@ async fn run_native_websocket_exchange_case(address: SocketAddr, case: &Value) -
     let (client, status, headers) = open_native_websocket_handshake(address, case).await?;
     let expected_status = required_status(case, "expected_status")?;
     let expected_accept = required_str(case, "expected_accept")?;
-    let expected_protocol = required_str(case, "offered_subprotocol")?;
+    let expected_protocol = case
+        .get("expected_subprotocol")
+        .and_then(Value::as_str)
+        .unwrap_or(required_str(case, "offered_subprotocol")?);
     if status != expected_status
         || !has_required_websocket_response_headers(&headers)
         || headers.get("sec-websocket-accept").map(String::as_str) != Some(expected_accept)
@@ -2629,8 +3024,10 @@ async fn run_native_websocket_exchange_case(address: SocketAddr, case: &Value) -
         || !expected_response_header_matches(&headers, case)
     {
         return Err(io::Error::other(format!(
-            "{}: WebSocket handshake mismatch: status={status}, accept={:?}, protocol={:?}",
+            "{}: WebSocket handshake mismatch: status={status}, required_headers={}, expected_response_header={}, accept={:?}, protocol={:?}, headers={headers:?}",
             required_str(case, "id")?,
+            has_required_websocket_response_headers(&headers),
+            expected_response_header_matches(&headers, case),
             headers.get("sec-websocket-accept"),
             headers.get("sec-websocket-protocol")
         ))
@@ -2792,6 +3189,102 @@ async fn run_native_websocket_rejection_case(address: SocketAddr, case: &Value) 
     verify_http1_upgrade_listener_recovers(address, case).await
 }
 
+async fn run_native_websocket_accept_after_close_case(
+    address: SocketAddr,
+    case: &Value,
+    registration_outcome: &mut watch::Receiver<Option<String>>,
+) -> ProbeResult<()> {
+    let (mut client, status, headers) = open_native_websocket_handshake(address, case).await?;
+    let (body, complete) = tokio::time::timeout(
+        Duration::from_secs(2),
+        read_response_body(&mut client, &headers),
+    )
+    .await??;
+    let expected_status = required_status(case, "expected_status")?;
+    let expected_body = required_str(case, "expected_response_body")?.as_bytes();
+    if status != expected_status || !complete || body != expected_body {
+        return Err(io::Error::other(format!(
+            "{}: deferred WebSocket response differed: status={status}, complete={complete}, body={body:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    drop(client);
+
+    let outcome = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(outcome) = registration_outcome.borrow_and_update().clone() {
+                return Ok::<_, io::Error>(outcome);
+            }
+            registration_outcome
+                .changed()
+                .await
+                .map_err(|_| io::Error::other("WebSocket acceptance outcome channel closed"))?;
+        }
+    })
+    .await??;
+    let expected_error = required_str(case, "expected_error")?;
+    if outcome != expected_error {
+        return Err(io::Error::other(format!(
+            "{}: delayed WebSocket accept result differed: {outcome:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn run_native_websocket_malformed_frame_case(
+    address: SocketAddr,
+    case: &Value,
+    observation: &mut watch::Receiver<Option<String>>,
+) -> ProbeResult<()> {
+    let (mut client, status, headers) = open_native_websocket_handshake(address, case).await?;
+    let expected_status = required_status(case, "expected_status")?;
+    if status != expected_status || !has_required_websocket_response_headers(&headers) {
+        return Err(io::Error::other(format!(
+            "{}: malformed-frame WebSocket handshake differed: status={status}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    // A client frame must be masked. This intentionally malformed frame lets
+    // the public session API observe and preserve the protocol error source.
+    client.write_all(&[0x81, 0x01, b'x']).await?;
+    client.flush().await?;
+    let observed = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(observed) = observation.borrow_and_update().clone() {
+                return Ok::<_, io::Error>(observed);
+            }
+            observation
+                .changed()
+                .await
+                .map_err(|_| io::Error::other("WebSocket error observation channel closed"))?;
+        }
+    })
+    .await??;
+    drop(client);
+
+    let expected_prefix = required_str(case, "expected_error_prefix")?;
+    let expected_source = case["expected_error_source"].as_bool().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "expected_error_source must be a boolean",
+        )
+    })?;
+    let expected_suffix = format!(";source={expected_source}");
+    if !observed.starts_with(expected_prefix) || !observed.ends_with(&expected_suffix) {
+        return Err(io::Error::other(format!(
+            "{}: WebSocket error observation differed: {observed:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
 fn has_required_websocket_response_headers(
     headers: &std::collections::HashMap<String, String>,
 ) -> bool {
@@ -2849,6 +3342,23 @@ fn required_byte_array(case: &Value, key: &str) -> ProbeResult<Vec<u8>> {
                 .map_err(Into::into)
         })
         .collect()
+}
+
+fn required_request_count(case: &Value) -> ProbeResult<usize> {
+    let Some(value) = case.get("request_count") else {
+        return Ok(1);
+    };
+    value
+        .as_u64()
+        .and_then(|count| usize::try_from(count).ok())
+        .filter(|count| *count > 0)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "request_count must be a positive integer",
+            )
+            .into()
+        })
 }
 
 async fn run_isolated_http3_alpn_case(case: &Value) -> ProbeResult<()> {
@@ -3038,6 +3548,11 @@ async fn run_isolated_http3_endpoint_close_lifecycle_case(case: &Value) -> Probe
         .collect::<Result<Vec<_>, _>>()?;
 
     let fixture = lifecycle_fixture();
+    // These shutdown inputs never dispatch an application request. Use the
+    // regular contract service so the HTTP/3 accept-loop behavior is covered
+    // for the same service type used by ordinary HTTP/3 requests, while the
+    // separate lifecycle object still verifies startup/shutdown ordering.
+    let (application, _) = contract_app_with_state(fixture.shutdown_sender.clone());
     let (_, _, quic_server_config) = test_tls_configs()?;
     let server_endpoint =
         quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
@@ -3049,7 +3564,7 @@ async fn run_isolated_http3_endpoint_close_lifecycle_case(case: &Value) -> Probe
     };
     let mut server = tokio::spawn(uvicorn_rs::serve_http3(
         server_endpoint,
-        fixture.app.clone(),
+        application,
         shutdown_on_change(fixture.shutdown_receiver.clone()),
         config,
     ));
@@ -3383,14 +3898,37 @@ async fn run_lifecycle_startup_fault_case(
     behavior: LifecycleHookBehavior,
 ) -> ProbeResult<()> {
     let fixture = lifecycle_fixture_with_behaviors(behavior, LifecycleHookBehavior::Complete);
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let shutdown = fixture.shutdown_receiver.clone();
-    let server = tokio::spawn(uvicorn_rs::serve_tcp(
-        listener,
-        fixture.app.clone(),
-        shutdown_on_change(shutdown),
-        lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
-    ));
+    let config = lifecycle_server_config(Arc::clone(&fixture.hooks), case)?;
+    let server = match required_str(case, "protocol")? {
+        "http/1.1" => {
+            let listener = TcpListener::bind("127.0.0.1:0").await?;
+            let shutdown = fixture.shutdown_receiver.clone();
+            tokio::spawn(uvicorn_rs::serve_tcp(
+                listener,
+                fixture.app.clone(),
+                shutdown_on_change(shutdown),
+                config,
+            ))
+        }
+        "http3" => {
+            let (_, _, quic_server_config) = test_tls_configs()?;
+            let endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
+            let shutdown = fixture.shutdown_receiver.clone();
+            tokio::spawn(uvicorn_rs::serve_http3(
+                endpoint,
+                fixture.app.clone(),
+                shutdown_on_change(shutdown),
+                config,
+            ))
+        }
+        protocol => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported lifecycle startup-fault protocol {protocol:?}"),
+            )
+            .into());
+        }
+    };
     expect_lifecycle_server_error(server, ApplicationLifecycleStage::Startup, behavior).await?;
     if fixture.state.startup_completed.load(Ordering::Acquire)
         || fixture.state.shutdown_completed.load(Ordering::Acquire)
@@ -4102,7 +4640,8 @@ async fn run_lifecycle_http1_case(case: &Value) -> ProbeResult<()> {
     ));
     let mut active_request = fixture.state.active_request.subscribe();
     let workflow =
-        run_lifecycle_http1_workflow(case, address, &fixture, &server, &mut active_request).await;
+        run_lifecycle_http1_workflow(case, address, &fixture, &server, &mut active_request, None)
+            .await;
     fixture.shutdown_sender.send_replace(true);
     fixture.state.release_request.send_replace(true);
     let server_result = join_lifecycle_server(server).await;
@@ -4111,21 +4650,184 @@ async fn run_lifecycle_http1_case(case: &Value) -> ProbeResult<()> {
     verify_lifecycle_state(case, &fixture.state)
 }
 
+async fn run_lifecycle_https_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    let (tls_acceptor, tls_clients, _) = test_tls_configs()?;
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let shutdown = fixture.shutdown_receiver.clone();
+    let server = tokio::spawn(uvicorn_rs::serve_tls(
+        listener,
+        tls_acceptor,
+        fixture.app.clone(),
+        shutdown_on_change(shutdown),
+        lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
+    ));
+    let mut active_request = fixture.state.active_request.subscribe();
+    let workflow = run_lifecycle_http1_workflow(
+        case,
+        address,
+        &fixture,
+        &server,
+        &mut active_request,
+        Some(tls_clients.http1.clone()),
+    )
+    .await;
+    fixture.shutdown_sender.send_replace(true);
+    fixture.state.release_request.send_replace(true);
+    let server_result = join_lifecycle_server(server).await;
+    workflow?;
+    server_result?;
+    verify_lifecycle_state(case, &fixture.state)
+}
+
+async fn run_lifecycle_websocket_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    let (tls_acceptor, tls_clients, _) = test_tls_configs()?;
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let shutdown = fixture.shutdown_receiver.clone();
+    let config = lifecycle_server_config(Arc::clone(&fixture.hooks), case)?;
+    let server = match required_str(case, "protocol")? {
+        "http/1.1" => tokio::spawn(uvicorn_rs::serve_tcp(
+            listener,
+            fixture.app.clone(),
+            shutdown_on_change(shutdown),
+            config,
+        )),
+        "https/1.1" => tokio::spawn(uvicorn_rs::serve_tls(
+            listener,
+            tls_acceptor,
+            fixture.app.clone(),
+            shutdown_on_change(shutdown),
+            config,
+        )),
+        protocol => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported lifecycle WebSocket protocol {protocol:?}"),
+            )
+            .into());
+        }
+    };
+
+    let workflow = run_lifecycle_websocket_probe(
+        case,
+        address,
+        (required_str(case, "protocol")? == "https/1.1").then(|| tls_clients.http1.clone()),
+    )
+    .await;
+    fixture.shutdown_sender.send_replace(true);
+    let server_result = join_lifecycle_server(server).await;
+    workflow?;
+    server_result?;
+    verify_lifecycle_startup_shutdown(case, &fixture.state)
+}
+
+async fn run_lifecycle_websocket_probe(
+    case: &Value,
+    address: SocketAddr,
+    tls_connector: Option<TlsConnector>,
+) -> ProbeResult<()> {
+    let (ready_status, ready_body) = lifecycle_http1_get_with_tls(
+        address,
+        required_str(case, "ready_path")?,
+        tls_connector.clone(),
+    )
+    .await?;
+    verify_lifecycle_response(case, b"started\n", ready_status, &ready_body)?;
+
+    if let Some(connector) = tls_connector {
+        let tcp_stream = TcpStream::connect(address).await?;
+        let server_name = ServerName::try_from("localhost".to_owned())?;
+        let stream = connector.connect(server_name, tcp_stream).await?;
+        run_lifecycle_websocket_session(stream, case).await
+    } else {
+        let stream = TcpStream::connect(address).await?;
+        run_lifecycle_websocket_session(stream, case).await
+    }
+}
+
+async fn run_lifecycle_websocket_session<S>(mut stream: S, case: &Value) -> ProbeResult<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let path = required_str(case, "path")?;
+    let key = required_str(case, "request_key")?;
+    let request = format!(
+        "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n"
+    );
+    stream.write_all(request.as_bytes()).await?;
+    let (status, headers) = read_response_head(&mut stream).await?;
+    if status != required_status(case, "expected_status")?
+        || !has_required_websocket_response_headers(&headers)
+        || headers.get("sec-websocket-accept").map(String::as_str)
+            != Some(required_str(case, "expected_accept")?)
+    {
+        return Err(io::Error::other(format!(
+            "{}: lifecycle WebSocket handshake mismatch: status={status}, headers={headers:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    let mut websocket = tokio_tungstenite::WebSocketStream::from_raw_socket(
+        stream,
+        tokio_tungstenite::tungstenite::protocol::Role::Client,
+        None,
+    )
+    .await;
+    let text = required_str(case, "text_payload")?;
+    websocket
+        .send(tokio_tungstenite::tungstenite::protocol::Message::Text(
+            text.to_owned().into(),
+        ))
+        .await?;
+    match tokio::time::timeout(Duration::from_secs(2), websocket.next()).await? {
+        Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Text(received)))
+            if received.as_str() == text => {}
+        other => {
+            return Err(io::Error::other(format!(
+                "{}: lifecycle WebSocket echo mismatch: {other:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+    }
+    websocket.close(None).await?;
+    match tokio::time::timeout(Duration::from_secs(2), websocket.next()).await? {
+        Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Close(_))) | None => Ok(()),
+        other => Err(io::Error::other(format!(
+            "{}: lifecycle WebSocket close mismatch: {other:?}",
+            required_str(case, "id")?
+        ))
+        .into()),
+    }
+}
+
 async fn run_lifecycle_http1_workflow(
     case: &Value,
     address: SocketAddr,
     fixture: &LifecycleFixture,
     server: &tokio::task::JoinHandle<Result<(), uvicorn_rs::ServeError>>,
     active_request: &mut watch::Receiver<bool>,
+    tls_connector: Option<TlsConnector>,
 ) -> ProbeResult<()> {
-    let (ready_status, ready_body) =
-        lifecycle_http1_get(address, required_str(case, "ready_path")?).await?;
+    let (ready_status, ready_body) = lifecycle_http1_get_with_tls(
+        address,
+        required_str(case, "ready_path")?,
+        tls_connector.clone(),
+    )
+    .await?;
     verify_lifecycle_response(case, b"started\n", ready_status, &ready_body)?;
 
     let id = required_str(case, "id")?.to_owned();
     let path = required_str(case, "path")?.to_owned();
     let active_address = address;
-    let active = tokio::spawn(async move { lifecycle_http1_get(active_address, &path).await });
+    let active_connector = tls_connector.clone();
+    let active = tokio::spawn(async move {
+        lifecycle_http1_get_with_tls(active_address, &path, active_connector).await
+    });
     wait_for_lifecycle_signal(active_request, "HTTP/1.1 held request did not start").await?;
     fixture.shutdown_sender.send_replace(true);
     tokio::time::sleep(lifecycle_release_delay(case)?).await;
@@ -4140,6 +4842,40 @@ async fn run_lifecycle_http1_workflow(
         .into());
     }
     verify_lifecycle_response(case, b"released\n", status, &body)
+}
+
+async fn lifecycle_http1_get_with_tls(
+    address: SocketAddr,
+    path: &str,
+    tls_connector: Option<TlsConnector>,
+) -> ProbeResult<(u16, Vec<u8>)> {
+    match tls_connector {
+        Some(connector) => lifecycle_https_get(address, path, &connector).await,
+        None => lifecycle_http1_get(address, path).await,
+    }
+}
+
+async fn lifecycle_https_get(
+    address: SocketAddr,
+    path: &str,
+    connector: &TlsConnector,
+) -> ProbeResult<(u16, Vec<u8>)> {
+    let tcp_stream = TcpStream::connect(address).await?;
+    let server_name = ServerName::try_from("localhost")?;
+    let mut stream = connector.connect(server_name, tcp_stream).await?;
+    let request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).await?;
+    stream.flush().await?;
+    let (status, headers) = read_response_head(&mut stream).await?;
+    let (body, complete) = read_response_body(&mut stream, &headers).await?;
+    if !complete {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "HTTPS lifecycle response was incomplete",
+        )
+        .into());
+    }
+    Ok((status, body))
 }
 
 async fn lifecycle_http1_get(address: SocketAddr, path: &str) -> ProbeResult<(u16, Vec<u8>)> {
@@ -4323,13 +5059,17 @@ async fn run_lifecycle_http3_connection_init_failure_case(case: &Value) -> Probe
 
 async fn run_lifecycle_http3_pending_handshake_shutdown_case(case: &Value) -> ProbeResult<()> {
     let fixture = lifecycle_fixture();
+    // The handshake is held before request dispatch, so the request service
+    // is not observed by the peer. Keep lifecycle coverage while using the
+    // regular HTTP/3 contract service instantiation.
+    let (application, _) = contract_app_with_state(fixture.shutdown_sender.clone());
     let (_, _, quic_server_config) = test_tls_configs()?;
     let server_endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
     let address = server_endpoint.local_addr()?;
     let shutdown = fixture.shutdown_receiver.clone();
     let mut server = tokio::spawn(uvicorn_rs::serve_http3(
         server_endpoint,
-        fixture.app.clone(),
+        application,
         shutdown_on_change(shutdown),
         lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
     ));
@@ -4607,6 +5347,7 @@ fn verify_lifecycle_events(case: &Value, state: &LifecycleState) -> ProbeResult<
         | "native-lifecycle-startup-timeout"
         | "native-lifecycle-startup-panic" => &["startup"],
         "native-lifecycle-drain"
+        | "native-lifecycle-websocket"
         | "native-lifecycle-readiness-pending"
         | "native-lifecycle-shutdown-error"
         | "native-lifecycle-shutdown-timeout"
@@ -4919,6 +5660,7 @@ fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<A
     let (peer_write_half_close_release, _) = watch::channel(false);
     let (http3_response_cancel_release, _) = watch::channel(false);
     let (upgrade_registration_outcome, _) = watch::channel(None);
+    let (websocket_error_observation, _) = watch::channel(None);
     let state = Arc::new(AppState {
         fail_next_readiness: AtomicBool::new(false),
         readiness_gate: Mutex::new(ReadinessGate::default()),
@@ -4945,6 +5687,7 @@ fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<A
         upload_tasks_dropped: Arc::new(AtomicUsize::new(0)),
         shutdown,
         upgrade_registration_outcome,
+        websocket_error_observation,
     });
     (
         ContractApp {
@@ -5084,16 +5827,26 @@ async fn run_cases(
             case["protocol"].as_str(),
             Some("https/1.1") | Some("h2-tls")
         ) {
-            if operation == "tls-invalid-handshake-recovery" {
-                run_tls_invalid_handshake_recovery_case(
-                    tls_address,
-                    tls_clients,
-                    case,
-                    observed_errors,
-                )
-                .await?;
-            } else {
-                run_tls_connection_security_case(tls_address, tls_clients, case).await?;
+            match operation {
+                "tls-invalid-handshake-recovery" => {
+                    run_tls_invalid_handshake_recovery_case(
+                        tls_address,
+                        tls_clients,
+                        case,
+                        observed_errors,
+                    )
+                    .await?;
+                }
+                "native-https-upgrade-session-error" => {
+                    run_tls_http1_upgrade_session_error_case(
+                        tls_address,
+                        tls_clients,
+                        case,
+                        observed_errors,
+                    )
+                    .await?;
+                }
+                _ => run_tls_connection_security_case(tls_address, tls_clients, case).await?,
             }
             let mut output = io::stdout().lock();
             writeln!(output, "PASS {id}")?;
@@ -9074,14 +9827,13 @@ async fn run_isolated_http3_idle_connection_shutdown_timeout_case(case: &Value) 
     } else {
         true
     };
-    if !server_joined {
-        if tokio::time::timeout(Duration::from_secs(1), &mut server)
+    if !server_joined
+        && tokio::time::timeout(Duration::from_secs(1), &mut server)
             .await
             .is_err()
-        {
-            server.abort();
-            let _ = server.await;
-        }
+    {
+        server.abort();
+        let _ = server.await;
     }
     if workflow.is_ok() && !client_idle {
         return Err(io::Error::new(
@@ -9202,6 +9954,32 @@ async fn run_http2_graceful_drain_case(
     Ok(())
 }
 
+fn input_string_values<'a>(
+    case: &'a Value,
+    array_key: &str,
+    default: &'a str,
+) -> ProbeResult<Vec<&'a str>> {
+    let Some(value) = case.get(array_key) else {
+        return Ok(vec![default]);
+    };
+    let values = value.as_array().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("case field {array_key} must be an array"),
+        )
+    })?;
+    let mut strings = Vec::with_capacity(values.len());
+    for value in values {
+        strings.push(value.as_str().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("case field {array_key} must contain only strings"),
+            )
+        })?);
+    }
+    Ok(strings)
+}
+
 fn required_str<'a>(value: &'a Value, key: &str) -> ProbeResult<&'a str> {
     value[key]
         .as_str()
@@ -9250,9 +10028,12 @@ async fn request(
     Ok(stream)
 }
 
-async fn read_response_head(
-    stream: &mut TcpStream,
-) -> ProbeResult<(u16, std::collections::HashMap<String, String>)> {
+async fn read_response_head<R>(
+    stream: &mut R,
+) -> ProbeResult<(u16, std::collections::HashMap<String, String>)>
+where
+    R: AsyncRead + Unpin + ?Sized,
+{
     let status_line = read_crlf_line(stream).await?;
     let status = std::str::from_utf8(&status_line)?
         .split_whitespace()
@@ -9279,10 +10060,13 @@ async fn read_response_head(
     Ok((status, headers))
 }
 
-async fn read_response_body(
-    stream: &mut TcpStream,
+async fn read_response_body<R>(
+    stream: &mut R,
     headers: &std::collections::HashMap<String, String>,
-) -> ProbeResult<(Vec<u8>, bool)> {
+) -> ProbeResult<(Vec<u8>, bool)>
+where
+    R: AsyncRead + Unpin + ?Sized,
+{
     if headers
         .get("transfer-encoding")
         .is_some_and(|value| value.eq_ignore_ascii_case("chunked"))
@@ -9310,7 +10094,10 @@ async fn read_response_body(
     Ok((body, true))
 }
 
-async fn read_next_chunk(stream: &mut TcpStream) -> io::Result<Option<Vec<u8>>> {
+async fn read_next_chunk<R>(stream: &mut R) -> io::Result<Option<Vec<u8>>>
+where
+    R: AsyncRead + Unpin + ?Sized,
+{
     let line = read_crlf_line(stream).await?;
     let line = std::str::from_utf8(&line)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
@@ -9342,7 +10129,10 @@ async fn read_next_chunk(stream: &mut TcpStream) -> io::Result<Option<Vec<u8>>> 
     Ok(Some(chunk))
 }
 
-async fn read_crlf_line(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+async fn read_crlf_line<R>(stream: &mut R) -> io::Result<Vec<u8>>
+where
+    R: AsyncRead + Unpin + ?Sized,
+{
     let mut line = Vec::new();
     loop {
         let byte = stream.read_u8().await?;

@@ -26,7 +26,7 @@ from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_c
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv" / "bin" / "python"
-CLIENT = ROOT / "tools" / "http3-probe" / "target" / "release" / "websocket"
+CLIENT = ROOT / "target" / "release" / "websocket"
 WORKLOADS = {
     "connection-handshake": {
         "mode": "handshake", "path": "/echo", "payload_bytes": 0,

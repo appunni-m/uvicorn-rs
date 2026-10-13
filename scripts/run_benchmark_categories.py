@@ -233,7 +233,7 @@ def normal_binary(path):
 def capture_identity(root, python, evidence_class):
     from benchmark_evidence import FASTAPI_BENCHMARK_DISTRIBUTIONS
 
-    clients = [root / "tools/http3-probe/target/release" / name for name in PROBE_NAMES]
+    clients = [root / "target/release" / name for name in PROBE_NAMES]
     for path in clients:
         normal_binary(path)
     extra_dependencies = {"uvicorn-rs-py": ["uvicorn_rs"]}
@@ -295,7 +295,7 @@ def validate_parity(root, before_path, parity_path, current, expected_count):
         raise RuntimeError("parity did not execute this exact native binary, Cargo.lock, and Git revision")
     harness = result["run"]["harness"]
     parity_http3 = harness.get("http3_client")
-    frozen_http3_path = str(root / "tools/http3-probe/target/release/parity-http3")
+    frozen_http3_path = str(root / "target/release/parity-http3")
     frozen_http3_sha256 = current["snapshot"]["clients"].get(frozen_http3_path)
     if (not isinstance(parity_http3, dict)
             or parity_http3.get("sha256") != frozen_http3_sha256):

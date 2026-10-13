@@ -138,11 +138,25 @@ def markdown_summary(report: dict[str, Any]) -> tuple[str, list[tuple[str, str, 
     repeat_rows = matrix.get("verification_runs", [])
     if not isinstance(repeat_rows, list):
         repeat_rows = []
+
+    def format_repeat(item: Any) -> str:
+        if not isinstance(item, dict):
+            return "invalid repeat record"
+        case_summary = item.get("summary")
+        if isinstance(case_summary, dict):
+            counts = (
+                f"({case_summary.get('passed', 0)}/"
+                f"{case_summary.get('selected', 0)})"
+            )
+        else:
+            counts = "(case summary unavailable)"
+        return (
+            f"{item.get('run', '?')}: {item.get('status', 'unknown')} "
+            f"{counts}"
+        )
+
     repeat_status = ", ".join(
-        f"{item.get('run', '?')}: {item.get('status', 'unknown')} "
-        f"({item.get('summary', {}).get('passed', 0)}/"
-        f"{item.get('summary', {}).get('selected', 0)})"
-        for item in repeat_rows if isinstance(item, dict)
+        format_repeat(item) for item in repeat_rows
     ) or "no repeat results recorded"
     source = run.get("source", {})
     build = run.get("build", {})

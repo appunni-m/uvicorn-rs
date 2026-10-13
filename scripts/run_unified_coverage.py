@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -97,6 +98,16 @@ def digest_bytes(value: bytes) -> str:
 
 def digest_file(path: Path) -> str:
     return digest_bytes(path.read_bytes())
+
+
+def restore_native_runner(native_runner: Path, snapshot: Path, expected_sha256: str) -> None:
+    """Restore the instrumented LLVM object if its Cargo target was cleaned."""
+    if native_runner.is_file() and digest_file(native_runner) == expected_sha256:
+        return
+    native_runner.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(snapshot, native_runner)
+    if digest_file(native_runner) != expected_sha256:
+        raise CoverageError("restored native coverage runner differs from the recorded build")
 
 
 def profile_receipts(paths: list[Path]) -> list[dict[str, str]]:
@@ -691,6 +702,11 @@ def main() -> int:
         "platform": platform.platform(),
         "python": platform.python_version(),
     }
+    native_runner_snapshot = artifacts_root / "coverage-objects" / native_runner.name
+    native_runner_snapshot.parent.mkdir(parents=True, exist_ok=False)
+    shutil.copy2(native_runner, native_runner_snapshot)
+    if digest_file(native_runner_snapshot) != build_identity["native_runner_sha256"]:
+        raise CoverageError("native coverage runner snapshot differs from the recorded build")
 
     case_receipts: list[dict[str, Any]] = []
     native_case_receipts: list[dict[str, Any]] = []
@@ -933,6 +949,9 @@ def main() -> int:
         )
 
     for index, case in enumerate(native_cases, 1):
+        restore_native_runner(
+            native_runner, native_runner_snapshot, build_identity["native_runner_sha256"]
+        )
         case_id = case["id"]
         slug = case_slug(case_id)
         case_dir = native_case_results_root / slug
@@ -1242,7 +1261,9 @@ def main() -> int:
         str(llvm_profdata), "merge", "-sparse", "-failure-mode=all", "-o",
         str(combined_profdata), *map(str, all_case_profiles),
     ], timeout=180)
-    aggregate_llvm = llvm_export(llvm_cov, [extension, native_runner], combined_profdata, timeout=180)
+    aggregate_llvm = llvm_export(
+        llvm_cov, [extension, native_runner_snapshot], combined_profdata, timeout=180
+    )
     aggregate_regions, aggregate_summaries, canonical_functions = source_region_map(
         aggregate_llvm, source["sha256"], set(PRODUCTION_SOURCE_SET)
     )
@@ -1275,7 +1296,7 @@ def main() -> int:
         attribution_cases.append(("native", receipt, merged))
 
     for attribution_index, (namespace, receipt, profile_data) in enumerate(attribution_cases, 1):
-        case_llvm = llvm_export(llvm_cov, [extension, native_runner], profile_data)
+        case_llvm = llvm_export(llvm_cov, [extension, native_runner_snapshot], profile_data)
         case_regions, _, _ = source_region_map(
             case_llvm,
             source["sha256"],
@@ -1520,6 +1541,8 @@ def main() -> int:
     }
     if source_identity(manifest, input_paths, native_manifest)["sha256"] != source["sha256"]:
         raise CoverageError("source or parity inputs changed while the coverage run was in progress")
+    restore_native_runner(native_runner, native_runner_snapshot, build_identity["native_runner_sha256"])
+    native_runner_snapshot.unlink(missing_ok=True)
     aggregate_llvm = filter_llvm_export_sources(aggregate_llvm, set(PRODUCTION_SOURCE_SET))
     aggregate_llvm[LLVM_EXTENSION_KEY] = coverage_extension
     output.parent.mkdir(parents=True, exist_ok=True)

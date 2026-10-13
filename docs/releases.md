@@ -2,36 +2,77 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-The project prepares wheel and source **candidates** from a reviewed commit.
-`Cargo.toml` keeps `publish = false`; the workflows upload GitHub Actions
-artifacts and do not publish to crates.io or PyPI, create a GitHub Release,
-or create or move tags. The project is licensed under
+The current workflow prepares Python wheel and source **candidates** from a
+reviewed commit. It assembles `uvicorn-rs-py` wheels and an sdist; it does not
+package the Python-free `uvicorn-rs` Rust crate or an executable.
+`crates/uvicorn-rs/Cargo.toml` and its path dependency
+`crates/native-app-contract/Cargo.toml` both keep `publish = false`. The
+workflows upload GitHub Actions artifacts and do not publish Rust crates to
+crates.io, Python packages to PyPI, create a GitHub Release, or create or move
+tags. The project is licensed under
 [BSD-3-Clause or MIT](../LICENSE), at the recipient's option, with copyright
 © 2026 Appunni M and the original Uvicorn/Hypercorn license notices retained.
 
 ## Current state
 
-**Latest all-gates passing CI state (2026-10-11).** Hosted CI
-[run 38087300590](https://github.com/appunni-m/uvicorn-rs/actions/runs/38087300590)
-passed all eight jobs on clean commit `16ed349f0d1528b8e6f42536b3d406ce17799915`:
-Rust quality and docs, the exact Rust minimum, installed-wheel parity, unified
-parity/fault contracts and 100% native coverage, Linux/macOS/Windows package
-jobs, and the declared Python-floor wheel.
+**Latest hosted CI: failed on 2026-10-13.** CI
+[run #109](https://github.com/appunni-m/uvicorn-rs/actions/runs/38354960365)
+ran on clean commit `b5719e8ee78c8207c2ed5debb18d57bc3b78bdb3`, which remains
+the `main` and `origin/main` commit. Installed-wheel framework comparisons and
+the transient systemd stop passed; Rust 1.85 library checking passed. This is
+not an all-gates pass:
 
-The latest hosted ASGI performance matrix,
-[38122909359](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359),
-validated only a partial matrix: all three platform jobs stopped during the
-sequential category step, so it produced no complete multi-system performance
-result. Its docs-update job pushed the evidence branch, then GitHub rejected
-`gh pr create` because Actions was not permitted to create or approve pull
-requests. No PR was opened. See the [benchmark status](benchmark-status.md)
-for the exact error and retained evidence. The
-2026-10-12 checkout snapshot cited in earlier status notes is no longer the
-current `main`; the branch has advanced since then. It has not yet passed a
-new all-gates hosted CI run, and no release candidate has been assembled from
-the current source. A remote tag check on 2026-10-13 returned no tags; the
-GitHub Releases listing could not be verified in this update because the
-unauthenticated API request returned 403.
+- Unified attribution selected 612 cases (511 ASGI and 101 native): 545
+  passed and 67 were infrastructure failures, with no application-case
+  failures. The oracle group passed 211/243, fault contracts 233/268, and
+  native verification 101/101. The 67 infrastructure failures occurred
+  because the parity runner could not find the HTTP/3 client under
+  `tools/http3-probe/target/release/`; Cargo places workspace binaries under
+  repository `target/release/`.
+- That attribution measured 6,678/7,384 regions and 4,948/5,420 lines. All
+  three full-matrix verification repeats then failed before producing a
+  result file, for the same missing HTTP/3 client. The summary step crashed
+  while formatting a failed repeat whose summary was absent. The separate
+  native matrix completed all three repeats at 101/101 each.
+- Native composition failed because its lockfile did not include dependencies
+  from the pinned FastAPI-RS and Starlette-RS commits; live composition cases
+  were skipped. Locally, the example lockfile has been regenerated from those
+  exact commits, its locked graph excludes PyO3, and all 17 live native
+  composition cases pass against those exact commits. Hosted CI has not yet
+  verified that fix.
+- Rust quality failed on two explicit panic fixtures and a collapsible-if
+  lint. The collapsible-if was corrected locally; the panic fixtures remain.
+- Platform package and Python-floor jobs were skipped.
+
+The latest performance matrix,
+[run #24](https://github.com/appunni-m/uvicorn-rs/actions/runs/38354960306),
+produced no parity or timing result. All three systems stopped looking for the
+HTTP/2 probe under the same incorrect nested target path. Local scripts now
+use the workspace `target/release/` paths, and a locked release build produced
+all four expected clients there. The coverage-summary formatter now handles a
+missing repeat summary. These are local fixes only; hosted CI and benchmark
+workflows have not verified them. The benchmark documentation job could not
+open a PR because Actions lacks permission to create or approve pull requests;
+the documentation change must be applied and reviewed through the repository
+workflow. See the [benchmark status](benchmark-status.md).
+
+The local 633-case coverage report is **not current-source evidence**. A
+source-hash audit found mismatches for
+`crates/uvicorn-rs/examples/native_core_contracts.rs` and
+`crates/uvicorn-rs/src/websocket.rs`; Coverage-MCP now reports its source as
+changed. The report is one attribution pass and has 58 missing regions and 34
+missing lines, but those numbers and their gap classifications must not be
+used to describe the current checkout. A fresh single-pass report and matching
+Coverage-MCP receipt are required before interpreting current gaps. The
+formal gate remains three complete repeats with 100% region and line coverage.
+
+`main` is not a clean release source: this checkout contains uncommitted Rust,
+manifest, workflow, script, and documentation edits. The candidate workflow
+assembles only the three `uvicorn-rs-py` wheels and an sdist; it does not build
+or verify a Python-free Rust crate or executable candidate. No candidate has
+been assembled from the current source. No public release or tag has been
+created; registry publication and GitHub Release creation are outside the
+configured candidate workflow.
 
 The following run-by-run notes are historical attempts, not the current
 release-candidate status.
@@ -290,20 +331,25 @@ hardcode the install version. No changelog update is part of this change.
 ## Assemble an immutable tagged candidate
 
 First commit the complete source, input matrix, workflows and packaging
-metadata together. Require a clean checkout and successful complete `CI` on
-`main` for that exact commit. A maintainer can then request candidate assembly
-by pushing an annotated `vMAJOR.MINOR.PATCH` tag for that commit.
+metadata together. For the native release objective, the workflows must also
+package and verify the Rust-native artifact and bind its source tree and path
+dependency to the candidate evidence; the current workflow only assembles
+Python wheel/sdist artifacts. Require a clean checkout and successful complete
+`CI` on `main` for that exact commit. A maintainer can then request candidate
+assembly by pushing an annotated `vMAJOR.MINOR.PATCH` tag for that commit.
 
 [Release candidate](../.github/workflows/release.yml) follows the immutable
-artifact/evidence pattern used by `fontdone` and `image-slash-star`, adapted to
-Python wheels and a source archive:
+artifact/evidence pattern used by `fontdone` and `image-slash-star`, currently
+adapted to Python wheels and a source archive:
 
 1. Verify the remote annotated tag object resolves to the checked-out commit,
    including when checkout materializes only its peeled commit.
 2. Require exact tag/manifest/lockfile version agreement and a clean checkout.
 3. Find a successful complete main CI run for that same commit.
-4. Download only that run's three platform package artifacts, normal parity,
+4. Download only that run's three Python package artifacts, normal parity,
    seam-exclusion audit, complete unified coverage and Python-floor evidence.
+   Add and verify the native Rust artifact before calling the bundle a native
+   `uvicorn-rs` release candidate.
 5. Verify package identities and retained evidence, then write bundle checksums
    and a candidate record containing version, tag, commit and CI run ID.
 6. Retain the complete candidate bundle for 90 days.
@@ -316,11 +362,15 @@ publication, OIDC authentication, repository writes or GitHub Release creation.
 ## Public release decision
 
 Candidate verification, hosted CI success and public publication are separate
-states. A public release additionally needs an explicit distribution decision,
-reviewed release notes, the current support/known-limit matrix, exact-source
-Coverage-MCP review and green hosted evidence. Experimental H3 limitations and
-workload-specific benchmark results remain visible. Use a clean proven commit;
-do not distribute the dirty local preparation artifacts as an official release.
+states. A public release additionally needs an explicit distribution decision
+that names the Rust-native crate and whether to publish the optional
+`uvicorn-rs-py` compatibility client, reviewed release notes, the current
+support/known-limit matrix, exact-source Coverage-MCP review, source-bound
+performance evidence (or a reviewed performance-scope revision), and green
+hosted evidence. `starlette-rs-py` and `fastapi-rs-py` are owned by their
+framework repositories. Experimental H3 limitations and workload-specific
+benchmark results remain visible. Use a clean proven commit; do not distribute
+the dirty local preparation artifacts as an official release.
 
 Dependabot proposes weekly Cargo and GitHub Action updates. Review those
 updates and their exact pins before accepting them into a candidate.
