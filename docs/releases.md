@@ -20,9 +20,10 @@ The latest hosted ASGI performance matrix,
 [38122909359](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359),
 validated only a partial matrix: all three platform jobs stopped during the
 sequential category step, so it produced no complete multi-system performance
-result. Its docs-update job also failed in the final pull-request step; the
-step log requires sign-in, so the exact error remains unknown. See the
-[benchmark status](benchmark-status.md) for the retained evidence. The
+result. Its docs-update job pushed the evidence branch, then GitHub rejected
+`gh pr create` because Actions was not permitted to create or approve pull
+requests. No PR was opened. See the [benchmark status](benchmark-status.md)
+for the exact error and retained evidence. The
 2026-10-12 checkout snapshot cited in earlier status notes is no longer the
 current `main`; the branch has advanced since then. It has not yet passed a
 new all-gates hosted CI run, and no release candidate has been assembled from

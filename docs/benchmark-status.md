@@ -68,9 +68,12 @@ The docs updater pushed commit [`94f68885`](https://github.com/appunni-m/uvicorn
 to `automation/benchmark-results`, then failed in the final “Propose the
 updated results documentation” step (job
 [`114433266672`](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359/job/114433266672#step:5:76)).
-The public run page requires sign-in to expose that step's log, so the exact
-pull-request creation error remains unknown. The aggregate result and docs
-step are separate outcomes.
+The GitHub Actions job log confirms that the branch push succeeded, but
+`gh pr create` was rejected with `GitHub Actions is not permitted to create or
+approve pull requests (createPullRequest)`. The workflow requested
+`pull-requests: write`; the effective Actions policy still blocked PR creation.
+The docs update is on the pushed branch, but no PR was opened. This permission
+failure is separate from the aggregate benchmark result.
 
 The separately attached `asgi-category-benchmarks-macos-arm64 (1).zip` has
 SHA-256 `92e2cd68d8afb38a367b6e789fc5143e6ff054b7cf7b3ab3298466692ee7091a`,
@@ -764,9 +767,9 @@ No release-candidate bundle is ready. CI run `38087300590` passed its eight
 hosted gates on clean commit `16ed349`. The newer ASGI benchmark matrix
 `38122909359` stopped in the sequential category step on all three systems, so
 it produced no validated multi-system performance result. Its docs-update job
-also failed in the final pull-request step; the required sign-in prevents
-inspection of the step log, so the exact error remains unknown. No tag, GitHub
-Release, crates.io publication, or PyPI package was created. See
+pushed the evidence branch, then `gh pr create` failed because GitHub Actions
+was not permitted to create or approve pull requests. No PR was opened. No tag,
+GitHub Release, crates.io publication, or PyPI package was created. See
 [release status](releases.md).
 
 ## Reproduction
