@@ -136,6 +136,7 @@ struct LifecycleState {
     observed_lifecycle_errors: Mutex<Vec<(ServerErrorPhase, String, bool)>>,
     readiness_errors: Mutex<Vec<(ServerErrorPhase, bool, String)>>,
     application_errors: Mutex<Vec<(ServerErrorPhase, bool, String)>>,
+    connection_errors: Mutex<Vec<(ServerErrorPhase, Option<SocketAddr>)>>,
 }
 
 struct LifecycleHooks {
@@ -1512,6 +1513,7 @@ fn lifecycle_fixture_with_behaviors(
         observed_lifecycle_errors: Mutex::new(Vec::new()),
         readiness_errors: Mutex::new(Vec::new()),
         application_errors: Mutex::new(Vec::new()),
+        connection_errors: Mutex::new(Vec::new()),
     });
     LifecycleFixture {
         app: LifecycleApp {
@@ -1577,6 +1579,14 @@ fn lifecycle_server_config(
                 }
             }))
         }
+        "native-lifecycle-http3-connection-init-failure-recovery" => {
+            let state = Arc::clone(&hooks.state);
+            Some(Arc::new(move |event: ServerErrorEvent<'_>| {
+                if let Ok(mut observations) = state.connection_errors.lock() {
+                    observations.push((event.phase(), event.peer_addr()));
+                }
+            }))
+        }
         _ => None,
     };
     Ok(uvicorn_rs::ServerConfig {
@@ -1617,6 +1627,9 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
         }
         "native-lifecycle-service-and-response-body-errors" => {
             return run_lifecycle_service_and_response_body_errors_case(case).await;
+        }
+        "native-lifecycle-http3-connection-init-failure-recovery" => {
+            return run_lifecycle_http3_connection_init_failure_case(case).await;
         }
         "native-lifecycle-readiness-error" => {
             return run_lifecycle_readiness_error_case(case).await;
@@ -3241,6 +3254,97 @@ async fn run_lifecycle_http3_case(case: &Value) -> ProbeResult<()> {
     verify_lifecycle_state(case, &fixture.state)
 }
 
+async fn run_lifecycle_http3_connection_init_failure_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+    let endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
+    let address = endpoint.local_addr()?;
+    let shutdown = fixture.shutdown_receiver.clone();
+    let server = tokio::spawn(uvicorn_rs::serve_http3(
+        endpoint,
+        fixture.app.clone(),
+        shutdown_on_change(shutdown),
+        lifecycle_server_config(Arc::clone(&fixture.hooks), case)?,
+    ));
+
+    let workflow = async {
+        let (ready_endpoint, mut ready_sender) =
+            new_http3_client(address, &tls_clients.http3).await?;
+        let mut ready = send_http3_request(
+            &mut ready_sender,
+            address,
+            "GET",
+            required_str(case, "recovery_path")?,
+            b"",
+        )
+        .await?;
+        let (ready_status, ready_body, _) = collect_http3_response(&mut ready).await?;
+        verify_lifecycle_response(case, b"started\n", ready_status, &ready_body)?;
+        ready_endpoint.close(quinn::VarInt::from_u32(0), b"lifecycle readiness complete");
+        ready_endpoint.wait_idle().await;
+
+        close_http3_peer_during_server_connection_creation(address, &tls_clients.http3, case)
+            .await?;
+        wait_for_lifecycle_http3_connection_error(&fixture.state, case).await?;
+
+        let (recovery_endpoint, mut recovery_sender) =
+            new_http3_client(address, &tls_clients.http3).await?;
+        let mut recovery = send_http3_request(
+            &mut recovery_sender,
+            address,
+            "GET",
+            required_str(case, "recovery_path")?,
+            b"",
+        )
+        .await?;
+        let (recovery_status, recovery_body, _) = collect_http3_response(&mut recovery).await?;
+        recovery_endpoint.close(
+            quinn::VarInt::from_u32(0),
+            b"lifecycle HTTP/3 connection initialization recovery complete",
+        );
+        recovery_endpoint.wait_idle().await;
+        verify_lifecycle_response(case, b"started\n", recovery_status, &recovery_body)
+    }
+    .await;
+
+    fixture.shutdown_sender.send_replace(true);
+    let server_result = join_lifecycle_server(server).await;
+    workflow?;
+    server_result?;
+    verify_lifecycle_startup_shutdown(case, &fixture.state)
+}
+
+async fn wait_for_lifecycle_http3_connection_error(
+    state: &LifecycleState,
+    case: &Value,
+) -> ProbeResult<()> {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let observed = state
+            .connection_errors
+            .lock()
+            .map_err(|_| io::Error::other("lifecycle connection error observations were poisoned"))?
+            .iter()
+            .any(|(phase, peer_addr)| {
+                *phase == ServerErrorPhase::Connection && peer_addr.is_some()
+            });
+        if observed {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!(
+                    "{}: HTTP/3 initialization failure produced no connection observation",
+                    required_str(case, "id")?
+                ),
+            )
+            .into());
+        }
+        sleep(Duration::from_millis(10)).await;
+    }
+}
+
 async fn run_lifecycle_http3_workflow(
     case: &Value,
     address: SocketAddr,
@@ -3322,12 +3426,7 @@ fn verify_lifecycle_response(
 }
 
 fn verify_lifecycle_state(case: &Value, state: &LifecycleState) -> ProbeResult<()> {
-    if !state.startup_completed.load(Ordering::Acquire) {
-        return Err(io::Error::other("application startup hook did not complete").into());
-    }
-    if !state.shutdown_completed.load(Ordering::Acquire) {
-        return Err(io::Error::other("application shutdown hook did not complete").into());
-    }
+    verify_lifecycle_startup_shutdown(case, state)?;
     if !state
         .shutdown_saw_response_body_drop
         .load(Ordering::Acquire)
@@ -3336,6 +3435,16 @@ fn verify_lifecycle_state(case: &Value, state: &LifecycleState) -> ProbeResult<(
             "application shutdown ran before the active response body was dropped",
         )
         .into());
+    }
+    Ok(())
+}
+
+fn verify_lifecycle_startup_shutdown(case: &Value, state: &LifecycleState) -> ProbeResult<()> {
+    if !state.startup_completed.load(Ordering::Acquire) {
+        return Err(io::Error::other("application startup hook did not complete").into());
+    }
+    if !state.shutdown_completed.load(Ordering::Acquire) {
+        return Err(io::Error::other("application shutdown hook did not complete").into());
     }
     verify_lifecycle_events(case, state)
 }
@@ -3353,6 +3462,7 @@ fn verify_lifecycle_events(case: &Value, state: &LifecycleState) -> ProbeResult<
         | "native-lifecycle-server-and-shutdown-error"
         | "native-lifecycle-server-timeout"
         | "native-lifecycle-readiness-error" => &["startup", "shutdown"],
+        "native-lifecycle-http3-connection-init-failure-recovery" => &["startup", "shutdown"],
         "native-lifecycle-service-and-response-body-errors" => &["startup", "shutdown"],
         operation => {
             return Err(io::Error::new(
@@ -3684,6 +3794,16 @@ async fn run_cases(
                 "http3-invalid-control-frame" => {
                     run_http3_invalid_control_frame_case(h3_address, &tls_clients.http3, case)
                         .await?
+                }
+                "http3-connection-init-failure-recovery" => {
+                    run_http3_connection_init_failure_case(
+                        h3_address,
+                        &tls_clients.http3,
+                        case,
+                        observed_errors.as_ref(),
+                        error_count,
+                    )
+                    .await?
                 }
                 "http3-stream-progress" => {
                     run_http3_stream_progress_case(h3_address, &tls_clients.http3, case).await?
@@ -4038,6 +4158,53 @@ async fn new_http3_client(
         let _ = std::future::poll_fn(|context| driver.poll_close(context)).await;
     });
     Ok((endpoint, sender))
+}
+
+async fn close_http3_peer_during_server_connection_creation(
+    address: SocketAddr,
+    client_config: &quinn::ClientConfig,
+    case: &Value,
+) -> ProbeResult<()> {
+    let stream_limit = case["client_max_concurrent_uni_streams"]
+        .as_u64()
+        .ok_or("client_max_concurrent_uni_streams must be an unsigned integer")?;
+    if stream_limit != 0 {
+        return Err("connection creation probe requires zero server unidirectional streams".into());
+    }
+    let close_error_code = case["client_close_error_code"]
+        .as_u64()
+        .ok_or("client_close_error_code must be an unsigned integer")?;
+    let mut transport = quinn::TransportConfig::default();
+    transport.max_concurrent_uni_streams(quinn::VarInt::from_u64(stream_limit)?);
+    let mut constrained_client_config = client_config.clone();
+    constrained_client_config.transport_config(Arc::new(transport));
+
+    let mut endpoint = quinn::Endpoint::client("127.0.0.1:0".parse::<SocketAddr>()?)?;
+    endpoint.set_default_client_config(constrained_client_config);
+    let connection = timeout(
+        Duration::from_secs(2),
+        endpoint.connect(address, "localhost")?,
+    )
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 connection-creation peer did not complete QUIC handshake",
+        )
+    })??;
+
+    // A zero stream limit leaves the native H3 constructor waiting to open its
+    // required control stream. Let the accepted QUIC connection reach that
+    // point, then close the peer while Connection::new is still pending.
+    sleep(Duration::from_millis(100)).await;
+    connection.close(
+        quinn::VarInt::from_u64(close_error_code)?,
+        b"peer closes during HTTP/3 connection creation",
+    );
+    timeout(Duration::from_secs(2), endpoint.wait_idle())
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "QUIC peer did not close"))?;
+    Ok(())
 }
 
 async fn send_http3_request(
@@ -4754,6 +4921,42 @@ async fn run_http3_invalid_control_frame_case(
     Ok(())
 }
 
+async fn run_http3_connection_init_failure_case(
+    address: SocketAddr,
+    client_config: &quinn::ClientConfig,
+    case: &Value,
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+    error_start: usize,
+) -> ProbeResult<()> {
+    close_http3_peer_during_server_connection_creation(address, client_config, case).await?;
+    wait_for_http3_connection_error_observation(observed_errors, error_start, case).await?;
+
+    let (recovery_endpoint, mut recovery_sender) = new_http3_client(address, client_config).await?;
+    let mut recovery = send_http3_request(
+        &mut recovery_sender,
+        address,
+        "GET",
+        required_str(case, "recovery_path")?,
+        b"",
+    )
+    .await?;
+    let (status, body, _) = collect_http3_response(&mut recovery).await?;
+    recovery_endpoint.close(
+        quinn::VarInt::from_u32(0),
+        b"HTTP/3 connection initialization recovery complete",
+    );
+    recovery_endpoint.wait_idle().await;
+    if status != StatusCode::OK.as_u16() || body != b"ready\n" {
+        return Err(io::Error::other(format!(
+            "{}: listener did not recover after an HTTP/3 connection initialization failure: status={status}, body={:?}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(&body)
+        ))
+        .into());
+    }
+    Ok(())
+}
+
 async fn run_http3_invalid_trailer_sequence_case(
     address: SocketAddr,
     client_config: &quinn::ClientConfig,
@@ -5200,6 +5403,37 @@ fn verify_expected_server_error(
         .into());
     }
     Ok(())
+}
+
+async fn wait_for_http3_connection_error_observation(
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+    start: usize,
+    case: &Value,
+) -> ProbeResult<()> {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let observed = observed_errors
+            .lock()
+            .map_err(|_| io::Error::other("server error observations were poisoned"))?
+            .get(start..)
+            .unwrap_or_default()
+            .iter()
+            .any(|error| error.phase == ServerErrorPhase::Connection && error.peer_addr.is_some());
+        if observed {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!(
+                    "{}: HTTP/3 initialization failure produced no connection-phase observation",
+                    required_str(case, "id")?
+                ),
+            )
+            .into());
+        }
+        sleep(Duration::from_millis(10)).await;
+    }
 }
 
 fn h3_connection_error_code(error: &(dyn Error + 'static)) -> Option<u64> {

@@ -541,6 +541,24 @@
       "expected_server_error_h3_code": 261
     },
     {
+      "id": "http3.peer-close-during-server-connection-creation-recovers",
+      "protocol": "http3",
+      "operation": "http3-connection-init-failure-recovery",
+      "covers": ["http3.injected-stream-error"],
+      "client_max_concurrent_uni_streams": 0,
+      "client_close_error_code": 0,
+      "recovery_path": "/ready"
+    },
+    {
+      "id": "native.lifecycle-http3-peer-close-during-server-connection-creation-recovers",
+      "protocol": "http3",
+      "operation": "native-lifecycle-http3-connection-init-failure-recovery",
+      "covers": ["http3.injected-stream-error"],
+      "client_max_concurrent_uni_streams": 0,
+      "client_close_error_code": 0,
+      "recovery_path": "/ready"
+    },
+    {
       "id": "http3.response-trailers-follow-streamed-data",
       "protocol": "http3",
       "operation": "request",
