@@ -19,12 +19,13 @@ Coverage-MCP queries matched the report receipt and found 64 missing regions
 and 34 missing lines. Its `tests=failed` status reflects the incomplete
 coverage gate, not a failed matrix case.
 
-The current source was then measured with the selected case
+The HTTP/3 request-body source was then measured with the selected case
 `http3.empty-request-body-is-consumed-through-eof` in
 `target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.
-The input passed 1/1 with complete attribution and no retries. The current
-executable denominator is 6,957 regions and 5,088 lines; the selected case
-covers 683 regions and 601 lines, so this is not aggregate coverage evidence.
+The input passed 1/1 with complete attribution and no retries. That selected
+measurement had an executable denominator of 6,957 regions and 5,088 lines;
+the selected case covered 683 regions and 601 lines, so it is not aggregate
+coverage evidence.
 The edit removed a `data_finished` state that could not persist across a poll:
 `poll_recv_data(None)` immediately polls trailers; when trailers are pending,
 the body returns `Pending` and polls data again on the next call. The empty-body
@@ -33,6 +34,19 @@ The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
 The full 594-case aggregate, three repeats, and zero-gap acceptance remain
 outstanding.
+
+The latest selected report is
+`target/asgi-coverage/current-http1-graceful-timeout-consolidated/coverage-report.json`.
+The existing native case
+`http1.graceful-shutdown-timeout-aborts-held-response` passed 1/1 after server
+task-error handling was consolidated. Coverage-MCP matched the report receipt
+and passed the case result; its focused region query at
+`crates/uvicorn-rs/src/lib.rs:1086` returned zero gap groups. The report covers
+498/6,960 regions and 410/5,093 lines for this selected run, not the aggregate.
+The change shares cancellation classification between ordinary connection
+joins and abort draining while retaining the distinct error log messages. It
+was captured from the working tree immediately before commit `b3abb4e3a`; the
+receipt records `dirty=true` and binds the exact source files.
 
 The two focused native cases for a peer close during HTTP/3 connection
 creation passed together in

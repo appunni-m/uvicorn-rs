@@ -19,12 +19,13 @@ and 34 missing lines. The report has no verification repeats; three are
 required. Coverage-MCP's `tests=failed` classification reflects the incomplete
 coverage gate, although all matrix case rows passed.
 
-The current change was measured separately with
+The HTTP/3 request-body change was measured separately with
 `target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.
 The native HTTP/3 empty-body EOF case passed 1/1 with complete attribution and
-no retries. The current executable denominator is **6,957 regions** and
-**5,088 lines**; that selected case covered 683 regions and 601 lines. This
-selected report does not establish aggregate coverage or full-matrix parity.
+no retries. That selected measurement had an executable denominator of
+**6,957 regions** and **5,088 lines**; the case covered 683 regions and 601
+lines. This selected report does not establish aggregate coverage or
+full-matrix parity.
 The `data_finished` field was removed because it could not persist across
 `poll_frame`: a `None` data poll immediately polls trailers; if trailers are
 pending, the body returns `Pending` and polls data again next time. The new
@@ -33,6 +34,20 @@ The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
 A complete current 594-case report and three-repeat verification remain
 outstanding.
+
+The latest selected report is
+`target/asgi-coverage/current-http1-graceful-timeout-consolidated/coverage-report.json`.
+The existing native case
+`http1.graceful-shutdown-timeout-aborts-held-response` passed 1/1 after the
+server task-error handling was consolidated. Coverage-MCP matched the report
+receipt and passed the case result; its focused region query at
+`crates/uvicorn-rs/src/lib.rs:1086` returned zero gap groups. The report covers
+498/6,960 regions and 410/5,093 lines in this selected run. It is not aggregate
+coverage evidence. The change shares cancellation classification between
+ordinary connection joins and abort draining while preserving their distinct
+error log messages. The run was captured from the working tree immediately
+before commit `b3abb4e3a`; the report records `dirty=true` and binds the exact
+source files by receipt.
 
 The focused cases
 `http3.peer-close-during-server-connection-creation-recovers` and
