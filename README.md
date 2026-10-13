@@ -55,12 +55,13 @@ earlier Uvicorn-RS core receipt records
 three repeats (51/51) on an earlier dirty, path-linked sibling snapshot,
 including request-body progress before upload completion over cleartext H1 and
 H2. That receipt used a separate `fastapi-rs-native` prototype and remains
-historical. A separate FastAPI-RS branch now adds an initial native service
-inside the sole `fastapi-rs` crate; its current 17-input H1/H2 socket manifest
-passed once on macOS ARM64 using dirty local FastAPI and Uvicorn worktrees.
-See the [native composition example](examples/native-fastapi-contracts/README.md).
-This is prototype evidence, not clean CI, Python FastAPI parity, or a speed
-result. The native prototype is now the `uvicorn-rs` Cargo
+historical. The sole `fastapi-rs` crate now has an initial native service
+slice on the `codex/native-fastapi-core` branch. Its 17-input H1/H2 socket
+manifest passed once from clean detached checkouts of Uvicorn-RS, FastAPI-RS,
+and the pinned Starlette-RS source. See the [composition evidence](docs/native-fastapi-composition.md)
+and [native composition example](examples/native-fastapi-contracts/README.md).
+This is local prototype evidence, not hosted CI, full FastAPI or Python parity,
+or a speed result. The native server product is the `uvicorn-rs` Cargo
 package, and the Python extension is distributed as `uvicorn-rs-py`. The
 Python adapter still has its earlier transport implementation and is not yet
 backed by the native server. See the

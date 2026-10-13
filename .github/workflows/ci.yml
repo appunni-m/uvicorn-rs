@@ -22,6 +22,8 @@ env:
   UV_VERSION: "0.11.29"
   MATURIN_VERSION: "1.14.1"
   STARLETTE_RS_REVISION: "738c43362938896c268ca29b9a9a2a5942df510c"
+  NATIVE_FASTAPI_RS_REVISION: "f438a7cbb2308e6c1f795aef98e333de23388533"
+  NATIVE_STARLETTE_RS_REVISION: "b4c8a65c85e1b0d251ca05874412811eaa3ac7b8"
   RUSTC_WRAPPER: ""
   RUSTC_WORKSPACE_WRAPPER: ""
   RUSTFLAGS: ""
@@ -72,6 +74,61 @@ jobs:
           fi
       - name: Run Rust-native HTTP live contract inputs
         run: cargo run -p uvicorn-rs --example native_core_contracts --locked -- tests/native-core/manifest.json
+
+  native-framework-composition:
+    name: Pinned native FastAPI-RS composition inputs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed stable action
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - name: Create clean sibling source checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$RUNNER_TEMP/native-composition"
+          mkdir -p "$workspace/uvicorn-rs" "$workspace/fastapi-rs" "$workspace/starlette-rs"
+          git archive --format=tar "$GITHUB_SHA" | tar -x -C "$workspace/uvicorn-rs"
+
+          git init "$workspace/fastapi-rs"
+          git -C "$workspace/fastapi-rs" remote add origin https://github.com/appunni-m/fastapi-rs.git
+          git -C "$workspace/fastapi-rs" fetch --depth 1 origin refs/heads/codex/native-fastapi-core
+          git -C "$workspace/fastapi-rs" checkout --detach FETCH_HEAD
+          test "$(git -C "$workspace/fastapi-rs" rev-parse HEAD)" = "$NATIVE_FASTAPI_RS_REVISION"
+
+          git init "$workspace/starlette-rs"
+          git -C "$workspace/starlette-rs" remote add origin https://github.com/appunni-m/starlette-rs.git
+          git -C "$workspace/starlette-rs" fetch --depth 1 origin "$NATIVE_STARLETTE_RS_REVISION"
+          git -C "$workspace/starlette-rs" checkout --detach FETCH_HEAD
+          test "$(git -C "$workspace/starlette-rs" rev-parse HEAD)" = "$NATIVE_STARLETTE_RS_REVISION"
+          test -z "$(git -C "$workspace/fastapi-rs" status --porcelain)"
+          test -z "$(git -C "$workspace/starlette-rs" status --porcelain)"
+
+          printf 'uvicorn-rs=%s\n' "$GITHUB_SHA"
+          printf 'fastapi-rs=%s\n' "$(git -C "$workspace/fastapi-rs" rev-parse HEAD)"
+          printf 'starlette-rs=%s\n' "$(git -C "$workspace/starlette-rs" rev-parse HEAD)"
+      - name: Confirm the integrated native graph excludes PyO3
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$RUNNER_TEMP/native-composition"
+          cargo tree --manifest-path "$workspace/uvicorn-rs/examples/native-fastapi-contracts/Cargo.toml" \
+            --locked --edges normal,build --format '{p}' > "$RUNNER_TEMP/native-composition-dependencies.txt"
+          if rg -q '^pyo3' "$RUNNER_TEMP/native-composition-dependencies.txt"; then
+            cat "$RUNNER_TEMP/native-composition-dependencies.txt"
+            echo "native FastAPI composition must not depend on PyO3"
+            exit 1
+          fi
+      - name: Run native FastAPI-RS → Starlette-RS → Uvicorn-RS live inputs
+        run: |
+          workspace="$RUNNER_TEMP/native-composition"
+          CARGO_TARGET_DIR="$RUNNER_TEMP/native-composition-target" \
+            cargo run --manifest-path "$workspace/uvicorn-rs/examples/native-fastapi-contracts/Cargo.toml" \
+            --locked -- "$workspace/uvicorn-rs/examples/native-fastapi-contracts/manifest.json"
 
   msrv:
     name: Compile the exact Rust minimum

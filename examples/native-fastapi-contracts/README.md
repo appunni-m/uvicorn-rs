@@ -22,19 +22,18 @@ then sends the seven-byte suffix and verifies the 11-byte response. It does not
 establish HTTP/3, TLS, WebSocket, lifespan, Python `module:app` compatibility,
 or a performance gain.
 
-The example resolves sibling `fastapi-rs` and `starlette-rs` development
-checkouts by relative path. Build from a workspace containing the matching
-FastAPI-RS native API and the Starlette-RS revision pinned by FastAPI-RS
-`metadata.yaml`. The local 17/17 run used a temporary path override because
-the native API changes are still in a separate FastAPI-RS worktree:
+The example resolves sibling `fastapi-rs` and `starlette-rs` checkouts by
+relative path. Build from a workspace containing the matching FastAPI-RS
+native API and the Starlette-RS revision pinned by FastAPI-RS `metadata.yaml`.
+The 17/17 local run used clean detached checkouts at the exact revisions and
+manifest hashes recorded in the [composition evidence](../../docs/native-fastapi-composition.md):
 
 ```sh
 cargo run --manifest-path examples/native-fastapi-contracts/Cargo.toml --locked -- examples/native-fastapi-contracts/manifest.json
 ```
 
-The archived 17-input result (51/51 across three repeats) used an earlier
-dirty, path-linked snapshot and a now-removed `fastapi-rs-native` crate. It is
-historical evidence only; it does not verify the current `fastapi-rs` API.
-Record fresh source identities and live results before treating this manifest
-as a release or CI acceptance gate. The native API currently covers a small
-Rust handler slice; it does not claim Python FastAPI/Pydantic equivalence.
+The older 17-input result (51/51 across three repeats) used a now-removed
+`fastapi-rs-native` crate and remains historical. The current run is one local
+source-bound repetition, not hosted CI or a release gate. The native API
+covers a small Rust handler slice; it does not claim Python FastAPI/Pydantic
+equivalence.
