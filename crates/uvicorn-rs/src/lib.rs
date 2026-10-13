@@ -855,7 +855,6 @@ where
                 };
                 let service = service.clone();
                 let shutdown = shutdown_receiver.clone();
-                let graceful_timeout = config.graceful_shutdown_timeout;
                 let error_observer = config.error_observer.clone();
                 let tls_acceptor = tls_acceptor.clone();
                 connections.spawn(async move {
@@ -877,7 +876,6 @@ where
                                         transport: TransportKind::Tcp,
                                     },
                                     shutdown,
-                                    graceful_timeout,
                                     error_observer.as_ref(),
                                 )
                                 .await
@@ -894,7 +892,6 @@ where
                                     transport: TransportKind::Tcp,
                                 },
                                 shutdown,
-                                graceful_timeout,
                                 error_observer.as_ref(),
                             )
                             .await
@@ -945,7 +942,6 @@ async fn serve_connection<I, S, B>(
     service: S,
     connection_info: ConnectionInfo,
     mut shutdown: watch::Receiver<bool>,
-    graceful_timeout: Duration,
     error_observer: Option<&ServerErrorObserver>,
 ) -> Result<(), ConnectionError>
 where
@@ -975,10 +971,7 @@ where
         result = &mut connection => result.map_err(ConnectionError::Http),
         _ = shutdown.changed() => {
             connection.as_mut().graceful_shutdown();
-            match tokio::time::timeout(graceful_timeout, &mut connection).await {
-                Ok(result) => result.map_err(ConnectionError::Http),
-                Err(_) => Err(ConnectionError::GracefulShutdownTimedOut),
-            }
+            connection.await.map_err(ConnectionError::Http)
         }
     }
 }
@@ -1049,7 +1042,6 @@ where
 enum ConnectionError {
     Http(Box<dyn Error + Send + Sync>),
     Tls(io::Error),
-    GracefulShutdownTimedOut,
 }
 
 impl Error for ConnectionError {
@@ -1057,7 +1049,6 @@ impl Error for ConnectionError {
         match self {
             Self::Http(error) => Some(error.as_ref()),
             Self::Tls(error) => Some(error),
-            Self::GracefulShutdownTimedOut => None,
         }
     }
 }
@@ -1067,9 +1058,6 @@ impl fmt::Display for ConnectionError {
         match self {
             Self::Http(error) => write!(formatter, "HTTP connection failed: {error}"),
             Self::Tls(error) => write!(formatter, "TLS handshake failed: {error}"),
-            Self::GracefulShutdownTimedOut => {
-                formatter.write_str("connection exceeded its graceful-shutdown deadline")
-            }
         }
     }
 }

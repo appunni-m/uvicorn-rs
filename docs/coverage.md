@@ -8,17 +8,32 @@ Acceptance requires three complete repeats, 100% region and line coverage,
 and zero-gap results from fully paginated Coverage-MCP queries bound to the
 exact report bytes.
 
-The latest complete-scope run is the local, Git-ignored report
+The latest complete-scope run before the shutdown cleanup below is the local,
+Git-ignored report
 `target/asgi-coverage/2026-10-14-current-595-single/coverage-report.json`,
 finished 2026-10-13 at 02:32 UTC. It records clean source revision
 `c5a200195149af548ced5d7425ed396cdbdc704c`, binds 103 source files, and covers
 the 511-case ASGI and 84-case native manifests. All 595 cases passed once with
 complete attribution and no case, infrastructure, or transient infrastructure
 failures. It measured **6,900/6,960 regions** and **5,061/5,093 lines**.
-Coverage-MCP's report entry is still awaiting a complete query; a focused
-regions query matched the source receipt and found 60 missing regions, and
-pagination and the line query remain outstanding. Three complete repeats are
-required and none has been run. This is not a 100% coverage pass.
+Coverage-MCP pagination is complete: all 111 region groups and 30 line groups
+were retrieved, and both queries reported `source: matches_receipt`. Coverage
+MCP reported `tests: failed` because the report has uncovered regions and
+lines; the full report remains below 100%. Three complete repeats are required
+and none has been run. This is not a 100% coverage pass.
+
+After that complete-scope run, the redundant per-connection graceful-shutdown
+timer was removed. The server-wide deadline already bounds connection draining
+and reports `ServeError::GracefulShutdownTimedOut`; retaining a second timer
+introduced a competing timeout at each connection. The focused native case
+`http1.graceful-shutdown-timeout-aborts-held-response` passed 1/1 against the
+updated source. Its Git-ignored selected report is
+`target/asgi-coverage/2026-10-13-h1-shutdown-deadline-selected/coverage-report.json`;
+it records 496/6,946 regions and 408/5,085 lines for that selected case. The
+source change also reduced the executable coverage denominator. This focused
+result verifies the shutdown contract only: the 595-case report above was
+collected before this edit and does not establish full-matrix parity or
+coverage for the updated source. The full matrix was not rerun.
 
 The HTTP/3 request-body change was measured separately with
 `target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.
