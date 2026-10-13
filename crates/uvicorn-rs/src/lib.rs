@@ -1078,17 +1078,26 @@ fn observe_connection(joined: Result<Result<(), ConnectionError>, JoinError>) {
     match joined {
         Ok(Ok(())) => {}
         Ok(Err(error)) => tracing::debug!(%error, "HTTP connection ended"),
-        Err(error) if error.is_cancelled() => {}
-        Err(error) => tracing::error!(%error, "HTTP connection task failed"),
+        Err(error) => observe_connection_task_error(error, false),
+    }
+}
+
+fn observe_connection_task_error(error: JoinError, during_abort: bool) {
+    if error.is_cancelled() {
+        return;
+    }
+
+    if during_abort {
+        tracing::error!(%error, "HTTP connection task failed while aborting");
+    } else {
+        tracing::error!(%error, "HTTP connection task failed");
     }
 }
 
 async fn drain_aborted_connections(connections: &mut JoinSet<Result<(), ConnectionError>>) {
     while let Some(joined) = connections.join_next().await {
         if let Err(error) = joined {
-            if !error.is_cancelled() {
-                tracing::error!(%error, "HTTP connection task failed while aborting");
-            }
+            observe_connection_task_error(error, true);
         }
     }
 }
