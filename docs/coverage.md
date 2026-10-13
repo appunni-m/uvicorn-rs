@@ -3,13 +3,15 @@
 ## Current unified coverage status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 92 Python-free native cases (603 total).
+parity/fault-contract cases and 101 Python-free native cases (612 total).
 Acceptance requires three complete repeats, 100% region and line coverage,
 and zero-gap results from fully paginated Coverage-MCP queries bound to the
 exact report bytes.
+Each report below is bound to its stated source and scope; older manifest
+counts describe that run and are not current aggregate acceptance evidence.
 
-The latest complete-scope run before the shutdown cleanup below is the local,
-Git-ignored report
+The historical complete-scope run before the shutdown cleanup below is the
+local, Git-ignored report
 `target/asgi-coverage/2026-10-14-current-595-single/coverage-report.json`,
 finished 2026-10-13 at 02:32 UTC. It records clean source revision
 `c5a200195149af548ced5d7425ed396cdbdc704c`, binds 103 source files, and covers
@@ -20,7 +22,9 @@ Coverage-MCP pagination is complete: all 111 region groups and 30 line groups
 were retrieved, and both queries reported `source: matches_receipt`. Coverage
 MCP reported `tests: failed` because the report has uncovered regions and
 lines; the full report remains below 100%. Three complete repeats are required
-and none has been run. This is not a 100% coverage pass.
+and none has been run. This is not a 100% coverage pass. It covers the
+then-current 511-case ASGI and 84-case native manifests and does not establish
+acceptance for the current 612-case manifest.
 
 After that complete-scope run, the redundant per-connection graceful-shutdown
 timer was removed. The server-wide deadline already bounds connection draining
@@ -49,19 +53,42 @@ that query discrepancy before claiming zero gaps. This selected report is not
 aggregate coverage evidence and does not establish WebSocket handshake,
 framing, or ASGI WebSocket support.
 
-The native HTTP/1.1 WebSocket prototype adds four manifest cases. The selected
-run passed 4/4 with complete attribution and no retries or infrastructure
-failures. It covers text/binary echo, Ping/Pong, close exchange, a server
-shutdown close handshake, malformed key rejection, and unoffered subprotocol
-rejection. The ignored report is
+The initial native HTTP/1.1 WebSocket selection passed 4/4 with complete
+attribution and no retries or infrastructure failures. It covers text/binary
+echo, Ping/Pong, close exchange, a server shutdown close handshake, malformed
+key rejection, and unoffered subprotocol rejection. Its historical, ignored
+report is
 `target/asgi-coverage/2026-10-13-native-websocket-h1-final/coverage-report.json`;
 it records 706, 632, 631, and 688 covered regions by case, respectively, and
 source SHA-256
 `8eccb701012a8cd5d44ae49a227d609df13a17ea3a9c473450fe627de1c9f4fe`. That
 digest was captured before the follow-up Rustdoc wording edits; executable code
-was unchanged after the run. This is selected-case attribution only. It does
-not establish aggregate coverage, TLS/H2/H3 WebSocket support, or Python ASGI
-WebSocket integration.
+was unchanged after the run. This four-case report is selected-case evidence;
+it does not establish aggregate coverage, TLS/H2/H3 WebSocket support, or
+Python ASGI WebSocket integration.
+
+The expanded native HTTP/1.1 WebSocket selection passed 13/13 in one unified
+run at
+`target/asgi-coverage/2026-10-13-native-websocket-rfc-contract-final/coverage-report.json`.
+The nine added cases cover a non-GET method, a WebSocket version other than
+13, a decoded key of the wrong size, a missing `Connection: Upgrade` token, a
+wrong `Upgrade` token, an empty offered subprotocol token, rejection of
+managed response-header overrides, single-use subprotocol selection, and
+preservation of an application response header. The report records complete
+per-case region attribution for all 13 selected inputs; all passed on the
+first attempt, with zero failed cases, retries, infrastructure failures, and
+transient infrastructure failures. Its source SHA-256 is
+`37901559958c25922e123eab1a080ec353b63654431416099ffc54eb82a5eeb1`. For this
+selected subset, it records 868/7,384 regions and 699/5,420 lines.
+The fully paginated follow-up Coverage-MCP queries for this exact report
+matched the source receipt and reported `tests: passed`. In
+`crates/uvicorn-rs/src/websocket.rs`, they returned 32 missing region groups
+across two pages (20 and 12 groups) and 17 missing line groups on one page.
+These are gaps in the selected report; they do not indicate a full-suite
+regression or an attribution defect. The aggregate gate remains incomplete, so
+this is not aggregate coverage evidence or a 100% coverage pass.
+HTTP/2 and HTTP/3 WebSockets, TLS WebSockets, and Python ASGI WebSocket mapping
+remain open.
 
 The HTTP/3 request-body change was measured separately with
 `target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.
@@ -79,7 +106,7 @@ passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
 Both cases are included in the 595-case run above; three-repeat verification
 and the full coverage gate remain outstanding.
 
-The latest selected report is
+A separate selected report is
 `target/asgi-coverage/current-http1-graceful-timeout-consolidated/coverage-report.json`.
 The existing native case
 `http1.graceful-shutdown-timeout-aborts-held-response` passed 1/1 after the
@@ -145,12 +172,13 @@ has no missing endpoint-drain regions; remaining selected-report gaps there
 belong to an uninstantiated generic placeholder. This confirms the bounded
 shutdown path for this input, not aggregate coverage or full-matrix acceptance.
 
-The current complete-manifest run is recorded above. Acceptance still requires
-three complete repeats, 100% region and line coverage, and fully paginated
-zero-gap Coverage-MCP results tied to the exact final report. Python line and
-branch coverage remain outside the Rust denominator. Generated reports,
-profiles, Coverage-MCP payloads, and logs stay under Git-ignored local output
-paths; the per-run artifacts are not committed.
+The historical 595-case complete-manifest run is recorded above. No
+complete-scope run covers the current 612-case manifest. Acceptance still
+requires three complete repeats, 100% region and line coverage, and fully
+paginated zero-gap Coverage-MCP results tied to the exact final report. Python
+line and branch coverage remain outside the Rust denominator. Generated
+reports, profiles, Coverage-MCP payloads, and logs stay under Git-ignored local
+output paths; the per-run artifacts are not committed.
 
 ## Previous adapter-only evidence (2026-10-12)
 
@@ -551,9 +579,9 @@ outputs remain local-only. This is local source-bound coverage evidence, not a
 performance result or a claim of complete official ASGI conformance.
 
 <a id="current-full-verification-494-cases"></a>
-## Current full verification (494 cases; unified matrix)
+## Historical full verification (494 cases; unified matrix)
 
-The compact current archive is
+The historical compact archive is
 [`asgi-unified-coverage-494`](../benchmarks/results/2026-10-09/asgi-unified-coverage-494/).
 It records revision `f260d78c71e9266c2b3301ab3915f74de5511fc2` from a dirty
 working tree. `src/lib.rs` SHA-256 is
@@ -674,8 +702,8 @@ The prior archive is
 It remains the evidence for adding the empty WebSocket subprotocol parity case;
 its report passed 491-case attribution and three repeats with 5,123/5,123
 regions and 3,628/3,628 lines before the coverage-only HTTP receive diagnostic
-adjustment. The current archive above is the source/build receipt for the
-latest region denominator.
+adjustment. The 494-case archive above is the source/build receipt for that
+run's region denominator.
 
 ## Superseded full verification (490 cases)
 

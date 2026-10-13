@@ -12,12 +12,25 @@ request/response streams, but it does not define a bidirectional WebSocket
 session or application startup and shutdown.
 
 The current `uvicorn-rs` crate serves HTTP/1.1, HTTP/2, and HTTP/3 Tower
-services and now provides a provisional RFC 6455 WebSocket handshake/session
-API for HTTP/1.1. Four selected native inputs pass text/binary echo, Ping/Pong,
-close exchange, shutdown close, malformed key rejection, and unoffered
-subprotocol rejection. This selected evidence is not a full WebSocket
-conformance result. The API currently depends on the server's HTTP/1.1 upgrade
-capability and is not a framework-neutral shared contract. A new
+services and provides a provisional HTTP/1.1 WebSocket handshake/session API.
+The current native manifest declares 101 cases, including 13 focused cleartext
+HTTP/1.1 WebSocket cases. All 13 selected cases passed with complete per-case
+attribution and zero case failures, infrastructure failures, transient
+infrastructure failures, or retries.
+The selected report,
+`target/asgi-coverage/2026-10-13-native-websocket-rfc-contract-final/coverage-report.json`,
+records 868/7,384 regions and 699/5,420 lines across its executable source set.
+Those selected-scope totals are not aggregate coverage or an RFC 6455
+conformance result. Coverage-MCP follow-up matched the source receipt and
+reported `tests: passed`, with 32 missing region groups and 17 missing line
+groups in `crates/uvicorn-rs/src/websocket.rs`. Aggregate acceptance remains
+incomplete: it requires three complete repeats of the full 612-case manifest,
+100% region and line coverage, and fully paginated zero-gap Coverage-MCP
+results. The cases exercise text/binary echo, Ping/Pong, close exchange,
+shutdown close, selected handshake rejection, and subprotocol/header rules.
+They do not complete the full handshake inventory. TLS, HTTP/2, and HTTP/3
+WebSockets, ASGI mapping, and framework-native integration remain open. The API depends on the server's
+HTTP/1.1 upgrade capability and is not a framework-neutral shared contract. A new
 `native-app-contract` crate prototypes runtime-neutral application
 startup/shutdown hooks, consumed optionally by the core's TCP/TLS and HTTP/3
 entry points.
@@ -110,8 +123,9 @@ re-exported by `uvicorn_rs` and optionally configured in `ServerConfig`.
 It is not the ASGI lifespan event protocol. Seven target-only live inputs now
 exercise startup state before request dispatch, H1/H2/H3 drain order, startup
 failure and timeout, shutdown failure and timeout, timeout cancellation, and
-typed source preservation. The current 36-input manifest passed three local
-macOS ARM64 repeats (108/108); the added H2 reset case observes request-future
+typed source preservation. A historical 36-input manifest snapshot passed
+three local macOS ARM64 repeats (108/108); it predates the current 101-case
+manifest. The H2 reset case observes request-future
 termination, connection survival, same-connection recovery, and later
 connection closure. It does not establish ASGI `http.disconnect` or identify the reset cause. The H1 half-close case completes a held response after client write-side shutdown while the connection lifetime remains open, consistent with RFC 9112 §9.6. See the
 [request-lifetime receipt](../../benchmarks/results/2026-10-12/native-request-lifetime-live/report.md).
@@ -147,7 +161,7 @@ requirements before that combination is listed as generally supported.
 
 | Transport | Current prototype | Required live cases before general support is claimed |
 |---|---|---|
-| HTTP/1.1, cleartext and TLS | Provisional native `WebSocketUpgrade` and `WebSocketSession` API; selected cleartext cases pass 4/4. TLS is not yet measured for the native API. | accept/denial, full invalid-handshake inventory, subprotocol/header selection, text/binary exchange, close code/reason, abrupt disconnect, bounded slow consumer, shutdown, TLS |
+| HTTP/1.1, cleartext and TLS | Provisional native `WebSocketUpgrade` and `WebSocketSession` API; 13 selected cleartext cases pass 13/13 with complete per-case attribution. This selected result is not aggregate coverage; aggregate acceptance remains incomplete. TLS is not yet measured for the native API. | accept/denial, full invalid-handshake inventory, subprotocol/header selection, text/binary exchange, close code/reason, abrupt disconnect, bounded slow consumer, shutdown, TLS |
 | HTTP/2, TLS | Not implemented | RFC 8441 negotiation, accept/denial, stream reset, sibling-stream health, frame exchange, bounded send, shutdown |
 | HTTP/3, QUIC/TLS | Not implemented | RFC 9220 negotiation, accept/denial, request-stream reset, sibling-stream health, frame exchange, bounded send, graceful drain |
 
@@ -166,7 +180,7 @@ native WebSocket support, framework lifecycle integration, or ASGI lifespan
 2.0 support. The seven core hook cases establish only the prototype's native
 startup/shutdown contract.
 
-## Current transport API gates (2026-10-12)
+## Current transport API gates (2026-10-13)
 
 The current native API provides distinct request- and connection-scoped
 lifetime handles, but it does not yet provide the complete ASGI disconnect
@@ -195,8 +209,12 @@ contract above:
   generic upgrade lifecycle evidence is not WebSocket handshake, framing,
   protocol conformance, or aggregate coverage evidence. A provisional
   HTTP/1.1 `WebSocketUpgrade`/`WebSocketSession` API has since been added and
-  its four selected handshake/session inputs pass; see the support matrix and
-  coverage record for the exact scope and limitations.
+  its 13 selected cleartext handshake/session inputs pass with complete
+  per-case attribution. Coverage-MCP follow-up matched the report's source
+  receipt and passed tests, but found 32 missing region groups and 17 missing
+  line groups in `crates/uvicorn-rs/src/websocket.rs`; aggregate acceptance
+  remains incomplete. See the [support matrix](../support-matrix.md)
+  for the report path, measured totals, and remaining gaps.
 
 The generic H2 request/connection lifetime signal and its sibling-isolation
 case are implemented. The native core now has a transport-specific HTTP/1.1

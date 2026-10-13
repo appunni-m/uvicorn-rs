@@ -21,7 +21,10 @@ use bytes::{Buf, Bytes};
 use futures_util::{stream, SinkExt, StreamExt};
 use h3::error::Code;
 use h3_quinn::quinn::{self, rustls as quic_rustls};
-use http::{Method, Request, Response, StatusCode};
+use http::{
+    header::{SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_VERSION},
+    HeaderName, HeaderValue, Method, Request, Response, StatusCode,
+};
 use http_body::{Body, SizeHint};
 use http_body_util::{combinators::UnsyncBoxBody, BodyExt, Empty, Full, StreamBody};
 use hyper_util::rt::{TokioExecutor, TokioIo};
@@ -784,11 +787,33 @@ where
                     });
                     response(StatusCode::OK, b"registration deferred\n")
                 }
-                "/native-websocket-echo" | "/native-websocket-unoffered-subprotocol" => {
+                "/native-websocket-echo"
+                | "/native-websocket-unoffered-subprotocol"
+                | "/native-websocket-invalid-method"
+                | "/native-websocket-invalid-version"
+                | "/native-websocket-invalid-key-size"
+                | "/native-websocket-missing-upgrade-token"
+                | "/native-websocket-wrong-upgrade-token"
+                | "/native-websocket-empty-subprotocol-token"
+                | "/native-websocket-reserved-response-header"
+                | "/native-websocket-duplicate-subprotocol"
+                | "/native-websocket-custom-response-header" => {
+                    let behavior = match request.uri().path() {
+                        "/native-websocket-reserved-response-header" => {
+                            NativeWebSocketBehavior::ReservedHeader
+                        }
+                        "/native-websocket-duplicate-subprotocol" => {
+                            NativeWebSocketBehavior::DuplicateSubprotocol
+                        }
+                        "/native-websocket-custom-response-header" => {
+                            NativeWebSocketBehavior::EchoWithHeader
+                        }
+                        _ => NativeWebSocketBehavior::Echo,
+                    };
                     native_websocket_route(
                         &mut request,
                         Some("native.echo.v1"),
-                        NativeWebSocketBehavior::Echo,
+                        behavior,
                     )
                 }
                 "/native-websocket-shutdown" => native_websocket_route(
@@ -1414,6 +1439,9 @@ where
 
 enum NativeWebSocketBehavior {
     Echo,
+    EchoWithHeader,
+    ReservedHeader,
+    DuplicateSubprotocol,
     Shutdown,
 }
 
@@ -1426,6 +1454,21 @@ fn native_websocket_route<B>(
         Ok(upgrade) => upgrade,
         Err(error) => return websocket_bad_request(error),
     };
+    let upgrade = match behavior {
+        NativeWebSocketBehavior::EchoWithHeader => upgrade.with_header(
+            HeaderName::from_static("x-native-websocket"),
+            HeaderValue::from_static("native"),
+        ),
+        NativeWebSocketBehavior::ReservedHeader => upgrade.with_header(
+            SEC_WEBSOCKET_ACCEPT,
+            HeaderValue::from_static("application-override"),
+        ),
+        _ => Ok(upgrade),
+    };
+    let upgrade = match upgrade {
+        Ok(upgrade) => upgrade,
+        Err(error) => return websocket_bad_request(error),
+    };
     let upgrade = match subprotocol {
         Some(subprotocol) => match upgrade.with_subprotocol(subprotocol) {
             Ok(upgrade) => upgrade,
@@ -1433,9 +1476,20 @@ fn native_websocket_route<B>(
         },
         None => upgrade,
     };
+    let upgrade = if matches!(behavior, NativeWebSocketBehavior::DuplicateSubprotocol) {
+        let Some(subprotocol) = subprotocol else {
+            return websocket_bad_request(WebSocketUpgradeError::InvalidSubprotocol);
+        };
+        match upgrade.with_subprotocol(subprotocol) {
+            Ok(upgrade) => upgrade,
+            Err(error) => return websocket_bad_request(error),
+        }
+    } else {
+        upgrade
+    };
 
     match behavior {
-        NativeWebSocketBehavior::Echo => upgrade
+        NativeWebSocketBehavior::Echo | NativeWebSocketBehavior::EchoWithHeader => upgrade
             .accept(empty_body(), |mut session| async move {
                 while let Some(message) = session.receive().await? {
                     match message {
@@ -1470,11 +1524,23 @@ fn native_websocket_route<B>(
                 Ok::<(), uvicorn_rs::WebSocketError>(())
             })
             .map_err(|error| io::Error::other(error.to_string())),
+        NativeWebSocketBehavior::ReservedHeader => {
+            websocket_bad_request(WebSocketUpgradeError::ReservedResponseHeader)
+        }
+        NativeWebSocketBehavior::DuplicateSubprotocol => {
+            websocket_bad_request(WebSocketUpgradeError::SubprotocolAlreadySelected)
+        }
     }
 }
 
 fn websocket_bad_request(error: WebSocketUpgradeError) -> Result<Response<AppBody>, io::Error> {
-    response(StatusCode::BAD_REQUEST, error.to_string().as_bytes())
+    let mut response = response(StatusCode::BAD_REQUEST, error.to_string().as_bytes())?;
+    if error == WebSocketUpgradeError::InvalidHandshake("Sec-WebSocket-Version must be 13") {
+        response
+            .headers_mut()
+            .insert(SEC_WEBSOCKET_VERSION, HeaderValue::from_static("13"));
+    }
+    Ok(response)
 }
 
 fn response(status: StatusCode, body: &[u8]) -> Result<Response<AppBody>, io::Error> {
@@ -2480,9 +2546,16 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
             "graceful-shutdown" => {
                 run_native_websocket_shutdown_case(address, case, &shutdown_sender).await
             }
-            "invalid-key" | "unoffered-subprotocol" => {
-                run_native_websocket_rejection_case(address, case).await
-            }
+            "invalid-key"
+            | "unoffered-subprotocol"
+            | "invalid-method"
+            | "invalid-version"
+            | "invalid-key-size"
+            | "missing-upgrade-token"
+            | "wrong-upgrade-token"
+            | "empty-subprotocol-token"
+            | "reserved-response-header"
+            | "duplicate-subprotocol" => run_native_websocket_rejection_case(address, case).await,
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("unknown native WebSocket scenario: {scenario}"),
@@ -2517,13 +2590,26 @@ async fn open_native_websocket_handshake(
         tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
     let path = required_str(case, "path")?;
     let key = required_str(case, "request_key")?;
+    let method = case.get("method").and_then(Value::as_str).unwrap_or("GET");
+    let connection_header = case
+        .get("connection_header")
+        .and_then(Value::as_str)
+        .unwrap_or("keep-alive, Upgrade");
+    let upgrade_header = case
+        .get("upgrade_header")
+        .and_then(Value::as_str)
+        .unwrap_or("websocket");
+    let websocket_version = case
+        .get("request_websocket_version")
+        .and_then(Value::as_str)
+        .unwrap_or("13");
     let protocol = case
         .get("offered_subprotocol")
         .and_then(Value::as_str)
         .map(|protocol| format!("Sec-WebSocket-Protocol: {protocol}\r\n"))
         .unwrap_or_default();
     let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive, Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n{protocol}\r\n"
+        "{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: {connection_header}\r\nUpgrade: {upgrade_header}\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: {websocket_version}\r\n{protocol}\r\n"
     );
     client.write_all(request.as_bytes()).await?;
     let (status, headers) =
@@ -2537,8 +2623,10 @@ async fn run_native_websocket_exchange_case(address: SocketAddr, case: &Value) -
     let expected_accept = required_str(case, "expected_accept")?;
     let expected_protocol = required_str(case, "offered_subprotocol")?;
     if status != expected_status
+        || !has_required_websocket_response_headers(&headers)
         || headers.get("sec-websocket-accept").map(String::as_str) != Some(expected_accept)
         || headers.get("sec-websocket-protocol").map(String::as_str) != Some(expected_protocol)
+        || !expected_response_header_matches(&headers, case)
     {
         return Err(io::Error::other(format!(
             "{}: WebSocket handshake mismatch: status={status}, accept={:?}, protocol={:?}",
@@ -2646,7 +2734,10 @@ async fn run_native_websocket_shutdown_case(
 ) -> ProbeResult<()> {
     let (client, status, headers) = open_native_websocket_handshake(address, case).await?;
     let expected_status = required_status(case, "expected_status")?;
-    if status != expected_status || !headers.contains_key("sec-websocket-accept") {
+    if status != expected_status
+        || !headers.contains_key("sec-websocket-accept")
+        || !has_required_websocket_response_headers(&headers)
+    {
         return Err(io::Error::other(format!(
             "{}: WebSocket shutdown handshake was not accepted: status={status}",
             required_str(case, "id")?
@@ -2689,6 +2780,7 @@ async fn run_native_websocket_rejection_case(address: SocketAddr, case: &Value) 
         || headers.contains_key("sec-websocket-accept")
         || !complete
         || !String::from_utf8_lossy(&body).contains(expected_error)
+        || !expected_response_header_matches(&headers, case)
     {
         return Err(io::Error::other(format!(
             "{}: rejected WebSocket handshake mismatch: status={status}, complete={complete}, body={:?}",
@@ -2698,6 +2790,40 @@ async fn run_native_websocket_rejection_case(address: SocketAddr, case: &Value) 
         .into());
     }
     verify_http1_upgrade_listener_recovers(address, case).await
+}
+
+fn has_required_websocket_response_headers(
+    headers: &std::collections::HashMap<String, String>,
+) -> bool {
+    headers
+        .get("upgrade")
+        .is_some_and(|value| value.eq_ignore_ascii_case("websocket"))
+        && headers.get("connection").is_some_and(|value| {
+            value
+                .split(',')
+                .any(|token| token.trim().eq_ignore_ascii_case("upgrade"))
+        })
+}
+
+fn expected_response_header_matches(
+    headers: &std::collections::HashMap<String, String>,
+    case: &Value,
+) -> bool {
+    let Some(name) = case
+        .get("expected_response_header_name")
+        .and_then(Value::as_str)
+    else {
+        return true;
+    };
+    let Some(expected_value) = case
+        .get("expected_response_header_value")
+        .and_then(Value::as_str)
+    else {
+        return false;
+    };
+    headers
+        .get(&name.to_ascii_lowercase())
+        .is_some_and(|value| value == expected_value)
 }
 
 fn required_byte_array(case: &Value, key: &str) -> ProbeResult<Vec<u8>> {

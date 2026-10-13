@@ -3,7 +3,7 @@
 ## Current acceptance status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests define 511 ASGI
-parity/fault-contract cases and 92 Python-free native cases (603 total).
+parity/fault-contract cases and 101 Python-free native cases (612 total).
 Acceptance requires three complete repeats of both matrices, 100% region and
 line coverage, and zero-gap results from fully paginated Coverage-MCP queries
 bound to the exact report bytes.
@@ -30,7 +30,7 @@ attribution. Its source SHA-256 is
 report's uncovered-region list has no `ConnectionUpgrade` function symbols,
 while a matching-source Coverage-MCP query returns five groups for that API;
 resolve this discrepancy before claiming zero gaps. These selected reports do
-not establish coverage for the current 603-case manifest. The current-source
+not establish coverage for the current 612-case manifest. The current-source
 full matrix, three repeats, 100% regions and lines, and final zero-gap
 Coverage-MCP receipt remain open.
 
@@ -47,16 +47,40 @@ the body returns `Pending` and polls data again on the next call. The empty-body
 input separately verifies the public request-body EOF and size-hint behavior.
 The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
-The full 603-case aggregate, three repeats, and zero-gap acceptance remain
+The full 612-case aggregate, three repeats, and zero-gap acceptance remain
 outstanding.
 
-The four native HTTP/1.1 WebSocket inputs passed in one selected unified run
-at `target/asgi-coverage/2026-10-13-native-websocket-h1-final/coverage-report.json`.
-They cover handshake validation and subprotocol selection, text/binary and
-Ping/Pong exchange, peer-close reply flushing, and the server-initiated close
-handshake during shutdown. The report has complete attribution and no retries
-or infrastructure failures, but is not aggregate coverage evidence. HTTP/2
-and HTTP/3 WebSockets, TLS WebSockets, and the Python ASGI mapping remain open.
+The initial four native HTTP/1.1 WebSocket inputs passed in a selected unified
+run at `target/asgi-coverage/2026-10-13-native-websocket-h1-final/coverage-report.json`.
+They cover text/binary and Ping/Pong exchange, close handling, shutdown, a
+malformed key, and an unoffered subprotocol. The report has complete
+attribution, but is not aggregate coverage evidence.
+
+The expanded 12-case native HTTP/1.1 WebSocket selection passed 12/12 in one
+unified run at
+`target/asgi-coverage/2026-10-13-native-websocket-handshake-expansion/coverage-report.json`.
+The new cases exercise a non-GET method, wrong WebSocket version, a decoded key
+of the wrong size, a missing `Connection: Upgrade` token, an empty offered
+subprotocol token, reserved response-header rejection, single-use
+subprotocol selection, and preservation of an application response header.
+Per-case region attribution is complete, with no case failures, retries, or
+infrastructure failures. The report records 868/7,384 regions and 699/5,420
+lines for this selected subset and is not aggregate coverage evidence. HTTP/2
+and HTTP/3 WebSockets, TLS WebSockets, and Python ASGI mapping remain open.
+
+The RFC-reviewed 13-case HTTP/1.1 WebSocket selection passed 13/13 in one
+unified run at
+`target/asgi-coverage/2026-10-13-native-websocket-rfc-contract-final/coverage-report.json`.
+It adds a wrong `Upgrade` token rejection, requires the unsupported-version
+response to advertise `Sec-WebSocket-Version: 13`, and checks the required
+`Upgrade: websocket` and `Connection: Upgrade` response headers on successful
+handshakes. These checks follow [RFC 6455 §4.2.2](https://www.rfc-editor.org/rfc/rfc6455#section-4.2.2)
+and [§4.4](https://www.rfc-editor.org/rfc/rfc6455#section-4.4). Per-case
+attribution is complete, with zero failed cases, infrastructure failures, or
+transient retries. The selected run records 868/7,384 regions and 699/5,420
+lines; its source SHA-256 is
+`37901559958c25922e123eab1a080ec353b63654431416099ffc54eb82a5eeb1`. The
+report is selected-subset evidence; the aggregate 100% gate remains open.
 
 The latest selected report is
 `target/asgi-coverage/current-http1-graceful-timeout-consolidated/coverage-report.json`.
