@@ -89,6 +89,8 @@ struct AppState {
     upload_body_errors: AtomicUsize,
     http3_body_pending: AtomicBool,
     http3_body_errors: AtomicUsize,
+    http3_response_cancel_pending: AtomicBool,
+    http3_response_cancel_release: watch::Sender<bool>,
     upload_tasks_dropped: Arc<AtomicUsize>,
     shutdown: watch::Sender<bool>,
 }
@@ -985,6 +987,91 @@ where
                     format!("{}\n", state.http3_cancelled_streams.load(Ordering::Acquire))
                         .as_bytes(),
                 ),
+                "/http3-response-cancel-pending" => response(
+                    StatusCode::OK,
+                    if state
+                        .http3_response_cancel_pending
+                        .load(Ordering::Acquire)
+                    {
+                        b"waiting\n"
+                    } else {
+                        b"ready\n"
+                    },
+                ),
+                "/http3-response-cancel-release" => {
+                    state.http3_response_cancel_release.send_replace(true);
+                    response(StatusCode::OK, b"released\n")
+                }
+                "/http3-response-hold-before-headers" => {
+                    let mut release = state.http3_response_cancel_release.subscribe();
+                    state
+                        .http3_response_cancel_pending
+                        .store(true, Ordering::Release);
+                    while !*release.borrow_and_update() {
+                        release.changed().await.map_err(|_| {
+                            io::Error::other("HTTP/3 response release channel closed")
+                        })?;
+                    }
+                    state
+                        .http3_response_cancel_pending
+                        .store(false, Ordering::Release);
+                    response(StatusCode::OK, b"released response\n")
+                }
+                "/http3-response-hold-before-trailers" => {
+                    let release = state.http3_response_cancel_release.subscribe();
+                    let response_state = Arc::clone(&state);
+                    let body = stream::unfold(
+                        (0_u8, release, response_state),
+                        |(step, mut release, response_state)| async move {
+                            match step {
+                                0 => Some((
+                                    Ok(http_body::Frame::data(Bytes::from_static(
+                                        b"before-trailers\n",
+                                    ))),
+                                    (1, release, response_state),
+                                )),
+                                1 => {
+                                    response_state
+                                        .http3_response_cancel_pending
+                                        .store(true, Ordering::Release);
+                                    while !*release.borrow_and_update() {
+                                        if release.changed().await.is_err() {
+                                            response_state
+                                                .http3_response_cancel_pending
+                                                .store(false, Ordering::Release);
+                                            return Some((
+                                                Err(io::Error::other(
+                                                    "HTTP/3 trailer release channel closed",
+                                                )),
+                                                (2, release, response_state),
+                                            ));
+                                        }
+                                    }
+                                    response_state
+                                        .http3_response_cancel_pending
+                                        .store(false, Ordering::Release);
+                                    let mut trailers = http::HeaderMap::new();
+                                    let value = match http::HeaderValue::from_bytes(b"complete") {
+                                        Ok(value) => value,
+                                        Err(error) => {
+                                            return Some((
+                                                Err(io::Error::other(error.to_string())),
+                                                (2, release, response_state),
+                                            ));
+                                        }
+                                    };
+                                    trailers.insert("x-contract-trailer", value);
+                                    Some((
+                                        Ok(http_body::Frame::trailers(trailers)),
+                                        (2, release, response_state),
+                                    ))
+                                }
+                                _ => None,
+                            }
+                        },
+                    );
+                    stream_response(body)
+                }
                 "/backpressure" => {
                     const CHUNK_SIZE: usize = 32 * 1024;
                     const TOTAL_CHUNKS: usize = 2_048;
@@ -1251,6 +1338,7 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http3-idle-connection-shutdown-timeout"
             || operation == "native-http3-peer-goaway-drain"
             || operation == "native-http3-incomplete-request-recovery"
+            || operation == "native-http3-response-send-cancel"
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
             || operation == "native-http1-service-panic-recovery"
@@ -1275,6 +1363,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http3_peer_goaway_case(case).await?;
             } else if operation == "native-http3-incomplete-request-recovery" {
                 run_isolated_http3_incomplete_request_recovery_case(case).await?;
+            } else if operation == "native-http3-response-send-cancel" {
+                run_isolated_http3_response_send_cancel_case(case).await?;
             } else if operation == "native-http1-tls-pending-handshake-shutdown" {
                 run_isolated_tls_pending_handshake_shutdown_case(case).await?;
             } else if operation == "graceful-timeout-abort" {
@@ -3366,6 +3456,7 @@ fn contract_app(shutdown: watch::Sender<bool>) -> ContractApp {
 
 fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<AppState>) {
     let (peer_write_half_close_release, _) = watch::channel(false);
+    let (http3_response_cancel_release, _) = watch::channel(false);
     let state = Arc::new(AppState {
         fail_next_readiness: AtomicBool::new(false),
         readiness_gate: Mutex::new(ReadinessGate::default()),
@@ -3387,6 +3478,8 @@ fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<A
         upload_body_errors: AtomicUsize::new(0),
         http3_body_pending: AtomicBool::new(false),
         http3_body_errors: AtomicUsize::new(0),
+        http3_response_cancel_pending: AtomicBool::new(false),
+        http3_response_cancel_release,
         upload_tasks_dropped: Arc::new(AtomicUsize::new(0)),
         shutdown,
     });
@@ -3424,6 +3517,7 @@ async fn run_cases(
             || operation == "native-http3-idle-connection-shutdown-timeout"
             || operation == "native-http3-peer-goaway-drain"
             || operation == "native-http3-incomplete-request-recovery"
+            || operation == "native-http3-response-send-cancel"
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
             || operation == "native-http1-service-panic-recovery"
@@ -6753,6 +6847,336 @@ async fn run_isolated_http3_incomplete_request_recovery_case(case: &Value) -> Pr
         )
         .into()),
     }
+}
+
+async fn run_isolated_http3_response_send_cancel_case(case: &Value) -> ProbeResult<()> {
+    let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+    let server_endpoint =
+        quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
+    let address = server_endpoint.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let observed_phases = Arc::new(Mutex::new(Vec::<ServerErrorPhase>::new()));
+    let phase_log = Arc::clone(&observed_phases);
+    let error_observer: ServerErrorObserver = Arc::new(move |event: ServerErrorEvent<'_>| {
+        if let Ok(mut phases) = phase_log.lock() {
+            phases.push(event.phase());
+        }
+    });
+    let server = tokio::spawn(uvicorn_rs::serve_http3(
+        server_endpoint,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            graceful_shutdown_timeout: Duration::from_secs(1),
+            error_observer: Some(error_observer),
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let workflow: ProbeResult<()> = async {
+        let mut endpoint = quinn::Endpoint::client("127.0.0.1:0".parse::<SocketAddr>()?)?;
+        endpoint.set_default_client_config(tls_clients.http3.clone());
+        let connection = tokio::time::timeout(
+            Duration::from_secs(2),
+            endpoint.connect(address, "localhost")?,
+        )
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "HTTP/3 peer did not connect"))??;
+        let (mut driver, mut sender) =
+            h3::client::new(h3_quinn::Connection::new(connection.clone())).await?;
+        let client_driver = tokio::spawn(async move {
+            let _ = std::future::poll_fn(|context| driver.poll_close(context)).await;
+        });
+
+        match required_str(case, "cancel_phase")? {
+            "before-headers" => {
+                let mut active = send_http3_request(
+                    &mut sender,
+                    address,
+                    "GET",
+                    required_str(case, "request_path")?,
+                    b"",
+                )
+                .await?;
+                wait_http3_response_cancel_state(&mut sender, address, case).await?;
+                active.stop_sending(Code::H3_REQUEST_CANCELLED);
+            }
+            "before-trailers" => {
+                let (mut request_send, mut response_receive) = connection.open_bi().await?;
+                let request = encode_raw_http3_get_request(
+                    &format!("localhost:{}", address.port()),
+                    required_str(case, "request_path")?,
+                )?;
+                request_send.write_all(&request).await?;
+                request_send.finish()?;
+
+                let mut response_buffer = Vec::new();
+                let (headers_type, _) = tokio::time::timeout(
+                    Duration::from_secs(2),
+                    read_raw_http3_frame(&mut response_receive, &mut response_buffer),
+                )
+                .await??;
+                let (data_type, first_chunk) = tokio::time::timeout(
+                    Duration::from_secs(2),
+                    read_raw_http3_frame(&mut response_receive, &mut response_buffer),
+                )
+                .await??;
+                if headers_type != 0x01
+                    || data_type != 0x00
+                    || first_chunk != required_str(case, "expected_first_chunk")?.as_bytes()
+                {
+                    return Err(io::Error::other(format!(
+                        "{}: response did not reach the pre-trailers checkpoint",
+                        required_str(case, "id")?
+                    ))
+                    .into());
+                }
+                wait_http3_response_cancel_state(&mut sender, address, case).await?;
+                let error_code = quinn::VarInt::from_u64(Code::H3_REQUEST_CANCELLED.value())?;
+                response_receive.stop(error_code)?;
+                drop(request_send);
+            }
+            phase => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("unknown HTTP/3 response cancellation phase {phase:?}"),
+                )
+                .into());
+            }
+        }
+
+        let mut release = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "release_path")?,
+            b"",
+        )
+        .await?;
+        let (release_status, release_body, _) = collect_http3_response(&mut release).await?;
+        if release_status != required_status(case, "release_status")?
+            || release_body != required_str(case, "release_body")?.as_bytes()
+        {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/3 cancellation release request did not complete",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        wait_http3_connection_error(&observed_phases, case).await?;
+
+        let mut recovery = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "recovery_path")?,
+            b"",
+        )
+        .await?;
+        let (status, body, _) = collect_http3_response(&mut recovery).await?;
+        if status != required_status(case, "recovery_status")?
+            || body != required_str(case, "recovery_body")?.as_bytes()
+        {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/3 connection did not recover after response cancellation",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        endpoint.close(
+            quinn::VarInt::from_u32(0),
+            b"HTTP/3 response cancellation case complete",
+        );
+        endpoint.wait_idle().await;
+        tokio::time::timeout(Duration::from_secs(2), client_driver)
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "HTTP/3 response cancellation client did not stop",
+                )
+            })??;
+        Ok(())
+    }
+    .await;
+
+    shutdown_sender.send_replace(true);
+    let server_result = tokio::time::timeout(Duration::from_secs(4), server).await;
+    workflow?;
+    match server_result {
+        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Err(error))) => Err(error.into()),
+        Ok(Err(error)) => Err(error.into()),
+        Err(_) => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 response cancellation server did not stop",
+        )
+        .into()),
+    }
+}
+
+fn encode_raw_http3_get_request(authority: &str, path: &str) -> ProbeResult<Vec<u8>> {
+    let mut field_section = vec![0x00, 0x00, 0xd1, 0xd7, 0x50];
+    append_qpack_literal(authority.as_bytes(), &mut field_section)?;
+    field_section.push(0x51);
+    append_qpack_literal(path.as_bytes(), &mut field_section)?;
+    if field_section.len() > 63 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "raw HTTP/3 request field section exceeds the one-byte frame length",
+        )
+        .into());
+    }
+
+    let mut request = Vec::with_capacity(field_section.len() + 2);
+    request.extend_from_slice(&[0x01, field_section.len() as u8]);
+    request.extend_from_slice(&field_section);
+    Ok(request)
+}
+
+fn append_qpack_literal(value: &[u8], output: &mut Vec<u8>) -> ProbeResult<()> {
+    let length = u8::try_from(value.len())?;
+    if length >= 0x80 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "raw HTTP/3 QPACK literal exceeds the supported length",
+        )
+        .into());
+    }
+    output.push(length);
+    output.extend_from_slice(value);
+    Ok(())
+}
+
+async fn read_raw_http3_frame(
+    stream: &mut quinn::RecvStream,
+    buffered: &mut Vec<u8>,
+) -> ProbeResult<(u64, Vec<u8>)> {
+    loop {
+        if let Some((frame_type, type_length)) = decode_quic_varint(buffered) {
+            if let Some((frame_length, length_length)) =
+                decode_quic_varint(&buffered[type_length..])
+            {
+                let payload_length = usize::try_from(frame_length)?;
+                if payload_length > 1024 * 1024 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "raw HTTP/3 response frame exceeded the probe limit",
+                    )
+                    .into());
+                }
+                let header_length = type_length + length_length;
+                let total_length = header_length + payload_length;
+                if buffered.len() >= total_length {
+                    let payload = buffered[header_length..total_length].to_vec();
+                    buffered.drain(..total_length);
+                    return Ok((frame_type, payload));
+                }
+            }
+        }
+
+        let chunk =
+            tokio::time::timeout(Duration::from_secs(2), stream.read_chunk(usize::MAX, true))
+                .await
+                .map_err(|_| {
+                    io::Error::new(io::ErrorKind::TimedOut, "HTTP/3 response frame timed out")
+                })??
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "HTTP/3 response ended before the expected frame",
+                    )
+                })?;
+        buffered.extend_from_slice(&chunk.bytes);
+    }
+}
+
+fn decode_quic_varint(buffered: &[u8]) -> Option<(u64, usize)> {
+    let first = *buffered.first()?;
+    let encoded_length = 1_usize << usize::from(first >> 6);
+    if buffered.len() < encoded_length {
+        return None;
+    }
+
+    let mut value = u64::from(first & 0x3f);
+    for byte in &buffered[1..encoded_length] {
+        value = (value << 8) | u64::from(*byte);
+    }
+    Some((value, encoded_length))
+}
+
+async fn wait_http3_response_cancel_state(
+    sender: &mut Http3Sender,
+    address: SocketAddr,
+    case: &Value,
+) -> ProbeResult<()> {
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let mut state = send_http3_request(
+                sender,
+                address,
+                "GET",
+                required_str(case, "pending_path")?,
+                b"",
+            )
+            .await?;
+            let (status, body, _) = collect_http3_response(&mut state).await?;
+            if status != StatusCode::OK.as_u16() {
+                return Err(io::Error::other(format!(
+                    "{}: HTTP/3 cancellation state request returned {status}",
+                    required_str(case, "id")?
+                ))
+                .into());
+            }
+            if body == required_str(case, "pending_state")?.as_bytes() {
+                return Ok::<(), Box<dyn Error + Send + Sync>>(());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            format!(
+                "{}: application did not reach its HTTP/3 response cancellation checkpoint",
+                case["id"].as_str().unwrap_or("unknown case")
+            ),
+        )
+    })??;
+    Ok(())
+}
+
+async fn wait_http3_connection_error(
+    observed_phases: &Mutex<Vec<ServerErrorPhase>>,
+    case: &Value,
+) -> ProbeResult<()> {
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if observed_phases
+                .lock()
+                .map_err(|_| io::Error::other("HTTP/3 error observer lock was poisoned"))?
+                .contains(&ServerErrorPhase::Connection)
+            {
+                return Ok::<(), Box<dyn Error + Send + Sync>>(());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            format!(
+                "{}: cancellation did not reach an HTTP/3 response-send error",
+                case["id"].as_str().unwrap_or("unknown case")
+            ),
+        )
+    })??;
+    Ok(())
 }
 
 async fn run_isolated_http3_idle_connection_shutdown_timeout_case(case: &Value) -> ProbeResult<()> {

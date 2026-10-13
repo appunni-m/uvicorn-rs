@@ -689,6 +689,38 @@
       "covers": ["http3.request-task-recovery"]
     },
     {
+      "id": "http3.response-cancel-before-headers-keeps-connection-usable",
+      "protocol": "native-core",
+      "operation": "native-http3-response-send-cancel",
+      "cancel_phase": "before-headers",
+      "request_path": "/http3-response-hold-before-headers",
+      "pending_path": "/http3-response-cancel-pending",
+      "pending_state": "waiting\n",
+      "release_path": "/http3-response-cancel-release",
+      "release_status": 200,
+      "release_body": "released\n",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
+    },
+    {
+      "id": "http3.response-cancel-before-trailers-keeps-connection-usable",
+      "protocol": "native-core",
+      "operation": "native-http3-response-send-cancel",
+      "cancel_phase": "before-trailers",
+      "request_path": "/http3-response-hold-before-trailers",
+      "expected_status": 200,
+      "expected_first_chunk": "before-trailers\n",
+      "pending_path": "/http3-response-cancel-pending",
+      "pending_state": "waiting\n",
+      "release_path": "/http3-response-cancel-release",
+      "release_status": 200,
+      "release_body": "released\n",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
+    },
+    {
       "id": "http1-tls.shutdown-bounds-incomplete-handshake",
       "protocol": "native-core",
       "operation": "native-http1-tls-pending-handshake-shutdown",
