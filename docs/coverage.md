@@ -3,20 +3,36 @@
 ## Current unified coverage status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 82 Python-free native cases (593 total). No
-complete 593-case report or three-repeat verification has been recorded for
-this manifest.
+parity/fault-contract cases and 83 Python-free native cases (594 total).
+Acceptance requires three complete repeats, 100% region and line coverage,
+and zero-gap results from fully paginated Coverage-MCP queries bound to the
+exact report bytes.
 
-The latest complete-scope report available locally is
-`target/asgi-coverage/2026-10-13-current-584/coverage-report.json`. It records
-clean commit `3a0a5149c8635afa69ce38cc984cda05a050136e` and covers 511 ASGI plus
-73 native cases (584 total). All 584 passed once with no failures or
-infrastructure retries. The report has no verification runs; three are
-required. It records **6,887/6,960 regions** and **5,055/5,092 lines**, leaving
-73 regions and 37 lines. Its executable Rust source hashes match the current
-checkout, so it remains useful as a gap-discovery baseline. Its older case
-manifest and runner receipts mean it is not acceptance evidence for the
-current 593-case matrix.
+The latest complete-scope report is
+`target/asgi-coverage/2026-10-13-current-593-single/coverage-report.json`,
+from clean commit `4b4abb1003bb98293a721963bed0068c52afe5ad`. It predates the
+current case and request-body simplification. All 593 cases passed once with
+complete attribution, no failed cases, and no infrastructure retries. It
+measured **6,896/6,960 regions** and **5,058/5,092 lines**. Fully paginated
+Coverage-MCP queries matched its source receipt and found 64 missing regions
+and 34 missing lines. The report has no verification repeats; three are
+required. Coverage-MCP's `tests=failed` classification reflects the incomplete
+coverage gate, although all matrix case rows passed.
+
+The current change was measured separately with
+`target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.
+The native HTTP/3 empty-body EOF case passed 1/1 with complete attribution and
+no retries. The current executable denominator is **6,957 regions** and
+**5,088 lines**; that selected case covered 683 regions and 601 lines. This
+selected report does not establish aggregate coverage or full-matrix parity.
+The `data_finished` field was removed because it could not persist across
+`poll_frame`: a `None` data poll immediately polls trailers; if trailers are
+pending, the body returns `Pending` and polls data again next time. The new
+input independently asserts the public empty-request-body state and EOF result.
+The existing `http3.empty-data-frame-does-not-end-request-body` case also
+passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
+A complete current 594-case report and three-repeat verification remain
+outstanding.
 
 The focused cases
 `http3.peer-close-during-server-connection-creation-recovers` and

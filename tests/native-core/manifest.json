@@ -505,6 +505,17 @@
       "expected_body": "initially_ended=false;size_lower=0;size_upper=None;ended=true;received=1\n"
     },
     {
+      "id": "http3.empty-request-body-is-consumed-through-eof",
+      "protocol": "http3",
+      "operation": "request",
+      "covers": ["http.request-upload"],
+      "method": "POST",
+      "path": "/body-state",
+      "body": "",
+      "expected_status": 200,
+      "expected_body": "initially_ended=false;size_lower=0;size_upper=None;ended=true;received=0\n"
+    },
+    {
       "id": "http3.request-trailers-follow-streamed-request-body",
       "protocol": "http3",
       "operation": "http3-request-trailers",

@@ -42,7 +42,6 @@ pin_project! {
     /// yields request trailers after the DATA stream ends.
     pub struct Http3RequestBody {
         stream: h3::server::RequestStream<h3_quinn::RecvStream, Bytes>,
-        data_finished: bool,
         finished: bool,
     }
 }
@@ -51,7 +50,6 @@ impl Http3RequestBody {
     fn new(stream: h3::server::RequestStream<h3_quinn::RecvStream, Bytes>) -> Self {
         Self {
             stream,
-            data_finished: false,
             finished: false,
         }
     }
@@ -70,28 +68,24 @@ impl Body for Http3RequestBody {
             return Poll::Ready(None);
         }
 
-        if !*this.data_finished {
-            match this.stream.poll_recv_data(context) {
-                Poll::Pending => return Poll::Pending,
-                Poll::Ready(Err(error)) => {
-                    *this.finished = true;
-                    return Poll::Ready(Some(Err(Box::new(error))));
-                }
-                Poll::Ready(Ok(Some(mut data))) => {
-                    let len = data.remaining();
-                    return Poll::Ready(Some(Ok(Frame::data(data.copy_to_bytes(len)))));
-                }
-                Poll::Ready(Ok(None)) => *this.data_finished = true,
+        match this.stream.poll_recv_data(context) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(Err(error)) => {
+                *this.finished = true;
+                return Poll::Ready(Some(Err(Box::new(error))));
             }
+            Poll::Ready(Ok(Some(mut data))) => {
+                let len = data.remaining();
+                return Poll::Ready(Some(Ok(Frame::data(data.copy_to_bytes(len)))));
+            }
+            Poll::Ready(Ok(None)) => {}
         }
 
         match this.stream.poll_recv_trailers(context) {
             Poll::Pending => {
                 // `poll_recv_data` can return `None` at the end of an empty
-                // DATA frame. While trailers are still pending, keep polling
-                // the request body so a later DATA frame is not treated as a
-                // trailer-sequence error.
-                *this.data_finished = false;
+                // DATA frame. Poll data again after returning Pending so a
+                // later DATA frame is not treated as a trailer-sequence error.
                 Poll::Pending
             }
             Poll::Ready(Err(error)) => {

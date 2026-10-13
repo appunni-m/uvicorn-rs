@@ -3,20 +3,36 @@
 ## Current acceptance status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests define 511 ASGI
-parity/fault-contract cases and 82 Python-free native cases (593 total).
+parity/fault-contract cases and 83 Python-free native cases (594 total).
 Acceptance requires three complete repeats of both matrices, 100% region and
 line coverage, and zero-gap results from fully paginated Coverage-MCP queries
 bound to the exact report bytes.
 
-No complete 593-case report exists for the current manifest. The latest
-complete-scope report available locally is
-`target/asgi-coverage/2026-10-13-current-584/coverage-report.json`; it covers
-511 ASGI plus 73 native cases (584 total), with 584/584 cases passing once and
-no failed or infrastructure cases. It records 6,887/6,960 regions and
-5,055/5,092 lines, with all three verification repeats still outstanding.
-The executable Rust source hashes match the current checkout, but the report's
-manifest and runner receipts are older, so it is diagnostic coverage evidence
-only.
+The latest full-matrix report is
+`target/asgi-coverage/2026-10-13-current-593-single/coverage-report.json`. It
+was generated from clean commit `4b4abb1003bb98293a721963bed0068c52afe5ad`,
+before the current empty-body case and request-body simplification. All 593
+selected cases passed once, with complete attribution and no failed or
+infrastructure cases. It measured 6,896/6,960 regions and 5,058/5,092 lines;
+one pass does not satisfy the three-repeat gate. Fully paginated
+Coverage-MCP queries matched the report receipt and found 64 missing regions
+and 34 missing lines. Its `tests=failed` status reflects the incomplete
+coverage gate, not a failed matrix case.
+
+The current source was then measured with the selected case
+`http3.empty-request-body-is-consumed-through-eof` in
+`target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.
+The input passed 1/1 with complete attribution and no retries. The current
+executable denominator is 6,957 regions and 5,088 lines; the selected case
+covers 683 regions and 601 lines, so this is not aggregate coverage evidence.
+The edit removed a `data_finished` state that could not persist across a poll:
+`poll_recv_data(None)` immediately polls trailers; when trailers are pending,
+the body returns `Pending` and polls data again on the next call. The empty-body
+input separately verifies the public request-body EOF and size-hint behavior.
+The existing `http3.empty-data-frame-does-not-end-request-body` case also
+passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
+The full 594-case aggregate, three repeats, and zero-gap acceptance remain
+outstanding.
 
 The two focused native cases for a peer close during HTTP/3 connection
 creation passed together in
