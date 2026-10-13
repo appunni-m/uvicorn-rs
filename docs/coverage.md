@@ -56,11 +56,22 @@ same-connection recovery through both harness apps. It passed 1/1 with complete
 attribution and no retries or infrastructure failures. Its selected report is
 `target/asgi-coverage/current-http3-response-cancel-before-finish/coverage-report.json`
 and remains Git-ignored with the other per-run artifacts. The attribution
-report marks `crates/uvicorn-rs/src/http3.rs:489-491` as hit by this case, but
-the raw LLVM segment has zero count at line 491 and the focused Coverage-MCP
-query returns one group at the same span. Treat the `finish().await` gap as
-unresolved until these source-level views agree. This selected report measures
-703/6,960 regions and 621/5,093 lines; it is not aggregate evidence.
+report maps `http3.rs:489-491` to a concrete function instantiation with a
+positive count. The raw LLVM export also contains a zero-count generic
+`handle_http3_request::<_, _>` row for that same span. The focused
+Coverage-MCP region query returned that row as one missing region group; its
+line query at 491 returned zero missing groups. The raw line segment at 491 is
+a boundary (`hasCount=false`), and the following `.map_err` expression at 492
+has an execution count. These are different views of the generic and concrete
+instantiations; the report's `hit_by` attribution does not cover every raw
+instantiation. Do not add a synthetic request just to reach the generic
+placeholder. This selected report measures 703/6,960 regions and 621/5,093
+lines; it is not aggregate evidence.
+
+The case reaches the response-send path through both native harness apps, but
+its observer records only that some connection-phase error occurred. It does
+not identify `finish().await` or its result, so it is indirect evidence for
+the finish path.
 
 The focused cases
 `http3.peer-close-during-server-connection-creation-recovers` and

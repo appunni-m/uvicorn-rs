@@ -80,10 +80,21 @@ the empty response body after headers, QUIC `STOP_SENDING`, body release, error
 observation, and same-connection recovery in both harness apps. Its selected
 report remains Git-ignored at
 `target/asgi-coverage/current-http3-response-cancel-before-finish/coverage-report.json`.
-The attribution map marks the region at `http3.rs:489-491` as hit, while the
-raw LLVM segment reports zero on line 491 and Coverage-MCP returns one group at
-that span. Keep the finish-await gap open until this discrepancy is resolved;
-the selected report is not aggregate evidence.
+The attribution map selects concrete function instantiations with positive
+counts for `http3.rs:489-491`, while the raw LLVM export also contains a
+zero-count generic `handle_http3_request::<_, _>` row at that span. The
+focused Coverage-MCP region query returned the generic row as one missing
+group; its line query at 491 returned zero missing groups. The raw line
+segment at 491 is a boundary (`hasCount=false`), and line 492 has an execution
+count. These results refer to different generic and concrete instantiations;
+the report's `hit_by` attribution does not cover every raw instantiation. Do
+not add a synthetic input just to reach the generic placeholder. The selected
+report is not aggregate evidence.
+
+The case reaches the response-send path through both `ContractApp` and
+`LifecycleApp`, but its observer checks only for some connection-phase error.
+It does not identify `finish().await` or its result, so this is indirect
+evidence for the finish path.
 
 ## Goal and decision
 
