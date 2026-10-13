@@ -14,6 +14,8 @@ target/
 *.log.*
 coverage-report*.json*
 *coverage-mcp-*.json*
+coverage-mcp-inputs/
+coverage-mcp-structured/
 # Python coverage data and rendered reports stay local too.
 .coverage
 .coverage.*
