@@ -8,16 +8,17 @@ Acceptance requires three complete repeats, 100% region and line coverage,
 and zero-gap results from fully paginated Coverage-MCP queries bound to the
 exact report bytes.
 
-The latest complete-scope report is
-`target/asgi-coverage/2026-10-13-current-593-single/coverage-report.json`,
-from clean commit `4b4abb1003bb98293a721963bed0068c52afe5ad`. It predates the
-current case and request-body simplification. All 593 cases passed once with
-complete attribution, no failed cases, and no infrastructure retries. It
-measured **6,896/6,960 regions** and **5,058/5,092 lines**. Fully paginated
-Coverage-MCP queries matched its source receipt and found 64 missing regions
-and 34 missing lines. The report has no verification repeats; three are
-required. Coverage-MCP's `tests=failed` classification reflects the incomplete
-coverage gate, although all matrix case rows passed.
+The latest complete-scope run is the local, Git-ignored report
+`target/asgi-coverage/2026-10-14-current-595-single/coverage-report.json`,
+finished 2026-10-13 at 02:32 UTC. It records clean source revision
+`c5a200195149af548ced5d7425ed396cdbdc704c`, binds 103 source files, and covers
+the 511-case ASGI and 84-case native manifests. All 595 cases passed once with
+complete attribution and no case, infrastructure, or transient infrastructure
+failures. It measured **6,900/6,960 regions** and **5,061/5,093 lines**.
+Coverage-MCP's report entry is still awaiting a complete query; a focused
+regions query matched the source receipt and found 60 missing regions, and
+pagination and the line query remain outstanding. Three complete repeats are
+required and none has been run. This is not a 100% coverage pass.
 
 The HTTP/3 request-body change was measured separately with
 `target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.
@@ -32,8 +33,8 @@ pending, the body returns `Pending` and polls data again next time. The new
 input independently asserts the public empty-request-body state and EOF result.
 The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
-A complete current 595-case report and three-repeat verification remain
-outstanding.
+Both cases are included in the 595-case run above; three-repeat verification
+and the full coverage gate remain outstanding.
 
 The latest selected report is
 `target/asgi-coverage/current-http1-graceful-timeout-consolidated/coverage-report.json`.
@@ -101,12 +102,12 @@ has no missing endpoint-drain regions; remaining selected-report gaps there
 belong to an uninstantiated generic placeholder. This confirms the bounded
 shutdown path for this input, not aggregate coverage or full-matrix acceptance.
 
-The acceptance gates still require a complete current-manifest run, three
-complete repeats, 100% region and line coverage, and fully paginated zero-gap
-Coverage-MCP results tied to the exact final report. Python line and branch
-coverage remain outside the Rust denominator. Generated reports, profiles,
-Coverage-MCP payloads, and logs stay under Git-ignored local output paths; the
-per-run artifacts are not committed.
+The current complete-manifest run is recorded above. Acceptance still requires
+three complete repeats, 100% region and line coverage, and fully paginated
+zero-gap Coverage-MCP results tied to the exact final report. Python line and
+branch coverage remain outside the Rust denominator. Generated reports,
+profiles, Coverage-MCP payloads, and logs stay under Git-ignored local output
+paths; the per-run artifacts are not committed.
 
 ## Previous adapter-only evidence (2026-10-12)
 
@@ -116,14 +117,10 @@ attribution and all three complete repeats passed with zero behavior,
 infrastructure, transient-infrastructure failures, or retries. Coverage was
 5,561/5,561 regions and 3,997/3,997 lines for `src/lib.rs` only.
 
-The [full report](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-report.json)
-retains case-to-region attribution, matrix receipts, and source/build identity.
-Coverage-MCP measured the
-[compact projection](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-mcp-input.json)
-and found zero region or line groups; it reported `source: matches_receipt`
-and `tests: passed`. The
-[Coverage-MCP receipt](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-mcp-receipt.json)
-binds those totals to that adapter-only report.
+The generated JSON report, compact projection, and Coverage-MCP receipt for
+this historical run are local artifacts excluded by `.gitignore`. This
+maintained summary records their case totals, source/build identity, and
+coverage result without committing per-run output.
 
 The run used CPython 3.12.13, Rust 1.98.1, and macOS 15.7.7 ARM64 at dirty
 working-tree revision `3dcaeaa0caf47aca96412d15451ac6a1123ebb04`. The measured
@@ -156,15 +153,12 @@ retries**. Each repeat passed 506/506 cases. Native coverage is
 **5,532/5,532 regions and 3,971/3,971 lines**, and case attribution matches the
 profile union.
 
-The [full report](../benchmarks/results/2026-10-11/unified-coverage-current-5532-regions-after-h3-fix.json)
-contains per-case region attribution, the complete matrix receipts, and source
-and build SHA-256 values. Coverage-MCP found zero missing regions using its
-[compact input projection](../benchmarks/results/2026-10-11/unified-coverage-current-5532-regions-after-h3-fix-mcp.json).
-The projection retains the LLVM coverage data and runner receipts while
-omitting duplicated per-case and per-region attribution arrays from the full
-report. Coverage-MCP reports `source: unverified` and `tests: unknown` for
-this LLVM export; source and test identity are established by the runner's
-receipts in the full report, not by Coverage-MCP.
+The generated full report and compact input projection for this historical
+run are local artifacts excluded by `.gitignore`. The projection retained the
+LLVM coverage data and runner receipts while omitting duplicated per-case and
+per-region attribution arrays from the full report. Coverage-MCP reported
+`source: unverified` and `tests: unknown` for this LLVM export; source and test
+identity came from the runner receipts, not Coverage-MCP.
 
 This local macOS 15.7.7 ARM64 measurement used Python 3.12.13 and Rust
 1.98.1, on dirty working tree revision
@@ -181,7 +175,8 @@ build for timing. This local receipt does not replace hosted exact-commit CI.
 The current checkout's `src/lib.rs` hash differs from the measured hash above,
 so this 506-case result is historical for the recorded source, not a full
 parity or coverage pass on the present working tree. The current renamed wheel
-has a separate, narrower [consumer smoke receipt](../benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
+has a separate, narrower consumer smoke result; its scope is summarized in the
+support matrix.
 
 #### Previous local evidence (same date, earlier source)
 
@@ -189,18 +184,17 @@ The earlier local run on this revision measured 5,532/5,532 regions and
 3,974/3,974 lines, with a different dirty `src/lib.rs` hash
 (`1f222c06c5ecfa4f1c3b22299259ddb69f5d39822427e50c4a9f8b4eebf8f455`) and
 extension build. Coverage-MCP reported `source: matches_receipt` and
-`tests: passed`, with zero missing regions or lines for that report. Its [full
-report](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-report.json),
-[Coverage-MCP receipt](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-mcp-receipt.json),
-[report context](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-report.json.context.json),
-and [evidence README](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/README.md)
-remain available. Before that earlier coverage run, its normal non-instrumented
-extension passed 243/243 public parity cases (SHA-256
+`tests: passed`, with zero missing regions or lines for that report. The raw
+report, Coverage-MCP receipt, context, and evidence README are generated local
+artifacts excluded by `.gitignore`; this paragraph preserves the historical
+summary without linking to local files. Before that earlier coverage run, its
+normal non-instrumented extension passed 243/243 public parity cases (SHA-256
 `bf3cb991025074bc416ccd514b836aec31899ca1ce6f0d40bdfa819c9dd07d43`); its
 coverage extension hash was
-`2f8538416e5890d21a57898852eda14c2c9fcfdb405bac23f7bde4826bcc6640`. Those
-receipts apply only to the earlier source and must not be carried forward to
-the current report.
+`2f8538416e5890d21a57898852eda14c2c9fcfdb405bac23f7bde4826bcc6640`. Its raw
+report, receipt, context, and evidence README are generated local artifacts
+excluded by `.gitignore`. These results apply only to the earlier source and
+must not be carried forward to the current report.
 
 ## Latest hosted exact-commit gate (2026-10-11)
 

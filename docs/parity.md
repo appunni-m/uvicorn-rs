@@ -120,9 +120,10 @@ original `fault.http3.connection-accept-error` first-accept case remains intact.
 This new workflow passed its selected instrumented case (1/1), with actual
 remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
-The [current unified report](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-report.json)
-preserves its observation and source identities. The case passes full
-attribution and all three 511-case repeats. The report's region map records
+The maintained [coverage summary](coverage.md) records the historical
+511-case adapter result and the latest unified 595-case status. Generated
+per-run reports remain local and Git-ignored. The case passes full attribution
+and all three 511-case repeats; the historical report's region map records
 which cases cover the final-drain spans.
 The `stream_reset` field follows the existing `recv_data` error convention;
 actual remote application close `0x102`, `body_stream_error`,
@@ -406,8 +407,8 @@ explicit ASGI response-order limitation, not an HTTP semantic mismatch. H3's
 client observation passes through `http::HeaderMap` and does not prove raw wire
 order. See [RFC 9110 §5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3),
 the [ASGI HTTP specification](https://asgi.readthedocs.io/en/latest/specs/www.html),
-the [focused receipt](../benchmarks/results/2026-10-12/psm2-response-header-order/README.md),
-and the [support matrix](support-matrix.md#supported-behaviors).
+and the [support matrix](support-matrix.md#supported-behaviors). The per-run
+receipt is a local ignored artifact.
 For this operation, manifest `observe` retains the wire order and its optional
 `compare` list selects the normalized fields used for parity; other operations
 compare every observed field by default. The offline CI evidence checker uses
