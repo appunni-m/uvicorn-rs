@@ -1,12 +1,14 @@
 # CLI and Python API
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 The latest local ASGI-adapter matrix is dated 2026-10-12. All 511 indexed cases
 passed attribution and each of three full repeats: 243 oracle-parity cases and
 268 target-only contracts. The report records 5,561/5,561 native regions and
 3,997/3,997 lines. This is dirty macOS ARM64 source evidence, not hosted release
 evidence or full ASGI conformance; see the
 [coverage report](coverage.md#latest-local-evidence-2026-10-12) and the
-[current candidate-wheel smoke](../benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
+current candidate-wheel smoke (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 
 ## CLI
 

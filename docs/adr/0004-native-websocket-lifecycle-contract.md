@@ -1,5 +1,7 @@
 # ADR 0004: Rust-native WebSocket and application lifecycle contract
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 - **Status:** Partially implemented; native HTTP/1.1 WebSocket transport is provisional, while the shared framework contract and lifecycle integration remain proposed
 - **Date:** 2026-10-12
 - **Related work:** Kata `wb4y`, `sw8s`, Starlette-RS `wkz8`, FastAPI-RS `s08y`
@@ -128,9 +130,9 @@ three local macOS ARM64 repeats (108/108); it predates the current 101-case
 manifest. The H2 reset case observes request-future
 termination, connection survival, same-connection recovery, and later
 connection closure. It does not establish ASGI `http.disconnect` or identify the reset cause. The H1 half-close case completes a held response after client write-side shutdown while the connection lifetime remains open, consistent with RFC 9112 §9.6. See the
-[request-lifetime receipt](../../benchmarks/results/2026-10-12/native-request-lifetime-live/report.md).
+request-lifetime receipt (`benchmarks/results/2026-10-12/native-request-lifetime-live/report.md`).
 The earlier 34-input package-move result remains in the
-[package-promotion receipt](../../benchmarks/results/2026-10-12/native-package-promotion-live/report.md).
+package-promotion receipt (`benchmarks/results/2026-10-12/native-package-promotion-live/report.md`).
 The API is unpublished, and Starlette-RS/FastAPI-RS do not yet consume it.
 
 ### Preserve dependency direction

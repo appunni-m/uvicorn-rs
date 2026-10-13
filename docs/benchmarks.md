@@ -1,5 +1,7 @@
 # Reproducible performance benchmarks
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 This guide runs the maintained benchmark matrix: HTTP/1.1, HTTP/2, HTTP/3,
 WebSockets, and lifespan/shutdown. The runners check each measured response or
 message before recording its metrics. The HTTP/1.1 runner retains failed
@@ -10,7 +12,7 @@ category runners may stop earlier. Failed or incomplete runs cannot qualify as
 performance comparisons.
 
 The latest completed full FastAPI comparison is the
-[FastAPI five-category report](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md):
+FastAPI five-category report (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md`):
 520 correctness rows passed across H1, H2, WebSockets, and lifecycle, with 32
 qualified workload/loop pairs. H3 at concurrency 64 stopped on Hypercorn
 reference timeouts. The maintained full-suite runner now gives H3 its own
@@ -58,14 +60,14 @@ Uvicorn has no H2 or H3 server baseline, so those rows compare with Hypercorn
 only. HTTP/3 upload has Rust-only rows because the tested Hypercorn version did
 not return a response after consuming the upload. A later FastAPI run also
 recorded a Hypercorn/uvloop timeout on the consumed-request workload at
-concurrency 64; see the [latest full-category report](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md).
+concurrency 64; see the latest full-category report (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md`).
 For a new comparison, keep the same explicitly recorded H3 concurrency on
 Hypercorn and uvicorn-rs. The full-suite wrapper uses `--h3-concurrency 1` by
 default; raising it is a separate capacity experiment and can make the
 Hypercorn correctness gate fail before performance is measured.
 The historical October 4 two-loop matrix recorded 66 H3 comparison rows and is
 archived with all categories in
-[`full-2026-10-04T113122Z`](../benchmarks/results/full-2026-10-04T113122Z/).
+`full-2026-10-04T113122Z` (`benchmarks/results/full-2026-10-04T113122Z/`).
 Its metadata says non-upload requests carried a one-byte body for ASGI
 compatibility, which means ordinary GET workloads had request content. The
 response checks passed for those archived inputs, but they are superseded and
@@ -187,7 +189,7 @@ FastAPI/Starlette/Pydantic distributions, the app and harness sources, the
 normal Rust binary, Python runtime, and load client.
 
 Older October 8 measurements are historical and tied to an earlier source
-snapshot. Use the [latest exact-source FastAPI results](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md)
+snapshot. Use the latest exact-source FastAPI results (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md`)
 for current workload comparisons.
 
 ### Expanded upstream FastAPI workload matrix
@@ -242,7 +244,7 @@ startup, idle shutdown, and active shutdown phases form one measurement.
 
 Earlier local matrices and retries are historical and tied to their own
 source snapshots. They are not pooled into the
-[2026-10-10 exact-source report](../benchmarks/results/2026-10-10/fastapi-current-matched-matrix-20261010/README.md),
+2026-10-10 exact-source report (`benchmarks/results/2026-10-10/fastapi-current-matched-matrix-20261010/README.md`),
 which records the complete five-category correctness matrix and focused retries.
 HTTP/3 performance there uses its separately recorded concurrency 1; it is not
 a high-concurrency capacity result. Timing exclusions remain in the linked raw
@@ -278,7 +280,7 @@ target; it cannot infer TCP segment boundaries or total copy bytes by itself.
 
 The latest exact-source report distinguishes the default 1 MiB upload from a
 1 KiB client-write workload and reports their separate matched outcomes. Its
-[boundary diagnosis](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md)
+boundary diagnosis (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md`)
 contains the receive/future counts; those counters locate work but are not
 normal-build timing evidence.
 
@@ -310,7 +312,7 @@ done
 
 The wrapper pairs Uvicorn and uvicorn-rs under both asyncio and uvloop using
 the same upstream FastAPI app. Do not combine the loops or concurrency points
-into one ratio. The [2026-10-10 diagnosis](../benchmarks/results/2026-10-10/fastapi-current-matched-matrix-20261010/README.md#the-fixed-route-gap-grows-with-concurrency)
+into one ratio. The 2026-10-10 diagnosis (`benchmarks/results/2026-10-10/fastapi-current-matched-matrix-20261010/README.md#the-fixed-route-gap-grows-with-concurrency`)
 keeps matched per-point percentiles, server CPU/op, rejected rows, and raw
 receipts.
 
@@ -515,7 +517,7 @@ snapshot. The October 4 matrix overlapped unrelated parity generation and
 validation, mypy, compatibility-atlas work, and Rust compilation; one Rust
 compile reached 787% CPU before WebSocket measurements. Its performance rows
 are provisional. See its
-[`run-notes.md`](../benchmarks/results/full-2026-10-04T113122Z/run-notes.md)
+`run-notes.md` (`benchmarks/results/full-2026-10-04T113122Z/run-notes.md`)
 and process snapshots for details. Earlier archives also contain overlapping
 Rust builds, tests, and documentation jobs. The loopback client shares CPU
 with the server; move large-transfer clients to a separate host when client
@@ -735,7 +737,7 @@ host contention, modified dependencies, deliberate exception costs and missing
 reference upload results remain excluded. Successful correctness execution can
 still produce zero qualified performance comparisons.
 
-The [current normal-build run](../benchmarks/results/performance-investigation-2026-10-05/final-normal-c7-categories/analysis.md)
+The current normal-build run (`benchmarks/results/performance-investigation-2026-10-05/final-normal-c7-categories/analysis.md`)
 qualifies three matched WebSocket connection-handshake repetitions, with a
 median same-repetition Rust/Uvicorn rate ratio of 1.590. Other workloads lack
 enough clean matches, and HTTP/3 is incomplete after a reference correctness
@@ -943,8 +945,8 @@ uv run --no-sync python scripts/run_http_category_bench.py \
 uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs-py
 ```
 
-See the [current-source protocol-stage report](../benchmarks/results/2026-10-10/fastapi-current-protocol-stages-20261010/README.md)
-for H2, H3, and WebSocket results and the [expanded HTTP/1 thread-CPU report](../benchmarks/results/2026-10-10/fastapi-current-all-h1-thread-cpu-retry-20261010/README.md)
+See the current-source protocol-stage report (`benchmarks/results/2026-10-10/fastapi-current-protocol-stages-20261010/README.md`)
+for H2, H3, and WebSocket results and the expanded HTTP/1 thread-CPU report (`benchmarks/results/2026-10-10/fastapi-current-all-h1-thread-cpu-retry-20261010/README.md`)
 for per-workload Python-loop/Tokio CPU placement. App-boundary timers and
 Rust-only counters have different meanings; neither is a function-level CPU
 decomposition.
@@ -977,7 +979,7 @@ matrix: `fastapi-fixed`, `fastapi-validated-route`, `fastapi-python-cpu`,
 `--server uvicorn-rs --loop asyncio`, then repeat with
 `--server uvicorn --http httptools --loop asyncio` to compare the same upstream
 FastAPI app, loop, and parser workload. Repeat under `uvloop` as a separate
-matched pair. The [exact-source FastAPI diagnosis](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md)
+matched pair. The exact-source FastAPI diagnosis (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md`)
 summarizes the completed local profiles and separates wall-time stack samples
 from on-CPU attribution.
 The profiler also accepts `fastapi-upload-1m-write-1k`,
@@ -1120,7 +1122,7 @@ load. Those wall-time stacks include both active and waiting threads; their
 counts do not quantify per-function CPU use. The resulting `.sample.txt`
 profiles and hashes are listed in `profile-summary.json`. Sampling adds
 profiler overhead, and every row remains diagnostic-only. The
-[current-source attribution report](../benchmarks/results/2026-10-09/fastapi-thread-cpu-mach-current-source-run2/README.md)
+current-source attribution report (`benchmarks/results/2026-10-09/fastapi-thread-cpu-mach-current-source-run2/README.md`)
 contains the run, raw thread samples, and its limitations. The earlier
-[thread-level CPU report](../benchmarks/results/2026-10-09/fastapi-thread-cpu-attribution/README.md)
+thread-level CPU report (`benchmarks/results/2026-10-09/fastapi-thread-cpu-attribution/README.md`)
 contains the synchronous-route CPU timer and asyncio/uvloop comparison.

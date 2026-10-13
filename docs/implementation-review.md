@@ -1,5 +1,7 @@
 # Implementation review: known gaps
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 The latest recorded local source matrix is the 511-case run from 2026-10-12:
 243 oracle comparisons, 268 target-only contracts, 5,561/5,561 regions, and
 3,997/3,997 lines. It passed attribution and three full repeats with no
@@ -136,7 +138,7 @@ run and a fresh quiet-host performance run remain unverified.
 | H3 fixed-response sampled RSS is high. | The Rust+uvloop row's median sampled peak was 252.3 MiB at concurrency 4; the Hypercorn reference was 89.7 MiB. The archived response checks passed on their recorded inputs, but the H3 metadata says non-upload requests carried one byte, including ordinary GET workloads. Those GET inputs are superseded and do not establish RFC-aligned correctness or comparable performance; the host was also busy. | Re-run bodyless GET workloads with request identities matched across servers, then profile connection/stream and buffer lifetimes on a quiet host before treating RSS as a leak or stable memory requirement. |
 | WebSocket text echo consumes more CPU and is slower than Uvicorn in this run. | Rust+uvloop measured 60,525 messages/s at 244% CPU; Uvicorn uvloop measured 73,207/s at 94% CPU. The 64 KiB binary echo favored Rust in rate but also used more CPU. | Profile the PyO3 message bridge and frame path separately; retain full-message parity gates. |
 
-The [October 4 run notes](../benchmarks/results/full-2026-10-04T113122Z/run-notes.md)
+The October 4 run notes (`benchmarks/results/full-2026-10-04T113122Z/run-notes.md`)
 link the environment, every raw category report, and process snapshots. These
 are exploratory medians from a contaminated host, not accepted speedup claims.
 

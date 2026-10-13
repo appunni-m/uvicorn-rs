@@ -1,5 +1,7 @@
 # Feasibility and performance scope
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 ## Decision
 
 The available matched measurements for the Python ASGI compatibility path do not show a general speed advantage over Uvicorn. The project should be described as an independent Rust-first ASGI server with a documented support subset, not as a faster Uvicorn replacement. Keep performance claims workload-specific. Partial matched measurements exist for later source snapshots, but a complete current-source, multi-category, multi-system comparison has not been qualified. Further optimization should target measured bottlenecks and be validated with fresh matched runs. The [proposed Rust-native FastAPI-RS/Starlette-RS architecture](rust-native-integration-architecture.html) is a separate path and has not been implemented or benchmarked. A release candidate still needs complete multi-system performance evidence.
@@ -13,8 +15,8 @@ The dirty macOS ARM64 working tree at revision
 and three complete 511-case repeats: 243 oracle-parity cases and 268
 target-only contracts. It measured 5,561/5,561 Rust regions and 3,997/3,997
 lines. Coverage-MCP found zero missing region/line groups and reported
-`source: matches_receipt`, `tests: passed`. The [full report](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-report.json)
-and [MCP receipt](../benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-mcp-receipt.json)
+`source: matches_receipt`, `tests: passed`. The full report (`benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-report.json`)
+and MCP receipt (`benchmarks/results/2026-10-12/unified-coverage-runtime-config-511-corrected/coverage-mcp-receipt.json`)
 record identities and scope. This verifies the PyO3 adapter's measured
 `src/lib.rs`, not a clean hosted build, the separate Python-free native crate,
 or the official ASGI suite.
@@ -33,17 +35,17 @@ normal non-instrumented extension passed 243/243 public parity cases (SHA-256
 `bf3cb991025074bc416ccd514b836aec31899ca1ce6f0d40bdfa819c9dd07d43`). The
 506-case unified matrix passed three complete repeats and measured 5,532/5,532
 regions and 3,974/3,974 lines with matching Coverage-MCP evidence. The
-[historical report](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-report.json),
-[receipt](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-mcp-receipt.json),
-and [evidence README](../benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/README.md)
+historical report (`benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-report.json`),
+receipt (`benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/coverage-mcp-receipt.json`),
+and evidence README (`benchmarks/results/2026-10-11/unified-coverage-kata-continuation-20261011/README.md`)
 remain source-bound to that benchmark run. The corresponding
-[FastAPI comparison](../benchmarks/results/2026-10-10/fastapi-current-matched-matrix-20261010/README.md)
+FastAPI comparison (`benchmarks/results/2026-10-10/fastapi-current-matched-matrix-20261010/README.md`)
 used ordinary FastAPI, Starlette, and Pydantic rather than FastAPI-RS or
 Starlette-RS. These local results do not replace hosted exact-commit
 verification or establish full Uvicorn compatibility.
 
 The exact-source local category analysis on commit `443c5cc` is preserved in
-the [evidence report](../benchmarks/results/2026-10-11/fastapi-exact-443c5cc-local-evidence/README.md).
+the evidence report (`benchmarks/results/2026-10-11/fastapi-exact-443c5cc-local-evidence/README.md`).
 It qualifies only three H1 workload/loop pairs, including slower 1 MiB uploads;
 the remaining rows were rejected for host CPU activity or did not meet the
 matched-pair gate. This is separate from the hosted run #16 artifacts and does
@@ -77,7 +79,7 @@ Representative asyncio results from the 2026-10-09 run:
 | WebSocket handshake | 2.151× | 0.420 → 0.189 ms | 281.1 → 152.3 µs/op |
 | WebSocket text echo | 0.591× | 1.108 → 1.863 ms | 17.3 → 48.1 µs/op |
 
-The [complete 2026-10-09 analysis](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/analysis.md) preserves p50/p95/p99, client and server CPU, sampled RSS, exclusions and per-workload qualification. The 2026-10-10 result table and full protocol evidence are in [benchmark results](benchmark-results.md). Ratios are never combined across protocols or references.
+The complete 2026-10-09 analysis (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/analysis.md`) preserves p50/p95/p99, client and server CPU, sampled RSS, exclusions and per-workload qualification. The 2026-10-10 result table and full protocol evidence are in [benchmark results](benchmark-results.md). Ratios are never combined across protocols or references.
 
 ## Where the measured overhead is
 
@@ -90,8 +92,8 @@ threads, for 547.3 µs total. Five clean matched profiles per server support
 that split. Fixed-route profiles show a smaller version: 34.0 µs total on
 Uvicorn versus 45.2 µs on Rust, including 16.8 µs on Tokio-named threads.
 These are diagnostic CPU measurements, not throughput rankings. See the
-[current fixed-route profiles](../benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/thread-cpu-profiles-retry/profile-summary.json)
-and [upload profiles](../benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/thread-cpu-upload-retry/profile-summary.json).
+current fixed-route profiles (`benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/thread-cpu-profiles-retry/profile-summary.json`)
+and upload profiles (`benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/thread-cpu-upload-retry/profile-summary.json`).
 
 Profiling-only ASGI timing captures show where upload latency appears: p50
 `receive()` wait is 24.06 ms on Rust versus 14.83 ms on Uvicorn, close to the
@@ -114,7 +116,7 @@ FastAPI handler or an identified SIMD loop. Full function-level CPU shares and
 a complete allocation/copy ledger remain unknown.
 
 The broader 360-profile H1 sweep in
-[fastapi-final-506](../benchmarks/results/2026-10-10/fastapi-final-506/current-source-diagnostics/all-http1-thread-cpu-20261010-aggregate.md)
+fastapi-final-506 (`benchmarks/results/2026-10-10/fastapi-final-506/current-source-diagnostics/all-http1-thread-cpu-20261010-aggregate.md`)
 is for the earlier `b5c1140…` source snapshot, not the later dirty `6b164eb…` benchmark snapshot.
 It found 16 clean workload/loop pairs with Rust process CPU at 1.15–2.13×
 Uvicorn and excess CPU on Tokio-named threads. Keep that wider sweep as

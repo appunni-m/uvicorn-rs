@@ -1,5 +1,7 @@
 # Benchmark and release-gate status
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 ## Latest local benchmark preparation (2026-10-13)
 
 The exact normal build passed **243/243** parity cases at commit
@@ -60,9 +62,24 @@ the sequential category step, so this run does not establish a complete
 three-system performance result. Its FastAPI validated-route throughput was
 below Uvicorn on all three systems: 0.676×/0.700× on Linux x86-64,
 0.769×/0.936× on Linux ARM64, and 0.671×/0.683× on macOS ARM64 (asyncio /
-uvloop). The [per-system report, archived raw evidence, and verified artifact
-digests](../benchmarks/results/hosted/38122909359-attempt-1/README.md) record
-the incomplete categories and failure receipts.
+uvloop). The [matrix report and digest manifest](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359/artifacts/11696763811)
+and the [Linux x86-64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359/artifacts/11697233690),
+[Linux ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359/artifacts/11696963085),
+and [macOS ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359/artifacts/11696818454)
+artifacts retain the raw category logs outside Git. They expire on 2027-01-09;
+no benchmark logs or raw reports are committed.
+
+The incomplete categories stopped at different boundaries:
+
+| System | Category and failing input | Observed failure |
+|---|---|---|
+| Linux x86-64 | HTTP/2 `protocol-scope`, Rust/uvloop, repetition 5 | The response check passed, then the server logged only `connection task failed: connection error`. Shutdown exited cleanly; the underlying error is not identified. |
+| Linux ARM64 | HTTP/2 `many-response-chunks`, Rust/asyncio, repetition 4 | The response check passed, then the same generic Rust connection error was logged. Shutdown exited cleanly; the underlying error is not identified. |
+| Linux ARM64 | HTTP/3 `fixed`, Hypercorn/uvloop, repetition 2 | The client timed out waiting for response headers. Hypercorn logged an unhandled `KeyError(0)` while looking up an H3 stream; the cause of the missing response is not established. |
+| macOS ARM64 | HTTP/1 FastAPI upload, 1 MiB body in 1 KiB writes, Rust/uvloop, repetition 1 | libcurl reported 31 send failures across 110 requests. FastAPI observed `ClientDisconnect`, followed by the server's disconnect-before-response-start error. The trigger remains unconfirmed. |
+
+These observations do not establish one shared failure cause or a complete
+performance ranking. Only individually qualified matched pairs are reported.
 
 The docs updater pushed commit [`94f68885`](https://github.com/appunni-m/uvicorn-rs/commit/94f68885d3455383a806c606b53781fe7be7b7a2)
 to `automation/benchmark-results`, then failed in the final “Propose the
@@ -77,14 +94,15 @@ failure is separate from the aggregate benchmark result.
 
 The separately attached `asgi-category-benchmarks-macos-arm64 (1).zip` has
 SHA-256 `92e2cd68d8afb38a367b6e789fc5143e6ff054b7cf7b3ab3298466692ee7091a`,
-identical to the archived macOS artifact above. It adds no new benchmark
+identical to the [macOS artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359/artifacts/11696818454)
+above. It adds no new benchmark
 samples. Its HTTP/1 category stopped after 120/300 rows when a 1 KiB upload
 case failed in the libcurl client; FastAPI then observed a client disconnect.
 The analyzer withholds all H1 ratios because the category is incomplete. The
 other categories produced 14 HTTP/2, 12 HTTP/3, 6 WebSocket, and 2 lifecycle
-matched descriptive pairs. The [archive review and current H1 experiment
-status](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/current-run-status.md)
-records the failure boundary and the limits on interpreting these measurements.
+matched descriptive pairs. The H1 experiment and its interpretation limits
+are recorded in [the local retries section](#h1-benchmark-source-retries-interrupted-by-host-load-2026-10-12)
+below.
 
 The later attached `asgi-category-benchmarks-macos-arm64.zip` has SHA-256
 `e556828c831dbec775a3da4a58445d96e60453f0874711b028717566b38593a3`. It
@@ -103,8 +121,8 @@ post-close settle interval. The fixture now waits for the release marker. The co
 passed one focused run plus 10 repeats locally with matching oracle and target
 observations. This identifies a test synchronization flaw but does not prove
 the old runtime correct or incorrect for an immediate post-disconnect receive,
-and it is not a hosted rerun. See the [archived-row review and repeat
-evidence](../benchmarks/results/2026-10-12/http1-disconnect-before-first-receive-repro/README.md).
+and it is not a hosted rerun. See the archived-row review and repeat
+evidence (`benchmarks/results/2026-10-12/http1-disconnect-before-first-receive-repro/README.md`).
 
 The Tokio blocking-pool experiment passed 243/243 public parity cases with the
 default, 1-thread, and 4-thread settings. Its first timing slice has one
@@ -112,8 +130,8 @@ qualified descriptive pair: default pool, stock FastAPI, 1 MiB request body,
 64 KiB client callback cap, three host-valid repetitions per server. Uvicorn
 handled 4,149 requests/s and Rust 3,840 (0.925×); Rust p50/p95/p99 and observed
 server CPU were higher. The setting comparison is incomplete: cap 1 had no
-qualified pairs, and cap 4 has not been timed. See the [full experiment
-report](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/README.md).
+qualified pairs, and cap 4 has not been timed. See the full experiment
+report (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/README.md`).
 
 Twelve earlier consecutive host preflights (receipts 5–16) rejected before
 benchmark startup. The latest of those samples found
@@ -122,27 +140,27 @@ reached 28.7% in one interval, and aggregate unrelated CPU ranged from 94.8%
 to 140.1%, with consecutive samples over the aggregate threshold. No process
 was stopped. Subsequent short windows accepted for the default and cap-1 runs,
 but the per-row guard still rejected noisy rows. Ten later cap-4 preflights
-rejected; the [first](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/cap-4-host-preflight.json)
-and [latest](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/cap-4-host-preflight-retry-9.json)
+rejected; the first (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/cap-4-host-preflight.json`)
+and latest (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/cap-4-host-preflight-retry-9.json`)
 receipts show the aggregate and sustained-process guards. Three subsequent
-focused cap-1 preflights rejected under the same guards; see the [latest
-receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/cap-1-focused-preflight-retry-2.json).
+focused cap-1 preflights rejected under the same guards; see the latest
+receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/cap-1-focused-preflight-retry-2.json`).
 Eighteen resumed preflights also rejected before timing: `mediaanalysisd` used
 29.3–101.5% of one core, `qemu-system-aarch64-headless` reached 78.7%, and
 aggregate unrelated CPU ranged from 56.2% to 279.6%. The latest sample found
 `mediaanalysisd` at 29.3–96.1% and aggregate unrelated CPU at 56.2–115.2%.
 No process was stopped.
-See the [first](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/resume-host-preflight-1.json)
-and [latest](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/resume-host-preflight-18.json)
+See the first (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/resume-host-preflight-1.json`)
+and latest (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/resume-host-preflight-18.json`)
 receipts.
-See the [current experiment
-status](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/current-run-status.md).
+See the current experiment
+status (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/current-run-status.md`).
 The latest goal-continuation preflight also rejected before timing: unrelated
 aggregate CPU ranged from 115.1% to 178.8%, a `python3.12` process used
 94.6–100.6% of one core throughout all eight intervals, and
 `qemu-system-aarch64-headless` reached 79.6% in one interval. The receipt
 records process names and PIDs only; no benchmark started and no process was
-stopped. See the [latest receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-goal-continuation-20261012.json).
+stopped. See the latest receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-goal-continuation-20261012.json`).
 The intended comparison isolates stock FastAPI 1 MiB uploads with 64 KiB and
 256 KiB client writes against Uvicorn on the same asyncio loop. No performance
 claim about pool-cap effects follows from this partial timing evidence.
@@ -153,7 +171,7 @@ intervals, and unrelated aggregate CPU ranged from 100.4% to 151.4%. The
 receipt captures names and PIDs, not the process command. No timed benchmark
 started in that rejected window and no process was stopped. Later short windows
 accepted for default and cap 1, but the cap comparison remains incomplete. See
-the [preflight receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-post-doc-audit.json).
+the preflight receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-post-doc-audit.json`).
 
 ### HTTP/2 benchmark-client shutdown check (2026-10-12)
 
@@ -169,7 +187,7 @@ The local check passed six of six rows across three repetitions each of
 lifecycle gates passed, and no unexpected native diagnostics were recorded.
 Only two rows passed the host timing guard, below the three-repetition
 threshold; this is a teardown correctness check, not a performance result. The
-[raw report and server logs](../benchmarks/results/2026-10-12/http2-client-shutdown-20261012/README.md)
+raw report and server logs (`benchmarks/results/2026-10-12/http2-client-shutdown-20261012/README.md`)
 record the command, source identity, host, and exclusions. A hosted rerun is
 still needed to confirm whether this client lifecycle defect explains the
 previous intermittent server diagnostic.
@@ -200,8 +218,9 @@ application path, but does not attribute it to a specific parser, Tokio stage,
 or Python bridge function. The containing five-category matrix remains
 incomplete because HTTP/1 stopped during a separate upload workload; its other
 protocol results cannot turn these rows into an overall speed claim. The
-[archived hosted evidence](../benchmarks/results/hosted/38122909359-attempt-1/README.md) records
-the matrix boundary and artifact digest.
+[hosted matrix artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38122909359/artifacts/11696763811)
+records the raw per-system rows and digest manifest; its partial status is
+summarized above.
 
 ### H1 benchmark-source retries interrupted by host load (2026-10-12)
 
@@ -214,7 +233,7 @@ failures, 24 timing-valid, 17 host-rejected); the retry stopped after 22 (zero
 response failures, 9 timing-valid, 13 host-rejected). Both strict analyses
 withheld ratios because category completion and identity gates were incomplete,
 and both post-stop preflights rejected. Do not combine the partial attempts or
-draw a performance conclusion. See the [attempt ledger and raw evidence](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/README.md).
+draw a performance conclusion. See the attempt ledger and raw evidence (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/README.md`).
 
 ### H1 benchmark-source route and fixed-response batch (2026-10-12)
 
@@ -225,7 +244,7 @@ validated FastAPI route measured 0.900× Uvicorn throughput under asyncio and
 uvloop pair had only two valid repetitions. The qualified pairs used 9.0–20.1
 µs more aggregate server-process CPU per operation. This does not isolate the
 CPU between the Python event loop, PyO3 bridge, and Rust networking. The
-[source-bound report and raw rows](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-route-fixed/README.md)
+source-bound report and raw rows (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-route-fixed/README.md`)
 record the exact identity and limits. These results cover two of 15 H1
 workloads and do not establish an overall speedup.
 
@@ -238,8 +257,8 @@ was 0.871× and 0.931× for large responses, 0.956× for many chunks under
 asyncio and 1.275× under uvloop, and 0.920× for small chunks under asyncio.
 Small chunks under uvloop had only two valid repetitions. Rust used more
 aggregate server-process CPU in all five qualified pairs; the measurements do
-not attribute that CPU to a particular Python or Rust function. The [report
-and raw evidence](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-response-workloads/README.md)
+not attribute that CPU to a particular Python or Rust function. The report
+and raw evidence (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-response-workloads/README.md`)
 record the source identity, latency, CPU, RSS, exclusions, and limits. Across
 the two completed H1 subsets, results show regressions on several workloads
 and one uvloop streaming win; they do not show a broad speedup.
@@ -253,7 +272,7 @@ host timing guard, and five workload/loop pairs qualified. Throughput versus
 Uvicorn was 0.648× / 0.686× for the standard 64 KiB writes, 1.001× / 0.995×
 for 1 KiB writes, and 0.649× for 256 KiB writes under asyncio. Rust used more
 aggregate server-process CPU in all five qualified pairs. The remaining cases
-did not have enough matching valid repetitions. The [report and raw evidence](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-upload-workloads/README.md)
+did not have enough matching valid repetitions. The report and raw evidence (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-upload-workloads/README.md`)
 record the exact identities and limitations. The workload-dependent results
 point to request-upload handling for deeper profiling; they do not identify a
 specific hot function or establish an overall speedup.
@@ -274,35 +293,35 @@ started during the rejected windows. A separate diagnostic-only upload profile
 ran under host load; every timing row was rejected, while thread snapshots and
 sampled stacks identified a possible PyO3 `spawn_blocking`/GIL completion cost.
 That observation motivates a controlled pool-limit A/B, but does not quantify
-the cause. See the [profile report](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-upload-profile/README.md),
-[preflight receipts](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-h1-rest.json),
-and [retry](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-profile-next-2.json).
+the cause. See the profile report (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-upload-profile/README.md`),
+preflight receipts (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-h1-rest.json`),
+and retry (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-profile-next-2.json`).
 The latest host check also rejected before timing: `mediaanalysisd` remained at
 63.2–87.9% of one core in all eight intervals, with unrelated aggregate CPU
 peaking at 115.9%. A retry 30 seconds later also rejected, with aggregate
 unrelated CPU peaking at 290.0% and `mediaanalysisd` remaining at 65.5–87.2% in
-all intervals. See the [first receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-20261012.json)
-and [retry](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry1-20261012.json).
+all intervals. See the first receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-20261012.json`)
+and retry (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry1-20261012.json`).
 A second retry rejected too: `mediaanalysisd` remained at 56.6–85.9% in all
-intervals, and aggregate unrelated CPU peaked at 136.4%. See the [second retry
-receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry2-20261012.json).
+intervals, and aggregate unrelated CPU peaked at 136.4%. See the second retry
+receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry2-20261012.json`).
 A third retry rejected as well: unrelated aggregate CPU peaked at 214.2%,
 `mediaanalysisd` used 55.1–87.8%, and a `python3.12` process used 86.0–100.5%
 in all intervals. No benchmark started and no process was stopped. See the
-[third receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry3-20261012.json).
+third receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry3-20261012.json`).
 A fourth retry rejected 45 seconds later: `mediaanalysisd` remained at
 51.6–98.4%, `rustc` at 94.0–103.5%, and aggregate unrelated CPU peaked at
-220.1%. No benchmark started. See the [fourth receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry4-20261012.json).
+220.1%. No benchmark started. See the fourth receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry4-20261012.json`).
 A fifth preflight 60 seconds later rejected as well: `mediaanalysisd` used
 70.8–75.5%, `rustc` used 94.3–101.5% in all intervals, and aggregate CPU
-peaked at 211.9%. See the [fifth receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry5-20261012.json).
+peaked at 211.9%. See the fifth receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry5-20261012.json`).
 A fresh preflight on continuation also rejected, with aggregate CPU peaking at
 200.3%, `mediaanalysisd` at 50.6–80.4% in all intervals, and a `python3.12`
 process at 95.8–97.1% in three intervals. No timing began. See the
-[receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-continuation-20261012-1.json).
+receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-continuation-20261012-1.json`).
 A second continuation preflight rejected too: aggregate CPU peaked at 227.1%,
 `mediaanalysisd` used 46.8–73.5% in all intervals, `git` used 27.5–32.0% in
-seven, and `rustc` briefly used 101.1%. See the [receipt](../benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-continuation-20261012-2.json).
+seven, and `rustc` briefly used 101.1%. See the receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-continuation-20261012-2.json`).
 
 ### Recorded dirty-source five-category run (2026-10-11)
 
@@ -316,7 +335,7 @@ working tree was dirty at revision `3dcaeaa0caf47aca96412d15451ac6a1123ebb04`;
 normal native extension SHA-256 was
 `5c23a4e33006b6183f3a0bba89b2506c3866be2d293b9cd49ebffb037c47b028`.
 
-The [five-category analysis](../benchmarks/results/2026-10-11/fastapi-current-full-category-20261011-retry1/analysis.md)
+The five-category analysis (`benchmarks/results/2026-10-11/fastapi-current-full-category-20261011-retry1/analysis.md`)
 and its raw rows keep each category and each host-rejected sample separate.
 HTTP/1 completed all 300 planned rows with zero response failures, but only 20
 passed the timing guard and **no H1 workload/loop pair qualified**. HTTP/2
@@ -326,7 +345,7 @@ HTTP/3 completed 130/130 rows (112 timing-valid, 10 qualified pairs), WebSocket
 completed 60/60 (57 timing-valid, 6 pairs), and lifecycle completed 20/20 (14
 timing-valid, 1 pair).
 
-An [isolated HTTP/2 retry](../benchmarks/results/2026-10-11/fastapi-current-full-category-20261011-http2-retry1/analysis.md)
+An isolated HTTP/2 retry (`benchmarks/results/2026-10-11/fastapi-current-full-category-20261011-http2-retry1/analysis.md`)
 completed all 140 planned rows with zero response failures; 26 rows passed the
 timing guard and two workload/loop pairs qualified. Its only qualifying
 workload was protocol-scope, at 3.566× throughput under asyncio and 3.995×
@@ -356,10 +375,10 @@ statistical-significance claim.
 Two fresh preflights before a focused H1 retry rejected the host before
 starting timed work. `mediaanalysisd` used 73.1–98.2% and 68.7–94.8% of one
 core; unrelated aggregate CPU reached 118.2% and 107.4%. Both receipts confirm
-that no benchmark started: [first](../benchmarks/results/2026-10-11/fastapi-current-h1-focused-retry-20261011/host-preflight.json)
-and [second](../benchmarks/results/2026-10-11/fastapi-current-h1-focused-retry-20261011-2/host-preflight.json).
+that no benchmark started: first (`benchmarks/results/2026-10-11/fastapi-current-h1-focused-retry-20261011/host-preflight.json`)
+and second (`benchmarks/results/2026-10-11/fastapi-current-h1-focused-retry-20261011-2/host-preflight.json`).
 
-The 2026-10-10 exact-source [FastAPI category matrix](../benchmarks/results/2026-10-10/fastapi-current-matched-matrix-20261010/README.md)
+The 2026-10-10 exact-source FastAPI category matrix (`benchmarks/results/2026-10-10/fastapi-current-matched-matrix-20261010/README.md`)
 uses stock FastAPI on CPython 3.12.13, one Tokio async worker, and source
 `1f222c0…` with normal extension `bf3cb99…`. It has 390/390 complete-matrix
 correctness rows, 420 focused retry rows, and 192 deeper H1 rows. H1 fixed
@@ -377,7 +396,7 @@ for request content: ordinary GETs carry no content and omit `Content-Length`;
 the route that consumes a body uses POST with one byte, and upload uses POST
 with its configured body. HTTP specifications are the source of truth when a
 wire-level compatibility observation conflicts with them.
-The [corrected-input smoke run](../benchmarks/results/2026-10-11/fastapi-http-spec-correctness-20261011/analysis.md)
+The corrected-input smoke run (`benchmarks/results/2026-10-11/fastapi-http-spec-correctness-20261011/analysis.md`)
 passed 24/24 response checks. Its 0.2-second duration is exploratory; although
 the analyzer formed one matched H3 uvloop pair, the fresh host preflight had
 rejected and the run is not a performance result. Older rows that sent a
@@ -385,7 +404,7 @@ one-byte GET body are a different input identity. See the [HTTP/3 request-shape
 details](benchmark-results.md#http3-request-shape-correction-2026-10-11).
 Thirteen subsequent preflights rejected timed work for aggregate unrelated CPU
 above 100% of one core and a process above the per-process threshold in
-consecutive intervals. The [latest receipt](../benchmarks/results/2026-10-11/wh9k-after-native-core-20261011-1.json)
+consecutive intervals. The latest receipt (`benchmarks/results/2026-10-11/wh9k-after-native-core-20261011-1.json`)
 records no benchmark start. In preflight 13, unrelated CPU ranged from
 49.4–122.2% of one core and `mediaanalysisd` used 28.1–102.7% across eight
 intervals. Preflight 12 recorded 119.0–172.3% aggregate activity, with a Codex
@@ -394,14 +413,14 @@ receipts remain available beside the benchmark results.
 
 Follow-up diagnostics now cover all 15 HTTP/1 workload variants with thread
 CPU counters and add 320 response-checked stage rows for HTTP/2, HTTP/3, and
-WebSockets. See the [per-thread report](../benchmarks/results/2026-10-10/fastapi-current-all-h1-thread-cpu-retry-20261010/README.md)
-and [protocol-stage report](../benchmarks/results/2026-10-10/fastapi-current-protocol-stages-20261010/README.md).
+WebSockets. See the per-thread report (`benchmarks/results/2026-10-10/fastapi-current-all-h1-thread-cpu-retry-20261010/README.md`)
+and protocol-stage report (`benchmarks/results/2026-10-10/fastapi-current-protocol-stages-20261010/README.md`).
 The stage timings are diagnostic-only; the ordinary matched matrix remains
 the throughput, latency, process CPU, and RSS evidence.
 
 A 32-byte WebSocket text-echo attempt on the recorded benchmark source passed 20/20 payload
 checks, but all 20 timing rows failed the host-activity guard. Its
-[receipt](../benchmarks/results/2026-10-10/fastapi-current-ws-text-echo-20261010/README.md)
+receipt (`benchmarks/results/2026-10-10/fastapi-current-ws-text-echo-20261010/README.md`)
 records the attempt without making a small-frame speed claim.
 
 The exact-source per-thread CPU retry covers 15 HTTP/1 workloads, four
@@ -409,12 +428,12 @@ server/loop variants, and five repetitions: 300 response checks passed and
 193 timing captures passed the host and identity guard. Its paired CPU split
 shows the Python loop near or below Uvicorn on most routes, with additional
 work on Tokio-named threads for fixed requests, uploads, and chunked output.
-The [per-workload report](../benchmarks/results/2026-10-10/fastapi-current-all-h1-thread-cpu-retry-20261010/README.md)
+The per-workload report (`benchmarks/results/2026-10-10/fastapi-current-all-h1-thread-cpu-retry-20261010/README.md`)
 keeps lower-count pairs and host-rejected captures visible. An earlier 228-row
 attempt had no timing captures pass the guard; it remains in the
-[attempt receipts](../benchmarks/results/2026-10-10/fastapi-causal-profiling-20261010/attempts.md).
+attempt receipts (`benchmarks/results/2026-10-10/fastapi-causal-profiling-20261010/attempts.md`).
 
-The [earlier focused diagnosis on source `6b164eb…`](../benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/README.md)
+The earlier focused diagnosis on source `6b164eb…` (`benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/README.md`)
 adds per-thread CPU evidence and qualified upload, streaming, WebSocket, HTTP/2,
 lifecycle, H3 chunked-response, and slow-reader follow-ups. It narrows the main
 measured HTTP/1.1 upload cost to request-body delivery and the Python/Rust
@@ -436,7 +455,7 @@ time. On source `1f222c0…`, normal-build H3 large and chunked responses qualif
 at concurrency 1; the stage report adds attribution for those paths. No
 higher-concurrency H3 capacity claim is available.
 
-The [full five-category report](../benchmarks/results/2026-10-10/fastapi-final-506/README.md)
+The full five-category report (`benchmarks/results/2026-10-10/fastapi-final-506/README.md`)
 uses source hash `b5c1140…`. Its seven low-concurrency H3 comparisons and
 20-repetition lifecycle results are historical evidence for that source.
 The newer focused report above uses dirty working-tree hash `6b164eb…`: H1
@@ -451,7 +470,7 @@ all 11 H1 workload categories but still do not resolve individual function CPU
 shares. No SIMD hotspot was identified. A feature-instrumented follow-up
 measured the full request `bytes` conversion path at about 73 µs per 1 MiB
 upload, but it does not separate the allocator from the copy loop. A complete
-allocation/copy ledger remains open; see the [bridge and copy report](../benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/copy-time-runtime-diagnostics-retry2-20261010/README.md).
+allocation/copy ledger remains open; see the bridge and copy report (`benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/copy-time-runtime-diagnostics-retry2-20261010/README.md`).
 
 A same-source request-body batch-threshold experiment compared the current
 256 KiB default with a temporary 1 MiB threshold on FastAPI's 1 MiB upload.
@@ -459,7 +478,7 @@ The baseline reached three shared clean pairs; host contention left the
 candidate below the three-pair gate. Its two isolated clean pairs suggest
 small CPU savings alongside higher RSS and worse tail latency, but are not
 enough to justify changing the default. The 256 KiB source and matching native
-build are restored. See the [threshold experiment receipt](../benchmarks/results/2026-10-10/fastapi-upload-threshold-ab-20261010/README.md).
+build are restored. See the threshold experiment receipt (`benchmarks/results/2026-10-10/fastapi-upload-threshold-ab-20261010/README.md`).
 
 The dirty `6b164eb…` working tree passed 243/243 normal-build public parity
 cases. The unified matrix passed 506/506 cases across three complete runs;
@@ -471,15 +490,15 @@ Two fresh local host preflights were rejected before timing. The latest
 eight-interval sample found unrelated `rustc` at 96.9–100.8% and
 `mediaanalysisd` at 74.8–95.8% of one core in every interval; aggregate
 unrelated CPU was 187.1–214.1%. No benchmark process was started. The
-[first receipt](../benchmarks/results/2026-10-10/fastapi-current-host-preflight-20261010/README.md)
-and [follow-up receipt](../benchmarks/results/2026-10-10/fastapi-current-host-preflight-retry2-20261010/README.md)
+first receipt (`benchmarks/results/2026-10-10/fastapi-current-host-preflight-20261010/README.md`)
+and follow-up receipt (`benchmarks/results/2026-10-10/fastapi-current-host-preflight-retry2-20261010/README.md`)
 retain the measurements and guard policy.
 
 A third eight-interval sample at 14:35 UTC also rejected timing. Unrelated
 aggregate CPU ranged from 116.6% to 251.4% of one core; `mediaanalysisd` was
 over 25% in every interval, while `rustc` and the Codex renderer also exceeded
 the guard in consecutive intervals. No benchmark process was started. See the
-[third preflight receipt](../benchmarks/results/2026-10-10/fastapi-current-host-preflight-retry3-20261010/README.md).
+third preflight receipt (`benchmarks/results/2026-10-10/fastapi-current-host-preflight-retry3-20261010/README.md`).
 
 The earlier 2026-10-09 full-category run used stock FastAPI, Starlette, and
 Pydantic, with one configured Tokio worker. H1, H2, WebSocket, and lifecycle
@@ -489,7 +508,7 @@ Hypercorn reference timeouts and produced no valid pair. The newer low-load H3
 follow-up is separate evidence and does not establish high-concurrency H3
 performance.
 
-The report [fastapi-thread-cpu-attribution](../benchmarks/results/2026-10-09/fastapi-thread-cpu-attribution/README.md)
+The report fastapi-thread-cpu-attribution (`benchmarks/results/2026-10-09/fastapi-thread-cpu-attribution/README.md`)
 adds 48 signal-gated CPU captures across four FastAPI H1 workloads, two event
 loops, and both servers. Every response passed; 12/48 captures passed the
 host/identity timing guard, so all CPU captures are diagnostic-only. A separate
@@ -498,7 +517,7 @@ with the guard passing. It found the Python handler near parity and the
 largest extra process CPU on request-body receive paths. Exact native
 function-level CPU shares and a complete allocation/copy ledger remain open.
 
-The [committed `e8148e4` per-thread CPU run](../benchmarks/results/2026-10-09/fastapi-thread-cpu-mach-current-source-run2/README.md)
+The committed `e8148e4` per-thread CPU run (`benchmarks/results/2026-10-09/fastapi-thread-cpu-mach-current-source-run2/README.md`)
 passed all 12 response checks and 11/12 host/identity guards. Its clean
 1 MiB-upload rows attribute about 563 µs/request of uvicorn-rs CPU to
 Tokio-named threads, with 22–23 runtime-named threads observed despite one
@@ -507,7 +526,7 @@ than Uvicorn's. These measurements are for the committed source before the
 later dirty `6b164eb…` capture and must not be merged with its 374 µs/thread
 result. They remain diagnostic-only and do not identify hot functions.
 
-The [committed `e8148e4` upload write-size sweep](../benchmarks/results/2026-10-09/fastapi-upload-granularity-current/README.md)
+The committed `e8148e4` upload write-size sweep (`benchmarks/results/2026-10-09/fastapi-upload-granularity-current/README.md`)
 passed response checks and obtained three to five valid pairs per workload.
 For 16 KiB–1 MiB client writes, uvicorn-rs delivered about half Uvicorn's
 throughput and used about three times its server CPU. Separate receive-stage
@@ -516,14 +535,14 @@ versus five Uvicorn receives, while Python-bytes copy volume stayed at one
 payload. This strengthens the receive-bridge diagnosis; function-level CPU
 shares remain open.
 
-The [latest native stack captures](../benchmarks/results/2026-10-09/fastapi-native-stack-attribution-run2/README.md)
+The latest native stack captures (`benchmarks/results/2026-10-09/fastapi-native-stack-attribution-run2/README.md`)
 add 12 correctness-passing profiles of the same FastAPI routes across asyncio
 and uvloop. They show upload time concentrated in `receive()` awaits, chunked
 response time in bounded Rust `send()` waits, and multiple Tokio-named runtime
 threads under load despite one async worker. These are diagnostic wall-time
 samples, not CPU shares or rankable benchmark rows.
 
-The local [494-case ASGI evidence archive](../benchmarks/results/2026-10-09/asgi-unified-coverage-494/)
+The local 494-case ASGI evidence archive (`benchmarks/results/2026-10-09/asgi-unified-coverage-494/`)
 records 240 live oracle comparisons, 254 target-only fault contracts, three
 complete repeats, 5,298/5,298 Rust regions, 3,753/3,753 lines, and 240/240
 normal-wheel parity. This archive is dirty local evidence based on `f260d78`;
@@ -536,8 +555,8 @@ focused TLS-WebSocket case that timed out once in hosted CI passed three
 consecutive local oracle comparisons. These runs used the same source and
 native-extension hashes recorded above, but the checkout was dirty, so they
 do not replace clean hosted evidence. Raw reports are
-[here](../benchmarks/results/2026-10-09/current-full-parity-recheck-240.json)
-and [here](../benchmarks/results/2026-10-09/wss-oracle-exact-e8148e4-retry3/).
+here (`benchmarks/results/2026-10-09/current-full-parity-recheck-240.json`)
+and here (`benchmarks/results/2026-10-09/wss-oracle-exact-e8148e4-retry3/`).
 
 A separate 2026-10-10 follow-up repeated that WSS input eight times on the
 current working tree: seven passed and one was classified as an oracle
@@ -546,7 +565,7 @@ unrelated `mediaanalysisd` and `rustc` using about one CPU core each; three
 later standard attempts and three debug attempts passed. This supports a
 load-sensitive timeout as a possibility, not a proven root cause, and the
 follow-up is not an exact source/build or hosted CI gate. See the
-[WSS follow-up receipt](../benchmarks/results/2026-10-10/ci50-wss-oracle-followup-local-20261010/README.md).
+WSS follow-up receipt (`benchmarks/results/2026-10-10/ci50-wss-oracle-followup-local-20261010/README.md`).
 
 ## Latest hosted correctness and release CI
 
@@ -592,7 +611,7 @@ create an incomplete-handshake EOF if a probe is accepted during shutdown. A
 local HTTPS-probe correction passed 10/10 TLS-drain runs on `a93cdff`, 3/3
 neighboring HTTP-drain cases, 3/3 neighboring TLS fault cases, and 6/6 runs on
 the candidate source used in those local runs. The hosted cause remains unconfirmed; details and
-receipts are in the [TLS-drain probe follow-up](../benchmarks/results/2026-10-10/ci54-tls-drain-probe-followup/README.md).
+receipts are in the TLS-drain probe follow-up (`benchmarks/results/2026-10-10/ci54-tls-drain-probe-followup/README.md`).
 
 ## Earlier hosted multi-system benchmark (run #11)
 
@@ -618,7 +637,7 @@ quality and MSRV passing, installed-wheel parity passing 240/240, and unified
 coverage still running. The old 494-case excerpt supplied for CI #54 reports
 an infrastructure failure in the TLS-drain adapter check, not a response or
 ASGI behavior mismatch. The local HTTPS-probe correction and focused receipts
-are recorded in the [TLS-drain probe follow-up](../benchmarks/results/2026-10-10/ci54-tls-drain-probe-followup/README.md).
+are recorded in the TLS-drain probe follow-up (`benchmarks/results/2026-10-10/ci54-tls-drain-probe-followup/README.md`).
 
 At that snapshot, benchmark #12 remained in progress. Its Linux x86-64 job
 failed the exact-binary step,
@@ -649,7 +668,7 @@ The fault contract passed three focused local repetitions on the same
 `a93cdff` Rust source, using a selected-subset coverage invocation. Each run
 attributed 2,002 regions and 1,449 lines; the focused report is incomplete by
 design and does not satisfy the full coverage gate. See the
-[reproduction receipt](../benchmarks/results/2026-10-10/ci55-body-pump-fault-repro-a93-20261010/README.md).
+reproduction receipt (`benchmarks/results/2026-10-10/ci55-body-pump-fault-repro-a93-20261010/README.md`).
 
 Commit [`72dfa51`](https://github.com/appunni-m/uvicorn-rs/commit/72dfa51f98a3a3518679ccaf7115d3bae6d8ac5f)
 adds bounded case-specific annotations to the benchmark parity step and is
@@ -660,7 +679,7 @@ commit. Its macOS ARM64 job failed exact parity at
 `http1.disconnect-before-first-asgi-receive` before timing; its Linux x86-64 and
 Linux ARM64 jobs passed parity and the FastAPI control, then entered sequential
 category measurements. No three-system benchmark aggregate is available yet.
-The [exact-commit local reproduction](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md)
+The exact-commit local reproduction (`benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md`)
 passed the case 60/60 times with matching oracle and target observations. The
 hosted artifact row is now retained: Uvicorn returned `http.disconnect`, while
 uvicorn-rs returned `http.request` followed by `http.disconnect`; both
@@ -696,7 +715,7 @@ artifacts before attributing the hosted failure.
 
 A separate exact-source local run on commit `443c5cc` completed its public
 parity gate (240/240) and all 650 category rows with zero recorded failures.
-Its [analysis and raw evidence](../benchmarks/results/2026-10-11/fastapi-exact-443c5cc-local-evidence/README.md)
+Its analysis and raw evidence (`benchmarks/results/2026-10-11/fastapi-exact-443c5cc-local-evidence/README.md`)
 show 570/650 timing rows rejected for unrelated host CPU activity; only three
 matched H1 pairs qualified. The 1 MiB upload measured 0.453× Uvicorn throughput
 under asyncio and 0.544× under uvloop, while HTTP/2, HTTP/3, WebSocket, and
@@ -707,26 +726,26 @@ failure.
 The latest local preflight, run 7, again rejected timing before starting a
 benchmark: unrelated host CPU ranged from 101.0% to 156.7% of one core, and
 `mediaanalysisd` used 74.4% to 100.5% in all eight intervals. See the
-[preflight receipt](../benchmarks/results/2026-10-11/kata-continuation-host-preflight-7/host-preflight.json).
+preflight receipt (`benchmarks/results/2026-10-11/kata-continuation-host-preflight-7/host-preflight.json`).
 
 A fresh preflight after the HTTP/3 input correction also rejected timing before
 starting a benchmark. Unrelated CPU reached 298.1% of one core; `homed` used
 58.7% to 126.4% and `cloudd` used up to 76.4% across the rejected intervals.
 The host guard rejected both aggregate and sustained per-process activity. See
-the [preflight receipt](../benchmarks/results/2026-10-11/h3-corrected-current-host-preflight-20261011-1.json).
+the preflight receipt (`benchmarks/results/2026-10-11/h3-corrected-current-host-preflight-20261011-1.json`).
 
 The earlier 78-row full H3 report is not validation of the corrected request
 framing: its recorded source hashes for the H3 script and client were
 `d3f11375` and `8e798372`, and its client binary hash was
 `a6947902`. The current H3 script and client source hashes are `26567768` and
 `34d464c5`, and the current binary hash is `c0ae1fce`. Exclude the earlier
-report's zero-failure count from evidence for the correction; its [raw rows](../benchmarks/results/2026-10-11/fastapi-kata-continuation-http3-20261011/http3.json)
+report's zero-failure count from evidence for the correction; its raw rows (`benchmarks/results/2026-10-11/fastapi-kata-continuation-http3-20261011/http3.json`)
 remain available for its original run identity.
 
 The focused 24-row report matches the current H3 script, client source, and
 binary identities. It covers `protocol-scope` and
 `protocol-scope-consumed-request`, with zero request failures and 16/24
-timing-valid rows. See its [raw report](../benchmarks/results/2026-10-11/fastapi-http-spec-correctness-20261011/http3.json).
+timing-valid rows. See its raw report (`benchmarks/results/2026-10-11/fastapi-http-spec-correctness-20261011/http3.json`).
 
 The complete corrected H3 matrix subsequently finished with 130/130 planned
 rows and zero request failures. Source, native-extension, and probe-binary
@@ -734,12 +753,12 @@ identities were stable before and after the run. The host guard accepted 69
 timing rows and rejected 61 for unrelated host CPU activity. At least three
 matched valid repetitions exist for `protocol-scope` and `fixed` under both
 loops, `large-response` under both loops, and `protocol-scope-consumed-request`
-under uvloop. The [run analysis](../benchmarks/results/2026-10-11/h3-rfc-input-corrected-repeat-20261011-1.artifacts/README.md)
+under uvloop. The run analysis (`benchmarks/results/2026-10-11/h3-rfc-input-corrected-repeat-20261011-1.artifacts/README.md`)
 reports their same-repetition throughput, latency, server CPU, and RSS ratios.
 These are one local Mac run against Hypercorn, not a multi-system or repeated
 release performance result. The chunked-response and slow-reader workloads
 have no qualified pairs; H3 upload has no Hypercorn reference rows and no valid
-Rust timing rows. The [raw report](../benchmarks/results/2026-10-11/h3-rfc-input-corrected-repeat-20261011-1.json),
+Rust timing rows. The raw report (`benchmarks/results/2026-10-11/h3-rfc-input-corrected-repeat-20261011-1.json`),
 JSONL checkpoints, and runner log retain all results.
 
 Review of run #16's `443c5cc` client source found that it sent a one-byte body
@@ -754,10 +773,10 @@ The first four post-run host preflights rejected timing before starting another
 measurement. Unrelated CPU ranged 178.6–200.0%, 78.4–202.4%, 90.6–282.9%,
 and 171.9–199.7% of one core across their eight intervals. The first recorded
 `rustc` and `mediaanalysisd` above 25% in every interval; the third included
-sustained `mediaanalysisd` activity. See preflight [1](../benchmarks/results/2026-10-11/after-h3-rfc-host-preflight-20261011-1.json),
-[2](../benchmarks/results/2026-10-11/after-h3-rfc-host-preflight-20261011-2.json),
-[3](../benchmarks/results/2026-10-11/after-h3-rfc-host-preflight-20261011-3.json),
-and [4](../benchmarks/results/2026-10-11/after-h3-rfc-host-preflight-20261011-4.json).
+sustained `mediaanalysisd` activity. See preflight 1 (`benchmarks/results/2026-10-11/after-h3-rfc-host-preflight-20261011-1.json`),
+2 (`benchmarks/results/2026-10-11/after-h3-rfc-host-preflight-20261011-2.json`),
+3 (`benchmarks/results/2026-10-11/after-h3-rfc-host-preflight-20261011-3.json`),
+and 4 (`benchmarks/results/2026-10-11/after-h3-rfc-host-preflight-20261011-4.json`).
 No process was stopped and no benchmark measurement began during these
 preflights.
 

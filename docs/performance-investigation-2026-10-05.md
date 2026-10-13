@@ -1,5 +1,7 @@
 # October 5 performance investigation
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 A general end-to-end speed improvement over Uvicorn or Hypercorn is **not proven**.
 The frozen October 5 comparison qualifies one workload: WebSocket connection
 handshakes were 1.59× faster than stock Uvicorn across three valid matched
@@ -15,7 +17,7 @@ in a separate target-only diagnostic.
 
 Raw reports, rejected rows, logs, source/native identities, dependency records,
 and profiling evidence are in
-[`performance-investigation-2026-10-05`](../benchmarks/results/performance-investigation-2026-10-05/).
+`performance-investigation-2026-10-05` (`benchmarks/results/performance-investigation-2026-10-05/`).
 The current checkout includes a later HTTP/3 application-close correction.
 Its 460-case attribution gate, three full repeats, 221-case normal-wheel parity,
 and exclusion audit passed on October 6; those correctness results do not
@@ -25,10 +27,10 @@ the current source require qualifying paired runs.
 The shared-write normal build uses a borrowed scalar/vectored buffer enum to
 share write-error handling. Its source `81c239…`, native `8f69af…` and passing
 213-case public parity, formatting and Clippy receipts are frozen in
-[`current-normal`](../benchmarks/results/performance-investigation-2026-10-05/current-normal/).
+`current-normal` (`benchmarks/results/performance-investigation-2026-10-05/current-normal/`).
 The measured HTTP/3 task-reaping build has source `313fc3…` and native
 `b11f16…`; its normal build receipts are in
-[`current-normal-h3-reaping`](../benchmarks/results/performance-investigation-2026-10-05/current-normal-h3-reaping/).
+`current-normal-h3-reaping` (`benchmarks/results/performance-investigation-2026-10-05/current-normal-h3-reaping/`).
 The October 5 source `c7bd49…` adds a coverage-only failure after a completed H3
 response; its saved normal artifact is `0e13bb…`. The first expanded 450-case
 attempt passed individual attribution but failed full repeats and left two
@@ -38,12 +40,12 @@ and three complete 451-case repeats with zero failures, infrastructure errors
 or retries. LLVM reports 4,778/4,778 native regions and 3,371/3,371 lines covered.
 The matching unfiltered MCP check also passed with zero gap groups and
 `source: matches_receipt`, `tests: passed`. The
-[full archived proof](../benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/archive-manifest.json)
+full archived proof (`benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/archive-manifest.json`)
 binds that report to the fresh instrumented native `d2323f…`. The saved normal
 binary `0e13bb…` passed 214/214 public parity cases and all three coverage-seam
 exclusion cases. Its portable identity stayed exactly equal before parity,
 after parity, after the exclusion audit and after documentation updates. The
-[normal proof](../benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/normal-gates-receipt.json)
+normal proof (`benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/normal-gates-receipt.json`)
 retains the two earlier invalid identity attempts as well as the successful run.
 The earlier memory
 measurement applies to `b11f16…`, not to an unmeasured binary. Each proof applies
@@ -57,7 +59,7 @@ declared workload overrides. Every category retained the exact pre-parity
 source/native/app/client/dependency identity. The four complete categories
 passed all 138 response/lifecycle checks; H3 retained one Rust sample before
 the reference failed. The suite remains `incomplete_categories`.
-The [raw run and derived analysis](../benchmarks/results/performance-investigation-2026-10-05/final-normal-c7-categories/analysis.md)
+The raw run and derived analysis (`benchmarks/results/performance-investigation-2026-10-05/final-normal-c7-categories/analysis.md`)
 retain every exclusion, checkpoint, server log and exact gate.
 
 | Category | Completed rows / planned | Correctness failures | Individually valid timings | Qualified workload comparisons |
@@ -100,8 +102,8 @@ passed all six response/lifecycle samples. Five timings were host-invalid;
 one passed individually and no paired ratio qualifies. At concurrency sixteen,
 both first-repetition samples passed responses but were host-invalid. Rust's
 second repetition failed the diagnostic gate on the client's application-close
-code zero. Both [c4](../benchmarks/results/performance-investigation-2026-10-05/h3-consumed-c4/)
-and [c16](../benchmarks/results/performance-investigation-2026-10-05/h3-consumed-c16/)
+code zero. Both c4 (`benchmarks/results/performance-investigation-2026-10-05/h3-consumed-c4/`)
+and c16 (`benchmarks/results/performance-investigation-2026-10-05/h3-consumed-c16/`)
 attempts retain their original client identity and failures.
 
 The maintained benchmark client now closes with explicit `H3_NO_ERROR`
@@ -140,13 +142,13 @@ the failed reference warmup. The analyzer marks the suite `incomplete_categories
 Host CPU contention rejected 132 of the 139 completed timing rows. Deliberate
 exception timings also remain unrankable because diagnostic costs differ.
 All raw attempts, server logs, identities and the exact harness snapshot are in
-[`categories-error-logs`](../benchmarks/results/performance-investigation-2026-10-05/categories-error-logs/).
+`categories-error-logs` (`benchmarks/results/performance-investigation-2026-10-05/categories-error-logs/`).
 
 A separate HTTP/1 retry completed 30 correct samples across fixed responses,
 1 MiB responses, response chunks, 32-header scopes and context variables.
 Eleven timings passed individually. Matching valid repetitions were fixed
 `[2, 3]`, large response `[1, 3]`, and scope `[1]`; no workload reached the
-required three matches. Its [raw evidence](../benchmarks/results/performance-investigation-2026-10-05/http1-clean-retry/)
+required three matches. Its raw evidence (`benchmarks/results/performance-investigation-2026-10-05/http1-clean-retry/`)
 also yields no qualified performance ratio. Invalid rows remain preserved.
 
 ### Stock Hypercorn HTTP/3 failure
@@ -162,7 +164,7 @@ stream bookkeeping when that app completes; a later DATA/FIN event can then
 reach the unguarded stream lookup. This mechanism matches the captured stack;
 packet-level ordering was not instrumented. Both reference crashes remain
 correctness failures and cannot produce a Rust speed ratio. No reference source
-was patched. The retained [H3 diagnostics](../benchmarks/results/performance-investigation-2026-10-05/h3-diagnostics/)
+was patched. The retained H3 diagnostics (`benchmarks/results/performance-investigation-2026-10-05/h3-diagnostics/`)
 include the initial sandbox bind failure and both live replays.
 
 The expanded correctness matrix exposed a separate H3 interoperability issue:
@@ -175,7 +177,7 @@ timed out waiting for Hypercorn's first response headers. With GREASE disabled,
 both servers returned 128 identical responses and passed the peer-close case
 with clean shutdown. Only that declared client setting changed; reference
 source, deadlines, request bodies, headers and sequence length stayed fixed.
-The [replay receipts](../benchmarks/results/performance-investigation-2026-10-05/http3-grease-interop/ab-receipt.json)
+The replay receipts (`benchmarks/results/performance-investigation-2026-10-05/http3-grease-interop/ab-receipt.json`)
 support a GREASE-dependent request-end failure. They do not directly trace
 packet ordering or the reference parser's event dispatch. The public sequence
 now declares GREASE disabled; the enabled failure remains archived.
@@ -277,7 +279,7 @@ Completed work counts were not fixed, before runs preceded after runs, and
 RSS is sampled process memory. The result supports this task-retention repair
 on the local workload. No throughput, latency, CPU or cross-server speed ratio
 is qualified. Preserve that scope when using the
-[raw comparison and derived analysis](../benchmarks/results/performance-investigation-2026-10-05/h3-task-reaping/).
+raw comparison and derived analysis (`benchmarks/results/performance-investigation-2026-10-05/h3-task-reaping/`).
 
 ### The Python boundary causes thread handoffs
 
@@ -353,11 +355,11 @@ unrelated aggregate CPU at 281.0% (maximum 319.4%; this sample overlapped a
 transient compile), 272.2% (maximum 315.9%; `mediaanalysisd` averaged 66.9%
 of one core, with transient Python activity), and 106.6% (maximum 130.7%;
 `mediaanalysisd` averaged 75.2% of one core across all 12 samples). The complete reports are
-[preflight 1](../benchmarks/results/2026-10-08/benchmark-host-preflight-2026-10-07T215407Z.json)
+preflight 1 (`benchmarks/results/2026-10-08/benchmark-host-preflight-2026-10-07T215407Z.json`)
 and
-[preflight 2](../benchmarks/results/2026-10-08/benchmark-host-preflight-2026-10-07T215514Z.json),
+preflight 2 (`benchmarks/results/2026-10-08/benchmark-host-preflight-2026-10-07T215514Z.json`),
 and
-[preflight 3](../benchmarks/results/2026-10-08/benchmark-host-preflight-2026-10-07T223228Z.json)
+preflight 3 (`benchmarks/results/2026-10-08/benchmark-host-preflight-2026-10-07T223228Z.json`)
 (SHA-256
 `c460107cef9435edaa7173a0b345f855763eb6fc5e3a353124e3fa232a388503`). None
 contains benchmark rows. A valid matched run still requires a quiet local

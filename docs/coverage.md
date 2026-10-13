@@ -1,5 +1,7 @@
 # Black-box parity and Rust source coverage
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 ## Current unified coverage status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
@@ -292,7 +294,7 @@ timing on `http1.disconnect-before-first-asgi-receive`: Uvicorn returns
 `http.disconnect`, while uvicorn-rs returns `http.request` before
 `http.disconnect`. Both report the disconnect and serve the follow-up request.
 The exact clean local build passed 60 focused repetitions, which does not
-explain or erase the hosted failure. The [reproduction receipt](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md)
+explain or erase the hosted failure. The reproduction receipt (`benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md`)
 preserves the hosted row, local run identities, and the unresolved cause.
 
 ## Previous local gate (2026-10-09)
@@ -303,7 +305,7 @@ attribution and all three complete 494-case repeats passed with zero failures,
 infrastructure errors, retries, or cases not run. Native coverage is
 **5,298/5,298 regions and 3,753/3,753 lines (100%)**. Coverage-MCP measured the
 exact report with `source: matches_receipt`, `tests: passed`, and zero missing
-region and line observations. The [494-case evidence archive](../benchmarks/results/2026-10-09/asgi-unified-coverage-494/)
+region and line observations. The 494-case evidence archive (`benchmarks/results/2026-10-09/asgi-unified-coverage-494/`)
 keeps its summary, source/build identity, repeat outcomes, and normal-wheel
 parity result in Git. Its generated report, context, and Coverage-MCP payload
 remain local-only. The normal non-instrumented extension passed all **240/240**
@@ -419,7 +421,7 @@ passed its focused two-case pair five times and a 485-case attribution plus
 three-repeat gate with zero infrastructure failures. That local result does
 not disprove the hosted instability; neither hosted run reports a behavioral
 mismatch or establishes a target-server regression. See the
-[local isolation diagnostics](../benchmarks/results/2026-10-07/asgi-inventory-485/tls-websocket-isolation-diagnostics.json).
+local isolation diagnostics (`benchmarks/results/2026-10-07/asgi-inventory-485/tls-websocket-isolation-diagnostics.json`).
 
 Run [#32](https://github.com/appunni-m/uvicorn-rs/actions/runs/37657779165)
 on commit `500860e` completed with failure at 2026-10-07 17:46 UTC. Rust
@@ -582,7 +584,7 @@ performance result or a claim of complete official ASGI conformance.
 ## Historical full verification (494 cases; unified matrix)
 
 The historical compact archive is
-[`asgi-unified-coverage-494`](../benchmarks/results/2026-10-09/asgi-unified-coverage-494/).
+`asgi-unified-coverage-494` (`benchmarks/results/2026-10-09/asgi-unified-coverage-494/`).
 It records revision `f260d78c71e9266c2b3301ab3915f74de5511fc2` from a dirty
 working tree. `src/lib.rs` SHA-256 is
 `56cccea49215b2b96cf7028ec01804c7142b0f364f91bbd957b1114ab13b65fb`; the
@@ -620,7 +622,7 @@ conformance.
 ## Previous full verification (491 cases; EOF fault consumption asserted)
 
 The previous archive is
-[`asgi-eof-recheck-fault-consumption-491`](../benchmarks/results/2026-10-08/asgi-eof-recheck-fault-consumption-491/).
+`asgi-eof-recheck-fault-consumption-491` (`benchmarks/results/2026-10-08/asgi-eof-recheck-fault-consumption-491/`).
 It records the earlier 491-case report. The working tree was
 dirty at revision `1a72c9b3ab18e01389b1e19efbc76bf569e98730`; the unified report
 SHA-256 is `bc49875bbdbdc0486465de314101b5124a552476a650296871171e9fe79129e1`,
@@ -660,7 +662,7 @@ the later `a78b4a9` package-probe fix changes no `src/lib.rs` coverage source.
 ## Previous full verification (491 cases; before EOF fault-consumption assertion)
 
 The archive is
-[`asgi-coverage-region-fix-491`](../benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/).
+`asgi-coverage-region-fix-491` (`benchmarks/results/2026-10-07/asgi-coverage-region-fix-491/`).
 The tracked archive contains a summary, three full-matrix repeat results, a
 normal-build oracle result, and an evidence index. Its generated compressed
 report, context receipt, and Coverage-MCP page are local-only. The report
@@ -698,7 +700,7 @@ not used. The checkout was dirty, so this is not a clean hosted release result.
 ## Superseded full verification (491 cases; before receive-region fix)
 
 The prior archive is
-[`asgi-empty-subprotocol-491`](../benchmarks/results/2026-10-07/asgi-empty-subprotocol-491/).
+`asgi-empty-subprotocol-491` (`benchmarks/results/2026-10-07/asgi-empty-subprotocol-491/`).
 It remains the evidence for adding the empty WebSocket subprotocol parity case;
 its report passed 491-case attribution and three repeats with 5,123/5,123
 regions and 3,628/3,628 lines before the coverage-only HTTP receive diagnostic
@@ -708,7 +710,7 @@ run's region denominator.
 ## Superseded full verification (490 cases)
 
 The superseded acceptance archive is
-[`famh-concurrent-load-acceptance`](../benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/).
+`famh-concurrent-load-acceptance` (`benchmarks/results/2026-10-07/famh-concurrent-load-acceptance/`).
 It contains the compressed unified LLVM report and matching context receipt,
 the full Coverage-MCP structured response, three raw full-matrix repeat
 results, a normal-build 238-case oracle report, and the focused five-case
@@ -756,7 +758,7 @@ documented in the archive README and evidence index.
 ## Historical full verification (485 cases; earlier October 7 source)
 
 The earlier archive is
-[`asgi-inventory-485`](../benchmarks/results/2026-10-07/asgi-inventory-485/).
+`asgi-inventory-485` (`benchmarks/results/2026-10-07/asgi-inventory-485/`).
 Its tracked README and evidence index record run identity and results. The
 compressed LLVM report, context receipt, full Coverage-MCP response,
 structured receipt, generated log, compressed matrix bundle, and normal-build
@@ -798,7 +800,7 @@ native coverage claim. The source checkout was dirty. A separate preliminary
 profile-reuse timeout; it is retained under `preliminary-retry-tolerant/` and
 is not the clean result summarized above. The final no-retry runs isolate the
 TLS WebSocket close case at a fresh server boundary; the diagnostic record is
-[`tls-websocket-isolation-diagnostics.json`](../benchmarks/results/2026-10-07/asgi-inventory-485/tls-websocket-isolation-diagnostics.json).
+`tls-websocket-isolation-diagnostics.json` (`benchmarks/results/2026-10-07/asgi-inventory-485/tls-websocket-isolation-diagnostics.json`).
 
 The case inventory is a focused black-box map, not full ASGI conformance. The
 known cross-name response-header ordering deviation and unsupported extensions
@@ -808,7 +810,7 @@ inventory](asgi-case-inventory.md).
 ## Historical full verification (473 cases; October 6 source inventory)
 
 The fixed archive at
-[`request-body-pump-ownership-coverage-473`](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
+`request-body-pump-ownership-coverage-473` (`benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/`)
 retains a tracked summary and evidence index with artifact hashes, plus the
 normal-wheel parity result and normal exclusion receipt. The generated unified
 report, context sidecar, exact Coverage-MCP response, and audit bundle with
@@ -859,7 +861,7 @@ server log, and structured three-repeat receipt are in the same archive.
 ## Historical full verification (460 cases; earlier October 6 source)
 
 The fixed archive at
-[`http3-peer-close-coverage-460`](../benchmarks/results/2026-10-06/http3-peer-close-coverage-460/)
+`http3-peer-close-coverage-460` (`benchmarks/results/2026-10-06/http3-peer-close-coverage-460/`)
 retains a tracked summary and evidence index with artifact hashes, the
 normal-wheel parity result, and the normal exclusion receipt. The audit bundle
 with generated logs, unified report, context sidecar, and exact Coverage-MCP
@@ -900,7 +902,7 @@ Its status is `complete` and coverage gate is `passed`. The sibling
 `full-proof-receipt.json` one level above retains source/build identities,
 case observations, attribution artifacts, all three complete-repeat receipts
 and final-drain attribution. The fixed repository archive preserves the
-[full proof receipt](../benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/full-proof-receipt.json),
+full proof receipt (`benchmarks/results/performance-investigation-2026-10-05/http3-task-reaping-coverage/full-proof-receipt.json`),
 attribution/repeat results, and source snapshots. The generated lossless
 report, context sidecar, unfiltered MCP pages, attribution bundle, and logs are
 local-only. Its source/input fingerprint is
@@ -946,10 +948,10 @@ committed release baseline.
 The accepted final attempt is
 `build/asgi-coverage/normal-gates-held-response-451-2026-10-05-attempt-3/`.
 The fixed repository archive preserves the
-[normal-gate receipt](../benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/normal-gates-receipt.json),
-[public parity result](../benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/public-parity-result.json),
-[exclusion audit](../benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/receipt.json)
-and [identity captured before public parity](../benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/benchmark-identity-before-public-parity.json).
+normal-gate receipt (`benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/normal-gates-receipt.json`),
+public parity result (`benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/public-parity-result.json`),
+exclusion audit (`benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/receipt.json`)
+and identity captured before public parity (`benchmarks/results/performance-investigation-2026-10-05/current-normal-http3-task-reaping-final/benchmark-identity-before-public-parity.json`).
 Its restored native SHA-256 is
 `0e13bb6d56cbccd53b2f34197358563d7fbaa04ad7cac69f359fd1a60d93d19d`,
 on the unchanged Rust source above. The portable maintained identity was
@@ -1052,7 +1054,7 @@ is not a clean committed release baseline.
 The authoritative local report is
 `build/asgi-coverage/unified-shared-write-clean-close-448-2026-10-05/coverage-report.json`.
 Its status is `complete` and coverage gate is `passed`. The repository
-[evidence archive](../benchmarks/results/performance-investigation-2026-10-05/current-coverage/archive-manifest.json)
+evidence archive (`benchmarks/results/performance-investigation-2026-10-05/current-coverage/archive-manifest.json`)
 preserves source/input snapshots and all three full-repeat receipts. The
 lossless report, unfiltered MCP receipt, repeat logs, native binaries, and raw
 profiles remain at their original local paths and are not committed.
@@ -1084,10 +1086,10 @@ Raw attribution and repeat artifacts are under
 
 That verification restored the workspace extension to its normal native with SHA-256
 `8f69afda0be9d121d304c674d5638f470da6939fbed58ce809457284df6585b6`.
-Its [public parity receipt](../benchmarks/results/performance-investigation-2026-10-05/current-normal/public-parity.json)
+Its public parity receipt (`benchmarks/results/performance-investigation-2026-10-05/current-normal/public-parity.json`)
 records 213/213 passes with zero failures, infrastructure errors or cases not
 run. Formatting, Clippy and build logs are preserved beside that receipt.
-The independent [normal exclusion audit](../benchmarks/results/performance-investigation-2026-10-05/current-coverage/normal-exclusion/receipt.json)
+The independent normal exclusion audit (`benchmarks/results/performance-investigation-2026-10-05/current-coverage/normal-exclusion/receipt.json`)
 passes every check and its exact three selected cases: one ordinary HTTP
 oracle comparison and both public header-capacity contracts. Registered fault
 points, control/diagnostic literals and LLVM instrumentation are absent; an
@@ -1103,7 +1105,7 @@ The previous generic-write-helper report at
 records 448 passing attribution cases and three complete passing repeats.
 Its aggregate summary is 4,758/4,758 regions and 3,358/3,358 lines, but MCP
 reports one function group with **seven missing observations**. It is retained
-as [incomplete zero-gap evidence](../benchmarks/results/performance-investigation-2026-10-05/current-coverage/previous-generic-helper/evidence-status.json).
+as incomplete zero-gap evidence (`benchmarks/results/performance-investigation-2026-10-05/current-coverage/previous-generic-helper/evidence-status.json`).
 The report's generated aggregate gate says `passed`; that does not waive the
 unfiltered MCP function gap.
 
@@ -1798,7 +1800,7 @@ fingerprint and instrumented binary (`c319ee0a…`); profiles were not combined
 with prior measurements. The actual installed macOS wheel (`76672335…`)
 separately passes 214 public comparisons and all 16 normal-exclusion gates with
 three selected live cases. These are dirty-checkout preparation receipts, not
-evidence of successful hosted CI on a release commit. The [release preparation
-archive](../benchmarks/results/release-preparation-2026-10-05/README.md) retains
+evidence of successful hosted CI on a release commit. The release preparation
+archive (`benchmarks/results/release-preparation-2026-10-05/README.md`) retains
 tracked release receipts and source snapshots. Generated coverage reports,
 per-case logs and profiles remain local-only.

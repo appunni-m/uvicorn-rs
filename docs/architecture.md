@@ -1,5 +1,7 @@
 # Architecture and buffer ownership
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 This document describes the current PyO3/ASGI implementation distributed as
 `uvicorn-rs-py`. The separate `uvicorn-rs` crate is Python-free and is not yet
 used by this Python server path; the adapter still carries its earlier network
@@ -17,7 +19,7 @@ current dirty source passed attribution and three full repeats with
 `src/lib.rs` hash, but not a clean hosted release or the separate native crate.
 No normal-build parity run was included. See the
 [coverage evidence](coverage.md#latest-local-evidence-2026-10-12) and the
-[current candidate-wheel smoke](../benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
+current candidate-wheel smoke (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 Older 506-, 494-, 485-, 451-, and 448-case results below are historical and do not
 attest the current checkout.
 

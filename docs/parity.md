@@ -1,5 +1,7 @@
 # ASGI server parity suite
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 The latest local source matrix is dated 2026-10-12. It passed all 511 indexed
 cases in attribution and in each of three complete repeats: 243 live oracle
 comparisons plus 268 target-only contracts, with zero failures or transient
@@ -154,7 +156,7 @@ the three complete matrix repeats receives 128/128 target responses matching
 the oracle. The instrumented per-case run records
 `request-body pumps joined: 128` at shutdown, so the same-connection workload
 also has an explicit completed-pump count in the retained
-[evidence receipt](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/http3-sequential-pump-repeats.json).
+evidence receipt (`benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/http3-sequential-pump-repeats.json`).
 
 Target-only synchronized contracts drive deterministic body errors, canceled
 and completed `JoinSet` reaping, early-response drain termination, and graceful
@@ -166,7 +168,7 @@ the same unified matrix; they are not oracle-parity cases. The earlier
 506-case source passed attribution and all three repeats with 5,532/5,532
 regions and 3,971/3,971 lines covered. That record is historical; the current
 511-case source receipt is linked above. The normal build for the recorded
-506-case source separately passed all 243 public oracle cases. The fixed [coverage archive](../benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/)
+506-case source separately passed all 243 public oracle cases. The fixed coverage archive (`benchmarks/results/2026-10-06/request-body-pump-ownership-coverage-473/`)
 retains the earlier evidence and its Coverage-MCP receipt.
 
 ## Concurrent load and zero-grace shutdown workflows

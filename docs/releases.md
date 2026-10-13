@@ -1,5 +1,7 @@
 # Release candidates
 
+> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+
 The project prepares wheel and source **candidates** from a reviewed commit.
 `Cargo.toml` keeps `publish = false`; the workflows upload GitHub Actions
 artifacts and do not publish to crates.io or PyPI, create a GitHub Release,
@@ -87,7 +89,7 @@ observed Linux jobs passed parity and entered category measurements. The
 hosted artifact shows Uvicorn returned `http.disconnect` and uvicorn-rs returned
 `http.request` followed by `http.disconnect`; the cause remains unconfirmed.
 A clean local wheel from the same commit passed the case 60/60 times. See the
-[reproduction receipt](../benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md).
+reproduction receipt (`benchmarks/results/2026-10-10/ci13-disconnect-exact72-repro/README.md`).
 At the time of that historical run, the checkout was dirty; no release
 candidate was assembled from it.
 
@@ -97,7 +99,7 @@ The latest local ASGI coverage receipt records 5,561/5,561 regions and
 repeats and no Coverage-MCP gaps. It does not provide hosted or clean-commit
 release evidence, and no normal-build parity run was included. A 2026-10-12
 `uvicorn-rs-py` candidate wheel passed a narrower local consumer smoke, recorded
-in the [wheel receipt](../benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
+in the wheel receipt (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 The stock FastAPI matrix also includes correctness-gated multi-protocol
 measurements. These results do not come from a clean exact-main candidate with
 successful hosted gates. No tag or release was created. See
@@ -199,7 +201,7 @@ and Maturin 1.14.1. Its exact-wheel consumer passed, and
 `release_evidence.py record --allow-dirty` validated package metadata, RECORD,
 licenses, and native architecture. The wheel, consumer receipt, and
 local-preparation manifest are in the
-[macOS reproduction archive](../benchmarks/results/2026-10-08/macos-arm64-run35-local-reproduction/).
+macOS reproduction archive (`benchmarks/results/2026-10-08/macos-arm64-run35-local-reproduction/`).
 That manifest is explicitly `local preparation` with `source_dirty: true` and
 does not establish a release candidate.
 
@@ -209,7 +211,7 @@ public parity/deployment job, including both framework comparisons and the
 transient systemd stop. Its independent unified coverage job failed with exit
 code 1, and the package candidate jobs were skipped because they depend on
 coverage. The artifact and exact job status are recorded in the
-[framework/deployment evidence index](../benchmarks/results/framework-integration-2026-10-07/evidence-index.json);
+framework/deployment evidence index (`benchmarks/results/framework-integration-2026-10-07/evidence-index.json`);
 the failure cause remains unresolved. No hosted release-candidate bundle, tag,
 or public release is complete. The benchmark's separately frozen binaries and
 results are identified in [the investigation](performance-investigation-2026-10-05.md).
