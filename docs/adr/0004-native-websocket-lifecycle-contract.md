@@ -1,6 +1,6 @@
 # ADR 0004: Rust-native WebSocket and application lifecycle contract
 
-- **Status:** Proposed; the lifecycle API is an unpublished prototype, and no shared API is stabilized by this record
+- **Status:** Partially implemented; native HTTP/1.1 WebSocket transport is provisional, while the shared framework contract and lifecycle integration remain proposed
 - **Date:** 2026-10-12
 - **Related work:** Kata `wb4y`, `sw8s`, Starlette-RS `wkz8`, FastAPI-RS `s08y`
 
@@ -12,7 +12,12 @@ request/response streams, but it does not define a bidirectional WebSocket
 session or application startup and shutdown.
 
 The current `uvicorn-rs` crate serves HTTP/1.1, HTTP/2, and HTTP/3 Tower
-services. It does not implement WebSocket transport. A new
+services and now provides a provisional RFC 6455 WebSocket handshake/session
+API for HTTP/1.1. Four selected native inputs pass text/binary echo, Ping/Pong,
+close exchange, shutdown close, malformed key rejection, and unoffered
+subprotocol rejection. This selected evidence is not a full WebSocket
+conformance result. The API currently depends on the server's HTTP/1.1 upgrade
+capability and is not a framework-neutral shared contract. A new
 `native-app-contract` crate prototypes runtime-neutral application
 startup/shutdown hooks, consumed optionally by the core's TCP/TLS and HTTP/3
 entry points.
@@ -136,16 +141,15 @@ application may also depend on both directly. Python extras install the
 The shared application contract is protocol-neutral; each transport adapter
 must pass its own live cases before that combination is listed as supported.
 
-The following table is a planned implementation contract, not a support
-claim. The current native server prototype has no WebSocket transport. Each
-protocol row must pass its live cases and applicable RFC requirements before
-that combination is listed as supported.
+The following table describes implementation status, not a full support
+claim. Each protocol row must pass its live cases and applicable RFC
+requirements before that combination is listed as generally supported.
 
-| Transport | Planned handshake owner (not implemented) | Required live cases before support is claimed |
+| Transport | Current prototype | Required live cases before general support is claimed |
 |---|---|---|
-| HTTP/1.1, cleartext and TLS | Uvicorn-RS transport implements RFC 6455 Upgrade | accept, denial, invalid handshake, subprotocol/header selection, text/binary exchange, close code/reason, abrupt disconnect, bounded slow consumer, shutdown |
-| HTTP/2, TLS | Uvicorn-RS transport implements RFC 8441 Extended CONNECT | negotiated enablement, accept/denial, stream reset, sibling-stream health, frame exchange, bounded send, shutdown |
-| HTTP/3, QUIC/TLS | Uvicorn-RS transport implements RFC 9220 Extended CONNECT | enablement, accept/denial, request-stream reset, sibling-stream health, frame exchange, bounded send, graceful drain |
+| HTTP/1.1, cleartext and TLS | Provisional native `WebSocketUpgrade` and `WebSocketSession` API; selected cleartext cases pass 4/4. TLS is not yet measured for the native API. | accept/denial, full invalid-handshake inventory, subprotocol/header selection, text/binary exchange, close code/reason, abrupt disconnect, bounded slow consumer, shutdown, TLS |
+| HTTP/2, TLS | Not implemented | RFC 8441 negotiation, accept/denial, stream reset, sibling-stream health, frame exchange, bounded send, shutdown |
+| HTTP/3, QUIC/TLS | Not implemented | RFC 9220 negotiation, accept/denial, request-stream reset, sibling-stream health, frame exchange, bounded send, graceful drain |
 
 Lifecycle inputs must cover startup ordering, startup failure, state visibility
 to a request, shutdown after a drained request/session, cancellation at the
@@ -189,12 +193,14 @@ contract above:
   successful `101` handoff/drain, session-handler error reporting, registration
   without an available upgrade, and registration after connection close. This
   generic upgrade lifecycle evidence is not WebSocket handshake, framing,
-  protocol conformance, or aggregate coverage evidence. HTTP/1 WebSocket
-  support remains unimplemented.
+  protocol conformance, or aggregate coverage evidence. A provisional
+  HTTP/1.1 `WebSocketUpgrade`/`WebSocketSession` API has since been added and
+  its four selected handshake/session inputs pass; see the support matrix and
+  coverage record for the exact scope and limitations.
 
 The generic H2 request/connection lifetime signal and its sibling-isolation
-case are implemented. The native core now has selected generic HTTP/1
-upgrade-session lifecycle cases, but no WebSocket protocol API or ASGI mapping.
+case are implemented. The native core now has a transport-specific HTTP/1.1
+WebSocket API, but no shared framework contract or ASGI mapping.
 ASGI task semantics and independent H3 idle-reset notification remain
 feasibility gates, not support claims. Do not route Python ASGI traffic through
 the native transport until pending-receive disconnect, response-after-EOF,

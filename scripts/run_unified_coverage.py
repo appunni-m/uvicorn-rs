@@ -50,6 +50,7 @@ PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
     "crates/uvicorn-rs/src/lib.rs",
     "crates/uvicorn-rs/src/http3.rs",
+    "crates/uvicorn-rs/src/websocket.rs",
     "crates/native-app-contract/src/lib.rs",
 )
 EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]

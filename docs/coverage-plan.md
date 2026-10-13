@@ -3,7 +3,7 @@
 ## Current acceptance status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests define 511 ASGI
-parity/fault-contract cases and 88 Python-free native cases (599 total).
+parity/fault-contract cases and 92 Python-free native cases (603 total).
 Acceptance requires three complete repeats of both matrices, 100% region and
 line coverage, and zero-gap results from fully paginated Coverage-MCP queries
 bound to the exact report bytes.
@@ -30,7 +30,7 @@ attribution. Its source SHA-256 is
 report's uncovered-region list has no `ConnectionUpgrade` function symbols,
 while a matching-source Coverage-MCP query returns five groups for that API;
 resolve this discrepancy before claiming zero gaps. These selected reports do
-not establish coverage for the current 599-case manifest. The current-source
+not establish coverage for the current 603-case manifest. The current-source
 full matrix, three repeats, 100% regions and lines, and final zero-gap
 Coverage-MCP receipt remain open.
 
@@ -47,8 +47,16 @@ the body returns `Pending` and polls data again on the next call. The empty-body
 input separately verifies the public request-body EOF and size-hint behavior.
 The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
-The full 599-case aggregate, three repeats, and zero-gap acceptance remain
+The full 603-case aggregate, three repeats, and zero-gap acceptance remain
 outstanding.
+
+The four native HTTP/1.1 WebSocket inputs passed in one selected unified run
+at `target/asgi-coverage/2026-10-13-native-websocket-h1-final/coverage-report.json`.
+They cover handshake validation and subprotocol selection, text/binary and
+Ping/Pong exchange, peer-close reply flushing, and the server-initiated close
+handshake during shutdown. The report has complete attribution and no retries
+or infrastructure failures, but is not aggregate coverage evidence. HTTP/2
+and HTTP/3 WebSockets, TLS WebSockets, and the Python ASGI mapping remain open.
 
 The latest selected report is
 `target/asgi-coverage/current-http1-graceful-timeout-consolidated/coverage-report.json`.

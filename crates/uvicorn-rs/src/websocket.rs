@@ -1,0 +1,458 @@
+//! HTTP/1.1 WebSocket handshake and session support.
+//!
+//! The server owns the upgraded session until it finishes or the configured
+//! connection-drain deadline expires. This module provides an initial RFC 6455
+//! handshake and framed session over HTTP/1.1. It does not implement WebSockets
+//! over HTTP/2 or HTTP/3, or negotiate WebSocket extensions.
+
+use std::{error::Error, fmt, future::Future};
+
+use data_encoding::BASE64;
+use futures_util::{SinkExt, StreamExt};
+use http::{
+    header::{
+        CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY,
+        SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION, UPGRADE,
+    },
+    HeaderMap, HeaderName, HeaderValue, Request, Response, StatusCode,
+};
+use hyper::upgrade::{self, OnUpgrade};
+use hyper_util::rt::TokioIo;
+use tokio_tungstenite::{
+    tungstenite::{handshake::derive_accept_key, protocol::Role, Error as TungsteniteError},
+    WebSocketStream,
+};
+
+use crate::{ConnectionUpgrade, ConnectionUpgradeClosed};
+
+/// WebSocket messages, close frames, and close-code values used by a session.
+pub use tokio_tungstenite::tungstenite::protocol::{
+    frame::coding::CloseCode as WebSocketCloseCode, CloseFrame as WebSocketCloseFrame,
+    Message as WebSocketMessage,
+};
+
+/// A validated HTTP/1.1 WebSocket upgrade request.
+///
+/// Create this value from a mutable request, optionally select one of the
+/// client's offered subprotocols or add response headers, and call
+/// [`accept`](Self::accept) to register the session before returning its
+/// response. The returned response has status 101 and the correct RFC 6455
+/// handshake headers.
+pub struct WebSocketUpgrade {
+    on_upgrade: OnUpgrade,
+    connection_upgrade: ConnectionUpgrade,
+    accept_key: HeaderValue,
+    offered_subprotocols: Vec<Vec<u8>>,
+    selected_subprotocol: Option<HeaderValue>,
+    response_headers: HeaderMap,
+}
+
+impl WebSocketUpgrade {
+    /// Validates an RFC 6455 HTTP/1.1 request and obtains its upgrade handle.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WebSocketUpgradeError::UnsupportedTransport`] for requests
+    /// outside HTTP/1.1 or without the native HTTP/1 upgrade capability. It
+    /// returns [`WebSocketUpgradeError::InvalidHandshake`] for malformed or
+    /// incomplete handshake headers.
+    pub fn from_request<B>(request: &mut Request<B>) -> Result<Self, WebSocketUpgradeError> {
+        if request.version() != http::Version::HTTP_11 {
+            return Err(WebSocketUpgradeError::UnsupportedTransport);
+        }
+        if request.method() != http::Method::GET {
+            return Err(WebSocketUpgradeError::InvalidHandshake(
+                "the request method must be GET",
+            ));
+        }
+
+        let connection_upgrade = request
+            .extensions()
+            .get::<ConnectionUpgrade>()
+            .cloned()
+            .ok_or(WebSocketUpgradeError::UnsupportedTransport)?;
+
+        if !has_header_token(request.headers(), &CONNECTION, b"upgrade")
+            || !has_header_token(request.headers(), &UPGRADE, b"websocket")
+        {
+            return Err(WebSocketUpgradeError::InvalidHandshake(
+                "Connection and Upgrade must negotiate websocket",
+            ));
+        }
+
+        let version = single_header(
+            request.headers(),
+            &SEC_WEBSOCKET_VERSION,
+            "Sec-WebSocket-Version",
+        )?;
+        if version.as_bytes() != b"13" {
+            return Err(WebSocketUpgradeError::InvalidHandshake(
+                "Sec-WebSocket-Version must be 13",
+            ));
+        }
+
+        let key = single_header(request.headers(), &SEC_WEBSOCKET_KEY, "Sec-WebSocket-Key")?;
+        let decoded_key = BASE64.decode(key.as_bytes()).map_err(|_| {
+            WebSocketUpgradeError::InvalidHandshake("Sec-WebSocket-Key must be valid base64")
+        })?;
+        if decoded_key.len() != 16 {
+            return Err(WebSocketUpgradeError::InvalidHandshake(
+                "Sec-WebSocket-Key must decode to 16 bytes",
+            ));
+        }
+        let accept_key =
+            HeaderValue::from_str(&derive_accept_key(key.as_bytes())).map_err(|_| {
+                WebSocketUpgradeError::InvalidHandshake("the derived accept key is invalid")
+            })?;
+
+        let offered_subprotocols = parse_subprotocols(request.headers())?;
+        let on_upgrade = upgrade::on(request);
+
+        Ok(Self {
+            on_upgrade,
+            connection_upgrade,
+            accept_key,
+            offered_subprotocols,
+            selected_subprotocol: None,
+            response_headers: HeaderMap::new(),
+        })
+    }
+
+    /// Selects a protocol offered by the client.
+    ///
+    /// Subprotocol matching is case-sensitive. Calling this method with a
+    /// value the client did not offer is rejected before the handshake is
+    /// committed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WebSocketUpgradeError::InvalidSubprotocol`] for a value that
+    /// is not an HTTP token or was not offered by the client. Returns
+    /// [`WebSocketUpgradeError::SubprotocolAlreadySelected`] if one was
+    /// selected earlier.
+    pub fn with_subprotocol(mut self, protocol: &str) -> Result<Self, WebSocketUpgradeError> {
+        if self.selected_subprotocol.is_some() {
+            return Err(WebSocketUpgradeError::SubprotocolAlreadySelected);
+        }
+        if !is_http_token(protocol.as_bytes())
+            || !self
+                .offered_subprotocols
+                .iter()
+                .any(|offered| offered.as_slice() == protocol.as_bytes())
+        {
+            return Err(WebSocketUpgradeError::InvalidSubprotocol);
+        }
+        self.selected_subprotocol = Some(
+            HeaderValue::from_str(protocol)
+                .map_err(|_| WebSocketUpgradeError::InvalidSubprotocol)?,
+        );
+        Ok(self)
+    }
+
+    /// Adds an application response header to the accepted handshake.
+    ///
+    /// The connection, upgrade, accept, extension, and subprotocol headers
+    /// are managed by this type and cannot be overridden. Header capacity
+    /// errors are returned instead of panicking.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WebSocketUpgradeError::ReservedResponseHeader`] for a
+    /// protocol-managed header and [`WebSocketUpgradeError::HeaderCapacity`]
+    /// if the finite HTTP header map cannot accept another value.
+    pub fn with_header(
+        mut self,
+        name: HeaderName,
+        value: HeaderValue,
+    ) -> Result<Self, WebSocketUpgradeError> {
+        if is_reserved_handshake_header(&name) {
+            return Err(WebSocketUpgradeError::ReservedResponseHeader);
+        }
+        self.response_headers
+            .try_append(name, value)
+            .map_err(|_| WebSocketUpgradeError::HeaderCapacity)?;
+        Ok(self)
+    }
+
+    /// Accepts the request, registers the session, and returns the 101 response.
+    ///
+    /// `handler` owns the session for its lifetime. It can receive and send
+    /// framed messages, wait for server shutdown, or return to close the
+    /// upgraded transport. Handler errors are reported by the configured
+    /// server error observer.
+    ///
+    /// The body type is supplied by the application so an upgrade response
+    /// fits the same body type as its ordinary HTTP responses.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WebSocketUpgradeError::ConnectionClosed`] if the connection
+    /// no longer accepts upgrade sessions, or
+    /// [`WebSocketUpgradeError::HeaderCapacity`] if the final response header
+    /// map cannot represent the selected handshake headers.
+    pub fn accept<B, F, Fut, E>(
+        self,
+        body: B,
+        handler: F,
+    ) -> Result<Response<B>, WebSocketUpgradeError>
+    where
+        F: FnOnce(WebSocketSession) -> Fut + Send + 'static,
+        Fut: Future<Output = Result<(), E>> + Send + 'static,
+        E: Error + Send + Sync + 'static,
+    {
+        let Self {
+            on_upgrade,
+            connection_upgrade,
+            accept_key,
+            selected_subprotocol,
+            response_headers,
+            offered_subprotocols: _,
+        } = self;
+
+        let mut response = Response::new(body);
+        *response.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
+        let headers = response.headers_mut();
+        headers.insert(CONNECTION, HeaderValue::from_static("upgrade"));
+        headers.insert(UPGRADE, HeaderValue::from_static("websocket"));
+        headers.insert(SEC_WEBSOCKET_ACCEPT, accept_key);
+        if let Some(protocol) = selected_subprotocol {
+            headers.insert(SEC_WEBSOCKET_PROTOCOL, protocol);
+        }
+        for (name, value) in &response_headers {
+            headers
+                .try_append(name.clone(), value.clone())
+                .map_err(|_| WebSocketUpgradeError::HeaderCapacity)?;
+        }
+
+        let session_shutdown = connection_upgrade.clone();
+        connection_upgrade
+            .register(on_upgrade, move |stream| async move {
+                let websocket = WebSocketStream::from_raw_socket(stream, Role::Server, None).await;
+                handler(WebSocketSession {
+                    stream: websocket,
+                    connection_upgrade: session_shutdown,
+                })
+                .await
+            })
+            .map_err(|ConnectionUpgradeClosed| WebSocketUpgradeError::ConnectionClosed)?;
+        Ok(response)
+    }
+}
+
+/// A framed WebSocket session owned by the native HTTP/1.1 connection.
+pub struct WebSocketSession {
+    stream: WebSocketStream<TokioIo<hyper::upgrade::Upgraded>>,
+    connection_upgrade: ConnectionUpgrade,
+}
+
+impl WebSocketSession {
+    /// Receives the next WebSocket message, including a peer close frame, or
+    /// returns `None` when the underlying stream ends. On a peer close, it
+    /// flushes the protocol close reply before returning the frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WebSocketError`] for malformed frames or transport failure.
+    pub async fn receive(&mut self) -> Result<Option<WebSocketMessage>, WebSocketError> {
+        let message = self
+            .stream
+            .next()
+            .await
+            .transpose()
+            .map_err(WebSocketError)?;
+        if matches!(message, Some(WebSocketMessage::Close(_))) {
+            // Tungstenite queues the close reply while reading the peer's
+            // close frame. A handler may return immediately after receiving
+            // that frame, so flush the queued reply before the upgraded
+            // transport can be dropped.
+            self.stream.flush().await.map_err(WebSocketError)?;
+        }
+        Ok(message)
+    }
+
+    /// Sends a WebSocket data or control message with transport backpressure.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WebSocketError`] if the peer has closed or the transport
+    /// fails while writing the frame.
+    pub async fn send(&mut self, message: WebSocketMessage) -> Result<(), WebSocketError> {
+        self.stream.send(message).await.map_err(WebSocketError)
+    }
+
+    /// Sends a WebSocket close frame and flushes queued frames.
+    ///
+    /// Pass `None` to send an empty close frame or provide a close code and
+    /// reason in a [`WebSocketCloseFrame`].
+    ///
+    /// To complete a server-initiated close handshake, continue receiving
+    /// until the peer's close frame arrives.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WebSocketError`] if the close frame cannot be written.
+    pub async fn close(
+        &mut self,
+        frame: Option<WebSocketCloseFrame>,
+    ) -> Result<(), WebSocketError> {
+        self.stream.close(frame).await.map_err(WebSocketError)
+    }
+
+    /// Waits until the server starts graceful shutdown for this connection.
+    pub async fn wait_for_shutdown(&mut self) {
+        self.connection_upgrade.wait_for_shutdown().await;
+    }
+}
+
+/// An error while validating a WebSocket handshake or registering its session.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WebSocketUpgradeError {
+    /// The request is not an HTTP/1.1 request with a native upgrade capability.
+    UnsupportedTransport,
+    /// The request does not satisfy the RFC 6455 handshake requirements.
+    InvalidHandshake(&'static str),
+    /// The selected subprotocol is invalid or was not offered by the client.
+    InvalidSubprotocol,
+    /// A subprotocol was selected more than once.
+    SubprotocolAlreadySelected,
+    /// The application attempted to replace a protocol-managed response header.
+    ReservedResponseHeader,
+    /// The HTTP header map reached its finite capacity.
+    HeaderCapacity,
+    /// The HTTP connection ended before the session could be registered.
+    ConnectionClosed,
+}
+
+impl fmt::Display for WebSocketUpgradeError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnsupportedTransport => {
+                formatter.write_str("WebSocket Upgrade is supported only on HTTP/1.1")
+            }
+            Self::InvalidHandshake(reason) => {
+                write!(formatter, "invalid WebSocket handshake: {reason}")
+            }
+            Self::InvalidSubprotocol => {
+                formatter.write_str("WebSocket subprotocol was invalid or not offered")
+            }
+            Self::SubprotocolAlreadySelected => {
+                formatter.write_str("WebSocket subprotocol was already selected")
+            }
+            Self::ReservedResponseHeader => {
+                formatter.write_str("WebSocket response header is managed by the handshake")
+            }
+            Self::HeaderCapacity => {
+                formatter.write_str("WebSocket response header capacity exceeded")
+            }
+            Self::ConnectionClosed => {
+                formatter.write_str("HTTP connection ended before upgrade registration")
+            }
+        }
+    }
+}
+
+impl Error for WebSocketUpgradeError {}
+
+/// A WebSocket framing or transport error.
+#[derive(Debug)]
+pub struct WebSocketError(TungsteniteError);
+
+impl fmt::Display for WebSocketError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "WebSocket session failed: {}", self.0)
+    }
+}
+
+impl Error for WebSocketError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+fn single_header<'a>(
+    headers: &'a HeaderMap,
+    name: &HeaderName,
+    display_name: &'static str,
+) -> Result<&'a HeaderValue, WebSocketUpgradeError> {
+    let mut values = headers.get_all(name).iter();
+    let Some(value) = values.next() else {
+        return Err(WebSocketUpgradeError::InvalidHandshake(display_name));
+    };
+    if values.next().is_some() {
+        return Err(WebSocketUpgradeError::InvalidHandshake(
+            "a required handshake header occurred more than once",
+        ));
+    }
+    Ok(value)
+}
+
+fn has_header_token(headers: &HeaderMap, name: &HeaderName, expected: &[u8]) -> bool {
+    headers.get_all(name).iter().any(|value| {
+        value
+            .as_bytes()
+            .split(|byte| *byte == b',')
+            .map(trim_ascii_whitespace)
+            .any(|token| token.eq_ignore_ascii_case(expected))
+    })
+}
+
+fn parse_subprotocols(headers: &HeaderMap) -> Result<Vec<Vec<u8>>, WebSocketUpgradeError> {
+    let mut offered = Vec::new();
+    for value in headers.get_all(&SEC_WEBSOCKET_PROTOCOL).iter() {
+        for protocol in value
+            .as_bytes()
+            .split(|byte| *byte == b',')
+            .map(trim_ascii_whitespace)
+        {
+            if !is_http_token(protocol) {
+                return Err(WebSocketUpgradeError::InvalidHandshake(
+                    "Sec-WebSocket-Protocol must contain non-empty tokens",
+                ));
+            }
+            offered.push(protocol.to_vec());
+        }
+    }
+    Ok(offered)
+}
+
+fn trim_ascii_whitespace(mut value: &[u8]) -> &[u8] {
+    while value.first().is_some_and(u8::is_ascii_whitespace) {
+        value = &value[1..];
+    }
+    while value.last().is_some_and(u8::is_ascii_whitespace) {
+        value = &value[..value.len() - 1];
+    }
+    value
+}
+
+fn is_http_token(value: &[u8]) -> bool {
+    !value.is_empty()
+        && value.iter().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(
+                    byte,
+                    b'!' | b'#'
+                        | b'$'
+                        | b'%'
+                        | b'&'
+                        | b'\''
+                        | b'*'
+                        | b'+'
+                        | b'-'
+                        | b'.'
+                        | b'^'
+                        | b'_'
+                        | b'`'
+                        | b'|'
+                        | b'~'
+                )
+        })
+}
+
+fn is_reserved_handshake_header(name: &HeaderName) -> bool {
+    name == CONNECTION
+        || name == UPGRADE
+        || name == SEC_WEBSOCKET_ACCEPT
+        || name == SEC_WEBSOCKET_EXTENSIONS
+        || name == SEC_WEBSOCKET_PROTOCOL
+}

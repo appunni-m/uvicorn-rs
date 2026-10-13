@@ -15,8 +15,11 @@
 //! native framework hook, not an implementation of the ASGI lifespan message
 //! protocol. HTTP/1.1 applications can register upgraded-session futures so
 //! the server keeps them in its connection drain and cancellation policy. The
-//! application still owns the upgrade handshake and wire protocol; this crate
-//! does not implement WebSocket semantics or integrate the Python ASGI adapter.
+//! crate also exposes an initial RFC 6455 [`WebSocketUpgrade`] and
+//! [`WebSocketSession`] API for native HTTP/1.1 services. This
+//! transport-specific API is not yet a shared framework contract; WebSockets
+//! over HTTP/2 or HTTP/3 and integration with the Python ASGI adapter are not
+//! implemented.
 //!
 //! Each request receives [`ConnectionInfo`], [`ConnectionLifetime`], and
 //! [`RequestLifetime`] values in its [`http::Extensions`]. The connection
@@ -75,8 +78,13 @@ use tower_service::Service;
 type BoxBodyError = Box<dyn Error + Send + Sync + 'static>;
 
 mod http3;
+mod websocket;
 
 pub use http3::{serve_http3, Http3RequestBody};
+pub use websocket::{
+    WebSocketCloseCode, WebSocketCloseFrame, WebSocketError, WebSocketMessage, WebSocketSession,
+    WebSocketUpgrade, WebSocketUpgradeError,
+};
 
 /// An observer for errors handled by the Rust server boundary.
 ///

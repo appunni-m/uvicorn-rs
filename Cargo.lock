@@ -1098,6 +1098,7 @@ name = "uvicorn-rs"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "data-encoding",
  "futures-util",
  "h2",
  "h3",
@@ -1114,6 +1115,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-rustls",
+ "tokio-tungstenite",
  "tower-service",
  "tracing",
 ]

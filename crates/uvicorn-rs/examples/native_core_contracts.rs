@@ -18,7 +18,7 @@ use std::{
 };
 
 use bytes::{Buf, Bytes};
-use futures_util::stream;
+use futures_util::{stream, SinkExt, StreamExt};
 use h3::error::Code;
 use h3_quinn::quinn::{self, rustls as quic_rustls};
 use http::{Method, Request, Response, StatusCode};
@@ -41,7 +41,8 @@ use uvicorn_rs::{
     ApplicationLifecycle, ApplicationLifecycleError, ApplicationLifecycleFuture,
     ApplicationLifecycleStage, ConnectionInfo, ConnectionLifetime, ConnectionUpgrade,
     RequestEndReason, RequestLifetime, ServerErrorEvent, ServerErrorObserver, ServerErrorPhase,
-    TransportKind,
+    TransportKind, WebSocketCloseCode, WebSocketCloseFrame, WebSocketMessage, WebSocketUpgrade,
+    WebSocketUpgradeError,
 };
 
 type AppBody = UnsyncBoxBody<Bytes, io::Error>;
@@ -783,6 +784,23 @@ where
                     });
                     response(StatusCode::OK, b"registration deferred\n")
                 }
+                "/native-websocket-echo" | "/native-websocket-unoffered-subprotocol" => {
+                    native_websocket_route(
+                        &mut request,
+                        Some("native.echo.v1"),
+                        NativeWebSocketBehavior::Echo,
+                    )
+                }
+                "/native-websocket-shutdown" => native_websocket_route(
+                    &mut request,
+                    None,
+                    NativeWebSocketBehavior::Shutdown,
+                ),
+                "/native-websocket-invalid-key" => native_websocket_route(
+                    &mut request,
+                    Some("native.echo.v1"),
+                    NativeWebSocketBehavior::Echo,
+                ),
                 "/ready" => response(StatusCode::OK, b"ready\n"),
                 "/arm-readiness-pending" => {
                     let mut readiness = state
@@ -1394,6 +1412,71 @@ where
     }
 }
 
+enum NativeWebSocketBehavior {
+    Echo,
+    Shutdown,
+}
+
+fn native_websocket_route<B>(
+    request: &mut Request<B>,
+    subprotocol: Option<&str>,
+    behavior: NativeWebSocketBehavior,
+) -> Result<Response<AppBody>, io::Error> {
+    let upgrade = match WebSocketUpgrade::from_request(request) {
+        Ok(upgrade) => upgrade,
+        Err(error) => return websocket_bad_request(error),
+    };
+    let upgrade = match subprotocol {
+        Some(subprotocol) => match upgrade.with_subprotocol(subprotocol) {
+            Ok(upgrade) => upgrade,
+            Err(error) => return websocket_bad_request(error),
+        },
+        None => upgrade,
+    };
+
+    match behavior {
+        NativeWebSocketBehavior::Echo => upgrade
+            .accept(empty_body(), |mut session| async move {
+                while let Some(message) = session.receive().await? {
+                    match message {
+                        WebSocketMessage::Text(text) => {
+                            session.send(WebSocketMessage::Text(text)).await?;
+                        }
+                        WebSocketMessage::Binary(bytes) => {
+                            session.send(WebSocketMessage::Binary(bytes)).await?;
+                        }
+                        WebSocketMessage::Close(_) => break,
+                        WebSocketMessage::Ping(_) | WebSocketMessage::Pong(_) => {}
+                        WebSocketMessage::Frame(_) => {}
+                    }
+                }
+                Ok::<(), uvicorn_rs::WebSocketError>(())
+            })
+            .map_err(|error| io::Error::other(error.to_string())),
+        NativeWebSocketBehavior::Shutdown => upgrade
+            .accept(empty_body(), |mut session| async move {
+                session.wait_for_shutdown().await;
+                session
+                    .close(Some(WebSocketCloseFrame {
+                        code: WebSocketCloseCode::Away,
+                        reason: "server shutdown".into(),
+                    }))
+                    .await?;
+                while let Some(message) = session.receive().await? {
+                    if matches!(message, WebSocketMessage::Close(_)) {
+                        break;
+                    }
+                }
+                Ok::<(), uvicorn_rs::WebSocketError>(())
+            })
+            .map_err(|error| io::Error::other(error.to_string())),
+    }
+}
+
+fn websocket_bad_request(error: WebSocketUpgradeError) -> Result<Response<AppBody>, io::Error> {
+    response(StatusCode::BAD_REQUEST, error.to_string().as_bytes())
+}
+
 fn response(status: StatusCode, body: &[u8]) -> Result<Response<AppBody>, io::Error> {
     let body = Full::new(Bytes::copy_from_slice(body))
         .map_err(|never| match never {})
@@ -1405,13 +1488,17 @@ fn response(status: StatusCode, body: &[u8]) -> Result<Response<AppBody>, io::Er
 }
 
 fn empty_response() -> Result<Response<AppBody>, io::Error> {
-    let body = Empty::<Bytes>::new()
-        .map_err(|never| match never {})
-        .boxed_unsync();
+    let body = empty_body();
     Response::builder()
         .status(StatusCode::OK)
         .body(body)
         .map_err(|error| io::Error::other(error.to_string()))
+}
+
+fn empty_body() -> AppBody {
+    Empty::<Bytes>::new()
+        .map_err(|never| match never {})
+        .boxed_unsync()
 }
 
 fn upgrade_response() -> Result<Response<AppBody>, io::Error> {
@@ -1629,6 +1716,7 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http1-connection-slot-reuse"
             || operation == "native-http1-service-panic-recovery"
             || operation == "native-http1-upgrade-session"
+            || operation == "native-http1-websocket"
         {
             if operation.starts_with("native-lifecycle-") {
                 run_isolated_lifecycle_case(case).await?;
@@ -1638,6 +1726,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http1_service_panic_recovery_case(case).await?;
             } else if operation == "native-http1-upgrade-session" {
                 run_isolated_http1_upgrade_session_case(case).await?;
+            } else if operation == "native-http1-websocket" {
+                run_isolated_http1_websocket_case(case).await?;
             } else if operation == "native-http3-alpn-contract" {
                 run_isolated_http3_alpn_case(case).await?;
             } else if operation == "native-http3-no-common-alpn-recovery" {
@@ -2366,6 +2456,273 @@ async fn run_http1_upgrade_registration_after_close_case(
         .into());
     }
     Ok(())
+}
+
+async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
+    let scenario = required_str(case, "scenario")?;
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let server = tokio::spawn(uvicorn_rs::serve_tcp(
+        listener,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            graceful_shutdown_timeout: Duration::from_millis(500),
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let workflow: ProbeResult<()> = async {
+        match scenario {
+            "message-exchange" => run_native_websocket_exchange_case(address, case).await,
+            "graceful-shutdown" => {
+                run_native_websocket_shutdown_case(address, case, &shutdown_sender).await
+            }
+            "invalid-key" | "unoffered-subprotocol" => {
+                run_native_websocket_rejection_case(address, case).await
+            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("unknown native WebSocket scenario: {scenario}"),
+            )
+            .into()),
+        }
+    }
+    .await;
+
+    shutdown_sender.send_replace(true);
+    let wait_ms = case["server_wait_ms"]
+        .as_u64()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
+    let server_result = tokio::time::timeout(Duration::from_millis(wait_ms), server)
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "native HTTP/1 WebSocket server did not stop",
+            )
+        })??;
+    workflow?;
+    server_result?;
+    Ok(())
+}
+
+async fn open_native_websocket_handshake(
+    address: SocketAddr,
+    case: &Value,
+) -> ProbeResult<(TcpStream, u16, std::collections::HashMap<String, String>)> {
+    let mut client =
+        tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
+    let path = required_str(case, "path")?;
+    let key = required_str(case, "request_key")?;
+    let protocol = case
+        .get("offered_subprotocol")
+        .and_then(Value::as_str)
+        .map(|protocol| format!("Sec-WebSocket-Protocol: {protocol}\r\n"))
+        .unwrap_or_default();
+    let request = format!(
+        "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive, Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n{protocol}\r\n"
+    );
+    client.write_all(request.as_bytes()).await?;
+    let (status, headers) =
+        tokio::time::timeout(Duration::from_secs(2), read_response_head(&mut client)).await??;
+    Ok((client, status, headers))
+}
+
+async fn run_native_websocket_exchange_case(address: SocketAddr, case: &Value) -> ProbeResult<()> {
+    let (client, status, headers) = open_native_websocket_handshake(address, case).await?;
+    let expected_status = required_status(case, "expected_status")?;
+    let expected_accept = required_str(case, "expected_accept")?;
+    let expected_protocol = required_str(case, "offered_subprotocol")?;
+    if status != expected_status
+        || headers.get("sec-websocket-accept").map(String::as_str) != Some(expected_accept)
+        || headers.get("sec-websocket-protocol").map(String::as_str) != Some(expected_protocol)
+    {
+        return Err(io::Error::other(format!(
+            "{}: WebSocket handshake mismatch: status={status}, accept={:?}, protocol={:?}",
+            required_str(case, "id")?,
+            headers.get("sec-websocket-accept"),
+            headers.get("sec-websocket-protocol")
+        ))
+        .into());
+    }
+
+    let mut websocket = tokio_tungstenite::WebSocketStream::from_raw_socket(
+        client,
+        tokio_tungstenite::tungstenite::protocol::Role::Client,
+        None,
+    )
+    .await;
+    let text = required_str(case, "text_payload")?;
+    websocket
+        .send(tokio_tungstenite::tungstenite::protocol::Message::Text(
+            text.to_owned().into(),
+        ))
+        .await?;
+    match tokio::time::timeout(Duration::from_secs(2), websocket.next()).await? {
+        Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Text(received)))
+            if received.as_str() == text => {}
+        other => {
+            return Err(io::Error::other(format!(
+                "{}: WebSocket text echo mismatch: {other:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+    }
+
+    let binary = required_byte_array(case, "binary_payload")?;
+    websocket
+        .send(tokio_tungstenite::tungstenite::protocol::Message::Binary(
+            Bytes::from(binary.clone()),
+        ))
+        .await?;
+    match tokio::time::timeout(Duration::from_secs(2), websocket.next()).await? {
+        Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Binary(received)))
+            if received.as_ref() == binary => {}
+        other => {
+            return Err(io::Error::other(format!(
+                "{}: WebSocket binary echo mismatch: {other:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+    }
+
+    let ping = required_str(case, "ping_payload")?;
+    websocket
+        .send(tokio_tungstenite::tungstenite::protocol::Message::Ping(
+            Bytes::copy_from_slice(ping.as_bytes()),
+        ))
+        .await?;
+    let pong = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            match websocket.next().await {
+                Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Pong(payload)))
+                    if payload.as_ref() == ping.as_bytes() =>
+                {
+                    return Ok::<_, io::Error>(())
+                }
+                Some(Ok(_)) => {}
+                Some(Err(error)) => return Err(io::Error::other(error.to_string())),
+                None => return Err(io::Error::other("WebSocket closed before pong")),
+            }
+        }
+    })
+    .await?;
+    pong?;
+
+    let close_code = required_u64(case, "expected_close_code")?;
+    let close_reason = required_str(case, "expected_close_reason")?;
+    websocket
+        .send(tokio_tungstenite::tungstenite::protocol::Message::Close(
+            Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+                code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Normal,
+                reason: close_reason.into(),
+            }),
+        ))
+        .await?;
+    match tokio::time::timeout(Duration::from_secs(2), websocket.next()).await? {
+        Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Close(Some(frame))))
+            if u64::from(u16::from(frame.code)) == close_code
+                && frame.reason.as_str() == close_reason => {}
+        other => {
+            return Err(io::Error::other(format!(
+                "{}: WebSocket close echo mismatch: {other:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+    }
+    Ok(())
+}
+
+async fn run_native_websocket_shutdown_case(
+    address: SocketAddr,
+    case: &Value,
+    shutdown_sender: &watch::Sender<bool>,
+) -> ProbeResult<()> {
+    let (client, status, headers) = open_native_websocket_handshake(address, case).await?;
+    let expected_status = required_status(case, "expected_status")?;
+    if status != expected_status || !headers.contains_key("sec-websocket-accept") {
+        return Err(io::Error::other(format!(
+            "{}: WebSocket shutdown handshake was not accepted: status={status}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    let mut websocket = tokio_tungstenite::WebSocketStream::from_raw_socket(
+        client,
+        tokio_tungstenite::tungstenite::protocol::Role::Client,
+        None,
+    )
+    .await;
+    shutdown_sender.send_replace(true);
+    match tokio::time::timeout(Duration::from_secs(2), websocket.next()).await? {
+        Some(Ok(tokio_tungstenite::tungstenite::protocol::Message::Close(Some(frame))))
+            if u64::from(u16::from(frame.code)) == required_u64(case, "expected_close_code")?
+                && frame.reason.as_str() == required_str(case, "expected_close_reason")? =>
+        {
+            futures_util::SinkExt::flush(&mut websocket).await?;
+            Ok(())
+        }
+        other => Err(io::Error::other(format!(
+            "{}: expected server shutdown close frame, got {other:?}",
+            required_str(case, "id")?
+        ))
+        .into()),
+    }
+}
+
+async fn run_native_websocket_rejection_case(address: SocketAddr, case: &Value) -> ProbeResult<()> {
+    let (mut client, status, headers) = open_native_websocket_handshake(address, case).await?;
+    let (body, complete) = tokio::time::timeout(
+        Duration::from_secs(2),
+        read_response_body(&mut client, &headers),
+    )
+    .await??;
+    let expected_status = required_status(case, "expected_status")?;
+    let expected_error = required_str(case, "expected_error")?;
+    if status != expected_status
+        || headers.contains_key("sec-websocket-accept")
+        || !complete
+        || !String::from_utf8_lossy(&body).contains(expected_error)
+    {
+        return Err(io::Error::other(format!(
+            "{}: rejected WebSocket handshake mismatch: status={status}, complete={complete}, body={:?}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(&body)
+        ))
+        .into());
+    }
+    verify_http1_upgrade_listener_recovers(address, case).await
+}
+
+fn required_byte_array(case: &Value, key: &str) -> ProbeResult<Vec<u8>> {
+    case.get(key)
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("{key} must be a byte array"),
+            )
+        })?
+        .iter()
+        .map(|value| {
+            value
+                .as_u64()
+                .and_then(|value| u8::try_from(value).ok())
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("{key} contains a value outside the byte range"),
+                    )
+                })
+                .map_err(Into::into)
+        })
+        .collect()
 }
 
 async fn run_isolated_http3_alpn_case(case: &Value) -> ProbeResult<()> {
@@ -4502,6 +4859,7 @@ async fn run_cases(
             || operation == "native-http1-connection-slot-reuse"
             || operation == "native-http1-service-panic-recovery"
             || operation == "native-http1-upgrade-session"
+            || operation == "native-http1-websocket"
         {
             continue;
         }
@@ -8736,6 +9094,13 @@ fn required_status(value: &Value, key: &str) -> ProbeResult<u16> {
         )
         .into()
     })
+}
+
+fn required_u64(value: &Value, key: &str) -> ProbeResult<u64> {
+    value[key]
+        .as_u64()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, format!("case has no {key}")))
+        .map_err(Into::into)
 }
 
 async fn request(

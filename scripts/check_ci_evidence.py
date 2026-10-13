@@ -33,6 +33,7 @@ PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
     "crates/uvicorn-rs/src/lib.rs",
     "crates/uvicorn-rs/src/http3.rs",
+    "crates/uvicorn-rs/src/websocket.rs",
     "crates/native-app-contract/src/lib.rs",
 )
 EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
@@ -637,9 +638,9 @@ def validate_coverage(
                          "uncovered_regions", "attribution", "coverage_mcp"}, "coverage")
     require(tuple(coverage.get("source_set", [])) == PRODUCTION_SOURCE_SET
             and tuple(coverage.get("executable_source_set", [])) == EXECUTABLE_SOURCE_SET,
-            "coverage source inventory is not the exact four-file set")
+            "coverage source inventory is not the exact five-file set")
     source_rows = coverage.get("source_files")
-    require(isinstance(source_rows, list) and len(source_rows) == 4, "per-file source summaries are incomplete")
+    require(isinstance(source_rows, list) and len(source_rows) == 5, "per-file source summaries are incomplete")
     raw_regions, raw_summaries, canonical_functions = llvm_production_regions(report, source["sha256"])
     for path, row in zip(PRODUCTION_SOURCE_SET, source_rows, strict=True):
         exact_keys(row, {"path", "classification", "summary"}, f"source summary {path}")

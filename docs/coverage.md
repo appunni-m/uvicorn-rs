@@ -3,7 +3,7 @@
 ## Current unified coverage status (2026-10-13)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 88 Python-free native cases (599 total).
+parity/fault-contract cases and 92 Python-free native cases (603 total).
 Acceptance requires three complete repeats, 100% region and line coverage,
 and zero-gap results from fully paginated Coverage-MCP queries bound to the
 exact report bytes.
@@ -48,6 +48,20 @@ report's uncovered-region list contains no `ConnectionUpgrade` symbols; resolve
 that query discrepancy before claiming zero gaps. This selected report is not
 aggregate coverage evidence and does not establish WebSocket handshake,
 framing, or ASGI WebSocket support.
+
+The native HTTP/1.1 WebSocket prototype adds four manifest cases. The selected
+run passed 4/4 with complete attribution and no retries or infrastructure
+failures. It covers text/binary echo, Ping/Pong, close exchange, a server
+shutdown close handshake, malformed key rejection, and unoffered subprotocol
+rejection. The ignored report is
+`target/asgi-coverage/2026-10-13-native-websocket-h1-final/coverage-report.json`;
+it records 706, 632, 631, and 688 covered regions by case, respectively, and
+source SHA-256
+`8eccb701012a8cd5d44ae49a227d609df13a17ea3a9c473450fe627de1c9f4fe`. That
+digest was captured before the follow-up Rustdoc wording edits; executable code
+was unchanged after the run. This is selected-case attribution only. It does
+not establish aggregate coverage, TLS/H2/H3 WebSocket support, or Python ASGI
+WebSocket integration.
 
 The HTTP/3 request-body change was measured separately with
 `target/asgi-coverage/current-http3-empty-body-eof-refactor/coverage-report.json`.
