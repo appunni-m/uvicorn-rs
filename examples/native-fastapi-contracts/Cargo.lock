@@ -144,29 +144,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "errno"
-version = "0.3.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
-dependencies = [
- "libc",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "fastapi-rs-native"
+name = "fastapi-rs"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "futures-util",
  "http",
  "http-body",
  "http-body-util",
  "serde",
  "serde_json",
  "starlette-rs",
- "tokio",
- "uvicorn-rs",
+ "tower-service",
 ]
 
 [[package]]
@@ -578,6 +566,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "native-app-contract"
+version = "0.1.0"
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -835,16 +827,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
-name = "signal-hook-registry"
-version = "1.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
-dependencies = [
- "errno",
- "libc",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -877,15 +859,11 @@ name = "starlette-rs"
 version = "0.1.0"
 dependencies = [
  "base64",
- "bytes",
  "encoding_rs",
  "flate2",
  "futures",
  "getrandom 0.4.3",
  "hmac",
- "http",
- "http-body",
- "http-body-util",
  "httpdate",
  "libc",
  "md-5",
@@ -894,8 +872,6 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
- "tower-layer",
- "tower-service",
  "unicode-general-category",
 ]
 
@@ -963,7 +939,6 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
- "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",
@@ -1003,12 +978,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
 ]
-
-[[package]]
-name = "tower-layer"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e"
 
 [[package]]
 name = "tower-service"
@@ -1096,6 +1065,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "native-app-contract",
  "pin-project-lite",
  "quinn",
  "tokio",
@@ -1109,7 +1079,7 @@ name = "uvicorn-rs-fastapi-native-contracts"
 version = "0.1.0"
 dependencies = [
  "bytes",
- "fastapi-rs-native",
+ "fastapi-rs",
  "futures-util",
  "h2",
  "http",

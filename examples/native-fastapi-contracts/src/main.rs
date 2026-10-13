@@ -15,7 +15,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use fastapi_rs_native::{
+use fastapi_rs::native::{
     FastApiNativeBuilder, NativeApplication, NativeApplicationError, NativeHttpResponse,
     NativeRequest, NativeRequestError, json_body, json_response, optional_query_parameter,
     path_parameter, streaming_response,

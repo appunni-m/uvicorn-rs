@@ -1,11 +1,11 @@
 # Rust-native FastAPI composition contracts
 
-This directory preserves an input manifest and runner for a Python-free vertical
-slice `fastapi-rs-native → Starlette-RS → uvicorn-rs`. The application,
-server, protocol clients, and assertions were Rust. The case file is a
-target-only contract manifest, not a Python ASGI parity suite. The referenced
-`fastapi-rs-native` sibling crate is absent from the currently checked-out
-source, so this example is not currently buildable.
+This directory preserves an input manifest and runner for a Python-free Rust
+vertical slice `fastapi-rs → Starlette-RS → uvicorn-rs`. The native API lives
+in the sole `fastapi-rs` crate; there is no separate `fastapi-rs-native`
+behavior crate. The application, server, protocol clients, and assertions are
+Rust. The case file is a target-only contract manifest, not Python ASGI parity
+or full FastAPI compatibility evidence.
 
 The manifest currently covers HTTP/1.1 and HTTP/2 prior knowledge: path/query
 routing, bodyless GETs without `Content-Length`, JSON request-body
@@ -23,20 +23,18 @@ establish HTTP/3, TLS, WebSocket, lifespan, Python `module:app` compatibility,
 or a performance gain.
 
 The example resolves sibling `fastapi-rs` and `starlette-rs` development
-checkouts by relative path. The command below is retained to reproduce the
-archived result after the missing sibling crate is restored; it currently fails
-because the referenced `fastapi-rs-native` manifest is absent:
+checkouts by relative path. Build from a workspace containing the matching
+FastAPI-RS native API and the Starlette-RS revision pinned by FastAPI-RS
+`metadata.yaml`. The local 17/17 run used a temporary path override because
+the native API changes are still in a separate FastAPI-RS worktree:
 
 ```sh
 cargo run --manifest-path examples/native-fastapi-contracts/Cargo.toml --locked -- examples/native-fastapi-contracts/manifest.json
 ```
 
-The archived 17-input manifest passed three sequential repeats (51/51) on an
-earlier dirty, path-linked sibling snapshot. The exact source identities,
-three command logs, and normal dependency tree are recorded in the [H2
-streaming-progress report](../../benchmarks/results/2026-10-12/native-fastapi-h2-streaming-composition/report.md).
-
-That earlier snapshot used a server-neutral `fastapi-rs-native` crate with an
-optional `uvicorn-rs` feature. Restore or recreate the crate, pin the source
-checkouts, and rerun the manifest before this can be a release or CI acceptance
-gate.
+The archived 17-input result (51/51 across three repeats) used an earlier
+dirty, path-linked snapshot and a now-removed `fastapi-rs-native` crate. It is
+historical evidence only; it does not verify the current `fastapi-rs` API.
+Record fresh source identities and live results before treating this manifest
+as a release or CI acceptance gate. The native API currently covers a small
+Rust handler slice; it does not claim Python FastAPI/Pydantic equivalence.
