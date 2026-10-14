@@ -18,7 +18,7 @@ from release_evidence import (
     COMMIT, LICENSE_EXPRESSION, PLATFORMS, ROOT, SHA256, command_output,
     fault_points, file_sha256, inspect_sdist, inspect_wheel, license_contract,
     load_json, normal_fault_markers, source_hashes, validate_consumer, validate_packaged_parity,
-    validate_source_consumer,
+    validate_source_consumer, inspect_rust_crate,
 )
 
 
@@ -99,7 +99,7 @@ def verify_external_evidence(directory: Path, version: str, commit: str, linux: 
             for path in (floor_path, public_path, normal_path, selected_path)}
 
 
-def verify(root: Path, version: str, commit: str, evidence: Path | None) -> dict:
+def verify(root: Path, version: str, commit: str, evidence: Path) -> dict:
     if COMMIT.fullmatch(commit) is None or command_output(["git", "rev-parse", "HEAD"]) != commit:
         raise ValueError("candidate commit must equal the full checked-out Git commit")
     if command_output(["git", "status", "--porcelain", "--untracked-files=all"]):
@@ -113,9 +113,11 @@ def verify(root: Path, version: str, commit: str, evidence: Path | None) -> dict
         raise ValueError("candidate directory must contain only regular artifact files")
     wheels = [path for path in paths if path.suffix == ".whl"]
     sdists = [path for path in paths if path.name.endswith(".tar.gz")]
-    if len(wheels) != 3 or len(sdists) != 1 or len(paths) != 12:
-        raise ValueError(f"expected exactly three wheels, one sdist and eight evidence files; found {len(wheels)} wheels, {len(sdists)} sdists, {len(paths)} files")
+    crates = [path for path in paths if path.suffix == ".crate"]
+    if len(wheels) != 3 or len(sdists) != 1 or len(crates) != 2 or len(paths) != 14:
+        raise ValueError(f"expected three wheels, one sdist, two Rust crates and eight evidence files; found {len(wheels)} wheels, {len(sdists)} sdists, {len(crates)} crates, {len(paths)} files")
     expected = {path.name for path in wheels} | {f"uvicorn_rs_py-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json"}
+    expected |= {f"native-app-contract-{version}.crate", f"uvicorn-rs-{version}.crate"}
     expected |= {f"build-manifest-{platform}.json" for platform in PLATFORMS}
     expected |= {f"consumer-{platform}.json" for platform in PLATFORMS}
     if {path.name for path in paths} != expected:
@@ -130,6 +132,16 @@ def verify(root: Path, version: str, commit: str, evidence: Path | None) -> dict
     if set(inspected) != set(PLATFORMS):
         raise ValueError("candidate platform matrix is incomplete")
     sdist = inspect_sdist(sdists[0], version)
+    native_crates = {
+        package: inspect_rust_crate(
+            root / f"{package}-{version}.crate",
+            package,
+            version,
+            expected_commit=commit,
+            require_clean=True,
+        )
+        for package in ("native-app-contract", "uvicorn-rs")
+    }
     manifests = {}
     tool_versions = set()
     for platform, target in PLATFORMS.items():
@@ -148,8 +160,12 @@ def verify(root: Path, version: str, commit: str, evidence: Path | None) -> dict
         files = {wheel["filename"], f"consumer-{platform}.json"}
         packages = {wheel["filename"]: wheel}
         if platform == "linux-x86_64":
-            files |= {sdist["filename"], "consumer-sdist.json", "parity-linux-x86_64.json"}
+            files |= {
+                sdist["filename"], "consumer-sdist.json", "parity-linux-x86_64.json",
+                *(f"{package}-{version}.crate" for package in native_crates),
+            }
             packages[sdist["filename"]] = sdist
+            packages.update({value["filename"]: value for value in native_crates.values()})
         if manifest.get("files") != {name: file_sha256(root / name) for name in sorted(files)}:
             raise ValueError(f"build manifest artifact/evidence checksums differ: {platform}")
         if manifest.get("packages") != packages:
@@ -168,6 +184,34 @@ def verify(root: Path, version: str, commit: str, evidence: Path | None) -> dict
                 or build.get("locked") is not True or not required_env <= set(build.get("environment", {}))
                 or any(value != "" for value in build["environment"].values())):
             raise ValueError("build manifest does not record the normal locked release build")
+        native_commands = [
+            "cargo package -p native-app-contract --no-verify --locked --offline",
+            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.native-app-contract.path=\"crates/native-app-contract\"'",
+            "copy target/native-package/package/*.crate to dist/",
+        ]
+        if platform == "linux-x86_64":
+            if build.get("native_crate_commands") != native_commands:
+                raise ValueError("Linux build manifest omitted the locked native crate packaging commands")
+            expected_consumer_check = {
+                "schema": "uvicorn-rs-native-crate-consumer@1",
+                "status": "passed",
+                "source_commit": commit,
+                "source_dirty": False,
+                "archive_sha256s": {
+                    f"{package}-{version}.crate": native_crates[package]["sha256"]
+                    for package in native_crates
+                },
+                "commands": [
+                    "cargo check --offline --locked --manifest-path <native-app-contract>/Cargo.toml",
+                    "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patch.crates-io.native-app-contract.path=<native-app-contract>",
+                ],
+            }
+            if build.get("native_crate_consumer_check") != expected_consumer_check:
+                raise ValueError("Linux build manifest omitted clean archive-build evidence for both Rust crates")
+        elif "native_crate_commands" in build:
+            raise ValueError("only the Linux producer should package the target-independent Rust source crates")
+        elif "native_crate_consumer_check" in build:
+            raise ValueError("only the Linux producer should record the target-independent Rust crate consumer check")
         validate_consumer(load_json(root / f"consumer-{platform}.json"), version, wheel["sha256"], wheel["native"]["sha256"])
         manifests[platform] = file_sha256(path)
     if len(tool_versions) != 1:
@@ -179,7 +223,7 @@ def verify(root: Path, version: str, commit: str, evidence: Path | None) -> dict
     parity_target = load_json(parity_path)["run"]["target"]
     if parity_target.get("revision") != commit or parity_target.get("dirty") is not False:
         raise ValueError("shipping Linux public parity is not from the clean expected commit")
-    external = verify_external_evidence(evidence, version, commit, linux) if evidence is not None else {}
+    external = verify_external_evidence(evidence, version, commit, linux)
     if source_hashes() != inputs:
         raise ValueError("reviewed package inputs changed during candidate verification")
     return {"schema": "uvicorn-rs-candidate-verification@1", "state": "verified candidate; publication disabled",
@@ -193,7 +237,12 @@ def main() -> int:
     parser.add_argument("directory", type=Path)
     parser.add_argument("version")
     parser.add_argument("commit")
-    parser.add_argument("--evidence-directory", type=Path)
+    parser.add_argument(
+        "--evidence-directory",
+        type=Path,
+        required=True,
+        help="complete external CI evidence directory required for candidate verification",
+    )
     args = parser.parse_args()
     try:
         result = verify(args.directory, args.version, args.commit, args.evidence_directory)
@@ -206,7 +255,7 @@ def main() -> int:
     except (OSError, ValueError, KeyError, TypeError, IndexError, RuntimeError, configparser.Error, zipfile.BadZipFile, tarfile.TarError, subprocess.SubprocessError) as error:
         print(f"release candidate: {error}", file=sys.stderr)
         return 1
-    print(f"verified three wheels, one source archive and their consumer/build evidence for {args.version} at {args.commit}")
+    print(f"verified three wheels, one source archive, two Rust crates and their evidence for {args.version} at {args.commit}")
     return 0
 
 

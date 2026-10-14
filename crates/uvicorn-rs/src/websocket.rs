@@ -5,6 +5,8 @@
 //! handshake and framed session over HTTP/1.1. It does not implement WebSockets
 //! over HTTP/2 or HTTP/3, or negotiate WebSocket extensions.
 
+#[cfg(coverage)]
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::{error::Error, fmt, future::Future};
 
 use data_encoding::BASE64;
@@ -134,6 +136,8 @@ impl WebSocketUpgrade {
         if self.selected_subprotocol.is_some() {
             return Err(WebSocketUpgradeError::SubprotocolAlreadySelected);
         }
+        let header_value = HeaderValue::from_str(protocol)
+            .map_err(|_| WebSocketUpgradeError::InvalidSubprotocol)?;
         if !is_http_token(protocol.as_bytes())
             || !self
                 .offered_subprotocols
@@ -142,10 +146,7 @@ impl WebSocketUpgrade {
         {
             return Err(WebSocketUpgradeError::InvalidSubprotocol);
         }
-        self.selected_subprotocol = Some(
-            HeaderValue::from_str(protocol)
-                .map_err(|_| WebSocketUpgradeError::InvalidSubprotocol)?,
-        );
+        self.selected_subprotocol = Some(header_value);
         Ok(self)
     }
 
@@ -265,7 +266,18 @@ impl WebSocketSession {
             // close frame. A handler may return immediately after receiving
             // that frame, so flush the queued reply before the upgraded
             // transport can be dropped.
-            self.stream.flush().await.map_err(WebSocketError)?;
+            #[cfg(coverage)]
+            let flush_result = if take_close_reply_flush_fault() {
+                Err(TungsteniteError::Io(std::io::Error::new(
+                    std::io::ErrorKind::BrokenPipe,
+                    "coverage-injected WebSocket close-reply flush failure",
+                )))
+            } else {
+                self.stream.flush().await
+            };
+            #[cfg(not(coverage))]
+            let flush_result = self.stream.flush().await;
+            flush_result.map_err(WebSocketError)?;
         }
         Ok(message)
     }
@@ -302,6 +314,38 @@ impl WebSocketSession {
     pub async fn wait_for_shutdown(&mut self) {
         self.connection_upgrade.wait_for_shutdown().await;
     }
+}
+
+#[cfg(coverage)]
+static CLOSE_REPLY_FLUSH_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+
+/// Arms the coverage-only WebSocket close-reply flush fault contract.
+///
+/// This hook is compiled only for instrumented coverage builds and is absent
+/// from normal library builds.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_close_reply_flush_fault() -> bool {
+    CLOSE_REPLY_FLUSH_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only WebSocket close-reply flush fault contract.
+///
+/// Returns whether the armed failure reached the public session error path.
+/// This hook is compiled only for instrumented coverage builds.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_close_reply_flush_fault() -> bool {
+    CLOSE_REPLY_FLUSH_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_close_reply_flush_fault() -> bool {
+    CLOSE_REPLY_FLUSH_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
 }
 
 /// An error while validating a WebSocket handshake or registering its session.

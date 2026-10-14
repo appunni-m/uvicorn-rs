@@ -43,15 +43,21 @@ use tower_service::Service;
 use uvicorn_rs::{
     ApplicationLifecycle, ApplicationLifecycleError, ApplicationLifecycleFuture,
     ApplicationLifecycleStage, ConnectionInfo, ConnectionLifetime, ConnectionUpgrade,
-    RequestEndReason, RequestLifetime, ServerErrorEvent, ServerErrorObserver, ServerErrorPhase,
-    TransportKind, WebSocketCloseCode, WebSocketCloseFrame, WebSocketError, WebSocketMessage,
-    WebSocketSession, WebSocketUpgrade, WebSocketUpgradeError,
+    PeerReadHalfClosed, RequestEndReason, RequestLifetime, ServerErrorEvent, ServerErrorObserver,
+    ServerErrorPhase, TransportKind, WebSocketCloseCode, WebSocketCloseFrame, WebSocketError,
+    WebSocketMessage, WebSocketSession, WebSocketUpgrade, WebSocketUpgradeError,
 };
 
 type AppBody = UnsyncBoxBody<Bytes, io::Error>;
 type AppFuture = Pin<Box<dyn Future<Output = Result<Response<AppBody>, io::Error>> + Send>>;
 type ProbeResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 type ShutdownSignal = Pin<Box<dyn Future<Output = ()> + Send>>;
+
+trait AsyncReadWrite: AsyncRead + AsyncWrite {}
+
+impl<T> AsyncReadWrite for T where T: AsyncRead + AsyncWrite {}
+
+type BoxedIo = Box<dyn AsyncReadWrite + Send + Unpin>;
 
 fn shutdown_on_change(mut receiver: watch::Receiver<bool>) -> ShutdownSignal {
     Box::pin(async move {
@@ -64,6 +70,8 @@ struct ObservedServerError {
     phase: ServerErrorPhase,
     peer_addr: Option<SocketAddr>,
     is_io_error: bool,
+    is_direct_io_error: bool,
+    has_error_source: bool,
     h3_error_code: Option<u64>,
     message: String,
 }
@@ -75,6 +83,7 @@ struct ContractApp {
 
 struct AppState {
     fail_next_readiness: AtomicBool,
+    panic_next_readiness: AtomicBool,
     readiness_gate: Mutex<ReadinessGate>,
     stream_complete: AtomicBool,
     graceful_timeout_stream_drops: Arc<AtomicUsize>,
@@ -86,8 +95,12 @@ struct AppState {
     request_future_drops: Arc<AtomicUsize>,
     request_ends_while_connection_open: Arc<AtomicUsize>,
     request_connections_closed: Arc<AtomicUsize>,
+    request_lifetime_peer_eof_available: Arc<AtomicBool>,
+    request_lifetime_peer_eof: Arc<AtomicBool>,
     peer_write_half_close_started: AtomicBool,
     peer_write_half_close_release: watch::Sender<bool>,
+    peer_read_half_close_observation: watch::Sender<Option<String>>,
+    peer_read_half_close_unavailable_result: watch::Sender<Option<String>>,
     response_chunks_polled: Arc<AtomicUsize>,
     response_streams_dropped: Arc<AtomicUsize>,
     upload_bytes_received: AtomicUsize,
@@ -95,6 +108,7 @@ struct AppState {
     http3_body_pending: AtomicBool,
     http3_body_errors: AtomicUsize,
     http3_response_cancel_pending: AtomicBool,
+    http3_response_cancel_waiters: AtomicUsize,
     http3_response_cancel_release: watch::Sender<bool>,
     upload_tasks_dropped: Arc<AtomicUsize>,
     shutdown: watch::Sender<bool>,
@@ -105,6 +119,7 @@ struct AppState {
 enum UpgradeSessionBehavior {
     Graceful(ConnectionLifetime),
     HandlerError,
+    HandlerPanic,
 }
 
 #[derive(Default)]
@@ -206,7 +221,7 @@ impl ApplicationLifecycle for LifecycleHooks {
                 std::future::pending::<()>().await;
             }
             if behavior == LifecycleHookBehavior::Panic {
-                panic!("injected lifecycle startup panic");
+                inject_native_contract_panic("injected lifecycle startup panic");
             }
             if behavior == LifecycleHookBehavior::Fail {
                 return Err(
@@ -230,7 +245,7 @@ impl ApplicationLifecycle for LifecycleHooks {
                 std::future::pending::<()>().await;
             }
             if behavior == LifecycleHookBehavior::Panic {
-                panic!("injected lifecycle shutdown panic");
+                inject_native_contract_panic("injected lifecycle shutdown panic");
             }
             if behavior == LifecycleHookBehavior::Fail {
                 return Err(
@@ -246,6 +261,10 @@ impl ApplicationLifecycle for LifecycleHooks {
             Ok(())
         })
     }
+}
+
+fn inject_native_contract_panic(message: &str) -> ! {
+    std::panic::resume_unwind(Box::new(message.to_owned()));
 }
 
 impl<B> Service<Request<B>> for LifecycleApp {
@@ -596,6 +615,13 @@ where
     type Future = AppFuture;
 
     fn poll_ready(&mut self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        if self
+            .state
+            .panic_next_readiness
+            .swap(false, Ordering::AcqRel)
+        {
+            inject_native_contract_panic("injected HTTP/3 application readiness panic");
+        }
         let mut readiness = match self.state.readiness_gate.lock() {
             Ok(readiness) => readiness,
             Err(_) => {
@@ -650,6 +676,7 @@ where
         let request_lifetime = request.extensions().get::<RequestLifetime>().cloned();
         let connection_lifetime = request.extensions().get::<ConnectionLifetime>().cloned();
         let connection_upgrade = request.extensions().get::<ConnectionUpgrade>().cloned();
+        let peer_read_half_closed = request.extensions().get::<PeerReadHalfClosed>().cloned();
         let peer_address = connection_info.as_ref().map(ConnectionInfo::peer_addr);
         let connection_security = connection_info.as_ref().map(|info| {
             let alpn = info
@@ -707,6 +734,10 @@ where
                     Some(details) => response(StatusCode::OK, details.as_bytes()),
                     None => Err(io::Error::other("connection metadata extension is missing")),
                 },
+                "/peer-read-half-close-availability" => response(
+                    StatusCode::OK,
+                    format!("available={}\n", peer_read_half_closed.is_some()).as_bytes(),
+                ),
                 "/empty" => empty_response(),
                 "/peer-write-half-close" => {
                     let Some(connection_lifetime) = connection_lifetime else {
@@ -740,6 +771,90 @@ where
                     state.peer_write_half_close_release.send_replace(true);
                     response(StatusCode::OK, b"released\n")
                 }
+                "/peer-read-half-close-full"
+                | "/peer-read-half-close-empty"
+                | "/peer-read-half-close-stream" => {
+                    let Some(peer_read_half_closed) = peer_read_half_closed else {
+                        return Err(io::Error::other(
+                            "peer read-half-close observation extension is missing",
+                        ));
+                    };
+                    state.peer_read_half_close_observation.send_replace(None);
+                    tokio::spawn(record_peer_read_half_close_observation(
+                        Arc::clone(&state),
+                        peer_read_half_closed,
+                    ));
+                    match path.as_str() {
+                        "/peer-read-half-close-full" => {
+                            response(StatusCode::OK, b"complete\n")
+                        }
+                        "/peer-read-half-close-empty" => {
+                            let mut response = empty_response()?;
+                            response.headers_mut().insert(
+                                http::header::CONTENT_LENGTH,
+                                HeaderValue::from_static("0"),
+                            );
+                            Ok(response)
+                        }
+                        "/peer-read-half-close-stream" => stream_response(stream::once(async {
+                            Ok::<_, io::Error>(http_body::Frame::data(Bytes::from_static(
+                                b"complete\n",
+                            )))
+                        })),
+                        _ => Err(io::Error::other(
+                            "unknown peer read-half-close response shape",
+                        )),
+                    }
+                }
+                "/peer-read-half-close-state" => {
+                    let mut observation = state.peer_read_half_close_observation.subscribe();
+                    let result = tokio::time::timeout(Duration::from_secs(3), async {
+                        loop {
+                            if let Some(value) = observation.borrow_and_update().clone() {
+                                return Ok::<_, io::Error>(value);
+                            }
+                            observation.changed().await.map_err(|_| {
+                                io::Error::other("peer read-half-close observation channel closed")
+                            })?;
+                        }
+                    })
+                    .await;
+                    match result {
+                        Ok(Ok(value)) => response(StatusCode::OK, value.as_bytes()),
+                        Ok(Err(error)) => Err(error),
+                        Err(_) => response(
+                            StatusCode::GATEWAY_TIMEOUT,
+                            b"peer read-half-close observation timed out\n",
+                        ),
+                    }
+                }
+                "/peer-read-half-close-shutdown-watch" => {
+                    let Some(mut peer_read_half_closed) = peer_read_half_closed else {
+                        return Err(io::Error::other(
+                            "peer read-half-close observation extension is missing",
+                        ));
+                    };
+                    state
+                        .peer_read_half_close_unavailable_result
+                        .send_replace(None);
+                    let outcome = state.peer_read_half_close_unavailable_result.clone();
+                    tokio::spawn(async move {
+                        let result = peer_read_half_closed.wait_until_read_half_closed().await;
+                        let value = match result {
+                            Ok(()) => format!(
+                                "read_half_closed={};error=none;source_none=true\n",
+                                peer_read_half_closed.is_read_half_closed()
+                            ),
+                            Err(error) => format!(
+                                "read_half_closed={};error={error};source_none={}\n",
+                                peer_read_half_closed.is_read_half_closed(),
+                                error.source().is_none()
+                            ),
+                        };
+                        outcome.send_replace(Some(value));
+                    });
+                    response(StatusCode::OK, b"watching\n")
+                }
                 "/upgrade-session" | "/upgrade-session-pending-response" => {
                     let (Some(connection_upgrade), Some(connection_lifetime)) =
                         (connection_upgrade, connection_lifetime)
@@ -761,7 +876,8 @@ where
                     upgrade_response()
                 }
                 "/upgrade-session-handler-error"
-                | "/upgrade-session-handler-error-pending-response" => {
+                | "/upgrade-session-handler-error-pending-response"
+                | "/upgrade-session-handler-panic" => {
                     let Some(connection_upgrade) = connection_upgrade else {
                         return Err(io::Error::other(
                             "HTTP/1 upgrade extension is missing",
@@ -771,7 +887,11 @@ where
                     register_contract_upgrade_session(
                         connection_upgrade,
                         on_upgrade,
-                        UpgradeSessionBehavior::HandlerError,
+                        if path == "/upgrade-session-handler-panic" {
+                            UpgradeSessionBehavior::HandlerPanic
+                        } else {
+                            UpgradeSessionBehavior::HandlerError
+                        },
                     )
                         .map_err(|error| io::Error::other(error.to_string()))?;
                     if path == "/upgrade-session-handler-error-pending-response" {
@@ -831,7 +951,9 @@ where
                 | "/native-websocket-accept-header-capacity"
                 | "/native-websocket-echo-accept-header-capacity"
                 | "/native-websocket-malformed-frame"
+                | "/native-websocket-close-flush-error"
                 | "/native-websocket-invalid-subprotocol-token"
+                | "/native-websocket-invalid-selected-subprotocol-header-value"
                 | "/native-websocket-invalid-version"
                 | "/native-websocket-invalid-key-size"
                 | "/native-websocket-missing-upgrade-token"
@@ -862,7 +984,8 @@ where
                         "/native-websocket-echo-accept-header-capacity" => {
                             NativeWebSocketBehavior::EchoAcceptHeaderCapacity
                         }
-                        "/native-websocket-malformed-frame" => {
+                        "/native-websocket-malformed-frame"
+                        | "/native-websocket-close-flush-error" => {
                             NativeWebSocketBehavior::ObserveReceiveError(
                                 state.websocket_error_observation.clone(),
                             )
@@ -871,9 +994,13 @@ where
                     };
                     let subprotocol = match request.uri().path() {
                         "/native-websocket-token-trim" => Some("Native+Echo"),
+                        "/native-websocket-invalid-selected-subprotocol-header-value" => {
+                            Some("native\r.echo")
+                        }
                         "/native-websocket-accept-header-capacity"
                         | "/native-websocket-echo-accept-header-capacity"
-                        | "/native-websocket-malformed-frame" => None,
+                        | "/native-websocket-malformed-frame"
+                        | "/native-websocket-close-flush-error" => None,
                         _ => Some("native.echo.v1"),
                     };
                     native_websocket_route(
@@ -927,6 +1054,12 @@ where
                     else {
                         return Err(io::Error::other("request lifetime extensions are missing"));
                     };
+                    let peer_eof_available =
+                        Arc::clone(&state.request_lifetime_peer_eof_available);
+                    if peer_read_half_closed.is_some() {
+                        peer_eof_available.store(true, Ordering::Release);
+                    }
+                    let peer_eof_observation = Arc::clone(&state.request_lifetime_peer_eof);
                     state
                         .request_lifetime_waiters
                         .fetch_add(1, Ordering::AcqRel);
@@ -939,9 +1072,16 @@ where
                     let request_ends_while_connection_open =
                         Arc::clone(&state.request_ends_while_connection_open);
                     let request_connections_closed = Arc::clone(&state.request_connections_closed);
+                    let peer_read_half_closed = peer_read_half_closed.clone();
                     tokio::spawn(async move {
                         let reason = request_lifetime.wait_until_ended().await;
                         if reason == Some(RequestEndReason::ServiceFutureDropped) {
+                            if let Some(peer_read_half_closed) = peer_read_half_closed {
+                                peer_eof_observation.store(
+                                    peer_read_half_closed.is_read_half_closed(),
+                                    Ordering::Release,
+                                );
+                            }
                             if request_lifetime.end_reason() == reason {
                                 request_lifetime_reason_checks.fetch_add(1, Ordering::AcqRel);
                             }
@@ -958,7 +1098,7 @@ where
                 "/request-lifetime-state" => response(
                     StatusCode::OK,
                     format!(
-                        "started={};dropped={};connection_open={};connection_closed={};reason_checks={}\n",
+                        "started={};dropped={};connection_open={};connection_closed={};reason_checks={};peer_eof_available={};peer_eof={}\n",
                         state.request_lifetime_waiters.load(Ordering::Acquire),
                         state.request_future_drops.load(Ordering::Acquire),
                         state
@@ -966,11 +1106,21 @@ where
                             .load(Ordering::Acquire),
                         state.request_connections_closed.load(Ordering::Acquire),
                         state.request_lifetime_reason_checks.load(Ordering::Acquire),
+                        state
+                            .request_lifetime_peer_eof_available
+                            .load(Ordering::Acquire),
+                        state.request_lifetime_peer_eof.load(Ordering::Acquire),
                     )
                     .as_bytes(),
                 ),
                 "/arm-readiness" => {
                     state.fail_next_readiness.store(true, Ordering::Release);
+                    response(StatusCode::OK, b"armed\n")
+                }
+                "/arm-readiness-panic" => {
+                    state
+                        .panic_next_readiness
+                        .store(true, Ordering::Release);
                     response(StatusCode::OK, b"armed\n")
                 }
                 "/body-state" => {
@@ -1315,6 +1465,14 @@ where
                         b"ready\n"
                     },
                 ),
+                "/http3-response-cancel-waiters" => response(
+                    StatusCode::OK,
+                    format!(
+                        "waiting={}\n",
+                        state.http3_response_cancel_waiters.load(Ordering::Acquire)
+                    )
+                    .as_bytes(),
+                ),
                 "/http3-response-cancel-release" => {
                     state
                         .http3_response_cancel_pending
@@ -1325,13 +1483,24 @@ where
                 "/http3-response-hold-before-headers" => {
                     let mut release = state.http3_response_cancel_release.subscribe();
                     state
+                        .http3_response_cancel_waiters
+                        .fetch_add(1, Ordering::AcqRel);
+                    state
                         .http3_response_cancel_pending
                         .store(true, Ordering::Release);
                     while !*release.borrow_and_update() {
-                        release.changed().await.map_err(|_| {
-                            io::Error::other("HTTP/3 response release channel closed")
-                        })?;
+                        if release.changed().await.is_err() {
+                            state
+                                .http3_response_cancel_waiters
+                                .fetch_sub(1, Ordering::AcqRel);
+                            return Err(io::Error::other(
+                                "HTTP/3 response release channel closed",
+                            ));
+                        }
                     }
+                    state
+                        .http3_response_cancel_waiters
+                        .fetch_sub(1, Ordering::AcqRel);
                     state
                         .http3_response_cancel_pending
                         .store(false, Ordering::Release);
@@ -1782,6 +1951,23 @@ fn empty_body() -> AppBody {
         .boxed_unsync()
 }
 
+async fn record_peer_read_half_close_observation(
+    state: Arc<AppState>,
+    mut observer: PeerReadHalfClosed,
+) {
+    let value = match observer.wait_until_read_half_closed().await {
+        Ok(()) => format!("observed={}\n", observer.is_read_half_closed()),
+        Err(error) => format!(
+            "observed={};error={error};source_none={}\n",
+            observer.is_read_half_closed(),
+            error.source().is_none()
+        ),
+    };
+    state
+        .peer_read_half_close_observation
+        .send_replace(Some(value));
+}
+
 fn upgrade_response() -> Result<Response<AppBody>, io::Error> {
     let body = Empty::<Bytes>::new()
         .map_err(|never| match never {})
@@ -1804,6 +1990,9 @@ fn register_contract_upgrade_session(
         match behavior {
             UpgradeSessionBehavior::HandlerError => {
                 Err(io::Error::other("upgrade handler sentinel"))
+            }
+            UpgradeSessionBehavior::HandlerPanic => {
+                inject_native_contract_panic("injected upgraded-session handler panic");
             }
             UpgradeSessionBehavior::Graceful(connection_lifetime) => {
                 let mut input = [0; 4];
@@ -1906,6 +2095,8 @@ async fn main() -> ProbeResult<()> {
                 phase: event.phase(),
                 peer_addr: event.peer_addr(),
                 is_io_error,
+                is_direct_io_error: event.error().is::<io::Error>(),
+                has_error_source: event.error().source().is_some(),
                 h3_error_code: h3_connection_error_code(event.error()),
                 message: event.error().to_string(),
             });
@@ -1985,24 +2176,31 @@ async fn main() -> ProbeResult<()> {
                 | "graceful-timeout-abort"
                 | "http3-graceful-timeout-abort"
         ) || operation.starts_with("native-lifecycle-")
+            || operation == "native-service-error-propagation"
             || operation == "native-http3-alpn-contract"
             || operation == "native-http3-no-common-alpn-recovery"
             || operation == "native-http3-no-common-alpn-lifecycle-recovery"
             || operation == "native-http3-endpoint-close-lifecycle"
             || operation == "native-http3-idle-connection-shutdown-timeout"
             || operation == "native-http3-peer-goaway-drain"
+            || operation == "native-http3-server-shutdown-open-connection"
             || operation == "native-http3-incomplete-request-recovery"
             || operation == "native-http3-response-send-cancel"
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
+            || operation == "native-http1-connection-task-reaping"
             || operation == "native-http1-service-panic-recovery"
             || operation == "native-http1-upgrade-session"
             || operation == "native-http1-websocket"
         {
             if operation.starts_with("native-lifecycle-") {
                 run_isolated_lifecycle_case(case).await?;
+            } else if operation == "native-service-error-propagation" {
+                run_isolated_service_error_propagation_case(case).await?;
             } else if operation == "native-http1-connection-slot-reuse" {
                 run_isolated_http1_connection_slot_reuse_case(case).await?;
+            } else if operation == "native-http1-connection-task-reaping" {
+                run_isolated_http1_connection_task_reaping_case(case).await?;
             } else if operation == "native-http1-service-panic-recovery" {
                 run_isolated_http1_service_panic_recovery_case(case).await?;
             } else if operation == "native-http1-upgrade-session" {
@@ -2021,6 +2219,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http3_idle_connection_shutdown_timeout_case(case).await?;
             } else if operation == "native-http3-peer-goaway-drain" {
                 run_isolated_http3_peer_goaway_case(case).await?;
+            } else if operation == "native-http3-server-shutdown-open-connection" {
+                run_isolated_http3_server_shutdown_case(case).await?;
             } else if operation == "native-http3-incomplete-request-recovery" {
                 run_isolated_http3_incomplete_request_recovery_case(case).await?;
             } else if operation == "native-http3-response-send-cancel" {
@@ -2158,6 +2358,7 @@ fn lifecycle_server_config(
         application_shutdown_timeout: hook_timeout,
         application_lifecycle: Some(hooks),
         error_observer,
+        service_error_policy: uvicorn_rs::ServiceErrorPolicy::RespondInternalServerError,
     })
 }
 
@@ -2195,6 +2396,12 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
         }
         "native-lifecycle-http3-pending-handshake-shutdown" => {
             return run_lifecycle_http3_pending_handshake_shutdown_case(case).await;
+        }
+        "native-lifecycle-http3-invalid-config" => {
+            return run_lifecycle_http3_invalid_config_case(case).await;
+        }
+        "native-lifecycle-hooks-omitted" => {
+            return run_lifecycle_http3_without_hooks_case(case).await;
         }
         "native-lifecycle-websocket" => return run_lifecycle_websocket_case(case).await,
         "native-lifecycle-readiness-error" => {
@@ -2322,6 +2529,76 @@ async fn run_isolated_http1_connection_slot_reuse_case(case: &Value) -> ProbeRes
             ))
             .into());
         }
+
+        let reconnect_requests = case["reconnect_requests"]
+            .as_u64()
+            .filter(|count| (1_u64..=128).contains(count))
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "reconnect_requests must be between 1 and 128",
+                )
+            })?;
+        for request_index in 0..reconnect_requests {
+            let mut reconnect = TcpStream::connect(address).await?;
+            let request = format!(
+                "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            );
+            reconnect.write_all(request.as_bytes()).await?;
+            let (reconnect_status, reconnect_headers) = tokio::time::timeout(
+                Duration::from_secs(2),
+                read_response_head(&mut reconnect),
+            )
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("reconnect {request_index} response head timed out"),
+                )
+            })??;
+            let (reconnect_body, reconnect_complete) = tokio::time::timeout(
+                Duration::from_secs(2),
+                read_response_body(&mut reconnect, &reconnect_headers),
+            )
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("reconnect {request_index} response body timed out"),
+                )
+            })??;
+            if reconnect_status != expected_status
+                || reconnect_body != expected_body.as_bytes()
+                || !reconnect_complete
+            {
+                return Err(io::Error::other(format!(
+                    "{}: reconnect {request_index} returned an unexpected response",
+                    required_str(case, "id")?
+                ))
+                .into());
+            }
+
+            let mut eof_probe = [0_u8; 1];
+            match tokio::time::timeout(Duration::from_secs(2), reconnect.read(&mut eof_probe)).await
+            {
+                Err(_) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        format!("reconnect {request_index} did not close as requested"),
+                    )
+                    .into())
+                }
+                Ok(Ok(0)) => {}
+                Ok(Ok(_)) => {
+                    return Err(io::Error::other(format!(
+                        "{}: reconnect {request_index} remained open after Connection: close",
+                        required_str(case, "id")?
+                    ))
+                    .into())
+                }
+                Ok(Err(error)) => return Err(error.into()),
+            }
+        }
         shutdown_sender.send_replace(true);
         Ok::<(), Box<dyn Error + Send + Sync>>(())
     }
@@ -2341,6 +2618,254 @@ async fn run_isolated_http1_connection_slot_reuse_case(case: &Value) -> ProbeRes
     workflow?;
     server_result?;
     Ok(())
+}
+
+async fn run_isolated_http1_connection_task_reaping_case(case: &Value) -> ProbeResult<()> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let max_connections = required_u64(case, "max_connections")?
+        .try_into()
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "max_connections is too large"))?;
+    let held_connection_count = case["held_connection_count"]
+        .as_u64()
+        .filter(|count| (1_u64..=64).contains(count))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "held_connection_count must be between 1 and 64",
+            )
+        })?;
+    if max_connections as u64 <= held_connection_count {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "max_connections must leave a slot for the completion probe",
+        )
+        .into());
+    }
+    let server = tokio::spawn(uvicorn_rs::serve_tcp(
+        listener,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            max_connections,
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let workflow: ProbeResult<()> = async {
+        let held_path = required_str(case, "held_path")?;
+        let mut held_connections = Vec::with_capacity(held_connection_count as usize);
+        for _ in 0..held_connection_count {
+            let mut held = tokio::time::timeout(
+                Duration::from_secs(2),
+                TcpStream::connect(address),
+            )
+            .await??;
+            let held_request = format!(
+                "GET {held_path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+            );
+            held.write_all(held_request.as_bytes()).await?;
+            held_connections.push(held);
+        }
+
+        let state_path = required_str(case, "state_path")?;
+        let expected_hold_state = required_str(case, "expected_hold_state")?.as_bytes();
+        let state_deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let mut state = tokio::time::timeout(
+                Duration::from_secs(2),
+                request(address, "GET", state_path, b""),
+            )
+            .await??;
+            let (status, headers) = tokio::time::timeout(
+                Duration::from_secs(2),
+                read_response_head(&mut state),
+            )
+            .await??;
+            let (body, complete) = tokio::time::timeout(
+                Duration::from_secs(2),
+                read_response_body(&mut state, &headers),
+            )
+            .await??;
+            if status != StatusCode::OK.as_u16() || !complete {
+                return Err(io::Error::other(
+                    "held-request state probe did not complete successfully",
+                )
+                .into());
+            }
+            if body == expected_hold_state {
+                let mut eof_probe = [0_u8; 1];
+                match tokio::time::timeout(Duration::from_secs(2), state.read(&mut eof_probe)).await
+                {
+                    Ok(Ok(0)) => {}
+                    Ok(Ok(_)) => {
+                        return Err(io::Error::other(
+                            "held-request state probe stayed open after Connection: close",
+                        )
+                        .into());
+                    }
+                    Ok(Err(error)) => return Err(error.into()),
+                    Err(_) => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::TimedOut,
+                            "held-request state probe did not close",
+                        )
+                        .into());
+                    }
+                }
+                break;
+            }
+            if Instant::now() >= state_deadline {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("held request did not reach the configured state: {body:?}"),
+                )
+                .into());
+            }
+            tokio::task::yield_now().await;
+        }
+
+        let probe_path = required_str(case, "probe_path")?;
+        let expected_status = required_status(case, "expected_status")?;
+        let expected_body = required_str(case, "expected_body")?.as_bytes();
+        let probe_count = case["probe_count"]
+            .as_u64()
+            .filter(|count| (1_u64..=128).contains(count))
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "probe_count must be between 1 and 128",
+                )
+            })?;
+        for probe_index in 0..probe_count {
+            let mut probe = tokio::time::timeout(
+                Duration::from_secs(2),
+                request(address, "GET", probe_path, b""),
+            )
+            .await??;
+            let (status, headers) = tokio::time::timeout(
+                Duration::from_secs(2),
+                read_response_head(&mut probe),
+            )
+            .await??;
+            let (body, complete) = tokio::time::timeout(
+                Duration::from_secs(2),
+                read_response_body(&mut probe, &headers),
+            )
+            .await??;
+            if status != expected_status || body != expected_body || !complete {
+                return Err(io::Error::other(format!(
+                    "probe {probe_index} returned an unexpected response while its sibling request was held"
+                ))
+                .into());
+            }
+            let mut eof_probe = [0_u8; 1];
+            match tokio::time::timeout(Duration::from_secs(2), probe.read(&mut eof_probe)).await {
+                Ok(Ok(0)) => {}
+                Ok(Ok(_)) => {
+                    return Err(io::Error::other(format!(
+                        "probe {probe_index} stayed open after Connection: close"
+                    ))
+                    .into());
+                }
+                Ok(Err(error)) => return Err(error.into()),
+                Err(_) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        format!("probe {probe_index} did not close"),
+                    )
+                    .into());
+                }
+            }
+            tokio::task::yield_now().await;
+        }
+
+        let mut release = tokio::time::timeout(
+            Duration::from_secs(2),
+            request(address, "GET", required_str(case, "release_path")?, b""),
+        )
+        .await??;
+        let (release_status, release_headers) = tokio::time::timeout(
+            Duration::from_secs(2),
+            read_response_head(&mut release),
+        )
+        .await??;
+        let (release_body, release_complete) = tokio::time::timeout(
+            Duration::from_secs(2),
+            read_response_body(&mut release, &release_headers),
+        )
+        .await??;
+        if release_status != expected_status
+            || release_body != required_str(case, "expected_release_body")?.as_bytes()
+            || !release_complete
+        {
+            return Err(io::Error::other("held response release endpoint did not match its contract").into());
+        }
+
+        for (held_index, held) in held_connections.iter_mut().enumerate() {
+            let (held_status, held_headers) = tokio::time::timeout(
+                Duration::from_secs(2),
+                read_response_head(held),
+            )
+            .await??;
+            let (held_body, held_complete) = tokio::time::timeout(
+                Duration::from_secs(2),
+                read_response_body(held, &held_headers),
+            )
+            .await??;
+            if held_status != expected_status
+                || held_body != required_str(case, "expected_held_body")?.as_bytes()
+                || !held_complete
+            {
+                return Err(io::Error::other(format!(
+                    "released held response {held_index} did not complete"
+                ))
+                .into());
+            }
+            let mut eof_probe = [0_u8; 1];
+            match tokio::time::timeout(Duration::from_secs(2), held.read(&mut eof_probe)).await {
+                Ok(Ok(0)) => {}
+                Ok(Ok(_)) => {
+                    return Err(io::Error::other(format!(
+                        "released held connection {held_index} remained open after Connection: close"
+                    ))
+                    .into());
+                }
+                Ok(Err(error)) => return Err(error.into()),
+                Err(_) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        format!("released held connection {held_index} did not close"),
+                    )
+                    .into());
+                }
+            }
+        }
+        drop(held_connections);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        Ok(())
+    }
+    .await;
+
+    shutdown_sender.send_replace(true);
+    let server_result = tokio::time::timeout(
+        Duration::from_millis(required_u64(case, "server_wait_ms")?),
+        server,
+    )
+    .await;
+    workflow?;
+    match server_result {
+        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Err(error))) => Err(error.into()),
+        Ok(Err(error)) => Err(error.into()),
+        Err(_) => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/1 connection-reaper server did not stop",
+        )
+        .into()),
+    }
 }
 
 async fn run_isolated_http1_service_panic_recovery_case(case: &Value) -> ProbeResult<()> {
@@ -2434,6 +2959,8 @@ async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()
                 phase: event.phase(),
                 peer_addr: event.peer_addr(),
                 is_io_error,
+                is_direct_io_error: event.error().is::<io::Error>(),
+                has_error_source: event.error().source().is_some(),
                 h3_error_code: None,
                 message: event.error().to_string(),
             });
@@ -2460,6 +2987,7 @@ async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()
             "session-handler-error" => {
                 run_http1_upgrade_error_case(address, case, &observed_errors, true).await
             }
+            "session-handler-panic" => run_http1_upgrade_panic_case(address, case).await,
             "upgrade-not-available" => {
                 run_http1_upgrade_error_case(address, case, &observed_errors, false).await
             }
@@ -2706,6 +3234,25 @@ async fn run_http1_upgrade_error_case(
     verify_http1_upgrade_listener_recovers(address, case).await
 }
 
+async fn run_http1_upgrade_panic_case(address: SocketAddr, case: &Value) -> ProbeResult<()> {
+    let (mut client, status, headers) =
+        open_http1_upgrade_case_connection(address, case, true).await?;
+    verify_http1_upgrade_headers(case, status, &headers)?;
+
+    let mut trailing = Vec::new();
+    tokio::time::timeout(Duration::from_secs(2), client.read_to_end(&mut trailing)).await??;
+    if !trailing.is_empty() {
+        return Err(io::Error::other(format!(
+            "{}: panicking upgraded session wrote unexpected bytes: {:?}",
+            required_str(case, "id")?,
+            trailing
+        ))
+        .into());
+    }
+
+    verify_http1_upgrade_listener_recovers(address, case).await
+}
+
 async fn run_tls_http1_upgrade_session_error_case(
     address: SocketAddr,
     tls_clients: &TlsClients,
@@ -2881,6 +3428,39 @@ async fn run_http1_upgrade_registration_after_close_case(
 
 async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
     let scenario = required_str(case, "scenario")?;
+    let fault_point = case
+        .get("fault")
+        .and_then(|fault| fault.get("point"))
+        .and_then(Value::as_str);
+    if fault_point.is_some_and(|point| point != "websocket.receive.close-reply.flush")
+        || (scenario == "close-reply-flush-failure"
+            && fault_point != Some("websocket.receive.close-reply.flush"))
+        || (fault_point.is_some() && scenario != "close-reply-flush-failure")
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "native WebSocket fault metadata differs from its scenario",
+        )
+        .into());
+    }
+    #[cfg(coverage)]
+    let fault_armed = match fault_point {
+        Some("websocket.receive.close-reply.flush") => uvicorn_rs::arm_close_reply_flush_fault(),
+        None => false,
+        Some(_) => false,
+    };
+    #[cfg(not(coverage))]
+    if fault_point.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "native fault contracts require an instrumented coverage build",
+        )
+        .into());
+    }
+    #[cfg(coverage)]
+    if fault_point.is_some() && !fault_armed {
+        return Err(io::Error::other("native WebSocket coverage fault was already armed").into());
+    }
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
@@ -2902,6 +3482,14 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
             "message-exchange" => run_native_websocket_exchange_case(address, case).await,
             "malformed-client-frame" => {
                 run_native_websocket_malformed_frame_case(
+                    address,
+                    case,
+                    &mut websocket_error_observation,
+                )
+                .await
+            }
+            "close-reply-flush-failure" => {
+                run_native_websocket_close_reply_flush_failure_case(
                     address,
                     case,
                     &mut websocket_error_observation,
@@ -2935,6 +3523,7 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
             | "wrong-upgrade-token"
             | "empty-subprotocol-token"
             | "invalid-subprotocol-token"
+            | "invalid-selected-subprotocol-header-value"
             | "reserved-response-header"
             | "duplicate-subprotocol" => run_native_websocket_rejection_case(address, case).await,
             _ => Err(io::Error::new(
@@ -2950,14 +3539,23 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
     let wait_ms = case["server_wait_ms"]
         .as_u64()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
-    let server_result = tokio::time::timeout(Duration::from_millis(wait_ms), server)
-        .await
-        .map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::TimedOut,
-                "native HTTP/1 WebSocket server did not stop",
+    let server_wait = tokio::time::timeout(Duration::from_millis(wait_ms), server).await;
+    #[cfg(coverage)]
+    if fault_armed {
+        if !uvicorn_rs::finish_close_reply_flush_fault() {
+            return Err(io::Error::other(
+                "native WebSocket close-reply flush fault was not consumed",
             )
-        })??;
+            .into());
+        }
+        println!("FAULT_CONSUMED websocket.receive.close-reply.flush");
+    }
+    let server_result = server_wait.map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            "native HTTP/1 WebSocket server did not stop",
+        )
+    })??;
     workflow?;
     server_result?;
     Ok(())
@@ -2987,14 +3585,8 @@ async fn open_native_websocket_handshake(
     let key_values = input_string_values(case, "request_websocket_key_values", key)?;
     let version_values =
         input_string_values(case, "request_websocket_version_values", websocket_version)?;
-    let key_headers = key_values
-        .iter()
-        .map(|value| format!("Sec-WebSocket-Key: {value}\r\n"))
-        .collect::<String>();
-    let version_headers = version_values
-        .iter()
-        .map(|value| format!("Sec-WebSocket-Version: {value}\r\n"))
-        .collect::<String>();
+    let key_headers = render_header_lines("Sec-WebSocket-Key", &key_values);
+    let version_headers = render_header_lines("Sec-WebSocket-Version", &version_values);
     let protocol = case
         .get("offered_subprotocol")
         .and_then(Value::as_str)
@@ -3007,6 +3599,17 @@ async fn open_native_websocket_handshake(
     let (status, headers) =
         tokio::time::timeout(Duration::from_secs(2), read_response_head(&mut client)).await??;
     Ok((client, status, headers))
+}
+
+fn render_header_lines(name: &str, values: &[&str]) -> String {
+    let mut headers = String::new();
+    for value in values {
+        headers.push_str(name);
+        headers.push_str(": ");
+        headers.push_str(value);
+        headers.push_str("\r\n");
+    }
+    headers
 }
 
 async fn run_native_websocket_exchange_case(address: SocketAddr, case: &Value) -> ProbeResult<()> {
@@ -3285,6 +3888,57 @@ async fn run_native_websocket_malformed_frame_case(
     Ok(())
 }
 
+async fn run_native_websocket_close_reply_flush_failure_case(
+    address: SocketAddr,
+    case: &Value,
+    observation: &mut watch::Receiver<Option<String>>,
+) -> ProbeResult<()> {
+    let (mut client, status, headers) = open_native_websocket_handshake(address, case).await?;
+    let expected_status = required_status(case, "expected_status")?;
+    if status != expected_status || !has_required_websocket_response_headers(&headers) {
+        return Err(io::Error::other(format!(
+            "{}: close-reply fault handshake differed: status={status}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    client
+        .write_all(&[0x88, 0x82, 0x37, 0xfa, 0x21, 0x3d, 0x34, 0x12])
+        .await?;
+    client.flush().await?;
+    let observed = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(observed) = observation.borrow_and_update().clone() {
+                return Ok::<_, io::Error>(observed);
+            }
+            observation
+                .changed()
+                .await
+                .map_err(|_| io::Error::other("WebSocket error observation channel closed"))?;
+        }
+    })
+    .await??;
+    drop(client);
+
+    let expected_prefix = required_str(case, "expected_error_prefix")?;
+    let expected_source = case["expected_error_source"].as_bool().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "expected_error_source must be a boolean",
+        )
+    })?;
+    let expected_suffix = format!(";source={expected_source}");
+    if !observed.starts_with(expected_prefix) || !observed.ends_with(&expected_suffix) {
+        return Err(io::Error::other(format!(
+            "{}: close-reply error observation differed: {observed:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
 fn has_required_websocket_response_headers(
     headers: &std::collections::HashMap<String, String>,
 ) -> bool {
@@ -3375,7 +4029,9 @@ async fn run_isolated_http3_alpn_case(case: &Value) -> ProbeResult<()> {
             observations.push(ObservedServerError {
                 phase: event.phase(),
                 peer_addr: event.peer_addr(),
-                is_io_error: event.error().is::<io::Error>(),
+                is_io_error: error_chain_contains::<io::Error>(event.error()),
+                is_direct_io_error: event.error().is::<io::Error>(),
+                has_error_source: event.error().source().is_some(),
                 h3_error_code: h3_connection_error_code(event.error()),
                 message: event.error().to_string(),
             });
@@ -3421,10 +4077,27 @@ async fn run_isolated_http3_alpn_case(case: &Value) -> ProbeResult<()> {
         }
     })
     .await??;
-    if observation.phase != ServerErrorPhase::Connection
+    let observed_error_type = if observation.is_io_error {
+        "io"
+    } else if observation.h3_error_code.is_some() {
+        "h3"
+    } else {
+        "http3"
+    };
+    let expected_error_has_source = case["expected_server_error_has_source"]
+        .as_bool()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "expected_server_error_has_source must be a boolean",
+            )
+        })?;
+    if server_error_phase_name(observation.phase)
+        != required_str(case, "expected_server_error_phase")?
+        || observed_error_type != required_str(case, "expected_server_error_type")?
         || observation.peer_addr.is_none()
-        || !observation.is_io_error
-        || observation.message != "QUIC connection did not negotiate the h3 ALPN"
+        || observation.has_error_source != expected_error_has_source
+        || observation.message != required_str(case, "expected_server_error_message")?
     {
         return Err(io::Error::other(format!(
             "{}: non-HTTP/3 ALPN error observation differed: {observation:?}",
@@ -3691,12 +4364,21 @@ where
         )
         .into());
     }
+    let expected_error_has_source = case["expected_server_error_has_source"]
+        .as_bool()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "expected_server_error_has_source must be a boolean",
+            )
+        })?;
 
     let endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
     let address = endpoint.local_addr()?;
     let observed_errors = Arc::new(Mutex::new(Vec::<(
         ServerErrorPhase,
         Option<SocketAddr>,
+        bool,
         bool,
         String,
     )>::new()));
@@ -3706,7 +4388,8 @@ where
             observations.push((
                 event.phase(),
                 event.peer_addr(),
-                event.error().is::<quinn::ConnectionError>(),
+                error_chain_contains::<quinn::ConnectionError>(event.error()),
+                event.error().source().is_some(),
                 event.error().to_string(),
             ));
         }
@@ -3758,6 +4441,7 @@ where
         if observation.0 != ServerErrorPhase::Connection
             || observation.1.is_none()
             || !observation.2
+            || observation.3 != expected_error_has_source
         {
             return Err(io::Error::other(format!(
                 "{}: expected an observed QUIC connection error with peer metadata, got {observation:?}",
@@ -3772,9 +4456,14 @@ where
             .map_err(|_| io::Error::other("HTTP/3 error observation lock was poisoned"))?
             .clone();
         if observations.is_empty()
-            || observations.iter().any(|(phase, peer_addr, is_quic, _)| {
-                *phase != ServerErrorPhase::Connection || peer_addr.is_none() || !is_quic
-            })
+            || observations.iter().any(
+                |(phase, peer_addr, is_quic, has_error_source, _)| {
+                    *phase != ServerErrorPhase::Connection
+                        || peer_addr.is_none()
+                        || !is_quic
+                        || *has_error_source != expected_error_has_source
+                },
+            )
         {
             return Err(io::Error::other(format!(
                 "{}: no-common-ALPN attempts produced unexpected server error observations: {observations:?}",
@@ -4820,6 +5509,7 @@ async fn run_lifecycle_http1_workflow(
     )
     .await?;
     verify_lifecycle_response(case, b"started\n", ready_status, &ready_body)?;
+    tokio::time::sleep(Duration::from_millis(50)).await;
 
     let id = required_str(case, "id")?.to_owned();
     let path = required_str(case, "path")?.to_owned();
@@ -4995,6 +5685,159 @@ async fn run_lifecycle_http3_case(case: &Value) -> ProbeResult<()> {
     workflow?;
     server_result?;
     verify_lifecycle_state(case, &fixture.state)
+}
+
+async fn run_lifecycle_http3_invalid_config_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    let (_, _, quic_server_config) = test_tls_configs()?;
+    let endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
+    let config = match required_str(case, "invalid_configuration")? {
+        "zero-connection-limit" => uvicorn_rs::ServerConfig {
+            max_connections: 0,
+            application_lifecycle: Some(fixture.hooks.clone()),
+            ..uvicorn_rs::ServerConfig::default()
+        },
+        "connection-limit-overflow" => uvicorn_rs::ServerConfig {
+            max_connections: tokio::sync::Semaphore::MAX_PERMITS + 1,
+            application_lifecycle: Some(fixture.hooks.clone()),
+            ..uvicorn_rs::ServerConfig::default()
+        },
+        configuration => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported HTTP/3 server configuration {configuration:?}"),
+            )
+            .into());
+        }
+    };
+
+    let error = tokio::time::timeout(
+        Duration::from_secs(2),
+        uvicorn_rs::serve_http3(endpoint, fixture.app, std::future::pending::<()>(), config),
+    )
+    .await
+    .map_err(|_| io::Error::other("HTTP/3 invalid configuration did not return promptly"))?
+    .err()
+    .ok_or_else(|| io::Error::other("HTTP/3 server accepted an invalid connection limit"))?;
+    let observed_error = match &error {
+        uvicorn_rs::ServeError::InvalidConnectionLimit => "invalid-connection-limit",
+        uvicorn_rs::ServeError::ConnectionLimitTooLarge => "connection-limit-too-large",
+        other => {
+            return Err(io::Error::other(format!(
+                "HTTP/3 server returned an unexpected configuration error: {other}"
+            ))
+            .into());
+        }
+    };
+    if observed_error != required_str(case, "expected_error")? {
+        return Err(io::Error::other(format!(
+            "{}: HTTP/3 configuration error differed: {observed_error}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    if let Some(expected_display) = case.get("expected_error_display") {
+        if expected_display.as_str() != Some(error.to_string().as_str()) {
+            return Err(io::Error::other("HTTP/3 configuration error display differed").into());
+        }
+    }
+    if error.source().is_some() {
+        return Err(io::Error::other("HTTP/3 configuration error had an unexpected source").into());
+    }
+    verify_configuration_rejected_before_lifecycle(&fixture.state)?;
+    Ok(())
+}
+
+async fn run_lifecycle_http3_without_hooks_case(case: &Value) -> ProbeResult<()> {
+    let fixture = lifecycle_fixture();
+    // This application is ready independently of server-managed lifecycle
+    // hooks. The case verifies that omitting hooks leaves serving and shutdown
+    // behavior available without invoking either callback.
+    fixture
+        .state
+        .startup_completed
+        .store(true, Ordering::Release);
+
+    let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+    let endpoint = quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse()?)?;
+    let address = endpoint.local_addr()?;
+    let mut config = uvicorn_rs::ServerConfig::default();
+    if let Some(limit) = case.get("max_connections") {
+        if limit.as_str() != Some("runtime-maximum") {
+            return Err(io::Error::other("unsupported lifecycle-free connection limit").into());
+        }
+        config.max_connections = tokio::sync::Semaphore::MAX_PERMITS;
+    }
+    let server = tokio::spawn(uvicorn_rs::serve_http3(
+        endpoint,
+        fixture.app.clone(),
+        shutdown_on_change(fixture.shutdown_receiver.clone()),
+        config,
+    ));
+
+    let workflow: ProbeResult<()> = match tokio::time::timeout(Duration::from_secs(5), async {
+        let (client_endpoint, mut sender) = new_http3_client(address, &tls_clients.http3).await?;
+        let mut response = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "path")?,
+            b"",
+        )
+        .await?;
+        let (status, body, _) = collect_http3_response(&mut response).await?;
+        if status != required_status(case, "expected_status")?
+            || body != required_str(case, "expected_body")?.as_bytes()
+        {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/3 request without lifecycle hooks differed: status={status}, body={body:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        client_endpoint.close(
+            quinn::VarInt::from_u32(0),
+            b"HTTP/3 lifecycle hooks omitted",
+        );
+        tokio::time::timeout(Duration::from_secs(2), client_endpoint.wait_idle())
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "HTTP/3 client did not close after lifecycle-free request",
+                )
+            })?;
+        Ok(())
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => Err(io::Error::other("HTTP/3 lifecycle-free request did not complete promptly").into()),
+    };
+
+    fixture.shutdown_sender.send_replace(true);
+    let server_result = join_lifecycle_server(server).await;
+    workflow?;
+    server_result?;
+
+    let events = fixture
+        .state
+        .events
+        .lock()
+        .map_err(|_| io::Error::other("lifecycle event state was poisoned"))?;
+    if !events.is_empty()
+        || fixture.state.requests_started.load(Ordering::Acquire) != 1
+        || !fixture.state.startup_completed.load(Ordering::Acquire)
+        || fixture.state.shutdown_completed.load(Ordering::Acquire)
+    {
+        return Err(io::Error::other(format!(
+            "{}: omitted lifecycle hooks were invoked or HTTP/3 serving did not complete; events={events:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
 }
 
 async fn run_lifecycle_http3_connection_init_failure_case(case: &Value) -> ProbeResult<()> {
@@ -5658,11 +6501,14 @@ fn contract_app(shutdown: watch::Sender<bool>) -> ContractApp {
 
 fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<AppState>) {
     let (peer_write_half_close_release, _) = watch::channel(false);
+    let (peer_read_half_close_observation, _) = watch::channel(None);
+    let (peer_read_half_close_unavailable_result, _) = watch::channel(None);
     let (http3_response_cancel_release, _) = watch::channel(false);
     let (upgrade_registration_outcome, _) = watch::channel(None);
     let (websocket_error_observation, _) = watch::channel(None);
     let state = Arc::new(AppState {
         fail_next_readiness: AtomicBool::new(false),
+        panic_next_readiness: AtomicBool::new(false),
         readiness_gate: Mutex::new(ReadinessGate::default()),
         stream_complete: AtomicBool::new(false),
         graceful_timeout_stream_drops: Arc::new(AtomicUsize::new(0)),
@@ -5674,8 +6520,12 @@ fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<A
         request_future_drops: Arc::new(AtomicUsize::new(0)),
         request_ends_while_connection_open: Arc::new(AtomicUsize::new(0)),
         request_connections_closed: Arc::new(AtomicUsize::new(0)),
+        request_lifetime_peer_eof_available: Arc::new(AtomicBool::new(false)),
+        request_lifetime_peer_eof: Arc::new(AtomicBool::new(false)),
         peer_write_half_close_started: AtomicBool::new(false),
         peer_write_half_close_release,
+        peer_read_half_close_observation,
+        peer_read_half_close_unavailable_result,
         response_chunks_polled: Arc::new(AtomicUsize::new(0)),
         response_streams_dropped: Arc::new(AtomicUsize::new(0)),
         upload_bytes_received: AtomicUsize::new(0),
@@ -5683,6 +6533,7 @@ fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<A
         http3_body_pending: AtomicBool::new(false),
         http3_body_errors: AtomicUsize::new(0),
         http3_response_cancel_pending: AtomicBool::new(false),
+        http3_response_cancel_waiters: AtomicUsize::new(0),
         http3_response_cancel_release,
         upload_tasks_dropped: Arc::new(AtomicUsize::new(0)),
         shutdown,
@@ -5716,16 +6567,19 @@ async fn run_cases(
                 | "graceful-timeout-abort"
                 | "http3-graceful-timeout-abort"
         ) || operation.starts_with("native-lifecycle-")
+            || operation == "native-service-error-propagation"
             || operation == "native-http3-alpn-contract"
             || operation == "native-http3-no-common-alpn-recovery"
             || operation == "native-http3-no-common-alpn-lifecycle-recovery"
             || operation == "native-http3-endpoint-close-lifecycle"
             || operation == "native-http3-idle-connection-shutdown-timeout"
             || operation == "native-http3-peer-goaway-drain"
+            || operation == "native-http3-server-shutdown-open-connection"
             || operation == "native-http3-incomplete-request-recovery"
             || operation == "native-http3-response-send-cancel"
             || operation == "native-http1-tls-pending-handshake-shutdown"
             || operation == "native-http1-connection-slot-reuse"
+            || operation == "native-http1-connection-task-reaping"
             || operation == "native-http1-service-panic-recovery"
             || operation == "native-http1-upgrade-session"
             || operation == "native-http1-websocket"
@@ -5846,6 +6700,16 @@ async fn run_cases(
                     )
                     .await?;
                 }
+                "http1-write-half-close"
+                    if case["observe_peer_read_half_close"].as_bool() == Some(true) =>
+                {
+                    run_http1_peer_read_half_close_case(
+                        tls_address,
+                        Some(&tls_clients.http1),
+                        case,
+                    )
+                    .await?;
+                }
                 _ => run_tls_connection_security_case(tls_address, tls_clients, case).await?,
             }
             let mut output = io::stdout().lock();
@@ -5911,12 +6775,17 @@ async fn run_cases(
 async fn run_server_config_validation_case(case: &Value) -> ProbeResult<()> {
     let fixture = lifecycle_fixture();
     let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let mut config = uvicorn_rs::ServerConfig::default();
+    let mut config = uvicorn_rs::ServerConfig {
+        application_lifecycle: Some(fixture.hooks.clone()),
+        ..uvicorn_rs::ServerConfig::default()
+    };
     match required_str(case, "invalid_configuration")? {
         "zero-connection-limit" => config.max_connections = 0,
+        "connection-limit-overflow" => {
+            config.max_connections = tokio::sync::Semaphore::MAX_PERMITS + 1;
+        }
         "graceful-timeout-overflow" => config.graceful_shutdown_timeout = Duration::MAX,
         "lifecycle-timeout-overflow" => {
-            config.application_lifecycle = Some(fixture.hooks.clone());
             config.application_startup_timeout = Duration::MAX;
         }
         invalid_configuration => {
@@ -5929,12 +6798,33 @@ async fn run_server_config_validation_case(case: &Value) -> ProbeResult<()> {
     }
 
     let shutdown = shutdown_on_change(fixture.shutdown_receiver.clone());
-    let result = uvicorn_rs::serve_tcp(listener, fixture.app, shutdown, config).await;
-    let error = result
-        .err()
-        .ok_or_else(|| io::Error::other("invalid server configuration unexpectedly succeeded"))?;
+    let error: uvicorn_rs::ServeError = tokio::time::timeout(Duration::from_secs(2), async {
+        let result = match case
+            .get("protocol")
+            .and_then(Value::as_str)
+            .unwrap_or("http/1.1")
+        {
+            "http/1.1" => uvicorn_rs::serve_tcp(listener, fixture.app, shutdown, config).await,
+            "https/1.1" => {
+                let (tls_acceptor, _, _) = test_tls_configs()?;
+                uvicorn_rs::serve_tls(listener, tls_acceptor, fixture.app, shutdown, config).await
+            }
+            protocol => {
+                return Err(io::Error::other(format!(
+                    "unsupported validation protocol {protocol:?}"
+                ))
+                .into())
+            }
+        };
+        result.err().ok_or_else(|| -> Box<dyn Error + Send + Sync> {
+            io::Error::other("invalid server configuration unexpectedly succeeded").into()
+        })
+    })
+    .await
+    .map_err(|_| io::Error::other("invalid server configuration did not return promptly"))??;
     let observed_variant = match &error {
         uvicorn_rs::ServeError::InvalidConnectionLimit => "invalid-connection-limit",
+        uvicorn_rs::ServeError::ConnectionLimitTooLarge => "connection-limit-too-large",
         uvicorn_rs::ServeError::InvalidGracefulShutdownTimeout => {
             "invalid-graceful-shutdown-timeout"
         }
@@ -5957,11 +6847,35 @@ async fn run_server_config_validation_case(case: &Value) -> ProbeResult<()> {
         ))
         .into());
     }
+    verify_configuration_rejected_before_lifecycle(&fixture.state)?;
+    Ok(())
+}
+
+fn verify_configuration_rejected_before_lifecycle(state: &LifecycleState) -> ProbeResult<()> {
+    let events = state
+        .events
+        .lock()
+        .map_err(|_| io::Error::other("lifecycle event state was poisoned"))?;
+    if !events.is_empty()
+        || state.startup_completed.load(Ordering::Acquire)
+        || state.shutdown_completed.load(Ordering::Acquire)
+        || state.requests_started.load(Ordering::Acquire) != 0
+    {
+        return Err(io::Error::other(format!(
+            "invalid configuration invoked lifecycle hooks or served a request: {events:?}"
+        ))
+        .into());
+    }
     Ok(())
 }
 
 fn run_public_error_contract_case(case: &Value) -> ProbeResult<()> {
     let default_config = uvicorn_rs::ServerConfig::default();
+    if default_config.service_error_policy
+        != uvicorn_rs::ServiceErrorPolicy::RespondInternalServerError
+    {
+        return Err(io::Error::other("default service error policy differed").into());
+    }
     if format!("{default_config:?}") != required_str(case, "expected_default_config_debug")? {
         return Err(io::Error::other("default ServerConfig debug output differed").into());
     }
@@ -5974,7 +6888,11 @@ fn run_public_error_contract_case(case: &Value) -> ProbeResult<()> {
         application_shutdown_timeout: Duration::from_millis(175),
         application_lifecycle: Some(fixture.hooks.clone()),
         error_observer: Some(Arc::new(|_| {})),
+        service_error_policy: uvicorn_rs::ServiceErrorPolicy::Propagate,
     };
+    if configured_config.service_error_policy != uvicorn_rs::ServiceErrorPolicy::Propagate {
+        return Err(io::Error::other("configured service error policy differed").into());
+    }
     if format!("{configured_config:?}") != required_str(case, "expected_configured_config_debug")? {
         return Err(io::Error::other("configured ServerConfig debug output differed").into());
     }
@@ -6083,6 +7001,536 @@ fn run_public_error_contract_case(case: &Value) -> ProbeResult<()> {
                 );
             }
         }
+    }
+    Ok(())
+}
+
+async fn run_isolated_service_error_propagation_case(case: &Value) -> ProbeResult<()> {
+    if required_str(case, "operation")? != "native-service-error-propagation" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "service error propagation case has an unexpected operation",
+        )
+        .into());
+    }
+    let case_id = required_str(case, "id")?.to_owned();
+
+    let failure_kind = required_str(case, "failure_kind")?;
+    let (expected_phase, expected_message, expected_fault_path) = match failure_kind {
+        "service" => ("service", "injected service error", "/service-error"),
+        "readiness" => ("readiness", "injected readiness failure", "/ready"),
+        other => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unknown service error failure kind {other:?}"),
+            )
+            .into());
+        }
+    };
+    if required_str(case, "expected_server_error_phase")? != expected_phase
+        || required_str(case, "expected_server_error_type")? != "io"
+        || required_str(case, "expected_server_error_message")? != expected_message
+        || required_str(case, "fault_path")? != expected_fault_path
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "service error propagation expectations differ from the selected failure",
+        )
+        .into());
+    }
+
+    let service_error_policy = match required_str(case, "service_error_policy")? {
+        "propagate" => uvicorn_rs::ServiceErrorPolicy::Propagate,
+        "respond-internal-server-error" => {
+            uvicorn_rs::ServiceErrorPolicy::RespondInternalServerError
+        }
+        other => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unknown service_error_policy {other:?}"),
+            )
+            .into());
+        }
+    };
+    let protocol = required_str(case, "protocol")?;
+    let expected_recovery_scope = match protocol {
+        "http/1.1" => "fresh-connection",
+        "h2c-prior-knowledge" | "http3" => "same-connection",
+        other => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported service error propagation protocol {other:?}"),
+            )
+            .into());
+        }
+    };
+    if required_str(case, "recovery_scope")? != expected_recovery_scope {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "service error recovery scope differs from its protocol",
+        )
+        .into());
+    }
+    let server_wait_ms = case["server_wait_ms"]
+        .as_u64()
+        .filter(|ms| (1..=5_000).contains(ms))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "server_wait_ms must be between 1 and 5000",
+            )
+        })?;
+
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let observed_errors = Arc::new(Mutex::new(Vec::<ObservedServerError>::new()));
+    let error_log = Arc::clone(&observed_errors);
+    let error_observer: ServerErrorObserver = Arc::new(move |event: ServerErrorEvent<'_>| {
+        let mut cause: Option<&(dyn Error + 'static)> = Some(event.error());
+        let mut is_io_error = false;
+        while let Some(error) = cause {
+            if error.is::<io::Error>() {
+                is_io_error = true;
+                break;
+            }
+            cause = error.source();
+        }
+        if let Ok(mut observations) = error_log.lock() {
+            observations.push(ObservedServerError {
+                phase: event.phase(),
+                peer_addr: event.peer_addr(),
+                is_io_error,
+                is_direct_io_error: event.error().is::<io::Error>(),
+                has_error_source: event.error().source().is_some(),
+                h3_error_code: h3_connection_error_code(event.error()),
+                message: event.error().to_string(),
+            });
+        }
+    });
+    let config = uvicorn_rs::ServerConfig {
+        max_connections: 8,
+        graceful_shutdown_timeout: Duration::from_millis(500),
+        error_observer: Some(error_observer),
+        service_error_policy,
+        ..uvicorn_rs::ServerConfig::default()
+    };
+    let application = contract_app(shutdown_sender.clone());
+    let (address, mut server, http3_client_config) = match protocol {
+        "http/1.1" | "h2c-prior-knowledge" => {
+            let listener = TcpListener::bind("127.0.0.1:0").await?;
+            let address = listener.local_addr()?;
+            let server = tokio::spawn(uvicorn_rs::serve_tcp(
+                listener,
+                application,
+                shutdown_on_change(shutdown_receiver),
+                config,
+            ));
+            (address, server, None)
+        }
+        "http3" => {
+            let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+            let endpoint =
+                quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
+            let address = endpoint.local_addr()?;
+            let server = tokio::spawn(uvicorn_rs::serve_http3(
+                endpoint,
+                application,
+                shutdown_on_change(shutdown_receiver),
+                config,
+            ));
+            (address, server, Some(tls_clients.http3))
+        }
+        other => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported service error propagation protocol {other:?}"),
+            )
+            .into());
+        }
+    };
+
+    let workflow = match tokio::time::timeout(Duration::from_secs(5), async {
+        match protocol {
+            "http/1.1" => run_service_error_propagation_http1(address, case).await,
+            "h2c-prior-knowledge" => run_service_error_propagation_http2(address, case).await,
+            "http3" => match http3_client_config.as_ref() {
+                Some(client_config) => {
+                    run_service_error_propagation_http3(address, client_config, case).await
+                }
+                None => Err(io::Error::other("HTTP/3 client config is missing").into()),
+            },
+            other => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported service error propagation protocol {other:?}"),
+            )
+            .into()),
+        }
+    })
+    .await
+    {
+        Ok(workflow) => workflow,
+        Err(_) => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            format!(
+                "{case_id}: native service error propagation protocol workflow exceeded 5 seconds"
+            ),
+        )
+        .into()),
+    };
+
+    shutdown_sender.send_replace(true);
+    let server_result =
+        tokio::time::timeout(Duration::from_millis(server_wait_ms), &mut server).await;
+    if server_result.is_err() {
+        server.abort();
+        let _ = tokio::time::timeout(Duration::from_secs(1), &mut server).await;
+    }
+    workflow?;
+    match server_result {
+        Ok(Ok(Ok(()))) => {}
+        Ok(Ok(Err(error))) => return Err(error.into()),
+        Ok(Err(error)) => return Err(error.into()),
+        Err(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!(
+                    "{case_id}: native service error propagation server did not stop within {server_wait_ms} ms"
+                ),
+            )
+            .into());
+        }
+    }
+    verify_service_error_observation(case, &observed_errors)
+}
+
+async fn run_service_error_propagation_http1(address: SocketAddr, case: &Value) -> ProbeResult<()> {
+    if required_str(case, "failure_kind")? == "readiness" {
+        let (status, body) =
+            read_service_error_http1_response(address, required_str(case, "arm_path")?).await?;
+        verify_service_error_http_response(case, status, &body, "arm_status", "arm_body")?;
+    }
+
+    let path = required_str(case, "fault_path")?;
+    let mut client = tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address))
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "HTTP/1.1 error probe connect timed out",
+            )
+        })??;
+    let request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    client.write_all(request.as_bytes()).await?;
+    let mut first_byte = [0_u8; 1];
+    match tokio::time::timeout(Duration::from_secs(2), client.read(&mut first_byte)).await {
+        Ok(Ok(0)) => {}
+        Ok(Ok(_)) => {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/1.1 propagated application error committed response bytes before aborting",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        Ok(Err(error)) if error.kind() == io::ErrorKind::ConnectionReset => {}
+        Ok(Err(error)) => {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/1.1 error probe ended with unexpected read error: {error}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        Err(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!(
+                    "{}: HTTP/1.1 propagated application error did not abort the connection before response headers",
+                    required_str(case, "id")?
+                ),
+            )
+            .into());
+        }
+    }
+
+    let (status, body) =
+        read_service_error_http1_response(address, required_str(case, "recovery_path")?).await?;
+    verify_service_error_http_response(case, status, &body, "recovery_status", "recovery_body")
+}
+
+async fn read_service_error_http1_response(
+    address: SocketAddr,
+    path: &str,
+) -> ProbeResult<(u16, Vec<u8>)> {
+    let mut client = tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address))
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "HTTP/1.1 request connect timed out",
+            )
+        })??;
+    let request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    client.write_all(request.as_bytes()).await?;
+    let (status, headers) =
+        tokio::time::timeout(Duration::from_secs(2), read_response_head(&mut client)).await??;
+    let (body, complete) = tokio::time::timeout(
+        Duration::from_secs(2),
+        read_response_body(&mut client, &headers),
+    )
+    .await??;
+    if !complete {
+        return Err(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            format!("HTTP/1.1 response for {path} ended before its body completed"),
+        )
+        .into());
+    }
+    Ok((status, body))
+}
+
+async fn run_service_error_propagation_http2(address: SocketAddr, case: &Value) -> ProbeResult<()> {
+    let socket = TcpStream::connect(address).await?;
+    let (mut sender, connection) = h2::client::handshake(socket).await?;
+    let mut driver = tokio::spawn(connection);
+    let workflow: ProbeResult<()> = async {
+        if required_str(case, "failure_kind")? == "readiness" {
+            let (status, body) =
+                read_http2_small_response(&mut sender, required_str(case, "arm_path")?).await?;
+            verify_service_error_http_response(case, status.as_u16(), &body, "arm_status", "arm_body")?;
+        }
+
+        let expected_reset_reason = required_str(case, "expected_reset_reason")?;
+        if expected_reset_reason != "INTERNAL_ERROR" {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "HTTP/2 error propagation requires the INTERNAL_ERROR stream reset",
+            )
+            .into());
+        }
+        sender = sender.clone().ready().await?;
+        let request = http2_service_error_request(address, required_str(case, "fault_path")?)?;
+        let (response, _request_body) = sender.send_request(request, true)?;
+        match tokio::time::timeout(Duration::from_secs(2), response).await {
+            Ok(Err(error)) if error.reason() == Some(h2::Reason::INTERNAL_ERROR) => {}
+            Ok(Err(error)) => {
+                return Err(io::Error::other(format!(
+                    "{}: HTTP/2 error stream reset reason differed: {:?}",
+                    required_str(case, "id")?,
+                    error.reason()
+                ))
+                .into());
+            }
+            Ok(Ok(response)) => {
+                return Err(io::Error::other(format!(
+                    "{}: HTTP/2 service error returned response status {} instead of resetting the stream before headers",
+                    required_str(case, "id")?,
+                    response.status()
+                ))
+                .into());
+            }
+            Err(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!(
+                        "{}: HTTP/2 error stream did not reset before response headers",
+                        required_str(case, "id")?
+                    ),
+                )
+                .into());
+            }
+        }
+
+        let (status, body) =
+            read_http2_small_response(&mut sender, required_str(case, "recovery_path")?).await?;
+        verify_service_error_http_response(
+            case,
+            status.as_u16(),
+            &body,
+            "recovery_status",
+            "recovery_body",
+        )
+    }
+    .await;
+
+    drop(sender);
+    let driver_result = tokio::time::timeout(Duration::from_secs(2), &mut driver).await;
+    if driver_result.is_err() {
+        driver.abort();
+        let _ = tokio::time::timeout(Duration::from_secs(1), &mut driver).await;
+    }
+    workflow?;
+    match driver_result {
+        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Err(error))) => Err(error.into()),
+        Ok(Err(error)) => Err(error.into()),
+        Err(_) => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/2 client driver remained active after its sender closed",
+        )
+        .into()),
+    }
+}
+
+fn http2_service_error_request(address: SocketAddr, path: &str) -> ProbeResult<Request<()>> {
+    Ok(Request::builder()
+        .method("GET")
+        .uri(format!("http://localhost:{}{path}", address.port()))
+        .header("host", "localhost")
+        .body(())?)
+}
+
+async fn run_service_error_propagation_http3(
+    address: SocketAddr,
+    client_config: &quinn::ClientConfig,
+    case: &Value,
+) -> ProbeResult<()> {
+    let (endpoint, mut sender) = new_http3_client(address, client_config).await?;
+    let workflow: ProbeResult<()> = async {
+        if required_str(case, "failure_kind")? == "readiness" {
+            let mut arm = send_http3_request(
+                &mut sender,
+                address,
+                "GET",
+                required_str(case, "arm_path")?,
+                b"",
+            )
+            .await?;
+            let (status, body, _) = collect_http3_response(&mut arm).await?;
+            verify_service_error_http_response(case, status, &body, "arm_status", "arm_body")?;
+        }
+
+        if required_str(case, "expected_reset_reason")? != "H3_INTERNAL_ERROR" {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "HTTP/3 error propagation requires the H3_INTERNAL_ERROR stream reset",
+            )
+            .into());
+        }
+        let mut failed = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "fault_path")?,
+            b"",
+        )
+        .await?;
+        match tokio::time::timeout(Duration::from_secs(2), failed.recv_response()).await {
+            Ok(Err(h3::error::StreamError::RemoteTerminate { code, .. }))
+                if code == Code::H3_INTERNAL_ERROR => {}
+            Ok(Err(error)) => {
+                return Err(io::Error::other(format!(
+                    "{}: HTTP/3 error stream reset differed from H3_INTERNAL_ERROR: {error:?}",
+                    required_str(case, "id")?
+                ))
+                .into());
+            }
+            Ok(Ok(response)) => {
+                return Err(io::Error::other(format!(
+                    "{}: HTTP/3 service error returned response status {} instead of resetting the stream before headers",
+                    required_str(case, "id")?,
+                    response.status()
+                ))
+                .into());
+            }
+            Err(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!(
+                        "{}: HTTP/3 error stream did not reset before response headers",
+                        required_str(case, "id")?
+                    ),
+                )
+                .into());
+            }
+        }
+
+        let mut recovery = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "recovery_path")?,
+            b"",
+        )
+        .await?;
+        let (status, body, _) = collect_http3_response(&mut recovery).await?;
+        verify_service_error_http_response(
+            case,
+            status,
+            &body,
+            "recovery_status",
+            "recovery_body",
+        )
+    }
+    .await;
+
+    endpoint.close(
+        quinn::VarInt::from_u32(0),
+        b"service error propagation case complete",
+    );
+    let endpoint_result = tokio::time::timeout(Duration::from_secs(2), endpoint.wait_idle()).await;
+    workflow?;
+    if endpoint_result.is_err() {
+        return Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 client endpoint did not become idle after stream recovery",
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn verify_service_error_http_response(
+    case: &Value,
+    status: u16,
+    body: &[u8],
+    status_field: &str,
+    body_field: &str,
+) -> ProbeResult<()> {
+    let expected_status = required_status(case, status_field)?;
+    let expected_body = required_str(case, body_field)?;
+    if status != expected_status || body != expected_body.as_bytes() {
+        return Err(io::Error::other(format!(
+            "{}: response differed: status={status}, body={:?}; expected status={expected_status}, body={expected_body:?}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(body)
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+fn verify_service_error_observation(
+    case: &Value,
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+) -> ProbeResult<()> {
+    let expected_phase = required_str(case, "expected_server_error_phase")?;
+    let expected_message = required_str(case, "expected_server_error_message")?;
+    let observations = observed_errors
+        .lock()
+        .map_err(|_| io::Error::other("service error observations were poisoned"))?;
+    let matching: Vec<_> = observations
+        .iter()
+        .filter(|observation| {
+            server_error_phase_name(observation.phase) == expected_phase
+                && observation.message == expected_message
+        })
+        .collect();
+    if matching.len() != 1 {
+        return Err(io::Error::other(format!(
+            "{}: expected one {expected_phase} observer event with the original io::Error message {expected_message:?}, got {matching:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    let observation = matching[0];
+    if !observation.is_io_error
+        || !observation.is_direct_io_error
+        || observation.peer_addr.is_none()
+        || observation.h3_error_code.is_some()
+    {
+        return Err(io::Error::other(format!(
+            "{}: propagated service error lost its direct io::Error observer type or peer metadata: {observation:?}",
+            required_str(case, "id")?
+        ))
+        .into());
     }
     Ok(())
 }
@@ -6303,6 +7751,28 @@ async fn run_http3_service_panic_recovery_case(
     case: &Value,
 ) -> ProbeResult<()> {
     let (endpoint, mut sender) = new_http3_client(address, client_config).await?;
+    if case.get("arm_path").is_some() {
+        let mut arm = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "arm_path")?,
+            b"",
+        )
+        .await?;
+        let (arm_status, arm_body, _) = collect_http3_response(&mut arm).await?;
+        if arm_status != required_status(case, "arm_status")?
+            || arm_body != required_str(case, "arm_body")?.as_bytes()
+        {
+            return Err(io::Error::other(format!(
+                "{}: readiness panic was not armed: status={arm_status}, body={:?}",
+                required_str(case, "id")?,
+                String::from_utf8_lossy(&arm_body)
+            ))
+            .into());
+        }
+    }
+
     let mut failed = timeout(
         Duration::from_secs(2),
         send_http3_request(
@@ -7459,6 +8929,17 @@ fn h3_connection_error_code(error: &(dyn Error + 'static)) -> Option<u64> {
     None
 }
 
+fn error_chain_contains<T: Error + 'static>(error: &(dyn Error + 'static)) -> bool {
+    let mut cause = Some(error);
+    while let Some(error) = cause {
+        if error.is::<T>() {
+            return true;
+        }
+        cause = error.source();
+    }
+    false
+}
+
 fn server_error_phase_name(phase: ServerErrorPhase) -> &'static str {
     match phase {
         ServerErrorPhase::ApplicationStartup => "application_startup",
@@ -7561,6 +9042,9 @@ async fn run_peer_address_case(address: std::net::SocketAddr, case: &Value) -> P
 }
 
 async fn run_http1_write_half_close_case(address: SocketAddr, case: &Value) -> ProbeResult<()> {
+    if case["observe_peer_read_half_close"].as_bool() == Some(true) {
+        return run_http1_peer_read_half_close_case(address, None, case).await;
+    }
     let mut stream = TcpStream::connect(address).await?;
     let method = required_str(case, "method")?;
     let case_id = required_str(case, "id")?;
@@ -7657,6 +9141,150 @@ async fn run_http1_write_half_close_case(address: SocketAddr, case: &Value) -> P
             "{}: half-closed request did not receive the expected response (status={status}, complete={complete}, body={:?})",
             required_str(case, "id")?,
             String::from_utf8_lossy(&body)
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn http1_case_request(
+    address: SocketAddr,
+    connector: Option<&TlsConnector>,
+    method: &str,
+    path: &str,
+    body: &[u8],
+) -> ProbeResult<BoxedIo> {
+    if let Some(connector) = connector {
+        let mut stream = connect_tls_http1(address, connector).await?;
+        let request = http1_request_bytes(method, path, body, true);
+        stream.write_all(&request).await?;
+        stream.flush().await?;
+        Ok(Box::new(stream))
+    } else {
+        Ok(Box::new(request(address, method, path, body).await?))
+    }
+}
+
+async fn http1_half_closed_case_request(
+    address: SocketAddr,
+    connector: Option<&TlsConnector>,
+    path: &str,
+) -> ProbeResult<BoxedIo> {
+    let request = http1_request_bytes("GET", path, b"", false);
+    if let Some(connector) = connector {
+        let mut stream = connect_tls_http1(address, connector).await?;
+        stream.write_all(&request).await?;
+        stream.flush().await?;
+        stream.get_mut().0.shutdown().await?;
+        Ok(Box::new(stream))
+    } else {
+        let mut stream = TcpStream::connect(address).await?;
+        stream.write_all(&request).await?;
+        stream.flush().await?;
+        stream.shutdown().await?;
+        Ok(Box::new(stream))
+    }
+}
+
+fn http1_request_bytes(method: &str, path: &str, body: &[u8], close: bool) -> Vec<u8> {
+    let mut request = format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\n");
+    if close {
+        request.push_str("Connection: close\r\n");
+    }
+    if method == "POST" || !body.is_empty() {
+        request.push_str(&format!("Content-Length: {}\r\n", body.len()));
+    }
+    request.push_str("\r\n");
+    let mut bytes = request.into_bytes();
+    bytes.extend_from_slice(body);
+    bytes
+}
+
+async fn read_http1_case_response(
+    address: SocketAddr,
+    connector: Option<&TlsConnector>,
+    method: &str,
+    path: &str,
+    body: &[u8],
+) -> ProbeResult<(u16, Vec<u8>, bool)> {
+    let mut stream = http1_case_request(address, connector, method, path, body).await?;
+    let (status, headers) = timeout(Duration::from_secs(4), read_response_head(&mut stream))
+        .await
+        .map_err(|_| {
+            io::Error::new(io::ErrorKind::TimedOut, "HTTP/1 response headers timed out")
+        })??;
+    let (body, complete) = timeout(
+        Duration::from_secs(4),
+        read_response_body(&mut stream, &headers),
+    )
+    .await
+    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "HTTP/1 response body timed out"))??;
+    Ok((status, body, complete))
+}
+
+async fn run_http1_peer_read_half_close_case(
+    address: SocketAddr,
+    connector: Option<&TlsConnector>,
+    case: &Value,
+) -> ProbeResult<()> {
+    let case_id = required_str(case, "id")?;
+    let mut target =
+        http1_half_closed_case_request(address, connector, required_str(case, "path")?).await?;
+    let (status, headers) = timeout(Duration::from_secs(4), read_response_head(&mut target))
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!("{case_id}: half-closed response headers timed out"),
+            )
+        })??;
+    let (body, complete) = timeout(
+        Duration::from_secs(4),
+        read_response_body(&mut target, &headers),
+    )
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            format!("{case_id}: half-closed response body timed out"),
+        )
+    })??;
+    if status != required_status(case, "expected_status")?
+        || body != required_str(case, "expected_body")?.as_bytes()
+        || !complete
+    {
+        return Err(io::Error::other(format!(
+            "{case_id}: half-closed client did not receive the expected complete response (status={status}, complete={complete}, body={:?})",
+            String::from_utf8_lossy(&body)
+        ))
+        .into());
+    }
+
+    let (state_status, state_body, state_complete) = timeout(
+        Duration::from_secs(4),
+        read_http1_case_response(
+            address,
+            connector,
+            "GET",
+            required_str(case, "state_path")?,
+            b"",
+        ),
+    )
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            format!("{case_id}: peer EOF observation did not become available"),
+        )
+    })??;
+    if state_status != StatusCode::OK.as_u16()
+        || !state_complete
+        || state_body != required_str(case, "expected_state_body")?.as_bytes()
+    {
+        return Err(io::Error::other(format!(
+            "{case_id}: expected observed raw EOF state {:?}; got status={state_status}, complete={state_complete}, body={:?}",
+            required_str(case, "expected_state_body")?,
+            String::from_utf8_lossy(&state_body)
         ))
         .into());
     }
@@ -8011,7 +9639,19 @@ async fn run_request_case(address: std::net::SocketAddr, case: &Value) -> ProbeR
     let method = required_str(case, "method")?;
     let path = required_str(case, "path")?;
     let body = case["body"].as_str().unwrap_or("").as_bytes();
-    let mut stream = request(address, method, path, body).await?;
+    let shutdown_write = case
+        .get("shutdown_write")
+        .map(|value| {
+            value.as_bool().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "shutdown_write must be a boolean",
+                )
+            })
+        })
+        .transpose()?
+        .unwrap_or(false);
+    let mut stream = request_with_shutdown(address, method, path, body, shutdown_write).await?;
     let (status, headers) = read_response_head(&mut stream).await?;
     let (body, complete) = read_response_body(&mut stream, &headers).await?;
     let expected_status = required_status(case, "expected_status")?;
@@ -8576,6 +10216,9 @@ async fn run_graceful_drain_case(address: std::net::SocketAddr, case: &Value) ->
 }
 
 async fn run_isolated_graceful_case(case: &Value) -> ProbeResult<()> {
+    if case["peer_read_half_close_unavailable"].as_bool() == Some(true) {
+        return run_isolated_peer_read_half_close_unavailable_case(case).await;
+    }
     if required_str(case, "operation")? == "http3-graceful-drain" {
         return run_isolated_http3_graceful_case(case).await;
     }
@@ -8617,6 +10260,139 @@ async fn run_isolated_graceful_case(case: &Value) -> ProbeResult<()> {
             "isolated graceful-shutdown server did not stop",
         )
         .into()),
+    }
+}
+
+async fn run_isolated_peer_read_half_close_unavailable_case(case: &Value) -> ProbeResult<()> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let address = listener.local_addr()?;
+    let server_wait_ms = case["server_wait_ms"]
+        .as_u64()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, state) = contract_app_with_state(shutdown_sender.clone());
+    let mut outcome = state.peer_read_half_close_unavailable_result.subscribe();
+    let mut server = tokio::spawn(uvicorn_rs::serve_tcp(
+        listener,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            max_connections: 8,
+            graceful_shutdown_timeout: Duration::from_secs(2),
+            error_observer: None,
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let result = async {
+        let mut client =
+            tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
+        let request = http1_request_bytes(
+            required_str(case, "method")?,
+            required_str(case, "path")?,
+            b"",
+            false,
+        );
+        client.write_all(&request).await?;
+        client.flush().await?;
+        let (status, headers) = timeout(Duration::from_secs(2), read_response_head(&mut client))
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "observer watch response headers timed out",
+                )
+            })??;
+        let (body, complete) = timeout(
+            Duration::from_secs(2),
+            read_response_body(&mut client, &headers),
+        )
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "observer watch response body timed out",
+            )
+        })??;
+        if status != StatusCode::OK.as_u16() || body.as_slice() != b"watching\n" || !complete {
+            return Err(io::Error::other(format!(
+                "{}: peer observer did not remain held on the live connection",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        let (shutdown_status, shutdown_body, shutdown_complete) = read_http1_case_response(
+            address,
+            None,
+            "GET",
+            required_str(case, "shutdown_path")?,
+            b"",
+        )
+        .await?;
+        if shutdown_status != StatusCode::OK.as_u16()
+            || shutdown_body != required_str(case, "shutdown_body")?.as_bytes()
+            || !shutdown_complete
+        {
+            return Err(io::Error::other(format!(
+                "{}: server shutdown trigger response did not complete",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+
+        let observed = timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(value) = outcome.borrow_and_update().clone() {
+                    return Ok::<_, io::Error>(value);
+                }
+                outcome.changed().await.map_err(|_| {
+                    io::Error::other("peer observer shutdown-result channel closed")
+                })?;
+            }
+        })
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "peer observer did not finish after the server closed its connection",
+            )
+        })??;
+        let expected = required_str(case, "expected_observer_state")?;
+        if observed != expected {
+            return Err(io::Error::other(format!(
+                "{}: expected observer shutdown state {expected:?}, got {observed:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        drop(client);
+        Ok::<(), Box<dyn Error + Send + Sync>>(())
+    }
+    .await;
+    if result.is_err() {
+        shutdown_sender.send_replace(true);
+    }
+    let server_result = timeout(Duration::from_millis(server_wait_ms), &mut server).await;
+    match (result, server_result) {
+        (Err(error), Ok(_)) => Err(error),
+        (Err(error), Err(_)) => {
+            server.abort();
+            let _ = server.await;
+            Err(error)
+        }
+        (Ok(()), Ok(Ok(Ok(())))) => Ok(()),
+        (Ok(()), Ok(Ok(Err(error)))) => Err(error.into()),
+        (Ok(()), Ok(Err(error))) => Err(error.into()),
+        (Ok(()), Err(_)) => {
+            server.abort();
+            let _ = server.await;
+            Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "peer observer server did not stop after cleanup",
+            )
+            .into())
+        }
     }
 }
 
@@ -9077,6 +10853,119 @@ async fn run_isolated_http3_peer_goaway_case(case: &Value) -> ProbeResult<()> {
         Err(_) => Err(io::Error::new(
             io::ErrorKind::TimedOut,
             "HTTP/3 peer GOAWAY server did not stop",
+        )
+        .into()),
+    }
+}
+
+async fn run_isolated_http3_server_shutdown_case(case: &Value) -> ProbeResult<()> {
+    let (_, tls_clients, quic_server_config) = test_tls_configs()?;
+    let server_endpoint =
+        quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
+    let address = server_endpoint.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let (application, _) = contract_app_with_state(shutdown_sender.clone());
+    let server_wait_ms = case["server_wait_ms"]
+        .as_u64()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
+    let server = tokio::spawn(uvicorn_rs::serve_http3(
+        server_endpoint,
+        application,
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            graceful_shutdown_timeout: Duration::from_millis(server_wait_ms),
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let workflow = async {
+        let mut endpoint = quinn::Endpoint::client("127.0.0.1:0".parse::<SocketAddr>()?)?;
+        endpoint.set_default_client_config(tls_clients.http3.clone());
+        let connection = tokio::time::timeout(
+            Duration::from_secs(2),
+            endpoint.connect(address, "localhost")?,
+        )
+        .await
+        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "HTTP/3 peer did not connect"))??;
+        let (mut driver, mut sender) =
+            h3::client::new(h3_quinn::Connection::new(connection.clone())).await?;
+        let client_driver = tokio::spawn(async move {
+            let _terminal = std::future::poll_fn(|context| driver.poll_close(context)).await;
+        });
+
+        let mut request = send_http3_request(
+            &mut sender,
+            address,
+            "GET",
+            required_str(case, "path")?,
+            b"",
+        )
+        .await?;
+        let (status, body, _) = collect_http3_response(&mut request).await?;
+        if status != required_status(case, "expected_status")?
+            || body != required_str(case, "expected_body")?.as_bytes()
+        {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/3 request did not complete before server shutdown",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        drop(request);
+
+        shutdown_sender.send_replace(true);
+        let peer_close =
+            tokio::time::timeout(Duration::from_millis(server_wait_ms), connection.closed())
+                .await
+                .map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "server did not close the HTTP/3 connection during graceful shutdown",
+                    )
+                })?;
+        match peer_close {
+            quinn::ConnectionError::ApplicationClosed(close)
+                if close.error_code == quinn::VarInt::from_u32(0) => {}
+            error => {
+                return Err(io::Error::other(format!(
+                    "{}: server shutdown did not close the HTTP/3 connection cleanly: {error:?}",
+                    required_str(case, "id")?
+                ))
+                .into());
+            }
+        }
+
+        tokio::time::timeout(Duration::from_millis(server_wait_ms), client_driver)
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "HTTP/3 client driver did not finish after server shutdown",
+                )
+            })??;
+        drop(sender);
+        tokio::time::timeout(Duration::from_millis(server_wait_ms), endpoint.wait_idle())
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "HTTP/3 client endpoint did not drain",
+                )
+            })?;
+        Ok::<(), Box<dyn Error + Send + Sync>>(())
+    }
+    .await;
+
+    shutdown_sender.send_replace(true);
+    let server_result = tokio::time::timeout(Duration::from_millis(server_wait_ms), server).await;
+    workflow?;
+    match server_result {
+        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Err(error))) => Err(error.into()),
+        Ok(Err(error)) => Err(error.into()),
+        Err(_) => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "HTTP/3 server did not stop after its active connection drained",
         )
         .into()),
     }
@@ -10013,6 +11902,16 @@ async fn request(
     path: &str,
     body: &[u8],
 ) -> ProbeResult<TcpStream> {
+    request_with_shutdown(address, method, path, body, false).await
+}
+
+async fn request_with_shutdown(
+    address: std::net::SocketAddr,
+    method: &str,
+    path: &str,
+    body: &[u8],
+    shutdown_write: bool,
+) -> ProbeResult<TcpStream> {
     let mut stream = TcpStream::connect(address).await?;
     let mut request =
         format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n");
@@ -10025,6 +11924,9 @@ async fn request(
     stream.write_all(request.as_bytes()).await?;
     stream.write_all(body).await?;
     stream.flush().await?;
+    if shutdown_write {
+        stream.shutdown().await?;
+    }
     Ok(stream)
 }
 

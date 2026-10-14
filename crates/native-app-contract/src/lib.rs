@@ -34,6 +34,32 @@ pub enum ApplicationLifecycleStage {
 ///
 /// Each hook must return its failures as `Err`; servers may cancel a hook by
 /// dropping its future when the configured timeout expires.
+///
+/// # Example
+///
+/// ```rust
+/// use native_app_contract::{
+///     ApplicationLifecycle, ApplicationLifecycleError, ApplicationLifecycleFuture,
+/// };
+///
+/// struct Lifecycle;
+///
+/// impl ApplicationLifecycle for Lifecycle {
+///     fn startup(&self) -> ApplicationLifecycleFuture<'_> {
+///         Box::pin(async { Ok::<(), ApplicationLifecycleError>(()) })
+///     }
+///
+///     fn shutdown(&self) -> ApplicationLifecycleFuture<'_> {
+///         Box::pin(async { Ok::<(), ApplicationLifecycleError>(()) })
+///     }
+/// }
+///
+/// # fn main() {
+/// let lifecycle = Lifecycle;
+/// let _startup = lifecycle.startup();
+/// let _shutdown = lifecycle.shutdown();
+/// # }
+/// ```
 pub trait ApplicationLifecycle: Send + Sync + 'static {
     /// Initializes application-owned resources before request acceptance.
     fn startup(&self) -> ApplicationLifecycleFuture<'_>;

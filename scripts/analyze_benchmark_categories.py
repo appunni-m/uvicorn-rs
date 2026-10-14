@@ -29,11 +29,13 @@ CATEGORIES = {
             "fixed", "large-response", "many-response-chunks", "small-response-chunks",
             "request-upload", "request-upload-small-chunks", "slow-reader-backpressure",
             "scope-32-headers", "contextvars", "sync-callable-awaitable",
-            "exception-to-500", "fastapi-fixed", "fastapi-large-response",
+            "exception-to-500", "fastapi-validated-route", "fastapi-fixed", "fastapi-large-response",
             "fastapi-many-response-chunks", "fastapi-small-response-chunks",
-            "fastapi-request-upload", "fastapi-request-upload-small-chunks",
+            "fastapi-request-upload", "fastapi-upload-1m-write-1k",
+            "fastapi-upload-1m-write-16k", "fastapi-upload-1m-write-256k",
+            "fastapi-upload-1m-write-1m", "fastapi-request-upload-small-chunks",
             "fastapi-slow-reader-backpressure", "fastapi-scope-32-headers",
-            "fastapi-contextvars", "fastapi-validated-route", "fastapi-python-cpu",
+            "fastapi-contextvars", "fastapi-python-cpu",
         ],
     },
     "http2": {
@@ -293,6 +295,15 @@ def driver_category_reasons(loaded, driver):
         return ["driver_category_receipt_missing_or_duplicate"]
     entry = matches[0]
     reasons = []
+    if loaded["category"] != "lifecycle":
+        driver_workloads = entry.get("workloads")
+        report_workloads = loaded["metadata"].get("workloads")
+        if (not isinstance(driver_workloads, list)
+                or not all(isinstance(name, str) for name in driver_workloads)
+                or not isinstance(report_workloads, list)
+                or not all(isinstance(name, str) for name in report_workloads)
+                or driver_workloads != report_workloads):
+            reasons.append("driver_category_workload_inventory_differs_or_missing")
     if type(entry.get("exit_code")) is not int or entry["exit_code"] != 0:
         reasons.append("driver_category_exit_not_successful")
     if not entry.get("finished_at") or any(entry.get(key) for key in ("error", "cleanup_error")):

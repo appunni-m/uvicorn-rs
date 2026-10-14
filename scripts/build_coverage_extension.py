@@ -66,6 +66,12 @@ def main() -> int:
     native_environment = os.environ.copy()
     native_environment["CARGO_TARGET_DIR"] = str(NATIVE_COVERAGE_TARGET)
     native_environment["RUSTC"] = rustc
+    # cargo-llvm-cov installs its own wrapper for the instrumented native
+    # contract build. Do not let a caller's cache wrapper become the
+    # pre-existing wrapper that cargo-llvm-cov probes while generating its
+    # environment; that probe can fail before the build starts.
+    native_environment["RUSTC_WRAPPER"] = ""
+    native_environment["RUSTC_WORKSPACE_WRAPPER"] = ""
     native_environment["LLVM_COV"] = str(tools["llvm_cov"])
     native_environment["LLVM_PROFDATA"] = str(tools["llvm_profdata"])
     coverage_environment = subprocess.run(

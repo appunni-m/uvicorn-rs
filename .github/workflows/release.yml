@@ -54,6 +54,7 @@ jobs:
           python scripts/check_release_version.py "$version"
           test -z "$(git status --porcelain --untracked-files=all)"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "tag-object-sha=$object_sha" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Require successful complete main CI for this exact commit
         id: ci-run
@@ -100,7 +101,7 @@ jobs:
           run-id: ${{ steps.ci-run.outputs.run-id }}
           name: uvicorn-rs-python-floor
           path: target/release-candidate/evidence/python-floor
-      - name: Verify package records, normal native binaries and exact artifact identities
+      - name: Verify Python packages, native Rust crates and exact artifact identities
         env:
           RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
           RELEASE_VERSION: ${{ steps.tag.outputs.version }}
@@ -135,6 +136,7 @@ jobs:
         env:
           RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
           RELEASE_VERSION: ${{ steps.tag.outputs.version }}
+          RELEASE_TAG_OBJECT: ${{ steps.tag.outputs.tag-object-sha }}
           RELEASE_CI_RUN: ${{ steps.ci-run.outputs.run-id }}
           RELEASE_CI_ATTEMPT: ${{ steps.ci-run.outputs.run-attempt }}
         run: |
@@ -147,13 +149,29 @@ jobs:
           record = {"schema": "uvicorn-rs-release-candidate@1", "state": "verified candidate; publication disabled",
                     "commit": os.environ["RELEASE_COMMIT"], "version": os.environ["RELEASE_VERSION"],
                     "ci_run_id": os.environ["RELEASE_CI_RUN"], "ci_run_attempt": os.environ["RELEASE_CI_ATTEMPT"],
-                    "tag": os.environ["GITHUB_REF_NAME"]}
+                    "tag": os.environ["GITHUB_REF_NAME"],
+                    "tag_object_sha": os.environ["RELEASE_TAG_OBJECT"]}
           (root / "candidate.json").write_text(json.dumps(record, indent=2) + "\n")
           files = sorted(path for path in root.rglob("*") if path.is_file())
           (root / "SHA256SUMS").write_text("".join(
               f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root).as_posix()}\n"
               for path in files))
           PY
+      - name: Revalidate the remote annotated tag immediately before upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
+          RELEASE_TAG_OBJECT: ${{ steps.tag.outputs.tag-object-sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}")"
+          object_type="$(jq -r '.object.type' <<< "$tag_json")"
+          object_sha="$(jq -r '.object.sha' <<< "$tag_json")"
+          test "$object_type" = tag
+          test "$object_sha" = "$RELEASE_TAG_OBJECT"
+          tag_commit="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${object_sha}" --jq '.object | select(.type == "commit") | .sha')"
+          test "$tag_commit" = "$RELEASE_COMMIT"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: uvicorn-rs-candidate-${{ github.ref_name }}

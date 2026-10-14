@@ -198,8 +198,16 @@ contract above:
 - The current H3 adapter uses h3 0.0.8 and h3-quinn 0.0.10. It observes a
   request-stream reset when the request body or response writer is polled, but
   it has no independent request-close future for an application waiting on an
-  unrelated await. A bounded request driver or lower-level stream hook is
-  needed; ordinary end-of-body must not be treated as a disconnect.
+  unrelated await. The locked Quinn 0.11.12 provides a passive
+  `SendStream::stopped()` future, but the H3 wrappers hide that sender. Kata
+  `6sf0` audited these exact sources; implementation is tracked by `a2wf`.
+  The preferred seam is an optional QUIC stopped-stream capability forwarded
+  through the H3 wrappers to a request-scoped future. Only a peer stop code
+  proves `STOP_SENDING`; normal finish acknowledgement and connection errors
+  have different meanings. An application held before headers must be
+  cancelled before any release, while a sibling request on the same
+  connection still completes. Timer polling, probe response bytes, a second
+  stream accept loop, and ordinary request-body EOF do not satisfy that gate.
 - Hyper-util 0.1.21 hands off HTTP/1 upgrades by completing the connection
   future. The native core now uses `serve_connection_with_upgrades` and exposes
   `ConnectionUpgrade` on HTTP/1.1 requests. Applications register their

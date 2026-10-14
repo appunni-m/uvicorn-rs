@@ -2,28 +2,85 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Latest hosted ASGI matrix: run #24 (2026-10-13)
+## Local host preflight (2026-10-14)
+
+The latest eight-sample macOS ARM64 preflight rejected benchmark timing before
+launch. Unrelated CPU use ranged from 114.9% to 228.1% of one logical core;
+`python3.12` remained near one core across the samples, and `rustfmt` briefly
+used 97.1%. The decision followed the existing aggregate and sustained-process
+guard. No timed benchmark started and no process was stopped. The receipt is
+Git-ignored at
+`target/benchmark-preflight/kata-finish-20261014-retry1.json` and records HEAD
+`796dee690ca83654cddb97131dc1dee37de96bcd`. The FastAPI benchmark remains
+unqualified; retry after a clean preflight.
+
+## Latest hosted benchmark matrix: run #25 (2026-10-13)
 
 The matrix
-[38354960306](https://github.com/appunni-m/uvicorn-rs/actions/runs/38354960306)
-produced no parity or timing rows on Linux x86-64, Linux ARM64, or macOS
-ARM64. Each system failed during normal protocol-client prebuild because the
-runner expected `tools/http3-probe/target/release/http2`; the root Cargo
-workspace writes that binary to repository `target/release/http2`.
+[38418430949](https://github.com/appunni-m/uvicorn-rs/actions/runs/38418430949)
+passed exact-normal-binary public parity on all three systems. All three
+platform category jobs are now terminal failures. The multi-system evidence
+validation job passed as an aggregation check, but the required categories did
+not complete and there is no validated three-system performance result.
 
-The parity and category scripts now look in the workspace output directory for
-the HTTP/3 parity, HTTP/2, HTTP/3 benchmark, and WebSocket clients. A focused
-locked `cargo build --release --manifest-path tools/http3-probe/Cargo.toml
---bins` succeeded locally and produced all four binaries at those paths. The
-changed Python scripts also passed `py_compile` under Python 3.9. The corrected
-paths have not yet passed hosted parity or a benchmark matrix. Therefore run
-#24 has no usable performance evidence and the path correction remains
-unverified in CI.
+The preliminary FastAPI-only HTTP/1 comparison produced 40 planned rows on
+each system with no correctness failures. It had 2 timing-valid rows on macOS
+and 39 on each Linux system; all three reports say `not_proven`. The full
+stock-FastAPI HTTP/1 category completed 300/300 correct, timing-valid rows on
+each Linux system. macOS stopped at 124 rows: rows 121–124 failed during the
+1 MiB upload workloads, and 75 rows were timing-valid. Its trace ends in
+Starlette `ClientDisconnect` while reading the upload body.
 
-The benchmark documentation job also failed to create a PR because the
-repository's Actions policy blocks `gh pr create`; the workflow cannot update
-the docs automatically under current permissions. Maintainers must review and
-commit the documentation update through the normal repository workflow.
+The complete Linux HTTP/1 reports qualified all 30 FastAPI workload/event-loop
+pairs on each system, with five matched repetitions per pair. The ratios below
+are medians of the 30 per-pair Rust/Uvicorn ratios; they summarize the recorded
+workloads and do not combine samples from different machines.
+
+| System | Qualified pairs | Rust faster | Throughput ratio, median (range) | p95 latency ratio, median | Server CPU per operation ratio, median | Server RSS ratio, median |
+|---|---:|---:|---:|---:|---:|---:|
+| Linux x86-64 | 30/30 | 6/30 | 0.713 (0.450–1.402) | 1.565 | 1.764 | 1.008 |
+| Linux ARM64 | 30/30 | 6/30 | 0.844 (0.436–1.463) | 1.369 | 1.563 | 1.014 |
+
+These measurements show no broad speed advantage for the current Python ASGI
+server path: throughput was lower in 24 of 30 pairs on each Linux machine, and
+median server CPU per operation was higher. They do not identify which layer
+caused the overhead. The reports compare FastAPI under Uvicorn with FastAPI
+under the current `uvicorn-rs-py` implementation; they do not measure the
+separate Python-free Rust application composition path. This evidence fails the
+project's performance objective and must not be presented as a release gain.
+
+HTTP/2 stopped on all three systems when the server diagnostic gate rejected
+`uvicorn-rs: connection task failed: connection error`; shutdown itself was
+clean. HTTP/3 also stopped on all three: the Linux Hypercorn reference failed
+large-response body-length checks (192,037 or 251,633 bytes received versus
+1,048,576 expected), while macOS Hypercorn/uvloop timed out waiting for
+protocol-scope response headers. The logs do not establish whether these H3
+failures share one cause. WebSocket completed 60/60 correct, timing-valid rows
+on every system. Lifecycle completed 20/20 on both Linux systems and 19/20 on
+macOS. Those passing categories do not make the whole matrix complete.
+
+The aggregate validator marked the result `validated_partial_matrix`. Its
+artifact reports 38 individually qualified workload/reference pairs on each
+Linux system and 8 on macOS; the separate FastAPI-only comparison qualified 4
+pairs on each Linux system and none on macOS. These counts are partial
+descriptive evidence, not a substitute for complete categories or a
+cross-system performance claim. The [aggregate evidence artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38418430949/artifacts/11829521030)
+contains the generated comparison report and source manifests.
+
+The benchmark docs job failed because GitHub Actions could not create a PR;
+commit documentation updates through the normal repository workflow. The
+category logs and partial reports are retained in the
+[run #25 artifacts](https://github.com/appunni-m/uvicorn-rs/actions/runs/38418430949).
+
+Run #24
+([38354960306](https://github.com/appunni-m/uvicorn-rs/actions/runs/38354960306))
+produced no parity or timing rows because the protocol clients were looked up
+under `tools/http3-probe/target/release/` instead of repository
+`target/release/`. The parity and category scripts now use the workspace output
+directory, and run #25 has passed hosted parity with those paths. The #24
+benchmark documentation job could not create a PR under the repository's
+Actions permissions; documentation updates must be reviewed and committed
+through the normal repository workflow.
 
 ## Latest local benchmark preparation (2026-10-13)
 

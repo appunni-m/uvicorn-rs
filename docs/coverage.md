@@ -2,43 +2,361 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current unified coverage status (2026-10-13)
+## Current unified coverage status (2026-10-14)
 
 The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 122 Python-free native cases (633 total).
+parity/fault-contract cases and 150 Python-free native cases (661 total).
 Acceptance requires three complete repeats, 100% region and line coverage,
-and zero-gap results from fully paginated Coverage-MCP queries bound to the
-exact report bytes.
+and fully paginated Coverage-MCP results bound to the exact report bytes.
 
-The last full-manifest diagnostic ran all 633 cases once. Its Git-ignored
-report is
-`build/asgi-coverage/2026-10-13-current-633-diagnostic-retry/coverage-report.json`,
-and records source SHA-256
-`68d20ea68f17f9fcbe48b05cb570c6fbf79772c5a5dec62d76ff4445918e8da1` at
-`b5719e8` with a dirty working tree. A later source-hash audit found that
-`crates/uvicorn-rs/examples/native_core_contracts.rs` and
-`crates/uvicorn-rs/src/websocket.rs` no longer match this report; Coverage-MCP
-now identifies its source as changed. Treat its measurements as historical
-diagnostics, not evidence for the current checkout. On that earlier snapshot,
-all 633 cases passed with complete attribution and no case, infrastructure,
-or transient infrastructure failures: 243/243 oracle parity, 268/268
-fault-contract, and 122/122 native. It measured **7,324/7,382 regions** and
-**5,383/5,417 lines** (58 regions and 34 lines missing). Coverage-MCP originally
-paginated 173 region groups and 29 line groups and matched that report at the
-time. It was a single-pass diagnostic, not acceptance. Three complete repeats
-and 100% region and line coverage remain formal gates; a fresh current-source
-report and matching Coverage-MCP receipt are needed before interpreting the
-current gaps. The first attempt could not finish attribution because the
-native LLVM runner disappeared; the retry's runner snapshot preserved the
-binary and completed attribution. Neither report is a release pass.
+Hosted CI [run #110](https://github.com/appunni-m/uvicorn-rs/actions/runs/38418430762)
+retained a full-scope report for commit
+`796dee690ca83654cddb97131dc1dee37de96bcd` and its then-current 633-case
+manifest. It passed 633/633 case attribution but measured 7,322/7,380 regions
+and 5,383/5,417 lines, leaving 58 regions and 34 lines uncovered. The report
+SHA-256 is
+`48a33bfb11b9b0580d446612071abb0406e2a2df2f156c88342ebdf67cc621a4`;
+Coverage-MCP could not produce a receipt from this retained artifact during
+follow-up because both queries timed out. This run predates the current
+661-case manifest and does not satisfy the exact-source coverage gate.
 
-### Historical audit of the gaps in the 2026-10-13 report
+### Normal and instrumented native case lanes
+
+Normal CI selects the 149 `target-contract` inputs from the 150-case native
+manifest using `scripts/select_native_contracts.py` and retains a receipt with the source and selected-input hashes,
+selected IDs and coverage-only IDs. The unified runner still includes all 150
+native cases and all 511 ASGI cases. It requires consumed fault evidence for
+the native `fault-contract` input, both during attribution and on each complete
+native repeat. Repeat receipts include expected and observed fault points in
+manifest order.
+
+The normal harness now rejects a declared fault with
+`native fault contracts require an instrumented coverage build`. Previously,
+that input substituted an abortive client reset in normal builds and could
+report a pass without consuming the declared fault. The substitution has been
+removed; the input and its expected behavior remain the same across builds.
+
+Three affected normal inputs passed, and the same fault input was rejected by
+the new normal binary. The retained old binary reported a pass for that fault
+without fault consumption, so it provides the defending negative control.
+The local receipt is
+`target/native-contracts/normal-fault-lane-focused.json`, SHA-256
+`c662db78d82eca8b362e4c0c55f6661b0a8441026f95414afe8937e17a5be601`.
+
+The fresh selected coverage run passed **1/1**, with the declared
+`websocket.receive.close-reply.flush` fault consumed, zero retries and no
+infrastructure failures. Report:
+`target/asgi-coverage-kata-20261014/normal-lane-fault-control/repeat-marker-report.json`;
+source SHA-256
+`59e4315f7bc3cd30673a63f4ab1aaab22a7223f91937a4f6d1dbe69baf74d898`;
+report SHA-256
+`40842f1cc3fb44c9065e69d6a2e729cb9649b2b3328a9663faf39b0cd3cf6912`.
+Coverage-MCP matched the source and passing selected receipt and found no
+missing region groups at the close-reply fault arm. This proves the affected
+lane behavior; it does not qualify all 661 cases or establish aggregate
+coverage. No complete repeats were run for this focused change. The selector's
+six CLI controls also passed: a valid 149-case selection and rejection of
+duplicate/empty IDs, unknown modes, a normal case declaring a fault, and a fault
+case without a point. Their local receipt is
+`target/native-contracts/selector-controls/receipt.json`.
+
+### Selected native TCP EOF evidence
+
+`PeerReadHalfClosed` is a TCP request extension, including TLS over TCP. It
+records a successful raw-socket EOF read with nonempty buffer capacity, below
+TLS. It does not treat reader destruction, HTTP body completion, an HTTP/2
+stream reset, or QUIC stream cancellation as TCP EOF. Waiting returns
+`PeerReadHalfClosedUnavailable` when observation ends without confirmed EOF.
+
+Nine new inputs reuse the request, half-close, and graceful-drain operations.
+They check complete, empty, and streamed responses after client write-half
+closure over TCP and TLS; the default service-error 500 after that closure;
+absence of the extension on HTTP/3; and the typed unavailable result after
+server shutdown without peer EOF. The existing HTTP/2 reset input also checks
+that the TCP extension is present and remains false during stream reset.
+
+These inputs and eight neighboring body, lifetime, upgrade, and transport
+controls passed **18/18** once, with complete attribution, zero retries, and
+zero case or infrastructure failures. Report:
+`target/asgi-coverage-kata-20261014/peer-eof-focused/full-report.json`;
+run ID `67168845c4a0470993f0d3d596487ce4`; source SHA-256
+`4bc08270c96ef7e71d65d48dc9531e8c0fe6781b686f38f86027be63fdd3bc41`;
+report SHA-256
+`d5e4f365ae9ddd288d972b9a9e13c85798ba609aaf741c5ea1d30ea35ac2ab5e`.
+The selected union measures 1,205/7,576 regions and 1,015/5,594 lines.
+Coverage-MCP matched the source and passing-test receipts when measured. Filtered queries
+have no missing groups at the wait method; the raw-read query retains one
+uncovered generic region and no missing lines. The filtered receipt is stored
+beside the report and is not a full aggregate zero-gap receipt.
+
+The EOF cases observe the signal **after response completion**. Hyper's
+`half_close(true)` preserves response delivery but does not promise a socket
+read while an HTTP/1 service is held. Kata `1m58` tracks prompt FIN observation
+at the protocol-driver level. Suppressing EOF for the entire service lifetime
+would also suppress incomplete request-body errors and can stall an app
+awaiting its body; that approach was rejected. No timer, second socket reader,
+probe write, or fabricated disconnect was added. This selected evidence does
+not qualify the 661-case gate or migrate the Python ASGI transport.
+The later fault-harness correction changed the source receipt; the 18-case
+report is a historical selected snapshot.
+
+### Selected native connection-limit evidence
+
+The native server validates `max_connections` in
+`1..=tokio::sync::Semaphore::MAX_PERMITS` before lifecycle startup. Values
+above that range return `ServeError::ConnectionLimitTooLarge`; zero retains
+`ServeError::InvalidConnectionLimit`. This prevents the locked Tokio semaphore
+constructor from panicking on an oversized public configuration.
+
+Four new inputs reuse the existing configuration and lifecycle operations:
+oversized TCP, TLS, and HTTP/3 limits return the typed error without invoking
+hooks, and HTTP/3 serves a real request at the exact runtime maximum.
+Ten affected inputs and controls passed once, with zero failures or retries,
+in `target/asgi-coverage-kata-20261014/connection-limit-focused/full-report.json`.
+The report SHA-256 is
+`5e98e192f9038cc2107bdf82a6ac06f3553cf8f3b58f2c70bbb340778e4c9f08`;
+the measured source SHA-256 is
+`f06a947b5935e6e5dd43e676a455b9d2d40dec1d048d4859ea2ee04b995f6410`.
+Coverage-MCP verified matching source receipts and no missing regions at the
+new rejection branch. This historical selected snapshot does not qualify its
+then-652-case coverage gate or the Python ASGI transport migration.
+
+### Selected native service-error policy evidence
+
+`ServerConfig::service_error_policy` now selects the default empty 500 response
+or propagation of the original typed readiness/service error. Six new isolated
+inputs check propagation across HTTP/1.1, HTTP/2, and HTTP/3. They require
+pre-header connection termination on H1, an `INTERNAL_ERROR` stream reset on
+H2, or an `H3_INTERNAL_ERROR` stream reset on H3, followed by a healthy request
+on a fresh H1 connection or the same H2/H3 connection. Each checks the original
+direct `io::Error`, message, observer phase, peer metadata, and bounded shutdown.
+The protocol workflow has a five-second deadline. A seventh input verifies an
+ordinary H3 service error still produces an empty 500 under the default policy.
+
+These inputs and nine default-policy, panic, body-error, and public-configuration
+controls passed **16/16** with complete attribution, zero retries, and zero case
+or infrastructure failures. Report:
+`target/asgi-coverage-kata-20261014/native-error-policy-focused/full-report.json`;
+run ID `da62b0e72cdc4acfb2d89eb032ed82aa`; source SHA-256
+`34103809821e490fd8f0901178b6110270bbf853c93e3459317cd4658044ffdc`;
+report SHA-256
+`1d53abd7ae006f5f4e737ade533875f5a0f80eb9a5c891027a6a7f4165f49241`.
+It records dirty revision `796dee6` and is local diagnostic evidence.
+
+The source-region union attributes the propagation returns and H3 reset arms
+to the selected inputs. Coverage-MCP matches the source receipt and passing
+test receipt. Its four filtered line queries have zero missing groups; the
+region queries retain gaps in other generic instantiations. The selected union
+measures 1,117/7,471 regions and 932/5,506 lines. This selected report does not
+replace full attribution, three repeats, or the fully paginated zero-gap gate.
+The filtered query receipt is retained beside the report, not attached as a
+full aggregate Coverage-MCP receipt.
+
+All six propagation inputs were also executed against the same instrumented
+runner with only `service_error_policy` changed to the default; all six failed
+at the intended abort/reset assertion. Their expectations were unchanged.
+The validated negative-control receipt is Git-ignored at
+`target/native-error-policy-negative-control/validated-receipt.json` and binds
+runner SHA-256
+`558b4dcac557595483a3c88b6df99a914ffe669fedc8276c070a0e970bdc2d90`.
+Native all-target/all-feature Clippy with warnings denied, formatting, and
+manifest/reference validation passed. No complete 648-case repeat was run.
+
+### Selected native panic recovery evidence
+
+The new native contracts cover two external application faults:
+
+- `http1.upgrade-handler-panic-closes-session-and-listener-recovers` accepts
+  the upgrade, observes session EOF without unexpected bytes, verifies a healthy
+  request on a fresh connection, and requires bounded server shutdown. Its
+  join diagnostic uses tracing; it does not assert a `ServerErrorObserver` event.
+- `http3.readiness-panic-returns-500-and-keeps-connection` arms one application
+  readiness panic, verifies an empty 500 and a typed readiness diagnostic, then
+  verifies a 200 response on the same HTTP/3 connection.
+
+Both are native target contracts. The deliberate panics live in the example
+harness, which `cargo package --list` excludes from the Rust crate archive;
+no production fault control or authored production panic was added.
+
+These cases and six neighboring readiness, upgrade, and listener contracts
+passed **8/8**, with complete per-case attribution and zero retries,
+infrastructure failures, or case failures. The selected report is Git-ignored at
+`target/asgi-coverage-kata-20261014/native-panic-contracts-focused/full-report.json`.
+Run ID: `60ef10cd1c984d5d8bfca58e6a9759ea`; source SHA-256:
+`3a5c6bdd1609297b5c9eb595598aee24d1255b7a4e9ff8746dad0e569753ac67`;
+report SHA-256:
+`78193027bf2428061e703064afd08e6bfb4c2d62a8d91a9f58c77b7cb5098016`.
+It records dirty revision `796dee6` and is diagnostic evidence only.
+
+The source-region union attributes the upgrade join-error arm and HTTP/3
+readiness-panic arm to the new cases. Coverage-MCP reports matching source and
+passing selected tests, but its filtered region queries retain gaps in other
+generic instantiations. The filtered line queries at those arms have zero
+missing groups. The selected union measures 1,031/7,434 regions and
+858/5,464 lines; it cannot be combined with the older full-source report or
+used to claim aggregate coverage. No complete 641-case repeat was run.
+
+An isolated source copy with only readiness containment removed failed the
+same HTTP/3 input with `H3_FRAME_UNEXPECTED` before response headers. Its local
+receipt is Git-ignored at `target/native-readiness-panic-regression/receipt.json`.
+This confirms the new case detects the uncontained readiness panic. Native
+all-target Clippy with warnings denied, formatting, and manifest/reference
+validation passed on the corrected worktree.
+
+### Last full-manifest baseline
+
+The last full-manifest attribution report is Git-ignored at
+`target/asgi-coverage-kata-20261014/current-639-attribution/full-report.json`.
+Run `01b6a2a77b06431bbfa132a91bb6de91` exercised all 639 cases once (511 ASGI
+and 128 Python-free native) with complete attribution and zero case,
+infrastructure, or transient failures. It records revision
+`796dee690ca83654cddb97131dc1dee37de96bcd`, a dirty source tree, aggregate
+source SHA-256
+`8c27b2b471e00b746f17d1db95af5d06317782d87df66359bdfaf0bd9cb0fb4f`, report
+SHA-256 `387aa56d0d4800165a2f6ad8975558f4b056028492119c4b383c585c32dac3b4`,
+and Coverage-MCP build ID
+`31cf4c67bd6305451dd6e5b6fa7d3d0fa92bb30b3f0d4099eb8e3be0f999f4b1`. The
+receipt matched the worktree when this report was generated. A later refactor
+in `lib.rs` changed the source hash, so this is now the last full-manifest
+baseline rather than exact-current-source evidence.
+
+Coverage measured **7,373/7,414 regions** and **5,420/5,444 lines**, leaving
+41 regions and 24 lines uncovered. Coverage-MCP fully paginated both exact
+report queries and returned `source=matches_receipt`: 176 region groups over
+nine pages and 22 line groups over two pages. Its `tests=failed` status reflects
+the remaining coverage gaps. The report's embedded `coverage_mcp` state still
+says `awaiting_query`; the completed live Coverage-MCP queries are the current
+evidence. The groups include repeated generic instantiations and are not a
+count of distinct behavioral gaps.
+
+This is one attribution pass only; no three-repeat matrix was run. The report
+is dirty local diagnostic evidence, not release proof, and the 100% gate remains
+open.
+
+After that full run, the HTTP/1 upgrade-extension decision moved into the
+non-generic `insert_http1_upgrade_extension` helper. The focused report at
+`target/asgi-coverage-kata-20261014/connection-upgrade-helper-focused/full-report.json`
+passed the existing native HTTP/1 WebSocket, HTTP/2 request, and HTTP/3 request
+cases (3/3, with no retries or infrastructure failures). Its source SHA-256 is
+`e1ff4ff9b75803fcf1456fa7b44313e7ad92fcb949e083ad98acbf5393dbf5c3`, report
+SHA-256 is
+`bd019e57027e46b634974458900d1853eaee1e7bc35d7e586f92b9efa10c99ef`, and run
+ID is `5dcdeee69a234f63b1d5409c3946b09c`. Coverage-MCP matched the source
+receipt, reported passing selected tests, and found zero missing groups for
+the helper. This selected run does not refresh aggregate totals or close the
+full-manifest gate; a full current-source report is still required.
+
+The newly added native input
+`http1.native-websocket-close-reply-flush-failure-preserves-source` passed a
+selected instrumented run at
+`target/asgi-coverage-kata-20261014/websocket-close-flush-fault-v4/full-report.json`.
+Its source SHA-256 is
+`8c27b2b471e00b746f17d1db95af5d06317782d87df66359bdfaf0bd9cb0fb4f` and its
+Coverage-MCP build ID is
+`31cf4c67bd6305451dd6e5b6fa7d3d0fa92bb30b3f0d4099eb8e3be0f999f4b1`.
+Coverage-MCP matched that report to its source receipt, passed the selected
+case, and reported no missing regions at `websocket.rs:267`. This selected
+report covers one input from the then-639-case manifest; it is not a full-manifest result and
+does not close the 100% gate. A full current-manifest report with three complete
+repeats and zero missing regions and lines is still required.
+
+The latest prior-input full-repeat baseline is Git-ignored at
+`target/asgi-coverage-kata-20261014/server-shutdown-final/full-report.json`.
+Run `9a19da353fef4d30aaf3fc8ea12d9d85` used revision `796dee6` with a dirty
+worktree and source SHA-256
+`c68c1c87078d8212beb5b283343145148027ed9e70394848d8fc15f7c1c357b1`. All
+635 cases passed, including 243 oracle-parity cases and 268 fault contracts;
+the 511-case ASGI matrix and 124-case native matrix each passed three complete
+repeats. Attribution is complete, with zero failed cases, infrastructure
+failures, transient infrastructure failures, or retries.
+
+Coverage measured **7,329/7,371 regions** and **5,384/5,408 lines** (42 regions
+and 24 lines missing). The uncovered regions are in `http3.rs` (16), `lib.rs`
+(21), and `websocket.rs` (5). Coverage-MCP fully paginated this exact report:
+170 region groups across nine pages and 21 line groups across two pages. Both
+queries reported `source=matches_receipt` and `tests=passed`; they returned
+remaining gaps, so this is not a zero-gap or 100% result. The aggregate gate is
+incomplete. This 635-case three-repeat result is historical and does not
+replace the last 639-case one-pass attribution report above.
+
+The 635-case report predates four native cases. The first two HTTP/3
+lifecycle cases are:
+`native.lifecycle-http3-omitted-hooks-still-serves` verifies that the server
+serves when application-managed lifecycle hooks are omitted, and
+`native.lifecycle-http3-zero-connection-limit-rejected` verifies that invalid
+server configuration returns the expected error. Both passed in the selected
+instrumented report at
+`target/asgi-coverage-kata-20261014/h3-lifecycle-config-selected/full-report.json`.
+Its Coverage-MCP build ID is `74e65d0e587146d1f114a5bd355afbb4a6760837be0cb7ec19cde3165fdcaa12`,
+report SHA-256 is
+`217ae2b4857a00f1197407765f698de2fb55835a082ba3f2acb1bb45c6a50b95`, and the
+recorded revision is `796dee6`. Coverage-MCP reports
+`source=matches_receipt` and `tests=passed`. This selected run verifies only
+the two added inputs; it does not provide current full-matrix coverage or the
+required three repeats. Coverage-MCP's incremental compare against the
+635-case report returned `incomparable` because the baseline detail is
+incomplete for a verified union; no additive coverage claim is made. The
+635-case report above predates these manifest and runner changes and cannot
+serve as the current acceptance report. The listener-reaping case,
+`native.http1.completed-connection-reaped-while-sibling-request-is-held`, was
+run together with the existing HTTP/1 and TLS lifecycle cases in the selected
+report at
+`target/asgi-coverage-kata-20261014/listener-non-generic-helper-selected/full-report.json`.
+All three passed. Coverage-MCP matched the source receipt and passed-test
+receipt, but this selected report is not a full-matrix coverage result. The
+last 639-case attribution report above supersedes it for one-pass case
+results, but not for three-repeat acceptance.
+
+A broader selected run then executed all 71 native HTTP/1, TLS, and HTTP/2
+inputs together at
+`target/asgi-coverage-kata-20261014/native-listener-protocols-selected/full-report.json`.
+All 71 passed; Coverage-MCP matched the source and test receipts. Its focused
+query still reports missing regions in `next_listener_event`: raw LLVM export
+contains a zero-count copy of the generated `tokio::select!` closure alongside
+an exercised copy, and the guarded `Option` fallback remains unvisited. This
+selected report is not a full-matrix result. The last 639-case full run includes
+those inputs, but does not clear the repeat or coverage gates and predates the
+current source refactor.
+
+Six additional HTTP/1 lifecycle error and cancellation cases also passed in
+`target/asgi-coverage-kata-20261014/native-listener-lifecycle-selected/full-report.json`.
+Coverage-MCP's incremental comparison against the 71-case report returned
+`incomparable` because the baseline lacks the detail required for a verified
+union, so no additive coverage claim is made. A `#[inline(never)]` experiment
+on the listener helper did not change its missing-region result and was
+removed.
+
+The report, raw profiles, and run logs are under ignored generated directories;
+none are tracked. The first exact-span audit found meaningful case candidates
+for the HTTP/3 lifecycle default/invalid-config paths (`lib.rs:751,753`) and
+listener completion (`lib.rs:946`). HTTP/3 shutdown failure (`http3.rs:355`)
+and WebSocket close-reply flush failure (`websocket.rs:267`) depend on peer
+failure timing and should count only if a black-box case proves repeatable.
+The two new HTTP/3 cases cover the public omitted-hooks and invalid-connection-
+limit configuration paths in a selected run. The existing
+`http1.max-connections-one-releases-slot-after-peer-close`
+case also passed alone under instrumentation, but did not attribute the
+`serve_listener` completion observation at `lib.rs:946`; it proves slot reuse,
+not that the listener reaped the finished task before shutdown.
+
+Other remaining regions appear tied to internal ownership invariants,
+uninhabited `Infallible` arms, unsupported `http_body::Frame` variants,
+prevalidated timeout overflow, or panic-only task-join outcomes. Under the
+current no-panic and no-private-trigger policy, those cannot be honestly
+covered by ordinary input cases. The literal 100% gate therefore remains open:
+first add and measure the reachable cases, then decide whether to refactor away
+unreachable branches or explicitly revise the coverage scope. Do not add
+synthetic cases just to inflate coverage. After source/input changes, rerun the
+three complete matrices, then repeat the strict offline, installed-extension,
+and exact-commit hosted checks.
+
+### Historical audit of the gaps in the 633-case report
 
 Three read-only reviews examined every uncovered region against the source and
-case inventory recorded for that report. Since two current source files no
-longer match its receipt, these findings are historical and are not a
-current-source gap audit. Re-run the audit against a new report before using
-these classifications to plan work.
+case inventory recorded for that 633-case report. The current report above has
+refreshed the aggregate gap counts, but a per-span audit against its exact
+source has not been completed. The classifications below remain historical;
+do not use them alone to add cases or change production code.
 
 | Source | Missing regions | Missing lines | Audit result |
 | --- | ---: | ---: | --- |
@@ -56,7 +374,8 @@ listener with a failing application startup hook and checks that serving never
 begins. The selected report passed 1/1 with complete attribution (205 regions)
 at
 `target/asgi-coverage/2026-10-13-h3-lifecycle-startup-selected/coverage-report.json`;
-that case also passed in the full 633-case diagnostic above.
+that input also passed in each of the then-current 124-case native verification
+repeats described above.
 
 The current native manifest also includes active TCP/TLS upgrade-registration
 cases and lifecycle-enabled WebSocket handshake/message cases over TCP and
@@ -102,11 +421,12 @@ it records 673/7,072 regions and 550/5,177 lines for the selected subset, with
 complete attribution and no case, infrastructure, or retry failures. Its
 source SHA-256 is `2c3558737f2f4643c4848b3c0d0438a1f245dcf1b4d2835b65b0282cfbaf0a3f`.
 Coverage-MCP reports a matching source receipt and passed case status. Its
-`ConnectionUpgrade` query still returns five function groups, although the
-report's uncovered-region list contains no `ConnectionUpgrade` symbols; resolve
-that query discrepancy before claiming zero gaps. This selected report is not
-aggregate coverage evidence and does not establish WebSocket handshake,
-framing, or ASGI WebSocket support.
+The old `ConnectionUpgrade` query discrepancy was traced to the generic
+service's protocol-specific instantiations: the HTTP/1 insertion executed, but
+the HTTP/3 instantiation could not enter that branch. The non-generic helper
+above removes that per-instantiation gap in the focused report. This selected
+report is not aggregate coverage evidence and does not establish WebSocket
+handshake, framing, or ASGI WebSocket support.
 
 The initial native HTTP/1.1 WebSocket selection passed 4/4 with complete
 attribution and no retries or infrastructure failures. It covers text/binary

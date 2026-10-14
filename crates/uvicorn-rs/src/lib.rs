@@ -22,17 +22,17 @@
 //! implemented.
 //!
 //! Each request receives [`ConnectionInfo`], [`ConnectionLifetime`], and
-//! [`RequestLifetime`] values in its [`http::Extensions`]. The connection
-//! handle ends when its protocol driver ends. The request handle identifies
-//! when the service or response-body path ends, including when Hyper drops an
-//! HTTP/2 service future after a stream reset. A dropped service future does
-//! not identify its cause; adapters must not interpret it as a peer reset
+//! [`RequestLifetime`] values in its [`http::Extensions`]. TCP requests also
+//! receive [`PeerReadHalfClosed`] to observe raw socket read-half closure. The
+//! connection handle ends when its protocol driver ends. The request handle
+//! identifies when the service or response-body path ends, including when
+//! Hyper drops an HTTP/2 service future after a stream reset. A dropped service
+//! future does not identify its cause; adapters must not interpret it as a peer reset
 //! unless the protocol layer provides that evidence. HTTP/3 request-reset
 //! notification remains limited by the current `h3` driver and is not
 //! guaranteed while neither request body nor response is being polled.
 
 use std::{
-    convert::Infallible,
     error::Error,
     fmt,
     future::Future,
@@ -76,11 +76,15 @@ use tokio_rustls::TlsAcceptor;
 use tower_service::Service;
 
 type BoxBodyError = Box<dyn Error + Send + Sync + 'static>;
+type BoxedShutdownFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 
 mod http3;
 mod websocket;
 
 pub use http3::{serve_http3, Http3RequestBody};
+#[cfg(coverage)]
+#[doc(hidden)]
+pub use websocket::{arm_close_reply_flush_fault, finish_close_reply_flush_fault};
 pub use websocket::{
     WebSocketCloseCode, WebSocketCloseFrame, WebSocketError, WebSocketMessage, WebSocketSession,
     WebSocketUpgrade, WebSocketUpgradeError,
@@ -108,6 +112,20 @@ pub enum ServerErrorPhase {
     ResponseBody,
     /// The HTTP connection failed or exceeded its drain deadline.
     Connection,
+}
+
+/// How the server handles errors returned by an application service before
+/// response commitment.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ServiceErrorPolicy {
+    /// Return an empty HTTP 500 response. This is the default policy.
+    #[default]
+    RespondInternalServerError,
+    /// Forward the original typed service or readiness error to the transport.
+    /// HTTP/1 ends the connection; HTTP/2 resets the affected stream.
+    /// HTTP/3 resets only the affected stream with `H3_INTERNAL_ERROR` before
+    /// sending response headers.
+    Propagate,
 }
 
 /// A borrowed error notification emitted by the server error observer.
@@ -142,6 +160,8 @@ impl ServerErrorEvent<'_> {
 #[derive(Clone)]
 pub struct ServerConfig {
     /// Maximum number of accepted connections that may be active at once.
+    ///
+    /// Must be in the inclusive range `1..=tokio::sync::Semaphore::MAX_PERMITS`.
     pub max_connections: usize,
     /// Maximum time to drain active connections after shutdown begins.
     pub graceful_shutdown_timeout: Duration,
@@ -162,6 +182,10 @@ pub struct ServerConfig {
     /// The observer runs synchronously on an error path. Its panic is caught
     /// and logged so it cannot unwind a connection task.
     pub error_observer: Option<ServerErrorObserver>,
+    /// Controls whether pre-response service errors become empty HTTP 500
+    /// responses or propagate to the transport. Defaults to
+    /// [`ServiceErrorPolicy::RespondInternalServerError`].
+    pub service_error_policy: ServiceErrorPolicy,
 }
 
 impl fmt::Debug for ServerConfig {
@@ -183,6 +207,7 @@ impl fmt::Debug for ServerConfig {
                 &self.application_lifecycle.is_some(),
             )
             .field("error_observer_configured", &self.error_observer.is_some())
+            .field("service_error_policy", &self.service_error_policy)
             .finish()
     }
 }
@@ -225,6 +250,66 @@ impl ConnectionInfo {
     #[must_use]
     pub const fn transport(&self) -> TransportKind {
         self.transport
+    }
+}
+
+/// A connection-scoped signal for peer TCP read-half closure.
+///
+/// The signal is inserted into requests served over TCP, including TLS over
+/// TCP. It becomes true only after the HTTP or TLS driver polls the raw socket
+/// with a nonempty read buffer and receives EOF. A TLS `close_notify` alone
+/// does not set it.
+/// The signal does not promise prompt observation while the driver is not
+/// polling the socket for input. In particular, HTTP/1.1 observation can wait
+/// until a pending service or response completes. This connection fact is not
+/// a per-request cancellation reason or an ASGI disconnect event.
+#[derive(Clone, Debug)]
+pub struct PeerReadHalfClosed {
+    closed: watch::Receiver<bool>,
+}
+
+impl PeerReadHalfClosed {
+    /// Returns whether raw TCP EOF has been observed for this connection.
+    #[must_use]
+    pub fn is_read_half_closed(&self) -> bool {
+        *self.closed.borrow()
+    }
+
+    /// Waits until raw TCP EOF is observed for this connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PeerReadHalfClosedUnavailable`] if the connection's reader
+    /// ends before the server observes EOF. Reader termination alone does not
+    /// confirm peer EOF.
+    pub async fn wait_until_read_half_closed(
+        &mut self,
+    ) -> Result<(), PeerReadHalfClosedUnavailable> {
+        loop {
+            if *self.closed.borrow_and_update() {
+                return Ok(());
+            }
+            self.closed
+                .changed()
+                .await
+                .map_err(|_| PeerReadHalfClosedUnavailable)?;
+        }
+    }
+}
+
+/// The server stopped observing a peer read-half closure before it observed EOF.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PeerReadHalfClosedUnavailable;
+
+impl fmt::Display for PeerReadHalfClosedUnavailable {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("peer read-half closure observation ended without EOF")
+    }
+}
+
+impl Error for PeerReadHalfClosedUnavailable {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
     }
 }
 
@@ -387,6 +472,75 @@ impl RequestLifetime {
                 return None;
             }
         }
+    }
+}
+
+struct PeerReadIo<I> {
+    inner: I,
+    peer_read_half_closed: watch::Sender<bool>,
+}
+
+impl<I> PeerReadIo<I> {
+    fn new(inner: I, peer_read_half_closed: watch::Sender<bool>) -> Self {
+        Self {
+            inner,
+            peer_read_half_closed,
+        }
+    }
+}
+
+impl<I> AsyncRead for PeerReadIo<I>
+where
+    I: AsyncRead + Unpin,
+{
+    fn poll_read(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let this = self.get_mut();
+        let filled_before = buffer.filled().len();
+        let result = Pin::new(&mut this.inner).poll_read(context, buffer);
+        if matches!(&result, Poll::Ready(Ok(())))
+            && buffer.remaining() > 0
+            && buffer.filled().len() == filled_before
+        {
+            this.peer_read_half_closed.send_replace(true);
+        }
+        result
+    }
+}
+
+impl<I> AsyncWrite for PeerReadIo<I>
+where
+    I: AsyncWrite + Unpin,
+{
+    fn poll_write(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().inner).poll_write(context, buffer)
+    }
+
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffers: &[io::IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().inner).poll_write_vectored(context, buffers)
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        self.inner.is_write_vectored()
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_flush(context)
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_shutdown(context)
     }
 }
 
@@ -576,6 +730,7 @@ impl Default for ServerConfig {
             application_shutdown_timeout: Duration::from_secs(30),
             application_lifecycle: None,
             error_observer: None,
+            service_error_policy: ServiceErrorPolicy::default(),
         }
     }
 }
@@ -603,6 +758,8 @@ fn observe_error(
 pub enum ServeError {
     /// The configured connection limit was zero.
     InvalidConnectionLimit,
+    /// The configured connection limit exceeded Tokio's maximum permit count.
+    ConnectionLimitTooLarge,
     /// The graceful-shutdown deadline could not be represented by the runtime clock.
     InvalidGracefulShutdownTimeout,
     /// A lifecycle timeout could not be represented by the runtime clock.
@@ -642,6 +799,9 @@ impl fmt::Display for ServeError {
         match self {
             Self::InvalidConnectionLimit => {
                 formatter.write_str("max_connections must be greater than zero")
+            }
+            Self::ConnectionLimitTooLarge => {
+                formatter.write_str("max_connections exceeds the runtime's maximum permit count")
             }
             Self::InvalidGracefulShutdownTimeout => {
                 formatter.write_str("graceful shutdown timeout exceeds the runtime clock range")
@@ -695,6 +855,7 @@ impl Error for ServeError {
             Self::ApplicationLifecycleFailed { error, .. } => Some(error.as_ref()),
             Self::ServerAndApplicationShutdown { server, .. } => Some(server.as_ref()),
             Self::InvalidConnectionLimit
+            | Self::ConnectionLimitTooLarge
             | Self::InvalidGracefulShutdownTimeout
             | Self::InvalidApplicationLifecycleTimeout
             | Self::ApplicationLifecyclePanicked { .. }
@@ -723,6 +884,9 @@ impl ServeError {
 fn validate_server_config(config: &ServerConfig) -> Result<(), ServeError> {
     if config.max_connections == 0 {
         return Err(ServeError::InvalidConnectionLimit);
+    }
+    if config.max_connections > Semaphore::MAX_PERMITS {
+        return Err(ServeError::ConnectionLimitTooLarge);
     }
     let now = Instant::now();
     if now.checked_add(config.graceful_shutdown_timeout).is_none() {
@@ -851,6 +1015,8 @@ async fn run_lifecycle_hook(
 /// # Errors
 ///
 /// Returns [`ServeError::InvalidConnectionLimit`] for a zero connection limit,
+/// [`ServeError::ConnectionLimitTooLarge`] when the limit exceeds Tokio's
+/// maximum semaphore permit count,
 /// [`ServeError::InvalidGracefulShutdownTimeout`] if the deadline cannot be
 /// represented, [`ServeError::Accept`] when the listener fails, or
 /// [`ServeError::GracefulShutdownTimedOut`] when active connections exceed the
@@ -871,8 +1037,9 @@ where
     S::Error: Error + fmt::Display + Send + Sync + 'static,
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
-    Shutdown: Future<Output = ()>,
+    Shutdown: Future<Output = ()> + Send,
 {
+    let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
     run_with_application_lifecycle(
         config.clone(),
         serve_listener(listener, service, shutdown, config, None),
@@ -907,8 +1074,9 @@ where
     S::Error: Error + fmt::Display + Send + Sync + 'static,
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
-    Shutdown: Future<Output = ()>,
+    Shutdown: Future<Output = ()> + Send,
 {
+    let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
     run_with_application_lifecycle(
         config.clone(),
         serve_listener(listener, service, shutdown, config, Some(acceptor)),
@@ -916,10 +1084,10 @@ where
     .await
 }
 
-async fn serve_listener<S, B, Shutdown>(
+async fn serve_listener<S, B>(
     listener: TcpListener,
     service: S,
-    shutdown: Shutdown,
+    shutdown: BoxedShutdownFuture<'_>,
     config: ServerConfig,
     tls_acceptor: Option<TlsAcceptor>,
 ) -> Result<(), ServeError>
@@ -929,87 +1097,89 @@ where
     S::Error: Error + fmt::Display + Send + Sync + 'static,
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
-    Shutdown: Future<Output = ()>,
 {
     let connection_slots = Arc::new(Semaphore::new(config.max_connections));
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
-    let mut shutdown = Box::pin(shutdown);
+    let mut shutdown = shutdown;
     let mut connections = JoinSet::new();
     let mut next_slot: Option<OwnedSemaphorePermit> = None;
 
     loop {
-        tokio::select! {
-            _ = &mut shutdown => break,
-            joined = connections.join_next(), if !connections.is_empty() => {
-                if let Some(joined) = joined {
-                    observe_connection(joined);
-                }
-            }
-            slot = Arc::clone(&connection_slots).acquire_owned(), if next_slot.is_none() => {
-                next_slot = Some(slot.map_err(|_| ServeError::InvalidConnectionLimit)?);
-            }
-            accepted = listener.accept(), if next_slot.is_some() => {
-                let (stream, peer) = accepted.map_err(ServeError::Accept)?;
-                let Some(slot) = next_slot.take() else {
-                    continue;
-                };
-                let service = service.clone();
-                let shutdown = shutdown_receiver.clone();
-                let error_observer = config.error_observer.clone();
-                let tls_acceptor = tls_acceptor.clone();
-                connections.spawn(async move {
-                    let _slot = slot;
-                    let result = match tls_acceptor {
-                        Some(acceptor) => match acceptor.accept(stream).await {
-                            Ok(stream) => {
-                                let alpn_protocol = stream
-                                    .get_ref()
-                                    .1
-                                    .alpn_protocol()
-                                    .map(Arc::<[u8]>::from);
-                                serve_connection(
-                                    stream,
-                                    service,
-                                    ConnectionInfo {
-                                        peer_addr: peer,
-                                        tls: Some(TlsInfo { alpn_protocol }),
-                                        transport: TransportKind::Tcp,
-                                    },
-                                    shutdown,
-                                    error_observer.as_ref(),
-                                )
-                                .await
-                            }
-                            Err(error) => Err(ConnectionError::Tls(error)),
-                        },
-                        None => {
-                            serve_connection(
-                                stream,
-                                service,
-                                ConnectionInfo {
-                                    peer_addr: peer,
-                                    tls: None,
-                                    transport: TransportKind::Tcp,
-                                },
-                                shutdown,
-                                error_observer.as_ref(),
-                            )
-                            .await
-                        }
-                    };
-                    if let Err(error) = &result {
-                        observe_error(
+        let ListenerEvent::Accepted { stream, peer, slot } = next_listener_event(
+            &listener,
+            &connection_slots,
+            &mut connections,
+            &mut next_slot,
+            &mut shutdown,
+        )
+        .await?
+        else {
+            break;
+        };
+
+        let (peer_read_half_closed_sender, peer_read_half_closed_receiver) = watch::channel(false);
+        let stream = PeerReadIo::new(stream, peer_read_half_closed_sender);
+        let peer_read_half_closed = PeerReadHalfClosed {
+            closed: peer_read_half_closed_receiver,
+        };
+
+        let service = service.clone();
+        let shutdown = shutdown_receiver.clone();
+        let error_observer = config.error_observer.clone();
+        let service_error_policy = config.service_error_policy;
+        let tls_acceptor = tls_acceptor.clone();
+        connections.spawn(async move {
+            let _slot = slot;
+            let result = match tls_acceptor {
+                Some(acceptor) => match acceptor.accept(stream).await {
+                    Ok(stream) => {
+                        let alpn_protocol =
+                            stream.get_ref().1.alpn_protocol().map(Arc::<[u8]>::from);
+                        serve_connection(
+                            stream,
+                            service,
+                            ConnectionInfo {
+                                peer_addr: peer,
+                                tls: Some(TlsInfo { alpn_protocol }),
+                                transport: TransportKind::Tcp,
+                            },
+                            peer_read_half_closed.clone(),
+                            shutdown,
                             error_observer.as_ref(),
-                            ServerErrorPhase::Connection,
-                            Some(peer),
-                            error,
-                        );
-                        tracing::debug!(%peer, %error, "HTTP connection finished with an error");
+                            service_error_policy,
+                        )
+                        .await
                     }
-                    result
-                });
+                    Err(error) => Err(ConnectionError::Tls(error)),
+                },
+                None => {
+                    serve_connection(
+                        stream,
+                        service,
+                        ConnectionInfo {
+                            peer_addr: peer,
+                            tls: None,
+                            transport: TransportKind::Tcp,
+                        },
+                        peer_read_half_closed,
+                        shutdown,
+                        error_observer.as_ref(),
+                        service_error_policy,
+                    )
+                    .await
+                }
+            };
+            if let Err(error) = &result {
+                observe_error(
+                    error_observer.as_ref(),
+                    ServerErrorPhase::Connection,
+                    Some(peer),
+                    error,
+                );
+                tracing::debug!(%peer, %error, "HTTP connection finished with an error");
             }
-        }
+            result
+        });
     }
 
     shutdown_sender.send_replace(true);
@@ -1037,12 +1207,51 @@ where
     Ok(())
 }
 
+enum ListenerEvent {
+    Shutdown,
+    Accepted {
+        stream: tokio::net::TcpStream,
+        peer: SocketAddr,
+        slot: OwnedSemaphorePermit,
+    },
+}
+
+async fn next_listener_event(
+    listener: &TcpListener,
+    connection_slots: &Arc<Semaphore>,
+    connections: &mut JoinSet<Result<(), ConnectionError>>,
+    next_slot: &mut Option<OwnedSemaphorePermit>,
+    shutdown: &mut BoxedShutdownFuture<'_>,
+) -> Result<ListenerEvent, ServeError> {
+    loop {
+        tokio::select! {
+            _ = shutdown.as_mut() => return Ok(ListenerEvent::Shutdown),
+            joined = connections.join_next(), if !connections.is_empty() => {
+                joined.into_iter().for_each(observe_connection);
+            }
+            slot = Arc::clone(connection_slots).acquire_owned(), if next_slot.is_none() => {
+                *next_slot = Some(slot.map_err(|_| ServeError::InvalidConnectionLimit)?);
+            }
+            accepted = listener.accept(), if next_slot.is_some() => {
+                let (stream, peer) = accepted.map_err(ServeError::Accept)?;
+                let slot = next_slot.take().map_or_else(
+                    || Err(ServeError::InvalidConnectionLimit),
+                    Ok,
+                )?;
+                return Ok(ListenerEvent::Accepted { stream, peer, slot });
+            }
+        }
+    }
+}
+
 async fn serve_connection<I, S, B>(
     stream: I,
     service: S,
     connection_info: ConnectionInfo,
+    peer_read_half_closed: PeerReadHalfClosed,
     mut shutdown: watch::Receiver<bool>,
     error_observer: Option<&ServerErrorObserver>,
+    service_error_policy: ServiceErrorPolicy,
 ) -> Result<(), ConnectionError>
 where
     I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -1070,9 +1279,11 @@ where
             connection_info,
             connection_lifetime,
             Some(connection_upgrade),
+            Some(peer_read_half_closed),
         ),
         error_observer.cloned(),
         peer_addr,
+        service_error_policy,
     );
     let service = TowerToHyperService::new(application);
     let connection = builder.serve_connection_with_upgrades(TokioIo::new(stream), service);
@@ -1139,6 +1350,7 @@ struct ConnectionInfoService<S, RequestBody, B> {
     connection_info: ConnectionInfo,
     connection_lifetime: ConnectionLifetime,
     connection_upgrade: Option<ConnectionUpgrade>,
+    peer_read_half_closed: Option<PeerReadHalfClosed>,
     _types: std::marker::PhantomData<fn(RequestBody) -> B>,
 }
 
@@ -1152,6 +1364,7 @@ where
             connection_info: self.connection_info.clone(),
             connection_lifetime: self.connection_lifetime.clone(),
             connection_upgrade: self.connection_upgrade.clone(),
+            peer_read_half_closed: self.peer_read_half_closed.clone(),
             _types: std::marker::PhantomData,
         }
     }
@@ -1163,12 +1376,14 @@ impl<S, RequestBody, B> ConnectionInfoService<S, RequestBody, B> {
         connection_info: ConnectionInfo,
         connection_lifetime: ConnectionLifetime,
         connection_upgrade: Option<ConnectionUpgrade>,
+        peer_read_half_closed: Option<PeerReadHalfClosed>,
     ) -> Self {
         Self {
             inner,
             connection_info,
             connection_lifetime,
             connection_upgrade,
+            peer_read_half_closed,
             _types: std::marker::PhantomData,
         }
     }
@@ -1194,14 +1409,32 @@ where
         request
             .extensions_mut()
             .insert(self.connection_lifetime.clone());
-        if request.version() == http::Version::HTTP_11 {
-            if let Some(connection_upgrade) = &self.connection_upgrade {
-                request.extensions_mut().insert(connection_upgrade.clone());
-            }
+        if let Some(peer_read_half_closed) = &self.peer_read_half_closed {
+            request
+                .extensions_mut()
+                .insert(peer_read_half_closed.clone());
         }
+        let request_version = request.version();
+        insert_http1_upgrade_extension(
+            request.extensions_mut(),
+            request_version,
+            self.connection_upgrade.as_ref(),
+        );
         let (request_lifetime, guard) = RequestLifetimeGuard::new();
         request.extensions_mut().insert(request_lifetime);
         RequestLifetimeFuture::new(self.inner.call(request), guard)
+    }
+}
+
+fn insert_http1_upgrade_extension(
+    extensions: &mut http::Extensions,
+    request_version: http::Version,
+    connection_upgrade: Option<&ConnectionUpgrade>,
+) {
+    if let (http::Version::HTTP_11, Some(connection_upgrade)) =
+        (request_version, connection_upgrade)
+    {
+        extensions.insert(connection_upgrade.clone());
     }
 }
 
@@ -1268,6 +1501,7 @@ where
     readiness_error: Option<S::Error>,
     error_observer: Option<ServerErrorObserver>,
     peer_addr: SocketAddr,
+    service_error_policy: ServiceErrorPolicy,
     _response_body: std::marker::PhantomData<fn() -> B>,
     _request_body: std::marker::PhantomData<fn() -> RequestBody>,
 }
@@ -1282,6 +1516,7 @@ where
             readiness_error: None,
             error_observer: self.error_observer.clone(),
             peer_addr: self.peer_addr,
+            service_error_policy: self.service_error_policy,
             _response_body: std::marker::PhantomData,
             _request_body: std::marker::PhantomData,
         }
@@ -1292,12 +1527,18 @@ impl<S, B, RequestBody> ServiceErrorResponse<S, B, RequestBody>
 where
     S: Service<Request<RequestBody>>,
 {
-    fn new(inner: S, error_observer: Option<ServerErrorObserver>, peer_addr: SocketAddr) -> Self {
+    fn new(
+        inner: S,
+        error_observer: Option<ServerErrorObserver>,
+        peer_addr: SocketAddr,
+        service_error_policy: ServiceErrorPolicy,
+    ) -> Self {
         Self {
             inner,
             readiness_error: None,
             error_observer,
             peer_addr,
+            service_error_policy,
             _response_body: std::marker::PhantomData,
             _request_body: std::marker::PhantomData,
         }
@@ -1311,7 +1552,7 @@ type ServiceResponseFuture<S, B, RequestBody> = FutureEither<
         <S as Service<Request<RequestBody>>>::Error,
         B,
     >,
-    Ready<Result<ResponseOnError<B>, Infallible>>,
+    Ready<Result<ResponseOnError<B>, <S as Service<Request<RequestBody>>>::Error>>,
 >;
 
 impl<S, B, RequestBody> Service<Request<RequestBody>> for ServiceErrorResponse<S, B, RequestBody>
@@ -1322,7 +1563,7 @@ where
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
     type Response = ResponseOnError<B>;
-    type Error = Infallible;
+    type Error = S::Error;
     type Future = ServiceResponseFuture<S, B, RequestBody>;
 
     fn poll_ready(&mut self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -1335,8 +1576,12 @@ where
                     Some(self.peer_addr),
                     &error,
                 );
-                self.readiness_error = Some(error);
-                Poll::Ready(Ok(()))
+                if self.service_error_policy == ServiceErrorPolicy::Propagate {
+                    Poll::Ready(Err(error))
+                } else {
+                    self.readiness_error = Some(error);
+                    Poll::Ready(Ok(()))
+                }
             }
             Poll::Pending => Poll::Pending,
         }
@@ -1351,6 +1596,7 @@ where
             self.inner.call(request),
             self.error_observer.clone(),
             self.peer_addr,
+            self.service_error_policy,
         ))
     }
 }
@@ -1361,16 +1607,23 @@ pin_project! {
         future: F,
         error_observer: Option<ServerErrorObserver>,
         peer_addr: SocketAddr,
+        service_error_policy: ServiceErrorPolicy,
         _types: std::marker::PhantomData<fn() -> (E, B)>,
     }
 }
 
 impl<F, E, B> ObserveServiceResult<F, E, B> {
-    fn new(future: F, error_observer: Option<ServerErrorObserver>, peer_addr: SocketAddr) -> Self {
+    fn new(
+        future: F,
+        error_observer: Option<ServerErrorObserver>,
+        peer_addr: SocketAddr,
+        service_error_policy: ServiceErrorPolicy,
+    ) -> Self {
         Self {
             future,
             error_observer,
             peer_addr,
+            service_error_policy,
             _types: std::marker::PhantomData,
         }
     }
@@ -1383,7 +1636,7 @@ where
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
-    type Output = Result<ResponseOnError<B>, Infallible>;
+    type Output = Result<ResponseOnError<B>, E>;
 
     fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
@@ -1405,8 +1658,13 @@ where
                     Some(*this.peer_addr),
                     &error,
                 );
-                tracing::error!(%error, "HTTP application service failed before response commitment");
-                Poll::Ready(Ok(internal_server_error()))
+                if *this.service_error_policy == ServiceErrorPolicy::Propagate {
+                    tracing::error!(%error, "HTTP application service failed before response commitment; propagating error");
+                    Poll::Ready(Err(error))
+                } else {
+                    tracing::error!(%error, "HTTP application service failed before response commitment");
+                    Poll::Ready(Ok(internal_server_error()))
+                }
             }
         }
     }

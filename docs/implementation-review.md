@@ -2,17 +2,23 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-The latest recorded local source matrix is the 511-case run from 2026-10-12:
-243 oracle comparisons, 268 target-only contracts, 5,561/5,561 regions, and
-3,997/3,997 lines. It passed attribution and three full repeats with no
-failures or transient infrastructure errors, and Coverage-MCP matched the
-source/build receipt with no missing groups. This is dirty macOS evidence, not
-a clean hosted release result; a normal-build parity and fault-control
-exclusion audit remains to be run on this exact source. The latest hosted CI
-run is recorded in [benchmark status](benchmark-status.md); exact
-current-source hosted verification remains incomplete. See the
-[latest source/build receipt](coverage.md#latest-local-evidence-2026-10-12).
-Earlier coverage and implementation results below are historical snapshots.
+The current manifests declare 661 cases: 511 Python ASGI cases and 150 native
+Rust service cases. The last dirty local combined attribution run passed
+639/639 once but left 41 regions and 24 lines uncovered. Hosted CI #110
+measured its then-current 633-case manifest at 7,322/7,380 regions and
+5,383/5,417 lines, also below the 100% gate. Neither report covers the current
+661-case source.
+The latest focused TCP EOF selection passed 18/18 with complete attribution.
+Three complete current-source repeats and the unified 100% region/line gate
+remain open. See the [current evidence record](coverage.md#current-unified-coverage-status-2026-10-14).
+
+The historical adapter-only run from 2026-10-12 passed 511/511 attribution and
+three repeats, with 243 oracle comparisons, 268 target-only contracts, and
+100% coverage of its recorded adapter source. It does not cover the native
+workspace or prove transport consolidation. The latest hosted CI failures are
+recorded in [benchmark status](benchmark-status.md); clean current-source
+verification remains incomplete. Earlier results below are historical
+snapshots.
 
 This page separates measured failures from risks that still need targeted
 evidence.

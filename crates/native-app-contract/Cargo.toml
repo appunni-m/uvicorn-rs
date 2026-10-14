@@ -3,9 +3,11 @@ name = "native-app-contract"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
-publish = false
 license = "BSD-3-Clause OR MIT"
 description = "Runtime-neutral contracts for Rust-native web applications"
+repository = "https://github.com/appunni-m/uvicorn-rs"
+documentation = "https://docs.rs/native-app-contract"
+readme = "README.md"
 
 [lib]
 name = "native_app_contract"

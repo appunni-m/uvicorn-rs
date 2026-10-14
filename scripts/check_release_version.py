@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check Rust, Python and both lockfiles against one candidate version."""
+"""Check Rust, Python, native-contract and lockfile versions for a candidate."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
         for name in (
             "Cargo.toml",
             "crates/uvicorn-rs/Cargo.toml",
+            "crates/native-app-contract/Cargo.toml",
             "pyproject.toml",
             "Cargo.lock",
             "uv.lock",
@@ -28,11 +29,14 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
     }
     cargo = documents["Cargo.toml"]["package"]
     native = documents["crates/uvicorn-rs/Cargo.toml"]["package"]
+    lifecycle = documents["crates/native-app-contract/Cargo.toml"]["package"]
     python = documents["pyproject.toml"]["project"]
     if cargo["name"] != "uvicorn-rs-py" or python["name"] != "uvicorn-rs-py":
         raise ValueError("root Cargo and Python distributions must both be uvicorn-rs-py")
     if native["name"] != "uvicorn-rs":
         raise ValueError("crates/uvicorn-rs must define the Python-free uvicorn-rs package")
+    if lifecycle["name"] != "native-app-contract":
+        raise ValueError("crates/native-app-contract must define the shared native lifecycle package")
 
     def locked_package(lock_name: str, package_name: str, *, editable: bool = False) -> dict:
         rows = [
@@ -53,9 +57,11 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
     versions = {
         "Cargo.toml": cargo["version"],
         "crates/uvicorn-rs/Cargo.toml": native["version"],
+        "crates/native-app-contract/Cargo.toml": lifecycle["version"],
         "pyproject.toml": python["version"],
         "Cargo.lock:uvicorn-rs-py": locked_package("Cargo.lock", "uvicorn-rs-py")["version"],
         "Cargo.lock:uvicorn-rs": locked_package("Cargo.lock", "uvicorn-rs")["version"],
+        "Cargo.lock:native-app-contract": locked_package("Cargo.lock", "native-app-contract")["version"],
         "uv.lock": locked_package("uv.lock", "uvicorn-rs-py", editable=True)["version"],
     }
     expected = expected if expected is not None else versions["Cargo.toml"]
@@ -83,7 +89,7 @@ def main() -> int:
     else:
         print(
             f"release version {versions['Cargo.toml']} matches the uvicorn-rs-py "
-            "Python adapter and uvicorn-rs native crate manifests and locks"
+            "Python adapter, uvicorn-rs native crate, shared lifecycle crate, and locks"
         )
     return 0
 

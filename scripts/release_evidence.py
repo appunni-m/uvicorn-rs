@@ -21,6 +21,7 @@ import struct
 import subprocess
 import sys
 import tarfile
+import tempfile
 import zipfile
 from datetime import datetime, timezone
 from email import policy
@@ -38,7 +39,18 @@ PLATFORMS = {
 }
 LICENSES = ("LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT")
 LICENSE_EXPRESSION = "BSD-3-Clause OR MIT"
-REQUIRED = ("Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "README.md", "src/lib.rs", *LICENSES)
+CRATE_DIRS = {
+    "native-app-contract": ROOT / "crates/native-app-contract",
+    "uvicorn-rs": ROOT / "crates/uvicorn-rs",
+}
+CRATE_EXCLUDES = {"native-app-contract": set(), "uvicorn-rs": {"examples/native_core_contracts.rs"}}
+REQUIRED = (
+    "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "README.md", "src/lib.rs", *LICENSES,
+    "crates/native-app-contract/Cargo.toml", "crates/native-app-contract/README.md",
+    *(f"crates/native-app-contract/{name}" for name in LICENSES),
+    "crates/uvicorn-rs/Cargo.toml", "crates/uvicorn-rs/README.md",
+    *(f"crates/uvicorn-rs/{name}" for name in LICENSES),
+)
 FORBIDDEN_DIRS = {
     "benchmarks", "build", "target", "tools", "tests", "scripts", "examples", "coverage",
     ".coverage-mcp", ".github", ".git", ".venv", "venv", "__pycache__", ".agents", ".codex",
@@ -83,6 +95,8 @@ def load_json(path: Path) -> dict:
 def source_hashes() -> dict[str, str]:
     paths = {ROOT / name for name in REQUIRED}
     paths.update((ROOT / "src").rglob("*.rs"))
+    paths.update((ROOT / "crates" / "uvicorn-rs").rglob("*.rs"))
+    paths.update((ROOT / "crates" / "native-app-contract").rglob("*.rs"))
     paths.update((ROOT / "python" / "uvicorn_rs").glob("*.py"))
     for optional in ("build.rs", ".gitignore"):
         if (ROOT / optional).exists():
@@ -104,16 +118,26 @@ def license_contract() -> None:
     for name in LICENSES:
         if not (ROOT / name).read_bytes().strip():
             raise ValueError(f"empty license file: {name}")
+    for crate_name, directory in CRATE_DIRS.items():
+        manifest = tomllib.loads((directory / "Cargo.toml").read_text(encoding="utf-8"))["package"]
+        if manifest.get("license") != LICENSE_EXPRESSION or manifest.get("publish") is False:
+            raise ValueError(f"{crate_name} must have the shared license and be publishable")
+        if not manifest.get("readme"):
+            raise ValueError(f"{crate_name} must declare its packaged README")
+        for name in LICENSES:
+            local = directory / name
+            if not local.is_file() or local.read_bytes() != (ROOT / name).read_bytes():
+                raise ValueError(f"{crate_name} license copy differs from the repository: {name}")
 
 
-def safe_member(name: str) -> str:
+def safe_member(name: str, *, allowed_dirs: frozenset[str] = frozenset()) -> str:
     normalized = name.rstrip("/")
     path = PurePosixPath(normalized)
     if (not normalized or "\\" in name or "\x00" in name or path.is_absolute()
             or any(part in {"", ".", ".."} for part in normalized.split("/"))
             or ":" in path.parts[0] or path.as_posix() != normalized):
         raise ValueError(f"unsafe archive path: {name!r}")
-    if (any(part.lower() in FORBIDDEN_DIRS or part.lower().startswith(".env") for part in path.parts)
+    if (any(part.lower() in FORBIDDEN_DIRS - allowed_dirs or part.lower().startswith(".env") for part in path.parts)
             or normalized.lower().endswith(FORBIDDEN_SUFFIXES)
             or path.name.lower() in {"credentials", "credentials.json", "secrets.json", "id_rsa", "id_ed25519"}):
         raise ValueError(f"repository/developer/secret file in package: {name}")
@@ -310,6 +334,205 @@ def inspect_sdist(path: Path, version: str) -> dict:
             "members": sorted(contents), "source_hashes": {name: sha256(data) for name, data in sorted(contents.items()) if name != "PKG-INFO"}}
 
 
+def inspect_rust_crate(
+    path: Path,
+    package_name: str,
+    version: str,
+    expected_commit: str | None = None,
+    require_clean: bool = False,
+) -> dict:
+    """Verify a Cargo archive contains the exact reviewed native crate sources."""
+    directory = CRATE_DIRS.get(package_name)
+    if directory is None or path.name != f"{package_name}-{version}.crate":
+        raise ValueError(f"unexpected native crate package name/version: {path.name}")
+    prefix = f"{package_name}-{version}/"
+    contents: dict[str, bytes] = {}
+    seen: set[str] = set()
+    with tarfile.open(path, "r:gz") as archive:
+        for member in archive.getmembers():
+            raw_name = safe_member(member.name, allowed_dirs=frozenset({"examples"}))
+            if raw_name in seen or not (member.isfile() or member.isdir()):
+                raise ValueError(f"duplicate or nonregular Cargo archive member: {raw_name}")
+            seen.add(raw_name)
+            if not raw_name.startswith(prefix):
+                if member.isdir() and raw_name == prefix.rstrip("/"):
+                    continue
+                raise ValueError("Cargo archive must have exactly the expected package root")
+            if member.isfile():
+                reader = archive.extractfile(member)
+                if reader is None:
+                    raise ValueError(f"unreadable Cargo archive member: {raw_name}")
+                relative = raw_name[len(prefix):]
+                contents[relative] = reader.read()
+                check_content(raw_name, contents[relative])
+
+    source_files = {
+        file.relative_to(directory).as_posix(): file
+        for file in directory.rglob("*")
+        if file.is_file() and file.relative_to(directory).as_posix() not in CRATE_EXCLUDES[package_name]
+    }
+    expected = {"Cargo.toml", "Cargo.toml.orig", "Cargo.lock", ".cargo_vcs_info.json"}
+    expected |= set(source_files) - {"Cargo.toml"}
+    if set(contents) != expected:
+        raise ValueError(
+            f"Cargo archive inventory differs for {package_name}: "
+            f"missing={sorted(expected - set(contents))}, extra={sorted(set(contents) - expected)}"
+        )
+    if contents["Cargo.toml.orig"] != (directory / "Cargo.toml").read_bytes():
+        raise ValueError(f"Cargo archive original manifest differs for {package_name}")
+    for relative, source in source_files.items():
+        if relative != "Cargo.toml" and contents[relative] != source.read_bytes():
+            raise ValueError(f"Cargo archive source differs from checkout: {package_name}/{relative}")
+    manifest = tomllib.loads(contents["Cargo.toml"].decode("utf-8"))
+    package = manifest.get("package", {})
+    if (package.get("name") != package_name or package.get("version") != version
+            or package.get("license") != LICENSE_EXPRESSION
+            or package.get("readme") != "README.md"):
+        raise ValueError(f"Cargo archive package identity/license/readme mismatch: {package_name}")
+    lock = tomllib.loads(contents["Cargo.lock"].decode("utf-8"))
+    locked = [entry for entry in lock.get("package", [])
+              if entry.get("name") == package_name and entry.get("version") == version]
+    if len(locked) != 1:
+        raise ValueError(f"Cargo archive lockfile does not identify {package_name} {version}")
+    if package_name == "uvicorn-rs":
+        dependency = manifest.get("dependencies", {}).get("native-app-contract", {})
+        if (dependency.get("version") != version or "path" in dependency
+                or not any(entry.get("name") == "native-app-contract"
+                           and entry.get("version") == version for entry in lock.get("package", []))):
+            raise ValueError("published uvicorn-rs archive must use the versioned lifecycle crate dependency")
+    for name in LICENSES:
+        if contents.get(name) != (ROOT / name).read_bytes():
+            raise ValueError(f"Cargo archive license differs from repository: {package_name}/{name}")
+    vcs = json.loads(contents[".cargo_vcs_info.json"].decode("utf-8"))
+    vcs_git = vcs.get("git") if isinstance(vcs, dict) else None
+    source_commit = vcs_git.get("sha1") if isinstance(vcs_git, dict) else None
+    source_dirty = vcs_git.get("dirty") if isinstance(vcs_git, dict) else None
+    vcs_path = vcs.get("path_in_vcs") if isinstance(vcs, dict) else None
+    expected_vcs_path = f"crates/{package_name}"
+    if (not isinstance(source_commit, str) or COMMIT.fullmatch(source_commit) is None
+            or vcs_path != expected_vcs_path):
+        raise ValueError(f"Cargo archive VCS identity is invalid: {package_name}")
+    if expected_commit is not None and source_commit != expected_commit:
+        raise ValueError(f"Cargo archive commit differs from candidate: {package_name}")
+    if type(source_dirty) is not bool:
+        raise ValueError(f"Cargo archive omitted its clean-source flag: {package_name}")
+    if require_clean and source_dirty:
+        raise ValueError(f"Cargo archive was packaged from a dirty source tree: {package_name}")
+    return {
+        "filename": path.name,
+        "sha256": file_sha256(path),
+        "size": path.stat().st_size,
+        "package": package_name,
+        "version": version,
+        "source_commit": source_commit,
+        "source_dirty": source_dirty,
+        "members": sorted(contents),
+        "source_hashes": {
+            relative: sha256(data)
+            for relative, data in sorted(contents.items())
+            if relative not in {"Cargo.toml", "Cargo.lock", ".cargo_vcs_info.json"}
+        },
+        "license_files_verified": True,
+    }
+
+
+def _extract_checked_rust_crate(path: Path, package_name: str, version: str, destination: Path) -> None:
+    """Extract an already-inspected Cargo archive without trusting tar paths."""
+    prefix = f"{package_name}-{version}/"
+    destination.mkdir(parents=True, exist_ok=False)
+    with tarfile.open(path, "r:gz") as archive:
+        for member in archive.getmembers():
+            raw_name = safe_member(member.name, allowed_dirs=frozenset({"examples"}))
+            if raw_name == prefix.rstrip("/"):
+                continue
+            if not raw_name.startswith(prefix) or not member.isfile():
+                if member.isdir() and raw_name.startswith(prefix):
+                    continue
+                raise ValueError(f"unexpected Cargo archive member during extraction: {member.name}")
+            relative = PurePosixPath(raw_name[len(prefix):])
+            if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+                raise ValueError(f"unsafe Cargo archive path during extraction: {member.name}")
+            target = destination.joinpath(*relative.parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            reader = archive.extractfile(member)
+            if reader is None:
+                raise ValueError(f"unreadable Cargo archive member during extraction: {member.name}")
+            target.write_bytes(reader.read())
+
+
+def verify_rust_crate_archives(
+    directory: Path,
+    version: str,
+    expected_commit: str,
+    require_clean: bool,
+) -> dict:
+    """Build both packaged Rust crates from extracted archives in isolation."""
+    packages = ("native-app-contract", "uvicorn-rs")
+    inspected = {
+        package: inspect_rust_crate(
+            directory / f"{package}-{version}.crate",
+            package,
+            version,
+            expected_commit=expected_commit,
+            require_clean=require_clean,
+        )
+        for package in packages
+    }
+    with tempfile.TemporaryDirectory(prefix="uvicorn-rs-crate-consumer-") as temporary:
+        root = Path(temporary)
+        extracted = {package: root / package for package in packages}
+        for package in packages:
+            _extract_checked_rust_crate(
+                directory / f"{package}-{version}.crate", package, version, extracted[package]
+            )
+        environment = os.environ.copy()
+        environment["CARGO_TARGET_DIR"] = str(root / "target")
+        for name in (
+            "RUSTFLAGS",
+            "CARGO_ENCODED_RUSTFLAGS",
+            "CARGO_BUILD_RUSTFLAGS",
+            "RUSTC_WRAPPER",
+            "RUSTC_WORKSPACE_WRAPPER",
+        ):
+            environment[name] = ""
+        for name in environment:
+            if name.startswith("CARGO_TARGET_") and name.endswith("_RUSTFLAGS"):
+                environment[name] = ""
+        commands = (
+            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["native-app-contract"] / "Cargo.toml")],
+            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"),
+             "--config", f'patch.crates-io.native-app-contract.path="{extracted["native-app-contract"].as_posix()}"'],
+        )
+        for command in commands:
+            result = subprocess.run(
+                command,
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=600,
+            )
+            if result.returncode != 0:
+                details = "\n".join(part for part in (result.stdout, result.stderr) if part)
+                raise RuntimeError(
+                    f"extracted Rust crate build failed ({' '.join(command)}):\n{details}"
+                )
+    return {
+        "schema": "uvicorn-rs-native-crate-consumer@1",
+        "status": "passed",
+        "source_commit": expected_commit,
+        "source_dirty": any(value["source_dirty"] for value in inspected.values()),
+        "archive_sha256s": {
+            value["filename"]: value["sha256"] for value in inspected.values()
+        },
+        "commands": [
+            "cargo check --offline --locked --manifest-path <native-app-contract>/Cargo.toml",
+            "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patch.crates-io.native-app-contract.path=<native-app-contract>",
+        ],
+    }
+
+
 def validate_consumer(value: dict, version: str, wheel_sha: str, native_sha: str | None = None) -> None:
     if not isinstance(wheel_sha, str) or SHA256.fullmatch(wheel_sha) is None:
         raise ValueError("consumer wheel identity must be a SHA-256 digest")
@@ -394,11 +617,26 @@ def record(args: argparse.Namespace) -> None:
     expected = {wheel["filename"], f"consumer-{args.platform}.json"}
     packages = {wheel["filename"]: wheel}
     if args.platform == "linux-x86_64":
-        expected |= {f"uvicorn_rs_py-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json"}
+        expected |= {
+            f"uvicorn_rs_py-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json",
+            f"native-app-contract-{version}.crate", f"uvicorn-rs-{version}.crate",
+        }
         sdist = inspect_sdist(directory / f"uvicorn_rs_py-{version}.tar.gz", version)
         packages[sdist["filename"]] = sdist
         validate_source_consumer(load_json(directory / "consumer-sdist.json"), version, sdist)
         validate_packaged_parity(directory / "parity-linux-x86_64.json", wheel["native"]["sha256"])
+        crate_consumer_check = verify_rust_crate_archives(
+            directory, version, args.commit, require_clean=not dirty
+        )
+        for crate_name in ("native-app-contract", "uvicorn-rs"):
+            crate = inspect_rust_crate(
+                directory / f"{crate_name}-{version}.crate",
+                crate_name,
+                version,
+                expected_commit=args.commit,
+                require_clean=not dirty,
+            )
+            packages[crate["filename"]] = crate
     if names != expected or any(path.is_symlink() or not path.is_file() for path in directory.iterdir()):
         raise ValueError(f"unexpected platform artifact inventory: expected {sorted(expected)}, found {sorted(names)}")
     validate_consumer(load_json(directory / f"consumer-{args.platform}.json"), version, wheel["sha256"], wheel["native"]["sha256"])
@@ -410,6 +648,16 @@ def record(args: argparse.Namespace) -> None:
     host = next((line[6:] for line in rustc.splitlines() if line.startswith("host: ")), None)
     if host != PLATFORMS[args.platform]:
         raise ValueError("producer host differs from declared native target")
+    build = {"wheel_command": ["maturin", "build", "--release", "--locked", "--interpreter", "python", "--out", "dist"],
+             "features": ["pyo3/extension-module"], "profile": "release", "locked": True,
+             "environment": {name: "" for name in sorted(flag_names)}}
+    if args.platform == "linux-x86_64":
+        build["native_crate_commands"] = [
+            "cargo package -p native-app-contract --no-verify --locked --offline",
+            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.native-app-contract.path=\"crates/native-app-contract\"'",
+            "copy target/native-package/package/*.crate to dist/",
+        ]
+        build["native_crate_consumer_check"] = crate_consumer_check
     value = {"schema": "uvicorn-rs-platform-build@1", "state": "local preparation" if dirty else "candidate",
              "commit": args.commit, "version": version, "platform": args.platform, "target": host,
              "source_dirty": dirty, "source_hashes": inputs, "source_sha256": inputs["src/lib.rs"],
@@ -417,9 +665,7 @@ def record(args: argparse.Namespace) -> None:
              "publication_blockers": ["dirty source checkout"] if dirty else [],
              "toolchain": {"rustc": rustc, "cargo": command_output(["cargo", "--version"]),
                            "maturin": command_output(["maturin", "--version"]), "python": sys.version},
-             "build": {"wheel_command": ["maturin", "build", "--release", "--locked", "--interpreter", "python", "--out", "dist"],
-                       "features": ["pyo3/extension-module"], "profile": "release", "locked": True,
-                       "environment": {name: "" for name in sorted(flag_names)}},
+             "build": build,
              "packages": packages, "files": {name: file_sha256(directory / name) for name in sorted(expected)}}
     if source_hashes() != inputs:
         raise ValueError("source inputs changed during artifact inspection")

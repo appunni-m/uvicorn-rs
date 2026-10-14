@@ -65,6 +65,12 @@ PYTHON_SOURCE_SET = (
 )
 NATIVE_MANIFEST = ROOT / "tests" / "native-core" / "manifest.json"
 NATIVE_RUNNER = ROOT / "target" / "asgi-native-coverage" / "release" / "examples" / "native_core_contracts"
+NATIVE_FAULT_CONTRACTS = {
+    "websocket.receive.close-reply.flush": {
+        "operation": "native-http1-websocket",
+        "scenario": "close-reply-flush-failure",
+    },
+}
 REPORT_INPUT_PATHS = (
     "tests/parity/manifest.json",
     "tests/parity/app.py",
@@ -164,6 +170,22 @@ def load_native_contract() -> tuple[dict[str, Any], list[dict[str, Any]]]:
             or len(covers) != len(set(covers))
         ):
             raise CoverageError(f"native-core case {case['id']} has invalid requirement coverage")
+        verification = case.get("verification", "target-contract")
+        fault = case.get("fault")
+        if verification not in {"target-contract", "fault-contract"}:
+            raise CoverageError(f"native-core case {case['id']} has invalid verification mode")
+        if verification == "fault-contract":
+            if (
+                not isinstance(fault, dict)
+                or set(fault) != {"point"}
+                or not isinstance(fault.get("point"), str)
+                or fault.get("point") not in NATIVE_FAULT_CONTRACTS
+                or case.get("operation") != NATIVE_FAULT_CONTRACTS[fault["point"]]["operation"]
+                or case.get("scenario") != NATIVE_FAULT_CONTRACTS[fault["point"]]["scenario"]
+            ):
+                raise CoverageError(f"native-core case {case['id']} has an invalid fault contract")
+        elif fault is not None:
+            raise CoverageError(f"native-core target contract {case['id']} cannot declare a fault point")
     return document, cases
 
 
@@ -989,13 +1011,23 @@ def main() -> int:
         stderr_path.write_text(stderr, encoding="utf-8")
         profiles = sorted(profile_dir.glob("*.profraw"))
         passed_ids = native_pass_ids(stdout)
-        status = "passed" if exit_code == 0 and passed_ids == [case_id] and profiles else "failed"
+        verification = case.get("verification", "target-contract")
+        fault = case.get("fault")
+        fault_consumed = (
+            verification == "fault-contract"
+            and f"FAULT_CONSUMED {fault['point']}" in stdout.splitlines()
+        )
+        fault_contract_passed = verification != "fault-contract" or fault_consumed
+        status = "passed" if exit_code == 0 and passed_ids == [case_id] and profiles and fault_contract_passed else "failed"
         if not profiles:
             status = "infrastructure_failed"
         native_result = {
-            "schema": "uvicorn-rs-native-case-result/2",
+            "schema": "uvicorn-rs-native-case-result/3",
             "case_id": case_id,
             "case_key": case_key("native", case_id),
+            "verification": verification,
+            "fault": fault,
+            "fault_consumed": fault_consumed,
             "status": status,
             "runner_exit_code": exit_code,
             "expected_pass_ids": [case_id],
@@ -1020,6 +1052,9 @@ def main() -> int:
             "operation": case.get("operation"),
             "protocol": case.get("protocol"),
             "requirements": case.get("covers", []),
+            "verification": verification,
+            "fault": fault,
+            "fault_consumed": fault_consumed,
             "status": status,
             "error": None if status == "passed" else f"native runner exit={exit_code}, pass_ids={passed_ids!r}",
             "runner_exit_code": exit_code,
@@ -1037,6 +1072,9 @@ def main() -> int:
             "attempts": [{
                 "attempt": 1,
                 "status": status,
+                "verification": verification,
+                "fault": fault,
+                "fault_consumed": fault_consumed,
                 "runner_exit_code": exit_code,
                 "result_artifact": str(result_path.relative_to(ROOT)),
                 "result_sha256": digest_file(result_path),
@@ -1209,15 +1247,29 @@ def main() -> int:
         stderr_path.write_text(stderr, encoding="utf-8")
         expected_ids = [case["id"] for case in all_native_cases]
         observed_ids = native_pass_ids(stdout)
+        expected_fault_points = [
+            case["fault"]["point"] for case in all_native_cases
+            if case.get("verification", "target-contract") == "fault-contract"
+        ]
+        observed_fault_points = [
+            line.removeprefix("FAULT_CONSUMED ") for line in stdout.splitlines()
+            if line.startswith("FAULT_CONSUMED ")
+        ]
+        faults_consumed = observed_fault_points == expected_fault_points
         profiles = sorted(repeat_dir.glob("*.profraw"))
         observed_set = set(observed_ids)
         passed_ids = observed_set & set(expected_ids)
+        if not faults_consumed:
+            passed_ids -= {
+                case["id"] for case in all_native_cases
+                if case.get("verification", "target-contract") == "fault-contract"
+            }
         passed_count = len(passed_ids)
         failed_count = len(set(expected_ids) - passed_ids)
         not_run_count = len(set(expected_ids) - observed_set)
-        passed = exit_code == 0 and len(observed_ids) == len(expected_ids) and observed_set == set(expected_ids) and profiles
+        passed = exit_code == 0 and observed_ids == expected_ids and profiles and faults_consumed
         repeat_result = {
-            "schema": "uvicorn-rs-native-matrix-result/2",
+            "schema": "uvicorn-rs-native-matrix-result/3",
             "run": repeat,
             "status": "completed" if passed else "failed",
             "runner_exit_code": exit_code,
@@ -1227,6 +1279,8 @@ def main() -> int:
             "not_run": not_run_count,
             "expected_case_ids": expected_ids,
             "observed_pass_ids": observed_ids,
+            "expected_fault_points": expected_fault_points,
+            "observed_fault_points": observed_fault_points,
             "stdout_artifact": str(stdout_path.relative_to(ROOT)),
             "stderr_artifact": str(stderr_path.relative_to(ROOT)),
             "profile_data_artifacts": [str(path.relative_to(ROOT)) for path in profiles],
@@ -1354,6 +1408,9 @@ def main() -> int:
     )
     oracle_case_receipts = [item for item in case_receipts if item["verification"] == "oracle-parity"]
     fault_case_receipts = [item for item in case_receipts if item["verification"] == "fault-contract"]
+    native_fault_case_receipts = [
+        item for item in native_case_receipts if item["verification"] == "fault-contract"
+    ]
     complete_asgi_repeats = (
         args.matrix_repeats == 3
         and len(matrix_runs) == args.matrix_repeats
@@ -1466,9 +1523,11 @@ def main() -> int:
                 "failed": sum(item["status"] == "failed" for item in oracle_case_receipts),
             },
             "fault_contracts": {
-                "selected": len(fault_case_receipts),
-                "passed": sum(item["status"] == "passed" for item in fault_case_receipts),
-                "failed": sum(item["status"] == "failed" for item in fault_case_receipts),
+                "selected": len(fault_case_receipts) + len(native_fault_case_receipts),
+                "passed": sum(item["status"] == "passed" for item in fault_case_receipts)
+                + sum(item["status"] == "passed" for item in native_fault_case_receipts),
+                "failed": sum(item["status"] == "failed" for item in fault_case_receipts)
+                + sum(item["status"] == "failed" for item in native_fault_case_receipts),
             },
             "verification_runs": matrix_runs,
             "native_verification_runs": native_matrix_runs,

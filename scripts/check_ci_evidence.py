@@ -38,6 +38,12 @@ PRODUCTION_SOURCE_SET = (
 )
 EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
 NO_COUNTER_SOURCE_SET = (PRODUCTION_SOURCE_SET[-1],)
+NATIVE_FAULT_CONTRACTS = {
+    "websocket.receive.close-reply.flush": {
+        "operation": "native-http1-websocket",
+        "scenario": "close-reply-flush-failure",
+    },
+}
 PYTHON_SOURCE_SET = (
     "python/uvicorn_rs/__init__.py",
     "python/uvicorn_rs/__main__.py",
@@ -553,6 +559,20 @@ def validate_coverage(
     native_ids = [case.get("id") for case in native_cases if isinstance(case, dict)]
     require(len(native_ids) == len(native_cases) and all(isinstance(item, str) and item.strip() for item in native_ids)
             and len(native_ids) == len(set(native_ids)), "invalid native case index")
+    for case in native_cases:
+        verification = case.get("verification", "target-contract")
+        fault = case.get("fault")
+        require(verification in {"target-contract", "fault-contract"},
+                f"invalid native verification mode: {case['id']}")
+        if verification == "fault-contract":
+            require(isinstance(fault, dict) and set(fault) == {"point"}
+                    and isinstance(fault.get("point"), str)
+                    and fault.get("point") in NATIVE_FAULT_CONTRACTS
+                    and case.get("operation") == NATIVE_FAULT_CONTRACTS[fault["point"]]["operation"]
+                    and case.get("scenario") == NATIVE_FAULT_CONTRACTS[fault["point"]]["scenario"],
+                    f"invalid native fault contract: {case['id']}")
+        else:
+            require(fault is None, f"native target contract cannot declare a fault: {case['id']}")
 
     ext = report.get("uvicorn_rs_unified")
     require(report.get("type") == "llvm.coverage.json.export" and isinstance(ext, dict)
@@ -630,6 +650,8 @@ def validate_coverage(
             and matrix.get("case_attribution_complete") is True, "coverage matrix is incomplete or contains retries")
     for key, policy in (("oracle_parity", "oracle-parity"), ("fault_contracts", "fault-contract")):
         count = sum(case.get("verification", "oracle-parity") == policy for case in asgi_cases)
+        if policy == "fault-contract":
+            count += sum(case.get("verification", "target-contract") == policy for case in native_cases)
         require(matrix.get(key) == {"selected": count, "passed": count, "failed": 0},
                 f"{key} case denominator differs")
 
@@ -888,8 +910,13 @@ def validate_coverage(
         cid = row["case_id"]
         case = native_by_id[cid]
         key = f"native:{cid}"
+        verification = case.get("verification", "target-contract")
+        fault = case.get("fault")
+        fault_consumed = verification == "fault-contract"
         require(row.get("case_key") == key and row.get("operation") == case.get("operation")
                 and row.get("protocol") == case.get("protocol") and row.get("status") == "passed"
+                and row.get("verification") == verification and row.get("fault") == fault
+                and row.get("fault_consumed") is fault_consumed
                 and row.get("error") is None and row.get("runner_exit_code") == 0
                 and row.get("expected_pass_ids") == [cid] and row.get("observed_pass_ids") == [cid]
                 and row.get("transient_infrastructure_failures") == 0
@@ -898,14 +925,16 @@ def validate_coverage(
                 f"native case receipt differs: {cid}")
         native_result = read_json(artifact(row["result_artifact"], row["result_sha256"]))
         require(native_result == {
-            "schema": "uvicorn-rs-native-case-result/2", "case_id": cid, "case_key": key,
+            "schema": "uvicorn-rs-native-case-result/3", "case_id": cid, "case_key": key,
+            "verification": verification, "fault": fault, "fault_consumed": fault_consumed,
             "status": "passed", "runner_exit_code": 0, "expected_pass_ids": [cid],
             "observed_pass_ids": [cid], "profile_data_artifacts": row["profile_data_artifacts"],
             "profile_data_receipts": row["profile_data_receipts"],
         }, f"native result artifact differs: {cid}")
         attempts = row.get("attempts")
         require(isinstance(attempts, list) and len(attempts) == 1 and attempts[0] == {
-            "attempt": 1, "status": "passed", "runner_exit_code": 0,
+            "attempt": 1, "status": "passed", "verification": verification,
+            "fault": fault, "fault_consumed": fault_consumed, "runner_exit_code": 0,
             "result_artifact": row["result_artifact"], "result_sha256": row["result_sha256"],
             "stdout_artifact": row["stdout_artifact"], "stderr_artifact": row["stderr_artifact"],
             "profile_data_artifacts": row["profile_data_artifacts"],
@@ -920,6 +949,9 @@ def validate_coverage(
                            f"native case stderr {cid}")
         stdout = artifact(row["stdout_artifact"]).read_text(encoding="utf-8")
         artifact(row["stderr_artifact"])
+        if verification == "fault-contract":
+            require(f"FAULT_CONSUMED {fault['point']}" in stdout.splitlines(),
+                    f"native fault point was not observed as consumed: {cid}")
         require([line.removeprefix("PASS ") for line in stdout.splitlines() if line.startswith("PASS ")] == [cid],
                 f"native case stdout does not prove its pass: {cid}")
         profiles = check_profiles(
@@ -973,13 +1005,19 @@ def validate_coverage(
                 f"ASGI repeat identity differs or repeats: {index}")
         seen_runs.add(rid)
 
+    expected_native_fault_points = [
+        case["fault"]["point"] for case in native_cases
+        if case.get("verification", "target-contract") == "fault-contract"
+    ]
     for index, repeat in enumerate(native_repeats, 1):
-        require(repeat.get("schema") == "uvicorn-rs-native-matrix-result/2" and repeat.get("run") == index
+        require(repeat.get("schema") == "uvicorn-rs-native-matrix-result/3" and repeat.get("run") == index
                 and repeat.get("status") == "completed" and repeat.get("runner_exit_code") == 0
                 and repeat.get("selected") == nc and repeat.get("passed") == nc
                 and repeat.get("failed") == 0 and repeat.get("not_run") == 0
                 and repeat.get("expected_case_ids") == native_ids
                 and repeat.get("observed_pass_ids") == native_ids
+                and repeat.get("expected_fault_points") == expected_native_fault_points
+                and repeat.get("observed_fault_points") == expected_native_fault_points
                 and repeat.get("transient_infrastructure_failures") == 0,
                 f"native repeat failed or out of order: {index}")
         attempts = repeat.get("attempts")
@@ -994,7 +1032,8 @@ def validate_coverage(
                 f"native repeat attempt differs: {index}")
         stored = read_json(artifact(repeat["artifact"], repeat["sha256"]))
         result_fields = ("schema", "run", "status", "runner_exit_code", "selected", "passed", "failed", "not_run",
-                         "expected_case_ids", "observed_pass_ids", "stdout_artifact", "stderr_artifact",
+                         "expected_case_ids", "observed_pass_ids", "expected_fault_points", "observed_fault_points",
+                         "stdout_artifact", "stderr_artifact",
                          "profile_data_artifacts", "profile_data_receipts")
         require(stored == {field: repeat[field] for field in result_fields},
                 f"native repeat result artifact differs: {index}")
@@ -1009,6 +1048,9 @@ def validate_coverage(
         artifact(repeat["stderr_artifact"])
         require([line.removeprefix("PASS ") for line in stdout.splitlines() if line.startswith("PASS ")] == native_ids,
                 f"native repeat stdout differs from manifest order: {index}")
+        require([line.removeprefix("FAULT_CONSUMED ") for line in stdout.splitlines()
+                 if line.startswith("FAULT_CONSUMED ")] == expected_native_fault_points,
+                f"native repeat fault consumption differs from manifest order: {index}")
         check_profiles(
             repeat.get("profile_data_artifacts"), repeat.get("profile_data_receipts"),
             f"native repeat {index}", expected_parent=root / "native-matrix-runs" / f"run-{index}",

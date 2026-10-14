@@ -10,6 +10,22 @@
       "expected_error_display": "max_connections must be greater than zero"
     },
     {
+      "id": "api.server-config-connection-limit-overflow-error",
+      "operation": "server-config-validation",
+      "protocol": "http/1.1",
+      "invalid_configuration": "connection-limit-overflow",
+      "expected_error": "connection-limit-too-large",
+      "expected_error_display": "max_connections exceeds the runtime's maximum permit count"
+    },
+    {
+      "id": "api.server-config-tls-connection-limit-overflow-error",
+      "operation": "server-config-validation",
+      "protocol": "https/1.1",
+      "invalid_configuration": "connection-limit-overflow",
+      "expected_error": "connection-limit-too-large",
+      "expected_error_display": "max_connections exceeds the runtime's maximum permit count"
+    },
+    {
       "id": "api.server-config-graceful-timeout-overflow-error",
       "operation": "server-config-validation",
       "invalid_configuration": "graceful-timeout-overflow",
@@ -30,7 +46,26 @@
       "path": "/ready",
       "expected_status": 200,
       "expected_body": "ready\n",
-      "blocked_ms": 100
+      "blocked_ms": 100,
+      "reconnect_requests": 64
+    },
+    {
+      "id": "http1.completed-connection-reaped-while-sibling-request-is-held",
+      "protocol": "native-core",
+      "operation": "native-http1-connection-task-reaping",
+      "held_path": "/http3-response-hold-before-headers",
+      "held_connection_count": 3,
+      "max_connections": 4,
+      "state_path": "/http3-response-cancel-waiters",
+      "expected_hold_state": "waiting=3\n",
+      "release_path": "/http3-response-cancel-release",
+      "expected_release_body": "released\n",
+      "expected_held_body": "released response\n",
+      "probe_path": "/ready",
+      "probe_count": 1,
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "server_wait_ms": 2000
     },
     {
       "id": "http1.service-panic-closes-connection-and-listener-recovers",
@@ -75,6 +110,16 @@
       "expected_upgrade": "uvicorn-rs-test",
       "expected_session_error": "upgrade handler sentinel",
       "expected_source_io_error": true,
+      "server_wait_ms": 1000
+    },
+    {
+      "id": "http1.upgrade-handler-panic-closes-session-and-listener-recovers",
+      "protocol": "native-core",
+      "operation": "native-http1-upgrade-session",
+      "scenario": "session-handler-panic",
+      "path": "/upgrade-session-handler-panic",
+      "expected_status": 101,
+      "expected_upgrade": "uvicorn-rs-test",
       "server_wait_ms": 1000
     },
     {
@@ -346,6 +391,23 @@
       "covers": ["websocket.protocol-error"]
     },
     {
+      "id": "http1.native-websocket-close-reply-flush-failure-preserves-source",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "close-reply-flush-failure",
+      "path": "/native-websocket-close-flush-error",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 101,
+      "expected_error_prefix": "WebSocket session failed:",
+      "expected_error_source": true,
+      "server_wait_ms": 1000,
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.receive.close-reply.flush"
+      },
+      "covers": ["websocket.protocol-error"]
+    },
+    {
       "id": "http1.native-websocket-key-decoding-to-wrong-size-is-rejected",
       "protocol": "native-core",
       "operation": "native-http1-websocket",
@@ -410,6 +472,19 @@
       "covers": ["websocket.protocol-error"]
     },
     {
+      "id": "http1.native-websocket-invalid-selected-subprotocol-header-value-is-rejected",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "invalid-selected-subprotocol-header-value",
+      "path": "/native-websocket-invalid-selected-subprotocol-header-value",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "offered_subprotocol": "native.echo.v1",
+      "expected_status": 400,
+      "expected_error": "WebSocket subprotocol was invalid or not offered",
+      "server_wait_ms": 1000,
+      "covers": ["websocket.protocol-error"]
+    },
+    {
       "id": "http1.native-websocket-managed-response-header-cannot-be-overridden",
       "protocol": "native-core",
       "operation": "native-http1-websocket",
@@ -458,8 +533,8 @@
     {
       "id": "api.public-server-error-display-source-and-config-debug-contract",
       "operation": "public-error-contract",
-      "expected_default_config_debug": "ServerConfig { max_connections: 1024, graceful_shutdown_timeout: 30s, application_startup_timeout: 30s, application_shutdown_timeout: 30s, application_lifecycle_configured: false, error_observer_configured: false }",
-      "expected_configured_config_debug": "ServerConfig { max_connections: 8, graceful_shutdown_timeout: 250ms, application_startup_timeout: 125ms, application_shutdown_timeout: 175ms, application_lifecycle_configured: true, error_observer_configured: true }",
+      "expected_default_config_debug": "ServerConfig { max_connections: 1024, graceful_shutdown_timeout: 30s, application_startup_timeout: 30s, application_shutdown_timeout: 30s, application_lifecycle_configured: false, error_observer_configured: false, service_error_policy: RespondInternalServerError }",
+      "expected_configured_config_debug": "ServerConfig { max_connections: 8, graceful_shutdown_timeout: 250ms, application_startup_timeout: 125ms, application_shutdown_timeout: 175ms, application_lifecycle_configured: true, error_observer_configured: true, service_error_policy: Propagate }",
       "errors": [
         { "variant": "invalid-connection-limit", "display": "max_connections must be greater than zero", "source": "none", "shutdown_failures": null },
         { "variant": "invalid-graceful-shutdown-timeout", "display": "graceful shutdown timeout exceeds the runtime clock range", "source": "none", "shutdown_failures": null },
@@ -624,6 +699,56 @@
       "expected_server_error_message": "injected service error"
     },
     {
+      "id": "http1.service-error-500-responds-after-peer-write-half-close",
+      "protocol": "http/1.1",
+      "operation": "request",
+      "method": "GET",
+      "path": "/service-error",
+      "shutdown_write": true,
+      "expected_status": 500,
+      "expected_body": "",
+      "expected_server_error_phase": "service",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected service error"
+    },
+    {
+      "id": "http1.service-error-propagates-before-response-commitment",
+      "protocol": "http/1.1",
+      "operation": "native-service-error-propagation",
+      "failure_kind": "service",
+      "service_error_policy": "propagate",
+      "recovery_scope": "fresh-connection",
+      "fault_path": "/service-error",
+      "expected_server_error_phase": "service",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected service error",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "server_wait_ms": 2000,
+      "covers": ["http.application-error"]
+    },
+    {
+      "id": "http1.readiness-error-propagates-before-response-commitment",
+      "protocol": "http/1.1",
+      "operation": "native-service-error-propagation",
+      "failure_kind": "readiness",
+      "service_error_policy": "propagate",
+      "recovery_scope": "fresh-connection",
+      "arm_path": "/arm-readiness",
+      "arm_status": 200,
+      "arm_body": "armed\n",
+      "fault_path": "/ready",
+      "expected_server_error_phase": "readiness",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected readiness failure",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "server_wait_ms": 2000,
+      "covers": ["http.application-error"]
+    },
+    {
       "id": "http1.response-body-error-after-commitment",
       "operation": "incomplete-response",
       "method": "GET",
@@ -654,6 +779,39 @@
       "release_body": "released\n",
       "expected_status": 200,
       "expected_body": "connection_open=true\n"
+    },
+    {
+      "id": "http1.peer-read-half-close-is-observed-after-complete-response",
+      "operation": "http1-write-half-close",
+      "observe_peer_read_half_close": true,
+      "method": "GET",
+      "path": "/peer-read-half-close-full",
+      "expected_status": 200,
+      "expected_body": "complete\n",
+      "state_path": "/peer-read-half-close-state",
+      "expected_state_body": "observed=true\n"
+    },
+    {
+      "id": "http1.peer-read-half-close-is-observed-after-bodyless-response",
+      "operation": "http1-write-half-close",
+      "observe_peer_read_half_close": true,
+      "method": "GET",
+      "path": "/peer-read-half-close-empty",
+      "expected_status": 200,
+      "expected_body": "",
+      "state_path": "/peer-read-half-close-state",
+      "expected_state_body": "observed=true\n"
+    },
+    {
+      "id": "http1.peer-read-half-close-is-observed-after-streamed-response",
+      "operation": "http1-write-half-close",
+      "observe_peer_read_half_close": true,
+      "method": "GET",
+      "path": "/peer-read-half-close-stream",
+      "expected_status": 200,
+      "expected_body": "complete\n",
+      "state_path": "/peer-read-half-close-state",
+      "expected_state_body": "observed=true\n"
     },
     {
       "id": "http1.slow-reader-bounds-response-polling-and-cancels-producer",
@@ -718,6 +876,45 @@
       "expected_server_error_message": "injected service error"
     },
     {
+      "id": "http2.service-error-propagates-with-sibling-recovery",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "native-service-error-propagation",
+      "failure_kind": "service",
+      "service_error_policy": "propagate",
+      "recovery_scope": "same-connection",
+      "fault_path": "/service-error",
+      "expected_server_error_phase": "service",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected service error",
+      "expected_reset_reason": "INTERNAL_ERROR",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "server_wait_ms": 2000,
+      "covers": ["http.application-error", "http2.response-stream-reset"]
+    },
+    {
+      "id": "http2.readiness-error-propagates-with-sibling-recovery",
+      "protocol": "h2c-prior-knowledge",
+      "operation": "native-service-error-propagation",
+      "failure_kind": "readiness",
+      "service_error_policy": "propagate",
+      "recovery_scope": "same-connection",
+      "arm_path": "/arm-readiness",
+      "arm_status": 200,
+      "arm_body": "armed\n",
+      "fault_path": "/ready",
+      "expected_server_error_phase": "readiness",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected readiness failure",
+      "expected_reset_reason": "INTERNAL_ERROR",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "server_wait_ms": 2000,
+      "covers": ["http.application-error", "http2.response-stream-reset"]
+    },
+    {
       "id": "http2.stream-reset-drops-response-producer",
       "protocol": "h2c-prior-knowledge",
       "operation": "http2-disconnect",
@@ -733,9 +930,9 @@
       "operation": "http2-request-lifetime",
       "path": "/request-lifetime-hold",
       "state_path": "/request-lifetime-state",
-      "expected_start_state": "started=1;dropped=0;connection_open=0;connection_closed=0;reason_checks=1\n",
-      "expected_end_state": "started=1;dropped=1;connection_open=1;connection_closed=0;reason_checks=2\n",
-      "expected_closed_state": "started=1;dropped=1;connection_open=1;connection_closed=1;reason_checks=2\n",
+      "expected_start_state": "started=1;dropped=0;connection_open=0;connection_closed=0;reason_checks=1;peer_eof_available=true;peer_eof=false\n",
+      "expected_end_state": "started=1;dropped=1;connection_open=1;connection_closed=0;reason_checks=2;peer_eof_available=true;peer_eof=false\n",
+      "expected_closed_state": "started=1;dropped=1;connection_open=1;connection_closed=1;reason_checks=2;peer_eof_available=true;peer_eof=false\n",
       "recovery_path": "/ready",
       "recovery_body": "ready\n"
     },
@@ -769,6 +966,42 @@
       "operation": "connection-security",
       "expected_status": 200,
       "expected_body": "tls=true;alpn=http/1.1\n"
+    },
+    {
+      "id": "http1-tls.peer-read-half-close-is-observed-after-complete-response",
+      "protocol": "https/1.1",
+      "operation": "http1-write-half-close",
+      "observe_peer_read_half_close": true,
+      "method": "GET",
+      "path": "/peer-read-half-close-full",
+      "expected_status": 200,
+      "expected_body": "complete\n",
+      "state_path": "/peer-read-half-close-state",
+      "expected_state_body": "observed=true\n"
+    },
+    {
+      "id": "http1-tls.peer-read-half-close-is-observed-after-bodyless-response",
+      "protocol": "https/1.1",
+      "operation": "http1-write-half-close",
+      "observe_peer_read_half_close": true,
+      "method": "GET",
+      "path": "/peer-read-half-close-empty",
+      "expected_status": 200,
+      "expected_body": "",
+      "state_path": "/peer-read-half-close-state",
+      "expected_state_body": "observed=true\n"
+    },
+    {
+      "id": "http1-tls.peer-read-half-close-is-observed-after-streamed-response",
+      "protocol": "https/1.1",
+      "operation": "http1-write-half-close",
+      "observe_peer_read_half_close": true,
+      "method": "GET",
+      "path": "/peer-read-half-close-stream",
+      "expected_status": 200,
+      "expected_body": "complete\n",
+      "state_path": "/peer-read-half-close-state",
+      "expected_state_body": "observed=true\n"
     },
     {
       "id": "http1-tls.malformed-handshake-reports-and-recovers",
@@ -807,6 +1040,15 @@
       "expected_body": "transport=quic;tls=true;alpn=h3;version=3\n"
     },
     {
+      "id": "http3.peer-read-half-close-observation-extension-is-absent",
+      "protocol": "http3",
+      "operation": "request",
+      "method": "GET",
+      "path": "/peer-read-half-close-availability",
+      "expected_status": 200,
+      "expected_body": "available=false\n"
+    },
+    {
       "id": "http3.websocket-upgrade-rejected-on-http3",
       "protocol": "http3",
       "operation": "request",
@@ -822,6 +1064,10 @@
       "id": "http3.non-h3-alpn-is-observed-and-server-recovers",
       "protocol": "http3",
       "operation": "native-http3-alpn-contract",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "http3",
+      "expected_server_error_message": "QUIC connection did not negotiate h3 ALPN",
+      "expected_server_error_has_source": false,
       "path": "/connection-details",
       "expected_status": 200,
       "expected_body": "transport=quic;tls=true;alpn=h3;version=3\n"
@@ -835,6 +1081,7 @@
       "client_alpn_protocol": "http/1.1",
       "expected_server_error_phase": "connection",
       "expected_server_error_type": "quic",
+      "expected_server_error_has_source": true,
       "method": "GET",
       "path": "/connection-details",
       "expected_status": 200,
@@ -849,6 +1096,7 @@
       "client_alpn_protocol": "http/1.1",
       "expected_server_error_phase": "connection",
       "expected_server_error_type": "quic",
+      "expected_server_error_has_source": true,
       "method": "GET",
       "path": "/ready",
       "expected_status": 200,
@@ -928,6 +1176,75 @@
       "expected_server_error_phase": "service",
       "expected_server_error_type": "io",
       "expected_server_error_message": "HTTP/3 application service panicked"
+    },
+    {
+      "id": "http3.service-error-before-response-commitment",
+      "protocol": "http3",
+      "operation": "request",
+      "method": "GET",
+      "path": "/service-error",
+      "expected_status": 500,
+      "expected_body": "",
+      "expected_server_error_phase": "service",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected service error"
+    },
+    {
+      "id": "http3.service-error-resets-stream-and-recovers-sibling",
+      "protocol": "http3",
+      "operation": "native-service-error-propagation",
+      "failure_kind": "service",
+      "service_error_policy": "propagate",
+      "recovery_scope": "same-connection",
+      "fault_path": "/service-error",
+      "expected_server_error_phase": "service",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected service error",
+      "expected_reset_reason": "H3_INTERNAL_ERROR",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "server_wait_ms": 2000,
+      "covers": ["http.application-error", "http3.request-task-recovery"]
+    },
+    {
+      "id": "http3.readiness-error-resets-stream-and-recovers-sibling",
+      "protocol": "http3",
+      "operation": "native-service-error-propagation",
+      "failure_kind": "readiness",
+      "service_error_policy": "propagate",
+      "recovery_scope": "same-connection",
+      "arm_path": "/arm-readiness",
+      "arm_status": 200,
+      "arm_body": "armed\n",
+      "fault_path": "/ready",
+      "expected_server_error_phase": "readiness",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "injected readiness failure",
+      "expected_reset_reason": "H3_INTERNAL_ERROR",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "server_wait_ms": 2000,
+      "covers": ["http.application-error", "http3.request-task-recovery"]
+    },
+    {
+      "id": "http3.readiness-panic-returns-500-and-keeps-connection",
+      "protocol": "http3",
+      "operation": "http3-service-panic-recovery",
+      "arm_path": "/arm-readiness-panic",
+      "arm_status": 200,
+      "arm_body": "armed\n",
+      "path": "/ready",
+      "expected_status": 500,
+      "expected_body": "",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "expected_server_error_phase": "readiness",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "HTTP/3 application service readiness panicked",
+      "covers": ["http3.request-task-recovery"]
     },
     {
       "id": "http3.response-body-error-resets-stream-and-keeps-connection",
@@ -1085,6 +1402,18 @@
       "shutdown_body": "shutting down\n"
     },
     {
+      "id": "http1.peer-read-half-close-wait-returns-unavailable-after-server-shutdown",
+      "protocol": "http/1.1",
+      "operation": "graceful-drain",
+      "peer_read_half_close_unavailable": true,
+      "method": "GET",
+      "path": "/peer-read-half-close-shutdown-watch",
+      "shutdown_path": "/shutdown",
+      "shutdown_body": "shutting down\n",
+      "server_wait_ms": 3000,
+      "expected_observer_state": "read_half_closed=false;error=peer read-half closure observation ended without EOF;source_none=true\n"
+    },
+    {
       "id": "http1.graceful-shutdown-timeout-aborts-held-response",
       "protocol": "http/1.1",
       "operation": "graceful-timeout-abort",
@@ -1154,6 +1483,16 @@
       "recovery_path": "/ready",
       "recovery_status": 200,
       "recovery_body": "ready\n",
+      "covers": ["http3.graceful-shutdown"]
+    },
+    {
+      "id": "http3.server-shutdown-closes-open-connection-cleanly",
+      "protocol": "http3",
+      "operation": "native-http3-server-shutdown-open-connection",
+      "path": "/ready",
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "server_wait_ms": 2000,
       "covers": ["http3.graceful-shutdown"]
     },
     {
@@ -1316,6 +1655,39 @@
       "expected_server_error_phase": "readiness",
       "expected_server_error_type": "io",
       "expected_server_error_message": "injected lifecycle readiness failure"
+    },
+    {
+      "id": "native.lifecycle-http3-zero-connection-limit-rejected",
+      "protocol": "http3",
+      "operation": "native-lifecycle-http3-invalid-config",
+      "invalid_configuration": "zero-connection-limit",
+      "expected_error": "invalid-connection-limit",
+      "expected_error_display": "max_connections must be greater than zero"
+    },
+    {
+      "id": "native.lifecycle-http3-connection-limit-overflow-rejected",
+      "protocol": "http3",
+      "operation": "native-lifecycle-http3-invalid-config",
+      "invalid_configuration": "connection-limit-overflow",
+      "expected_error": "connection-limit-too-large",
+      "expected_error_display": "max_connections exceeds the runtime's maximum permit count"
+    },
+    {
+      "id": "native.lifecycle-http3-maximum-connection-limit-still-serves",
+      "protocol": "http3",
+      "operation": "native-lifecycle-hooks-omitted",
+      "max_connections": "runtime-maximum",
+      "path": "/ready",
+      "expected_status": 200,
+      "expected_body": "started\n"
+    },
+    {
+      "id": "native.lifecycle-http3-omitted-hooks-still-serves",
+      "protocol": "http3",
+      "operation": "native-lifecycle-hooks-omitted",
+      "path": "/ready",
+      "expected_status": 200,
+      "expected_body": "started\n"
     },
     {
       "id": "native.lifecycle-startup-error-prevents-serving",

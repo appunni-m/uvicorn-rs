@@ -2,80 +2,241 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-The current workflow prepares Python wheel and source **candidates** from a
-reviewed commit. It assembles `uvicorn-rs-py` wheels and an sdist; it does not
-package the Python-free `uvicorn-rs` Rust crate or an executable.
-`crates/uvicorn-rs/Cargo.toml` and its path dependency
-`crates/native-app-contract/Cargo.toml` both keep `publish = false`. The
-workflows upload GitHub Actions artifacts and do not publish Rust crates to
-crates.io, Python packages to PyPI, create a GitHub Release, or create or move
-tags. The project is licensed under
+The release candidate is built from a reviewed commit. The current candidate
+workflow packages three `uvicorn-rs-py` wheels, an sdist, and two Python-free
+Rust crate archives (`native-app-contract` and `uvicorn-rs`). The native
+archives are configured in the current worktree and passed local Cargo
+packaging and archive inspection; hosted CI has not verified these changes
+yet. The Rust crates are library packages; this repository does not currently
+provide a standalone native executable. The workflows upload candidate
+artifacts but do not publish Rust crates to crates.io, Python packages to
+PyPI, create a GitHub Release, or create or move tags. The project is licensed under
 [BSD-3-Clause or MIT](../LICENSE), at the recipient's option, with copyright
 © 2026 Appunni M and the original Uvicorn/Hypercorn license notices retained.
 
 ## Current state
 
-**Latest hosted CI: failed on 2026-10-13.** CI
-[run #109](https://github.com/appunni-m/uvicorn-rs/actions/runs/38354960365)
-ran on clean commit `b5719e8ee78c8207c2ed5debb18d57bc3b78bdb3`, which remains
-the `main` and `origin/main` commit. Installed-wheel framework comparisons and
-the transient systemd stop passed; Rust 1.85 library checking passed. This is
-not an all-gates pass:
+This release-preparation series changes the native runtime, live contracts,
+source-archive packaging, and evidence validation. Its local diagnostic
+receipts record base commit
+[`796dee6`](https://github.com/appunni-m/uvicorn-rs/commit/796dee690ca83654cddb97131dc1dee37de96bcd)
+and the measured dirty source hashes. Committing those changes does not turn
+the receipts into clean hosted qualification. No tag or candidate has been
+created for this preparation; [main](https://github.com/appunni-m/uvicorn-rs/tree/main)
+is the source branch.
 
-- Unified attribution selected 612 cases (511 ASGI and 101 native): 545
-  passed and 67 were infrastructure failures, with no application-case
-  failures. The oracle group passed 211/243, fault contracts 233/268, and
-  native verification 101/101. The 67 infrastructure failures occurred
-  because the parity runner could not find the HTTP/3 client under
-  `tools/http3-probe/target/release/`; Cargo places workspace binaries under
-  repository `target/release/`.
-- That attribution measured 6,678/7,384 regions and 4,948/5,420 lines. All
-  three full-matrix verification repeats then failed before producing a
-  result file, for the same missing HTTP/3 client. The summary step crashed
-  while formatting a failed repeat whose summary was absent. The separate
-  native matrix completed all three repeats at 101/101 each.
-- Native composition failed because its lockfile did not include dependencies
-  from the pinned FastAPI-RS and Starlette-RS commits; live composition cases
-  were skipped. Locally, the example lockfile has been regenerated from those
-  exact commits, its locked graph excludes PyO3, and all 17 live native
-  composition cases pass against those exact commits. Hosted CI has not yet
-  verified that fix.
-- Rust quality failed on two explicit panic fixtures and a collapsible-if
-  lint. The collapsible-if was corrected locally; the panic fixtures remain.
-- Platform package and Python-floor jobs were skipped.
+### Remaining release gates (2026-10-14)
 
-The latest performance matrix,
-[run #24](https://github.com/appunni-m/uvicorn-rs/actions/runs/38354960306),
-produced no parity or timing result. All three systems stopped looking for the
-HTTP/2 probe under the same incorrect nested target path. Local scripts now
-use the workspace `target/release/` paths, and a locked release build produced
-all four expected clients there. The coverage-summary formatter now handles a
-missing repeat summary. These are local fixes only; hosted CI and benchmark
-workflows have not verified them. The benchmark documentation job could not
-open a PR because Actions lacks permission to create or approve pull requests;
-the documentation change must be applied and reviewed through the repository
-workflow. See the [benchmark status](benchmark-status.md).
+These gates apply to the requested Rust-native server and thin Python client
+architecture. Kata records the work under `ec8x` and `wb4y`; candidate assembly
+is tracked by `zep3`.
 
-The local 633-case coverage report is **not current-source evidence**. A
-source-hash audit found mismatches for
-`crates/uvicorn-rs/examples/native_core_contracts.rs` and
-`crates/uvicorn-rs/src/websocket.rs`; Coverage-MCP now reports its source as
-changed. The report is one attribution pass and has 58 missing regions and 34
-missing lines, but those numbers and their gap classifications must not be
-used to describe the current checkout. A fresh single-pass report and matching
-Coverage-MCP receipt are required before interpreting current gaps. The
-formal gate remains three complete repeats with 100% region and line coverage.
+| Pending gate | Current evidence | Required completion |
+|---|---|---|
+| Canonical Rust transport and thin Python adapter (`sw8s`) | The root PyO3 package still implements its own networking and does not depend on the native `uvicorn-rs` crate. | Route the Python ASGI client through the native server, remove the duplicate protocol implementation as each capability migrates, and preserve Python loop, context, callable, exception, lifespan, disconnect, cancellation, and streaming behavior through live cases. |
+| Native framework composition (`wb4y`) | A clean pinned prototype passed 17 H1/H2 socket inputs once; the hosted composition job in CI #110 failed. | Verify the chosen application-owned or opt-in dependency topology on pinned sources in hosted CI, retain the Python-free dependency graph, and verify each composition behavior claimed by the released support matrix. Composed TLS/H3, WebSockets, and framework lifecycle are currently outside that prototype's evidence. |
+| Python compatibility matrix (`sw8s`) | An abi3 Python floor and individual framework/oracle versions are recorded; a maintained client compatibility matrix is not implemented. | Publish and exercise the exact Python, asyncio/uvloop, ASGI, and upstream integration combinations claimed by each Python client after transport migration. |
+| Unified coverage (`t6zz`) | Hosted CI #110 passed attribution for its then-current 633 cases but left 58 regions and 34 lines uncovered. A later dirty 639-case local report left 41 regions and 24 lines uncovered. The current manifest has 661 cases and lacks a full current-source report. | Produce complete attribution and three complete repeats on the final source, with 100% region and line coverage, zero failures/retries/infrastructure errors, and a fully paginated zero-gap Coverage-MCP receipt bound to the report bytes. |
+| Representative performance (`wh9k`, `k8ft`) | Benchmark #25 completed the full FastAPI HTTP/1 workload grid only on Linux. Rust was faster in 6/30 matched workload/event-loop pairs on each Linux system; median throughput ratios were 0.713 (x86-64) and 0.844 (ARM64), with higher median CPU per operation. HTTP/2, HTTP/3, and macOS HTTP/1 were incomplete. | Fix the observed correctness and client-lifecycle failures, optimize the current Python ASGI path, and repeat the same stock-FastAPI workloads. Require at least three valid repetitions per claimed pair and record latency, throughput, CPU, memory, and source/build identities. The current evidence does not meet the performance objective; if optimization does not produce a reviewed meaningful gain, revise the scope before release. |
+| Clean commit and hosted CI (`zep3`) | Release preparation has focused local checks; CI #110 failed quality, composition, and coverage, so package jobs were skipped. | Review and commit the final source, then pass every required hosted gate on that exact clean commit, including Rust 1.85, normal-wheel parity, fault-seam exclusion, native composition, and unified coverage. |
+| Packaged consumer evidence (`zep3`) | Both Rust archives passed local dirty-source inspection and Rust 1.85 checks; current hosted artifact verification is missing. | Verify the three supported wheels, sdist, and two Rust archives from the clean commit, including fresh installed consumers, the Python floor, extracted Rust archive builds, licenses, versions, and checksums. |
+| Performance acceptance in candidate verification (`q9pv`, blocking `zep3`) | The candidate workflow downloads package, parity, coverage, and Python-floor evidence; it does not enforce the required performance evidence or reviewed scope revision. | Add explicit validation of that acceptance evidence, tied to the candidate source and retained artifact identity, before the bundle can be called verified. |
+| Immutable candidate and final documentation (`zep3`) | No current candidate or tag exists. | Reconcile support, deployment, feasibility, benchmark, and coverage claims with the final evidence; assemble the bundle from the successful CI run/attempt; verify the annotated tag object and commit; retain candidate manifests and SHA256SUMS. Keep generated logs, profiles, and coverage reports out of Git. |
 
-`main` is not a clean release source: this checkout contains uncommitted Rust,
-manifest, workflow, script, and documentation edits. The candidate workflow
-assembles only the three `uvicorn-rs-py` wheels and an sdist; it does not build
-or verify a Python-free Rust crate or executable candidate. No candidate has
-been assembled from the current source. No public release or tag has been
-created; registry publication and GitHub Release creation are outside the
-configured candidate workflow.
+The current workflow stops at a verified candidate artifact. Registry
+publication and a public GitHub Release remain outside this workstream. Native
+Rust applications compose the library into their executable; a standalone
+native CLI is not part of the selected package contract.
+
+Kata `xzf9` added two native application-panic recovery contracts. The focused
+eight-case run passed without retries or infrastructure failures; the readiness
+case also detected the original failure in an isolated copy with containment
+removed. That snapshot contained 641 inputs (511 ASGI and 130
+native). Its selected evidence does not satisfy the full coverage gate or
+replace the last 639-case baseline. See the
+[coverage record](coverage.md#selected-native-panic-recovery-evidence).
+
+Kata `dsna` adds an explicit native service-error policy as a transport-migration
+prerequisite. Six propagation inputs and a default H3 service-error control
+brought that measured inventory to 648 (511 ASGI, 137 native). The focused run
+passed 16/16, and all six default-policy negative controls detected the intended
+abort/reset mismatch. This does not route Python through the native transport
+or close an aggregate release gate. See the
+[selected policy evidence](coverage.md#selected-native-service-error-policy-evidence).
+
+Four subsequent connection-limit inputs brought that snapshot's inventory to
+652 (511 ASGI, 141 native). Ten selected configuration inputs and controls
+passed once; oversized TCP/TLS/H3 admission limits return a typed error before
+hooks, and the exact H3 runtime ceiling still serves. This does not replace
+the full coverage, hosted CI, or performance release gates. See the
+[selected coverage evidence](coverage.md#selected-native-connection-limit-evidence).
+
+Nine native TCP EOF inputs bring the current inventory to 661 (511 ASGI,
+150 native). Eighteen affected inputs and controls passed once with complete
+attribution and no retries. They prove factual raw EOF observation after
+response completion, distinguish HTTP/2 stream reset and server shutdown, and
+preserve responses after peer write-half closure. Prompt notification during a
+held HTTP/1 service remains a protocol-driver prerequisite in Kata `1m58`.
+The adapter still uses its separate transport. See the
+[selected EOF evidence](coverage.md#selected-native-tcp-eof-evidence).
+
+Normal native CI selects 149 target contracts and retains the one declared
+fault contract in unified coverage. A normal build rejects that fault input;
+it no longer substitutes a peer reset and reports a false fault pass. Three
+normal controls and the instrumented fault case passed their focused checks.
+This lane correction is tracked by Kata `rh4d`; see the
+[normal and instrumented lane evidence](coverage.md#normal-and-instrumented-native-case-lanes).
+
+Hosted CI [run #110](https://github.com/appunni-m/uvicorn-rs/actions/runs/38418430762)
+completed with failure. The installed normal wheel passed the complete public
+input matrix (243/243), the two Starlette comparisons, and the transient
+systemd shutdown case. Rust 1.85 library compilation passed. The Rust quality
+job failed because Clippy also linted two intentional panic fault inputs in
+[`native_core_contracts.rs`](../crates/uvicorn-rs/examples/native_core_contracts.rs).
+The current worktree keeps all-target Clippy enabled and uses
+`std::panic::resume_unwind` only in the test-only fault injector, without a
+`clippy::panic` allow or expectation. The targeted all-feature Clippy check for
+that example passes locally on Rust 1.98.1. A clean hosted CI run for this
+exact source is still required. The
+integrated native dependency graph
+excludes PyO3, but its live composition job fails compiling the pinned
+Starlette-RS source: `file_response.rs:89` declares an unnecessary `mut`, and
+that checkout denies `unused` warnings. The current worktree caps dependency
+lint levels to warnings only for this composition smoke; the separate
+uvicorn-rs workspace lint gate remains warning-denied. This is a proposed CI
+remediation and does not count as a hosted pass until the exact-source run is
+green.
+
+Hosted CI #110 completed its then-current 633-case unified run, but coverage
+was below its 100% gate: 7,322/7,380 regions and 5,383/5,417 lines (58 regions and 34 lines
+remain uncovered). Platform package and Python-floor jobs were skipped because
+of the failed gates. The hosted coverage artifact is retained on run #110;
+the exact-source Coverage-MCP review remains a separate release requirement.
+
+Benchmark [run #25](https://github.com/appunni-m/uvicorn-rs/actions/runs/38418430949)
+passed exact-binary public parity on all three systems, but every platform
+category job is now terminal with failure. FastAPI-only comparisons had 39/40
+timing-valid rows on each Linux system and 2/40 on macOS; all three report
+`not_proven`. Stock FastAPI HTTP/1 completed 300/300 correct, timing-valid rows
+on each Linux system. macOS stopped at row 124 with four upload correctness
+failures (121–124). HTTP/2 stopped on all systems at the unexpected native
+diagnostic gate. HTTP/3 stopped on all systems with incomplete results: Linux
+Hypercorn large-response checks received fewer than the expected 1 MiB, and
+macOS Hypercorn/uvloop timed out waiting for response headers. WebSocket
+completed 60/60 valid rows on every system; lifecycle completed 20/20 on Linux
+and 19/20 on macOS. These partial categories do not establish a complete
+three-system result or a performance gain. The multi-system evidence
+aggregation passed, but the documentation job could not create a PR under the
+Actions permissions. Run #24 produced no data because its protocol-client path
+was wrong; #25 exercises the path correction. See
+[benchmark status](benchmark-status.md).
+
+The last full-manifest local attribution report is dirty and therefore does
+not clear the hosted release gate. It predates the current HTTP/1 upgrade
+helper refactor, so it is a baseline rather than exact-current-source evidence.
+Run
+`01b6a2a77b06431bbfa132a91bb6de91` passed all 639 cases once (511 ASGI and 128
+native), with zero case, infrastructure, or transient failures. It used dirty
+source SHA-256
+`8c27b2b471e00b746f17d1db95af5d06317782d87df66359bdfaf0bd9cb0fb4f` at
+revision `796dee690ca83654cddb97131dc1dee37de96bcd`. Coverage measured
+7,373/7,414 regions and 5,420/5,444 lines, leaving 41 regions and 24 lines
+uncovered. Coverage-MCP matched the source receipt and fully paginated 176
+region groups over nine pages and 22 line groups over two pages; its `tests`
+status is `failed` because gaps remain. The run has no complete-repeat matrix
+and does not meet the 100% coverage gate. The exact report SHA-256 is
+`387aa56d0d4800165a2f6ad8975558f4b056028492119c4b383c585c32dac3b4`; the
+build ID is
+`31cf4c67bd6305451dd6e5b6fa7d3d0fa92bb30b3f0d4099eb8e3be0f999f4b1`.
+
+The historical focused report at
+`target/asgi-coverage-kata-20261014/connection-upgrade-helper-focused/full-report.json`
+passed three existing native protocol cases (HTTP/1 WebSocket, HTTP/2 request,
+and HTTP/3 request). Coverage-MCP matched its source receipt and found no gaps
+in `insert_http1_upgrade_extension`. This selected run verifies that snapshot's
+focused refactor only; it does not replace a full current-manifest report or satisfy the 100%
+coverage and three-repeat release gates.
+
+The prior 638-case aggregate (`658dbb240d2c42cabaa2727a380ed71f`, source SHA
+`a04e92df09a3b53e73649e7f9258b9a6b7fdecbffbc1d1861e90bbc2d929fbc7`) is now
+historical. The 639-case report includes the newer native input
+`http1.native-websocket-close-reply-flush-failure-preserves-source` and
+supersedes the 638-case report for one-pass attribution only. Three complete
+repeats, zero missing regions and lines, and a clean exact-commit hosted run
+remain pending.
+
+The preceding 635-case local report passed three repeats on the then-current
+511-case ASGI and 124-case native manifests, but measured 7,329/7,371 regions
+and 5,384/5,408 lines, so it also missed 100% and predates the current
+manifest. Three native cases were individually exercised in selected
+instrumented reports before the 638-case full attribution run; the 639-case
+manifest adds the WebSocket close-reply flush case. The last 639-case report
+includes all four for one-pass attribution. The two
+HTTP/3 lifecycle cases,
+`native.lifecycle-http3-omitted-hooks-still-serves` and
+`native.lifecycle-http3-zero-connection-limit-rejected`, both passed selected
+instrumented runs; Coverage-MCP reported `source=matches_receipt` and
+`tests=passed`. These are not full-matrix results. The added HTTP/1
+listener-reaping case was run with
+the HTTP/1 and TLS lifecycle cases in another selected instrumented report;
+all three passed, and Coverage-MCP matched the source and test receipts. That
+report also is not full-matrix evidence. A broader selected report ran all 71
+native HTTP/1, TLS, and HTTP/2 inputs successfully, but still showed uncovered
+`next_listener_event` regions in Coverage-MCP. The last 639-case full-source
+report confirms remaining gaps on its pre-refactor source; three complete
+current-manifest repeats, 100% regions
+and lines, zero-gap Coverage-MCP results, and a clean exact-commit hosted run
+remain required. See the
+[coverage record](coverage.md#current-unified-coverage-status-2026-10-14).
+
+The release-preparation changes make both Rust library manifests publishable and give
+`uvicorn-rs` a versioned `native-app-contract` dependency. The Linux CI package
+job now builds both `.crate` archives, and the release verifier checks their
+source members, licenses, dependency metadata, versions, checksums, and
+embedded Cargo commit/clean-tree identity. The release-evidence step also
+builds each extracted archive with the contract crate locally substituted for
+its not-yet-published registry version. The crate READMEs now include install
+metadata and usage guidance; `uvicorn-rs` has a compiled minimal Tower server
+example, and `native-app-contract` has a lifecycle-hook doctest.
+
+On 2026-10-13, local `cargo package --list --allow-dirty` included the README,
+license notices, and minimal example in the `uvicorn-rs` archive (13 files,
+135.8 KiB uncompressed) and the README/license files in the lifecycle contract
+archive (9 files, 9.5 KiB uncompressed). Both archives built and verified with
+exact Rust 1.85.0. The `uvicorn-rs` package build substituted the local
+`native-app-contract` source because its registry version is not published.
+The lifecycle doctest passed 1/1, warning-denied rustdoc passed for both
+crates, and Clippy passed for the minimal server example. Version
+synchronization and the prior extracted-archive checks also passed. These
+commands used `--allow-dirty` only for local package
+inspection; the archives record a dirty source tree and are not candidate
+evidence. The changes still need a clean commit and hosted CI; no candidate
+bundle has validated the new native artifacts. The release workflow remains
+candidate-only and does not publish to crates.io or PyPI or create a GitHub
+Release. The support matrix now distinguishes the legacy ASGI probe workload
+count from the 15-workload stock-FastAPI H1 category matrix.
+
+Refreshed local Rust archive checks on 2026-10-14 measured 9.8 KiB for
+`native-app-contract` and 148.4 KiB for `uvicorn-rs` (uncompressed). Both
+archives passed exact source, dependency, license, and VCS inspection, and
+their extracted trees compiled in dependency order. Seven added unsafe-path
+controls were rejected. The archives and consumer receipt are under ignored
+`target/native-archive-final-20261014/`; the receipt records the dirty source
+state. This remains local package verification, not hosted release evidence.
 
 The following run-by-run notes are historical attempts, not the current
 release-candidate status.
+
+The parser-aware EOF experiment remains isolated. Its cleartext cases pass
+against the patched Hyper copy, but the TLS and pipeline comparison found two
+candidate failures: raw TCP FIN over TLS can turn into `UnexpectedEof` before
+the held response, and a TLS pipeline can lose its follow-up request. See the
+[native runtime ADR](adr/0003-rust-native-service-contract.md#peer-closure-and-request-lifetime)
+for inputs and limits. This prototype is not installed in production.
+RFC 9112 §9.6 says a TCP half-close neither delimits an HTTP request nor implies
+that the client cannot read its response. RFC 8446 §6.1 requires TLS
+`close_notify` before transport closure so truncation remains detectable; raw
+TLS FIN stays a separate error case.
 
 CI #54
 ([run 38045596633](https://github.com/appunni-m/uvicorn-rs/actions/runs/38045596633))
@@ -257,6 +418,7 @@ the failure cause remains unresolved. No hosted release-candidate bundle, tag,
 or public release is complete. The benchmark's separately frozen binaries and
 results are identified in [the investigation](performance-investigation-2026-10-05.md).
 
+
 ## Main CI gates
 
 [CI](../.github/workflows/ci.yml) runs on `main`, `codex/**` branches, pull
@@ -272,6 +434,7 @@ tagged candidate bundle is uploaded without replacement.
 | --- | --- |
 | Rust quality | Formatting, Clippy with warnings denied, default/no-default/all-feature compilation and rustdoc; Rust 1.98.1 |
 | Rust minimum | Locked library compilation on exactly Rust 1.85.0 |
+| Normal native contracts | Every `target-contract` native input on the normal Rust build; retain the manifest and selection hashes and leave `fault-contract` inputs in unified coverage |
 | Normal public parity | Every current public input case against stock pinned references, using the installed normal wheel on CPython 3.12.13 |
 | Normal-build exclusion | Native fault/LLVM/diagnostic controls absent, with three existing public cases and an armed control file ignored |
 | Unified native coverage | Every indexed parity/fault-contract case attributed individually, three complete repeats, zero retries, 100% measured native regions and lines |
@@ -285,11 +448,15 @@ Rust test executables or a Python unit-test runner. Structural checks validate
 existing input contracts and evidence; they do not substitute for live parity.
 
 The unified report keeps case-to-region attribution in one LLVM JSON document.
-Its denominator is the default-feature `src/lib.rs` build with coverage-only
-failure seams. Python, dependencies, optional `runtime-diagnostics`, other
-platform cfg branches and the complete official ASGI conformance suite are
-outside that denominator. A coverage failure or incomplete repeat fails CI;
-there is no reduced threshold or automatic retry into a passing receipt.
+Its declared Rust source inventory is the Python adapter's `src/lib.rs`, the
+native server's `lib.rs`, `http3.rs` and `websocket.rs`, and
+`native-app-contract/src/lib.rs`. The contract crate has no executable counters;
+the other four files contribute to the measured denominator under the coverage
+builder's feature configuration and `cfg(coverage)` failure seams. Python,
+dependencies, optional `runtime-diagnostics`, other platform cfg branches and
+the complete official ASGI conformance suite are outside that denominator.
+A coverage failure or incomplete repeat fails CI; there is no reduced threshold
+or automatic retry into a passing receipt.
 
 Hosted CI checks the report directly. The external Coverage-MCP review is a
 separate source-matched check and is not silently claimed by hosted CI. Before
@@ -304,6 +471,7 @@ described in [coverage](coverage.md).
 | macOS ARM64 wheel | macOS 14, CPython 3.12.10 | Exact installed-wheel HTTP, loop/context, lifespan and API cancellation smoke |
 | Windows x86-64 wheel | Windows Server 2022, CPython 3.12.10 | Same package-consumer smoke; POSIX signal parity is not claimed |
 | Source archive | Ubuntu 24.04 | Required inputs/license/metadata, safe inventory, locked extracted rebuild and fresh consumer |
+| Native Rust source archives | Ubuntu 24.04 | `native-app-contract` and `uvicorn-rs` package inventories, metadata, licenses, safe extraction and locked dependency-ordered compilation |
 
 The wheel tag is `cp39-abi3`; the Python 3.9 job validates that ABI floor on
 Linux, not every protocol on every Python/OS combination. Linux builds use the
@@ -315,9 +483,10 @@ presented as a native execution result.
 `scripts/check_installed_wheel.py` rejects imports from the editable checkout
 and compares the imported native bytes with the supplied wheel. Platform build
 manifests bind package hashes, source inputs, version, commit, toolchain and
-consumer evidence. The raw package set has exactly three wheels, one source
-archive, three manifests, three platform consumer receipts, one source-consumer
-receipt and the Linux full-parity report. Assembly verifies wheel metadata/tags/RECORD, licenses,
+consumer evidence. The raw package set has exactly three wheels, one Python
+source archive, two native Rust source archives, three manifests, three platform
+consumer receipts, one source-consumer receipt and the Linux full-parity report
+(14 files). Assembly verifies wheel metadata/tags/RECORD, licenses,
 normal native markers, source inputs and expected platforms. Repository-only
 benchmark archives, test harnesses, coverage profiles, keys and environments
 are excluded from distributions.
@@ -326,30 +495,31 @@ Maturin 1.14.1's `sdist` command has no `--locked` option. The subsequent source
 rebuild uses `maturin build --release --locked`, checks input equality before
 and after building, and retains the build log. Version agreement includes
 `Cargo.toml`, `pyproject.toml`, `Cargo.lock` and `uv.lock`; the workflows do not
-hardcode the install version. No changelog update is part of this change.
+hardcode the install version.
 
 ## Assemble an immutable tagged candidate
 
-First commit the complete source, input matrix, workflows and packaging
-metadata together. For the native release objective, the workflows must also
-package and verify the Rust-native artifact and bind its source tree and path
-dependency to the candidate evidence; the current workflow only assembles
-Python wheel/sdist artifacts. Require a clean checkout and successful complete
+First commit the complete source, input matrix, workflows, examples and
+packaging metadata together. The current worktree adds both Rust library
+crates to the candidate bundle, binds their source and dependency metadata to
+the build evidence, and locally verifies their archives with Rust 1.85.0;
+hosted validation of these changes is still pending. Require a clean checkout
+and successful complete
 `CI` on `main` for that exact commit. A maintainer can then request candidate
 assembly by pushing an annotated `vMAJOR.MINOR.PATCH` tag for that commit.
 
 [Release candidate](../.github/workflows/release.yml) follows the immutable
-artifact/evidence pattern used by `fontdone` and `image-slash-star`, currently
-adapted to Python wheels and a source archive:
+artifact/evidence pattern used by `fontdone` and `image-slash-star`. It gathers
+the three Python wheels, source archive, two Rust crate archives and their
+matching CI evidence. Publication remains disabled:
 
 1. Verify the remote annotated tag object resolves to the checked-out commit,
    including when checkout materializes only its peeled commit.
 2. Require exact tag/manifest/lockfile version agreement and a clean checkout.
 3. Find a successful complete main CI run for that same commit.
-4. Download only that run's three Python package artifacts, normal parity,
-   seam-exclusion audit, complete unified coverage and Python-floor evidence.
-   Add and verify the native Rust artifact before calling the bundle a native
-   `uvicorn-rs` release candidate.
+4. Download only that run's three Python wheel artifacts, Linux source archive
+   and Rust crate archives, normal parity, seam-exclusion audit, complete
+   unified coverage and Python-floor evidence.
 5. Verify package identities and retained evidence, then write bundle checksums
    and a candidate record containing version, tag, commit and CI run ID.
 6. Retain the complete candidate bundle for 90 days.
@@ -363,14 +533,20 @@ publication, OIDC authentication, repository writes or GitHub Release creation.
 
 Candidate verification, hosted CI success and public publication are separate
 states. A public release additionally needs an explicit distribution decision
-that names the Rust-native crate and whether to publish the optional
-`uvicorn-rs-py` compatibility client, reviewed release notes, the current
-support/known-limit matrix, exact-source Coverage-MCP review, source-bound
-performance evidence (or a reviewed performance-scope revision), and green
-hosted evidence. `starlette-rs-py` and `fastapi-rs-py` are owned by their
-framework repositories. Experimental H3 limitations and workload-specific
-benchmark results remain visible. Use a clean proven commit; do not distribute
-the dirty local preparation artifacts as an official release.
+that names both Rust crates (`native-app-contract` and `uvicorn-rs`) and whether
+to publish the optional `uvicorn-rs-py` compatibility client, reviewed release
+notes, the current support/known-limit matrix, exact-source Coverage-MCP
+review, source-bound performance evidence (or a reviewed performance-scope
+revision), and green hosted evidence. If the Rust crates are published to
+crates.io, publish `native-app-contract` before `uvicorn-rs`, which depends on
+its registry version. `starlette-rs-py` and `fastapi-rs-py` are owned by their framework
+repositories. Experimental H3 limitations and workload-specific benchmark
+results remain visible. Use a clean proven commit; do not distribute the dirty
+local preparation artifacts as an official release.
+
+The current version notes are in [CHANGELOG.md](../CHANGELOG.md). Keep them in
+the `Unreleased` section until a clean candidate has passed the exact-commit
+gates and a distribution decision is made.
 
 Dependabot proposes weekly Cargo and GitHub Action updates. Review those
 updates and their exact pins before accepting them into a candidate.

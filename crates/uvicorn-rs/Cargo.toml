@@ -3,10 +3,12 @@ name = "uvicorn-rs"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
-publish = false
 license = "BSD-3-Clause OR MIT"
 description = "Rust-native HTTP server library"
 repository = "https://github.com/appunni-m/uvicorn-rs"
+documentation = "https://docs.rs/uvicorn-rs"
+readme = "README.md"
+exclude = ["examples/native_core_contracts.rs"]
 
 [lib]
 name = "uvicorn_rs"
@@ -20,7 +22,7 @@ h3-quinn = "0.0.10"
 http = "1"
 http-body = "1"
 http-body-util = "0.1"
-native-app-contract = { path = "../native-app-contract" }
+native-app-contract = { version = "0.1.0", path = "../native-app-contract" }
 pin-project-lite = "0.2"
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["http1", "http2", "server", "server-auto", "service", "tokio"] }

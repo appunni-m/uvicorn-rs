@@ -73,7 +73,22 @@ jobs:
             exit 1
           fi
       - name: Run Rust-native HTTP live contract inputs
-        run: cargo run -p uvicorn-rs --example native_core_contracts --locked -- tests/native-core/manifest.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/native-contracts
+          python3 scripts/select_native_contracts.py
+          cargo run -p uvicorn-rs --example native_core_contracts --locked -- \
+            target/native-contracts/normal-inputs.json 2>&1 | tee target/native-contracts/normal-run.log
+      - name: Retain native normal-lane inputs, selection and outcomes
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: uvicorn-rs-native-normal-contracts
+          path: target/native-contracts/
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
 
   native-framework-composition:
     name: Pinned native FastAPI-RS composition inputs
@@ -124,6 +139,13 @@ jobs:
             exit 1
           fi
       - name: Run native FastAPI-RS → Starlette-RS → Uvicorn-RS live inputs
+        # The pinned Starlette-RS revision has a Linux-only `unused_mut` lint
+        # in a macOS-specific stat branch. The uvicorn-rs workspace has its
+        # own warning-denied Clippy gate above; cap dependency lint levels only
+        # for this integration smoke so upstream warnings do not mask runtime
+        # composition failures.
+        env:
+          RUSTFLAGS: --cap-lints warn
         run: |
           workspace="$RUNNER_TEMP/native-composition"
           CARGO_TARGET_DIR="$RUNNER_TEMP/native-composition-target" \
@@ -442,6 +464,18 @@ jobs:
           test "${#sdists[@]}" -eq 1
           python scripts/check_sdist_build.py --sdist "${sdists[0]}" --output-dir target/sdist-consumer
           cp target/sdist-consumer/result.json dist/consumer-sdist.json
+      - name: Package the Python-free server and shared lifecycle crates
+        if: runner.os == 'Linux'
+        env:
+          CARGO_TARGET_DIR: target/native-package
+        run: |
+          set -euo pipefail
+          cargo package -p native-app-contract --no-verify --locked --offline
+          cargo package -p uvicorn-rs --no-verify --locked --offline \
+            --config 'patch.crates-io.native-app-contract.path="crates/native-app-contract"'
+          packages=(target/native-package/package/*.crate)
+          test "${#packages[@]}" -eq 2
+          cp "${packages[@]}" dist/
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         if: runner.os == 'Linux'
         with:
