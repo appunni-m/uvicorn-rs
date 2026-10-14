@@ -4237,8 +4237,8 @@ async fn serve_forever(
             Some(result) = connection_tasks.join_next(), if !connection_tasks.is_empty() => {
                 match result {
                     Ok(Ok(())) => {}
-                    Ok(Err(error)) => log_error(format_args!("uvicorn-rs: connection task failed: {error}")),
-                    Err(error) => log_error(format_args!("uvicorn-rs: connection task failed: {error}")),
+                    Ok(Err(error)) => log_error(format_args!("uvicorn-rs: connection task failed: {error:?}")),
+                    Err(error) => log_error(format_args!("uvicorn-rs: connection task failed: {error:?}")),
                 }
             }
             accepted = async {
@@ -4382,10 +4382,10 @@ async fn serve_forever(
                 match result {
                     Ok(Ok(())) => {}
                     Ok(Err(error)) => log_error(format_args!(
-                        "uvicorn-rs: connection task failed during shutdown: {error}"
+                        "uvicorn-rs: connection task failed during shutdown: {error:?}"
                     )),
                     Err(error) => log_error(format_args!(
-                        "uvicorn-rs: connection task failed during shutdown: {error}"
+                        "uvicorn-rs: connection task failed during shutdown: {error:?}"
                     )),
                 }
             }

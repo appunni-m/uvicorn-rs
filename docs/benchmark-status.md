@@ -2,7 +2,68 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Latest hosted benchmark matrix: run #26 (2026-10-14)
+## Latest hosted benchmark matrix: run #27 (2026-10-14)
+
+The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526995006)
+measured commit
+[`ef9680c8e34fb2bf1c959b94d832f61cbf580213`](https://github.com/appunni-m/uvicorn-rs/commit/ef9680c8e34fb2bf1c959b94d832f61cbf580213).
+Exact-binary parity and all correctness checks in the separate stock-FastAPI
+comparison passed on all three systems. All platform category jobs stopped in
+HTTP/2 after successful response checks because the server logged
+`connection task failed: connection error`; each server shut down cleanly. The
+underlying I/O error remains unknown. The category diagnostic gate remains
+strict; a focused local follow-up is recorded below.
+
+| System | HTTP/1 | HTTP/2 | HTTP/3 | WebSocket | Lifecycle | Qualified pairs |
+|---|---|---|---|---|---|---:|
+| Linux x86-64 | 300/300 rows; 30/30 pairs | 27/140 rows; incomplete | 130/130 rows; 12/14 pairs | 60/60 rows; 6/6 pairs | 20/20 rows; 2/2 pairs | 50 |
+| Linux ARM64 | 300/300 rows; 30/30 pairs | 2/140 rows; incomplete | 130/130 rows; 12/14 pairs | 60/60 rows; 6/6 pairs | 20/20 rows; 2/2 pairs | 50 |
+| macOS ARM64 | 300/300 rows; 24/30 pairs | 53/140 rows; incomplete | 130/130 rows; 12/14 pairs | 60/60 rows; 6/6 pairs | 20/20 rows; 2/2 pairs | 44 |
+
+The HTTP/1 rows compare a stock Python FastAPI app under Uvicorn and
+`uvicorn-rs-py`; they do not use FastAPI-RS or Starlette-RS. Each Linux system
+qualified all 30 workload/event-loop pairs;
+macOS qualified 24. The table reports medians of matched per-pair Rust/Uvicorn
+ratios, so architectures are not combined.
+
+| System | Qualified H1 pairs | Rust higher throughput | Throughput ratio, median | p95 latency ratio, median | Server CPU/operation ratio, median | Server RSS ratio, median |
+|---|---:|---:|---:|---:|---:|---:|
+| Linux x86-64 | 30/30 | 7/30 | 0.765 | 1.497 | 1.549 | 1.010 |
+| Linux ARM64 | 30/30 | 5/30 | 0.793 | 1.460 | 1.575 | 1.013 |
+| macOS ARM64 | 24/30 | 5/24 | 0.835 | 1.198 | 1.357 | 1.016 |
+
+The current Python ASGI path has no broad speed advantage in this run: median
+throughput is below Uvicorn on all three systems, and median server CPU per
+operation is higher. The macOS timing exclusions and incomplete HTTP/2
+categories also mean the matrix does not qualify the full required workload
+inventory. These are measured outcomes, not release performance acceptance.
+
+The workflow used Python 3.12.13 and Rust 1.98.1, five repetitions, five
+seconds per timed sample, one second of warmup, concurrency 64 (HTTP/3
+concurrency 1), and independent hosted Linux x86-64, Linux ARM64, and macOS
+ARM64 runners. See [benchmark methodology](benchmarks.md) and the
+[generated multi-system report](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526995006/artifacts/11879148475).
+The [Linux x86-64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526995006/artifacts/11878788763),
+[Linux ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526995006/artifacts/11879906195),
+and [macOS ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526995006/artifacts/11879698658)
+artifacts retain the raw rows and server logs. The evidence aggregates to
+`validated_partial_matrix`; it does not satisfy the performance gate.
+
+## Focused HTTP/2 diagnostic probe (2026-10-14)
+
+After changing the local server diagnostic to print Hyper's `Debug` error,
+five normal-build repetitions of HTTP/2 `large-response` on
+`uvicorn-rs-asyncio` passed all response checks and exited cleanly. All five
+server logs were empty, so the hosted connection error did not recur and the
+new diagnostic did not capture its underlying cause. The host guard rejected
+all five timing samples for unrelated CPU activity; this is not performance
+evidence. The probe used working-tree source SHA-256
+`a74b6c7d799d1fa5080f0a7064fb8c23b4671b89449dc83e16f3449d4a907dd9` and is
+retained only under Git-ignored `target/h2-debug-format-20261014.jsonl` and
+`target/h2-debug-format-20261014.artifacts/`. It does not resolve the hosted
+failure or replace the complete benchmark matrix.
+
+## Previous hosted benchmark matrix: run #26 (2026-10-14)
 
 The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38515000313)
 passed public parity and the separate stock-FastAPI HTTP/1 comparison on all

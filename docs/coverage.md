@@ -9,6 +9,26 @@ parity/fault-contract cases and 150 Python-free native cases (661 total).
 Acceptance requires three complete repeats, 100% region and line coverage,
 and fully paginated Coverage-MCP results bound to the exact report bytes.
 
+The latest exact-commit report is from hosted CI
+[run 38526994848](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526994848)
+on commit
+[`ef9680c8e34fb2bf1c959b94d832f61cbf580213`](https://github.com/appunni-m/uvicorn-rs/commit/ef9680c8e34fb2bf1c959b94d832f61cbf580213).
+All 661 indexed ASGI and native cases passed in each of three complete
+verification runs, with zero retries or infrastructure failures. The unified
+report measured **7,533/7,576 regions** and **5,569/5,594 lines**, leaving 43
+regions and 25 lines uncovered. Its SHA-256 is
+`1bef17e4fc15bbb21eb57144811dbbc9404dd44eec54ec30def086e44d57376a` and its
+source SHA-256 is
+`911747c042fbc1cb7c66a0fb626bfa2eb063a514e73c04d8a0adc9b021b346ee`. The
+[unified coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526994848/artifacts/11878179532)
+retains the report and attribution data. Coverage-MCP did not return a
+receipt for this report during three follow-up calls, which timed out, so the
+required exact-report, fully paginated zero-gap check remains pending. Every
+indexed case passed, but the coverage threshold and MCP receipt requirements
+remain unmet.
+
+### Historical hosted baseline: CI run #110
+
 Hosted CI [run #110](https://github.com/appunni-m/uvicorn-rs/actions/runs/38418430762)
 retained a full-scope report for commit
 `796dee690ca83654cddb97131dc1dee37de96bcd` and its then-current 633-case
