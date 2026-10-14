@@ -1,0 +1,46 @@
+{
+  "schema": "uvicorn-rs-performance-review@1",
+  "decision": "not_proven",
+  "rationale": "The current evidence does not establish a repeatable performance gain or a documented scope revision supported by retained measurements. Keep candidate verification blocked until the exact release commit has a complete hosted matrix and this record cites claims supported by that matrix.",
+  "scope": {
+    "comparison": "stock FastAPI and Starlette under uvicorn-rs-py versus Uvicorn",
+    "category": "http1",
+    "systems": [
+      "linux-x86_64",
+      "linux-aarch64",
+      "macos-arm64"
+    ],
+    "loops": [
+      "asyncio",
+      "uvloop"
+    ],
+    "workloads": [
+      "fastapi-validated-route",
+      "fastapi-fixed",
+      "fastapi-large-response",
+      "fastapi-many-response-chunks",
+      "fastapi-small-response-chunks",
+      "fastapi-request-upload",
+      "fastapi-upload-1m-write-1k",
+      "fastapi-upload-1m-write-16k",
+      "fastapi-upload-1m-write-256k",
+      "fastapi-upload-1m-write-1m",
+      "fastapi-request-upload-small-chunks",
+      "fastapi-slow-reader-backpressure",
+      "fastapi-scope-32-headers",
+      "fastapi-contextvars",
+      "fastapi-python-cpu"
+    ],
+    "minimum_matched_repetitions": 3,
+    "required_metrics": [
+      "operations_per_second",
+      "p50_ms",
+      "p95_ms",
+      "p99_ms",
+      "server_cpu_microseconds_per_operation",
+      "server_rss_sampled_peak_mib"
+    ]
+  },
+  "claims": [],
+  "scope_revision": null
+}

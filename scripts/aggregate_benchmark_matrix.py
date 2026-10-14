@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 from html import escape
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -230,7 +231,7 @@ def archive_system_evidence(artifact: Path, destination: Path) -> None:
                 if path.is_file():
                     archive.add(path, arcname=path.relative_to(artifact))
         for name in ("environment.json", "system-packages.txt", "parity-before.json",
-                     "parity.json"):
+                     "parity.json", "native-extension.bin"):
             path = preparation / name
             if path.is_file():
                 archive.add(path, arcname=path.relative_to(artifact))
@@ -610,6 +611,12 @@ def main() -> int:
             artifact_paths[system["system_id"]],
             evidence_dir / f"{system['system_id']}-evidence.tar.gz",
         )
+    retained_files = sorted(path for path in args.output_dir.rglob("*")
+                            if path.is_file() and path.name != "SHA256SUMS")
+    (args.output_dir / "SHA256SUMS").write_text("".join(
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(args.output_dir).as_posix()}\n"
+        for path in retained_files
+    ))
     print(json.dumps({"status": matrix_status, "systems": list(SYSTEMS),
                       "qualified_pairs_by_system": {item["system_id"]: item["qualified_pairs"] for item in systems},
                       "fastapi_qualified_pairs_by_system": {

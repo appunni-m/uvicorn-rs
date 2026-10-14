@@ -16,7 +16,9 @@ on:
       - tests/parity/**
       - parity/**
       - .github/workflows/benchmark-categories.yml
+      - .github/workflows/release.yml
       - docs/benchmarks.md
+      - docs/performance-acceptance.json
   schedule:
     - cron: "23 3 * * 1"
   workflow_dispatch:
@@ -180,6 +182,13 @@ jobs:
           .venv/bin/python scripts/run_benchmark_categories.py \
             --capture-identity target/benchmark-preparation/parity-before.json \
             2>&1 | tee target/benchmark-preparation/freeze.log
+          .venv/bin/python - <<'PY'
+          import importlib
+          import shutil
+          from pathlib import Path
+          native = Path(importlib.import_module("uvicorn_rs._native").__file__)
+          shutil.copyfile(native, Path("target/benchmark-preparation/native-extension.bin"))
+          PY
       - name: Gate the exact normal binary on every indexed public parity case
         shell: bash
         run: |

@@ -40,13 +40,35 @@ is tracked by `zep3`.
 | Representative performance (`wh9k`, `k8ft`) | Benchmark #25 completed the full FastAPI HTTP/1 workload grid only on Linux. Rust was faster in 6/30 matched workload/event-loop pairs on each Linux system; median throughput ratios were 0.713 (x86-64) and 0.844 (ARM64), with higher median CPU per operation. HTTP/2, HTTP/3, and macOS HTTP/1 were incomplete. | Fix the observed correctness and client-lifecycle failures, optimize the current Python ASGI path, and repeat the same stock-FastAPI workloads. Require at least three valid repetitions per claimed pair and record latency, throughput, CPU, memory, and source/build identities. The current evidence does not meet the performance objective; if optimization does not produce a reviewed meaningful gain, revise the scope before release. |
 | Clean commit and hosted CI (`zep3`) | Release preparation has focused local checks; CI #110 failed quality, composition, and coverage, so package jobs were skipped. | Review and commit the final source, then pass every required hosted gate on that exact clean commit, including Rust 1.85, normal-wheel parity, fault-seam exclusion, native composition, and unified coverage. |
 | Packaged consumer evidence (`zep3`) | Both Rust archives passed local dirty-source inspection and Rust 1.85 checks; current hosted artifact verification is missing. | Verify the three supported wheels, sdist, and two Rust archives from the clean commit, including fresh installed consumers, the Python floor, extracted Rust archive builds, licenses, versions, and checksums. |
-| Performance acceptance in candidate verification (`q9pv`, blocking `zep3`) | The candidate workflow downloads package, parity, coverage, and Python-floor evidence; it does not enforce the required performance evidence or reviewed scope revision. | Add explicit validation of that acceptance evidence, tied to the candidate source and retained artifact identity, before the bundle can be called verified. |
+| Performance acceptance in candidate verification (`q9pv`, blocking `zep3`) | Run #26 is a `validated_partial_matrix`; it cannot establish the performance objective. The release gate now requires a complete matrix and an exact-commit decision record. | Run a complete correctness-gated matrix on the final tagged commit, then record measured gain claims or a documented scope revision in `performance-acceptance.json`. Candidate assembly rejects `not_proven`, partial/stale artifacts, and unsupported or underqualified claims. |
 | Immutable candidate and final documentation (`zep3`) | No current candidate or tag exists. | Reconcile support, deployment, feasibility, benchmark, and coverage claims with the final evidence; assemble the bundle from the successful CI run/attempt; verify the annotated tag object and commit; retain candidate manifests and SHA256SUMS. Keep generated logs, profiles, and coverage reports out of Git. |
 
 The current workflow stops at a verified candidate artifact. Registry
 publication and a public GitHub Release remain outside this workstream. Native
 Rust applications compose the library into their executable; a standalone
 native CLI is not part of the selected package contract.
+
+### Performance acceptance gate
+
+The tag workflow selects a completed benchmark run for the exact commit on
+`main`. All three platform jobs and the aggregate job must have succeeded. It
+downloads the aggregate by artifact ID, checks GitHub's artifact digest, and
+revalidates the run and artifact metadata before assembling the candidate.
+The verifier recomputes each platform result from retained evidence, checks
+the full source and dependency identities, and inspects the retained native
+extension bytes for coverage or diagnostic instrumentation. Linux x86-64 is
+also compared byte-for-byte with the normal-build native extension used by the
+candidate parity audit.
+
+The decision record must cover the maintained stock-FastAPI HTTP/1 workload
+inventory. A gain claim needs three or more valid matched repetitions for each
+claimed workload, event loop, and system, with throughput, latency, CPU, and
+RSS measurements present; throughput or latency must support a gain claim,
+while CPU and RSS provide required resource context. A scope revision must cite
+a checked-in document and retained qualified measurements. A complete matrix
+on its own is not a gain claim. The current record is `not_proven`, and the latest hosted matrix is
+partial, so no tag can currently produce a verified candidate. The gate does
+not publish packages, create a public release, or create or move tags.
 
 Kata `xzf9` added two native application-panic recovery contracts. The focused
 eight-case run passed without retries or infrastructure failures; the readiness
