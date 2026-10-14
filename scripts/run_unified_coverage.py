@@ -36,7 +36,7 @@ run_parity = importlib.import_module("run_parity")
 
 RUNNER = ROOT / "scripts" / "run_parity.py"
 BUILD_SCRIPT = ROOT / "scripts" / "build_coverage_extension.py"
-RESULT_SCHEMA = "uvicorn-rs-coverage/unified@4"
+RESULT_SCHEMA = "uvicorn-rs-coverage/unified@5"
 LLVM_EXTENSION_KEY = "uvicorn_rs_unified"
 SOURCE_PATHS = (
     "src",
@@ -315,14 +315,15 @@ def source_region_map(
     dict[str, dict[str, int]],
     dict[tuple[str, int, int], str],
 ]:
-    """Map the canonical LLVM function-instantiation groups to source regions.
+    """Map LLVM function-instantiation groups to source-span regions.
 
     LLVM's file summary counts regions per instantiation group and merges each
-    group's instantiations by taking the maximum covered and total counts. A
-    raw source-span union across all function rows can therefore overstate the
-    file summary when different generic instantiations cover different spans.
-    Select one deterministic aggregate-profile representative per group, then
-    reuse that same symbol while attributing each isolated case profile.
+    group's instantiations by taking the maximum covered and total counts. Use
+    that same deterministic representative to preserve LLVM's denominator and
+    raw summary, but attribute a source region as hit when any monomorphization
+    executes the exact source span. Generic instantiations share the source
+    region even when their branch outcomes differ. Reuse the aggregate-selected
+    representative's source spans when attributing isolated case profiles.
     """
     data = llvm_report["data"][0]
     files: dict[str, dict[str, Any]] = {}
@@ -427,9 +428,29 @@ def source_region_map(
         selected_regions = next(
             code_regions for candidate, code_regions in instantiations if candidate == symbol
         )
+        representative_spans = {
+            (region[0], region[1], region[2], region[3], region[7])
+            for region in selected_regions
+        }
+        covered_source_spans: set[tuple[int, int, int, int, int]] = set()
+        for candidate, code_regions in instantiations:
+            candidate_spans = {
+                (region[0], region[1], region[2], region[3], region[7])
+                for region in code_regions
+            }
+            if not candidate_spans <= representative_spans:
+                raise CoverageError(
+                    f"LLVM instantiation has source regions outside its representative: {group_key}"
+                )
+            covered_source_spans.update(
+                (region[0], region[1], region[2], region[3], region[7])
+                for region in code_regions
+                if region[4] > 0
+            )
 
         for raw_region in selected_regions:
-            start_line, start_column, end_line, end_column, count, _, _, kind = raw_region
+            start_line, start_column, end_line, end_column, _, _, _, kind = raw_region
+            source_span = (start_line, start_column, end_line, end_column, kind)
             identity = [
                 source_digest,
                 relative_path,
@@ -453,7 +474,7 @@ def source_region_map(
                 "end": {"line": end_line, "column": end_column},
                 "kind": kind,
                 "function_symbols": [symbol],
-                "covered": count > 0,
+                "covered": source_span in covered_source_spans,
             }
 
     if canonical_functions is None:
@@ -1392,12 +1413,18 @@ def main() -> int:
     case_index = sorted(receipt["case_key"] for _, receipt, _ in attribution_cases)
     case_index_by_key = {case_key: index for index, case_key in enumerate(case_index)}
 
-    source_region_summary = {
+    llvm_source_summary = {
         metric: sum(aggregate_summaries[path][metric] for path in EXECUTABLE_SOURCE_SET)
         for metric in ("regions", "lines")
     } | {
         f"{metric}_total": sum(aggregate_summaries[path][f"{metric}_total"] for path in EXECUTABLE_SOURCE_SET)
         for metric in ("regions", "lines")
+    }
+    source_region_summary = {
+        "regions": len(aggregate_hits),
+        "regions_total": len(aggregate_regions),
+        "lines": llvm_source_summary["lines"],
+        "lines_total": llvm_source_summary["lines_total"],
     }
     complete_case_matrix = (
         len(case_receipts) == len(cases)
@@ -1562,6 +1589,14 @@ def main() -> int:
                     "missing": int(source_region_summary["lines_total"] - source_region_summary["lines"]),
                 },
             },
+            "llvm_summary": {
+                metric: {
+                    "covered": int(llvm_source_summary[metric]),
+                    "total": int(llvm_source_summary[f"{metric}_total"]),
+                    "missing": int(llvm_source_summary[f"{metric}_total"] - llvm_source_summary[metric]),
+                }
+                for metric in ("regions", "lines")
+            },
             "regions": [
                 {
                     **region,
@@ -1572,8 +1607,9 @@ def main() -> int:
             "uncovered_regions": uncovered,
             "attribution": {
                 "algorithm": (
-                    "LLVM instantiation groups with a deterministic aggregate-profile representative; "
-                    "region IDs include source hash, file, group start, function symbol, source span, and kind"
+                    "LLVM instantiation groups use a deterministic maximum-summary representative for the denominator; "
+                    "hits are unioned by exact source span across monomorphizations; region IDs include source hash, "
+                    "file, group start, representative function symbol, source span, and kind"
                 ),
                 "aggregate_profile_data_sha256": digest_file(combined_profdata),
                 "per_case_profiles": len(attribution_cases),

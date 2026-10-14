@@ -137,10 +137,16 @@ class H2Client:
             await asyncio.wait_for(self.window_changed.wait(), timeout=10)
 
     async def close(self) -> None:
-        self.reader_task.cancel()
-        await asyncio.gather(self.reader_task, return_exceptions=True)
-        self.writer.close()
-        await self.writer.wait_closed()
+        try:
+            # Finish the HTTP/2 connection before closing TLS so the server
+            # observes a protocol-level shutdown instead of an abrupt EOF.
+            self.connection.close_connection()
+            await self._write_pending()
+        finally:
+            self.reader_task.cancel()
+            await asyncio.gather(self.reader_task, return_exceptions=True)
+            self.writer.close()
+            await self.writer.wait_closed()
 
 
 def expected_body(config: dict) -> bytes:

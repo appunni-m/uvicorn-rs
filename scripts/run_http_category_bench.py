@@ -212,6 +212,10 @@ WORKLOADS = {
             "upload_bytes": 1_048_576,
             "upload_chunk_bytes": 1024,
         },
+        # Keep this input bounded on three-CPU virtual runners: at the default
+        # concurrency, 1 MiB uploads split into 1 KiB client reads caused
+        # disconnects during warm-up across every server implementation.
+        "concurrency": 8,
     },
     "fastapi-upload-1m-write-16k": {
         "app": "examples.bench_fastapi:app",

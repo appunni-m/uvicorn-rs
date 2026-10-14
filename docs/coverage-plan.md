@@ -258,7 +258,13 @@ separate gates.
 ## One unified coverage and attribution report
 
 The JSON below is a historical schema sketch, not the current report schema.
-The current runner and checker use `uvicorn-rs-coverage/unified@4`.
+The current runner and checker use `uvicorn-rs-coverage/unified@5`. Region
+attribution uses the exact source span across Rust monomorphizations, so an
+input that executes a region in one generic instantiation is not reported as a
+gap merely because the maximum-summary representative is another instantiation.
+`coverage.summary.regions` reports that source-span union; `coverage.llvm_summary`
+and each source-file summary retain the official LLVM maximum-instantiation
+totals. Line totals continue to use LLVM's file summary.
 
 Produce one authoritative `coverage-report.json` for the complete selected case
 matrix and exact instrumented source/build. It contains both the aggregate

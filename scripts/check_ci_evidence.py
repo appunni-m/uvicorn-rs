@@ -28,7 +28,7 @@ from coverage_toolchain import ToolchainError, validate_coverage_tools
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests/parity/manifest.json"
-UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@4"
+UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@5"
 PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
     "crates/uvicorn-rs/src/lib.rs",
@@ -423,8 +423,23 @@ def llvm_production_regions(
                     f"case profile is missing aggregate-selected function representative: {group_key}")
         selected_functions[group_key] = symbol
         selected_regions = next(raws for candidate, raws in instantiations if candidate == symbol)
+        representative_spans = {
+            (raw[0], raw[1], raw[2], raw[3], raw[7]) for raw in selected_regions
+        }
+        covered_source_spans: set[tuple[int, int, int, int, int]] = set()
+        for _, candidate_regions in instantiations:
+            candidate_spans = {
+                (raw[0], raw[1], raw[2], raw[3], raw[7]) for raw in candidate_regions
+            }
+            require(candidate_spans <= representative_spans,
+                    f"LLVM instantiation has source regions outside its representative: {group_key}")
+            covered_source_spans.update(
+                (raw[0], raw[1], raw[2], raw[3], raw[7])
+                for raw in candidate_regions if raw[4] > 0
+            )
         for raw in selected_regions:
-            start_line, start_col, end_line, end_col, count, _, _, kind = raw
+            start_line, start_col, end_line, end_col, _, _, _, kind = raw
+            source_span = (start_line, start_col, end_line, end_col, kind)
             identity = [source_digest, relative, group_line, group_column, symbol,
                         start_line, start_col, end_line, end_col, kind]
             region_id = digest_json(identity)
@@ -432,7 +447,7 @@ def llvm_production_regions(
             regions[region_id] = {
                 "file": relative,
                 "function_group": {"line": group_line, "column": group_column},
-                "covered": count > 0,
+                "covered": source_span in covered_source_spans,
                 "function_symbols": {symbol},
             }
     for relative in EXECUTABLE_SOURCE_SET:
@@ -656,7 +671,7 @@ def validate_coverage(
                 f"{key} case denominator differs")
 
     coverage = ext["coverage"]
-    exact_keys(coverage, {"gate", "source_set", "executable_source_set", "source_files", "summary", "regions",
+    exact_keys(coverage, {"gate", "source_set", "executable_source_set", "source_files", "summary", "llvm_summary", "regions",
                          "uncovered_regions", "attribution", "coverage_mcp"}, "coverage")
     require(tuple(coverage.get("source_set", [])) == PRODUCTION_SOURCE_SET
             and tuple(coverage.get("executable_source_set", [])) == EXECUTABLE_SOURCE_SET,
@@ -671,8 +686,20 @@ def validate_coverage(
                 f"source classification differs: {path}")
         exact_keys(row.get("summary"), {"regions", "lines", "regions_total", "lines_total"}, f"summary {path}")
         require(row["summary"] == raw_summaries[path], f"per-file LLVM summary differs: {path}")
-    expected_summary = aggregate_source_summary(source_rows)
-    require(coverage.get("summary") == expected_summary, "aggregate is not the executable source union")
+    expected_llvm_summary = aggregate_source_summary(source_rows)
+    require(coverage.get("llvm_summary") == expected_llvm_summary,
+            "aggregate LLVM summary differs from per-file source rows")
+    source_region_hits = sum(region["covered"] for region in raw_regions.values())
+    expected_summary = {
+        "regions": {
+            "covered": source_region_hits,
+            "total": len(raw_regions),
+            "missing": len(raw_regions) - source_region_hits,
+        },
+        "lines": expected_llvm_summary["lines"],
+    }
+    require(coverage.get("summary") == expected_summary,
+            "source-span union summary differs from independently reconstructed regions")
     for metric, row in expected_summary.items():
         require(row["total"] > 0 and row["covered"] == row["total"] and row["missing"] == 0,
                 f"unified source {metric} coverage is below 100%")
@@ -770,8 +797,9 @@ def validate_coverage(
             and case_index == sorted(all_keys)
             and len(case_index) == len(set(case_index))
             and attribution.get("algorithm") == (
-                "LLVM instantiation groups with a deterministic aggregate-profile representative; "
-                "region IDs include source hash, file, group start, function symbol, source span, and kind"
+                "LLVM instantiation groups use a deterministic maximum-summary representative for the denominator; "
+                "hits are unioned by exact source span across monomorphizations; region IDs include source hash, "
+                "file, group start, representative function symbol, source span, and kind"
             )
             and attribution.get("case_region_lookup") == (
                 "coverage.regions[].hit_by -> coverage.attribution.case_index"

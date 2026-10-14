@@ -538,8 +538,7 @@ def render_markdown(report: dict) -> str:
         lines += [
             "",
             f"Download `{system['artifact']}` from the [workflow run]({run_url}) for raw rows, logs, environment receipts, and the complete per-run analysis.",
-            f"Archived machine-readable evidence: [matrix results](../benchmarks/results/hosted/{report['archive_key']}/matrix.json) and [raw system bundle](../benchmarks/results/hosted/{report['archive_key']}/{system['system_id']}-evidence.tar.gz).",
-            f"Verify archived files with the [SHA-256 manifest](../benchmarks/results/hosted/{report['archive_key']}/SHA256SUMS).",
+            "The run's matrix artifact includes the hashed machine-readable receipts and raw system bundles. GitHub Actions retains those files for 90 days; generated logs and per-run results are not committed to Git.",
         ]
     lines += [
         "",

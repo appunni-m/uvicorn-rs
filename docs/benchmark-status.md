@@ -2,6 +2,60 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Latest hosted benchmark matrix: run #26 (2026-10-14)
+
+The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38515000313)
+passed public parity and the separate stock-FastAPI HTTP/1 comparison on all
+three systems. The category jobs and overall matrix are incomplete, so this
+run does not establish a three-system performance result or a speedup.
+
+| System | HTTP/1 | HTTP/2 | HTTP/3 | WebSocket | Lifecycle | Qualified pairs |
+|---|---|---|---|---|---|---:|
+| Linux x86-64 | 300/300 rows; 30/30 pairs | 47/140 rows; incomplete | 130/130 rows; 12/14 pairs | 60/60 rows; 6/6 pairs | 20/20 rows; 2/2 pairs | 50 |
+| Linux ARM64 | 300/300 rows; 30/30 pairs | 48/140 rows; incomplete | 130/130 rows; 12/14 pairs | 60/60 rows; 6/6 pairs | 20/20 rows; 2/2 pairs | 50 |
+| macOS ARM64 | 124/300 rows; incomplete | 140/140 rows; 12/14 pairs | 130/130 rows; 12/14 pairs | 60/60 rows; 6/6 pairs | 20/20 rows; 2/2 pairs | 32 |
+
+The macOS HTTP/1 category recorded four correctness failures in the 1 MiB
+upload workload using 1 KiB client writes at concurrency 64. All four server
+profiles failed during warm-up with client send errors; FastAPI observed
+`ClientDisconnect`. Linux HTTP/2 stopped in the Rust/asyncio `large-response`
+workload after successful client response checks, followed by the generic
+`uvicorn-rs: connection task failed: connection error` diagnostic. The
+failures occurred at repetition 2 on x86-64 and repetition 3 on ARM64; server
+shutdown was clean. Their shared cause is not established.
+
+The separate FastAPI-only comparison produced all 40 planned rows without
+correctness failures on each system. It qualified 4/4 workload/loop pairs on
+each Linux system and 0/4 on macOS because of timing exclusions. This comparison
+uses stock FastAPI and Starlette under Uvicorn and uvicorn-rs; it does not use
+FastAPI-RS or Starlette-RS.
+
+The [matrix artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38515000313/artifacts/11873134174)
+and [Linux x86-64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38515000313/artifacts/11874197074),
+[Linux ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38515000313/artifacts/11873189132),
+and [macOS ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38515000313/artifacts/11874001693)
+artifacts retain source-bound receipts, raw rows, reports, and logs for 90
+days. The artifacts aggregate to `validated_partial_matrix`: 50 qualified
+pairs on each Linux system and 32 on macOS. Partial pairs are descriptive
+evidence only and do not satisfy performance acceptance.
+
+Focused local follow-ups validated the two failing inputs after harness
+changes. The HTTP/1 upload passed once on all four server/loop profiles at
+concurrency 8 with response and lifecycle gates passing. The HTTP/2
+large-response probe completed 4,071 requests with no client failures and a
+clean server exit after the client sent GOAWAY and drained pending frames.
+Both runs rejected timing because unrelated local CPU activity exceeded the
+guard. These probes do not confirm the fixes on hosted runners or provide
+performance evidence. The next complete hosted matrix must validate the
+workload changes.
+
+The status/docs job also failed: it tried to stage per-run files under the
+Git-ignored `benchmarks/results/` directory. The workflow now keeps generated
+reports and logs in 90-day Actions artifacts and proposes documentation-only
+changes on its automation branch. Repository Actions permissions cannot
+create pull requests, so the workflow provides a compare link for manual
+review.
+
 ## Local host preflight (2026-10-14)
 
 The latest eight-sample macOS ARM64 preflight rejected benchmark timing before
@@ -14,7 +68,7 @@ Git-ignored at
 `796dee690ca83654cddb97131dc1dee37de96bcd`. The FastAPI benchmark remains
 unqualified; retry after a clean preflight.
 
-## Latest hosted benchmark matrix: run #25 (2026-10-13)
+## Previous hosted benchmark matrix: run #25 (2026-10-13)
 
 The matrix
 [38418430949](https://github.com/appunni-m/uvicorn-rs/actions/runs/38418430949)
