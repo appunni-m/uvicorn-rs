@@ -143,12 +143,13 @@ jobs:
         # in a macOS-specific stat branch. The uvicorn-rs workspace has its
         # own warning-denied Clippy gate above; cap dependency lint levels only
         # for this integration smoke so upstream warnings do not mask runtime
-        # composition failures.
+        # composition failures. The workflow-wide empty CARGO_ENCODED_RUSTFLAGS
+        # takes precedence over RUSTFLAGS in Cargo, so unset it for this command.
         env:
           RUSTFLAGS: --cap-lints warn
         run: |
           workspace="$RUNNER_TEMP/native-composition"
-          CARGO_TARGET_DIR="$RUNNER_TEMP/native-composition-target" \
+          env -u CARGO_ENCODED_RUSTFLAGS CARGO_TARGET_DIR="$RUNNER_TEMP/native-composition-target" \
             cargo run --manifest-path "$workspace/uvicorn-rs/examples/native-fastapi-contracts/Cargo.toml" \
             --locked -- "$workspace/uvicorn-rs/examples/native-fastapi-contracts/manifest.json"
 
