@@ -16,6 +16,7 @@ on:
       - '!scripts/check_ci_evidence.py'
       - '!scripts/coverage_contract.py'
       - '!scripts/coverage_toolchain.py'
+      - '!scripts/release_evidence.py'
       - '!scripts/run_unified_coverage.py'
       - '!scripts/summarize_unified_coverage.py'
       - examples/**

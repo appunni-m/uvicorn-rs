@@ -434,7 +434,9 @@ def inspect_rust_crate(
     vcs = json.loads(contents[".cargo_vcs_info.json"].decode("utf-8"))
     vcs_git = vcs.get("git") if isinstance(vcs, dict) else None
     source_commit = vcs_git.get("sha1") if isinstance(vcs_git, dict) else None
-    source_dirty = vcs_git.get("dirty") if isinstance(vcs_git, dict) else None
+    # Cargo omits `git.dirty` from `.cargo_vcs_info.json` for a clean source
+    # checkout; it records the field only when packaging dirty sources.
+    source_dirty = vcs_git.get("dirty", False) if isinstance(vcs_git, dict) else None
     vcs_path = vcs.get("path_in_vcs") if isinstance(vcs, dict) else None
     expected_vcs_path = f"crates/{package_name}"
     if (not isinstance(source_commit, str) or COMMIT.fullmatch(source_commit) is None
@@ -443,7 +445,7 @@ def inspect_rust_crate(
     if expected_commit is not None and source_commit != expected_commit:
         raise ValueError(f"Cargo archive commit differs from candidate: {package_name}")
     if type(source_dirty) is not bool:
-        raise ValueError(f"Cargo archive omitted its clean-source flag: {package_name}")
+        raise ValueError(f"Cargo archive has an invalid dirty-source flag: {package_name}")
     if require_clean and source_dirty:
         raise ValueError(f"Cargo archive was packaged from a dirty source tree: {package_name}")
     return {
