@@ -23,6 +23,7 @@ import sys
 import tempfile
 from typing import Any
 
+from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
 
 
@@ -1223,16 +1224,8 @@ def validate_coverage(
     if allow_pending_mcp and mcp_pending:
         exact_keys(mcp_receipt, {"status", "measurement_path", "metric", "required_follow_up"},
                    "pending Coverage-MCP request")
-        require(mcp_receipt == {
-            "status": "awaiting_query",
-            "measurement_path": str(report_path.relative_to(ROOT)),
-            "metric": "regions",
-            "required_follow_up": (
-                "Query and fully paginate both regions and lines for this exact report; require zero missing "
-                "source-span totals, source=matches_receipt, and tests=passed; retain function-instantiation "
-                "groups as diagnostics."
-            ),
-        }, "pending Coverage-MCP request differs from the producer contract")
+        require(mcp_receipt == pending_coverage_mcp_request(str(report_path.relative_to(ROOT))),
+                "pending Coverage-MCP request differs from the producer contract")
     else:
         validate_coverage_mcp(
             mcp_receipt, report_path=report_path, report_relative=str(report_path.relative_to(ROOT)),

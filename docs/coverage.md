@@ -4,6 +4,19 @@
 
 ## Current unified coverage status (2026-10-15)
 
+Exact-source hosted CI [run 38790016719](https://github.com/appunni-m/uvicorn-rs/actions/runs/38790016719)
+on commit `5a32e3c0d84a02c95fe8a3f01712c895419ea571` completed all 717 indexed
+cases. It reported 8,654/8,654 LLVM regions and 6,521/6,521 lines, with zero
+uncovered regions. The evidence checker rejected the run afterward because the
+report producer and checker used different wording for the pending
+Coverage-MCP request. This was a receipt-contract failure, not a failed ASGI
+case or uncovered source region. The producer wording now matches the checker;
+this edited source needs a new exact-commit hosted run and a matching
+Coverage-MCP receipt. The hosted report artifact is
+[uvicorn-rs-unified-coverage](https://github.com/appunni-m/uvicorn-rs/actions/runs/38790016719/artifacts/12001561854).
+
+The local full-source report below is a separate earlier dirty-source result.
+
 The final local full-source report executed all **717/717** declared cases:
 511 Python ASGI cases and 206 Python-free native cases. Attribution passed
 with zero case failures, infrastructure failures, retries, or unrun cases.

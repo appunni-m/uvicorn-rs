@@ -2,7 +2,30 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Latest hosted benchmark matrix: run #29 (2026-10-14)
+## Current hosted benchmark matrix: run #30 (2026-10-15/16)
+
+The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815)
+uses commit `5cb4b7b84`, which predates the current main commit
+`5a32e3c0d84a02c95fe8a3f01712c895419ea571`. At the 2026-10-16 status
+check, Linux x86-64, Linux ARM64, and macOS ARM64 had each passed parity and
+the stock-FastAPI comparison and remained in the sequential category step.
+The category jobs have not completed, so there are no final category row
+counts, timing validity totals, or ratios to report, and no artifacts are
+available yet.
+
+The matching exact-source CI
+[run 38790016719](https://github.com/appunni-m/uvicorn-rs/actions/runs/38790016719)
+has passed Rust quality, Rust 1.85, native FastAPI-RS composition, and
+installed-wheel public parity. Its coverage run completed all 717 indexed
+cases and measured 8,654/8,654 regions and 6,521/6,521 lines, then failed
+because the pending Coverage-MCP request text differed between the report
+producer and evidence checker. That wording is now aligned in source. Run #30
+is on an older commit and cannot establish performance for the current release
+candidate. When it finishes, inspect only the first failing workload with one
+focused reproducer; do not report a speedup without complete, qualified
+evidence on the release commit.
+
+## Previous completed hosted benchmark matrix: run #29 (2026-10-14)
 
 The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38537208330)
 measured commit

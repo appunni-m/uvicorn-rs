@@ -10,13 +10,18 @@ on:
       - uv.lock
       - src/**
       - python/**
-      - scripts/**
+      - 'scripts/**'
+      - '!scripts/attach_coverage_mcp.py'
+      - '!scripts/build_coverage_extension.py'
+      - '!scripts/check_ci_evidence.py'
+      - '!scripts/coverage_contract.py'
+      - '!scripts/coverage_toolchain.py'
+      - '!scripts/run_unified_coverage.py'
+      - '!scripts/summarize_unified_coverage.py'
       - examples/**
       - tools/http3-probe/**
       - tests/parity/**
       - parity/**
-      - .github/workflows/benchmark-categories.yml
-      - .github/workflows/release.yml
       - docs/benchmarks.md
       - docs/performance-acceptance.json
   schedule:

@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from typing import Any
 import uuid
 
+from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, capture_coverage_tools
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -174,6 +175,7 @@ REPORT_INPUT_PATHS = (
     "scripts/coverage_toolchain.py",
     "scripts/check_ci_evidence.py",
     "scripts/attach_coverage_mcp.py",
+    "scripts/coverage_contract.py",
     "scripts/run_unified_coverage.py",
     "pyproject.toml",
     "uv.lock",
@@ -1818,12 +1820,9 @@ def main() -> int:
                 "case_region_lookup": "coverage.regions[].hit_by -> coverage.attribution.case_index",
                 "case_index": case_index,
             },
-            "coverage_mcp": {
-                "status": "awaiting_query",
-                "measurement_path": str(output.relative_to(ROOT)) if output.is_relative_to(ROOT) else str(output),
-                "metric": "regions",
-                "required_follow_up": "Query and fully paginate both regions and lines for this exact report; require zero groups, source=matches_receipt, and tests=passed.",
-            },
+            "coverage_mcp": pending_coverage_mcp_request(
+                str(output.relative_to(ROOT)) if output.is_relative_to(ROOT) else str(output)
+            ),
         },
         "artifacts": {
             "aggregate_profile_data": str(combined_profdata.relative_to(ROOT)),
