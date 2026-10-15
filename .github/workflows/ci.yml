@@ -55,7 +55,8 @@ jobs:
           cargo check --lib --locked
           cargo check --lib --no-default-features --locked
           cargo check --lib --all-features --locked
-          cargo check -p uvicorn-rs --all-targets --locked
+          env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
+            cargo check -p uvicorn-rs --all-targets --locked
           cargo check --manifest-path tools/http3-probe/Cargo.toml --bins --locked
       - name: Build Rust API documentation
         env:
@@ -78,7 +79,8 @@ jobs:
           set -euo pipefail
           mkdir -p target/native-contracts
           python3 scripts/select_native_contracts.py
-          cargo run -p uvicorn-rs --example native_core_contracts --locked -- \
+          env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
+            cargo run -p uvicorn-rs --example native_core_contracts --locked -- \
             target/native-contracts/normal-inputs.json 2>&1 | tee target/native-contracts/normal-run.log
       - name: Retain native normal-lane inputs, selection and outcomes
         if: always()
@@ -168,7 +170,8 @@ jobs:
           cargo check --lib --locked
           cargo check --lib --no-default-features --locked
           cargo check --lib --all-features --locked
-          cargo check -p uvicorn-rs --all-targets --locked
+          env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
+            cargo check -p uvicorn-rs --all-targets --locked
 
   python-package:
     name: Complete public parity on the installed normal wheel

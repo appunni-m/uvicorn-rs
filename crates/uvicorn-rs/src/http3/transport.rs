@@ -237,24 +237,31 @@ impl BidiStream {
             crate::observe_http3_invalid_stream_id_fault();
         }
         let id = id_result?;
-        let registration = stops.and_then(|stops| {
-            #[cfg(coverage)]
-            if crate::take_http3_peer_stop_observer_unavailable_fault() {
-                return None;
-            }
-            #[cfg(coverage)]
-            if let Some(fault) = crate::take_http3_peer_stop_observer_outcome_fault() {
-                let outcome = match fault {
-                    crate::Http3PeerStopObserverOutcomeFault::Error => {
-                        Err(quinn::StoppedError::ZeroRttRejected)
-                    }
-                    crate::Http3PeerStopObserverOutcomeFault::LocalRetirement => Ok(None),
-                };
-                let observer: PeerStopped = Box::pin(std::future::ready(outcome));
-                return Some(stops.register_observer(id, observer));
-            }
-            Some(stops.register(id, &send))
-        });
+        let registration = stops
+            .filter(|_| {
+                #[cfg(coverage)]
+                {
+                    !crate::take_http3_peer_stop_observer_unavailable_fault()
+                }
+                #[cfg(not(coverage))]
+                {
+                    true
+                }
+            })
+            .map(|stops| {
+                #[cfg(coverage)]
+                if let Some(fault) = crate::take_http3_peer_stop_observer_outcome_fault() {
+                    let outcome = match fault {
+                        crate::Http3PeerStopObserverOutcomeFault::Error => {
+                            Err(quinn::StoppedError::ZeroRttRejected)
+                        }
+                        crate::Http3PeerStopObserverOutcomeFault::LocalRetirement => Ok(None),
+                    };
+                    let observer: PeerStopped = Box::pin(std::future::ready(outcome));
+                    return stops.register_observer(id, observer);
+                }
+                stops.register(id, &send)
+            });
         Ok(Self {
             send: SendStream {
                 stream: send,
