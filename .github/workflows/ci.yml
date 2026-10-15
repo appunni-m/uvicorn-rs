@@ -47,7 +47,9 @@ jobs:
       - name: Check formatting and lints
         run: |
           cargo fmt --all -- --check
-          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo clippy --workspace --lib --all-features --locked -- -D warnings
+          env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
+            cargo clippy -p uvicorn-rs --all-targets --all-features --locked -- -D warnings
           cargo fmt --manifest-path tools/http3-probe/Cargo.toml --all -- --check
           cargo clippy --manifest-path tools/http3-probe/Cargo.toml --all-targets --all-features --locked -- -D warnings
       - name: Compile feature modes (behavior is checked through live ASGI cases)

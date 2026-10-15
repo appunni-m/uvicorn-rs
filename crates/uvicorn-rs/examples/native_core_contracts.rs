@@ -3964,7 +3964,13 @@ async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()
         if !consumed {
             return Err(io::Error::other("native HTTP/1 upgrade fault was not consumed").into());
         }
-        println!("FAULT_CONSUMED {}", fault_point.unwrap_or("unknown"));
+        let mut output = io::stdout().lock();
+        writeln!(
+            output,
+            "FAULT_CONSUMED {}",
+            fault_point.unwrap_or("unknown")
+        )?;
+        output.flush()?;
     }
     workflow?;
     server_result?;
@@ -4562,7 +4568,13 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
         if !consumed {
             return Err(io::Error::other("native WebSocket fault was not consumed").into());
         }
-        println!("FAULT_CONSUMED {}", fault_point.unwrap_or("unknown"));
+        let mut output = io::stdout().lock();
+        writeln!(
+            output,
+            "FAULT_CONSUMED {}",
+            fault_point.unwrap_or("unknown")
+        )?;
+        output.flush()?;
     }
     let server_result = server_wait.map_err(|_| {
         io::Error::new(
@@ -12871,7 +12883,10 @@ async fn run_isolated_peer_read_adapter_contract_case(case: &Value) -> ProbeResu
     let address = listener.local_addr()?;
     let mut client = timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
     let (accepted, _) = timeout(Duration::from_secs(2), listener.accept()).await??;
-    let (mut peer_io, observer, pump) = uvicorn_rs::coverage_proactive_peer_read(accepted);
+    let adapter = uvicorn_rs::coverage_proactive_peer_read(accepted);
+    let mut peer_io = adapter.io;
+    let observer = adapter.observer;
+    let pump = adapter.pump;
     let pump = pump.ok_or_else(|| {
         io::Error::other("proactive peer-read adapter did not create its reader pump")
     })?;
@@ -14906,7 +14921,7 @@ async fn run_isolated_http3_transport_adapter_edge_case(case: &Value) -> ProbeRe
                     "HTTP/3 transport adapter peer did not connect",
                 )
             })??;
-            let server_connection = tokio::time::timeout(Duration::from_secs(2), accept_task)
+            let _server_connection = tokio::time::timeout(Duration::from_secs(2), accept_task)
                 .await
                 .map_err(|_| {
                     io::Error::new(

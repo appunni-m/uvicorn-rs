@@ -158,21 +158,30 @@ pub async fn coverage_http3_finish_after_reset(
     http3::coverage_finish_after_reset(connection).await
 }
 
+/// Result of installing the proactive peer-read adapter for a coverage
+/// contract. This type is absent from normal builds.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub struct CoveragePeerReadAdapter<I> {
+    /// The peer-observed asynchronous socket I/O.
+    pub io: I,
+    /// Reports whether the peer closed its write half.
+    pub observer: PeerReadHalfClosed,
+    /// Drives observation independently from application reads.
+    pub pump: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
+}
+
 /// Observes a TCP stream with the proactive peer-read adapter for coverage
-/// contracts. This entry point is absent from normal builds.
+/// contracts. This function is absent from normal builds.
 #[cfg(coverage)]
 #[doc(hidden)]
 pub fn coverage_proactive_peer_read(
     stream: tokio::net::TcpStream,
-) -> (
-    impl AsyncRead + AsyncWrite + Unpin + Send,
-    PeerReadHalfClosed,
-    Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
-) {
+) -> CoveragePeerReadAdapter<impl AsyncRead + AsyncWrite + Unpin + Send> {
     let (io, observer, pump, _) =
         peer_read::observe_peer_read(stream, PeerReadHalfCloseMode::Proactive);
     let pump = pump.map(|pump| Box::pin(pump) as Pin<Box<dyn Future<Output = ()> + Send>>);
-    (io, observer, pump)
+    CoveragePeerReadAdapter { io, observer, pump }
 }
 
 /// Arms a coverage-only HTTP/3 peer stream-credit gate.

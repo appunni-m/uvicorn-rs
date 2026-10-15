@@ -101,7 +101,7 @@ pub(crate) async fn coverage_accept_bidi_error(
 pub(crate) async fn coverage_finish_after_reset(
     connection: quinn::Connection,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    use h3::quic::{BidiStream as _, OpenStreams as _, RecvStream as _, SendStream as _};
+    use h3::quic::{BidiStream as _, RecvStream as _, SendStream as _};
 
     let (mut connection, _) = transport::Connection::new(connection);
     let stream = std::future::poll_fn(|context| {
