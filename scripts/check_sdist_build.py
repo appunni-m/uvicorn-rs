@@ -11,7 +11,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tarfile
-import venv
+
+from release_evidence import validate_sdist_source_contents
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sdist", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--consumer-python", type=Path,
+                        help="Python used for the isolated wheel consumer (defaults to the build interpreter)")
     args = parser.parse_args()
     archive_path = args.sdist.resolve()
     output = args.output_dir.resolve()
@@ -47,18 +50,9 @@ def main() -> None:
             raise ValueError(f"source archive lacks required input: {name}")
     archive_files = {path.relative_to(source).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
                      for path in source.rglob("*") if path.is_file()}
-    hashes = {}
-    for packaged in sorted(source.rglob("*")):
-        if not packaged.is_file():
-            continue
-        name = packaged.relative_to(source).as_posix()
-        if name == "PKG-INFO":
-            continue  # Generated distribution metadata is inspected by the package verifier.
-        data = packaged.read_bytes()
-        checkout = ROOT / name
-        if not checkout.is_file() or data != checkout.read_bytes():
-            raise ValueError(f"source archive differs from reviewed checkout: {name}")
-        hashes[name] = hashlib.sha256(data).hexdigest()
+    contents = {path.relative_to(source).as_posix(): path.read_bytes()
+                for path in source.rglob("*") if path.is_file()}
+    hashes = validate_sdist_source_contents(contents, ROOT)
     environment = os.environ.copy()
     for key in list(environment):
         if ("LLVM_COV" in key or key.startswith("UVICORN_RS_COVERAGE_")
@@ -76,7 +70,11 @@ def main() -> None:
     if len(artifacts) != 1:
         raise ValueError("source rebuild did not produce exactly one wheel")
     consumer = output / "consumer-environment"
-    venv.EnvBuilder(with_pip=True).create(consumer)
+    consumer_interpreter = args.consumer_python.resolve() if args.consumer_python else Path(sys.executable)
+    if not consumer_interpreter.is_file() or not os.access(consumer_interpreter, os.X_OK):
+        raise ValueError(f"consumer Python is not an executable file: {consumer_interpreter}")
+    subprocess.run([str(consumer_interpreter), "-m", "venv", str(consumer)],
+                   env=environment, check=True, timeout=120)
     python = consumer / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     subprocess.run([str(python), "-m", "pip", "install", "--no-deps", "--no-index",
                     str(artifacts[0])], env=environment, check=True, timeout=120)

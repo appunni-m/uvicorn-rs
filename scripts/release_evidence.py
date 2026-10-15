@@ -108,6 +108,36 @@ def source_hashes() -> dict[str, str]:
     return {path.relative_to(ROOT).as_posix(): file_sha256(path) for path in sorted(paths)}
 
 
+def validate_sdist_source_contents(contents: dict[str, bytes], root: Path = ROOT) -> dict[str, str]:
+    """Verify archived files and Cargo workspace members against the reviewed checkout."""
+    original_manifest_path = root / "Cargo.toml"
+    original_manifest = tomllib.loads(original_manifest_path.read_text(encoding="utf-8"))
+    try:
+        packaged_manifest = tomllib.loads(contents["Cargo.toml"].decode("utf-8"))
+    except (KeyError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise ValueError("source archive has no valid Cargo.toml") from error
+    if packaged_manifest != original_manifest:
+        raise ValueError("source archive Cargo.toml differs from the reviewed checkout")
+    workspace = packaged_manifest.get("workspace", {})
+    members = workspace.get("members", []) if isinstance(workspace, dict) else []
+    if not isinstance(members, list) or any(not isinstance(member, str) for member in members):
+        raise ValueError("workspace members must be an explicit string list for sdist verification")
+    missing_members = [member for member in members
+                       if (PurePosixPath(member) / "Cargo.toml").as_posix() not in contents]
+    if missing_members:
+        raise ValueError(f"source archive omits Cargo workspace members: {missing_members}")
+
+    hashes = {}
+    for name, data in contents.items():
+        if name == "PKG-INFO":
+            continue
+        source = root / name
+        if not source.is_file() or source.read_bytes() != data:
+            raise ValueError(f"source archive differs from reviewed checkout: {name}")
+        hashes[name] = sha256(data)
+    return dict(sorted(hashes.items()))
+
+
 def license_contract() -> None:
     cargo = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]
     python = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
@@ -307,7 +337,7 @@ def inspect_sdist(path: Path, version: str) -> dict:
     seen = set()
     with tarfile.open(path, "r:gz") as archive:
         for member in archive.getmembers():
-            name = safe_member(member.name)
+            name = safe_member(member.name, allowed_dirs=frozenset({"examples", "tools"}))
             if name in seen or not (member.isfile() or member.isdir()):
                 raise ValueError(f"duplicate or nonregular source archive member: {name}")
             seen.add(name)
@@ -327,11 +357,9 @@ def inspect_sdist(path: Path, version: str) -> dict:
     mandatory = {*REQUIRED, *(f"python/uvicorn_rs/{path.name}" for path in (ROOT / "python/uvicorn_rs").glob("*.py"))}
     if not mandatory <= set(contents):
         raise ValueError(f"source archive missing required inputs: {sorted(mandatory - set(contents))}")
-    for name, data in contents.items():
-        if name != "PKG-INFO" and (name not in inputs or sha256(data) != inputs[name]):
-            raise ValueError(f"source archive differs from reviewed input: {name}")
+    archive_hashes = validate_sdist_source_contents(contents, ROOT)
     return {"filename": path.name, "sha256": file_sha256(path), "size": path.stat().st_size,
-            "members": sorted(contents), "source_hashes": {name: sha256(data) for name, data in sorted(contents.items()) if name != "PKG-INFO"}}
+            "members": sorted(contents), "source_hashes": archive_hashes}
 
 
 def inspect_rust_crate(

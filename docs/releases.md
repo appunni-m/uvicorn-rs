@@ -573,9 +573,15 @@ normal native markers, source inputs and expected platforms. Repository-only
 benchmark archives, test harnesses, coverage profiles, keys and environments
 are excluded from distributions.
 
-Maturin 1.14.1's `sdist` command has no `--locked` option. The subsequent source
-rebuild uses `maturin build --release --locked`, checks input equality before
-and after building, and retains the build log. Version agreement includes
+Maturin 1.14.1's `sdist` command has no `--locked` option. This workspace uses
+`sdist-generator = "git"` so the archive keeps the reviewed root manifest,
+lockfile, and every Cargo workspace member. The Cargo generator removes unused
+workspace members from `Cargo.toml` but leaves `Cargo.lock` unchanged; the
+resulting archive cannot rebuild with `--locked`. Keep workspace members such
+as `tools/http3-probe` in the source archive. The source checker verifies the
+manifest and member inventory, then the rebuild uses
+`maturin build --release --locked`, checks input equality before and after
+building, and retains the build log. Version agreement includes
 `Cargo.toml`, `pyproject.toml`, `Cargo.lock` and `uv.lock`; the workflows do not
 hardcode the install version.
 
