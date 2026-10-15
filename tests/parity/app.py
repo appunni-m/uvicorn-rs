@@ -920,6 +920,7 @@ async def _app_impl(scope, receive, send):
             b"read-once",
             content_type=b"application/octet-stream",
         )
+        _record("http.body-pump.app-response-finished")
         return
 
     if path == "/upload-pump-disconnect":

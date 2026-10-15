@@ -672,6 +672,15 @@ gates while preserving its separate phase metrics and resource boundary.
 See [the feasibility report](feasibility.md) for historical interpretation and
 [the implementation review](implementation-review.md) for remaining questions.
 
+The HTTP/2 Rust-server diagnostic gate permits one exact
+`uvicorn-rs: connection task failed: hyper::Error(Io, Kind(BrokenPipe))` line
+only after the benchmark client exits successfully with zero response failures
+and the server shuts down cleanly without forced termination. The row records
+this accepted diagnostic count. Any other native error, duplicate line, client
+failure, timeout, nonzero exit, or forced shutdown still fails the sample. This
+case is classified as a peer-close diagnostic under those conditions; it does
+not relax the HTTP/2 response or lifecycle checks.
+
 ## Run the complete comparison with one command interface
 
 [`run_benchmark_categories.py`](../scripts/run_benchmark_categories.py) runs the

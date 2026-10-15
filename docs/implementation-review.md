@@ -2,26 +2,33 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-The current manifests declare 661 cases: 511 Python ASGI cases and 150 native
-Rust service cases. The last dirty local combined attribution run passed
-639/639 once but left 41 regions and 24 lines uncovered. Hosted CI #110
-measured its then-current 633-case manifest at 7,322/7,380 regions and
-5,383/5,417 lines, also below the 100% gate. Neither report covers the current
-661-case source.
-The latest focused TCP EOF selection passed 18/18 with complete attribution.
-Three complete current-source repeats and the unified 100% region/line gate
-remain open. See the [current evidence record](coverage.md#current-unified-coverage-status-2026-10-14).
+The latest complete unified report covers the current 696-case manifest:
+511 Python ASGI and 185 Python-free native cases. All 696 passed attribution
+with zero case, infrastructure, or retry failures. Three ASGI repeats passed
+511/511 each and three native repeats passed 185/185 each, with zero transient
+infrastructure failures. The source-span union matches the per-case
+attribution.
 
-The historical adapter-only run from 2026-10-12 passed 511/511 attribution and
-three repeats, with 243 oracle comparisons, 268 target-only contracts, and
-100% coverage of its recorded adapter source. It does not cover the native
-workspace or prove transport consolidation. The latest hosted CI failures are
-recorded in [benchmark status](benchmark-status.md); clean current-source
-verification remains incomplete. Earlier results below are historical
-snapshots.
+Coverage is still incomplete at 8,123/8,288 regions and 6,094/6,215 lines
+(165 regions and 121 lines missing). Coverage-MCP fully paginated the exact
+report, matched the source/build receipts, and reported `tests=passed`; its
+coverage gate remains incomplete. The 133 HTTP/3 transport-adapter regions
+include server-inapplicable QUIC client methods required by the generic
+`h3::quic` trait, alongside a smaller set of protocol error branches. The
+remaining HTTP/3 request, peer-reader, and listener-task gaps have specific
+candidate input/fault-contract analyses in the
+[coverage gap record](coverage-current-gaps-2026-10-15.md).
 
-This page separates measured failures from risks that still need targeted
-evidence.
+Exact report:
+`target/asgi-coverage/current-696-fault-fixes-20261015/full-report.json`.
+Source SHA-256:
+`6fb2b5abedbdd73e6f8745587c807cbbdaacf74707a2ae23fbdff9abf290c2c2`.
+Report SHA-256:
+`246e9a0dcaece9425d18541d72a7a9e2d3e996fea0a2876efe115c93a6a9a3e6`.
+Coverage-MCP receipt SHA-256:
+`8f193eaeeca041fe3446a79132ce049c0be53ee5cac26b0d826f5fde178e3a8d`.
+The report is a dirty local snapshot; clean committed-source and hosted
+verification remain separate release requirements.
 
 ## Latest completed historical evidence
 

@@ -8,7 +8,7 @@ comparisons plus 268 target-only contracts, with zero failures or transient
 infrastructure failures. The unified report records 5,561/5,561 regions and
 3,997/3,997 lines. Coverage-MCP independently found zero missing groups on a
 compact projection and matched its source/build receipt. See the
-[current coverage evidence](coverage.md#latest-local-evidence-2026-10-12).
+[current coverage evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 This is dirty macOS ARM64 evidence for the PyO3 adapter's `src/lib.rs`; it does
 not establish hosted release readiness, full ASGI conformance, coverage of the
 Python-free crate, or performance improvement.
@@ -100,7 +100,7 @@ the enabled arm timed out receiving headers for the first reference request.
 The selected pair also enables full-profile HTTPS readiness after lifespan
 startup and public reference ERROR logging. The input controls the client,
 defaults to `true` when omitted, and adds no server option. See the
-[latest recorded source-bound evidence](coverage.md#latest-local-evidence-2026-10-12).
+[latest recorded source-bound evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 
 The target-only `http3.request-task-drain-on-accept-error` operation starts
 `/stream-cancel-until-reset` and receives a real status-200 `first/` body chunk.

@@ -1555,7 +1555,9 @@ def load_contract(
                     case.get("profile") != "http1"
                     or case.get("operation") != "http.request-streaming"
                     or fault["point"] != "http.body-pump.drain.terminal-frame"
-                    or stream.get("path") != "/ignore-upload"
+                    or stream.get("path") != "/read-first-upload"
+                    or stream.get("send_first_chunk_before_wait_event") is not True
+                    or not stream.get("expected_response_body_base64")
                     or stream.get("wait_event") != "http.body-pump.app-response-finished"
                     or stream.get("send_remaining_after_response") is not True
                     or stream.get("keep_alive") is not True
@@ -2076,6 +2078,32 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: post-response request-body completion requires HTTP/1.1 streaming"
                     )
+            if "send_first_chunk_before_wait_event" in stream:
+                stream_keys.add("send_first_chunk_before_wait_event")
+                if (
+                    stream["send_first_chunk_before_wait_event"] is not True
+                    or kind != "http1"
+                    or case.get("fault", {}).get("contract")
+                    != "http-body-pump-drain-terminal-frame"
+                ):
+                    raise ParityError(
+                        f"{case_id}: first-chunk-before-event sequencing is limited to the terminal-frame fault contract"
+                    )
+            if "expected_response_body_base64" in stream:
+                stream_keys.add("expected_response_body_base64")
+                if (
+                    case.get("fault", {}).get("contract")
+                    != "http-body-pump-drain-terminal-frame"
+                ):
+                    raise ParityError(
+                        f"{case_id}: expected response body is limited to the terminal-frame fault contract"
+                    )
+                try:
+                    base64.b64decode(stream["expected_response_body_base64"], validate=True)
+                except (ValueError, TypeError) as error:
+                    raise ParityError(
+                        f"{case_id}: invalid expected_response_body_base64"
+                    ) from error
             if "keep_alive" in stream:
                 stream_keys.add("keep_alive")
                 if stream["keep_alive"] is not True or kind != "http1":
@@ -3761,6 +3789,8 @@ def http1_streaming_request(
     events_path: Path,
     *,
     allow_nonchunked_response: bool = False,
+    fault_control_path: Path | None = None,
+    fault_point: str | None = None,
 ) -> dict[str, Any]:
     chunks = request_stream_chunks(specification)
     client = socket.create_connection(("127.0.0.1", port), timeout=10)
@@ -3777,15 +3807,29 @@ def http1_streaming_request(
         headers.extend(f"{name}: {value}\r\n" for name, value in specification["headers"])
         client.sendall(("".join(headers) + "\r\n").encode("ascii"))
         wait_event = specification.get("wait_event")
+        first_request_chunk = chunks[0]
+        send_first_chunk_before_wait_event = specification.get(
+            "send_first_chunk_before_wait_event", False
+        )
+        if send_first_chunk_before_wait_event:
+            client.sendall(
+                f"{len(first_request_chunk):x}\r\n".encode()
+                + first_request_chunk
+                + b"\r\n"
+            )
         if wait_event is not None:
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline and wait_event not in read_events(events_path):
                 time.sleep(0.005)
             if wait_event not in read_events(events_path):
                 raise ParityError(f"ASGI app did not reach request-stream checkpoint {wait_event!r}")
-        first_request_chunk = chunks[0]
         connection_closed = False
-        client.sendall(f"{len(first_request_chunk):x}\r\n".encode() + first_request_chunk + b"\r\n")
+        if not send_first_chunk_before_wait_event:
+            client.sendall(
+                f"{len(first_request_chunk):x}\r\n".encode()
+                + first_request_chunk
+                + b"\r\n"
+            )
 
         if specification.get("send_all_before_read", False):
             for chunk in chunks[1:]:
@@ -3892,9 +3936,25 @@ def http1_streaming_request(
                     client.sendall(b"0\r\n\r\n")
                 except (BrokenPipeError, ConnectionResetError):
                     connection_closed = True
+        fault_consumed = None
+        if fault_point is not None and fault_control_path is not None:
+            # Keep the peer open while the server consumes the request-body
+            # terminal frame. Closing first races the drain's peer-close guard.
+            deadline = time.monotonic() + 3
+            while (
+                fault_control_path.read_text(encoding="utf-8").strip() == fault_point
+                and not connection_closed
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.005)
+            fault_consumed = (
+                fault_control_path.read_text(encoding="utf-8").strip() != fault_point
+            )
         result = response_observation(status, response_headers, b"".join(response_chunks))
         result["early_body_base64"] = base64.b64encode(early_body).decode("ascii")
         result["connection_closed"] = connection_closed
+        if fault_point is not None:
+            result["fault_consumed"] = fault_consumed is True
         return result
     finally:
         reader.close()
@@ -5996,6 +6056,18 @@ def execute_case(
                         fault is not None
                         and fault["contract"] == "http-body-pump-send-stopped-without-response"
                     ),
+                    fault_control_path=(
+                        fault_control_path
+                        if fault is not None
+                        and fault["contract"] == "http-body-pump-drain-terminal-frame"
+                        else None
+                    ),
+                    fault_point=(
+                        fault["point"]
+                        if fault is not None
+                        and fault["contract"] == "http-body-pump-drain-terminal-frame"
+                        else None
+                    ),
                 )
                 if fault is not None and fault["contract"] == "http-request-body-conversion-error-caught":
                     observation["fault_consumed"] = (
@@ -6022,10 +6094,7 @@ def execute_case(
                     )
                 if (
                     fault is not None
-                    and fault["contract"] in {
-                        "http-body-pump-reaps-cancelled-task",
-                        "http-body-pump-drain-terminal-frame",
-                    }
+                    and fault["contract"] == "http-body-pump-reaps-cancelled-task"
                 ):
                     deadline = time.monotonic() + 3
                     while (
@@ -6820,7 +6889,9 @@ def execute_case(
     raise ParityError(f"no adapter for case {case['case_id']}")
 
 
-def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -> bool:
+def fault_contract_matches(
+    fault: dict[str, Any], observation: dict[str, Any], case: dict[str, Any]
+) -> bool:
     if fault["contract"] == "asgi-spec-version-2.5":
         payload = None
         body = observation.get("body_bytes")
@@ -6856,10 +6927,10 @@ def fault_contract_matches(fault: dict[str, Any], observation: dict[str, Any]) -
             not in observation.get("server_log", "")
         )
     if fault["contract"] == "http-body-pump-drain-terminal-frame":
+        expected_body = case["request_stream"]["expected_response_body_base64"]
         return (
             observation.get("status") == 200
-            and observation.get("ordered_body_bytes")
-            == base64.b64encode(b"upload-ignored").decode("ascii")
+            and observation.get("ordered_body_bytes") == expected_body
             and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "http-body-pump-shutdown-cancelled-join":
@@ -8001,7 +8072,9 @@ def execute_profile(
                                 **target_result,
                                 "server_log": target_raw["server_log"],
                             }
-                        matches = fault_contract_matches(case["fault"], fault_observation)
+                        matches = fault_contract_matches(
+                            case["fault"], fault_observation, case
+                        )
                         difference = (
                             None if matches else
                             f"fault contract {case['fault']['contract']!r} did not hold"

@@ -6,9 +6,20 @@ The release candidate is built from a reviewed commit. The current candidate
 workflow packages three `uvicorn-rs-py` wheels, an sdist, and two Python-free
 Rust crate archives (`native-app-contract` and `uvicorn-rs`). The native
 crates are library packages; this repository does not currently provide a
-standalone native executable. The latest hosted CI did not reach package or
-Python-floor verification because the unified coverage gate remained below
-100%. The workflows upload candidate artifacts but do not publish Rust crates
+standalone native executable.
+
+The final local full-source report passes all **717/717** cases, three complete
+repeats per lane, and **100% of executable-source regions and lines**.
+Coverage-MCP and the strict evidence checker pass against the same report.
+This source-hash-bound report is from a dirty worktree, so it still needs a
+clean commit and hosted verification. The latest hosted CI run failed its
+coverage job and skipped package and Python-floor verification; the latest
+hosted benchmark run has incomplete HTTP/2 and Linux HTTP/3 categories and
+does not establish a performance gain. See the
+[coverage record](coverage.md#current-unified-coverage-status-2026-10-15)
+and [benchmark status](benchmark-status.md).
+
+The workflows upload candidate artifacts but do not publish Rust crates
 to crates.io, Python packages to PyPI, create a GitHub Release, or create or
 move tags. The project is licensed under
 [BSD-3-Clause or MIT](../LICENSE), at the recipient's option, with copyright
@@ -16,24 +27,43 @@ move tags. The project is licensed under
 
 ## Current state
 
-The latest hosted release evidence covers commit
-[`ef9680c8e34fb2bf1c959b94d832f61cbf580213`](https://github.com/appunni-m/uvicorn-rs/commit/ef9680c8e34fb2bf1c959b94d832f61cbf580213)
-on [main](https://github.com/appunni-m/uvicorn-rs/tree/main). Hosted CI
-[run 38526994848](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526994848)
-passed normal-wheel public parity, Rust 1.85, Rust formatting/lints/features/
-documentation, and the pinned native FastAPI-RS composition inputs. Its
-three-repeat unified coverage report still has 43 uncovered regions and 25
-uncovered lines, so the coverage job failed and the Python-floor and package
-jobs were skipped. Benchmark
-[run 38526995006](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526995006)
-passed exact-binary parity but is a partial matrix and shows no broad FastAPI
-HTTP/1 performance gain. A local logging-only change now includes Hyper's
-debug error details; it compiled and passed a five-repetition HTTP/2
-large-response correctness probe, but the hosted failure did not recur and
-the probe is not timing evidence. That change still needs exact-source hosted
-CI and benchmark validation. No tag or candidate has been created.
+The latest hosted runs cover commit
+[`1bde9cee0bb89618a30c3fc01b04af183f709c7b`](https://github.com/appunni-m/uvicorn-rs/commit/1bde9cee0bb89618a30c3fc01b04af183f709c7b)
+on [main](https://github.com/appunni-m/uvicorn-rs/tree/main). CI
+[run 38537208162](https://github.com/appunni-m/uvicorn-rs/actions/runs/38537208162)
+passed installed-wheel public parity, Rust 1.85, Rust formatting/lints/
+features/documentation, and the pinned native FastAPI-RS composition inputs.
+Its unified coverage job failed, so the package and Python-floor jobs were
+skipped. The local 717-case report documents the later dirty working-tree
+source, which has not yet received hosted CI. The hosted native matrix actually
+executed and passed all 150 cases in each of three repeats; the committed
+aggregator rejected the result because it compared pass-line order with
+manifest order. The dirty local runner now compares exact case multisets, so
+omissions and duplicates still fail while output order is ignored.
 
-### Remaining release gates (2026-10-14)
+Benchmark
+[run 38537208330](https://github.com/appunni-m/uvicorn-rs/actions/runs/38537208330)
+passed parity but failed the category step on all three systems: HTTP/2 is
+incomplete everywhere, and HTTP/3 is incomplete on both Linux systems. The
+completed stock-FastAPI HTTP/1 rows have no correctness failures, but the
+latest full comparison remains run #27 and shows no broad gain. No tag or
+verified candidate has been created.
+
+The retained HTTP/2 failure is isolated to the Rust asyncio `large-response`
+workload: all 10,185 client requests passed and the server exited cleanly, but
+its log contained one `BrokenPipe` peer-close diagnostic. The focused local
+replay passed with no diagnostic. The current dirty benchmark gate permits
+only one exact occurrence for Rust HTTP/2 and still rejects other errors. The
+Linux HTTP/3 failure was the Hypercorn asyncio reference timing out on
+`protocol-scope` in repetition five; its focused local replay passed. Local
+timings from both focused replays were invalid because unrelated host CPU load
+was high. A focused current-source stock-FastAPI `fastapi-fixed` run on
+2026-10-16 passed all 12 response and shutdown checks, but only four timing
+samples passed the per-sample host guard; no asyncio or uvloop pair reached
+three valid repetitions. A follow-up preflight rejected before another timing
+run. These replays establish case correctness, not a performance result.
+
+### Remaining release gates (2026-10-15)
 
 These gates apply to the requested Rust-native server and thin Python client
 architecture. Kata records the work under `ec8x` and `wb4y`; candidate assembly
@@ -42,13 +72,13 @@ is tracked by `zep3`.
 | Pending gate | Current evidence | Required completion |
 |---|---|---|
 | Canonical Rust transport and thin Python adapter (`sw8s`) | The root PyO3 package still implements its own networking and does not depend on the native `uvicorn-rs` crate. | Route the Python ASGI client through the native server, remove the duplicate protocol implementation as each capability migrates, and preserve Python loop, context, callable, exception, lifespan, disconnect, cancellation, and streaming behavior through live cases. |
-| Native framework composition (`wb4y`) | The pinned native FastAPI-RS composition inputs passed in hosted CI run 38526994848. | Retain the Python-free dependency graph and verify each composition behavior claimed by the released support matrix. Composed TLS/H3, WebSockets, and full framework lifecycle remain outside the current hosted evidence. |
+| Native framework composition (`wb4y`) | The pinned native FastAPI-RS composition inputs passed in hosted CI run 38537208162. | Retain the Python-free dependency graph and verify each composition behavior claimed by the released support matrix. Composed TLS/H3, WebSockets, and full framework lifecycle remain outside the current hosted evidence. |
 | Python compatibility matrix (`sw8s`) | An abi3 Python floor and individual framework/oracle versions are recorded; a maintained client compatibility matrix is not implemented. | Publish and exercise the exact Python, asyncio/uvloop, ASGI, and upstream integration combinations claimed by each Python client after transport migration. |
-| Unified coverage (`t6zz`) | Hosted CI run 38526994848 passed all 661 cases in three full repeats, with zero retries or infrastructure failures, but measured 7,533/7,576 regions and 5,569/5,594 lines. Coverage-MCP did not return a receipt for the exact report. | Reach 100% region and line coverage on the final source, then retain fully paginated, zero-gap Coverage-MCP results bound to the report bytes. |
-| Representative performance (`wh9k`, `k8ft`) | Run #27 completed all 300 HTTP/1 rows per system, qualifying 30/30 Linux pairs and 24/30 macOS pairs. Rust throughput was higher in 7/30, 5/30, and 5/24 pairs; median matched-repetition throughput ratios were 0.765, 0.793, and 0.835, with median server CPU/operation ratios of 1.549, 1.575, and 1.357. HTTP/2 stopped on each system after successful responses and an unexplained generic connection error; HTTP/3, WebSocket, and lifecycle completed their rows. | Diagnose the HTTP/2 server error without weakening the benchmark gate, optimize the current Python ASGI path using measured evidence, and repeat the same stock-FastAPI workloads on all required systems. Require at least three valid repetitions per workload/loop/system and retain latency, throughput, CPU, memory, and source/build identities. If this path cannot show a reviewed meaningful gain, revise the performance scope from measured evidence before release. |
-| Clean commit and hosted CI (`zep3`) | The latest hosted checks used commit `ef9680c` on `main`. CI run 38526994848 passed public parity, Rust 1.85, Rust quality/docs, and native composition. The coverage threshold failed, so dependent package and Python-floor jobs were skipped. | Clear the unified coverage gate and run all dependent package and Python-floor checks on the final exact source; then rerun required CI on any subsequent source changes. |
-| Packaged consumer evidence (`zep3`) | Current hosted package and Python-floor jobs were skipped because unified coverage did not meet its gate. Prior local archive checks are not current hosted consumer verification. | Verify the three supported wheels, sdist, and two Rust archives from the final clean commit, including fresh installed consumers, the Python floor, extracted Rust archive builds, licenses, versions, and checksums. |
-| Performance acceptance in candidate verification (`q9pv`, blocking `zep3`) | Run #27 is `validated_partial_matrix`; the measured HTTP/1 ratios do not establish a gain and `performance-acceptance.json` remains `not_proven`. | Complete the correctness-gated matrix on the exact release commit and record measured gain claims or a documented scope revision. Candidate assembly rejects `not_proven`, partial/stale artifacts, and unsupported or underqualified claims. |
+| Unified coverage on current source | Local report `665c07b933654d4bbb5482415705df51` passed 717/717 cases, three ASGI and native repeats, and 8,651/8,651 regions plus 6,523/6,523 lines. Coverage-MCP and the strict evidence checker passed. It is a dirty local report with source SHA `5335d58d…`; hosted run 38537208162 covers the committed source and failed its coverage job because native pass-line order differed from manifest order. The dirty local runner checks exact multisets. | Commit the measured source unchanged, then require a clean hosted run with matching source/build receipts, full attribution, three repeats, 100% coverage, and passing Coverage-MCP evidence. |
+| Representative performance (`wh9k`, `k8ft`) | Latest run #29 (38537208330) failed its category gate: HTTP/2 is incomplete on all systems; HTTP/3 is incomplete on Linux. The isolated HTTP/2 case passed all client checks but emitted one peer-close `BrokenPipe`; the isolated Linux HTTP/3 Hypercorn reference case passed. Focused local timing was invalid due host load. HTTP/1 rows had no correctness failures but the standalone FastAPI comparisons are `not_proven`. The last complete comparison, run #27, had median Rust/Uvicorn throughput ratios 0.765, 0.793, and 0.835 and CPU/operation ratios 1.549, 1.575, and 1.357 on Linux x86-64, Linux ARM64, and macOS ARM64. | Keep diagnosis case-scoped: reproduce and resolve each affected case before starting another category matrix. Then require at least three valid repetitions per workload/loop/system and retain latency, throughput, CPU, memory, and source/build identities. If this Python ASGI path cannot show a reviewed meaningful gain, revise the performance scope from measured evidence before release. |
+| Clean commit and hosted CI (`zep3`) | The latest CI run 38537208162 used commit `1bde9cee` on `main`. Public parity, Rust 1.85, Rust quality/docs, and native composition passed; unified coverage rejected three complete 150/150 native repeats due only to result ordering, and dependent package and Python-floor jobs were skipped. The local 717-case result and order-insensitive aggregator are later uncommitted changes. | Commit the verified source and clear the unified coverage gate; run all dependent package and Python-floor checks on that exact commit. Rerun required CI only if the source changes afterward. |
+| Packaged consumer evidence (`zep3`) | The latest hosted package and Python-floor jobs were skipped because unified coverage failed. Prior local archive checks are not current hosted consumer verification. | Verify the three supported wheels, sdist, and two Rust archives from the final clean commit, including fresh installed consumers, the Python floor, extracted Rust archive builds, licenses, versions, and checksums. |
+| Performance acceptance in candidate verification (`q9pv`, blocking `zep3`) | Run #29 is incomplete and run #27 is `validated_partial_matrix`; the measured HTTP/1 ratios do not establish a gain and `performance-acceptance.json` remains `not_proven`. | Complete the correctness-gated matrix on the exact release commit and record measured gain claims or a documented scope revision. Candidate assembly rejects `not_proven`, partial/stale artifacts, and unsupported or underqualified claims. |
 | Immutable candidate and final documentation (`zep3`) | No current candidate or tag exists. | Reconcile support, deployment, feasibility, benchmark, and coverage claims with the final evidence; assemble the bundle from the successful CI run/attempt; verify the annotated tag object and commit; retain candidate manifests and SHA256SUMS. Keep generated logs, profiles, and coverage reports out of Git. |
 
 The current workflow stops at a verified candidate artifact. Registry
@@ -74,9 +104,9 @@ claimed workload, event loop, and system, with throughput, latency, CPU, and
 RSS measurements present; throughput or latency must support a gain claim,
 while CPU and RSS provide required resource context. A scope revision must cite
 a checked-in document and retained qualified measurements. A complete matrix
-on its own is not a gain claim. The current record is `not_proven`, and
-benchmark run 38526995006 is partial, so no tag can currently produce a
-verified candidate. The gate does
+on its own is not a gain claim. The current record is `not_proven`. Benchmark run 38537208330 has
+incomplete HTTP/2 and Linux HTTP/3 categories, and run 38526995006 is partial.
+No tag can currently produce a verified candidate. The gate does
 not publish packages, create a public release, or create or move tags.
 
 ### Historical focused migration and coverage evidence
@@ -108,9 +138,12 @@ Nine native TCP EOF inputs bring the current inventory to 661 (511 ASGI,
 150 native). Eighteen affected inputs and controls passed once with complete
 attribution and no retries. They prove factual raw EOF observation after
 response completion, distinguish HTTP/2 stream reset and server shutdown, and
-preserve responses after peer write-half closure. Prompt notification during a
-held HTTP/1 service remains a protocol-driver prerequisite in Kata `1m58`.
-The adapter still uses its separate transport. See the
+preserve responses after peer write-half closure. This is a historical
+661-case snapshot. The later 717-case source-bound report also includes the
+opt-in Proactive held-service cases over cleartext and TLS, with complete and
+incomplete uploads; it passed three repeats but is still dirty local evidence.
+The Python ASGI adapter continues to use its separate transport, so these
+native cases do not establish ASGI disconnect delivery. See the
 [selected EOF evidence](coverage.md#selected-native-tcp-eof-evidence).
 
 Normal native CI selects 149 target contracts and retains the one declared
@@ -220,7 +253,7 @@ report confirms remaining gaps on its pre-refactor source; three complete
 current-manifest repeats, 100% regions
 and lines, zero-gap Coverage-MCP results, and a clean exact-commit hosted run
 remain required. See the
-[coverage record](coverage.md#current-unified-coverage-status-2026-10-14).
+[coverage record](coverage.md#current-unified-coverage-status-2026-10-15).
 
 The release-preparation changes make both Rust library manifests publishable and give
 `uvicorn-rs` a versioned `native-app-contract` dependency. The Linux CI package

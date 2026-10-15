@@ -3591,7 +3591,9 @@ async fn drain_http_request_body(
             frame = body.frame() => frame,
         };
         #[cfg(coverage)]
-        let frame = if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpDrainTerminalFrame) {
+        let frame = if frame.is_none()
+            && coverage_fault_take(CoverageFaultPoint::HttpBodyPumpDrainTerminalFrame)
+        {
             None
         } else {
             frame

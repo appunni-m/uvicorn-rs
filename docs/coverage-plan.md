@@ -1,55 +1,88 @@
 # Plan: unified black-box coverage for the ASGI adapter and Python-free Rust runtime
 
-## Current acceptance status (2026-10-13)
+## Current acceptance status (2026-10-15)
 
-The unified v4 acceptance remains open. The current manifests define 511 ASGI
-parity/fault-contract cases and 122 Python-free native cases (633 total).
-Acceptance requires three complete repeats of both matrices, 100% region and
-line coverage, and zero-gap results from fully paginated Coverage-MCP queries
-bound to the exact report bytes.
+The latest complete exact-source report is
+`target/asgi-coverage/current-696-fault-fixes-20261015/full-report.json`.
+It ran the current 696-case manifest: 511 Python ASGI and 185 Python-free
+native cases. Attribution passed 696/696 with zero failures, infrastructure
+failures, retries, or unrun cases. Three full ASGI repeats passed 511/511
+each and three native repeats passed 185/185 each; all repeats had zero
+transient infrastructure failures, and attribution matches the aggregate.
 
-The last full-manifest diagnostic ran all 633 cases once. Its Git-ignored
-report is
-`build/asgi-coverage/2026-10-13-current-633-diagnostic-retry/coverage-report.json`,
-and records SHA-256
-`68d20ea68f17f9fcbe48b05cb570c6fbf79772c5a5dec62d76ff4445918e8da1` at
-`b5719e8` with a dirty working tree. A later source-hash audit found that
-`crates/uvicorn-rs/examples/native_core_contracts.rs` and
-`crates/uvicorn-rs/src/websocket.rs` no longer match this report; Coverage-MCP
-now identifies its source as changed. Treat this report as a historical
-diagnostic, not evidence for the current checkout. On that earlier snapshot,
-all 633 cases passed with complete attribution and zero case or infrastructure
-failures: 243/243 oracle parity, 268/268 fault-contract, and 122/122 native.
-It measured 7,324/7,382 regions and 5,383/5,417 lines (58 regions and 34 lines
-missing). The original Coverage-MCP query paginated 173 region groups and 29
-line groups and matched the report at the time. A fresh single-pass report
-bound to current source, plus a matching Coverage-MCP receipt, is required
-before interpreting current gaps. Three complete repeats and 100% region and
-line coverage remain formal gates. An initial attempt stopped during
-attribution when the native LLVM runner disappeared; a runner snapshot let the
-retry finish attribution.
+The report measures 8,123/8,288 LLVM regions and 6,094/6,215 lines. Coverage
+therefore remains below the 100% gate by 165 regions and 121 lines. Coverage-MCP
+fully paginated 210 region groups and 89 line groups, with matching source/build
+identity and `tests=passed`; its aggregate gate remains incomplete. The exact
+source/report hashes and per-file totals are in the
+[unified coverage record](coverage.md#current-unified-coverage-status-2026-10-15).
 
-### Audit of the current gaps
+The current gap inventory now uses this full run rather than the earlier
+689-case baseline. It identifies server-inapplicable `h3::quic` client
+adapter methods separately from real request, peer-stop, response-write, and
+peer-reader failure paths, and specifies the public assertions or deterministic
+fault contracts required to exercise each candidate. Do not add duplicate
+inputs when the existing HTTP/3 cancellation and lifecycle cases already
+prove the same outcome. Keep generated reports, profiles, logs, and MCP
+receipts under ignored `target/`.
 
-The following gap audit is historical and applies only to the report snapshot
-above; it is not validated for the current source because two recorded source
-hashes changed. It inspected 58 missing regions (34 source lines) and found no
-additional deterministic public-input case for that snapshot. The 21 `lib.rs` regions include internal channel and
-semaphore invariants, OS-dependent accept failure, late clock-boundary
-handling, uninhabited `Infallible` paths, and task-join reporting that requires
-a panic. The 31 HTTP/3 regions include closed-admission or impossible join
-states, late shutdown/clock paths, uninhabited service errors, panic-only task
-joins, and internal error formatting. The 6 WebSocket regions include
-`HeaderValue` conversions for a Base64-generated accept key and a selected
-subprotocol that has passed token validation, plus close-reply flush failure
-that depends on peer failure and timing. The current `http_body::Frame` API only constructs DATA and trailer
-frames, so the unsupported-frame branch has no public stimulus.
+### Earlier full-coverage snapshot: t6zz v6
 
-Do not add a case whose only purpose is to execute a private region. A named
-fault contract is justified only when it verifies an externally observable
-error or cleanup guarantee. The strict 100% region/line requirement remains in
-force; the historical audit neither reduces the denominator nor waives the
-gate.
+Unified schema v7 declares 511 Python ASGI cases and 164 Python-free native
+cases (675 total). The t6zz v6 exact-source report is
+`target/asgi-coverage/t6zz-final-acceptance-20261015-v6/full-report.json`.
+It records run ID `53b90df8098b43c0ab702742581d37ad`, source SHA-256
+`edf9189996750cb42c7cbabbe7d3238556f24a40ae84fc0fad6f740f2cd8c368`, and
+report SHA-256
+`87949c1c2582ec68dbf15cbec6e1d5f23cb47e1981226094741b1775d2f112db`, at
+revision `1bde9cee0bb89618a30c3fc01b04af183f709c7b` with a dirty worktree.
+
+All 675/675 attribution cases passed with zero failures or retries: 243
+oracle-parity, 268 ASGI fault-contract, 156 native target-contract, and 8
+native fault-contract cases. Three ASGI repeats passed 511/511 each, and three
+native repeats passed 164/164 each; every repeat had zero transient
+infrastructure failures. Per-case attribution matches the aggregate. Normalized
+LLVM source-span coverage is 7,655/7,655 regions and 5,706/5,706 lines. The source-bound
+Coverage-MCP receipt reports `source=matches_receipt`, `tests=passed`, matching
+build identity, and zero missing aggregate regions or lines. It contains 9
+region pages, 1 line page, 163 per-function-instantiation diagnostic groups,
+and zero line groups. The source-span totals are the gate; grouped rows retain
+monomorphization detail.
+
+Astra review's native execution-order mismatch and HTTP/3 delivery-barrier
+findings are resolved. Strict validation passed on this fresh v6 report,
+independently replaying the aggregate and all 675 isolated case profiles.
+Kata `t6zz` is locally complete. This is a dirty source snapshot; a clean
+committed-source run and hosted CI remain release validation.
+
+### Implementation results
+
+R2 and R3 were resolved with `watch::Receiver::wait_for`, removing manual
+channel-closed fallback loops. R4 is exercised by
+`http1.shutdown-timeout-drains-completed-connection-and-aborts-held-sibling`.
+R5 moves HTTP/3 request cancellation to the connection supervisor, which aborts
+and drains sibling request tasks after QUIC connection closure.
+
+The final two error paths use narrowly scoped fault contracts with observable
+recovery assertions. `fault.http1.upgrade-receiver-closed-keeps-service-healthy`
+closes the upgrade receiver while the service is polling it, then verifies a
+healthy follow-up request. `fault.http1.native-websocket-derived-accept-key-header-value-error-recovers`
+forces the fallible derived accept-key header conversion to fail, verifies the
+handshake is rejected, and checks a later request. These are coverage-build
+fault contracts, not oracle parity inputs. No panic, unsafe code, or source
+exclusion was added.
+
+The HTTP/3 peer-stop shutdown case
+`http3.peer-stops-critical-control-stream-then-shutdown` observes STOP_SENDING
+transmission, then requires a later ACK batch with no bytes in flight and no
+intervening packet loss or congestion. Its client-only observer delegates to
+Quinn's default Cubic controller, and a client keepalive ensures another ACK
+batch can arrive. Twenty normal-build repetitions passed, followed by the
+instrumented attribution case and all three native matrix repetitions.
+
+Keep generated reports, profiles, logs, and MCP receipts under ignored
+`target/`; do not commit them. The report and detailed gap-to-case attribution
+are summarized in [current unified coverage status](coverage.md#current-unified-coverage-status-2026-10-15).
 
 The manifest includes
 `native.lifecycle-http3-startup-error-prevents-serving`: an input-driven H3
@@ -82,13 +115,13 @@ connection close. They passed 4/4 in one selected unified run at
 the selected result has 673/7,072 regions, 550/5,177 lines, and complete case
 attribution. Its source SHA-256 is
 `2c3558737f2f4643c4848b3c0d0438a1f245dcf1b4d2835b65b0282cfbaf0a3f`. The exact
-report's uncovered-region list has no `ConnectionUpgrade` function symbols,
-while a matching-source Coverage-MCP query returns five groups for that API;
-resolve this discrepancy before claiming zero gaps. These selected reports
-predate the current 633-case report above, which still has 58 region and 34
-line gaps.
-Three repeats, 100% regions and lines, and final zero-gap Coverage-MCP results
-remain open.
+report's uncovered-region list had no `ConnectionUpgrade` function symbols,
+while a matching-source Coverage-MCP query returned five groups for that API.
+Those groups describe function instantiations rather than the union of source
+spans. Schema v7 makes the distinction explicit and independently reconstructs
+the aggregate and per-case source-span hit sets from retained profiles. These
+selected reports are historical; current totals and repeat results appear at
+the top of this page.
 
 The HTTP/3 request-body source was then measured with the selected case
 `http3.empty-request-body-is-consumed-through-eof` in
@@ -104,8 +137,8 @@ input separately verifies the public request-body EOF and size-hint behavior.
 The existing `http3.empty-data-frame-does-not-end-request-body` case also
 passed 1/1 after the edit, preserving the empty-DATA-then-later-DATA behavior.
 The historical 629-case matrix ran once with one infrastructure failure and
-59 region / 34 line gaps. It predates the current 633-case report above. Three
-complete repeats and zero-gap acceptance remain outstanding.
+59 region / 34 line gaps. It predates the historical 633-case report above.
+That snapshot did not establish three complete repeats or zero-gap acceptance.
 
 The initial four native HTTP/1.1 WebSocket inputs passed in a selected unified
 run at `target/asgi-coverage/2026-10-13-native-websocket-h1-final/coverage-report.json`.
@@ -170,9 +203,9 @@ released and joined. Coverage-MCP reports `source: matches_receipt` and
 at the endpoint-idle shutdown path. This selected case does not establish the
 full matrix or aggregate coverage.
 Do not add cases for uninstantiated generic placeholders or private
-implementation lines. The current-manifest matrix has passed once, but three
-repeats, 100% regions and lines, and fully paginated zero-gap Coverage-MCP
-results remain outstanding. Schema v4 retains function-instantiation-aware region IDs,
+implementation lines. At that stage the matrix had passed once, but three
+repeats, 100% regions and lines, and fully paginated Coverage-MCP acceptance
+were outstanding. Schema v4 retained function-instantiation-aware region IDs,
 indexed `hit_by` attribution, per-profile hashes, independent LLVM replay,
 exact artifact checks, and fully paginated MCP row identity. Python line and
 branch coverage remain outside the Rust denominator.
@@ -200,11 +233,11 @@ The case reaches the response-send path through both `ContractApp` and
 It does not identify `finish().await` or its result, so this is indirect
 evidence for the finish path.
 
-## Goal and decision
+## Original goal and case-model decision
 
-Raise measured Rust source coverage to 100% for the audited production Rust source while retaining the existing manifest-backed, live parity matrix and its input-only protocol cases. Keep one test runner, one case/result format, and one authoritative coverage report. Add one standardized case family: **fault-injection workflows**.
+The goal is 100% measured Rust source coverage for the audited production source while retaining the manifest-backed live parity matrix. The case-model decision permits declared fault-contract workflows alongside oracle-backed inputs in the same runner and report. The request to implement `t6zz` superseded the earlier documentation-only investigation. Two explicit coverage-build fault contracts now exercise the defensive receiver-closure and derived-header conversion errors, with public recovery assertions. Their ownership and input-invariant proofs remain in Kata `pmnm` and `z2gq`; no natural wire input is claimed for those paths. See [current acceptance status](#current-acceptance-status-2026-10-15).
 
-Ordinary cases continue to compare live wire behavior against the pinned Uvicorn or Hypercorn oracle. A Rust-only injected failure has no equivalent stimulus in those servers, so it must be labeled and evaluated as a fault-contract case, never reported as Uvicorn parity. Both modes feed the same source/build coverage union and case-to-region attribution report. Verification mode remains visible as case metadata; it does not split the coverage denominator or create a second coverage ledger. Only the behavioral parity pass rate is scoped to oracle-backed cases.
+Ordinary cases compare live wire behavior against the pinned Uvicorn or Hypercorn oracle. A Rust-only injected failure has no equivalent stimulus in those servers, so it must be labeled as a fault-contract case, never reported as Uvicorn parity. Both modes feed the same source/build coverage union and case-to-region attribution report. Verification mode remains visible as case metadata; it does not split the coverage denominator or create a second coverage ledger. Only the behavioral parity pass rate is scoped to oracle-backed cases.
 
 Do not add duplicate requests just to increase counts, exclude source regions to improve the percentage, or claim branch coverage when the report does not contain branch detail.
 
@@ -258,13 +291,15 @@ separate gates.
 ## One unified coverage and attribution report
 
 The JSON below is a historical schema sketch, not the current report schema.
-The current runner and checker use `uvicorn-rs-coverage/unified@5`. Region
-attribution uses the exact source span across Rust monomorphizations, so an
-input that executes a region in one generic instantiation is not reported as a
-gap merely because the maximum-summary representative is another instantiation.
-`coverage.summary.regions` reports that source-span union; `coverage.llvm_summary`
-and each source-file summary retain the official LLVM maximum-instantiation
-totals. Line totals continue to use LLVM's file summary.
+The current runner, evidence checker, and Coverage-MCP receipt attacher use
+`uvicorn-rs-coverage/unified@7`. Region attribution uses the exact source span
+across Rust monomorphizations, so an input that executes a region in one
+generic instantiation is not reported as a gap merely because another
+instantiation is LLVM's maximum-summary representative. The standard LLVM
+file/aggregate region summaries, `coverage.summary.regions`,
+`coverage.llvm_summary`, and per-file source summaries all use that same
+source-span union. Raw LLVM function-instantiation counters remain in the
+function rows. Line summaries continue to use LLVM's file-level line summary.
 
 Produce one authoritative `coverage-report.json` for the complete selected case
 matrix and exact instrumented source/build. It contains both the aggregate
@@ -450,7 +485,7 @@ Use the existing parity result envelope for selected/executed/passed/failed/not-
 
 The numbered workstreams below preserve the implementation plan and candidate
 cases from earlier measurements. They are historical planning material, not
-a live source-coverage backlog. Review the [current gap inventory](#current-gap-inventory)
+a live source-coverage backlog. Review the [current gap audit](#implementation-results-and-remaining-gaps)
 for the remaining measured gaps and verification work. Full source coverage
 does not establish full protocol or ASGI conformance.
 
@@ -474,13 +509,13 @@ case change.
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The 447- and 506-case reports are historical source snapshots. The
-2026-10-12 unified v4 563-case inventory supersedes their source-coverage results for the
-current recorded PyO3 source; see [latest evidence](coverage.md#latest-local-evidence-2026-10-12).
+The 447- and 506-case reports are historical source snapshots. At the time, the 2026-10-12 unified v4 563-case inventory superseded those
+source-coverage results. The 2026-10-15 report supersedes that historical
+snapshot; see [latest evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 Normal-build parity and fault-control exclusion remain unverified for this
 exact source.
 
-Before adding failpoints, use true client inputs for any uncovered behavior that can happen on a real deployment. The current matrix covers H1 malformed-final-chunk disconnect, incomplete-upload reset, early-response drain and response-stream reset; H2 partial-upload reset/cancellation and a healthy sibling stream; and H3 body errors, close/cancellation handling and follow-up health. Its H3 one-connection sequence serves 128 requests with 128 request-body pumps joined in each of three full repeats. Remaining candidates must first be reconciled against existing cases and named requirements:
+Before adding failpoints, use true client inputs for any uncovered behavior that can happen on a real deployment. The matrix at that snapshot covered H1 malformed-final-chunk disconnect, incomplete-upload reset, early-response drain and response-stream reset; H2 partial-upload reset/cancellation and a healthy sibling stream; and H3 body errors, close/cancellation handling and follow-up health. Its H3 one-connection sequence served 128 requests with 128 request-body pumps joined in each of three full repeats. Remaining candidates must first be reconciled against existing cases and named requirements:
 
 - HTTP/2 client disconnect while response flow control is blocked, and broader simultaneous-stream cancellation races.
 - HTTP/3 raw `RESET_STREAM` frame interoperability and response-stream failure while sending. The current body-pump cases do not prove that a particular QUIC reset frame was received.
@@ -496,9 +531,9 @@ Each candidate must name the missing function/region it targets before it is add
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The 447- and 506-case reports are historical source snapshots. The
-2026-10-12 unified v4 563-case inventory supersedes their source-coverage results for the
-current recorded PyO3 source; see [latest evidence](coverage.md#latest-local-evidence-2026-10-12).
+The 447- and 506-case reports are historical source snapshots. At the time, the 2026-10-12 unified v4 563-case inventory superseded those
+source-coverage results. The 2026-10-15 report supersedes that historical
+snapshot; see [latest evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 Normal-build parity and fault-control exclusion remain unverified for this
 exact source.
 
@@ -522,9 +557,9 @@ For each operation class, inject representative errors for allocation/constructi
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The 447- and 506-case reports are historical source snapshots. The
-2026-10-12 unified v4 563-case inventory supersedes their source-coverage results for the
-current recorded PyO3 source; see [latest evidence](coverage.md#latest-local-evidence-2026-10-12).
+The 447- and 506-case reports are historical source snapshots. At the time, the 2026-10-12 unified v4 563-case inventory superseded those
+source-coverage results. The 2026-10-15 report supersedes that historical
+snapshot; see [latest evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 Normal-build parity and fault-control exclusion remain unverified for this
 exact source.
 
@@ -545,9 +580,9 @@ The live observations should include response status/body or connection closure,
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The 447- and 506-case reports are historical source snapshots. The
-2026-10-12 unified v4 563-case inventory supersedes their source-coverage results for the
-current recorded PyO3 source; see [latest evidence](coverage.md#latest-local-evidence-2026-10-12).
+The 447- and 506-case reports are historical source snapshots. At the time, the 2026-10-12 unified v4 563-case inventory superseded those
+source-coverage results. The 2026-10-15 report supersedes that historical
+snapshot; see [latest evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 Normal-build parity and fault-control exclusion remain unverified for this
 exact source.
 
@@ -568,9 +603,9 @@ Use existing raw-wire support or add a low-level WebSocket stimulus adapter only
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The 447- and 506-case reports are historical source snapshots. The
-2026-10-12 unified v4 563-case inventory supersedes their source-coverage results for the
-current recorded PyO3 source; see [latest evidence](coverage.md#latest-local-evidence-2026-10-12).
+The 447- and 506-case reports are historical source snapshots. At the time, the 2026-10-12 unified v4 563-case inventory superseded those
+source-coverage results. The 2026-10-15 report supersedes that historical
+snapshot; see [latest evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 Normal-build parity and fault-control exclusion remain unverified for this
 exact source.
 
@@ -591,9 +626,9 @@ Use external signals/control files or the existing public server API as workflow
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The 447- and 506-case reports are historical source snapshots. The
-2026-10-12 unified v4 563-case inventory supersedes their source-coverage results for the
-current recorded PyO3 source; see [latest evidence](coverage.md#latest-local-evidence-2026-10-12).
+The 447- and 506-case reports are historical source snapshots. At the time, the 2026-10-12 unified v4 563-case inventory superseded those
+source-coverage results. The 2026-10-15 report supersedes that historical
+snapshot; see [latest evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 Normal-build parity and fault-control exclusion remain unverified for this
 exact source.
 
@@ -621,18 +656,22 @@ Keep Hypercorn as the same-protocol oracle for ordinary H3 inputs. Mark injected
 
 **Exit gate:** no missing H3 region remains; H3 cases are deterministic across three runs or are implemented as single-point injected scenarios with bounded timeouts.
 
-### 7. Rust task/runtime, TLS, and module registration
+### 7. Historical candidate list: Rust task/runtime, TLS, and module registration
 
 **Historical status (423-case source/build): complete for that measured
 region inventory.** Its three full repeats passed with no region or line gaps.
-The 447- and 506-case reports are historical source snapshots. The
-2026-10-12 unified v4 563-case inventory supersedes their source-coverage results for the
-current recorded PyO3 source; see [latest evidence](coverage.md#latest-local-evidence-2026-10-12).
+The 447- and 506-case reports are historical source snapshots. At the time, the 2026-10-12 unified v4 563-case inventory superseded those
+source-coverage results. The 2026-10-15 report supersedes that historical
+snapshot; see [latest evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 Normal-build parity and fault-control exclusion remain unverified for this
 exact source.
 
 
-Cover the remaining supervisor and adapter error paths:
+This candidate list predates the latest 675-case report and is not an
+instruction to add cases. The full current source-span inventory is covered;
+use [current unified coverage status](coverage.md#current-unified-coverage-status-2026-10-15)
+before proposing any further coverage change. The following list is retained
+as historical planning context only:
 
 - `serve_forever`: join failures, listener accept failure, HTTP/3 endpoint setup, graceful drain deadline and task abort;
 - TLS configuration: valid/invalid/mismatched key, QUIC conversion error, TLS accept interrupted by shutdown;
@@ -640,13 +679,9 @@ Cover the remaining supervisor and adapter error paths:
 - `ConnectionIo`: EOF, read error, write error, flush/shutdown behavior;
 - native module registration and PyO3 binding error returns.
 
-Use real occupied-port, reset, and cancellation workflows where deterministic; use compile-gated fault points for internal errors or generated binding registration errors. A module-init error may require a separate instrumented import subprocess because no request can run before the module loads.
+## Historical gap inventory (2026-10-12 report)
 
-**Exit gate:** all remaining regions are mapped to a named workflow/failpoint and produce an externally observable result; no production test-control path is enabled.
-
-## Current gap inventory
-
-The current source-bound gap map is attached to the full report at
+The source-bound gap map for this historical snapshot was attached to the full report at
 `target/asgi-coverage/2026-10-12-tls-shutdown-v3/coverage-report.json`; its
 fully paginated raw MCP receipt is
 `target/asgi-coverage/2026-10-12-tls-shutdown-v3/coverage-mcp-pages.json`.
@@ -662,7 +697,7 @@ The counts in function groups can overlap and do not add up to the number of
 missing regions. Preserve test cases that have zero marginal coverage if they
 assert useful regression behavior. Do not combine profiles across source or
 manifest changes or reuse historical coordinates. See [current coverage
-status](coverage.md#current-unified-coverage-status-2026-10-12) for the exact
+status](coverage.md#current-unified-coverage-status-2026-10-15) for the exact
 source, report, and build identities.
 
 ## Historical Coverage-MCP function-group inventory (336-case report)
@@ -743,7 +778,7 @@ uncovered region and its exact case attribution.
 - Per-case profiling must not silently omit child server processes, module-import subprocesses, or shutdown paths. Isolate profiles by case and target process, verify profile flush/completeness, and reject an aggregate whose profile union does not equal its per-case hit map.
 - Coverage alone does not prove behavior quality. Each injection needs a meaningful external invariant and follow-up cleanup assertion.
 - Rust-generated PyO3 glue and platform-specific error arms may not be controllable after module import. If they remain unreachable after the fault seam is implemented, report the exact residual and do not quietly exclude it.
-- The 5,561-region report is historical adapter-only evidence for `src/lib.rs`; it does not cover the current three-executable-file denominator. No complete unified report with the current source identity, both full matrices, and attached zero-gap MCP receipt is available yet. The current native-only diagnostic is incomplete. Run all gates on the same source and input receipt before treating coverage as complete.
+- The 5,561-region report is historical adapter-only evidence for `src/lib.rs`; it does not cover the current four-executable-file denominator. The t6zz v6 schema-v7 snapshot in [the unified coverage record](coverage.md#current-unified-coverage-status-2026-10-15) passed 675-case attribution, three repeats of each matrix, full source-region and line coverage, the source-bound Coverage-MCP receipt, and strict offline profile replay. It predates the current native transport edits; only a 35-case selected run has been rerun so far. Clean committed-source and hosted release checks remain separate.
 
 ## Maintenance after completion
 
@@ -752,7 +787,7 @@ uncovered region and its exact case attribution.
 3. Use Coverage-MCP incremental comparisons only with fixed Rust source, instrumentation, and region inventory. A changed build requires a new full measurement.
 4. After source or input changes, pass every attribution case and three complete repeats. Require zero missing regions/lines, exact profile-union attribution, and attached matching MCP receipts.
 5. Verify normal release builds contain no active fault control. The historical audit is referenced in its unified report; repeat it for the changed native source.
-6. Repeat on clean committed source before establishing a release or hosted CI baseline. The current raw unified matrix and attached Coverage-MCP gate remain outstanding. No package was published.
+6. The local exact-source gate is complete. Repeat on clean committed source and run hosted CI before establishing a release baseline. No package was published.
 
 The historical 336-case table above preserves the earlier gap investigation.
 It does not describe the current source. Future batches must retain their own

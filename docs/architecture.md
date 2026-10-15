@@ -9,16 +9,24 @@ implementation. ADR 0003 records the target transport consolidation. The
 previous root Python distribution and CLI names are not compatibility
 requirements.
 
+The native crate now exposes an opt-in proactive TCP EOF observer for native
+service integrations. Its implementation is recorded in
+[`PeerReadHalfCloseMode`](../crates/uvicorn-rs/src/lib.rs); this observer is not
+yet the Python ASGI server's transport backend and does not itself produce an
+ASGI `http.disconnect` event.
+
 For the proposed Rust-native integration with Starlette-RS and FastAPI-RS, see
 the [detailed architecture diagram](rust-native-integration-architecture.html).
 
-The latest local full ASGI-adapter matrix is dated 2026-10-12. It contains
+The last source-bound full ASGI-adapter matrix predates the October 15 native
+transport work. It contains
 243 live oracle comparisons and 268 target-only fault/support contracts; the
-current dirty source passed attribution and three full repeats with
-5,561/5,561 regions and 3,997/3,997 lines. This verifies the recorded current
-`src/lib.rs` hash, but not a clean hosted release or the separate native crate.
+the earlier dirty source passed attribution and three full repeats with
+5,561/5,561 regions and 3,997/3,997 lines. Those totals do not cover the
+October 15 edits to the native crate, the coverage inventory, or this document.
+They do not establish a clean hosted release or the separate native crate.
 No normal-build parity run was included. See the
-[coverage evidence](coverage.md#latest-local-evidence-2026-10-12) and the
+[coverage evidence](coverage.md#current-unified-coverage-status-2026-10-15) and the
 current candidate-wheel smoke (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 Older 506-, 494-, 485-, 451-, and 448-case results below are historical and do not
 attest the current checkout.
@@ -164,6 +172,24 @@ server currently exposes no application-configurable maximum request-body size.
 HTTP flow control belongs to Hyper; QUIC and HTTP/3 flow control belong to Quinn
 and `h3`.
 
+## Native TCP peer read-half closure
+
+The Python-free native crate reports raw TCP EOF through the
+`PeerReadHalfClosed` request extension. `ServerConfig.peer_read_half_close`
+selects one of two observation modes:
+
+| Mode | Reader ownership | Buffering and timing |
+|---|---|---|
+| `OnRead` (default) | Hyper or TLS reads the accepted socket directly. | No read-ahead queue or extra bridge copy. EOF is observed when the protocol driver reads; a held HTTP/1 service can delay it. |
+| `Proactive` | One raw TCP read future runs inside the existing connection task and feeds TLS/HTTP through a bounded queue. | At most two queued 16 KiB chunks plus one chunk in the consumer; adds one payload copy and queue wakeups. It can observe EOF while the service waits, unless unread input fills the queue. |
+
+Both modes set the signal only after a successful nonempty raw-socket read
+returns EOF. A TLS `close_notify` is not raw EOF. Neither mode discards buffered
+request bytes, marks an incomplete body complete, cancels an application, or
+closes the response write side. HTTP/2 and HTTP/3 do not use this TCP setting.
+Proactive mode is opt-in because its scheduling and copy cost needs a clean
+paired benchmark before it can be considered a general performance setting.
+
 ## Header capacity and response commitment
 
 Response and WebSocket acceptance headers use the pinned `http` crate's finite
@@ -253,7 +279,7 @@ matrix's fresh full verification covers both through this case and passes all
 termination/cancellation; the probe's `stream_reset` error convention alone
 does not identify a QUIC `RESET_STREAM` frame. See the
 [workflow contract](parity.md#current-http3-workflows) and
-[source-bound status](coverage.md#latest-local-evidence-2026-10-12).
+[source-bound status](coverage.md#current-unified-coverage-status-2026-10-15).
 
 ## Shutdown ownership and stages
 
@@ -310,7 +336,7 @@ The one-connection HTTP/3 case completes 128 one-byte uploads; its instrumented
 attribution records 128/128 body pumps joined, and each of the three complete
 matrix repeats returns 128/128 responses matching Hypercorn in the recorded
 source snapshot. The current 511-case matrix passes these recorded ASGI
-workflows; see [latest local evidence](coverage.md#latest-local-evidence-2026-10-12).
+workflows; see [latest local evidence](coverage.md#current-unified-coverage-status-2026-10-15).
 
 Lifespan has a dedicated cleanup tracker. Its main native task remains outside
 that tracker while startup and shutdown run, so request cleanup does not wait

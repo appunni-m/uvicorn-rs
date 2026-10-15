@@ -7,7 +7,7 @@ passed attribution and each of three full repeats: 243 oracle-parity cases and
 268 target-only contracts. The report records 5,561/5,561 native regions and
 3,997/3,997 lines. This is dirty macOS ARM64 source evidence, not hosted release
 evidence or full ASGI conformance; see the
-[coverage report](coverage.md#latest-local-evidence-2026-10-12) and the
+[coverage report](coverage.md#current-unified-coverage-status-2026-10-15) and the
 current candidate-wheel smoke (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 
 ## CLI
@@ -49,6 +49,15 @@ is not a Uvicorn CLI option.
 
 The CLI runs the Python ASGI implementation in `uvicorn-rs-py`. The separately
 packaged native `uvicorn-rs` server is not yet its transport backend.
+
+Native Rust services can choose how a TCP peer's read-half closure is observed
+through `ServerConfig.peer_read_half_close`. The default `OnRead` mode adds no
+read-ahead queue; `Proactive` uses one owned read future and a bounded queue to
+observe EOF while an HTTP/1 service is waiting. Proactive mode holds at most two
+queued 16 KiB chunks plus the chunk currently being consumed and adds an input
+copy. Both modes preserve response writes and incomplete-body errors. This
+native option does not configure the Python CLI and does not emit ASGI
+`http.disconnect`; see [transport ownership and buffering](architecture.md#native-tcp-peer-read-half-closure).
 
 Ctrl-C and SIGTERM initiate shutdown. The server runs ASGI lifespan startup
 before serving and lifespan shutdown after draining/cancelling active work.

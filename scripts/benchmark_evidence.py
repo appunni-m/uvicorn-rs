@@ -270,7 +270,18 @@ def collect_bounded_client(process, seconds: float, server, monitor, *, interval
     return stdout, stderr
 
 
-def finalize_server(process, log, *, permit_app_error: bool = False) -> dict:
+_EXPECTED_H2_PEER_CLOSE = (
+    "uvicorn-rs: connection task failed: hyper::Error(Io, Kind(BrokenPipe))"
+)
+
+
+def finalize_server(
+    process,
+    log,
+    *,
+    permit_app_error: bool = False,
+    permit_h2_peer_close: bool = False,
+) -> dict:
     """Require a live server, clean graceful exit, and no unexpected panic hook."""
     check_server_alive(process)
     shutdown = stop_owned(process, graceful=True)
@@ -281,9 +292,12 @@ def finalize_server(process, log, *, permit_app_error: bool = False) -> dict:
     unexpected_python_error = not permit_app_error and (
         "Traceback (most recent call last):" in output or "Task exception was never retrieved" in output
     )
+    expected_h2_peer_close_count = output.splitlines().count(_EXPECTED_H2_PEER_CLOSE)
+    permit_one_h2_peer_close = permit_h2_peer_close and expected_h2_peer_close_count == 1
     native_error_lines = [
         line for line in output.splitlines()
         if line.startswith("uvicorn-rs:") and re.search(r"\b(failed|exceeded|aborting)\b|does not support lifespan", line)
+        and not (permit_one_h2_peer_close and line == _EXPECTED_H2_PEER_CLOSE)
         and not (permit_app_error and line == "uvicorn-rs: ASGI request failed: RuntimeError: benchmark exception path")
     ]
     if shutdown["forced"] or shutdown["returncode"] != 0 or panic or unexpected_python_error or native_error_lines:
@@ -298,7 +312,10 @@ def finalize_server(process, log, *, permit_app_error: bool = False) -> dict:
         "server_log": {"path": str(log.name), "sha256": _sha256(Path(log.name))},
         "server_lifecycle_gate": "passed",
         "unexpected_panic_events": 0,
-        "unexpected_native_errors": 0,
+        "unexpected_native_errors": len(native_error_lines),
+        "expected_h2_peer_close_diagnostics": (
+            expected_h2_peer_close_count if permit_one_h2_peer_close else 0
+        ),
     }
 
 

@@ -1,5 +1,16 @@
 //! HTTP/3 serving over a caller-configured Quinn endpoint.
 
+mod transport;
+
+#[cfg(coverage)]
+pub(crate) mod coverage;
+
+#[cfg(coverage)]
+pub(crate) use coverage::{
+    coverage_accept_bidi_error, coverage_exercise_client_adapter_methods,
+    coverage_finish_after_reset, coverage_open_bidi_application_close_code, CoverageClient,
+};
+
 use std::{
     error::Error,
     fmt,
@@ -9,20 +20,20 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use bytes::{Buf, Bytes};
 use futures_util::FutureExt;
 use h3::error::Code;
 use h3_quinn::quinn;
-use http::{Request, Response, Version};
+use http::{Request, Response, StatusCode, Version};
 use http_body::{Body, Frame, SizeHint};
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 use tokio::{
-    sync::{watch, OwnedSemaphorePermit, Semaphore},
+    sync::{watch, Semaphore},
     task::JoinSet,
-    time::Instant,
 };
 use tower_service::Service;
 
@@ -42,13 +53,13 @@ pin_project! {
     /// yields each received DATA frame when the application polls for it and
     /// yields request trailers after the DATA stream ends.
     pub struct Http3RequestBody {
-        stream: h3::server::RequestStream<h3_quinn::RecvStream, Bytes>,
+        stream: h3::server::RequestStream<transport::RecvStream, Bytes>,
         finished: bool,
     }
 }
 
 impl Http3RequestBody {
-    fn new(stream: h3::server::RequestStream<h3_quinn::RecvStream, Bytes>) -> Self {
+    fn new(stream: h3::server::RequestStream<transport::RecvStream, Bytes>) -> Self {
         Self {
             stream,
             finished: false,
@@ -136,7 +147,8 @@ impl Body for Http3RequestBody {
 ///
 /// Returns [`ServeError::InvalidConnectionLimit`] for a zero connection limit,
 /// [`ServeError::ConnectionLimitTooLarge`] when the limit exceeds Tokio's
-/// maximum semaphore permit count,
+/// maximum semaphore permit count, [`ServeError::ConnectionAdmissionClosed`]
+/// if the internal admission semaphore closes while serving,
 /// [`ServeError::InvalidGracefulShutdownTimeout`] if the deadline cannot be
 /// represented, or [`ServeError::GracefulShutdownTimedOut`] when active
 /// connections exceed the configured drain deadline. Individual QUIC
@@ -161,78 +173,100 @@ where
     let lifecycle_config = config.clone();
     super::run_with_application_lifecycle(lifecycle_config, async move {
         let connection_slots = Arc::new(Semaphore::new(config.max_connections));
+        #[cfg(coverage)]
+        if super::take_listener_admission_closed_fault() {
+            connection_slots.close();
+        }
         let (shutdown_sender, shutdown_receiver) = watch::channel(false);
         let mut shutdown = Box::pin(shutdown);
         let mut connections = JoinSet::new();
-        let mut next_slot: Option<OwnedSemaphorePermit> = None;
 
-        loop {
-            tokio::select! {
-                _ = &mut shutdown => break,
-                joined = connections.join_next(), if !connections.is_empty() => {
-                    observe_connection_task(joined);
+        'accept: loop {
+            let slot = tokio::select! {
+                _ = &mut shutdown => break 'accept,
+                slot = Arc::clone(&connection_slots).acquire_owned() => {
+                    slot.map_err(ServeError::ConnectionAdmissionClosed)?
                 }
-                slot = Arc::clone(&connection_slots).acquire_owned(), if next_slot.is_none() => {
-                    next_slot = Some(slot.map_err(|_| ServeError::InvalidConnectionLimit)?);
-                }
-                incoming = endpoint.accept(), if next_slot.is_some() => {
-                    let Some(incoming) = incoming else { break; };
-                    let Some(slot) = next_slot.take() else { continue; };
-                    let service = service.clone();
-                    let shutdown = shutdown_receiver.clone();
-                    let error_observer = config.error_observer.clone();
-                    let service_error_policy = config.service_error_policy;
-                    connections.spawn(async move {
-                        let _slot = slot;
-                        if let Err(error) = serve_incoming_connection(
-                            incoming,
-                            service,
-                            shutdown,
-                            error_observer.as_ref(),
-                            service_error_policy,
-                        ).await {
-                            tracing::debug!(%error, "HTTP/3 connection finished with an error");
-                        }
-                    });
+            };
+
+            loop {
+                tokio::select! {
+                    _ = &mut shutdown => break 'accept,
+                    joined = connections.join_next(), if !connections.is_empty() => {
+                        observe_connection_task(joined);
+                    }
+                    incoming = endpoint.accept() => {
+                        let Some(incoming) = incoming else { break 'accept; };
+                        let service = service.clone();
+                        let shutdown = shutdown_receiver.clone();
+                        let error_observer = config.error_observer.clone();
+                        let service_error_policy = config.service_error_policy;
+                        connections.spawn(async move {
+                            let _slot = slot;
+                            if let Err(error) = serve_incoming_connection(
+                                incoming,
+                                service,
+                                shutdown,
+                                error_observer.as_ref(),
+                                service_error_policy,
+                            ).await {
+                                tracing::debug!(%error, "HTTP/3 connection finished with an error");
+                            }
+                        });
+                        break;
+                    }
                 }
             }
         }
 
-        endpoint.set_server_config(None);
-        shutdown_sender.send_replace(true);
-        let shutdown_deadline = Instant::now()
-            .checked_add(config.graceful_shutdown_timeout)
-            .ok_or(ServeError::InvalidGracefulShutdownTimeout)?;
-        while !connections.is_empty() {
-            let remaining = shutdown_deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
+        finish_http3_shutdown(
+            endpoint,
+            shutdown_sender,
+            &mut connections,
+            config.graceful_shutdown_timeout,
+        )
+        .await
+    })
+    .await
+}
+
+async fn finish_http3_shutdown(
+    endpoint: quinn::Endpoint,
+    shutdown_sender: watch::Sender<bool>,
+    connections: &mut JoinSet<()>,
+    graceful_shutdown_timeout: Duration,
+) -> Result<(), ServeError> {
+    endpoint.set_server_config(None);
+    shutdown_sender.send_replace(true);
+    let shutdown_deadline = crate::graceful_shutdown_deadline(graceful_shutdown_timeout)?;
+    let shutdown_deadline = tokio::time::sleep_until(shutdown_deadline);
+    tokio::pin!(shutdown_deadline);
+    loop {
+        tokio::select! {
+            biased;
+            // Keep the original deadline strict, while letting an empty
+            // set finish through `join_next()` even after the deadline.
+            _ = &mut shutdown_deadline, if !connections.is_empty() => {
                 connections.abort_all();
-                drain_connection_tasks(&mut connections).await;
+                drain_connection_tasks(connections).await;
                 endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown deadline");
                 return Err(ServeError::GracefulShutdownTimedOut);
             }
-            match tokio::time::timeout(remaining, connections.join_next()).await {
-                Ok(Some(joined)) => observe_connection_task(Some(joined)),
-                Ok(None) => break,
-                Err(_) => {
-                    connections.abort_all();
-                    drain_connection_tasks(&mut connections).await;
-                    endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown deadline");
-                    return Err(ServeError::GracefulShutdownTimedOut);
-                }
-            }
+            joined = connections.join_next() => match joined {
+                Some(joined) => observe_connection_task(Some(joined)),
+                None => break,
+            },
         }
+    }
 
-        endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown");
-        if tokio::time::timeout(config.graceful_shutdown_timeout, endpoint.wait_idle())
-            .await
-            .is_err()
-        {
-            return Err(ServeError::GracefulShutdownTimedOut);
-        }
-        Ok(())
-    })
-    .await
+    endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown");
+    if tokio::time::timeout(graceful_shutdown_timeout, endpoint.wait_idle())
+        .await
+        .is_err()
+    {
+        return Err(ServeError::GracefulShutdownTimedOut);
+    }
+    Ok(())
 }
 
 async fn serve_incoming_connection<S, B>(
@@ -287,6 +321,20 @@ where
         return Err(error);
     }
 
+    #[cfg(coverage)]
+    if crate::take_http3_peer_bidi_stream_credit_gate() {
+        // Exercise the real QUIC stream-credit wait in the client adapter.
+        // The test endpoint advertises zero initial credit. This accepted
+        // connection grants one stream only after the client observes Pending.
+        crate::observe_http3_peer_bidi_stream_credit_gate_installed();
+        let connection = connection.clone();
+        tokio::spawn(async move {
+            crate::wait_for_http3_peer_bidi_stream_credit_release().await;
+            connection.set_max_concurrent_bi_streams(quinn::VarInt::from_u32(1));
+            crate::observe_http3_peer_bidi_stream_credit_granted();
+        });
+    }
+
     let connection_info = ConnectionInfo {
         peer_addr,
         tls: Some(TlsInfo {
@@ -331,7 +379,8 @@ where
 {
     let peer_addr = connection_info.peer_addr();
     let (connection_lifetime, _connection_lifetime_guard) = crate::ConnectionLifetimeGuard::new();
-    let created = h3::server::Connection::new(h3_quinn::Connection::new(connection.clone()))
+    let (transport, peer_stops) = transport::Connection::new(connection.clone());
+    let created = h3::server::Connection::new(transport)
         .await
         .map_err(Http3ConnectionError::H3)?;
     let info_service = ConnectionInfoService::<S, Http3RequestBody, B>::new(
@@ -372,21 +421,19 @@ where
                 match accepted {
                     Ok(Some(resolver)) => {
                         let application = application.clone();
-                        let connection = connection.clone();
                         let error_observer = error_observer.cloned();
+                        let peer_stops = peer_stops.clone();
                         requests.spawn(async move {
-                            tokio::select! {
-                                result = handle_http3_request(
-                                    resolver,
-                                    application,
-                                    peer_addr,
-                                    error_observer,
-                                ) => {
-                                    if let Err(error) = result {
-                                        tracing::debug!(%error, "HTTP/3 request stream failed");
-                                    }
-                                }
-                                _ = connection.closed() => {}
+                            if let Err(error) = handle_http3_request(
+                                resolver,
+                                application,
+                                peer_addr,
+                                error_observer,
+                                peer_stops,
+                            )
+                            .await
+                            {
+                                tracing::debug!(%error, "HTTP/3 request stream failed");
                             }
                         });
                     }
@@ -406,6 +453,20 @@ where
             b"HTTP/3 request acceptance failed",
         );
     }
+
+    // The connection owns every request stream. Once QUIC closes, no sibling
+    // request can make progress, so cancel the remaining applications before
+    // draining their task results.
+    while !requests.is_empty() {
+        tokio::select! {
+            biased;
+            _ = connection.closed() => {
+                requests.abort_all();
+                break;
+            }
+            Some(result) = requests.join_next() => observe_request_task(result),
+        }
+    }
     while let Some(result) = requests.join_next().await {
         observe_request_task(result);
     }
@@ -419,14 +480,15 @@ where
 }
 
 async fn handle_http3_request<S, B>(
-    resolver: h3::server::RequestResolver<h3_quinn::Connection, Bytes>,
-    mut service: ServiceErrorResponse<
+    resolver: h3::server::RequestResolver<transport::Connection, Bytes>,
+    service: ServiceErrorResponse<
         ConnectionInfoService<S, Http3RequestBody, B>,
         crate::RequestLifetimeBody<B>,
         Http3RequestBody,
     >,
     peer_addr: std::net::SocketAddr,
     error_observer: Option<ServerErrorObserver>,
+    peer_stops: transport::PeerStops,
 ) -> Result<(), Http3RequestStreamError<S::Error>>
 where
     S: Service<Request<Http3RequestBody>, Response = Response<B>> + Clone,
@@ -441,7 +503,82 @@ where
     *request.version_mut() = Version::HTTP_3;
     let (mut send_stream, receive_stream) = stream.split();
     let request = request.map(|()| Http3RequestBody::new(receive_stream));
+    let Some(mut peer_stopped) = peer_stops.take(send_stream.send_id()) else {
+        #[cfg(coverage)]
+        crate::observe_http3_peer_stop_observer_unavailable_fault();
+        let error = Http3RequestStreamError::ObserverUnavailable(io::Error::other(
+            "HTTP/3 request has no send-stream stop observer",
+        ));
+        observe_error(
+            error_observer.as_ref(),
+            ServerErrorPhase::Connection,
+            Some(peer_addr),
+            &error,
+        );
+        let mut response = Response::new(());
+        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        send_http3_response_start::<S::Error>(&mut send_stream, response).await?;
+        finish_http3_response::<S::Error>(&mut send_stream).await?;
+        return Err(error);
+    };
 
+    let stop_code = {
+        let work = run_http3_request(
+            request,
+            &mut send_stream,
+            service,
+            peer_addr,
+            error_observer.clone(),
+        );
+        tokio::pin!(work);
+        tokio::select! {
+            biased;
+            stopped = &mut peer_stopped => match stopped {
+                Ok(Some(code)) => code,
+                // Quinn also returns None after the local send side has been
+                // fully retired. It is not evidence that the peer cancelled
+                // the application, and the completed observer must not be
+                // polled again.
+                Ok(None) => return work.await,
+                Err(error) => {
+                    let error = Http3RequestStreamError::PeerStop(error);
+                    observe_error(
+                        error_observer.as_ref(),
+                        ServerErrorPhase::Connection,
+                        Some(peer_addr),
+                        &error,
+                    );
+                    return Err(error);
+                }
+            },
+            result = &mut work => return result,
+        }
+    };
+
+    // Leaving the block drops pending readiness, application, and body
+    // futures before resetting just this request. The connection's accept
+    // driver continues serving sibling streams.
+    send_stream.stop_stream(Code::from(stop_code.into_inner()));
+    Ok(())
+}
+
+async fn run_http3_request<S, B>(
+    request: Request<Http3RequestBody>,
+    send_stream: &mut h3::server::RequestStream<transport::SendStream, Bytes>,
+    mut service: ServiceErrorResponse<
+        ConnectionInfoService<S, Http3RequestBody, B>,
+        crate::RequestLifetimeBody<B>,
+        Http3RequestBody,
+    >,
+    peer_addr: std::net::SocketAddr,
+    error_observer: Option<ServerErrorObserver>,
+) -> Result<(), Http3RequestStreamError<S::Error>>
+where
+    S: Service<Request<Http3RequestBody>, Response = Response<B>> + Clone,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<super::BoxBodyError> + Send + Sync + 'static,
+{
     let response = match AssertUnwindSafe(futures_util::future::poll_fn(|context| {
         service.poll_ready(context)
     }))
@@ -489,31 +626,38 @@ where
     let mut body = Box::pin(body);
     parts.version = Version::HTTP_3;
     let send_result = async {
-        send_stream
-            .send_response(Response::from_parts(parts, ()))
-            .await
-            .map_err(Http3RequestStreamError::H3)?;
+        send_http3_response_start::<S::Error>(send_stream, Response::from_parts(parts, ())).await?;
 
-        while let Some(frame) = body.frame().await {
+        loop {
+            let frame = AssertUnwindSafe(body.frame())
+                .catch_unwind()
+                .await
+                .map_err(|_| {
+                    Http3RequestStreamError::Body(Box::new(io::Error::other(
+                        "HTTP/3 application response body panicked",
+                    )))
+                })?;
+            let Some(frame) = frame else {
+                break;
+            };
             let frame = frame.map_err(Http3RequestStreamError::Body)?;
             match frame.into_data() {
                 Ok(data) => send_stream
                     .send_data(data)
                     .await
                     .map_err(Http3RequestStreamError::H3)?,
-                Err(frame) => match frame.into_trailers() {
-                    Ok(trailers) => send_stream
+                Err(frame) => {
+                    // `Frame` can contain only DATA or trailers. Since DATA
+                    // extraction failed above, the remaining frame is trailers.
+                    let trailers = frame.into_trailers().unwrap_or_default();
+                    send_stream
                         .send_trailers(trailers)
                         .await
-                        .map_err(Http3RequestStreamError::H3)?,
-                    Err(_) => return Err(Http3RequestStreamError::UnsupportedBodyFrame),
-                },
+                        .map_err(Http3RequestStreamError::H3)?;
+                }
             }
         }
-        send_stream
-            .finish()
-            .await
-            .map_err(Http3RequestStreamError::H3)
+        finish_http3_response::<S::Error>(send_stream).await
     }
     .await;
 
@@ -583,23 +727,32 @@ enum Http3RequestStreamError<E> {
     H3(h3::error::StreamError),
     Body(super::BoxBodyError),
     Service(E),
-    UnsupportedBodyFrame,
+    PeerStop(quinn::StoppedError),
+    ObserverUnavailable(io::Error),
 }
 
 impl<E> fmt::Display for Http3RequestStreamError<E>
 where
-    E: fmt::Display,
+    E: Error + fmt::Display + 'static,
 {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::H3(error) => write!(formatter, "HTTP/3 stream failed: {error}"),
-            Self::Body(error) => write!(formatter, "response body failed: {error}"),
+            Self::H3(error) => {
+                let source = <Self as Error>::source(self).unwrap_or(error);
+                write!(formatter, "HTTP/3 stream failed: {source}")
+            }
+            Self::Body(error) => {
+                let source = <Self as Error>::source(self).unwrap_or(error.as_ref());
+                write!(formatter, "response body failed: {source}")
+            }
             Self::Service(error) => {
-                write!(formatter, "HTTP/3 application service failed: {error}")
+                let source = <Self as Error>::source(self).unwrap_or(error);
+                write!(formatter, "HTTP/3 application service failed: {source}")
             }
-            Self::UnsupportedBodyFrame => {
-                formatter.write_str("response body emitted a frame other than DATA or trailers")
+            Self::PeerStop(error) => {
+                write!(formatter, "HTTP/3 peer-stop observation failed: {error}")
             }
+            Self::ObserverUnavailable(error) => error.fmt(formatter),
         }
     }
 }
@@ -613,7 +766,31 @@ where
             Self::H3(error) => Some(error),
             Self::Body(error) => Some(error.as_ref()),
             Self::Service(error) => Some(error),
-            Self::UnsupportedBodyFrame => None,
+            Self::PeerStop(error) => Some(error),
+            Self::ObserverUnavailable(error) => Some(error),
         }
     }
+}
+
+async fn send_http3_response_start<E>(
+    send_stream: &mut h3::server::RequestStream<transport::SendStream, Bytes>,
+    response: Response<()>,
+) -> Result<(), Http3RequestStreamError<E>> {
+    send_stream
+        .send_response(response)
+        .await
+        .map_err(Http3RequestStreamError::H3)
+}
+
+async fn finish_http3_response<E>(
+    send_stream: &mut h3::server::RequestStream<transport::SendStream, Bytes>,
+) -> Result<(), Http3RequestStreamError<E>> {
+    #[cfg(coverage)]
+    if crate::take_http3_response_fallback_finish_fault() {
+        send_stream.stop_stream(Code::H3_REQUEST_CANCELLED);
+    }
+    send_stream
+        .finish()
+        .await
+        .map_err(Http3RequestStreamError::H3)
 }

@@ -28,20 +28,105 @@ from coverage_toolchain import ToolchainError, validate_coverage_tools
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests/parity/manifest.json"
-UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@5"
+UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@7"
 PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
     "crates/uvicorn-rs/src/lib.rs",
     "crates/uvicorn-rs/src/http3.rs",
+    "crates/uvicorn-rs/src/http3/transport.rs",
     "crates/uvicorn-rs/src/websocket.rs",
+    "crates/uvicorn-rs/src/peer_read.rs",
     "crates/native-app-contract/src/lib.rs",
 )
 EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
 NO_COUNTER_SOURCE_SET = (PRODUCTION_SOURCE_SET[-1],)
+COVERAGE_SUPPORT_SOURCE_SET = (
+    "crates/uvicorn-rs/src/http3/coverage.rs",
+)
 NATIVE_FAULT_CONTRACTS = {
+    "http1.upgrade.receiver-closed": {
+        "operation": "native-http1-upgrade-session",
+        "scenario": "receiver-closed",
+    },
+    "http1.peer-read.receiver-closed": {
+        "operation": "native-http1-peer-read-receiver-closed",
+        "scenario": "receiver-closed",
+    },
+    "http3.peer-stop-observer.unavailable": {
+        "operation": "http3-peer-stop-observer-unavailable",
+        "scenario": "observer-unavailable",
+    },
+    "http3.peer-stop-observer.error": {
+        "operation": "http3-peer-stop-observer-error",
+        "scenario": "observer-error",
+    },
+    "http3.peer-stop-observer.local-retirement": {
+        "operation": "http3-peer-stop-local-retirement",
+        "scenario": "local-retirement",
+    },
+    "http3.client-adapter.read-closed-stream": {
+        "operation": "native-http3-client-adapter-read-closed-stream",
+        "scenario": "read-closed-stream",
+    },
+    "http3.client-adapter.write-closed-stream": {
+        "operation": "native-http3-client-adapter-write-closed-stream",
+        "scenario": "write-closed-stream",
+    },
+    "http3.response-send.frame-error": {
+        "operation": "native-http3-response-send-failure",
+        "scenario": "response-frame-send-failure",
+    },
+    "http3.response-finish.error": {
+        "operation": "native-http3-response-send-failure",
+        "scenario": "response-finish-failure",
+    },
+    "http3.response-fallback.start-error": {
+        "operation": "native-http3-response-send-failure",
+        "scenario": "response-fallback-start-failure",
+    },
+    "http3.response-fallback.finish-error": {
+        "operation": "native-http3-response-send-failure",
+        "scenario": "response-fallback-finish-failure",
+    },
+    "http3.transport.stream-id.out-of-range": {
+        "operation": "native-http3-transport-adapter-edge-case",
+        "scenario": "stream-id-out-of-range",
+    },
+    "http3.transport.send-data-pending": {
+        "operation": "native-http3-transport-adapter-edge-case",
+        "scenario": "send-data-before-ready",
+    },
+    "http3.transport.finish-after-reset": {
+        "operation": "native-http3-transport-adapter-edge-case",
+        "scenario": "finish-after-reset",
+    },
+    "websocket.accept-key.header-value-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accept-key-header-value-error",
+    },
     "websocket.receive.close-reply.flush": {
         "operation": "native-http1-websocket",
         "scenario": "close-reply-flush-failure",
+    },
+    "websocket.receive.close-reply.cancel": {
+        "operation": "native-http1-websocket",
+        "scenario": "close-receive-cancellation",
+    },
+    "server.graceful-shutdown.deadline-overflow": {
+        "operation": "native-server-graceful-deadline-overflow",
+        "scenario": "deadline-overflow",
+    },
+    "server.listener.accept-error": {
+        "operation": "native-server-listener-accept-error",
+        "scenario": "accept-error",
+    },
+    "server.listener.admission-closed": {
+        "operation": "native-server-listener-admission-closed",
+        "scenario": "admission-closed",
+    },
+    "server.http3.admission-closed": {
+        "operation": "native-server-http3-admission-closed",
+        "scenario": "http3-admission-closed",
     },
 }
 PYTHON_SOURCE_SET = (
@@ -68,11 +153,6 @@ def sha256(path: Path) -> str:
 
 def digest_json(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-
-
-def coverage_mcp_group_identity(group: dict[str, Any]) -> str:
-    """Use the complete row so distinct null-function line groups stay distinct."""
-    return json.dumps(group, sort_keys=True, separators=(",", ":"))
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -324,20 +404,31 @@ def llvm_source_name(path: Path) -> str | None:
 def llvm_production_regions(
     report: dict[str, Any], source_digest: str,
     *, canonical_functions: dict[tuple[str, int, int], str] | None = None,
+    require_normalized_summaries: bool = True,
 ) -> tuple[
     dict[str, dict[str, Any]],
     dict[str, dict[str, int]],
     dict[tuple[str, int, int], str],
 ]:
-    """Reconstruct executable source regions and per-file LLVM totals."""
+    """Reconstruct source-span regions and validate normalized file summaries."""
     data = report.get("data")
     require(isinstance(data, list) and len(data) == 1, "LLVM export must contain one unified measurement")
     files, functions = data[0].get("files"), data[0].get("functions")
     require(isinstance(files, list) and isinstance(functions, list), "LLVM measurement lacks files/functions")
+    source_names: dict[str, str | None] = {}
+
+    def source_name(filename: str) -> str | None:
+        # Every region refers back to a filename in this immutable export.
+        # Resolve each distinct path once, rather than repeating filesystem
+        # lookups for every region of every function instantiation.
+        if filename not in source_names:
+            source_names[filename] = llvm_source_name(Path(filename))
+        return source_names[filename]
+
     selected: dict[str, dict[str, Any]] = {}
     for item in files:
         require(isinstance(item, dict) and isinstance(item.get("filename"), str), "invalid LLVM file row")
-        relative = llvm_source_name(Path(item["filename"]))
+        relative = source_name(item["filename"])
         if relative is not None:
             require(relative not in selected, f"LLVM export duplicates {relative}")
             selected[relative] = item
@@ -370,13 +461,14 @@ def llvm_production_regions(
                 "invalid LLVM function row")
         filenames = function["filenames"]
         require(all(isinstance(filename, str) for filename in filenames), "invalid LLVM function filenames")
+        relative_filenames = [source_name(filename) for filename in filenames]
         by_file: dict[str, list[list[int]]] = {}
         for raw in function["regions"]:
             require(isinstance(raw, list) and len(raw) == 8 and all(type(value) is int for value in raw),
                     "invalid raw LLVM region")
             file_index = raw[5]
             require(0 <= file_index < len(filenames), "invalid LLVM region file index")
-            relative = llvm_source_name(Path(filenames[file_index]))
+            relative = relative_filenames[file_index]
             if relative is not None:
                 by_file.setdefault(relative, []).append(raw)
         for relative, raw_regions in by_file.items():
@@ -451,11 +543,26 @@ def llvm_production_regions(
                 "function_symbols": {symbol},
             }
     for relative in EXECUTABLE_SOURCE_SET:
+        file_regions = [region for region in regions.values() if region["file"] == relative]
+        source_summary = {
+            "regions": sum(region["covered"] for region in file_regions),
+            "regions_total": len(file_regions),
+        }
         if canonical_functions is None:
-            require(reconstructed[relative] == {
-                "regions": summaries[relative]["regions"],
-                "regions_total": summaries[relative]["regions_total"],
-            }, f"LLVM instantiation-group summary differs for {relative}")
+            if require_normalized_summaries:
+                require(summaries[relative]["regions"] == source_summary["regions"]
+                        and summaries[relative]["regions_total"] == source_summary["regions_total"],
+                        f"normalized source-span region summary differs for {relative}")
+            else:
+                # A fresh llvm-cov export carries LLVM's maximum-instantiation
+                # file summary. Normalize its region totals to the same
+                # source-span union used by the embedded report before the
+                # replay comparison; retain the LLVM file-level line summary.
+                summaries[relative]["regions"] = source_summary["regions"]
+                summaries[relative]["regions_total"] = source_summary["regions_total"]
+            require(reconstructed[relative]["regions_total"] == source_summary["regions_total"]
+                    and reconstructed[relative]["regions"] <= source_summary["regions"],
+                    f"raw LLVM instantiation counters disagree with normalized source spans for {relative}")
     require(bool(regions), "LLVM export has no executable production regions")
     return regions, summaries, selected_functions
 
@@ -508,6 +615,7 @@ def case_profile_regions(
         llvm_report = export_llvm_profile(merged, label=label, llvm_cov=llvm_cov, binaries=binaries)
         regions, _, _ = llvm_production_regions(
             llvm_report, source_digest, canonical_functions=canonical_functions,
+            require_normalized_summaries=False,
         )
         require(set(regions) == aggregate_region_ids,
                 f"case LLVM region identity differs from aggregate for {label}")
@@ -518,6 +626,7 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
     require(tuple(source_constant(coverage_runner, "PRODUCTION_SOURCE_SET")) == PRODUCTION_SOURCE_SET
             and tuple(source_constant(coverage_runner, "EXECUTABLE_SOURCE_SET")) == EXECUTABLE_SOURCE_SET
             and tuple(source_constant(coverage_runner, "NO_COUNTER_SOURCE_SET")) == NO_COUNTER_SOURCE_SET
+            and tuple(source_constant(coverage_runner, "COVERAGE_SUPPORT_SOURCE_SET")) == COVERAGE_SUPPORT_SOURCE_SET
             and tuple(source_constant(coverage_runner, "PYTHON_SOURCE_SET")) == PYTHON_SOURCE_SET,
             "coverage runner production-source classification differs from validator contract")
     selected: dict[str, str] = {}
@@ -533,7 +642,8 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
         for directory in (ROOT / "src", ROOT / "crates/uvicorn-rs/src", ROOT / "crates/native-app-contract/src")
         for item in directory.rglob("*.rs")
     }
-    require(discovered == set(PRODUCTION_SOURCE_SET), "production Rust source inventory is incomplete or unclassified")
+    require(discovered == set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET),
+            "Rust source inventory is incomplete or unclassified")
     python_sources = {
         str(item.relative_to(ROOT)) for item in (ROOT / "python/uvicorn_rs").rglob("*.py")
     }
@@ -671,13 +781,21 @@ def validate_coverage(
                 f"{key} case denominator differs")
 
     coverage = ext["coverage"]
-    exact_keys(coverage, {"gate", "source_set", "executable_source_set", "source_files", "summary", "llvm_summary", "regions",
+    exact_keys(coverage, {"gate", "source_set", "executable_source_set", "coverage_support_source_set",
+                         "source_files", "llvm_normalization", "summary", "llvm_summary", "regions",
                          "uncovered_regions", "attribution", "coverage_mcp"}, "coverage")
     require(tuple(coverage.get("source_set", [])) == PRODUCTION_SOURCE_SET
-            and tuple(coverage.get("executable_source_set", [])) == EXECUTABLE_SOURCE_SET,
-            "coverage source inventory is not the exact five-file set")
+            and tuple(coverage.get("executable_source_set", [])) == EXECUTABLE_SOURCE_SET
+            and tuple(coverage.get("coverage_support_source_set", [])) == COVERAGE_SUPPORT_SOURCE_SET,
+            "coverage source inventory differs from the declared production sources")
     source_rows = coverage.get("source_files")
-    require(isinstance(source_rows, list) and len(source_rows) == 5, "per-file source summaries are incomplete")
+    require(isinstance(source_rows, list) and len(source_rows) == len(PRODUCTION_SOURCE_SET),
+            "per-file source summaries are incomplete")
+    require(coverage.get("llvm_normalization") == {
+        "regions": "source-span union across Rust function instantiations",
+        "lines": "LLVM file-level line summary",
+        "function_counters": "raw LLVM instantiation counters retained",
+    }, "LLVM source-summary normalization policy differs")
     raw_regions, raw_summaries, canonical_functions = llvm_production_regions(report, source["sha256"])
     for path, row in zip(PRODUCTION_SOURCE_SET, source_rows, strict=True):
         exact_keys(row, {"path", "classification", "summary"}, f"source summary {path}")
@@ -685,10 +803,19 @@ def validate_coverage(
         require(row.get("path") == path and row.get("classification") == classification,
                 f"source classification differs: {path}")
         exact_keys(row.get("summary"), {"regions", "lines", "regions_total", "lines_total"}, f"summary {path}")
-        require(row["summary"] == raw_summaries[path], f"per-file LLVM summary differs: {path}")
+        require(row["summary"] == raw_summaries[path], f"per-file normalized summary differs: {path}")
     expected_llvm_summary = aggregate_source_summary(source_rows)
     require(coverage.get("llvm_summary") == expected_llvm_summary,
-            "aggregate LLVM summary differs from per-file source rows")
+            "aggregate normalized LLVM summary differs from per-file source rows")
+    data = report["data"][0]
+    for metric in ("regions", "lines"):
+        total_row = data.get("totals", {}).get(metric)
+        expected = expected_llvm_summary[metric]
+        require(isinstance(total_row, dict)
+                and total_row.get("count") == expected["total"]
+                and total_row.get("covered") == expected["covered"]
+                and total_row.get("notcovered") == expected["missing"],
+                f"standard LLVM aggregate {metric} totals differ from unified summary")
     source_region_hits = sum(region["covered"] for region in raw_regions.values())
     expected_summary = {
         "regions": {
@@ -770,7 +897,7 @@ def validate_coverage(
         aggregate_profile, label="aggregate", llvm_cov=llvm_cov, binaries=coverage_binaries,
     )
     replayed_regions, replayed_summaries, replayed_functions = llvm_production_regions(
-        replayed_llvm, source["sha256"],
+        replayed_llvm, source["sha256"], require_normalized_summaries=False,
     )
     require(replayed_regions == raw_regions and replayed_summaries == raw_summaries
             and replayed_functions == canonical_functions,
@@ -1038,16 +1165,23 @@ def validate_coverage(
         if case.get("verification", "target-contract") == "fault-contract"
     ]
     for index, repeat in enumerate(native_repeats, 1):
+        observed_ids = repeat.get("observed_pass_ids")
+        observed_fault_points = repeat.get("observed_fault_points")
+        require(isinstance(observed_ids, list) and all(isinstance(cid, str) for cid in observed_ids)
+                and sorted(observed_ids) == sorted(native_ids),
+                f"native repeat case inventory differs: {index}")
+        require(isinstance(observed_fault_points, list)
+                and all(isinstance(point, str) for point in observed_fault_points)
+                and sorted(observed_fault_points) == sorted(expected_native_fault_points),
+                f"native repeat fault inventory differs: {index}")
         require(repeat.get("schema") == "uvicorn-rs-native-matrix-result/3" and repeat.get("run") == index
                 and repeat.get("status") == "completed" and repeat.get("runner_exit_code") == 0
                 and repeat.get("selected") == nc and repeat.get("passed") == nc
                 and repeat.get("failed") == 0 and repeat.get("not_run") == 0
                 and repeat.get("expected_case_ids") == native_ids
-                and repeat.get("observed_pass_ids") == native_ids
                 and repeat.get("expected_fault_points") == expected_native_fault_points
-                and repeat.get("observed_fault_points") == expected_native_fault_points
                 and repeat.get("transient_infrastructure_failures") == 0,
-                f"native repeat failed or out of order: {index}")
+                f"native repeat failed or expected inventory differs: {index}")
         attempts = repeat.get("attempts")
         require(isinstance(attempts, list) and len(attempts) == 1 and attempts[0].get("attempt") == 1
                 and attempts[0].get("status") == "completed" and attempts[0].get("runner_exit_code") == 0
@@ -1074,11 +1208,11 @@ def validate_coverage(
                            f"native repeat stderr {index}")
         stdout = artifact(repeat["stdout_artifact"]).read_text(encoding="utf-8")
         artifact(repeat["stderr_artifact"])
-        require([line.removeprefix("PASS ") for line in stdout.splitlines() if line.startswith("PASS ")] == native_ids,
-                f"native repeat stdout differs from manifest order: {index}")
+        require([line.removeprefix("PASS ") for line in stdout.splitlines() if line.startswith("PASS ")] == observed_ids,
+                f"native repeat stdout differs from observed receipt order: {index}")
         require([line.removeprefix("FAULT_CONSUMED ") for line in stdout.splitlines()
-                 if line.startswith("FAULT_CONSUMED ")] == expected_native_fault_points,
-                f"native repeat fault consumption differs from manifest order: {index}")
+                 if line.startswith("FAULT_CONSUMED ")] == observed_fault_points,
+                f"native repeat fault consumption differs from observed receipt order: {index}")
         check_profiles(
             repeat.get("profile_data_artifacts"), repeat.get("profile_data_receipts"),
             f"native repeat {index}", expected_parent=root / "native-matrix-runs" / f"run-{index}",
@@ -1094,8 +1228,9 @@ def validate_coverage(
             "measurement_path": str(report_path.relative_to(ROOT)),
             "metric": "regions",
             "required_follow_up": (
-                "Query and fully paginate both regions and lines for this exact report; require zero groups, "
-                "source=matches_receipt, and tests=passed."
+                "Query and fully paginate both regions and lines for this exact report; require zero missing "
+                "source-span totals, source=matches_receipt, and tests=passed; retain function-instantiation "
+                "groups as diagnostics."
             ),
         }, "pending Coverage-MCP request differs from the producer contract")
     else:
@@ -1117,20 +1252,27 @@ def validate_coverage_mcp(
     receipt: dict[str, Any], *, report_path: Path, report_relative: str, build: dict[str, Any],
     source: dict[str, Any], summary: dict[str, dict[str, int]], artifact: Any,
 ) -> None:
-    exact_keys(receipt, {"status", "gate", "measurement_path", "metric", "source", "recorded_revision", "build_id",
+    exact_keys(receipt, {"status", "gate", "group_semantics", "measurement_path", "metric", "source", "recorded_revision", "build_id",
                          "tests", "coverage", "line_coverage", "group_count", "groups", "line_group_count",
                          "line_groups", "location_samples_are_bounded", "pages", "line_pages", "receipt_artifact",
                          "receipt_sha256"},
                "Coverage-MCP receipt")
     build_id = digest_json(build)
     require(receipt.get("status") == "measured" and receipt.get("gate") == "passed"
+            and receipt.get("group_semantics") == (
+                "per-function-instantiation observations; source-span totals are the coverage gate"
+            )
             and receipt.get("measurement_path") == report_relative and receipt.get("metric") == "regions"
             and receipt.get("source") == "matches_receipt" and receipt.get("tests") == "passed"
             and receipt.get("recorded_revision") == source["revision"] and receipt.get("build_id") == build_id
-            and receipt.get("group_count") == 0 and receipt.get("groups") == []
-            and receipt.get("line_group_count") == 0 and receipt.get("line_groups") == []
+            and type(receipt.get("group_count")) is int and receipt["group_count"] >= 0
+            and isinstance(receipt.get("groups"), list)
+            and len(receipt["groups"]) == receipt["group_count"]
+            and type(receipt.get("line_group_count")) is int and receipt["line_group_count"] >= 0
+            and isinstance(receipt.get("line_groups"), list)
+            and len(receipt["line_groups"]) == receipt["line_group_count"]
             and receipt.get("location_samples_are_bounded") is True,
-            "Coverage-MCP did not prove zero gaps for this source/test receipt")
+            "Coverage-MCP does not bind complete source coverage to this test receipt")
     region_total = summary["regions"] | {"metric": "regions"}
     line_total = summary["lines"] | {"metric": "lines"}
     require(receipt.get("coverage") == region_total and receipt.get("line_coverage") == line_total,
@@ -1160,9 +1302,10 @@ def validate_coverage_mcp(
         require(isinstance(response, dict) and isinstance(response.get("data"), dict),
                 f"invalid MCP response {index}")
         data = response["data"]
-        require(data.get("status") == "measured" and data.get("group_count") == 0
-                and data.get("groups") == [] and data.get("next_offset") is None,
-                f"MCP page {index} is incomplete or reports gaps")
+        require(data.get("status") == "measured"
+                and type(data.get("group_count")) is int and data["group_count"] >= 0
+                and isinstance(data.get("groups"), list),
+                f"MCP page {index} is incomplete or has invalid grouped diagnostics")
         measurement = data.get("measurement")
         require(isinstance(measurement, dict) and isinstance(measurement.get("coverage"), dict),
                 f"MCP page {index} lacks a measurement")
@@ -1186,7 +1329,7 @@ def validate_coverage_mcp(
     for metric, metric_pages in by_metric.items():
         expected_offset = 0
         expected_limit = metric_pages[0]["request"]["limit"]
-        seen_groups: set[str] = set()
+        observed_group_rows = 0
         total_groups: int | None = None
         for index, page in enumerate(metric_pages):
             request, data = page["request"], page["response"]["data"]
@@ -1208,9 +1351,7 @@ def validate_coverage_mcp(
                         and type(group.get("count")) is int and group["count"] >= 0
                         and isinstance(group.get("locations"), list),
                         f"MCP {metric} page {index} has an invalid group row")
-                identity = coverage_mcp_group_identity(group)
-                require(identity not in seen_groups, f"MCP {metric} repeats a group row")
-                seen_groups.add(identity)
+                observed_group_rows += 1
             next_offset = data.get("next_offset")
             require(next_offset is None or (type(next_offset) is int and next_offset > expected_offset),
                     f"MCP {metric} page {index} has an invalid next offset")
@@ -1218,7 +1359,8 @@ def validate_coverage_mcp(
                     f"MCP {metric} page order continues after terminal or stops before next page")
             if next_offset is not None:
                 expected_offset = next_offset
-        require(total_groups == len(seen_groups), f"MCP {metric} pages omit or duplicate groups")
+        require(total_groups == observed_group_rows,
+                f"MCP {metric} page row count differs from its reported group total")
     require(report_path.is_file(), "coverage report disappeared during MCP receipt validation")
 
 

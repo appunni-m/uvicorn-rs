@@ -103,15 +103,21 @@ for TCP requests, including TLS. It records successful raw EOF reads below TLS;
 reader destruction without EOF returns `PeerReadHalfClosedUnavailable`.
 HTTP/2 stream reset does not set it, and HTTP/3 has no TCP handle.
 
-The selected 18-input EOF run verifies response delivery after peer write-half
+The selected 18-input EOF run verified response delivery after peer write-half
 closure and observation after complete, empty, or streamed H1 responses over
-TCP/TLS. It does not establish notification before a held service returns.
-Locked Hyper's half-close policy can defer reads during an H1 response. A
-service-wide EOF guard would also suppress incomplete request-body errors,
-so it cannot supply this capability safely. Kata `1m58` tracks a parser-aware
-protocol-driver solution before canonical ASGI disconnect migration. The
-current native manifest has 150 inputs; the historical 36-case repeated
-receipt above does not qualify it. See the [current coverage record](../coverage.md#current-unified-coverage-status-2026-10-14).
+TCP/TLS. That run did not establish notification before a held service
+returns. Locked Hyper's half-close policy can defer reads during an H1
+response, and a service-wide EOF guard would suppress incomplete request-body
+errors. The later native implementation uses opt-in
+`PeerReadHalfCloseMode::Proactive`: one owned raw TCP reader feeds TLS/HTTP
+through a bounded queue while the protocol driver remains the sole consumer.
+The current 206-case native manifest includes held-service inputs for
+bodyless, complete, and incomplete uploads over cleartext and TLS. All 206
+native cases passed in each of three repeats in the source-bound 717-case
+unified report, which remains dirty local evidence rather than hosted release
+proof. Default `OnRead` behavior can still defer EOF observation, and this
+native request extension does not deliver ASGI `http.disconnect`. See the
+[current coverage record](../coverage.md#current-unified-coverage-status-2026-10-15).
 
 An isolated copy of Hyper 1.11.1 demonstrates a narrower parser-aware path:
 when request parsing has reached `Reading::KeepAlive` with no buffered bytes,
@@ -122,7 +128,8 @@ assertions while both builds retain response delivery. The observer assertion
 requires successful completion and confirmed EOF, so reader destruction
 cannot satisfy it. This is feasibility evidence under ignored `target/`, not
 a dependency change or production capability. TLS and buffered pipelining
-need separate evidence before adopting a protocol-driver change.
+need separate evidence before adopting this parser-aware Hyper change; the
+production Proactive mode is a distinct bounded-reader design.
 
 The follow-up 11-input TLS/pipeline comparison failed **2/11 candidate inputs**:
 an unclean TLS raw FIN surfaced Rustls `UnexpectedEof` before the held response,

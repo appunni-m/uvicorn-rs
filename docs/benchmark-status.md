@@ -2,7 +2,57 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Latest hosted benchmark matrix: run #27 (2026-10-14)
+## Latest hosted benchmark matrix: run #29 (2026-10-14)
+
+The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38537208330)
+measured commit
+[`1bde9cee0bb89618a30c3fc01b04af183f709c7b`](https://github.com/appunni-m/uvicorn-rs/commit/1bde9cee0bb89618a30c3fc01b04af183f709c7b).
+Parity completed on all three systems. The category step failed on each
+system because HTTP/2 stopped before all 140 planned rows were written.
+HTTP/3 also stopped early on Linux x86-64 and Linux ARM64; the retained Linux
+output includes a Hypercorn asyncio `protocol-scope` request that timed out
+waiting for response headers. macOS completed all 130 HTTP/3 rows. WebSocket
+completed 60/60 rows and lifecycle completed 20/20 rows on every system.
+
+| System | FastAPI-only HTTP/1 | HTTP/1 categories | HTTP/2 | HTTP/3 | WebSocket | Lifecycle |
+|---|---:|---:|---:|---:|---:|---:|
+| Linux x86-64 | 40/40 rows; 39 timing-valid | 300/300; 300 timing-valid | incomplete; 140 planned | incomplete; 130 planned | 60/60 | 20/20 |
+| Linux ARM64 | 40/40 rows; 39 timing-valid | 300/300; 300 timing-valid | incomplete; 140 planned | incomplete; 130 planned | 60/60 | 20/20 |
+| macOS ARM64 | 40/40 rows; 5 timing-valid | 300/300; 232 timing-valid | incomplete; 140 planned | 130/130; 117 timing-valid | 60/60 | 20/20 |
+
+The completed HTTP/1 rows had zero correctness failures. Timing validity does
+not establish a speedup: the standalone FastAPI comparisons are
+`not_proven`, and the broader category matrix is incomplete. The latest
+complete multi-system FastAPI comparison remains run #27 below; its median
+Rust/Uvicorn throughput ratios were below 1.0 on all three systems, so it did
+not demonstrate a broad gain.
+
+The workflow used Python 3.12.13, Rust 1.98.1, five repetitions, five seconds
+per timed sample, one second of warmup, and concurrency 64 (HTTP/3 concurrency
+1). The [Linux x86-64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38537208330/artifacts/11884090964),
+[Linux ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38537208330/artifacts/11884251396),
+and [macOS ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38537208330/artifacts/11885435428)
+retain category JSONL checkpoints and logs. The HTTP/2 failure's specific
+sample-level cause is not present in the job summary; the retained artifacts
+are needed to diagnose it. This run does not satisfy performance acceptance.
+
+## Focused local FastAPI HTTP/1 workload (2026-10-16)
+
+A single `fastapi-fixed` workload was run on Apple M3 Pro / macOS 15.7.7 with
+the same stock FastAPI app on Uvicorn and `uvicorn-rs-py`, under asyncio and
+uvloop. The run used Python 3.12.13, Rust 1.98.1, concurrency 64, a one-second
+warmup, five-second samples, and three repetitions per server. All 12 samples
+passed response correctness and graceful shutdown, and source identity stayed
+stable. The initial host preflight accepted, but unrelated CPU activity rose
+during the run. The per-sample guard accepted only 4 of 12 timings: Uvicorn
+asyncio 1/3, Rust asyncio 2/3, Uvicorn uvloop 0/3, and Rust uvloop 1/3. No
+matched pair has the required three valid repetitions. A follow-up host
+preflight rejected before another timing run because unrelated CPU exceeded
+the aggregate and process limits. These rows do not establish a ratio or
+performance result. The raw report and logs are local-only under
+`target/benchmark-categories/2026-10-16/fastapi-fixed-single.json`.
+
+## Previous hosted benchmark matrix: run #27 (2026-10-14)
 
 The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526995006)
 measured commit

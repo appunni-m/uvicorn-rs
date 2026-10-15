@@ -1,7 +1,308 @@
 {
   "schema_version": 1,
-  "protocols": ["http/1.1", "h2c-prior-knowledge", "https/1.1", "h2-tls", "http3"],
+  "protocols": [
+    "http/1.1",
+    "h2c-prior-knowledge",
+    "https/1.1",
+    "h2-tls",
+    "http3"
+  ],
   "cases": [
+    {
+      "id": "http1.proactive-eof-before-headers-none",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": false,
+      "upload": "none",
+      "incomplete": false
+    },
+    {
+      "id": "http1.proactive-peer-read-mode-is-observable",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": false,
+      "upload": "none",
+      "incomplete": false,
+      "peer_read_mode": "proactive"
+    },
+    {
+      "id": "http1.proactive-peer-read-adapter-zero-read-scalar-write-reset-error-recovery",
+      "protocol": "native-core",
+      "operation": "native-http1-peer-read-adapter-contract",
+      "upload_body": "adapter-input",
+      "response_body": "adapter-output",
+      "vector_response_body": "vector-output",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n"
+    },
+    {
+      "id": "http1.proactive-upload-reset-reports-error-without-false-eof",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-upload-reset",
+      "method": "POST",
+      "path": "/upload-cancel",
+      "partial_body": "partial",
+      "declared_content_length": 1048576,
+      "state_path": "/upload-cancel-state",
+      "expected_received_bytes": 7,
+      "expected_body_errors": 1,
+      "expected_dropped_tasks": 1,
+      "abortive_disconnect": true,
+      "peer_read_state_path": "/proactive-peer-read-state",
+      "expected_peer_read_state": "observed=false\n",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "covers": [
+        "http.request-upload"
+      ]
+    },
+    {
+      "id": "http1.proactive-reader-stops-on-shutdown-with-flooded-upload",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-upload-flood-shutdown",
+      "request_path": "/proactive-upload-hold",
+      "declared_content_length": 67108864,
+      "socket_send_buffer_bytes": 32768,
+      "minimum_written_bytes": 65536,
+      "state_path": "/peer-write-half-close-state",
+      "expected_pending_state": "started=true\n",
+      "graceful_shutdown_timeout_ms": 100,
+      "expected_server_error": "active connections exceeded the graceful-shutdown deadline",
+      "covers": [
+        "http.request-upload"
+      ]
+    },
+    {
+      "id": "fault.http1.proactive-peer-read-receiver-closed-keeps-listener-healthy",
+      "protocol": "native-core",
+      "operation": "native-http1-peer-read-receiver-closed",
+      "scenario": "receiver-closed",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http1.peer-read.receiver-closed"
+      },
+      "request_path": "/ready",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n"
+    },
+    {
+      "id": "fault.http3.peer-stop-observer-unavailable-keeps-connection-usable",
+      "protocol": "http3",
+      "operation": "http3-peer-stop-observer-unavailable",
+      "scenario": "observer-unavailable",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.peer-stop-observer.unavailable"
+      },
+      "request_path": "/ready",
+      "expected_status": 500,
+      "expected_body": "",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "HTTP/3 request has no send-stream stop observer"
+    },
+    {
+      "id": "fault.http3.response-send-header-data-trailer-errors-isolate-streams",
+      "protocol": "http3",
+      "operation": "native-http3-response-send-failure",
+      "scenario": "response-frame-send-failure",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response-send.frame-error"
+      },
+      "failure_stages": [
+        {
+          "stage": "response-start",
+          "path": "/ready"
+        },
+        {
+          "stage": "response-data",
+          "path": "/response-trailers"
+        },
+        {
+          "stage": "response-trailers",
+          "path": "/response-trailers"
+        }
+      ],
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n",
+      "expected_send_failures": 3
+    },
+    {
+      "id": "fault.http3.response-finish-error-keeps-connection-usable",
+      "protocol": "http3",
+      "operation": "native-http3-response-send-failure",
+      "scenario": "response-finish-failure",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response-finish.error"
+      },
+      "covers": [
+        "http3.injected-stream-error",
+        "http3.request-task-recovery"
+      ],
+      "request_path": "/ready",
+      "expected_error": "response-fails",
+      "expected_recovery": "same-connection-bidirectional-stream",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n"
+    },
+    {
+      "id": "fault.http3.observer-fallback-response-start-error-recovers-listener",
+      "protocol": "http3",
+      "operation": "native-http3-response-send-failure",
+      "scenario": "response-fallback-start-failure",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response-fallback.start-error"
+      },
+      "covers": [
+        "http3.injected-stream-error",
+        "http3.request-task-recovery"
+      ],
+      "request_path": "/ready",
+      "expected_error": "response-fails",
+      "expected_recovery": "new-connection",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n"
+    },
+    {
+      "id": "fault.http3.observer-fallback-response-finish-error-recovers-listener",
+      "protocol": "http3",
+      "operation": "native-http3-response-send-failure",
+      "scenario": "response-fallback-finish-failure",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.response-fallback.finish-error"
+      },
+      "covers": [
+        "http3.injected-stream-error",
+        "http3.request-task-recovery"
+      ],
+      "request_path": "/ready",
+      "expected_error": "response-fails",
+      "expected_recovery": "new-connection",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n"
+    },
+    {
+      "id": "http1.proactive-eof-before-headers-content-length",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": false,
+      "upload": "content-length",
+      "incomplete": false
+    },
+    {
+      "id": "http1.proactive-eof-before-headers-content-length-incomplete",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": false,
+      "upload": "content-length",
+      "incomplete": true,
+      "covers": [
+        "http.request-upload"
+      ]
+    },
+    {
+      "id": "http1.proactive-eof-before-headers-chunked",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": false,
+      "upload": "chunked",
+      "incomplete": false
+    },
+    {
+      "id": "http1.proactive-eof-before-headers-chunked-incomplete",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": false,
+      "upload": "chunked",
+      "incomplete": true,
+      "covers": [
+        "http.request-upload"
+      ]
+    },
+    {
+      "id": "http1.proactive-eof-preserves-default-500",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": false,
+      "upload": "none",
+      "service_error": true
+    },
+    {
+      "id": "http1-tls.proactive-eof-before-headers-none",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": true,
+      "upload": "none",
+      "incomplete": false
+    },
+    {
+      "id": "http1-tls.proactive-eof-before-headers-content-length",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": true,
+      "upload": "content-length",
+      "incomplete": false
+    },
+    {
+      "id": "http1-tls.proactive-eof-before-headers-content-length-incomplete",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": true,
+      "upload": "content-length",
+      "incomplete": true,
+      "covers": [
+        "http.request-upload"
+      ]
+    },
+    {
+      "id": "http1-tls.proactive-eof-before-headers-chunked",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": true,
+      "upload": "chunked",
+      "incomplete": false
+    },
+    {
+      "id": "http1-tls.proactive-eof-before-headers-chunked-incomplete",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": true,
+      "upload": "chunked",
+      "incomplete": true,
+      "covers": [
+        "http.request-upload"
+      ]
+    },
+    {
+      "id": "http1-tls.proactive-eof-preserves-default-500",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": true,
+      "upload": "none",
+      "service_error": true
+    },
+    {
+      "id": "http1-tls.proactive-eof-distinguishes-close-notify-from-raw-fin",
+      "protocol": "native-core",
+      "operation": "native-http1-proactive-peer-eof",
+      "tls": true,
+      "upload": "none",
+      "tls_close_notify_first": true
+    },
     {
       "id": "api.server-config-zero-connection-limit-error",
       "operation": "server-config-validation",
@@ -66,6 +367,20 @@
       "expected_status": 200,
       "expected_body": "ready\n",
       "server_wait_ms": 2000
+    },
+    {
+      "id": "http1.shutdown-timeout-drains-completed-connection-and-aborts-held-sibling",
+      "protocol": "native-core",
+      "operation": "native-http1-shutdown-drain-completed",
+      "completed_path": "/finish",
+      "completed_first_chunk": "first\n",
+      "completed_final_chunk": "finished\n",
+      "held_path": "/hold",
+      "held_first_chunk": "held\n",
+      "graceful_timeout_ms": 150,
+      "deadline_margin_ms": 50,
+      "server_wait_ms": 2000,
+      "expected_held_body_drops": 1
     },
     {
       "id": "http1.service-panic-closes-connection-and-listener-recovers",
@@ -157,6 +472,19 @@
       "server_wait_ms": 1000
     },
     {
+      "id": "fault.http1.upgrade-receiver-closed-keeps-service-healthy",
+      "protocol": "native-core",
+      "operation": "native-http1-upgrade-session",
+      "scenario": "receiver-closed",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http1.upgrade.receiver-closed"
+      },
+      "expected_status": 200,
+      "expected_response_body": "ready\n",
+      "server_wait_ms": 1000
+    },
+    {
       "id": "http1.native-websocket-text-binary-ping-close",
       "protocol": "native-core",
       "operation": "native-http1-websocket",
@@ -167,12 +495,23 @@
       "expected_status": 101,
       "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
       "text_payload": "native text",
-      "binary_payload": [0, 255, 110, 97, 116, 105, 118, 101],
+      "binary_payload": [
+        0,
+        255,
+        110,
+        97,
+        116,
+        105,
+        118,
+        101
+      ],
       "ping_payload": "ping probe",
       "expected_close_code": 1000,
       "expected_close_reason": "case complete",
       "server_wait_ms": 1000,
-      "covers": ["websocket.message-exchange"]
+      "covers": [
+        "websocket.message-exchange"
+      ]
     },
     {
       "id": "http1.native-websocket-server-shutdown-close",
@@ -185,7 +524,9 @@
       "expected_close_code": 1001,
       "expected_close_reason": "server shutdown",
       "server_wait_ms": 1000,
-      "covers": ["websocket.upgrade-shutdown-cancellation"]
+      "covers": [
+        "websocket.upgrade-shutdown-cancellation"
+      ]
     },
     {
       "id": "http1.native-websocket-invalid-key-is-rejected",
@@ -197,7 +538,9 @@
       "expected_status": 400,
       "expected_error": "Sec-WebSocket-Key must be valid base64",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-without-upgrade-capability-is-rejected",
@@ -209,7 +552,9 @@
       "expected_status": 400,
       "expected_error": "WebSocket Upgrade is supported only on HTTP/1.1",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-unoffered-subprotocol-is-rejected",
@@ -222,7 +567,9 @@
       "expected_status": 400,
       "expected_error": "WebSocket subprotocol was invalid or not offered",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-non-get-method-is-rejected",
@@ -235,7 +582,9 @@
       "expected_status": 400,
       "expected_error": "the request method must be GET",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-version-other-than-13-is-rejected",
@@ -250,7 +599,9 @@
       "expected_response_header_name": "sec-websocket-version",
       "expected_response_header_value": "13",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-missing-version-header-is-rejected",
@@ -263,7 +614,9 @@
       "expected_status": 400,
       "expected_error": "invalid WebSocket handshake: Sec-WebSocket-Version",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-duplicate-version-header-is-rejected",
@@ -272,11 +625,16 @@
       "scenario": "duplicate-version-header",
       "path": "/native-websocket-echo",
       "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
-      "request_websocket_version_values": ["13", "13"],
+      "request_websocket_version_values": [
+        "13",
+        "13"
+      ],
       "expected_status": 400,
       "expected_error": "a required handshake header occurred more than once",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-missing-key-header-is-rejected",
@@ -289,7 +647,9 @@
       "expected_status": 400,
       "expected_error": "invalid WebSocket handshake: Sec-WebSocket-Key",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-duplicate-key-header-is-rejected",
@@ -305,7 +665,9 @@
       "expected_status": 400,
       "expected_error": "a required handshake header occurred more than once",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-rfc-token-whitespace-is-trimmed",
@@ -320,12 +682,24 @@
       "expected_status": 101,
       "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
       "text_payload": "native text",
-      "binary_payload": [0, 255, 110, 97, 116, 105, 118, 101],
+      "binary_payload": [
+        0,
+        255,
+        110,
+        97,
+        116,
+        105,
+        118,
+        101
+      ],
       "ping_payload": "ping probe",
       "expected_close_code": 1000,
       "expected_close_reason": "case complete",
       "server_wait_ms": 1000,
-      "covers": ["websocket.message-exchange", "websocket.protocol-error"]
+      "covers": [
+        "websocket.message-exchange",
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-custom-header-capacity-is-reported",
@@ -337,7 +711,9 @@
       "expected_status": 400,
       "expected_error": "WebSocket response header capacity exceeded",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-final-header-capacity-is-reported",
@@ -349,7 +725,9 @@
       "expected_status": 400,
       "expected_error": "WebSocket response header capacity exceeded",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-echo-handler-final-header-capacity-is-reported",
@@ -361,7 +739,9 @@
       "expected_status": 400,
       "expected_error": "WebSocket response header capacity exceeded",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-accept-after-connection-close-is-reported",
@@ -374,7 +754,10 @@
       "expected_response_body": "deferred WebSocket accept\n",
       "expected_error": "HTTP connection ended before upgrade registration",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error", "websocket.upgrade-shutdown-cancellation"]
+      "covers": [
+        "websocket.protocol-error",
+        "websocket.upgrade-shutdown-cancellation"
+      ]
     },
     {
       "id": "http1.native-websocket-malformed-client-frame-preserves-source",
@@ -388,7 +771,9 @@
       "expected_error_prefix": "WebSocket session failed:",
       "expected_error_source": true,
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-close-reply-flush-failure-preserves-source",
@@ -405,7 +790,30 @@
       "fault": {
         "point": "websocket.receive.close-reply.flush"
       },
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
+    },
+    {
+      "id": "http1.native-websocket-close-receive-cancellation-preserves-frame",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "close-receive-cancellation",
+      "path": "/native-websocket-cancel-receive",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 101,
+      "client_close_reason": "cancel-safe",
+      "expected_close_code": 1000,
+      "expected_close_reason": "cancel-safe",
+      "expected_observation": "cancelled;close-code=1000;close-reason=cancel-safe",
+      "server_wait_ms": 1000,
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.receive.close-reply.cancel"
+      },
+      "covers": [
+        "websocket.message-exchange"
+      ]
     },
     {
       "id": "http1.native-websocket-key-decoding-to-wrong-size-is-rejected",
@@ -417,7 +825,27 @@
       "expected_status": 400,
       "expected_error": "Sec-WebSocket-Key must decode to 16 bytes",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
+    },
+    {
+      "id": "fault.http1.native-websocket-derived-accept-key-header-value-error-recovers",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "accept-key-header-value-error",
+      "path": "/native-websocket-invalid-derived-accept-key",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 400,
+      "expected_error": "the derived accept key is invalid",
+      "server_wait_ms": 1000,
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.accept-key.header-value-error"
+      },
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-connection-without-upgrade-token-is-rejected",
@@ -430,7 +858,9 @@
       "expected_status": 400,
       "expected_error": "Connection and Upgrade must negotiate websocket",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-wrong-upgrade-token-is-rejected",
@@ -443,7 +873,9 @@
       "expected_status": 400,
       "expected_error": "Connection and Upgrade must negotiate websocket",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-empty-offered-subprotocol-token-is-rejected",
@@ -456,7 +888,9 @@
       "expected_status": 400,
       "expected_error": "Sec-WebSocket-Protocol must contain non-empty tokens",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-invalid-offered-subprotocol-token-is-rejected",
@@ -469,7 +903,9 @@
       "expected_status": 400,
       "expected_error": "Sec-WebSocket-Protocol must contain non-empty tokens",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-invalid-selected-subprotocol-header-value-is-rejected",
@@ -482,7 +918,9 @@
       "expected_status": 400,
       "expected_error": "WebSocket subprotocol was invalid or not offered",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-managed-response-header-cannot-be-overridden",
@@ -495,7 +933,9 @@
       "expected_status": 400,
       "expected_error": "WebSocket response header is managed by the handshake",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-subprotocol-selection-is-single-use",
@@ -508,7 +948,9 @@
       "expected_status": 400,
       "expected_error": "WebSocket subprotocol was already selected",
       "server_wait_ms": 1000,
-      "covers": ["websocket.protocol-error"]
+      "covers": [
+        "websocket.protocol-error"
+      ]
     },
     {
       "id": "http1.native-websocket-application-response-header-is-preserved",
@@ -523,28 +965,90 @@
       "expected_response_header_name": "x-native-websocket",
       "expected_response_header_value": "native",
       "text_payload": "native header check",
-      "binary_payload": [0, 255, 110, 97, 116, 105, 118, 101],
+      "binary_payload": [
+        0,
+        255,
+        110,
+        97,
+        116,
+        105,
+        118,
+        101
+      ],
       "ping_payload": "header ping",
       "expected_close_code": 1000,
       "expected_close_reason": "header case complete",
       "server_wait_ms": 1000,
-      "covers": ["websocket.message-exchange"]
+      "covers": [
+        "websocket.message-exchange"
+      ]
     },
     {
       "id": "api.public-server-error-display-source-and-config-debug-contract",
       "operation": "public-error-contract",
-      "expected_default_config_debug": "ServerConfig { max_connections: 1024, graceful_shutdown_timeout: 30s, application_startup_timeout: 30s, application_shutdown_timeout: 30s, application_lifecycle_configured: false, error_observer_configured: false, service_error_policy: RespondInternalServerError }",
-      "expected_configured_config_debug": "ServerConfig { max_connections: 8, graceful_shutdown_timeout: 250ms, application_startup_timeout: 125ms, application_shutdown_timeout: 175ms, application_lifecycle_configured: true, error_observer_configured: true, service_error_policy: Propagate }",
+      "expected_default_config_debug": "ServerConfig { max_connections: 1024, graceful_shutdown_timeout: 30s, application_startup_timeout: 30s, application_shutdown_timeout: 30s, application_lifecycle_configured: false, error_observer_configured: false, service_error_policy: RespondInternalServerError, peer_read_half_close: OnRead }",
+      "expected_configured_config_debug": "ServerConfig { max_connections: 8, graceful_shutdown_timeout: 250ms, application_startup_timeout: 125ms, application_shutdown_timeout: 175ms, application_lifecycle_configured: true, error_observer_configured: true, service_error_policy: Propagate, peer_read_half_close: OnRead }",
       "errors": [
-        { "variant": "invalid-connection-limit", "display": "max_connections must be greater than zero", "source": "none", "shutdown_failures": null },
-        { "variant": "invalid-graceful-shutdown-timeout", "display": "graceful shutdown timeout exceeds the runtime clock range", "source": "none", "shutdown_failures": null },
-        { "variant": "invalid-application-lifecycle-timeout", "display": "application lifecycle timeout exceeds the runtime clock range", "source": "none", "shutdown_failures": null },
-        { "variant": "startup-failed", "display": "application startup hook failed: startup sentinel", "source": "startup sentinel", "shutdown_failures": null },
-        { "variant": "shutdown-failed", "display": "application shutdown hook failed: shutdown sentinel", "source": "shutdown sentinel", "shutdown_failures": null },
-        { "variant": "startup-panicked", "display": "application startup hook panicked", "source": "none", "shutdown_failures": null },
-        { "variant": "shutdown-panicked", "display": "application shutdown hook panicked", "source": "none", "shutdown_failures": null },
-        { "variant": "startup-timed-out", "display": "application startup hook exceeded its deadline", "source": "none", "shutdown_failures": null },
-        { "variant": "shutdown-timed-out", "display": "application shutdown hook exceeded its deadline", "source": "none", "shutdown_failures": null },
+        {
+          "variant": "invalid-connection-limit",
+          "display": "max_connections must be greater than zero",
+          "source": "none",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "connection-admission-closed",
+          "display": "connection admission closed: semaphore closed",
+          "source": "semaphore closed",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "invalid-graceful-shutdown-timeout",
+          "display": "graceful shutdown timeout exceeds the runtime clock range",
+          "source": "none",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "invalid-application-lifecycle-timeout",
+          "display": "application lifecycle timeout exceeds the runtime clock range",
+          "source": "none",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "startup-failed",
+          "display": "application startup hook failed: startup sentinel",
+          "source": "startup sentinel",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "shutdown-failed",
+          "display": "application shutdown hook failed: shutdown sentinel",
+          "source": "shutdown sentinel",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "startup-panicked",
+          "display": "application startup hook panicked",
+          "source": "none",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "shutdown-panicked",
+          "display": "application shutdown hook panicked",
+          "source": "none",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "startup-timed-out",
+          "display": "application startup hook exceeded its deadline",
+          "source": "none",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "shutdown-timed-out",
+          "display": "application shutdown hook exceeded its deadline",
+          "source": "none",
+          "shutdown_failures": null
+        },
         {
           "variant": "server-and-application-shutdown",
           "display": "server stopped with could not accept a TCP connection: accept sentinel; application shutdown hook failed: shutdown sentinel also failed",
@@ -554,8 +1058,18 @@
             "application shutdown hook failed: shutdown sentinel"
           ]
         },
-        { "variant": "accept-failed", "display": "could not accept a TCP connection: accept sentinel", "source": "accept sentinel", "shutdown_failures": null },
-        { "variant": "graceful-shutdown-timed-out", "display": "active connections exceeded the graceful-shutdown deadline", "source": "none", "shutdown_failures": null }
+        {
+          "variant": "accept-failed",
+          "display": "could not accept a TCP connection: accept sentinel",
+          "source": "accept sentinel",
+          "shutdown_failures": null
+        },
+        {
+          "variant": "graceful-shutdown-timed-out",
+          "display": "active connections exceeded the graceful-shutdown deadline",
+          "source": "none",
+          "shutdown_failures": null
+        }
       ]
     },
     {
@@ -577,6 +1091,17 @@
       "path": "/connection-security",
       "expected_status": 200,
       "expected_body": "tls=false;alpn=none\n"
+    },
+    {
+      "id": "http1.peer-read-mode-default-is-observable",
+      "operation": "request",
+      "method": "GET",
+      "path": "/peer-read-half-close-mode",
+      "expected_status": 200,
+      "expected_body": "mode=on-read\n",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
     },
     {
       "id": "http1.empty-successful-response",
@@ -726,7 +1251,9 @@
       "recovery_status": 200,
       "recovery_body": "ready\n",
       "server_wait_ms": 2000,
-      "covers": ["http.application-error"]
+      "covers": [
+        "http.application-error"
+      ]
     },
     {
       "id": "http1.readiness-error-propagates-before-response-commitment",
@@ -746,7 +1273,9 @@
       "recovery_status": 200,
       "recovery_body": "ready\n",
       "server_wait_ms": 2000,
-      "covers": ["http.application-error"]
+      "covers": [
+        "http.application-error"
+      ]
     },
     {
       "id": "http1.response-body-error-after-commitment",
@@ -891,7 +1420,10 @@
       "recovery_status": 200,
       "recovery_body": "ready\n",
       "server_wait_ms": 2000,
-      "covers": ["http.application-error", "http2.response-stream-reset"]
+      "covers": [
+        "http.application-error",
+        "http2.response-stream-reset"
+      ]
     },
     {
       "id": "http2.readiness-error-propagates-with-sibling-recovery",
@@ -912,7 +1444,10 @@
       "recovery_status": 200,
       "recovery_body": "ready\n",
       "server_wait_ms": 2000,
-      "covers": ["http.application-error", "http2.response-stream-reset"]
+      "covers": [
+        "http.application-error",
+        "http2.response-stream-reset"
+      ]
     },
     {
       "id": "http2.stream-reset-drops-response-producer",
@@ -1076,8 +1611,12 @@
       "id": "http3.no-common-alpn-handshake-is-observed-and-server-recovers",
       "protocol": "http3",
       "operation": "native-http3-no-common-alpn-recovery",
-      "covers": ["http3.handshake-recovery"],
-      "server_alpn_protocols": ["h3"],
+      "covers": [
+        "http3.handshake-recovery"
+      ],
+      "server_alpn_protocols": [
+        "h3"
+      ],
       "client_alpn_protocol": "http/1.1",
       "expected_server_error_phase": "connection",
       "expected_server_error_type": "quic",
@@ -1091,8 +1630,12 @@
       "id": "http3.lifecycle-no-common-alpn-handshake-is-observed-and-server-recovers",
       "protocol": "http3",
       "operation": "native-http3-no-common-alpn-lifecycle-recovery",
-      "covers": ["http3.handshake-recovery"],
-      "server_alpn_protocols": ["h3"],
+      "covers": [
+        "http3.handshake-recovery"
+      ],
+      "server_alpn_protocols": [
+        "h3"
+      ],
       "client_alpn_protocol": "http/1.1",
       "expected_server_error_phase": "connection",
       "expected_server_error_type": "quic",
@@ -1110,7 +1653,10 @@
       "endpoint_close_reason": "endpoint closed by owner",
       "startup_wait_ms": 1000,
       "server_wait_ms": 1000,
-      "expected_lifecycle_events": ["startup", "shutdown"]
+      "expected_lifecycle_events": [
+        "startup",
+        "shutdown"
+      ]
     },
     {
       "id": "http3.request-body-is-streamed-to-the-service",
@@ -1137,7 +1683,9 @@
       "id": "http3.empty-data-frame-does-not-end-request-body",
       "protocol": "http3",
       "operation": "http3-upload-pending",
-      "covers": ["http.request-upload"],
+      "covers": [
+        "http.request-upload"
+      ],
       "path": "/http3-pending-consume",
       "state_path": "/http3-body-pending-state",
       "empty_data_frame_before_body": true,
@@ -1166,7 +1714,9 @@
       "id": "http3.service-panic-returns-500-and-keeps-connection",
       "protocol": "http3",
       "operation": "http3-service-panic-recovery",
-      "covers": ["http3.request-task-recovery"],
+      "covers": [
+        "http3.request-task-recovery"
+      ],
       "path": "/http3-service-panic",
       "expected_status": 500,
       "expected_body": "",
@@ -1205,7 +1755,10 @@
       "recovery_status": 200,
       "recovery_body": "ready\n",
       "server_wait_ms": 2000,
-      "covers": ["http.application-error", "http3.request-task-recovery"]
+      "covers": [
+        "http.application-error",
+        "http3.request-task-recovery"
+      ]
     },
     {
       "id": "http3.readiness-error-resets-stream-and-recovers-sibling",
@@ -1226,7 +1779,10 @@
       "recovery_status": 200,
       "recovery_body": "ready\n",
       "server_wait_ms": 2000,
-      "covers": ["http.application-error", "http3.request-task-recovery"]
+      "covers": [
+        "http.application-error",
+        "http3.request-task-recovery"
+      ]
     },
     {
       "id": "http3.readiness-panic-returns-500-and-keeps-connection",
@@ -1244,7 +1800,93 @@
       "expected_server_error_phase": "readiness",
       "expected_server_error_type": "io",
       "expected_server_error_message": "HTTP/3 application service readiness panicked",
-      "covers": ["http3.request-task-recovery"]
+      "covers": [
+        "http3.request-task-recovery"
+      ]
+    },
+    {
+      "id": "fault.http3.peer-stop-observer-error-preserves-listener",
+      "protocol": "http3",
+      "operation": "http3-peer-stop-observer-error",
+      "scenario": "observer-error",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.peer-stop-observer.error"
+      },
+      "request_path": "/ready",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "http3",
+      "expected_server_error_message": "HTTP/3 peer-stop observation failed: 0-RTT rejected",
+      "covers": [
+        "http3.request-task-recovery"
+      ]
+    },
+    {
+      "id": "fault.http3.local-send-retirement-preserves-held-response",
+      "protocol": "http3",
+      "operation": "http3-peer-stop-local-retirement",
+      "scenario": "local-retirement",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.peer-stop-observer.local-retirement"
+      },
+      "request_path": "/http3-response-hold-before-headers",
+      "pending_path": "/http3-response-cancel-pending",
+      "pending_state": "waiting\n",
+      "release_path": "/http3-response-cancel-release",
+      "release_status": 200,
+      "release_body": "released\n",
+      "expected_status": 200,
+      "expected_body": "released response\n",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n",
+      "covers": [
+        "http3.request-task-recovery"
+      ]
+    },
+    {
+      "id": "http3.client-adapter-round-trip-response-trailers",
+      "protocol": "http3",
+      "operation": "http3-adapter-client-round-trip",
+      "path": "/response-trailers",
+      "method": "POST",
+      "body": "request body\n",
+      "request_trailer": "uploaded",
+      "expected_status": 200,
+      "expected_body": "body\n",
+      "expected_trailer": "complete"
+    },
+    {
+      "id": "http3.client-adapter-response-reset-recovers-sibling",
+      "protocol": "http3",
+      "operation": "http3-adapter-client-reset-recovery",
+      "path": "/http3-response-error",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "response body failed: injected HTTP/3 response body error",
+      "covers": [
+        "http3.request-task-recovery"
+      ]
+    },
+    {
+      "id": "http3.client-adapter-peer-stops-large-upload-and-recovers",
+      "protocol": "http3",
+      "operation": "http3-adapter-client-upload-stop",
+      "path": "/ready",
+      "body_bytes": 16777216,
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n",
+      "covers": [
+        "http3.request-task-recovery"
+      ]
     },
     {
       "id": "http3.response-body-error-resets-stream-and-keeps-connection",
@@ -1260,6 +1902,45 @@
       "expected_server_error_message": "response body failed: injected HTTP/3 response body error"
     },
     {
+      "id": "http3.response-body-panic-resets-stream-and-keeps-connection",
+      "protocol": "http3",
+      "operation": "http3-response-error",
+      "path": "/http3-response-body-panic",
+      "first_chunk": "before-panic\n",
+      "expected_status": 200,
+      "recovery_path": "/ready",
+      "recovery_body": "ready\n",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "response body failed: HTTP/3 application response body panicked"
+    },
+    {
+      "id": "http3.response-body-drop-panic-is-logged-and-connection-recovers",
+      "protocol": "http3",
+      "operation": "http3-response-error",
+      "path": "/http3-response-body-drop-panic",
+      "first_chunk": "before-drop-panic\n",
+      "expected_status": 200,
+      "recovery_path": "/ready",
+      "recovery_body": "ready\n",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "io",
+      "expected_server_error_message": "response body failed: injected HTTP/3 response body error before drop panic",
+      "expect_request_task_panic_log": true
+    },
+    {
+      "id": "http3.connection-task-service-clone-panic-is-logged-and-listener-recovers",
+      "protocol": "http3",
+      "operation": "http3-connection-task-panic-recovery",
+      "arm_path": "/arm-http3-clone-panic",
+      "arm_status": 200,
+      "arm_body": "armed\n",
+      "trigger_path": "/ready",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
+    },
+    {
       "id": "http3.request-body-size-hint-and-end-stream-state",
       "protocol": "http3",
       "operation": "request",
@@ -1273,7 +1954,9 @@
       "id": "http3.empty-request-body-is-consumed-through-eof",
       "protocol": "http3",
       "operation": "request",
-      "covers": ["http.request-upload"],
+      "covers": [
+        "http.request-upload"
+      ],
       "method": "POST",
       "path": "/body-state",
       "body": "",
@@ -1317,10 +2000,27 @@
       "expected_server_error_h3_code": 261
     },
     {
+      "id": "http3.invalid-control-frame-cancels-held-sibling-and-recovers",
+      "protocol": "http3",
+      "operation": "http3-invalid-control-frame",
+      "held_sibling_path": "/http3-response-hold-before-headers",
+      "expected_waiters_before_close": 1,
+      "expected_waiters_after_close": 0,
+      "expected_connection_error_code": 261,
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_type": "h3",
+      "expected_server_error_h3_code": 261
+    },
+    {
       "id": "http3.peer-close-during-server-connection-creation-recovers",
       "protocol": "http3",
       "operation": "http3-connection-init-failure-recovery",
-      "covers": ["http3.injected-stream-error"],
+      "covers": [
+        "http3.injected-stream-error"
+      ],
       "client_max_concurrent_uni_streams": 0,
       "client_close_error_code": 0,
       "recovery_path": "/ready"
@@ -1329,7 +2029,9 @@
       "id": "native.lifecycle-http3-peer-close-during-server-connection-creation-recovers",
       "protocol": "http3",
       "operation": "native-lifecycle-http3-connection-init-failure-recovery",
-      "covers": ["http3.injected-stream-error"],
+      "covers": [
+        "http3.injected-stream-error"
+      ],
       "client_max_concurrent_uni_streams": 0,
       "client_close_error_code": 0,
       "recovery_path": "/ready"
@@ -1438,6 +2140,19 @@
       "expected_dropped_streams": 1
     },
     {
+      "id": "http1.zero-deadline-observes-response-drop-panic",
+      "protocol": "http/1.1",
+      "operation": "graceful-timeout-abort",
+      "path": "/graceful-timeout-drop-panic",
+      "expected_status": 200,
+      "first_chunk": "held\n",
+      "graceful_timeout_ms": 0,
+      "server_wait_ms": 1000,
+      "expected_server_error": "active connections exceeded the graceful-shutdown deadline",
+      "expected_dropped_streams": 1,
+      "expect_connection_task_abort_panic_log": true
+    },
+    {
       "id": "http3.zero-deadline-aborts-held-response",
       "protocol": "http3",
       "operation": "http3-graceful-timeout-abort",
@@ -1449,6 +2164,64 @@
       "server_wait_ms": 1000,
       "expected_server_error": "active connections exceeded the graceful-shutdown deadline",
       "expected_dropped_streams": 1
+    },
+    {
+      "id": "fault.server.graceful-shutdown.deadline-overflow",
+      "protocol": "native-core",
+      "operation": "native-server-graceful-deadline-overflow",
+      "scenario": "deadline-overflow",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.graceful-shutdown.deadline-overflow"
+      },
+      "expected_error": "graceful shutdown timeout exceeds the runtime clock range"
+    },
+    {
+      "id": "fault.http3.graceful-shutdown.deadline-overflow",
+      "protocol": "http3",
+      "operation": "native-server-graceful-deadline-overflow",
+      "scenario": "deadline-overflow",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.graceful-shutdown.deadline-overflow"
+      },
+      "expected_error": "graceful shutdown timeout exceeds the runtime clock range",
+      "covers": [
+        "http3.graceful-shutdown"
+      ]
+    },
+    {
+      "id": "fault.server.listener.accept-error",
+      "protocol": "native-core",
+      "operation": "native-server-listener-accept-error",
+      "scenario": "accept-error",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.listener.accept-error"
+      },
+      "expected_error": "could not accept a TCP connection: injected TCP listener accept failure"
+    },
+    {
+      "id": "fault.server.listener.admission-closed",
+      "protocol": "native-core",
+      "operation": "native-server-listener-admission-closed",
+      "scenario": "admission-closed",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.listener.admission-closed"
+      },
+      "expected_error": "connection admission closed: semaphore closed"
+    },
+    {
+      "id": "fault.server.http3.admission-closed",
+      "protocol": "native-core",
+      "operation": "native-server-http3-admission-closed",
+      "scenario": "http3-admission-closed",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.http3.admission-closed"
+      },
+      "expected_error": "connection admission closed: semaphore closed"
     },
     {
       "id": "http3.positive-deadline-aborts-held-response",
@@ -1467,11 +2240,22 @@
       "id": "http3.idle-open-connection-shutdown-times-out-while-endpoint-drains",
       "protocol": "http3",
       "operation": "native-http3-idle-connection-shutdown-timeout",
-      "covers": ["http3.graceful-shutdown"],
+      "covers": [
+        "http3.graceful-shutdown"
+      ],
       "path": "/request-lifetime-hold",
       "graceful_timeout_ms": 25,
       "server_wait_ms": 1000,
       "expected_server_error": "active connections exceeded the graceful-shutdown deadline"
+    },
+    {
+      "id": "http3.quic-idle-timeout-retires-connection-and-recovers-listener",
+      "protocol": "http3",
+      "operation": "native-http3-idle-timeout-recovery",
+      "idle_timeout_ms": 250,
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n"
     },
     {
       "id": "http3.peer-goaway-drains-cleanly-and-server-remains-available",
@@ -1483,7 +2267,9 @@
       "recovery_path": "/ready",
       "recovery_status": 200,
       "recovery_body": "ready\n",
-      "covers": ["http3.graceful-shutdown"]
+      "covers": [
+        "http3.graceful-shutdown"
+      ]
     },
     {
       "id": "http3.server-shutdown-closes-open-connection-cleanly",
@@ -1493,7 +2279,167 @@
       "expected_status": 200,
       "expected_body": "ready\n",
       "server_wait_ms": 2000,
-      "covers": ["http3.graceful-shutdown"]
+      "covers": [
+        "http3.graceful-shutdown"
+      ]
+    },
+    {
+      "id": "http3.client-adapter-maps-peer-and-local-close",
+      "protocol": "http3",
+      "operation": "native-http3-client-adapter-application-close",
+      "path": "/ready",
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "server_wait_ms": 2000,
+      "expected_close_code": 0,
+      "covers": [
+        "http3.graceful-shutdown"
+      ]
+    },
+    {
+      "id": "http3.server-adapter-maps-peer-close-while-accepting-bidirectional-stream",
+      "protocol": "http3",
+      "operation": "native-http3-accept-bidi-peer-close",
+      "close_code": 47,
+      "close_reason": "client closed before opening a request stream",
+      "expected_error": "application-close"
+    },
+    {
+      "id": "fault.http3.transport-rejects-out-of-range-stream-id",
+      "protocol": "http3",
+      "operation": "native-http3-transport-adapter-edge-case",
+      "scenario": "stream-id-out-of-range",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.transport.stream-id.out-of-range"
+      },
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "raw_stream_id": 18446744073709551615,
+      "request_path": "/ready",
+      "expected_error": "request-fails-and-connection-closes",
+      "expected_recovery": "new-connection",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n"
+    },
+    {
+      "id": "fault.http3.transport-rejects-send-data-before-ready",
+      "protocol": "http3",
+      "operation": "native-http3-transport-adapter-edge-case",
+      "scenario": "send-data-before-ready",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.transport.send-data-pending"
+      },
+      "covers": [
+        "http3.injected-stream-error",
+        "http3.request-task-recovery"
+      ],
+      "request_path": "/ready",
+      "expected_error": "request-fails-and-connection-closes",
+      "expected_recovery": "new-connection",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n"
+    },
+    {
+      "id": "fault.http3.transport-finish-after-reset-returns-error",
+      "protocol": "http3",
+      "operation": "native-http3-transport-adapter-edge-case",
+      "scenario": "finish-after-reset",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.transport.finish-after-reset"
+      },
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "expected_error": "closed-stream",
+      "expected_recovery": "same-connection-bidirectional-stream"
+    },
+    {
+      "id": "http3.client-adapter-waits-for-peer-stream-credit",
+      "protocol": "http3",
+      "operation": "native-http3-client-adapter-stream-credit",
+      "path": "/ready",
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "pending_observation_ms": 25,
+      "server_wait_ms": 3000
+    },
+    {
+      "id": "http3.client-adapter-maps-peer-idle-timeout",
+      "protocol": "http3",
+      "operation": "native-http3-client-adapter-idle-timeout",
+      "path": "/ready",
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "idle_timeout_ms": 250,
+      "server_wait_ms": 3000
+    },
+    {
+      "id": "http3.client-adapter-read-connection-lost-during-shutdown",
+      "protocol": "http3",
+      "operation": "native-http3-client-adapter-read-connection-lost",
+      "request_path": "/http3-response-hold-before-headers",
+      "pending_path": "/http3-response-cancel-pending",
+      "shutdown_path": "/shutdown",
+      "body_bytes": 0,
+      "server_grace_ms": 100,
+      "server_wait_ms": 3000
+    },
+    {
+      "id": "http3.client-adapter-write-connection-lost-during-upload-shutdown",
+      "protocol": "http3",
+      "operation": "native-http3-client-adapter-write-connection-lost",
+      "request_path": "/http3-response-hold-before-headers",
+      "pending_path": "/http3-response-cancel-pending",
+      "shutdown_path": "/shutdown",
+      "body_bytes": 16777216,
+      "server_grace_ms": 100,
+      "server_wait_ms": 3000
+    },
+    {
+      "id": "fault.http3.client-adapter-read-closed-stream-recovers-sibling",
+      "protocol": "http3",
+      "operation": "native-http3-client-adapter-read-closed-stream",
+      "scenario": "read-closed-stream",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.client-adapter.read-closed-stream"
+      },
+      "request_path": "/ready",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n",
+      "server_wait_ms": 3000
+    },
+    {
+      "id": "fault.http3.client-adapter-write-closed-stream-recovers-sibling",
+      "protocol": "http3",
+      "operation": "native-http3-client-adapter-write-closed-stream",
+      "scenario": "write-closed-stream",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.client-adapter.write-closed-stream"
+      },
+      "request_path": "/ready",
+      "request_body": "fault-contract body\n",
+      "recovery_path": "/ready",
+      "expected_recovery_status": 200,
+      "expected_recovery_body": "ready\n",
+      "server_wait_ms": 3000
+    },
+    {
+      "id": "http3.peer-stops-critical-control-stream-then-shutdown",
+      "protocol": "http3",
+      "operation": "native-http3-control-stream-stop-then-shutdown",
+      "expected_connection_error_code": 260,
+      "covers": [
+        "http3.graceful-shutdown"
+      ]
     },
     {
       "id": "http3.incomplete-request-stream-reset-keeps-connection-usable",
@@ -1502,12 +2448,15 @@
       "recovery_path": "/ready",
       "recovery_status": 200,
       "recovery_body": "ready\n",
-      "covers": ["http3.request-task-recovery"]
+      "covers": [
+        "http3.request-task-recovery"
+      ]
     },
     {
       "id": "http3.response-cancel-before-headers-keeps-connection-usable",
       "protocol": "native-core",
       "operation": "native-http3-response-send-cancel",
+      "cancelled_path": "/http3-response-cancel-dropped",
       "cancel_phase": "before-headers",
       "request_path": "/http3-response-hold-before-headers",
       "pending_path": "/http3-response-cancel-pending",
@@ -1517,12 +2466,16 @@
       "release_body": "released\n",
       "recovery_path": "/ready",
       "recovery_status": 200,
-      "recovery_body": "ready\n"
+      "recovery_body": "ready\n",
+      "covers": [
+        "http3.request-task-recovery"
+      ]
     },
     {
       "id": "http3.response-cancel-before-trailers-keeps-connection-usable",
       "protocol": "native-core",
       "operation": "native-http3-response-send-cancel",
+      "cancelled_path": "/http3-response-cancel-dropped",
       "cancel_phase": "before-trailers",
       "request_path": "/http3-response-hold-before-trailers",
       "expected_status": 200,
@@ -1534,12 +2487,16 @@
       "release_body": "released\n",
       "recovery_path": "/ready",
       "recovery_status": 200,
-      "recovery_body": "ready\n"
+      "recovery_body": "ready\n",
+      "covers": [
+        "http3.request-task-recovery"
+      ]
     },
     {
       "id": "http3.response-cancel-before-finish-keeps-connection-usable",
       "protocol": "native-core",
       "operation": "native-http3-response-send-cancel",
+      "cancelled_path": "/http3-response-cancel-dropped",
       "cancel_phase": "before-finish",
       "request_path": "/http3-response-hold-before-finish",
       "expected_status": 200,
@@ -1550,13 +2507,22 @@
       "release_body": "released\n",
       "recovery_path": "/ready",
       "recovery_status": 200,
-      "recovery_body": "ready\n"
+      "recovery_body": "ready\n",
+      "covers": [
+        "http3.request-task-recovery"
+      ]
     },
     {
       "id": "http1-tls.shutdown-bounds-incomplete-handshake",
       "protocol": "native-core",
       "operation": "native-http1-tls-pending-handshake-shutdown",
-      "partial_tls_record_bytes": [22, 3, 1, 0, 100],
+      "partial_tls_record_bytes": [
+        22,
+        3,
+        1,
+        0,
+        100
+      ],
       "pending_handshake_settle_ms": 50,
       "graceful_timeout_ms": 40,
       "server_wait_ms": 1000,
@@ -1566,7 +2532,9 @@
       "id": "http3.lifecycle-shutdown-bounds-pending-handshake",
       "protocol": "http3",
       "operation": "native-lifecycle-http3-pending-handshake-shutdown",
-      "covers": ["http3.graceful-shutdown"],
+      "covers": [
+        "http3.graceful-shutdown"
+      ],
       "expected_server_error": "active connections exceeded the graceful-shutdown deadline",
       "graceful_timeout_ms": 1000,
       "server_wait_ms": 2000

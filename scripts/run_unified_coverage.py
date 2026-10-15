@@ -36,7 +36,7 @@ run_parity = importlib.import_module("run_parity")
 
 RUNNER = ROOT / "scripts" / "run_parity.py"
 BUILD_SCRIPT = ROOT / "scripts" / "build_coverage_extension.py"
-RESULT_SCHEMA = "uvicorn-rs-coverage/unified@5"
+RESULT_SCHEMA = "uvicorn-rs-coverage/unified@7"
 LLVM_EXTENSION_KEY = "uvicorn_rs_unified"
 SOURCE_PATHS = (
     "src",
@@ -51,8 +51,14 @@ PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
     "crates/uvicorn-rs/src/lib.rs",
     "crates/uvicorn-rs/src/http3.rs",
+    "crates/uvicorn-rs/src/http3/transport.rs",
     "crates/uvicorn-rs/src/websocket.rs",
+    "crates/uvicorn-rs/src/peer_read.rs",
     "crates/native-app-contract/src/lib.rs",
+)
+# Sources compiled only to drive coverage contracts, not production code.
+COVERAGE_SUPPORT_SOURCE_SET = (
+    "crates/uvicorn-rs/src/http3/coverage.rs",
 )
 EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
 NO_COUNTER_SOURCE_SET = ("crates/native-app-contract/src/lib.rs",)
@@ -66,9 +72,89 @@ PYTHON_SOURCE_SET = (
 NATIVE_MANIFEST = ROOT / "tests" / "native-core" / "manifest.json"
 NATIVE_RUNNER = ROOT / "target" / "asgi-native-coverage" / "release" / "examples" / "native_core_contracts"
 NATIVE_FAULT_CONTRACTS = {
+    "http1.upgrade.receiver-closed": {
+        "operation": "native-http1-upgrade-session",
+        "scenario": "receiver-closed",
+    },
+    "http1.peer-read.receiver-closed": {
+        "operation": "native-http1-peer-read-receiver-closed",
+        "scenario": "receiver-closed",
+    },
+    "http3.peer-stop-observer.unavailable": {
+        "operation": "http3-peer-stop-observer-unavailable",
+        "scenario": "observer-unavailable",
+    },
+    "http3.peer-stop-observer.error": {
+        "operation": "http3-peer-stop-observer-error",
+        "scenario": "observer-error",
+    },
+    "http3.peer-stop-observer.local-retirement": {
+        "operation": "http3-peer-stop-local-retirement",
+        "scenario": "local-retirement",
+    },
+    "http3.client-adapter.read-closed-stream": {
+        "operation": "native-http3-client-adapter-read-closed-stream",
+        "scenario": "read-closed-stream",
+    },
+    "http3.client-adapter.write-closed-stream": {
+        "operation": "native-http3-client-adapter-write-closed-stream",
+        "scenario": "write-closed-stream",
+    },
+    "http3.response-send.frame-error": {
+        "operation": "native-http3-response-send-failure",
+        "scenario": "response-frame-send-failure",
+    },
+    "http3.response-finish.error": {
+        "operation": "native-http3-response-send-failure",
+        "scenario": "response-finish-failure",
+    },
+    "http3.response-fallback.start-error": {
+        "operation": "native-http3-response-send-failure",
+        "scenario": "response-fallback-start-failure",
+    },
+    "http3.response-fallback.finish-error": {
+        "operation": "native-http3-response-send-failure",
+        "scenario": "response-fallback-finish-failure",
+    },
+    "http3.transport.stream-id.out-of-range": {
+        "operation": "native-http3-transport-adapter-edge-case",
+        "scenario": "stream-id-out-of-range",
+    },
+    "http3.transport.send-data-pending": {
+        "operation": "native-http3-transport-adapter-edge-case",
+        "scenario": "send-data-before-ready",
+    },
+    "http3.transport.finish-after-reset": {
+        "operation": "native-http3-transport-adapter-edge-case",
+        "scenario": "finish-after-reset",
+    },
+    "websocket.accept-key.header-value-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accept-key-header-value-error",
+    },
     "websocket.receive.close-reply.flush": {
         "operation": "native-http1-websocket",
         "scenario": "close-reply-flush-failure",
+    },
+    "websocket.receive.close-reply.cancel": {
+        "operation": "native-http1-websocket",
+        "scenario": "close-receive-cancellation",
+    },
+    "server.graceful-shutdown.deadline-overflow": {
+        "operation": "native-server-graceful-deadline-overflow",
+        "scenario": "deadline-overflow",
+    },
+    "server.listener.accept-error": {
+        "operation": "native-server-listener-accept-error",
+        "scenario": "accept-error",
+    },
+    "server.listener.admission-closed": {
+        "operation": "native-server-listener-admission-closed",
+        "scenario": "admission-closed",
+    },
+    "server.http3.admission-closed": {
+        "operation": "native-server-http3-admission-closed",
+        "scenario": "http3-admission-closed",
     },
 }
 REPORT_INPUT_PATHS = (
@@ -197,10 +283,11 @@ def source_identity(
         for directory in (ROOT / "src", ROOT / "crates" / "uvicorn-rs" / "src", ROOT / "crates" / "native-app-contract" / "src")
         for source in directory.rglob("*.rs")
     }
-    if discovered_sources != set(PRODUCTION_SOURCE_SET):
+    expected_rust_sources = set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET)
+    if discovered_sources != expected_rust_sources:
         raise CoverageError(
-            "production Rust source inventory changed: "
-            f"expected={sorted(PRODUCTION_SOURCE_SET)}, discovered={sorted(discovered_sources)}"
+            "Rust source inventory changed: "
+            f"expected={sorted(expected_rust_sources)}, discovered={sorted(discovered_sources)}"
         )
     discovered_python_sources = {
         str(source.relative_to(ROOT)) for source in (ROOT / "python" / "uvicorn_rs").rglob("*.py")
@@ -326,17 +413,29 @@ def source_region_map(
     representative's source spans when attributing isolated case profiles.
     """
     data = llvm_report["data"][0]
+    root = ROOT.resolve()
+    resolved_filenames: dict[str, str] = {}
+
+    def resolve_filename(filename: str) -> str:
+        # Filenames repeat across thousands of regions in one fixed export.
+        # Resolve each path once without caching across measurements.
+        if filename not in resolved_filenames:
+            resolved_filenames[filename] = str(Path(filename).resolve())
+        return resolved_filenames[filename]
+
     files: dict[str, dict[str, Any]] = {}
+    relative_paths: dict[str, str] = {}
     for item in data["files"]:
-        absolute_path = Path(item["filename"]).resolve()
-        if not absolute_path.is_relative_to(ROOT.resolve()):
+        normalized = resolve_filename(item["filename"])
+        absolute_path = Path(normalized)
+        if not absolute_path.is_relative_to(root):
             continue
-        relative_path = str(absolute_path.relative_to(ROOT.resolve()))
+        relative_path = str(absolute_path.relative_to(root))
         if relative_path in allowed_sources:
-            normalized = str(absolute_path)
             if normalized in files:
                 raise CoverageError(f"LLVM export duplicates production file row: {relative_path}")
             files[normalized] = item
+            relative_paths[normalized] = relative_path
     if not files:
         raise CoverageError("LLVM export contains no files beneath the repository")
 
@@ -344,7 +443,7 @@ def source_region_map(
     file_summaries: dict[str, dict[str, int]] = {}
     function_groups: dict[tuple[str, int, int], list[tuple[str, list[list[int]]]]] = {}
     for absolute_path, file_data in files.items():
-        relative_path = str(Path(absolute_path).relative_to(ROOT.resolve()))
+        relative_path = relative_paths[absolute_path]
         summary = file_data["summary"]
         file_summaries[relative_path] = {
             metric: int(summary[metric]["covered"])
@@ -363,6 +462,7 @@ def source_region_map(
             raise CoverageError(f"LLVM function has invalid filenames: {function['name']}")
         if not isinstance(raw_regions, list):
             raise CoverageError(f"LLVM function has invalid regions: {function['name']}")
+        function_paths = [resolve_filename(filename) for filename in filenames]
         by_file: dict[str, list[list[int]]] = {}
         for raw_region in raw_regions:
             if not isinstance(raw_region, list) or len(raw_region) != 8 or not all(
@@ -372,10 +472,10 @@ def source_region_map(
             start_line, start_column, end_line, end_column, count, file_index, _, kind = raw_region
             if file_index < 0 or file_index >= len(filenames):
                 raise CoverageError(f"LLVM region has an invalid file index: {function['name']}")
-            absolute_path = str(Path(filenames[file_index]).resolve())
+            absolute_path = function_paths[file_index]
             if absolute_path not in files:
                 continue
-            relative_path = str(Path(absolute_path).relative_to(ROOT.resolve()))
+            relative_path = relative_paths[absolute_path]
             by_file.setdefault(relative_path, []).append(raw_region)
 
         for relative_path, file_regions in by_file.items():
@@ -579,6 +679,72 @@ def filter_llvm_export_sources(
         totals[metric] = total
     data["totals"] = totals
     return llvm_report
+
+
+def normalize_llvm_source_summaries(
+    llvm_report: dict[str, Any], source_summaries: dict[str, dict[str, int]]
+) -> None:
+    """Make LLVM file and aggregate summaries use the unified source inventory.
+
+    LLVM retains separate function rows for Rust monomorphizations and its
+    default file summary takes one maximum-covered instantiation per group.
+    The unified report instead attributes each canonical source span as hit
+    when any instantiation executes it. Keep those raw function counters, but
+    publish file and aggregate summaries on the same source-span basis used by
+    ``uvicorn_rs_unified.coverage.regions`` and Coverage-MCP.
+    """
+    data_rows = llvm_report.get("data")
+    if not isinstance(data_rows, list) or len(data_rows) != 1:
+        raise CoverageError("cannot normalize an unsupported LLVM export")
+    data = data_rows[0]
+    files = data.get("files")
+    if not isinstance(files, list):
+        raise CoverageError("cannot normalize LLVM export without file rows")
+
+    seen: set[str] = set()
+    for item in files:
+        filename = item.get("filename")
+        if not isinstance(filename, str):
+            raise CoverageError("cannot normalize LLVM export with an invalid filename")
+        absolute_path = Path(filename).resolve()
+        if not absolute_path.is_relative_to(ROOT.resolve()):
+            continue
+        relative_path = str(absolute_path.relative_to(ROOT.resolve()))
+        expected = source_summaries.get(relative_path)
+        if expected is None:
+            continue
+        seen.add(relative_path)
+        summary = item.get("summary")
+        if not isinstance(summary, dict):
+            raise CoverageError(f"LLVM summary missing for {relative_path}")
+        for metric in ("regions", "lines"):
+            values = expected
+            covered = values[metric]
+            count = values[f"{metric}_total"]
+            row = summary.get(metric)
+            if not isinstance(row, dict):
+                raise CoverageError(f"LLVM {metric} summary missing for {relative_path}")
+            row["covered"] = covered
+            row["count"] = count
+            row["notcovered"] = count - covered
+            row["percent"] = covered / count * 100 if count else 0
+
+    missing = set(EXECUTABLE_SOURCE_SET) - seen
+    if missing:
+        raise CoverageError(f"normalized LLVM export omitted executable sources: {sorted(missing)}")
+
+    metrics = ("branches", "functions", "instantiations", "lines", "mcdc", "regions")
+    totals: dict[str, dict[str, int | float]] = {}
+    for metric in metrics:
+        count = sum(int(item["summary"][metric]["count"]) for item in files)
+        covered = sum(int(item["summary"][metric]["covered"]) for item in files)
+        totals[metric] = {
+            "count": count,
+            "covered": covered,
+            "notcovered": count - covered,
+            "percent": covered / count * 100 if count else 0,
+        }
+    data["totals"] = totals
 
 
 def selected_case_results(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1276,7 +1442,7 @@ def main() -> int:
             line.removeprefix("FAULT_CONSUMED ") for line in stdout.splitlines()
             if line.startswith("FAULT_CONSUMED ")
         ]
-        faults_consumed = observed_fault_points == expected_fault_points
+        faults_consumed = sorted(observed_fault_points) == sorted(expected_fault_points)
         profiles = sorted(repeat_dir.glob("*.profraw"))
         observed_set = set(observed_ids)
         passed_ids = observed_set & set(expected_ids)
@@ -1288,7 +1454,12 @@ def main() -> int:
         passed_count = len(passed_ids)
         failed_count = len(set(expected_ids) - passed_ids)
         not_run_count = len(set(expected_ids) - observed_set)
-        passed = exit_code == 0 and observed_ids == expected_ids and profiles and faults_consumed
+        # The runner emits shared-server cases before isolated cases, so its
+        # pass lines are not guaranteed to follow manifest order. Check an
+        # exact multiset match to reject omissions and duplicates without
+        # making ordering part of the contract.
+        case_ids_match = sorted(observed_ids) == sorted(expected_ids)
+        passed = exit_code == 0 and case_ids_match and profiles and faults_consumed
         repeat_result = {
             "schema": "uvicorn-rs-native-matrix-result/3",
             "run": repeat,
@@ -1413,19 +1584,42 @@ def main() -> int:
     case_index = sorted(receipt["case_key"] for _, receipt, _ in attribution_cases)
     case_index_by_key = {case_key: index for index, case_key in enumerate(case_index)}
 
+    source_region_summaries = {
+        path: {"regions": 0, "regions_total": 0}
+        for path in PRODUCTION_SOURCE_SET
+    }
+    for region in aggregate_regions.values():
+        summary = source_region_summaries[region["file"]]
+        summary["regions_total"] += 1
+        summary["regions"] += int(region["covered"])
+    normalized_aggregate_summaries = {
+        path: {
+            **summary,
+            **source_region_summaries[path],
+        }
+        for path, summary in aggregate_summaries.items()
+    }
+
     llvm_source_summary = {
-        metric: sum(aggregate_summaries[path][metric] for path in EXECUTABLE_SOURCE_SET)
+        metric: sum(normalized_aggregate_summaries[path][metric] for path in EXECUTABLE_SOURCE_SET)
         for metric in ("regions", "lines")
     } | {
-        f"{metric}_total": sum(aggregate_summaries[path][f"{metric}_total"] for path in EXECUTABLE_SOURCE_SET)
+        f"{metric}_total": sum(
+            normalized_aggregate_summaries[path][f"{metric}_total"]
+            for path in EXECUTABLE_SOURCE_SET
+        )
         for metric in ("regions", "lines")
     }
     source_region_summary = {
-        "regions": len(aggregate_hits),
-        "regions_total": len(aggregate_regions),
+        "regions": sum(source_region_summaries[path]["regions"] for path in EXECUTABLE_SOURCE_SET),
+        "regions_total": sum(
+            source_region_summaries[path]["regions_total"] for path in EXECUTABLE_SOURCE_SET
+        ),
         "lines": llvm_source_summary["lines"],
         "lines_total": llvm_source_summary["lines_total"],
     }
+    if source_region_summary["regions"] != len(aggregate_hits):
+        raise CoverageError("per-file source region summaries differ from the attributed union")
     complete_case_matrix = (
         len(case_receipts) == len(cases)
         and len(native_case_receipts) == len(native_cases)
@@ -1509,7 +1703,7 @@ def main() -> int:
         {
             "path": path,
             "classification": "no-executable-counters" if path in NO_COUNTER_SOURCE_SET else "executable",
-            "summary": aggregate_summaries[path],
+            "summary": normalized_aggregate_summaries[path],
         }
         for path in all_source_paths
     ]
@@ -1576,7 +1770,13 @@ def main() -> int:
             "gate": "passed" if coverage_gate_passed else "incomplete",
             "source_set": all_source_paths,
             "executable_source_set": list(EXECUTABLE_SOURCE_SET),
+            "coverage_support_source_set": list(COVERAGE_SUPPORT_SOURCE_SET),
             "source_files": source_file_rows,
+            "llvm_normalization": {
+                "regions": "source-span union across Rust function instantiations",
+                "lines": "LLVM file-level line summary",
+                "function_counters": "raw LLVM instantiation counters retained",
+            },
             "summary": {
                 "regions": {
                     "covered": int(source_region_summary["regions"]),
@@ -1639,6 +1839,10 @@ def main() -> int:
     restore_native_runner(native_runner, native_runner_snapshot, build_identity["native_runner_sha256"])
     native_runner_snapshot.unlink(missing_ok=True)
     aggregate_llvm = filter_llvm_export_sources(aggregate_llvm, set(PRODUCTION_SOURCE_SET))
+    normalize_llvm_source_summaries(
+        aggregate_llvm,
+        {path: normalized_aggregate_summaries[path] for path in PRODUCTION_SOURCE_SET},
+    )
     aggregate_llvm[LLVM_EXTENSION_KEY] = coverage_extension
     output.parent.mkdir(parents=True, exist_ok=True)
     # Keep the complete per-region `hit_by` relation using case-index integers,

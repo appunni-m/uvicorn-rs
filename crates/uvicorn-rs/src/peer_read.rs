@@ -1,0 +1,256 @@
+use std::{
+    future::Future,
+    io,
+    pin::Pin,
+    task::{Context, Poll},
+};
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf},
+    net::{tcp::OwnedReadHalf, tcp::OwnedWriteHalf, TcpStream},
+    sync::{mpsc, watch},
+};
+
+use super::{PeerReadHalfCloseMode, PeerReadHalfClosed};
+
+const READ_CHUNK_SIZE: usize = 16 * 1024;
+const READ_QUEUE_CAPACITY: usize = 2;
+
+pub(super) struct PeerReadIo {
+    inner: ReadMode,
+}
+
+enum ReadMode {
+    OnRead {
+        stream: TcpStream,
+        closed: watch::Sender<bool>,
+    },
+    Proactive(BufferedReadIo),
+}
+
+struct BufferedReadIo {
+    writer: OwnedWriteHalf,
+    receiver: mpsc::Receiver<ReadEvent>,
+    current: Bytes,
+    terminal: ReadTerminal,
+}
+
+enum ReadEvent {
+    Data(Bytes),
+    Eof,
+    Error(io::Error),
+}
+
+enum ReadTerminal {
+    Open,
+    Eof,
+    Failed(io::ErrorKind),
+}
+
+/// Creates one socket reader. The optional pump must be driven alongside the
+/// entire connection, including TLS acceptance and registered upgrade sessions.
+pub(super) fn observe_peer_read(
+    stream: TcpStream,
+    mode: PeerReadHalfCloseMode,
+) -> (
+    PeerReadIo,
+    PeerReadHalfClosed,
+    Option<impl Future<Output = ()> + Send>,
+    bool,
+) {
+    let (closed, receiver) = watch::channel(false);
+    let observer = PeerReadHalfClosed {
+        closed: receiver,
+        mode,
+    };
+    let (inner, pump, prioritize_receiver_close_fault) = match mode {
+        PeerReadHalfCloseMode::OnRead => (ReadMode::OnRead { stream, closed }, None, false),
+        PeerReadHalfCloseMode::Proactive => {
+            let (reader, writer) = stream.into_split();
+            let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
+            #[cfg(coverage)]
+            let (receiver, prioritize_receiver_close_fault) = {
+                let mut receiver = receiver;
+                if super::take_http1_peer_read_receiver_closed_fault() {
+                    receiver.close();
+                    (receiver, true)
+                } else {
+                    (receiver, false)
+                }
+            };
+            #[cfg(not(coverage))]
+            let (receiver, prioritize_receiver_close_fault) = (receiver, false);
+            (
+                ReadMode::Proactive(BufferedReadIo {
+                    writer,
+                    receiver,
+                    current: Bytes::new(),
+                    terminal: ReadTerminal::Open,
+                }),
+                Some(pump_peer_read(reader, sender, closed)),
+                prioritize_receiver_close_fault,
+            )
+        }
+    };
+    (
+        PeerReadIo { inner },
+        observer,
+        pump,
+        prioritize_receiver_close_fault,
+    )
+}
+
+async fn pump_peer_read(
+    mut reader: OwnedReadHalf,
+    sender: mpsc::Sender<ReadEvent>,
+    closed: watch::Sender<bool>,
+) {
+    loop {
+        // Reserve before reading so pressure from HTTP/TLS also bounds socket
+        // read-ahead. The consumer may hold one additional, partly read chunk.
+        let Ok(permit) = sender.reserve().await else {
+            #[cfg(coverage)]
+            super::observe_http1_peer_read_receiver_closed_fault();
+            return;
+        };
+        let mut chunk = BytesMut::with_capacity(READ_CHUNK_SIZE);
+        let mut destination = (&mut chunk).limit(READ_CHUNK_SIZE);
+        match reader.read_buf(&mut destination).await {
+            Ok(0) => {
+                // Only this nonempty raw socket read establishes peer EOF.
+                // Queue it after all data; observing it never closes writes.
+                closed.send_replace(true);
+                permit.send(ReadEvent::Eof);
+                return;
+            }
+            Ok(_) => {
+                permit.send(ReadEvent::Data(chunk.freeze()));
+            }
+            Err(error) => {
+                permit.send(ReadEvent::Error(error));
+                return;
+            }
+        }
+    }
+}
+
+impl BufferedReadIo {
+    fn poll_read(
+        &mut self,
+        context: &mut Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        if buffer.remaining() == 0 {
+            return Poll::Ready(Ok(()));
+        }
+        loop {
+            if !self.current.is_empty() {
+                let count = buffer.remaining().min(self.current.len());
+                buffer.put_slice(&self.current[..count]);
+                self.current.advance(count);
+                return Poll::Ready(Ok(()));
+            }
+            match self.terminal {
+                ReadTerminal::Eof => return Poll::Ready(Ok(())),
+                ReadTerminal::Failed(kind) => {
+                    return Poll::Ready(Err(io::Error::new(
+                        kind,
+                        "raw TCP reader previously failed",
+                    )));
+                }
+                ReadTerminal::Open => {}
+            }
+            match self.receiver.poll_recv(context) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Some(ReadEvent::Data(chunk))) => self.current = chunk,
+                Poll::Ready(Some(ReadEvent::Eof)) => self.terminal = ReadTerminal::Eof,
+                Poll::Ready(Some(ReadEvent::Error(error))) => {
+                    self.terminal = ReadTerminal::Failed(error.kind());
+                    return Poll::Ready(Err(error));
+                }
+                Poll::Ready(None) => {
+                    // A dropped producer does not establish peer EOF. Preserve
+                    // that distinction even if its owner ends unexpectedly.
+                    self.terminal = ReadTerminal::Failed(io::ErrorKind::ConnectionAborted);
+                    return Poll::Ready(Err(io::Error::new(
+                        io::ErrorKind::ConnectionAborted,
+                        "raw TCP reader ended without an EOF or error",
+                    )));
+                }
+            }
+        }
+    }
+}
+
+impl AsyncRead for PeerReadIo {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        match &mut self.get_mut().inner {
+            ReadMode::OnRead { stream, closed } => {
+                let filled_before = buffer.filled().len();
+                let result = Pin::new(stream).poll_read(context, buffer);
+                if matches!(&result, Poll::Ready(Ok(())))
+                    && buffer.remaining() > 0
+                    && buffer.filled().len() == filled_before
+                {
+                    closed.send_replace(true);
+                }
+                result
+            }
+            ReadMode::Proactive(stream) => stream.poll_read(context, buffer),
+        }
+    }
+}
+
+impl AsyncWrite for PeerReadIo {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        match &mut self.get_mut().inner {
+            ReadMode::OnRead { stream, .. } => Pin::new(stream).poll_write(context, buffer),
+            ReadMode::Proactive(stream) => Pin::new(&mut stream.writer).poll_write(context, buffer),
+        }
+    }
+
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffers: &[io::IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        match &mut self.get_mut().inner {
+            ReadMode::OnRead { stream, .. } => {
+                Pin::new(stream).poll_write_vectored(context, buffers)
+            }
+            ReadMode::Proactive(stream) => {
+                Pin::new(&mut stream.writer).poll_write_vectored(context, buffers)
+            }
+        }
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        match &self.inner {
+            ReadMode::OnRead { stream, .. } => stream.is_write_vectored(),
+            ReadMode::Proactive(stream) => stream.writer.is_write_vectored(),
+        }
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match &mut self.get_mut().inner {
+            ReadMode::OnRead { stream, .. } => Pin::new(stream).poll_flush(context),
+            ReadMode::Proactive(stream) => Pin::new(&mut stream.writer).poll_flush(context),
+        }
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match &mut self.get_mut().inner {
+            ReadMode::OnRead { stream, .. } => Pin::new(stream).poll_shutdown(context),
+            ReadMode::Proactive(stream) => Pin::new(&mut stream.writer).poll_shutdown(context),
+        }
+    }
+}

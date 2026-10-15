@@ -58,10 +58,20 @@ Then request `http://127.0.0.1:8080/health`.
 - `ApplicationLifecycle` provides native Rust startup and shutdown hooks; it
   is not the ASGI lifespan protocol.
 - `PeerReadHalfClosed` observes actual raw TCP EOF, including below TLS.
-  Observation can wait until an HTTP/1 service or response finishes. If the
-  reader ends without observing EOF, its wait method returns
-  `PeerReadHalfClosedUnavailable`. This connection signal is distinct from
-  request cancellation; it is absent on HTTP/3.
+  `ServerConfig.peer_read_half_close` defaults to `OnRead`, which uses no
+  read-ahead queue and can wait until an HTTP/1 service or response finishes.
+  Opt-in `Proactive` mode drives one owned raw-reader future in the existing
+  connection task and feeds TLS/HTTP through a bounded queue: two queued 16 KiB
+  chunks plus one being consumed. It adds one input copy and queue wakeups, so
+  measure the workload before enabling it. A full queue can still delay EOF.
+  Neither mode discards request bytes, completes an incomplete body, cancels a
+  request, or closes response writes. If the reader ends without observing EOF,
+  the wait method returns `PeerReadHalfClosedUnavailable`. This connection
+  signal is absent on HTTP/3.
+- HTTP/3 request tasks observe Quinn `STOP_SENDING` while readiness, the Tower
+  service, or response-body writes are pending. A stop drops only that request's
+  pending work; a normal send-side completion does not cancel the application.
+  HTTP/3 retains its own stream and connection error boundaries.
 - `ServiceErrorPolicy::RespondInternalServerError` is the default: Rust service
   and readiness errors before response commitment become an empty 500 response.
   `ServiceErrorPolicy::Propagate` forwards the original error to the protocol

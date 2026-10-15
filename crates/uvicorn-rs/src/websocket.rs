@@ -6,7 +6,10 @@
 //! over HTTP/2 or HTTP/3, or negotiate WebSocket extensions.
 
 #[cfg(coverage)]
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    OnceLock,
+};
 use std::{error::Error, fmt, future::Future};
 
 use data_encoding::BASE64;
@@ -16,10 +19,12 @@ use http::{
         CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY,
         SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION, UPGRADE,
     },
-    HeaderMap, HeaderName, HeaderValue, Request, Response, StatusCode,
+    Extensions, HeaderMap, HeaderName, HeaderValue, Method, Request, Response, StatusCode, Version,
 };
 use hyper::upgrade::{self, OnUpgrade};
 use hyper_util::rt::TokioIo;
+#[cfg(coverage)]
+use tokio::sync::Notify;
 use tokio_tungstenite::{
     tungstenite::{handshake::derive_accept_key, protocol::Role, Error as TungsteniteError},
     WebSocketStream,
@@ -49,6 +54,78 @@ pub struct WebSocketUpgrade {
     response_headers: HeaderMap,
 }
 
+struct ValidatedWebSocketHandshake {
+    connection_upgrade: ConnectionUpgrade,
+    accept_key: HeaderValue,
+    offered_subprotocols: Vec<Vec<u8>>,
+}
+
+fn validate_websocket_handshake(
+    version: Version,
+    method: &Method,
+    extensions: &Extensions,
+    headers: &HeaderMap,
+) -> Result<ValidatedWebSocketHandshake, WebSocketUpgradeError> {
+    if version != Version::HTTP_11 {
+        return Err(WebSocketUpgradeError::UnsupportedTransport);
+    }
+    if method != Method::GET {
+        return Err(WebSocketUpgradeError::InvalidHandshake(
+            "the request method must be GET",
+        ));
+    }
+
+    let connection_upgrade = extensions
+        .get::<ConnectionUpgrade>()
+        .cloned()
+        .ok_or(WebSocketUpgradeError::UnsupportedTransport)?;
+
+    if !has_header_token(headers, &CONNECTION, b"upgrade")
+        || !has_header_token(headers, &UPGRADE, b"websocket")
+    {
+        return Err(WebSocketUpgradeError::InvalidHandshake(
+            "Connection and Upgrade must negotiate websocket",
+        ));
+    }
+
+    let version = single_header(headers, &SEC_WEBSOCKET_VERSION, "Sec-WebSocket-Version")?;
+    if version.as_bytes() != b"13" {
+        return Err(WebSocketUpgradeError::InvalidHandshake(
+            "Sec-WebSocket-Version must be 13",
+        ));
+    }
+
+    let key = single_header(headers, &SEC_WEBSOCKET_KEY, "Sec-WebSocket-Key")?;
+    let decoded_key = BASE64.decode(key.as_bytes()).map_err(|_| {
+        WebSocketUpgradeError::InvalidHandshake("Sec-WebSocket-Key must be valid base64")
+    })?;
+    if decoded_key.len() != 16 {
+        return Err(WebSocketUpgradeError::InvalidHandshake(
+            "Sec-WebSocket-Key must decode to 16 bytes",
+        ));
+    }
+    let derived_accept_key = derive_accept_key(key.as_bytes());
+    #[cfg(coverage)]
+    let accept_key_source: &str = if take_derived_accept_key_header_value_fault() {
+        "\r\n"
+    } else {
+        &derived_accept_key
+    };
+    #[cfg(not(coverage))]
+    let accept_key_source: &str = &derived_accept_key;
+    let accept_key = HeaderValue::from_str(accept_key_source).map_err(|_| {
+        WebSocketUpgradeError::InvalidHandshake("the derived accept key is invalid")
+    })?;
+
+    let offered_subprotocols = parse_subprotocols(headers)?;
+
+    Ok(ValidatedWebSocketHandshake {
+        connection_upgrade,
+        accept_key,
+        offered_subprotocols,
+    })
+}
+
 impl WebSocketUpgrade {
     /// Validates an RFC 6455 HTTP/1.1 request and obtains its upgrade handle.
     ///
@@ -59,62 +136,19 @@ impl WebSocketUpgrade {
     /// returns [`WebSocketUpgradeError::InvalidHandshake`] for malformed or
     /// incomplete handshake headers.
     pub fn from_request<B>(request: &mut Request<B>) -> Result<Self, WebSocketUpgradeError> {
-        if request.version() != http::Version::HTTP_11 {
-            return Err(WebSocketUpgradeError::UnsupportedTransport);
-        }
-        if request.method() != http::Method::GET {
-            return Err(WebSocketUpgradeError::InvalidHandshake(
-                "the request method must be GET",
-            ));
-        }
-
-        let connection_upgrade = request
-            .extensions()
-            .get::<ConnectionUpgrade>()
-            .cloned()
-            .ok_or(WebSocketUpgradeError::UnsupportedTransport)?;
-
-        if !has_header_token(request.headers(), &CONNECTION, b"upgrade")
-            || !has_header_token(request.headers(), &UPGRADE, b"websocket")
-        {
-            return Err(WebSocketUpgradeError::InvalidHandshake(
-                "Connection and Upgrade must negotiate websocket",
-            ));
-        }
-
-        let version = single_header(
+        let handshake = validate_websocket_handshake(
+            request.version(),
+            request.method(),
+            request.extensions(),
             request.headers(),
-            &SEC_WEBSOCKET_VERSION,
-            "Sec-WebSocket-Version",
         )?;
-        if version.as_bytes() != b"13" {
-            return Err(WebSocketUpgradeError::InvalidHandshake(
-                "Sec-WebSocket-Version must be 13",
-            ));
-        }
-
-        let key = single_header(request.headers(), &SEC_WEBSOCKET_KEY, "Sec-WebSocket-Key")?;
-        let decoded_key = BASE64.decode(key.as_bytes()).map_err(|_| {
-            WebSocketUpgradeError::InvalidHandshake("Sec-WebSocket-Key must be valid base64")
-        })?;
-        if decoded_key.len() != 16 {
-            return Err(WebSocketUpgradeError::InvalidHandshake(
-                "Sec-WebSocket-Key must decode to 16 bytes",
-            ));
-        }
-        let accept_key =
-            HeaderValue::from_str(&derive_accept_key(key.as_bytes())).map_err(|_| {
-                WebSocketUpgradeError::InvalidHandshake("the derived accept key is invalid")
-            })?;
-
-        let offered_subprotocols = parse_subprotocols(request.headers())?;
         let on_upgrade = upgrade::on(request);
 
         Ok(Self {
             on_upgrade,
-            connection_upgrade,
-            accept_key,
-            offered_subprotocols,
+            connection_upgrade: handshake.connection_upgrade,
+            accept_key: handshake.accept_key,
+            offered_subprotocols: handshake.offered_subprotocols,
             selected_subprotocol: None,
             response_headers: HeaderMap::new(),
         })
@@ -232,6 +266,7 @@ impl WebSocketUpgrade {
                 handler(WebSocketSession {
                     stream: websocket,
                     connection_upgrade: session_shutdown,
+                    pending_close: None,
                 })
                 .await
             })
@@ -244,6 +279,8 @@ impl WebSocketUpgrade {
 pub struct WebSocketSession {
     stream: WebSocketStream<TokioIo<hyper::upgrade::Upgraded>>,
     connection_upgrade: ConnectionUpgrade,
+    // Some(None) retains a peer close frame without a code or reason.
+    pending_close: Option<Option<WebSocketCloseFrame>>,
 }
 
 impl WebSocketSession {
@@ -251,35 +288,47 @@ impl WebSocketSession {
     /// returns `None` when the underlying stream ends. On a peer close, it
     /// flushes the protocol close reply before returning the frame.
     ///
+    /// Canceling this future preserves any received close frame. A subsequent
+    /// call resumes flushing the reply before returning that frame.
+    ///
     /// # Errors
     ///
     /// Returns [`WebSocketError`] for malformed frames or transport failure.
     pub async fn receive(&mut self) -> Result<Option<WebSocketMessage>, WebSocketError> {
-        let message = self
-            .stream
-            .next()
-            .await
-            .transpose()
-            .map_err(WebSocketError)?;
-        if matches!(message, Some(WebSocketMessage::Close(_))) {
-            // Tungstenite queues the close reply while reading the peer's
-            // close frame. A handler may return immediately after receiving
-            // that frame, so flush the queued reply before the upgraded
-            // transport can be dropped.
-            #[cfg(coverage)]
-            let flush_result = if take_close_reply_flush_fault() {
-                Err(TungsteniteError::Io(std::io::Error::new(
-                    std::io::ErrorKind::BrokenPipe,
-                    "coverage-injected WebSocket close-reply flush failure",
-                )))
-            } else {
-                self.stream.flush().await
-            };
-            #[cfg(not(coverage))]
-            let flush_result = self.stream.flush().await;
-            flush_result.map_err(WebSocketError)?;
+        if self.pending_close.is_none() {
+            match self
+                .stream
+                .next()
+                .await
+                .transpose()
+                .map_err(WebSocketError)?
+            {
+                Some(WebSocketMessage::Close(frame)) => self.pending_close = Some(frame),
+                message => return Ok(message),
+            }
         }
-        Ok(message)
+        #[cfg(coverage)]
+        if take_close_reply_flush_cancellation_fault() {
+            close_reply_flush_cancellation_reached().notify_one();
+            std::future::pending::<()>().await;
+        }
+        // Tungstenite queues the close reply while reading the peer's close
+        // frame. Flush it before a handler can return and drop the transport,
+        // retaining the frame in the session if this receive is canceled.
+        #[cfg(coverage)]
+        let flush_result = if take_close_reply_flush_fault() {
+            Err(TungsteniteError::Io(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "coverage-injected WebSocket close-reply flush failure",
+            )))
+        } else {
+            self.stream.flush().await
+        };
+        #[cfg(not(coverage))]
+        let flush_result = self.stream.flush().await;
+        let frame = self.pending_close.take();
+        flush_result.map_err(WebSocketError)?;
+        Ok(frame.map(WebSocketMessage::Close))
     }
 
     /// Sends a WebSocket data or control message with transport backpressure.
@@ -318,6 +367,38 @@ impl WebSocketSession {
 
 #[cfg(coverage)]
 static CLOSE_REPLY_FLUSH_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static CLOSE_REPLY_FLUSH_CANCELLATION_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static CLOSE_REPLY_FLUSH_CANCELLATION_REACHED: OnceLock<Notify> = OnceLock::new();
+#[cfg(coverage)]
+static DERIVED_ACCEPT_KEY_HEADER_VALUE_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+
+/// Arms the coverage-only derived WebSocket accept-key header conversion fault.
+///
+/// The injected value is supplied only at the header parser boundary in
+/// instrumented builds. The derived RFC 6455 accept key remains unchanged.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_derived_accept_key_header_value_fault() -> bool {
+    DERIVED_ACCEPT_KEY_HEADER_VALUE_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only derived accept-key conversion fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_derived_accept_key_header_value_fault() -> bool {
+    DERIVED_ACCEPT_KEY_HEADER_VALUE_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_derived_accept_key_header_value_fault() -> bool {
+    DERIVED_ACCEPT_KEY_HEADER_VALUE_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
 
 /// Arms the coverage-only WebSocket close-reply flush fault contract.
 ///
@@ -341,11 +422,47 @@ pub fn finish_close_reply_flush_fault() -> bool {
     CLOSE_REPLY_FLUSH_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
 }
 
+/// Arms a coverage-only barrier after a peer close is retained and before its
+/// protocol reply is flushed.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_close_reply_flush_cancellation_fault() -> bool {
+    CLOSE_REPLY_FLUSH_CANCELLATION_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Waits until a `receive` future reaches the close-reply cancellation barrier.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub async fn wait_for_close_reply_flush_cancellation_fault() {
+    close_reply_flush_cancellation_reached().notified().await;
+}
+
+/// Finishes the coverage-only close-reply cancellation contract.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_close_reply_flush_cancellation_fault() -> bool {
+    CLOSE_REPLY_FLUSH_CANCELLATION_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
 #[cfg(coverage)]
 fn take_close_reply_flush_fault() -> bool {
     CLOSE_REPLY_FLUSH_FAULT_STATE
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
+}
+
+#[cfg(coverage)]
+fn take_close_reply_flush_cancellation_fault() -> bool {
+    CLOSE_REPLY_FLUSH_CANCELLATION_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+#[cfg(coverage)]
+fn close_reply_flush_cancellation_reached() -> &'static Notify {
+    CLOSE_REPLY_FLUSH_CANCELLATION_REACHED.get_or_init(Notify::new)
 }
 
 /// An error while validating a WebSocket handshake or registering its session.

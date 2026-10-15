@@ -2,30 +2,147 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current unified coverage status (2026-10-14)
+## Current unified coverage status (2026-10-15)
 
-The unified v4 acceptance remains open. The current manifests contain 511 ASGI
-parity/fault-contract cases and 150 Python-free native cases (661 total).
-Acceptance requires three complete repeats, 100% region and line coverage,
-and fully paginated Coverage-MCP results bound to the exact report bytes.
+The final local full-source report executed all **717/717** declared cases:
+511 Python ASGI cases and 206 Python-free native cases. Attribution passed
+with zero case failures, infrastructure failures, retries, or unrun cases.
+All three full ASGI repeats passed **511/511** and all three native repeats
+passed **206/206**, with zero transient infrastructure failures in each
+repeat. Per-case attribution matches the aggregate union.
 
-The latest exact-commit report is from hosted CI
-[run 38526994848](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526994848)
-on commit
-[`ef9680c8e34fb2bf1c959b94d832f61cbf580213`](https://github.com/appunni-m/uvicorn-rs/commit/ef9680c8e34fb2bf1c959b94d832f61cbf580213).
-All 661 indexed ASGI and native cases passed in each of three complete
-verification runs, with zero retries or infrastructure failures. The unified
-report measured **7,533/7,576 regions** and **5,569/5,594 lines**, leaving 43
-regions and 25 lines uncovered. Its SHA-256 is
-`1bef17e4fc15bbb21eb57144811dbbc9404dd44eec54ec30def086e44d57376a` and its
-source SHA-256 is
-`911747c042fbc1cb7c66a0fb626bfa2eb063a514e73c04d8a0adc9b021b346ee`. The
-[unified coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38526994848/artifacts/11878179532)
-retains the report and attribution data. Coverage-MCP did not return a
-receipt for this report during three follow-up calls, which timed out, so the
-required exact-report, fully paginated zero-gap check remains pending. Every
-indexed case passed, but the coverage threshold and MCP receipt requirements
-remain unmet.
+The measured executable-source union is **8,651/8,651 LLVM regions** and
+**6,523/6,523 lines**. The unified source coverage gate and strict evidence
+checker both passed.
+
+| Executable source file | LLVM regions | Lines |
+| --- | ---: | ---: |
+| `src/lib.rs` | 5,563/5,563 | 3,998/3,998 |
+| `crates/uvicorn-rs/src/lib.rs` | 1,447/1,447 | 1,227/1,227 |
+| `crates/uvicorn-rs/src/http3.rs` | 673/673 | 536/536 |
+| `crates/uvicorn-rs/src/http3/transport.rs` | 366/366 | 291/291 |
+| `crates/uvicorn-rs/src/websocket.rs` | 405/405 | 320/320 |
+| `crates/uvicorn-rs/src/peer_read.rs` | 197/197 | 151/151 |
+| **Total executable source** | **8,651/8,651** | **6,523/6,523** |
+
+`crates/native-app-contract/src/lib.rs` is in the declared source set and has
+no executable LLVM counters. The coverage-only helper
+`crates/uvicorn-rs/src/http3/coverage.rs` is reported separately from the
+production executable-source denominator.
+
+Coverage-MCP measured the same report and matched its source/build receipt:
+13 region pages and one line page, `tests=passed`, `gate=passed`, and zero
+missing regions or lines. Its 187 region groups are per-function-instantiation
+diagnostics; they do not replace the aggregate totals. The strict CI evidence
+checker also accepted the attached report and receipt.
+
+The report is
+`target/asgi-coverage/final-release-acceptance-20261015-r4/report.json`,
+run `665c07b933654d4bbb5482415705df51`, at revision
+`1bde9cee0bb89618a30c3fc01b04af183f709c7b`. Its source SHA-256 is
+`5335d58d277dc3c844c7f602f349053214e2c8f8a2fb4f6cc1dc126c1b313ef2`;
+the instrumented extension SHA-256 is
+`0020079b603a1d065a8ced12fe3eecdfd4e9d71184871d8069cc31c5ee5663ce`;
+the report SHA-256 is
+`301be8575d59f277e169a4199d5d6c44487483e9f5968811612054f6c1ba78cf`;
+and the paginated Coverage-MCP receipt SHA-256 is
+`362b8c044366b503d9b6887b1d191b5a4d701e0ea3b0eab95a8e50085d0433fe`.
+Environment: macOS 15.7.7 ARM64, CPython 3.12.13, Rust 1.98.1, and
+`cargo-llvm-cov` 0.8.7. This is a source-hash-bound **dirty local** result;
+it does not establish a clean-commit or hosted release pass. Reports,
+profiles, logs, and MCP data remain under ignored `target/`.
+
+### Earlier full-coverage snapshot: t6zz v6
+
+This earlier schema v7 snapshot declared 511 Python ASGI cases and 164
+Python-free native cases (675 total). Its full report is
+`target/asgi-coverage/t6zz-final-acceptance-20261015-v6/full-report.json`.
+It records run ID `53b90df8098b43c0ab702742581d37ad`, revision
+`1bde9cee0bb89618a30c3fc01b04af183f709c7b`, and a dirty worktree. Its source
+SHA-256 is
+`edf9189996750cb42c7cbabbe7d3238556f24a40ae84fc0fad6f740f2cd8c368`; the
+report SHA-256 after the MCP receipt was attached is
+`87949c1c2582ec68dbf15cbec6e1d5f23cb47e1981226094741b1775d2f112db`.
+
+All **675/675 attribution cases passed**, with zero failures, infrastructure
+errors, or retries: 243 oracle-parity cases, 268 ASGI fault-contract cases,
+156 native target-contract cases, and 8 native fault-contract cases. Three
+complete ASGI repeats passed **511/511 each**, and three native repeats passed
+**164/164 each**, with zero transient infrastructure failures in every run.
+Per-case profile attribution matches the aggregate. Normalized LLVM source-span coverage is
+**7,655/7,655 regions** and **5,706/5,706 lines**. The instrumented extension
+SHA-256 is `da8b066b124b8fcefee33497fafb5c1b4aa7219e49cf4d13017c3c7441d9e5cb`;
+the measurement used Python 3.12.13 on macOS 15.7.7 arm64 and Rust 1.98.1.
+
+### Resolved source gaps and deterministic behavior
+
+- The two watch-channel lifetime fallbacks (`R2` and `R3`) were removed by
+  replacing the manual watch loops with `watch::Receiver::wait_for`. Existing
+  public HTTP/1 upgrade-lifetime and HTTP/2 stream-reset-lifetime cases passed
+  and attributed the changed paths.
+- The HTTP/1 graceful-timeout drain (`R4`) is exercised by
+  `http1.shutdown-timeout-drains-completed-connection-and-aborts-held-sibling`.
+  It keeps one completed connection's response, aborts a held sibling at the
+  public shutdown deadline, and observes the timeout result.
+- HTTP/3 request cancellation (`R5`) now has one owner at the connection
+  supervisor. It closes and aborts remaining request tasks after the QUIC
+  connection closes, then drains task results. The malformed-control-frame
+  held-sibling case and the peer-close held-response case both pass and
+  attribute the cancellation behavior.
+
+- The formerly unreachable HTTP/1 upgrade receiver closure is exercised by
+  `fault.http1.upgrade-receiver-closed-keeps-service-healthy`. A coverage-only
+  fault closes the receiver while the service is polling it; the case checks
+  connection handling and a later healthy HTTP request.
+- The derived WebSocket accept-key conversion error is exercised by
+  `fault.http1.native-websocket-derived-accept-key-header-value-error-recovers`.
+  A coverage-only fault reaches the fallible header-value conversion; the
+  case verifies handshake rejection and a healthy follow-up request. Ordinary
+  valid-key and invalid-key RFC handshake cases continue to cover protocol
+  behavior. The constructor remains fallible; no panic or unsafe construction
+  was introduced.
+- The native HTTP/3 control-stream stop/shutdown case observes STOP_SENDING
+  transmission, then requires a later ACK batch with no bytes in flight and
+  no intervening packet loss or congestion. A client-only observer delegates
+  to Quinn's default Cubic controller; a short client keepalive ensures a new
+  ACK batch can arrive. This establishes delivery before requesting shutdown.
+  The normal build passed 20 focused repetitions. The final instrumented case
+  and all three native matrix repetitions also passed.
+
+These two new paths are declared fault contracts, not Uvicorn parity claims.
+Each verifies an externally observable response or recovery property. They
+remain inside the same unified source denominator and per-case attribution
+map.
+
+### Coverage-MCP receipt and strict evidence validation
+
+Coverage-MCP read this exact report with `source=matches_receipt`, matching
+build identity, and `tests=passed`. The fully paginated receipt contains 9
+region pages and 1 line page. Aggregate region coverage is **7,655/7,655**
+with zero missing; line coverage is **5,706/5,706** with zero missing. MCP
+returns 163 per-function-instantiation diagnostic groups and zero line groups.
+Those grouped observations retain LLVM monomorphization detail; the aggregate
+source-span totals are the coverage gate. Receipt SHA-256:
+`6281f21c07a298e75e2c2f0f97b178ec1a612dc4142b0f3de33d50678a7632aa`.
+
+Strict validation passed on this report after independently replaying the
+retained aggregate and all 675 isolated case profiles. It verifies exact native
+case and fault multisets, authenticates their execution order against recorded
+stdout, and checks the complete MCP receipt. Both Astra review findings—the
+native execution-order mismatch and imprecise HTTP/3 delivery barrier—are
+resolved in this measured source. Run the same validation with:
+
+```sh
+.venv/bin/python scripts/check_ci_evidence.py coverage \
+  target/asgi-coverage/t6zz-final-acceptance-20261015-v6/full-report.json
+```
+
+The passing output is retained in the same directory as `strict-check.log`.
+Reports, profiles, logs, and MCP receipts remain under Git-ignored `target/`
+and must not be committed. Kata `t6zz` is locally complete. The evidence is
+exact for this dirty source snapshot; hosted CI and a clean committed-source
+run remain release validation steps. Python and branch coverage are not
+claimed. Older dated reports below are historical.
 
 ### Historical hosted baseline: CI run #110
 
@@ -38,32 +155,34 @@ SHA-256 is
 `48a33bfb11b9b0580d446612071abb0406e2a2df2f156c88342ebdf67cc621a4`;
 Coverage-MCP could not produce a receipt from this retained artifact during
 follow-up because both queries timed out. This run predates the current
-661-case manifest and does not satisfy the exact-source coverage gate.
+675-case manifest and does not satisfy the exact-source coverage gate.
 
 ### Normal and instrumented native case lanes
 
-Normal CI selects the 149 `target-contract` inputs from the 150-case native
-manifest using `scripts/select_native_contracts.py` and retains a receipt with the source and selected-input hashes,
-selected IDs and coverage-only IDs. The unified runner still includes all 150
-native cases and all 511 ASGI cases. It requires consumed fault evidence for
-the native `fault-contract` input, both during attribution and on each complete
-native repeat. Repeat receipts include expected and observed fault points in
-manifest order.
+The t6zz v6 native manifest contained 164 cases: 156 `target-contract` cases
+and 8 `fault-contract` cases. Unified schema v7 ran all 164 native cases
+with all 511 Python ASGI cases. Each native fault contract must be consumed
+by an instrumented run; the normal harness rejects fault-contract inputs with
+`native fault contracts require an instrumented coverage build`.
 
-The normal harness now rejects a declared fault with
-`native fault contracts require an instrumented coverage build`. Previously,
-that input substituted an abortive client reset in normal builds and could
-report a pass without consuming the declared fault. The substitution has been
-removed; the input and its expected behavior remain the same across builds.
+The focused selector and fault-lane receipts below are historical evidence
+from the earlier 150-case native manifest, which had 149 target contracts and
+one fault contract. They document the normal-build rejection fix, not the
+the t6zz v6 164-case lane or current aggregate coverage result.
+
+The normal harness previously substituted an abortive client reset for a
+declared fault in normal builds and could report a pass without consuming the
+fault. That substitution was removed; the input and expected behavior remain
+the same across builds.
 
 Three affected normal inputs passed, and the same fault input was rejected by
 the new normal binary. The retained old binary reported a pass for that fault
-without fault consumption, so it provides the defending negative control.
-The local receipt is
+without fault consumption, so it provides the defending negative control. The
+historical local receipt is
 `target/native-contracts/normal-fault-lane-focused.json`, SHA-256
 `c662db78d82eca8b362e4c0c55f6661b0a8441026f95414afe8937e17a5be601`.
 
-The fresh selected coverage run passed **1/1**, with the declared
+The historical selected coverage run passed **1/1**, with the declared
 `websocket.receive.close-reply.flush` fault consumed, zero retries and no
 infrastructure failures. Report:
 `target/asgi-coverage-kata-20261014/normal-lane-fault-control/repeat-marker-report.json`;
@@ -73,12 +192,12 @@ report SHA-256
 `40842f1cc3fb44c9065e69d6a2e729cb9649b2b3328a9663faf39b0cd3cf6912`.
 Coverage-MCP matched the source and passing selected receipt and found no
 missing region groups at the close-reply fault arm. This proves the affected
-lane behavior; it does not qualify all 661 cases or establish aggregate
-coverage. No complete repeats were run for this focused change. The selector's
-six CLI controls also passed: a valid 149-case selection and rejection of
-duplicate/empty IDs, unknown modes, a normal case declaring a fault, and a fault
-case without a point. Their local receipt is
-`target/native-contracts/selector-controls/receipt.json`.
+historical lane behavior; it does not establish aggregate coverage for the
+t6zz v6 675-case manifest. No complete repeats were run for that focused
+change. The selector's six CLI controls also passed in that snapshot: a valid
+149-case selection and rejection of duplicate/empty IDs, unknown modes, a
+normal case declaring a fault, and a fault case without a point. Its local
+receipt is `target/native-contracts/selector-controls/receipt.json`.
 
 ### Selected native TCP EOF evidence
 
@@ -119,6 +238,18 @@ probe write, or fabricated disconnect was added. This selected evidence does
 not qualify the 661-case gate or migrate the Python ASGI transport.
 The later fault-harness correction changed the source receipt; the 18-case
 report is a historical selected snapshot.
+
+The current native implementation adds opt-in `PeerReadHalfCloseMode::Proactive`:
+one owned raw TCP reader feeds TLS/HTTP through a bounded queue while the
+protocol driver remains the sole consumer. The 717-case source-bound unified
+report includes bodyless, complete-upload, incomplete-upload, cleartext, and
+TLS cases that hold the service until raw EOF; all 206 native cases passed in
+each of three repeats with 100% executable-region and line coverage. The
+report is from a dirty worktree and is not hosted release evidence. One
+bodyless cleartext held-service case was also rerun individually on the current
+build and passed. The default `OnRead` mode still observes EOF only when the
+protocol driver reads, and neither mode routes this signal through the Python
+ASGI adapter or emits `http.disconnect`.
 
 ### Selected native connection-limit evidence
 
@@ -2091,9 +2222,10 @@ uv run --python 3.12 --locked --group benchmark python scripts/run_unified_cover
   --artifacts-dir build/asgi-coverage/unified/artifacts
 ```
 
-The runner builds the LLVM-instrumented extension, runs every manifest case in
-an isolated target process for case-to-region attribution, then runs the
-complete matrix three times. It verifies source/build identity and that the
+The runner builds the LLVM-instrumented Python extension and native contract
+executable, runs every case from both manifests in an isolated target process
+for case-to-region attribution, then runs each complete matrix three times.
+It verifies source/build identity and that the
 per-case profile union matches the aggregate coverage profile. Raw profiles,
 case results, logs, and matrix receipts are retained under the artifacts
 directory.
@@ -2111,10 +2243,11 @@ clears event logs when restarting a profile, so startup and held-request
 checkpoints cannot be satisfied by an earlier process.
 
 The report is LLVM JSON with one `uvicorn_rs_unified` extension. In that
-extension, `matrix.case_results` contains the result, verification mode,
-requirement mapping, observations, and profile receipt for each selected case.
+extension, `matrix.case_results` records the ASGI cases and
+`matrix.native_case_results` records the native cases, including their
+verification modes, observations, and profile receipts.
 `coverage.regions` contains every measured source region and its complete
-`hit_by` list of case IDs. To find what a case triggered, filter those region
+`hit_by` list of case keys (`asgi:<id>` or `native:<id>`). To find what a case triggered, filter those region
 rows for its ID. To find what triggered a region, read its `hit_by` list. An
 empty list identifies an uncovered region. Both queries use the same report.
 
@@ -2150,9 +2283,20 @@ zero, continues at exactly the returned offset with a stable limit and no
 filters, has no duplicate groups or repeated terminal pages, and ends at
 `next_offset: null`. Current reports omit redundant inverse attribution arrays
 and can be queried directly. Run `scripts/attach_coverage_mcp.py` against the
-report and saved page array. Require matching totals for both metrics, zero
-groups, `source: matches_receipt`, `tests: passed`, and complete pagination
-before strict validation:
+report and saved page array. Require matching source-span totals for both
+metrics, zero missing regions and lines, `source: matches_receipt`,
+`tests: passed`, and complete pagination before strict validation. Schema v7
+retains per-function-instantiation diagnostic groups even when the union of
+identical source spans is fully covered; the checker independently reconstructs
+that union from the retained aggregate and isolated profiles.
+
+```sh
+uv run --python 3.12 --locked --group benchmark python scripts/attach_coverage_mcp.py \
+  --report build/asgi-coverage/unified/coverage-report.json \
+  --receipt build/asgi-coverage/unified/coverage-mcp-receipt.json
+```
+
+Then validate the attached report:
 
 ```sh
 uv run --python 3.12 --locked --group benchmark python scripts/check_ci_evidence.py coverage \

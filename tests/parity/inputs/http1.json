@@ -4909,14 +4909,16 @@
       },
       "request_stream": {
         "method": "POST",
-        "path": "/ignore-upload",
+        "path": "/read-first-upload",
         "headers": [],
         "chunks_base64": [
           "Zmlyc3QtY2h1bms=",
           "c2Vjb25kLWNodW5r"
         ],
         "keep_alive": true,
+        "send_first_chunk_before_wait_event": true,
         "wait_event": "http.body-pump.app-response-finished",
+        "expected_response_body_base64": "cmVhZC1vbmNl",
         "send_remaining_after_response": true
       }
     },

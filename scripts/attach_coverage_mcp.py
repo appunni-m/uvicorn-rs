@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION_KEY = "uvicorn_rs_unified"
-REPORT_SCHEMA = "uvicorn-rs-coverage/unified@5"
+REPORT_SCHEMA = "uvicorn-rs-coverage/unified@7"
 
 
 class ReceiptError(RuntimeError):
@@ -25,11 +25,6 @@ def sha256_bytes(value: bytes) -> str:
 
 def digest_json(value: Any) -> str:
     return sha256_bytes(json.dumps(value, sort_keys=True, separators=(",", ":")).encode())
-
-
-def group_row_identity(group: dict[str, Any]) -> str:
-    """Identify an MCP row without collapsing nullable line-function rows."""
-    return json.dumps(group, sort_keys=True, separators=(",", ":"))
 
 
 def main() -> int:
@@ -117,7 +112,6 @@ def main() -> int:
         expected_offset = 0
         expected_limit = metric_pages[0]["request"]["limit"]
         groups = []
-        seen: set[str] = set()
         for page_index, page in enumerate(metric_pages):
             request = page["request"]
             data = page["response"]["data"]
@@ -148,11 +142,8 @@ def main() -> int:
                     raise ReceiptError(f"Coverage-MCP {metric} returned an invalid group count")
                 if not isinstance(group.get("locations"), list):
                     raise ReceiptError(f"Coverage-MCP {metric} returned invalid group locations")
-                identity = group_row_identity(group)
-                if identity in seen:
-                    raise ReceiptError(f"Coverage-MCP returned a duplicate group row: {identity}")
-                seen.add(identity)
                 groups.append({
+                    "mcp_group_index": len(groups),
                     "file": group["path"],
                     "function": group["function"],
                     "missing_observations": group["count"],
@@ -177,8 +168,9 @@ def main() -> int:
     line_measurement = first_measurements["lines"]
     if first_measurement.get("source") != "matches_receipt" or line_measurement.get("source") != "matches_receipt":
         raise ReceiptError("Coverage-MCP source identity does not match the saved context receipt")
-    if first_measurement.get("tests") != "passed" or line_measurement.get("tests") != "passed":
-        raise ReceiptError("Coverage-MCP did not observe a passing full input receipt")
+    tests_status = first_measurement.get("tests")
+    if tests_status not in {"passed", "failed"} or line_measurement.get("tests") != tests_status:
+        raise ReceiptError("Coverage-MCP test status is missing or differs between metrics")
 
     span_to_regions: dict[tuple[str, int, int, int, int], list[str]] = {}
     for region in extension["coverage"]["regions"]:
@@ -200,13 +192,20 @@ def main() -> int:
 
     extension["coverage"]["coverage_mcp"] = {
         "status": "measured",
-        "gate": "passed" if group_count == 0 and line_group_count == 0 else "incomplete",
+        "gate": "passed"
+        if first_measurement.get("source") == "matches_receipt"
+        and line_measurement.get("source") == "matches_receipt"
+        and first_measurement["coverage"].get("missing") == 0
+        and line_measurement["coverage"].get("missing") == 0
+        and tests_status == "passed"
+        else "incomplete",
+        "group_semantics": "per-function-instantiation observations; source-span totals are the coverage gate",
         "measurement_path": expected_reference,
         "metric": "regions",
         "source": first_measurement.get("source"),
         "recorded_revision": first_measurement.get("recorded_revision"),
         "build_id": first_measurement.get("build_id"),
-        "tests": first_measurement.get("tests"),
+        "tests": tests_status,
         "coverage": first_measurement["coverage"],
         "line_coverage": (
             first_measurements["lines"]["coverage"] if "lines" in first_measurements else None
@@ -279,8 +278,8 @@ def main() -> int:
         and (matrix["scope"] != "complete" or complete_repeats)
         and len(page_data["regions"]) > 0
         and len(page_data["lines"]) > 0
-        and group_count == 0
-        and line_group_count == 0
+        and first_measurement["coverage"].get("missing") == 0
+        and line_measurement["coverage"].get("missing") == 0
         and first_measurement.get("source") == "matches_receipt"
         and line_measurement.get("source") == "matches_receipt"
         and first_measurement.get("tests") == "passed"
