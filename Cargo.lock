@@ -1162,6 +1162,8 @@ dependencies = [
  "tokio-rustls",
  "tokio-tungstenite",
  "tokio-util",
+ "tower-service",
+ "uvicorn-rs",
 ]
 
 [[package]]

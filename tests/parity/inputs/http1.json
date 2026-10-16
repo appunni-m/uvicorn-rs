@@ -2956,7 +2956,7 @@
       "verification": "fault-contract",
       "fault": {
         "point": "server.connection-task.service-error",
-        "contract": "http-connection-task-error-followup-200"
+        "contract": "http-native-service-error-close-followup-200"
       },
       "request_sequence": [
         {
@@ -2979,21 +2979,16 @@
       ]
     },
     {
-      "case_id": "fault.http1.connection-task-join-error",
+      "case_id": "http1.connection-close-first-request-then-reconnect",
       "profile": "http1",
       "operation": "http.keepalive-sequence",
       "covers": [
         "http.keepalive-sequence"
       ],
-      "verification": "fault-contract",
-      "fault": {
-        "point": "server.connection-task.join-error",
-        "contract": "http-connection-task-error-followup-200"
-      },
       "request_sequence": [
         {
           "method": "GET",
-          "path": "/scope?coverage-fault=task-join-error",
+          "path": "/scope?connection-close=first",
           "headers": [
             [
               "Connection",
@@ -3004,14 +2999,14 @@
         },
         {
           "method": "GET",
-          "path": "/scope?coverage-fault=followup",
+          "path": "/scope?connection-close=followup",
           "headers": [],
           "body_base64": ""
         }
       ]
     },
     {
-      "case_id": "fault.http1.connection-task-service-await-error",
+      "case_id": "fault.http1.native-connection-write-error",
       "profile": "http1",
       "operation": "http.keepalive-sequence",
       "covers": [
@@ -3019,109 +3014,13 @@
       ],
       "verification": "fault-contract",
       "fault": {
-        "point": "server.connection-task.service-await-error",
-        "contract": "http-connection-task-write-error-followup-200"
+        "point": "server.connection-io.poll-write-error",
+        "contract": "http-native-connection-write-error-followup-200"
       },
       "request_sequence": [
         {
           "method": "GET",
-          "path": "/scope?coverage-fault=service-await-error",
-          "headers": [
-            [
-              "Connection",
-              "close"
-            ]
-          ],
-          "body_base64": ""
-        },
-        {
-          "method": "GET",
-          "path": "/scope?coverage-fault=followup",
-          "headers": [],
-          "body_base64": ""
-        }
-      ]
-    },
-    {
-      "case_id": "fault.http1.connection-task-join-await-error",
-      "profile": "http1",
-      "operation": "http.keepalive-sequence",
-      "covers": [
-        "http.keepalive-sequence"
-      ],
-      "verification": "fault-contract",
-      "fault": {
-        "point": "server.connection-task.join-await-error",
-        "contract": "http-connection-task-write-error-followup-200"
-      },
-      "request_sequence": [
-        {
-          "method": "GET",
-          "path": "/scope?coverage-fault=join-await-error",
-          "headers": [
-            [
-              "Connection",
-              "close"
-            ]
-          ],
-          "body_base64": ""
-        },
-        {
-          "method": "GET",
-          "path": "/scope?coverage-fault=followup",
-          "headers": [],
-          "body_base64": ""
-        }
-      ]
-    },
-    {
-      "case_id": "fault.http1.connection-task-service-select-result",
-      "profile": "http1",
-      "operation": "http.keepalive-sequence",
-      "covers": [
-        "http.keepalive-sequence"
-      ],
-      "verification": "fault-contract",
-      "fault": {
-        "point": "server.connection-task.service-select-result",
-        "contract": "http-connection-task-write-error-followup-200"
-      },
-      "request_sequence": [
-        {
-          "method": "GET",
-          "path": "/scope?coverage-fault=service-select-result",
-          "headers": [
-            [
-              "Connection",
-              "close"
-            ]
-          ],
-          "body_base64": ""
-        },
-        {
-          "method": "GET",
-          "path": "/scope?coverage-fault=followup",
-          "headers": [],
-          "body_base64": ""
-        }
-      ]
-    },
-    {
-      "case_id": "fault.http1.connection-task-join-select-result",
-      "profile": "http1",
-      "operation": "http.keepalive-sequence",
-      "covers": [
-        "http.keepalive-sequence"
-      ],
-      "verification": "fault-contract",
-      "fault": {
-        "point": "server.connection-task.join-select-result",
-        "contract": "http-connection-task-write-error-followup-200"
-      },
-      "request_sequence": [
-        {
-          "method": "GET",
-          "path": "/scope?coverage-fault=join-select-result",
+          "path": "/scope?coverage-fault=native-write-error",
           "headers": [
             [
               "Connection",

@@ -6,12 +6,15 @@
 
 The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815)
 uses commit `5cb4b7b84`, which predates the current main commit
-`5a32e3c0d84a02c95fe8a3f01712c895419ea571`. At the 2026-10-16 status
-check, Linux x86-64, Linux ARM64, and macOS ARM64 had each passed parity and
-the stock-FastAPI comparison and remained in the sequential category step.
-The category jobs have not completed, so there are no final category row
-counts, timing validity totals, or ratios to report, and no artifacts are
-available yet.
+`6c00d536c52f8f9dd2dc90ac67eb12bd0c58ca59`. Linux x86-64, Linux ARM64, and
+macOS ARM64 passed parity and the stock-FastAPI comparison. All three category
+jobs then failed in HTTP/2 before the planned 140 rows were complete. HTTP/1
+(300 rows), HTTP/3 (130 rows), WebSocket (60 rows), and lifecycle (20 rows)
+completed on each system. Timing-valid counts varied by host; the run has no
+complete multi-system acceptance result. The three platform artifacts are
+retained: [Linux ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815/artifacts/12001999347),
+[Linux x86-64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815/artifacts/12002004967),
+and [macOS ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815/artifacts/12002479233).
 
 The matching exact-source CI
 [run 38790016719](https://github.com/appunni-m/uvicorn-rs/actions/runs/38790016719)
@@ -21,9 +24,15 @@ cases and measured 8,654/8,654 regions and 6,521/6,521 lines, then failed
 because the pending Coverage-MCP request text differed between the report
 producer and evidence checker. That wording is now aligned in source. Run #30
 is on an older commit and cannot establish performance for the current release
-candidate. When it finishes, inspect only the first failing workload with one
-focused reproducer; do not report a speedup without complete, qualified
-evidence on the release commit.
+candidate. Its first HTTP/2 failure on each host was: Rust/uvloop large response
+with two `BrokenPipe` diagnostics on Linux ARM64; Rust/uvloop multi-chunk
+response with eight client timeouts at the previous 10-second request deadline
+on Linux x86-64; and Rust/uvloop small upload with one `ConnectionReset`
+diagnostic on macOS ARM64. On this checkout, each exact workload/server pair
+passed a single correctness-gated replay with no unexpected server diagnostics.
+Those local timings are invalid because unrelated processes consumed roughly
+one or more CPU cores during sampling. Do not report a speedup without complete,
+qualified evidence on the release commit.
 
 ## Previous completed hosted benchmark matrix: run #29 (2026-10-14)
 

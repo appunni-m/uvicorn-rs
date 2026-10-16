@@ -23,11 +23,14 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 #[cfg(feature = "runtime-diagnostics")]
 use std::sync::atomic::AtomicU64;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
+#[cfg(any(not(feature = "native-tcp"), coverage))]
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::task::{Context, Poll};
 
 use bytes::{Buf, Bytes};
+#[cfg(not(feature = "native-tcp"))]
 use futures_util::task::AtomicWaker;
 use futures_util::{SinkExt, StreamExt};
 use http::header::{HeaderName, HeaderValue};
@@ -36,8 +39,12 @@ use http_body::{Body, Frame, SizeHint};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
+#[cfg(not(feature = "native-tcp"))]
 use hyper::service::service_fn;
-use hyper_util::rt::{TokioExecutor, TokioIo};
+#[cfg(not(feature = "native-tcp"))]
+use hyper_util::rt::TokioExecutor;
+use hyper_util::rt::TokioIo;
+#[cfg(not(feature = "native-tcp"))]
 use hyper_util::server::conn::auto;
 #[cfg(coverage)]
 use pyo3::exceptions::PyMemoryError;
@@ -46,7 +53,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyString};
 use pyo3_async_runtimes::TaskLocals;
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
+#[cfg(not(feature = "native-tcp"))]
+use tokio::net::TcpStream;
 use tokio::sync::mpsc::{
     self,
     error::{TryRecvError, TrySendError},
@@ -101,6 +110,7 @@ enum CoverageFaultPoint {
     HttpBodyPumpShutdownCompleteTaskBeforeAbort,
     HttpRequestBodySegmentLengthOverflow,
     HttpRequestBodySegmentOutOfBounds,
+    #[cfg(not(feature = "native-tcp"))]
     ConnectionIoEofRecheckPause,
     PythonAsgiReceiveBorrowConflict,
     ServerControlShutdownBorrowConflict,
@@ -209,14 +219,23 @@ enum CoverageFaultPoint {
     HttpReceiveImmediateDisconnectMessageError,
     HttpReceiveLockContention,
     ServerConnectionTaskServiceError,
+    #[cfg(not(feature = "native-tcp"))]
     ServerConnectionTaskJoinError,
+    #[cfg(not(feature = "native-tcp"))]
     ServerConnectionTaskServiceAwaitError,
+    #[cfg(not(feature = "native-tcp"))]
     ServerConnectionTaskJoinAwaitError,
+    #[cfg(not(feature = "native-tcp"))]
     ServerConnectionTaskServiceSelectResult,
+    #[cfg(not(feature = "native-tcp"))]
     ServerConnectionTaskJoinSelectResult,
+    #[cfg(not(feature = "native-tcp"))]
     ServerConnectionTaskServiceErrorDuringShutdown,
+    #[cfg(not(feature = "native-tcp"))]
     ServerConnectionTaskJoinErrorDuringShutdown,
+    #[cfg(not(feature = "native-tcp"))]
     ServerConnectionTaskShutdownHang,
+    #[cfg(not(feature = "native-tcp"))]
     ServerConnectionIoPollWriteError,
     HttpAsgiIoAllocate,
     HttpAppInvokeCall,
@@ -245,6 +264,7 @@ enum CoverageFaultPoint {
     Http3BodyPumpConnectionClosedSelect,
     Http3BodyPumpSenderClosedSelect,
     Http3BodyPumpFinalMessageConnectionClosedSelect,
+    Http3BodyPumpFinalMessageSendError,
     Http3BodyPumpEmptyData,
     Http3BodyPumpSendError,
     ServerListenerAcceptError,
@@ -355,6 +375,7 @@ impl CoverageFaultPoint {
                 "http.request.body-segment.length-overflow"
             }
             Self::HttpRequestBodySegmentOutOfBounds => "http.request.body-segment.out-of-bounds",
+            #[cfg(not(feature = "native-tcp"))]
             Self::ConnectionIoEofRecheckPause => "server.connection-io.eof-recheck.pause",
             Self::PythonAsgiReceiveBorrowConflict => "python.asgi-receive.borrow-conflict",
             Self::ServerControlShutdownBorrowConflict => "server.control.shutdown.borrow-conflict",
@@ -497,24 +518,33 @@ impl CoverageFaultPoint {
             }
             Self::HttpReceiveLockContention => "http.receive.lock-contention",
             Self::ServerConnectionTaskServiceError => "server.connection-task.service-error",
+            #[cfg(not(feature = "native-tcp"))]
             Self::ServerConnectionTaskJoinError => "server.connection-task.join-error",
+            #[cfg(not(feature = "native-tcp"))]
             Self::ServerConnectionTaskServiceAwaitError => {
                 "server.connection-task.service-await-error"
             }
+            #[cfg(not(feature = "native-tcp"))]
             Self::ServerConnectionTaskJoinAwaitError => "server.connection-task.join-await-error",
+            #[cfg(not(feature = "native-tcp"))]
             Self::ServerConnectionTaskServiceSelectResult => {
                 "server.connection-task.service-select-result"
             }
+            #[cfg(not(feature = "native-tcp"))]
             Self::ServerConnectionTaskJoinSelectResult => {
                 "server.connection-task.join-select-result"
             }
+            #[cfg(not(feature = "native-tcp"))]
             Self::ServerConnectionTaskServiceErrorDuringShutdown => {
                 "server.connection-task.service-error-during-shutdown"
             }
+            #[cfg(not(feature = "native-tcp"))]
             Self::ServerConnectionTaskJoinErrorDuringShutdown => {
                 "server.connection-task.join-error-during-shutdown"
             }
+            #[cfg(not(feature = "native-tcp"))]
             Self::ServerConnectionTaskShutdownHang => "server.connection-task.shutdown-hang",
+            #[cfg(not(feature = "native-tcp"))]
             Self::ServerConnectionIoPollWriteError => "server.connection-io.poll-write-error",
             Self::HttpAsgiIoAllocate => "http.asgi-io.allocate",
             Self::HttpAppInvokeCall => "http.asgi.app-invoke",
@@ -551,6 +581,7 @@ impl CoverageFaultPoint {
             Self::Http3BodyPumpFinalMessageConnectionClosedSelect => {
                 "http3.body-pump.final-message-connection-closed-select"
             }
+            Self::Http3BodyPumpFinalMessageSendError => "http3.body-pump.final-message-send-error",
             Self::Http3BodyPumpEmptyData => "http3.body-pump.empty-data-frame",
             Self::Http3BodyPumpSendError => "http3.body-pump.send-error",
             Self::ServerListenerAcceptError => "server.listener.accept-error",
@@ -955,6 +986,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    #[cfg(not(feature = "native-tcp"))]
     fn tcp_io_poll_started(&self) -> Option<std::time::Instant> {
         #[cfg(feature = "runtime-diagnostics")]
         return Some(std::time::Instant::now());
@@ -963,6 +995,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    #[cfg(not(feature = "native-tcp"))]
     fn tcp_read_poll_finished(
         &self,
         bytes: usize,
@@ -1000,6 +1033,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    #[cfg(not(feature = "native-tcp"))]
     fn tcp_write_poll_finished(
         &self,
         bytes: usize,
@@ -1037,6 +1071,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    #[cfg(not(feature = "native-tcp"))]
     fn tcp_flush_poll_finished(&self, started: Option<std::time::Instant>) {
         #[cfg(feature = "runtime-diagnostics")]
         {
@@ -1055,6 +1090,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    #[cfg(not(feature = "native-tcp"))]
     fn tcp_shutdown_poll_finished(&self, started: Option<std::time::Instant>) {
         #[cfg(feature = "runtime-diagnostics")]
         {
@@ -1413,18 +1449,196 @@ fn classify_asgi_event_type(py: Python<'_>, value: Bound<'_, PyAny>) -> PyResult
 }
 
 #[derive(Clone)]
+enum ConnectionClosed {
+    Watch(watch::Receiver<bool>),
+    #[cfg(feature = "native-tcp")]
+    Native {
+        lifetime: uvicorn_rs::ConnectionLifetime,
+        peer_read_half_closed: Option<uvicorn_rs::PeerReadHalfClosed>,
+        peer_read_failed: Option<uvicorn_rs::PeerReadFailed>,
+    },
+}
+
+impl ConnectionClosed {
+    fn is_closed(&self) -> bool {
+        match self {
+            Self::Watch(closed) => *closed.borrow(),
+            #[cfg(feature = "native-tcp")]
+            Self::Native {
+                lifetime,
+                peer_read_half_closed,
+                peer_read_failed,
+            } => {
+                lifetime.is_closed()
+                    || peer_read_half_closed
+                        .as_ref()
+                        .is_some_and(uvicorn_rs::PeerReadHalfClosed::is_read_half_closed)
+                    || peer_read_failed
+                        .as_ref()
+                        .is_some_and(|failed| failed.error_kind().is_some())
+            }
+        }
+    }
+
+    async fn wait_until_closed(&mut self) {
+        match self {
+            Self::Watch(closed) => {
+                let _ = closed.wait_for(|is_closed| *is_closed).await;
+            }
+            #[cfg(feature = "native-tcp")]
+            Self::Native {
+                lifetime,
+                peer_read_half_closed,
+                peer_read_failed,
+            } => match (peer_read_half_closed, peer_read_failed) {
+                (Some(peer_read_half_closed), Some(peer_read_failed)) => {
+                    tokio::select! {
+                        _ = lifetime.wait_until_closed() => {},
+                        _ = peer_read_half_closed.wait_until_read_half_closed() => {},
+                        _ = peer_read_failed.wait_until_failed() => {},
+                    }
+                }
+                (Some(peer_read_half_closed), None) => {
+                    tokio::select! {
+                        _ = lifetime.wait_until_closed() => {},
+                        _ = peer_read_half_closed.wait_until_read_half_closed() => {},
+                    }
+                }
+                (None, Some(peer_read_failed)) => {
+                    tokio::select! {
+                        _ = lifetime.wait_until_closed() => {},
+                        _ = peer_read_failed.wait_until_failed() => {},
+                    }
+                }
+                (None, None) => lifetime.wait_until_closed().await,
+            },
+        }
+    }
+
+    async fn wait_until_body_pump_stops(&mut self) {
+        match self {
+            Self::Watch(closed) => {
+                let _ = closed.wait_for(|is_closed| *is_closed).await;
+            }
+            Self::Native {
+                lifetime,
+                peer_read_half_closed,
+                ..
+            } => {
+                if let Some(peer_read_half_closed) = peer_read_half_closed {
+                    tokio::select! {
+                        _ = lifetime.wait_until_closed() => {},
+                        _ = peer_read_half_closed.wait_until_read_half_closed() => {},
+                    }
+                } else {
+                    lifetime.wait_until_closed().await;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
 struct ConnectionContext {
     server: Arc<ServerContext>,
     peer_addr: SocketAddr,
     transport_scheme: &'static str,
-    connection_closed: watch::Receiver<bool>,
+    connection_closed: ConnectionClosed,
+    #[cfg(feature = "native-tcp")]
+    native_upgrade: Option<uvicorn_rs::ConnectionUpgrade>,
 }
 
+#[cfg(feature = "native-tcp")]
+#[derive(Clone)]
+struct NativeAsgiService {
+    server: Arc<ServerContext>,
+}
+
+#[cfg(feature = "native-tcp")]
+impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
+    type Response = Response<ResponseBody>;
+    type Error = std::io::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, _context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, request: Request<Incoming>) -> Self::Future {
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::ServerConnectionTaskServiceError) {
+            return Box::pin(async {
+                Err(std::io::Error::other(
+                    "coverage-injected native HTTP service error",
+                ))
+            });
+        }
+        let Some(connection_info) = request
+            .extensions()
+            .get::<uvicorn_rs::ConnectionInfo>()
+            .cloned()
+        else {
+            return Box::pin(async {
+                Err(std::io::Error::other(
+                    "native TCP transport omitted connection metadata",
+                ))
+            });
+        };
+        let Some(connection_lifetime) = request
+            .extensions()
+            .get::<uvicorn_rs::ConnectionLifetime>()
+            .cloned()
+        else {
+            return Box::pin(async {
+                Err(std::io::Error::other(
+                    "native TCP transport omitted connection lifetime",
+                ))
+            });
+        };
+        let peer_read_half_closed = request
+            .extensions()
+            .get::<uvicorn_rs::PeerReadHalfClosed>()
+            .cloned();
+        let peer_read_failed = request
+            .extensions()
+            .get::<uvicorn_rs::PeerReadFailed>()
+            .cloned();
+        let native_upgrade = request
+            .extensions()
+            .get::<uvicorn_rs::ConnectionUpgrade>()
+            .cloned();
+        let context = ConnectionContext {
+            server: Arc::clone(&self.server),
+            peer_addr: connection_info.peer_addr(),
+            transport_scheme: if connection_info.tls().is_some() {
+                "https"
+            } else {
+                "http"
+            },
+            connection_closed: ConnectionClosed::Native {
+                lifetime: connection_lifetime,
+                peer_read_half_closed,
+                peer_read_failed,
+            },
+            native_upgrade,
+        };
+        Box::pin(async move {
+            if is_websocket_upgrade(&request) {
+                Ok(handle_websocket_request(request, context).await)
+            } else {
+                handle_request(request, context).await
+            }
+        })
+    }
+}
+
+#[cfg(not(feature = "native-tcp"))]
 struct ActiveHttpRequest {
     active_http_requests: Arc<AtomicUsize>,
     read_eof_waker: Arc<AtomicWaker>,
 }
 
+#[cfg(not(feature = "native-tcp"))]
 impl ActiveHttpRequest {
     fn new(active_http_requests: Arc<AtomicUsize>, read_eof_waker: Arc<AtomicWaker>) -> Self {
         active_http_requests.fetch_add(1, Ordering::AcqRel);
@@ -1435,6 +1649,7 @@ impl ActiveHttpRequest {
     }
 }
 
+#[cfg(not(feature = "native-tcp"))]
 impl Drop for ActiveHttpRequest {
     fn drop(&mut self) {
         if self.active_http_requests.fetch_sub(1, Ordering::AcqRel) == 1 {
@@ -2236,7 +2451,7 @@ enum LifespanEvent {
 struct AsgiIo {
     request_messages: Arc<Mutex<mpsc::Receiver<RequestMessage>>>,
     _request_sender: Option<mpsc::Sender<RequestMessage>>,
-    connection_closed: watch::Receiver<bool>,
+    connection_closed: ConnectionClosed,
     request_cancellation: CancellationToken,
     request_disconnected: Arc<AtomicBool>,
     response_start_attempted: Arc<AtomicBool>,
@@ -2251,7 +2466,7 @@ struct AsgiIo {
 #[pymethods]
 impl AsgiIo {
     fn receive<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        if slf.request_disconnected.load(Ordering::Acquire) || *slf.connection_closed.borrow() {
+        if slf.request_disconnected.load(Ordering::Acquire) || slf.connection_closed.is_closed() {
             slf.diagnostics.http_receive_immediate();
             #[cfg(coverage)]
             let request_message = if coverage_fault_is_armed(
@@ -2351,7 +2566,7 @@ impl AsgiIo {
         match event_type {
             AsgiEventType::HttpResponseStart => {
                 slf.response_start_attempted.store(true, Ordering::Release);
-                if *slf.connection_closed.borrow()
+                if slf.connection_closed.is_closed()
                     || slf.request_disconnected.load(Ordering::Acquire)
                 {
                     return Err(PyOSError::new_err(
@@ -2414,7 +2629,7 @@ impl AsgiIo {
                 Ok(py.None().into_bound(py))
             }
             AsgiEventType::HttpResponseBody => {
-                if *slf.connection_closed.borrow()
+                if slf.connection_closed.is_closed()
                     || slf.request_disconnected.load(Ordering::Acquire)
                 {
                     return Err(PyOSError::new_err(
@@ -3247,6 +3462,7 @@ impl Drop for AsgiBody {
     }
 }
 
+#[cfg(not(feature = "native-tcp"))]
 struct ConnectionIo<I> {
     io: I,
     diagnostics: RuntimeDiagnostics,
@@ -3265,7 +3481,7 @@ struct ConnectionIo<I> {
 async fn pump_http_request_body(
     mut body: Incoming,
     sender: mpsc::Sender<RequestMessage>,
-    mut connection_closed: watch::Receiver<bool>,
+    mut connection_closed: ConnectionClosed,
     cancellation: CancellationToken,
     request_cancellation: CancellationToken,
 ) {
@@ -3301,7 +3517,7 @@ async fn pump_http_request_body(
     let mut body_len = 0usize;
     let mut body_started = None;
     loop {
-        if *connection_closed.borrow()
+        if connection_closed.is_closed()
             || cancellation.is_cancelled()
             || request_cancellation.is_cancelled()
         {
@@ -3534,7 +3750,7 @@ async fn pump_http_request_body(
 async fn send_http_request_message(
     body: &mut Incoming,
     sender: &mpsc::Sender<RequestMessage>,
-    connection_closed: &mut watch::Receiver<bool>,
+    connection_closed: &mut ConnectionClosed,
     cancellation: &CancellationToken,
     request_cancellation: &CancellationToken,
     message: RequestMessage,
@@ -3580,7 +3796,7 @@ async fn send_http_request_message(
 
 async fn drain_http_request_body(
     body: &mut Incoming,
-    connection_closed: &mut watch::Receiver<bool>,
+    connection_closed: &mut ConnectionClosed,
     cancellation: &CancellationToken,
     request_cancellation: &CancellationToken,
 ) {
@@ -3606,13 +3822,13 @@ async fn drain_http_request_body(
 }
 
 async fn wait_for_body_pump_stop(
-    connection_closed: &mut watch::Receiver<bool>,
+    connection_closed: &mut ConnectionClosed,
     cancellation: &CancellationToken,
     request_cancellation: &CancellationToken,
 ) {
     tokio::select! {
         biased;
-        _ = wait_for_connection_close(connection_closed) => {},
+        _ = connection_closed.wait_until_body_pump_stops() => {},
         _ = cancellation.cancelled() => {},
         _ = request_cancellation.cancelled() => {},
     }
@@ -3645,10 +3861,11 @@ where
     tasks.spawn(task);
 }
 
-async fn wait_for_connection_close(connection_closed: &mut watch::Receiver<bool>) {
-    let _ = connection_closed.wait_for(|closed| *closed).await;
+async fn wait_for_connection_close(connection_closed: &mut ConnectionClosed) {
+    connection_closed.wait_until_closed().await;
 }
 
+#[cfg(not(feature = "native-tcp"))]
 impl<I: AsyncRead + Unpin> AsyncRead for ConnectionIo<I> {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -3697,6 +3914,7 @@ impl<I: AsyncRead + Unpin> AsyncRead for ConnectionIo<I> {
     }
 }
 
+#[cfg(not(feature = "native-tcp"))]
 impl<I> ConnectionIo<I> {
     fn poll_read_after_eof(&mut self, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         #[cfg(coverage)]
@@ -3728,11 +3946,13 @@ impl<I> ConnectionIo<I> {
     }
 }
 
+#[cfg(not(feature = "native-tcp"))]
 enum WriteBuffers<'a> {
     Scalar(&'a [u8]),
     Vectored(&'a [std::io::IoSlice<'a>]),
 }
 
+#[cfg(not(feature = "native-tcp"))]
 impl<I: AsyncWrite + Unpin> ConnectionIo<I> {
     #[inline]
     fn poll_write_buffers(
@@ -3792,6 +4012,7 @@ impl<I: AsyncWrite + Unpin> ConnectionIo<I> {
     }
 }
 
+#[cfg(not(feature = "native-tcp"))]
 impl<I: AsyncWrite + Unpin> AsyncWrite for ConnectionIo<I> {
     fn poll_write(
         self: Pin<&mut Self>,
@@ -4230,8 +4451,70 @@ async fn serve_forever(
     let http3_task =
         endpoint.map(|endpoint| tokio::spawn(serve_http3(endpoint, Arc::clone(&server))));
 
-    let mut connection_tasks = tokio::task::JoinSet::new();
+    let mut connection_tasks: tokio::task::JoinSet<Result<(), BoxError>> =
+        tokio::task::JoinSet::new();
     let mut accept_error = None;
+    #[cfg(feature = "native-tcp")]
+    {
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::ServerListenerAcceptError) {
+            let _ = uvicorn_rs::arm_listener_accept_fault();
+        }
+        let config = uvicorn_rs::ServerConfig {
+            graceful_shutdown_timeout: options.graceful_timeout,
+            // Let an invalid HTTP/1 ASGI response start reach the transport,
+            // which closes the connection as Uvicorn does. Ordinary ASGI app
+            // exceptions are converted to 500 responses in `handle_request`.
+            service_error_policy: uvicorn_rs::ServiceErrorPolicy::Propagate,
+            peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::Proactive,
+            error_observer: Some(Arc::new(|event| {
+                if event.phase() == uvicorn_rs::ServerErrorPhase::Connection {
+                    log_error(format_args!(
+                        "uvicorn-rs: HTTP connection from {:?} failed: {}",
+                        event.peer_addr(),
+                        event.error()
+                    ));
+                }
+            })),
+            ..uvicorn_rs::ServerConfig::default()
+        };
+        let service = NativeAsgiService {
+            server: Arc::clone(&server),
+        };
+        let result = if let Some(acceptor) = server.tcp_tls.clone() {
+            let shutdown = cancellation.clone();
+            uvicorn_rs::serve_tls(
+                listener,
+                acceptor,
+                service,
+                async move { shutdown.cancelled().await },
+                config,
+            )
+            .await
+        } else {
+            let shutdown = cancellation.clone();
+            uvicorn_rs::serve_tcp(
+                listener,
+                service,
+                async move { shutdown.cancelled().await },
+                config,
+            )
+            .await
+        };
+        if let Err(error) = result {
+            match error {
+                uvicorn_rs::ServeError::GracefulShutdownTimedOut => log_error(format_args!(
+                    "uvicorn-rs: TCP shutdown exceeded the graceful timeout"
+                )),
+                error => {
+                    accept_error = Some(PyOSError::new_err(format!(
+                        "native TCP server failed: {error}"
+                    )));
+                }
+            }
+        }
+    }
+    #[cfg(not(feature = "native-tcp"))]
     loop {
         tokio::select! {
             biased;
@@ -4356,6 +4639,7 @@ async fn serve_forever(
     }
 
     // Stop transport admission before waiting for active responses to drain.
+    #[cfg(not(feature = "native-tcp"))]
     drop(listener);
     cancellation.cancel();
     let shutdown_started = tokio::time::Instant::now();
@@ -4554,6 +4838,7 @@ async fn wait_for_lifespan_cleanup(tracker: &TaskTracker, graceful_timeout: std:
     }
 }
 
+#[cfg(not(feature = "native-tcp"))]
 async fn serve_connection(
     stream: TcpStream,
     peer_addr: SocketAddr,
@@ -4585,7 +4870,9 @@ async fn serve_connection(
         server: Arc::clone(&server),
         peer_addr,
         transport_scheme,
-        connection_closed: closed_rx,
+        connection_closed: ConnectionClosed::Watch(closed_rx),
+        #[cfg(feature = "native-tcp")]
+        native_upgrade: None,
     };
     let result = if let Some(tls) = server.tcp_tls.as_ref() {
         let stream = tokio::select! {
@@ -4612,6 +4899,7 @@ async fn serve_connection(
     result
 }
 
+#[cfg(not(feature = "native-tcp"))]
 async fn serve_hyper_connection<I>(
     io: I,
     context: ConnectionContext,
@@ -4735,7 +5023,7 @@ async fn serve_http3(
 
     endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown");
     #[cfg(coverage)]
-    if coverage_fault_is_armed(CoverageFaultPoint::ServerHttp3TaskShutdownHang) {
+    if coverage_fault_take(CoverageFaultPoint::ServerHttp3TaskShutdownHang) {
         std::future::pending::<()>().await;
     }
     #[cfg(coverage)]
@@ -4845,7 +5133,9 @@ async fn serve_http3_connection(
             server: Arc::clone(&server),
             peer_addr,
             transport_scheme: "https",
-            connection_closed: closed_rx.clone(),
+            connection_closed: ConnectionClosed::Watch(closed_rx.clone()),
+            #[cfg(feature = "native-tcp")]
+            native_upgrade: None,
         };
         requests.spawn(async move {
             #[cfg(coverage)]
@@ -5051,7 +5341,7 @@ async fn handle_http3_request(
 async fn pump_h3_request_body(
     mut body: h3::server::RequestStream<h3_quinn::RecvStream, Bytes>,
     sender: mpsc::Sender<RequestMessage>,
-    mut connection_closed: watch::Receiver<bool>,
+    mut connection_closed: ConnectionClosed,
     cancellation: CancellationToken,
     request_cancellation: CancellationToken,
 ) {
@@ -5059,7 +5349,7 @@ async fn pump_h3_request_body(
     let mut pending_data: Option<Bytes> = None;
     loop {
         #[cfg(coverage)]
-        if *connection_closed.borrow()
+        if connection_closed.is_closed()
             || cancellation.is_cancelled()
             || request_cancellation.is_cancelled()
             || coverage_fault_take(CoverageFaultPoint::Http3BodyPumpConnectionClosed)
@@ -5067,7 +5357,7 @@ async fn pump_h3_request_body(
             return;
         }
         #[cfg(not(coverage))]
-        if *connection_closed.borrow()
+        if connection_closed.is_closed()
             || cancellation.is_cancelled()
             || request_cancellation.is_cancelled()
         {
@@ -5168,7 +5458,13 @@ async fn pump_h3_request_body(
                         }
                         wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
                     } => return,
-                    result = sender.send(message) => {
+                    result = async {
+                        #[cfg(coverage)]
+                        if coverage_fault_take(CoverageFaultPoint::Http3BodyPumpFinalMessageSendError) {
+                            return Err(tokio::sync::mpsc::error::SendError(message));
+                        }
+                        sender.send(message).await
+                    } => {
                         if result.is_err() {
                             return;
                         }
@@ -5710,10 +6006,62 @@ async fn handle_websocket_request_inner(
 
     let app_task = app_task.into_handle();
     let server = Arc::clone(&context.server);
+    #[cfg(feature = "native-tcp")]
+    let native_upgrade = context.native_upgrade.clone();
     let session_cancellation = server.cancellation.clone();
     let upgrade_cancellation = session_cancellation.clone();
     let connection_closed = context.connection_closed;
     let websocket_tasks = Arc::clone(&server.websocket_tasks);
+    #[cfg(feature = "native-tcp")]
+    if let Some(native_upgrade) = native_upgrade {
+        #[cfg(coverage)]
+        let inject_shutdown_panic =
+            coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownPanic);
+        #[cfg(coverage)]
+        let inject_shutdown_hang =
+            coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownHang);
+        #[cfg(coverage)]
+        let upgrade_shutdown = native_upgrade.clone();
+        let session_cancellation = session_cancellation.clone();
+        native_upgrade
+            .register(on_upgrade, move |upgraded| async move {
+                #[cfg(coverage)]
+                if inject_shutdown_panic {
+                    upgrade_shutdown.wait_for_shutdown().await;
+                    app_task.abort();
+                    let _ = app_task.await;
+                    coverage_panic(
+                        "coverage-injected WebSocket session task panic during shutdown",
+                    );
+                }
+                #[cfg(coverage)]
+                if inject_shutdown_hang {
+                    upgrade_shutdown.wait_for_shutdown().await;
+                    app_task.abort();
+                    let _ = app_task.await;
+                    return std::future::pending::<Result<(), std::io::Error>>().await;
+                }
+                let socket = WebSocketStream::from_raw_socket(upgraded, Role::Server, None).await;
+                if let Err(error) = drive_websocket(
+                    socket,
+                    incoming_tx,
+                    outgoing_rx,
+                    app_task,
+                    state,
+                    connection_closed,
+                    session_cancellation,
+                )
+                .await
+                {
+                    log_error(format_args!(
+                        "uvicorn-rs: WebSocket session failed: {error}"
+                    ));
+                }
+                Ok::<(), std::io::Error>(())
+            })
+            .map_err(|error| Box::new(error) as BoxError)?;
+        return Ok(handshake_response);
+    }
     websocket_tasks.lock().await.spawn(async move {
         #[cfg(coverage)]
         if coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownPanic) {
@@ -5825,7 +6173,7 @@ async fn drive_websocket<I>(
     mut outgoing: mpsc::Receiver<WebSocketOutgoing>,
     mut app_task: tokio::task::JoinHandle<PyResult<Py<PyAny>>>,
     state: Arc<AtomicU8>,
-    mut connection_closed: watch::Receiver<bool>,
+    mut connection_closed: ConnectionClosed,
     cancellation: CancellationToken,
 ) -> Result<(), BoxError>
 where

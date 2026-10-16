@@ -2352,6 +2352,25 @@
       }
     },
     {
+      "case_id": "fault.http3.body-pump-final-message-send-error",
+      "profile": "http3",
+      "operation": "http3.body-pump-early-exit",
+      "covers": [
+        "http3.body-pump-early-exit"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.body-pump.final-message-send-error",
+        "contract": "http3-body-pump-early-exit-500"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/return-before-response-start",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "fault.http3.connection-task-panic-during-shutdown",
       "profile": "http3",
       "operation": "http3.connection-task-shutdown",

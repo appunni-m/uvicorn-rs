@@ -89,9 +89,20 @@ SERVERS = {
 
 
 def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+    # The Rust server binds HTTP/3 to the same port as HTTPS whenever TLS is
+    # enabled. Select a port that is available for both transports so an
+    # unrelated UDP listener cannot make an HTTP/2 benchmark fail at startup.
+    for _ in range(128):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp_socket:
+            tcp_socket.bind(("127.0.0.1", 0))
+            port = tcp_socket.getsockname()[1]
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp_socket:
+                try:
+                    udp_socket.bind(("127.0.0.1", port))
+                except OSError:
+                    continue
+                return port
+    raise RuntimeError("could not find a port available for both TCP and UDP")
 
 
 def server_command(
@@ -349,6 +360,7 @@ def main() -> None:
             **evidence_metadata,
             "slow_reader_rate_bytes_per_second": 4_194_304,
             "h2_client": "native Rust h2 client, up to four TLS connections with multiplexed streams, full response-body equality",
+            "h2_request_timeout_seconds": 20,
             "source_sha256": source_digest(),
             "workloads": args.workloads,
             "servers": selected_servers,

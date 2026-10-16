@@ -219,10 +219,7 @@ def main() -> None:
 
             prefix = "uvicorn-rs-stage-h3-" if args.protocol == "http3" else "uvicorn-rs-stage-h2-"
             with tempfile.TemporaryDirectory(prefix=prefix) as directory:
-                if args.protocol == "http3":
-                    cert, key = runner.make_certificate(Path(directory))
-                else:
-                    cert, key = runner.certificate(Path(directory))
+                ca_certificate, cert, key = runner.generate_server_certificate(Path(directory))
                 config = Path(directory) / "hypercorn.toml"
                 include_date = "false" if args.protocol == "http3" else "true"
                 config.write_text(
@@ -241,7 +238,7 @@ def main() -> None:
                             evidence.label_sample(workload, server_name, repetition)
                             metrics = runner.sample(
                                 runner.SERVERS[server_name], workload, args.duration,
-                                args.warmup, concurrency, cert, key, config, evidence,
+                                args.warmup, concurrency, cert, key, ca_certificate, config, evidence,
                             )
                             attach_diagnostics(workload, server_name, repetition, metrics, stage_path)
         else:

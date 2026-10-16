@@ -30,14 +30,16 @@ result. See the [complete results](docs/benchmark-results.md),
 [benchmark status](docs/benchmark-status.md), and
 [feasibility report](docs/feasibility.md).
 
-The latest local ASGI-adapter evidence is dated 2026-10-12: 511 cases,
+The previous local ASGI-adapter evidence snapshot is dated 2026-10-12: 511 cases,
 comprising 243 live oracle comparisons and 268 target-only contracts, passed
 attribution and three complete repeats. The dirty source snapshot measured
 5,561/5,561 Rust regions and 3,997/3,997 lines; Coverage-MCP found zero missing
 groups with matching source/build and test receipts. This is local evidence,
-not a clean hosted release result, and covers `src/lib.rs` only. The separate
-Python-free `uvicorn-rs` crate is not yet the Python adapter's transport
-backend. See the [support matrix](docs/support-matrix.md) and
+not a clean hosted release result, and covers `src/lib.rs` only. The Python
+ASGI path now uses the Python-free `uvicorn-rs` crate for HTTP/1.1 and HTTP/2
+over TCP/TLS; HTTP/3 remains in the extension's Rust server layer. Python app
+invocation, ASGI events, and event-loop ownership still cross the PyO3 bridge.
+See the [support matrix](docs/support-matrix.md) and
 [coverage report](docs/coverage.md). A narrower `uvicorn-rs-py` candidate-wheel
 smoke passed; see its [receipt](benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md).
 The Python-free `uvicorn-rs` crate has body-aware Tower service entry points for
@@ -63,8 +65,12 @@ and [native composition example](examples/native-fastapi-contracts/README.md).
 This is local prototype evidence, not hosted CI, full FastAPI or Python parity,
 or a speed result. The native server product is the `uvicorn-rs` Cargo
 package, and the Python extension is distributed as `uvicorn-rs-py`. The
-Python adapter still has its earlier transport implementation and is not yet
-backed by the native server. See the
+Python ASGI path now uses the native crate for HTTP/1.1 and HTTP/2 over
+TCP/TLS. HTTP/3 remains in the Rust server layer in the PyO3 extension. Python
+ASGI calls still cross into the Python-owned asyncio loop for scope,
+`receive`/`send`, context, and exceptions, so this is not a Python-free ASGI
+path. Focused current-source cases pass, while exact-source hosted coverage
+and performance evidence remain open. See the
 [promoted-package live contract receipt](benchmarks/results/2026-10-12/native-package-promotion-live/report.md),
 [historical pre-promotion receipt](benchmarks/results/2026-10-12/native-core-http3-live/report.json),
 [native composition receipt](benchmarks/results/2026-10-12/native-fastapi-h2-streaming-composition/report.md),

@@ -37,7 +37,7 @@
       "verification": "fault-contract",
       "fault": {
         "point": "server.connection-io.poll-write-error",
-        "contract": "server-hyper-connection-error-during-shutdown"
+        "contract": "server-native-connection-error-during-shutdown"
       },
       "lifecycle": {
         "stream_path": "/stream-shutdown-hold",

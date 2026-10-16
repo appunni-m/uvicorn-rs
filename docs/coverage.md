@@ -1285,9 +1285,12 @@ HTTP/2 streams (four 100 ms slow-reader rounds each), 16 HTTP/3 streams (three
 rounds), and 16 WebSocket sessions (four rounds). They compare response
 lengths and SHA-256 fingerprints, require full concurrency and healthy
 follow-up requests, verify application tasks return to zero, require no net
-idle Python-task growth, and constrain the spread in late-round RSS samples to
-16 MiB. These are fixed-load stability checks, not an absolute memory cap or a
-throughput/latency benchmark. A separate zero-grace HTTP/1.1 shutdown case
+idle Python-task growth, and limit the spread between the last two sampled
+server-process-tree RSS values to 16 MiB. The sampler includes worker children
+so a supervisor's changing RSS cannot hide or invent server growth. Summed RSS
+may count shared pages more than once; this is a fixed-load stability check,
+not an absolute memory cap or a throughput/latency benchmark. A separate
+zero-grace HTTP/1.1 shutdown case
 holds 16 ASGI response streams, resets their clients, requires 16 cancellations
 and zero completed responses, then checks bounded process exit and completed
 lifespan shutdown. Shutdown duration is recorded for diagnosis only.

@@ -17,6 +17,12 @@ use super::{PeerReadHalfCloseMode, PeerReadHalfClosed};
 const READ_CHUNK_SIZE: usize = 16 * 1024;
 const READ_QUEUE_CAPACITY: usize = 2;
 
+pub(super) enum PeerReadPumpOutcome {
+    ReceiverClosed,
+    ReadHalfClosed,
+    ReadFailed(io::ErrorKind),
+}
+
 pub(super) struct PeerReadIo {
     inner: ReadMode,
 }
@@ -25,6 +31,7 @@ enum ReadMode {
     OnRead {
         stream: TcpStream,
         closed: watch::Sender<bool>,
+        failed: watch::Sender<Option<io::ErrorKind>>,
     },
     Proactive(BufferedReadIo),
 }
@@ -56,16 +63,29 @@ pub(super) fn observe_peer_read(
 ) -> (
     PeerReadIo,
     PeerReadHalfClosed,
-    Option<impl Future<Output = ()> + Send>,
+    super::PeerReadFailed,
+    Option<impl Future<Output = PeerReadPumpOutcome> + Send>,
     bool,
 ) {
     let (closed, receiver) = watch::channel(false);
+    let (failed, failed_receiver) = watch::channel(None);
     let observer = PeerReadHalfClosed {
         closed: receiver,
         mode,
     };
+    let failed_observer = super::PeerReadFailed {
+        failed: failed_receiver,
+    };
     let (inner, pump, prioritize_receiver_close_fault) = match mode {
-        PeerReadHalfCloseMode::OnRead => (ReadMode::OnRead { stream, closed }, None, false),
+        PeerReadHalfCloseMode::OnRead => (
+            ReadMode::OnRead {
+                stream,
+                closed,
+                failed,
+            },
+            None,
+            false,
+        ),
         PeerReadHalfCloseMode::Proactive => {
             let (reader, writer) = stream.into_split();
             let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
@@ -88,7 +108,7 @@ pub(super) fn observe_peer_read(
                     current: Bytes::new(),
                     terminal: ReadTerminal::Open,
                 }),
-                Some(pump_peer_read(reader, sender, closed)),
+                Some(pump_peer_read(reader, sender, closed, failed)),
                 prioritize_receiver_close_fault,
             )
         }
@@ -96,6 +116,7 @@ pub(super) fn observe_peer_read(
     (
         PeerReadIo { inner },
         observer,
+        failed_observer,
         pump,
         prioritize_receiver_close_fault,
     )
@@ -105,14 +126,15 @@ async fn pump_peer_read(
     mut reader: OwnedReadHalf,
     sender: mpsc::Sender<ReadEvent>,
     closed: watch::Sender<bool>,
-) {
+    failed: watch::Sender<Option<io::ErrorKind>>,
+) -> PeerReadPumpOutcome {
     loop {
         // Reserve before reading so pressure from HTTP/TLS also bounds socket
         // read-ahead. The consumer may hold one additional, partly read chunk.
         let Ok(permit) = sender.reserve().await else {
             #[cfg(coverage)]
             super::observe_http1_peer_read_receiver_closed_fault();
-            return;
+            return PeerReadPumpOutcome::ReceiverClosed;
         };
         let mut chunk = BytesMut::with_capacity(READ_CHUNK_SIZE);
         let mut destination = (&mut chunk).limit(READ_CHUNK_SIZE);
@@ -122,14 +144,16 @@ async fn pump_peer_read(
                 // Queue it after all data; observing it never closes writes.
                 closed.send_replace(true);
                 permit.send(ReadEvent::Eof);
-                return;
+                return PeerReadPumpOutcome::ReadHalfClosed;
             }
             Ok(_) => {
                 permit.send(ReadEvent::Data(chunk.freeze()));
             }
             Err(error) => {
+                let kind = error.kind();
+                failed.send_replace(Some(kind));
                 permit.send(ReadEvent::Error(error));
-                return;
+                return PeerReadPumpOutcome::ReadFailed(kind);
             }
         }
     }
@@ -190,7 +214,11 @@ impl AsyncRead for PeerReadIo {
         buffer: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         match &mut self.get_mut().inner {
-            ReadMode::OnRead { stream, closed } => {
+            ReadMode::OnRead {
+                stream,
+                closed,
+                failed,
+            } => {
                 let filled_before = buffer.filled().len();
                 let result = Pin::new(stream).poll_read(context, buffer);
                 if matches!(&result, Poll::Ready(Ok(())))
@@ -198,6 +226,9 @@ impl AsyncRead for PeerReadIo {
                     && buffer.filled().len() == filled_before
                 {
                     closed.send_replace(true);
+                }
+                if let Poll::Ready(Err(error)) = &result {
+                    failed.send_replace(Some(error.kind()));
                 }
                 result
             }

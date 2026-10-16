@@ -94,7 +94,6 @@ FAULT_POINTS = {
     "http.body-pump.shutdown.complete-task-before-abort",
     "http.request.body-segment.length-overflow",
     "http.request.body-segment.out-of-bounds",
-    "server.connection-io.eof-recheck.pause",
     "python.asgi-receive.borrow-conflict",
     "server.control.shutdown.borrow-conflict",
     "server.serve.control.borrow-conflict",
@@ -107,7 +106,6 @@ FAULT_POINTS = {
     "native.module.wrap-function.serve",
     "native.runtime.build.error",
     "server.websocket-task.shutdown-panic",
-    "server.connection-task.shutdown-hang",
     "http3.request-task.panic",
     "http3.request-task.panic-after-response",
     "http3.connection.accept-finished",
@@ -203,13 +201,6 @@ FAULT_POINTS = {
     "http.receive.immediate-disconnect-message-error",
     "http.receive.lock-contention",
     "server.connection-task.service-error",
-    "server.connection-task.join-error",
-    "server.connection-task.service-await-error",
-    "server.connection-task.join-await-error",
-    "server.connection-task.service-select-result",
-    "server.connection-task.join-select-result",
-    "server.connection-task.service-error-during-shutdown",
-    "server.connection-task.join-error-during-shutdown",
     "server.connection-io.poll-write-error",
     "http.asgi-io.allocate",
     "http.asgi.app-invoke",
@@ -241,6 +232,7 @@ FAULT_POINTS = {
     "http3.body-pump.connection-closed-select",
     "http3.body-pump.sender-closed-select",
     "http3.body-pump.final-message-connection-closed-select",
+    "http3.body-pump.final-message-send-error",
     "http3.body-pump.empty-data-frame",
     "http3.body-pump.send-error",
     "websocket.handshake.mutex.poison",
@@ -340,7 +332,6 @@ FAULT_CONTRACTS = {
     "asgi-spec-version-2.5",
     "http-response-reset-cancels-deferred-task",
     "server-cancellation-schedule-error-bounded-shutdown",
-    "http-read-eof-recheck-completes",
     "http-500-then-followup-200",
     "http-callback-error-followup-200",
     "http-original-task-start-error-followup-200",
@@ -389,8 +380,8 @@ FAULT_CONTRACTS = {
     "http-final-body-preserved-after-app-task-panic",
     "http-task-panic-before-final-body-closes-stream",
     "http-start-and-final-body-preserved-after-task-wins-select",
-    "http-connection-task-error-followup-200",
-    "http-connection-task-write-error-followup-200",
+    "http-native-service-error-close-followup-200",
+    "http-native-connection-write-error-followup-200",
     "http-concurrent-receive-after-lock-contention",
     "http-task-completion-error-followup-200",
     "http-start-response-preserved-followup-200",
@@ -402,9 +393,7 @@ FAULT_CONTRACTS = {
     "server-lifespan-startup-auto-fallback",
     "server-shutdown-failure",
     "server-lifespan-task-cancel",
-    "server-connection-task-error-during-shutdown",
-    "server-connection-task-shutdown-timeout-abort",
-    "server-hyper-connection-error-during-shutdown",
+    "server-native-connection-error-during-shutdown",
     "websocket-server-shutdown-force-abort",
     "websocket-driver-send-error-followup-200",
     "websocket-driver-send-error-cancels-app",
@@ -511,7 +500,7 @@ class ParityError(RuntimeError):
 
 
 class ProcessResourceSampler:
-    """Sample one server process while a synchronized load case is active."""
+    """Sample the live server process tree during a synchronized load case."""
 
     def __init__(self, pid: int) -> None:
         self.process = psutil.Process(pid)
@@ -525,10 +514,29 @@ class ProcessResourceSampler:
 
     def sample(self) -> tuple[int, int]:
         try:
-            with self.process.oneshot():
-                sample = (self.process.memory_info().rss, self.process.num_threads())
+            processes = [self.process, *self.process.children(recursive=True)]
         except psutil.Error as error:
-            raise ParityError(f"could not sample server resources: {error}") from error
+            raise ParityError(f"could not enumerate server processes: {error}") from error
+        rss_bytes = 0
+        thread_count = 0
+        root_sampled = False
+        for process in processes:
+            try:
+                with process.oneshot():
+                    rss_bytes += process.memory_info().rss
+                    thread_count += process.num_threads()
+                root_sampled |= process.pid == self.process.pid
+            except psutil.NoSuchProcess:
+                if process.pid == self.process.pid:
+                    raise ParityError("server process exited during resource sampling")
+                # A child can exit after children() returns and before its
+                # sample; the next interval will observe the remaining tree.
+                continue
+            except psutil.Error as error:
+                raise ParityError(f"could not sample server resources: {error}") from error
+        if not root_sampled:
+            raise ParityError("server process was absent from its resource sample")
+        sample = (rss_bytes, thread_count)
         self.samples.append(sample)
         return sample
 
@@ -1048,6 +1056,10 @@ def load_contract(
                         f"{case_id}: HTTP/3 peer-close classifier faults require the GREASE peer-close workflow"
                     )
             elif fault["contract"] == "http3-body-pump-early-exit-500":
+                request = case.get("request", {})
+                final_message_send_error = (
+                    fault["point"] == "http3.body-pump.final-message-send-error"
+                )
                 if (
                     case.get("profile") != "http3"
                     or case.get("operation") != "http3.body-pump-early-exit"
@@ -1056,12 +1068,18 @@ def load_contract(
                         "http3.body-pump.connection-closed",
                         "http3.body-pump.connection-closed-select",
                         "http3.body-pump.sender-closed-select",
+                        "http3.body-pump.final-message-send-error",
                     }
-                    or case.get("request", {}).get("path") not in {"/return-before-response-start", "/h3-upload-disconnect"}
-                    or not case.get("request", {}).get("body_base64")
+                    or request.get("path") not in {"/return-before-response-start", "/h3-upload-disconnect"}
+                    or request.get("method") != "POST"
+                    or (final_message_send_error and (
+                        request.get("path") != "/return-before-response-start"
+                        or request.get("body_base64") != ""
+                    ))
+                    or (not final_message_send_error and not request.get("body_base64"))
                 ):
                     raise ParityError(
-                        f"{case_id}: HTTP/3 body-pump early exits require a nonempty POST request"
+                        f"{case_id}: HTTP/3 body-pump early exits require a supported POST probe"
                     )
             elif fault["contract"] == "http3-upload-body-pump-preserves-data":
                 if (
@@ -1249,16 +1267,6 @@ def load_contract(
                     or case.get("response_reset", {}).get("path") != "/stream-cancel-until-reset"
                 ):
                     raise ParityError(f"{case_id}: deferred task transfer requires the held response-reset workflow")
-            elif fault["contract"] == "http-read-eof-recheck-completes":
-                disconnect = case.get("disconnect", {})
-                if (
-                    case.get("profile") != "http2"
-                    or case.get("operation") != "http.client-disconnect"
-                    or fault["point"] != "server.connection-io.eof-recheck.pause"
-                    or "reset" in disconnect
-                    or disconnect.get("wait_event") != "http.disconnect.waiting"
-                ):
-                    raise ParityError(f"{case_id}: EOF recheck requires a synchronized HTTP/2 connection disconnect")
             elif fault["contract"] == "server-cancellation-schedule-error-bounded-shutdown":
                 if (
                     case.get("profile") != "lifecycle"
@@ -1270,14 +1278,11 @@ def load_contract(
                     or case.get("lifecycle", {}).get("hold_path") != "/hold"
                 ):
                     raise ParityError(f"{case_id}: cancellation errors require a held request and bounded shutdown")
-            elif fault["contract"] == "http-connection-task-error-followup-200":
+            elif fault["contract"] == "http-native-service-error-close-followup-200":
                 if (
                     case.get("profile") != "http1"
                     or case.get("operation") != "http.keepalive-sequence"
-                    or fault["point"] not in {
-                        "server.connection-task.service-error",
-                        "server.connection-task.join-error",
-                    }
+                    or fault["point"] != "server.connection-task.service-error"
                     or "request_sequence" not in case
                     or len(case["request_sequence"]) != 2
                     or not any(
@@ -1286,18 +1291,13 @@ def load_contract(
                     )
                 ):
                     raise ParityError(
-                        f"{case_id}: connection-task faults require a close-delimited first request and HTTP follow-up"
+                        f"{case_id}: native service errors require a close-delimited request and HTTP follow-up"
                     )
-            elif fault["contract"] == "http-connection-task-write-error-followup-200":
+            elif fault["contract"] == "http-native-connection-write-error-followup-200":
                 if (
                     case.get("profile") != "http1"
                     or case.get("operation") != "http.keepalive-sequence"
-                    or fault["point"] not in {
-                        "server.connection-task.service-await-error",
-                        "server.connection-task.join-await-error",
-                        "server.connection-task.service-select-result",
-                        "server.connection-task.join-select-result",
-                    }
+                    or fault["point"] != "server.connection-io.poll-write-error"
                     or "request_sequence" not in case
                     or len(case["request_sequence"]) != 2
                     or not any(
@@ -1306,7 +1306,7 @@ def load_contract(
                     )
                 ):
                     raise ParityError(
-                        f"{case_id}: connection-task write faults require a close-delimited first request and HTTP follow-up"
+                        f"{case_id}: native connection-write faults require a close-delimited request and HTTP follow-up"
                     )
             elif fault["contract"] == "http-concurrent-receive-after-lock-contention":
                 stream = case.get("request_stream", {})
@@ -1748,32 +1748,7 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: lifespan task cancellation requires the shutdown-cancellation workflow"
                     )
-            elif fault["contract"] == "server-connection-task-error-during-shutdown":
-                if (
-                    case.get("profile") != "lifecycle"
-                    or case.get("operation") != "lifespan.shutdown-cancellation"
-                    or fault["point"] not in {
-                        "server.connection-task.service-error-during-shutdown",
-                        "server.connection-task.join-error-during-shutdown",
-                    }
-                    or case.get("lifecycle", {}).get("hold_path") != "/hold"
-                ):
-                    raise ParityError(
-                        f"{case_id}: connection-task shutdown faults require the held-request lifecycle workflow"
-                    )
-            elif fault["contract"] == "server-connection-task-shutdown-timeout-abort":
-                if (
-                    case.get("profile") != "lifecycle"
-                    or case.get("operation") != "lifespan.shutdown-cancellation"
-                    or fault["point"] != "server.connection-task.shutdown-hang"
-                    or case.get("lifecycle", {}).get("state_path") != "/state"
-                    or case.get("lifecycle", {}).get("hold_path") != "/hold"
-                    or case.get("lifecycle", {}).get("graceful_timeout_seconds") != 1
-                ):
-                    raise ParityError(
-                        f"{case_id}: connection-task timeout faults require the bounded held-request shutdown workflow"
-                    )
-            elif fault["contract"] == "server-hyper-connection-error-during-shutdown":
+            elif fault["contract"] == "server-native-connection-error-during-shutdown":
                 if (
                     case.get("profile") not in {"lifecycle", "lifecycle-tls"}
                     or case.get("operation")
@@ -1784,7 +1759,7 @@ def load_contract(
                     or "reset_connection_after_shutdown" in case.get("lifecycle", {})
                 ):
                     raise ParityError(
-                        f"{case_id}: Hyper connection write faults require a held response during graceful shutdown"
+                        f"{case_id}: native connection write faults require a held response during graceful shutdown"
                     )
             elif fault["contract"] == "websocket-server-shutdown-force-abort":
                 if (
@@ -2685,10 +2660,10 @@ def load_contract(
                     or case["lifecycle"].get("stream_path") != "/stream-shutdown-hold"
                     or case.get("verification") != "fault-contract"
                     or case.get("fault", {}).get("contract")
-                    != "server-hyper-connection-error-during-shutdown"
+                    != "server-native-connection-error-during-shutdown"
                 ):
                     raise ParityError(
-                        f"{case_id}: Hyper connection error requires a fault-contract held-stream workflow"
+                    f"{case_id}: native connection error requires a fault-contract held-stream workflow"
                     )
             elif "stream_path" in case["lifecycle"]:
                 raise ParityError(
@@ -4072,8 +4047,6 @@ def http2_disconnect_request(
     port: int,
     specification: dict[str, Any],
     events_path: Path,
-    fault_control_path: Path | None = None,
-    fault_point: str | None = None,
 ) -> dict[str, Any]:
     events_before = len(read_events(events_path))
     context = ssl._create_unverified_context()
@@ -4164,22 +4137,6 @@ def http2_disconnect_request(
     events = read_events(events_path)[events_before:]
     if event not in events:
         raise ParityError("HTTP/2 app did not finish its disconnect receives")
-    fault_consumed = False
-    if fault_control_path is not None:
-        if fault_point is None:
-            raise ParityError("HTTP/2 EOF recheck fault observation requires its point selector")
-        deadline = time.monotonic() + 3
-        while (
-            fault_control_path.read_text(encoding="utf-8").strip()
-            == fault_point
-            and time.monotonic() < deadline
-        ):
-            time.sleep(0.005)
-        if fault_control_path.read_text(encoding="utf-8").strip() == fault_point:
-            raise ParityError(
-                "HTTP/2 EOF recheck pause was not consumed while the disconnected request was held"
-            )
-        fault_consumed = True
     followup = http2_request(port, {
         "method": "GET", "path": specification["followup_path"], "headers": [], "body_base64": "",
     })
@@ -4188,8 +4145,6 @@ def http2_disconnect_request(
         "followup": followup,
         "application_events": events,
     }
-    if fault_control_path is not None:
-        observation["fault_consumed"] = fault_consumed
     return observation
 
 
@@ -5131,9 +5086,10 @@ def _load_resource_result(
         and result["peak_python_tasks"] >= concurrency
         for result in resource_rounds
     )
-    settled_rss = [result["rss_after_bytes"] for result in resource_rounds[-3:]]
+    settled_rss = [result["rss_after_bytes"] for result in resource_rounds[-2:]]
     rss_stable = (
-        len(settled_rss) == 3
+        len(resource_rounds) == rounds
+        and len(settled_rss) == 2
         and max(settled_rss) - min(settled_rss) <= 16 * 1024 * 1024
     )
     task_counts = [result["idle_python_tasks"] for result in resource_rounds]
@@ -5631,6 +5587,11 @@ def websocket_observation(
             raise ParityError("WebSocket app did not enter its held receive before shutdown")
         exit_code, _ = stop_server(server, graceful=True)
         client.join(3)
+        fault_consumed = (
+            fault_control_path is None
+            or fault_point is None
+            or fault_control_path.read_text(encoding="utf-8").strip() != fault_point
+        )
         deadline = time.monotonic() + 2
         application_events = read_events(events_path)[events_before:]
         while time.monotonic() < deadline and not any(
@@ -5643,6 +5604,7 @@ def websocket_observation(
             "application_events": application_events,
             "close_code": client_result["close_code"],
             "close_reason": client_result["close_reason"],
+            "fault_consumed": fault_consumed,
         }
     client_socket: socket.socket | None = None
     try:
@@ -6171,7 +6133,13 @@ def execute_case(
             if case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}:
                 return http3_peer_close_request(server, trust_anchor, request, h3_client)
             if request.get("hold_open_for_shutdown"):
-                return http3_shutdown_request(server, trust_anchor, request, h3_client)
+                observation = http3_shutdown_request(server, trust_anchor, request, h3_client)
+                if fault is not None and fault["point"] == "server.http3-task.shutdown-hang":
+                    observation["fault_consumed"] = (
+                        fault_control_path.read_text(encoding="utf-8").strip()
+                        != fault["point"]
+                    )
+                return observation
             if request.get("invalid_alpn"):
                 try:
                     http3_request(server["port"], trust_anchor, request, h3_client)
@@ -6314,19 +6282,7 @@ def execute_case(
         if fault_control_path is not None:
             fault_control_path.write_text(fault["point"], encoding="utf-8")
         if profile["id"] == "http2":
-            eof_recheck_control = (
-                fault_control_path
-                if fault and fault["contract"] == "http-read-eof-recheck-completes"
-                else None
-            )
-            try:
-                return http2_disconnect_request(
-                    server["port"], disconnect, server["events"], eof_recheck_control,
-                    fault["point"] if eof_recheck_control is not None else None,
-                )
-            finally:
-                if fault_control_path is not None:
-                    fault_control_path.write_text("", encoding="utf-8")
+            return http2_disconnect_request(server["port"], disconnect, server["events"])
         client = socket.create_connection(("127.0.0.1", server["port"]), timeout=5)
         disconnect_started = time.monotonic()
         reset_elapsed_seconds = None
@@ -6621,7 +6577,7 @@ def execute_case(
                 fault = case.get("fault")
                 if (
                     fault is not None
-                    and fault["contract"] == "server-hyper-connection-error-during-shutdown"
+                    and fault["contract"] == "server-native-connection-error-during-shutdown"
                 ):
                     fault_control_path = server.get("coverage_fault_control_path")
                     if fault_control_path is None:
@@ -6799,22 +6755,6 @@ def execute_case(
         fault_control_path = server.get("coverage_fault_control_path") if fault else None
         if fault_control_path is not None:
             fault_control_path.write_text(fault["point"], encoding="utf-8")
-        if (
-            fault is not None
-            and fault["contract"] == "server-connection-task-shutdown-timeout-abort"
-        ):
-            # Complete one connection while the injected select is armed, then
-            # hold a second connection until shutdown exercises its timeout arm.
-            probe = http1_request(server["port"], {
-                "method": "GET",
-                "path": lifecycle["state_path"],
-                "headers": [],
-                "body_base64": "",
-            })
-            if probe.get("status") != 200 or probe.get("body_base64") != "cmVhZHk=":
-                raise ParityError(
-                    "shutdown-timeout fault probe did not complete with the expected state response"
-                )
         if lifecycle.get("unfinished_tls_handshake") is True:
             pending_tls = socket.create_connection(("127.0.0.1", server["port"]), timeout=3)
             try:
@@ -7080,13 +7020,6 @@ def fault_contract_matches(
             and "response.reset.app-cancelled" in observation.get("application_events", [])
             and isinstance(followup, dict) and followup.get("status") == 200
         )
-    if fault["contract"] == "http-read-eof-recheck-completes":
-        followup = observation.get("followup_response")
-        return (
-            observation.get("disconnect_event") is True
-            and observation.get("fault_consumed") is True
-            and isinstance(followup, dict) and followup.get("status") == 200
-        )
     if fault["contract"] == "server-cancellation-schedule-error-bounded-shutdown":
         events = observation.get("application_events", [])
         log = observation.get("server_log", "")
@@ -7305,6 +7238,7 @@ def fault_contract_matches(
             observation.get("status") == 200
             and observation.get("process_terminated") is True
             and "HTTP/3 shutdown exceeded grace period" in observation.get("server_log", "")
+            and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "http-final-body-preserved-after-app-task-panic":
         return (
@@ -7375,17 +7309,7 @@ def fault_contract_matches(
             and first_body == expected_body
             and followup.get("status") == 200
         )
-    if fault["contract"] == "http-connection-task-error-followup-200":
-        responses = observation.get("responses")
-        return (
-            isinstance(responses, list)
-            and len(responses) == 2
-            and all(isinstance(response, dict) for response in responses)
-            and responses[0].get("status") == 200
-            and responses[1].get("status") == 200
-            and "connection task failed:" in observation.get("server_log", "")
-        )
-    if fault["contract"] == "http-connection-task-write-error-followup-200":
+    if fault["contract"] == "http-native-service-error-close-followup-200":
         responses = observation.get("responses")
         return (
             isinstance(responses, list)
@@ -7394,7 +7318,18 @@ def fault_contract_matches(
             and responses[0].get("status") is None
             and responses[0].get("connection_closed") is True
             and responses[1].get("status") == 200
-            and "connection task failed:" in observation.get("server_log", "")
+        )
+    if fault["contract"] == "http-native-connection-write-error-followup-200":
+        responses = observation.get("responses")
+        return (
+            isinstance(responses, list)
+            and len(responses) == 2
+            and all(isinstance(response, dict) for response in responses)
+            and responses[0].get("status") is None
+            and responses[0].get("connection_closed") is True
+            and responses[1].get("status") == 200
+            and "uvicorn-rs: HTTP connection from" in observation.get("server_log", "")
+            and "HTTP connection failed:" in observation.get("server_log", "")
         )
     if fault["contract"] == "http-concurrent-receive-after-lock-contention":
         return (
@@ -7549,31 +7484,15 @@ def fault_contract_matches(
             and "lifespan.shutdown.hold" in events
             and "lifespan.task-cancelled" in events
         )
-    if fault["contract"] == "server-connection-task-error-during-shutdown":
-        events = observation.get("application_events", [])
-        return (
-            observation.get("process_terminated") is True
-            and "request.cancelled" in events
-            and "lifespan.shutdown" in events
-            and "connection task failed during shutdown" in observation.get("server_log", "")
-        )
-    if fault["contract"] == "server-connection-task-shutdown-timeout-abort":
-        events = observation.get("application_events", [])
-        return (
-            observation.get("process_terminated") is True
-            and observation.get("process_exit_code") == 0
-            and "request.cancelled" in events
-            and "lifespan.shutdown" in events
-            and "panicked" not in observation.get("server_log", "")
-        )
-    if fault["contract"] == "server-hyper-connection-error-during-shutdown":
+    if fault["contract"] == "server-native-connection-error-during-shutdown":
         events = observation.get("application_events", [])
         return (
             observation.get("process_terminated") is True
             and observation.get("connection_closed") is True
             and observation.get("response_stream_started") is True
             and "lifespan.shutdown" in events
-            and "connection task failed during shutdown:" in observation.get("server_log", "")
+            and "uvicorn-rs: HTTP connection from" in observation.get("server_log", "")
+            and "HTTP connection failed:" in observation.get("server_log", "")
         )
     if fault["contract"] == "websocket-server-shutdown-force-abort":
         events = observation.get("application_events", [])
@@ -7581,6 +7500,7 @@ def fault_contract_matches(
             observation.get("process_terminated") is True
             and "websocket.hold" in events
             and "websocket.app-cancelled" in events
+            and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "websocket-driver-send-error-followup-200":
         followup = observation.get("followup_response")
@@ -7955,11 +7875,6 @@ def execute_profile(
                                                  "lifespan_shutdown_completed": target_raw["lifespan_shutdown_completed"]}
                         elif case["fault"]["contract"] == "http-response-reset-cancels-deferred-task":
                             fault_observation = {**target_result, "application_events": target_raw["application_events"]}
-                        elif case["fault"]["contract"] == "http-read-eof-recheck-completes":
-                            fault_observation = {
-                                **target_result,
-                                "fault_consumed": target_raw.get("fault_consumed"),
-                            }
                         elif case["fault"]["contract"] == "http-reset-before-body-worker-disconnect-followup-200":
                             fault_observation = {
                                 **target_result,
@@ -8009,21 +7924,15 @@ def execute_profile(
                                 **target_result,
                                 "application_events": target_raw["application_events"],
                             }
-                        elif case["fault"]["contract"] in {
-                            "http-connection-task-error-followup-200",
-                            "http-connection-task-write-error-followup-200",
-                        }:
-                            deadline = time.monotonic() + 2
-                            server_log = read_server_log(target)
-                            while (
-                                "connection task failed:" not in server_log
-                                and time.monotonic() < deadline
-                            ):
-                                time.sleep(0.01)
-                                server_log = read_server_log(target)
+                        elif case["fault"]["contract"] == "http-native-connection-write-error-followup-200":
                             fault_observation = {
                                 **target_result,
-                                "server_log": server_log,
+                                "server_log": target_raw["server_log"],
+                            }
+                        elif case["fault"]["contract"] == "websocket-server-shutdown-force-abort":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
                             }
                         elif case["fault"]["contract"] == "http-concurrent-receive-after-lock-contention":
                             fault_observation = {
@@ -8043,18 +7952,7 @@ def execute_profile(
                                 **target_result,
                                 "server_log": server_log,
                             }
-                        elif case["fault"]["contract"] == "server-connection-task-error-during-shutdown":
-                            fault_observation = {
-                                **target_result,
-                                "server_log": target_raw["server_log"],
-                            }
-                        elif case["fault"]["contract"] == "server-connection-task-shutdown-timeout-abort":
-                            fault_observation = {
-                                **target_result,
-                                "process_exit_code": target_raw["process_exit_code"],
-                                "server_log": target_raw["server_log"],
-                            }
-                        elif case["fault"]["contract"] == "server-hyper-connection-error-during-shutdown":
+                        elif case["fault"]["contract"] == "server-native-connection-error-during-shutdown":
                             fault_observation = {
                                 **target_result,
                                 "server_log": target_raw["server_log"],
@@ -8063,6 +7961,7 @@ def execute_profile(
                             fault_observation = {
                                 **target_result,
                                 "server_log": target_raw["server_log"],
+                                "fault_consumed": target_raw.get("fault_consumed"),
                             }
                         elif case["fault"]["contract"] in {
                             "http3-connection-task-shutdown-error",

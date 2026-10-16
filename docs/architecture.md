@@ -2,30 +2,36 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-This document describes the current PyO3/ASGI implementation distributed as
-`uvicorn-rs-py`. The separate `uvicorn-rs` crate is Python-free and is not yet
-used by this Python server path; the adapter still carries its earlier network
-implementation. ADR 0003 records the target transport consolidation. The
-previous root Python distribution and CLI names are not compatibility
-requirements.
+This document describes the PyO3/ASGI implementation distributed as
+`uvicorn-rs-py` and the Python-free `uvicorn-rs` server crate. The current
+default Python-server path delegates HTTP/1.1 and HTTP/2 over TCP/TLS to the
+native crate through a Rust Tower service. HTTP/3 remains in the Rust server
+layer in the PyO3 extension. Python app loading, the caller-owned event loop,
+ASGI scope/messages, context, and app exceptions remain on the Python side.
+This transport migration is new and still needs exact-source hosted coverage
+and benchmark evidence. The previous root Python distribution and CLI names
+are not compatibility requirements.
 
-The native crate now exposes an opt-in proactive TCP EOF observer for native
-service integrations. Its implementation is recorded in
-[`PeerReadHalfCloseMode`](../crates/uvicorn-rs/src/lib.rs); this observer is not
-yet the Python ASGI server's transport backend and does not itself produce an
-ASGI `http.disconnect` event.
+The native crate exposes an opt-in proactive TCP EOF observer through
+[`PeerReadHalfCloseMode`](../crates/uvicorn-rs/src/lib.rs). The Python ASGI
+adapter uses the native TCP/TLS serving path, but this observer does not by
+itself produce an ASGI `http.disconnect` event; the adapter maps transport
+lifetime observations into ASGI behavior at its boundary.
 
 For the proposed Rust-native integration with Starlette-RS and FastAPI-RS, see
 the [detailed architecture diagram](rust-native-integration-architecture.html).
 
-The last source-bound full ASGI-adapter matrix predates the October 15 native
-transport work. It contains
-243 live oracle comparisons and 268 target-only fault/support contracts; the
-the earlier dirty source passed attribution and three full repeats with
-5,561/5,561 regions and 3,997/3,997 lines. Those totals do not cover the
-October 15 edits to the native crate, the coverage inventory, or this document.
-They do not establish a clean hosted release or the separate native crate.
-No normal-build parity run was included. See the
+There is no completed full-source coverage report for the current native
+TCP/TLS integration. The most recent completed local coverage report predates
+this transport change and measured 243 live oracle comparisons plus 268
+target-only fault/support contracts, with 5,561/5,561 regions and 3,997/3,997
+lines. Those totals do not cover the current native crate integration or the
+revised coverage inventory and do not establish a clean hosted release. The
+current source completed two 506-case local matrix repeats; its third repeat
+stopped on the HTTP/3 resource probe's root-process RSS sample. The probe now
+samples the Hypercorn process tree, and the focused H3 case passes, but no full
+post-fix report has been produced. No normal-build parity run was included in
+the older report. See the
 [coverage evidence](coverage.md#current-unified-coverage-status-2026-10-15) and the
 current candidate-wheel smoke (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 Older 506-, 494-, 485-, 451-, and 448-case results below are historical and do not
@@ -48,11 +54,16 @@ flowchart LR
     A -->|receive / send| B
 ```
 
-The `uvicorn-rs-py` CLI imports `module:attribute`, selects asyncio or optional uvloop, and
-starts the Rust server from that event loop. PyO3's asyncio integration
-dispatches ASGI calls back to the captured loop. Application code never runs on
-Tokio workers. The Python bridge wraps Rust-backed `receive()` and `send()`
-operations in the ASGI callable shape; it does not parse HTTP or manage sockets.
+The `uvicorn-rs-py` CLI imports `module:attribute`, selects asyncio or optional
+uvloop, and starts the Rust server from that event loop. For HTTP/1.1 and
+HTTP/2 over TCP/TLS, the Python adapter creates a Rust Tower service and passes
+it to `uvicorn_rs::serve_tcp` or `serve_tls`; the native crate owns parsing,
+connection state, TLS transport, flow control, and graceful connection drain.
+HTTP/3 is served by the extension's Rust QUIC path. PyO3's asyncio integration
+dispatches ASGI calls back to the captured Python loop. Application code never
+runs on Tokio workers. The bridge constructs the ASGI scope and wraps
+Rust-backed `receive()` and `send()` operations in the callable shape; each
+ASGI event and callback still crosses the Python boundary.
 
 The native module builds its Tokio runtime at import with one worker thread
 and registers the completed runtime with PyO3's async integration. A

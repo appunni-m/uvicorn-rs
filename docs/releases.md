@@ -15,20 +15,38 @@ Rust 1.85, native FastAPI-RS composition, and installed-wheel public parity.
 Its unified coverage job completed all 717 indexed cases and reported
 8,654/8,654 regions and 6,521/6,521 lines. The evidence checker then failed
 because the report producer's pending Coverage-MCP request text differed from
-the checker's required contract. The producer/checker wording is now aligned;
-the corrected source needs an exact-commit hosted run and a matching
-Coverage-MCP receipt before coverage is accepted.
+the checker's required contract. A later commit corrected the producer/checker
+wording. Main has since
+advanced through archive packaging fixes to
+`6c00d536c52f8f9dd2dc90ac67eb12bd0c58ca59`. Those hosted results predate the
+native TCP/TLS integration described below; the corrected coverage gate still
+needs a source-matched hosted receipt.
 
 The latest local 717-case/three-repeat report is from an earlier dirty source
 snapshot and is not evidence for this commit. Multi-system benchmark
 [run 38787712815](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815)
-is still running its sequential category step on Linux x86-64, Linux ARM64,
-and macOS ARM64. It measures older commit `5cb4b7b84`; no final category
-artifacts or qualified performance result are available. The previously
-reported `http1.disconnect-before-first-asgi-receive` discrepancy passed as a
+completed on Linux x86-64, Linux ARM64, and macOS ARM64, but every platform
+stopped in HTTP/2 before all 140 rows were recorded. The run measured older
+commit `5cb4b7b84`. Its artifacts retain the failed inputs; focused current-source
+replays of all three HTTP/2 failure classes passed correctness, but host CPU
+activity invalidated their timings. No qualified performance result is
+available. The previously reported
+`http1.disconnect-before-first-asgi-receive` discrepancy also passed as a
 single local parity case on the current checkout. See the
 [coverage record](coverage.md#current-unified-coverage-status-2026-10-15)
 and [benchmark status](benchmark-status.md).
+
+The current working-tree unified-coverage attempt ran the 506-case Python
+matrix three times: repeats one and two passed 506/506; repeat three passed
+505/506. The only failed observation was
+`http3.concurrent-stream-load-slow-reader-resource-bound`, where the RSS
+stability check returned false after otherwise healthy load, completed
+responses, and follow-up requests. The focused case then passed twice on the
+updated process-tree RSS sampler, including the 16-stream load, response
+hashes, zero active tasks, stable resource rounds, and a healthy follow-up.
+The native 206-case matrix completed two repeats before the local runner was
+stopped. This is focused working-tree evidence, not a complete post-fix
+coverage receipt; the exact-source hosted run remains required.
 
 The workflows upload candidate artifacts but do not publish Rust crates
 to crates.io, Python packages to PyPI, create a GitHub Release, or create or
@@ -38,9 +56,10 @@ move tags. The project is licensed under
 
 ## Current state
 
-The current hosted runs cover commit
-[`5a32e3c0d84a02c95fe8a3f01712c895419ea571`](https://github.com/appunni-m/uvicorn-rs/commit/5a32e3c0d84a02c95fe8a3f01712c895419ea571)
-on [main](https://github.com/appunni-m/uvicorn-rs/tree/main). CI
+The latest complete CI results cited here cover commit
+[`5a32e3c0d84a02c95fe8a3f01712c895419ea571`](https://github.com/appunni-m/uvicorn-rs/commit/5a32e3c0d84a02c95fe8a3f01712c895419ea571).
+Main has since advanced to `6c00d536c52f8f9dd2dc90ac67eb12bd0c58ca59`; the
+native TCP/TLS integration in the current worktree has no hosted run yet. CI
 [run 38790016719](https://github.com/appunni-m/uvicorn-rs/actions/runs/38790016719)
 has four completed jobs, all successful: installed-wheel public parity, Rust
 1.85, Rust formatting/lints/features/documentation, and pinned native
@@ -54,12 +73,11 @@ reusable connection returning status 200 and the same response body.
 
 Benchmark
 [run 38787712815](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815)
-is active on all three systems in the sequential category step. It measures
-older commit `5cb4b7b84`; there are no completed category artifacts or
-performance ratios to report. The prior completed matrix, run #29, had
-incomplete HTTP/2 categories on all systems and incomplete HTTP/3 categories
-on Linux. The latest complete FastAPI comparison remains run #27 and did not
-show a broad gain. No tag or verified candidate has been created.
+finished with failed HTTP/2 category jobs on all three systems. HTTP/1, HTTP/3,
+WebSocket, and lifecycle categories completed, but the overall result is
+incomplete. The run measures older commit `5cb4b7b84`; it cannot qualify the
+current source. The latest complete FastAPI comparison remains run #27 and did
+not show a broad gain. No tag or verified candidate has been created.
 
 ### Previous run #29 diagnostics (2026-10-14)
 
@@ -77,7 +95,7 @@ samples passed the per-sample host guard; no asyncio or uvloop pair reached
 three valid repetitions. A follow-up preflight rejected before another timing
 run. These replays establish case correctness, not a performance result.
 
-### Remaining release gates (2026-10-15)
+### Remaining release gates (2026-10-16)
 
 These gates apply to the requested Rust-native server and thin Python client
 architecture. Kata records the work under `ec8x` and `wb4y`; candidate assembly
@@ -85,14 +103,14 @@ is tracked by `zep3`.
 
 | Pending gate | Current evidence | Required completion |
 |---|---|---|
-| Canonical Rust transport and thin Python adapter (`sw8s`) | The root PyO3 package still implements its own networking and does not depend on the native `uvicorn-rs` crate. | Route the Python ASGI client through the native server, remove the duplicate protocol implementation as each capability migrates, and preserve Python loop, context, callable, exception, lifespan, disconnect, cancellation, and streaming behavior through live cases. |
+| Canonical Rust transport and thin Python adapter (`sw8s`) | The current default Python ASGI path delegates HTTP/1.1 and HTTP/2 over TCP/TLS to `uvicorn-rs`; HTTP/3 remains in the extension's Rust server layer. Python ASGI scope/events and app execution still cross the asyncio/PyO3 boundary. | Complete exact-source live coverage for the new transport, verify the documented support matrix, and preserve Python loop, context, callable, exception, lifespan, disconnect, cancellation, and streaming behavior. Then measure the path against matched Uvicorn workloads. |
 | Native framework composition (`wb4y`) | The pinned native FastAPI-RS composition inputs passed in exact-source hosted CI run 38790016719. | Retain the Python-free dependency graph and verify each composition behavior claimed by the released support matrix. Composed TLS/H3, WebSockets, and full framework lifecycle remain outside the current hosted evidence. |
 | Python compatibility matrix (`sw8s`) | An abi3 Python floor and individual framework/oracle versions are recorded; a maintained client compatibility matrix is not implemented. | Publish and exercise the exact Python, asyncio/uvloop, ASGI, and upstream integration combinations claimed by each Python client after transport migration. |
 | Unified coverage on current source | Exact-source CI run 38790016719 completed 717 indexed cases and measured 8,654/8,654 regions and 6,521/6,521 lines. Its evidence checker failed because producer and checker disagreed on pending Coverage-MCP request wording; the producer wording is now aligned. | Run the corrected exact source through hosted coverage and obtain a passing source-matched Coverage-MCP receipt. Diagnose the first failing case only; do not restart the full matrix for a report-contract mismatch. |
-| Representative performance (`wh9k`, `k8ft`) | Multi-system run 38787712815 is active in its sequential category step on three systems and uses older commit `5cb4b7b84`. No category totals or qualified ratios are available. Run #29 was incomplete; run #27's median throughput ratios were 0.765, 0.793, and 0.835 on Linux x86-64, Linux ARM64, and macOS ARM64. | Inspect the completed run's first failing input, if any, with one focused reproducer. Then require at least three valid repetitions per workload/loop/system and retain latency, throughput, CPU, memory, and source/build identities. If the Python ASGI path cannot show a reviewed meaningful gain, revise the performance scope from measured evidence before release. |
-| Clean commit and hosted CI (`zep3`) | CI run 38790016719 uses clean main commit `5a32e3c0d84a02c95fe8a3f01712c895419ea571`; four jobs passed and the coverage evidence check failed after all indexed cases passed. | Clear the corrected exact-source coverage gate and run any dependent candidate/package checks on that exact commit. Rerun only gates affected by later source changes. |
+| Representative performance (`wh9k`, `k8ft`) | Multi-system run 38787712815 completed but all three systems stopped in HTTP/2. The run uses older commit `5cb4b7b84`. Focused current-source reproductions of the three HTTP/2 failure classes passed correctness; local timings were invalid because unrelated host CPU activity exceeded the guard. `performance-acceptance.json` remains `not_proven`. | Run the correctness-gated categories on the exact release commit, with at least three valid repetitions per workload/loop/system, and retain latency, throughput, CPU, memory, and source/build identities. If the Python ASGI path cannot show a reviewed meaningful gain, revise the performance scope from measured evidence before release. |
+| Clean commit and hosted CI (`zep3`) | CI run 38790016719 uses clean commit `5a32e3c0d84a02c95fe8a3f01712c895419ea571`; four jobs passed and the coverage evidence check failed after all indexed cases passed. Main has since advanced to `6c00d536c52f8f9dd2dc90ac67eb12bd0c58ca59`, and the native TCP/TLS integration has no exact-source hosted validation yet. | Commit the reviewed transport and documentation changes, push them to `main`, then run the affected hosted coverage, Rust, parity, and package gates. Re-run only gates affected by later source changes. |
 | Packaged consumer evidence (`zep3`) | Exact-source CI verified the installed normal wheel's public parity, Rust 1.85, and native composition. No candidate bundle has been produced or inspected. | Verify the three supported wheels, sdist, and two Rust archives from the final clean commit, including fresh installed consumers, the Python floor, extracted Rust archive builds, licenses, versions, and checksums. |
-| Performance acceptance in candidate verification (`q9pv`, blocking `zep3`) | Run 38787712815 remains active on older source; the last completed matrix is incomplete and the last complete FastAPI comparison does not show a gain. `performance-acceptance.json` remains `not_proven`. | Complete the correctness-gated matrix on the exact release commit and record measured gain claims or a documented scope revision. Candidate assembly rejects `not_proven`, partial/stale artifacts, and unsupported or underqualified claims. |
+| Performance acceptance in candidate verification (`q9pv`, blocking `zep3`) | Run 38787712815 is complete but incomplete as evidence: HTTP/2 failed on every platform and it measures older source. `performance-acceptance.json` remains `not_proven`. | Complete the correctness-gated matrix on the exact release commit and record measured gain claims or a documented scope revision. Candidate assembly rejects `not_proven`, partial/stale artifacts, and unsupported or underqualified claims. |
 | Immutable candidate and final documentation (`zep3`) | No current candidate or tag exists. | Reconcile support, deployment, feasibility, benchmark, and coverage claims with the final evidence; assemble the bundle from the successful CI run/attempt; verify the annotated tag object and commit; retain candidate manifests and SHA256SUMS. Keep generated logs, profiles, and coverage reports out of Git. |
 
 The current workflow stops at a verified candidate artifact. Registry
@@ -158,8 +176,9 @@ preserve responses after peer write-half closure. This is a historical
 661-case snapshot. The later 717-case source-bound report also includes the
 opt-in Proactive held-service cases over cleartext and TLS, with complete and
 incomplete uploads; it passed three repeats but is still dirty local evidence.
-The Python ASGI adapter continues to use its separate transport, so these
-native cases do not establish ASGI disconnect delivery. See the
+The Python ASGI TCP/TLS path now uses the native transport, but these
+generic native cases do not by themselves establish ASGI disconnect delivery.
+See the
 [selected EOF evidence](coverage.md#selected-native-tcp-eof-evidence).
 
 Normal native CI selects 149 target contracts and retains the one declared

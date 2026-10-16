@@ -23,8 +23,9 @@
 //!
 //! Each request receives [`ConnectionInfo`], [`ConnectionLifetime`], and
 //! [`RequestLifetime`] values in its [`http::Extensions`]. TCP requests also
-//! receive [`PeerReadHalfClosed`] to observe raw socket read-half closure. The
-//! connection handle ends when its protocol driver ends. The request handle
+//! receive [`PeerReadHalfClosed`] and [`PeerReadFailed`] to distinguish clean
+//! raw socket EOF from a terminal read error. The connection handle ends when
+//! its protocol driver ends. The request handle
 //! identifies when the service or response-body path ends, including when
 //! Hyper drops an HTTP/2 service future after a stream reset. A dropped service
 //! future does not identify its cause; adapters must not interpret it as a peer reset
@@ -81,6 +82,95 @@ use tower_service::Service;
 
 type BoxBodyError = Box<dyn Error + Send + Sync + 'static>;
 type BoxedShutdownFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+
+#[cfg(coverage)]
+struct CoverageFaultIo<I> {
+    inner: I,
+    control_file: Option<std::path::PathBuf>,
+    failed: bool,
+}
+
+#[cfg(coverage)]
+impl<I> CoverageFaultIo<I> {
+    fn new(inner: I) -> Self {
+        Self {
+            inner,
+            control_file: std::env::var_os("UVICORN_RS_COVERAGE_FAULT_FILE")
+                .map(std::path::PathBuf::from),
+            failed: false,
+        }
+    }
+
+    fn take_write_error_fault(&mut self) -> bool {
+        const POINT: &str = "server.connection-io.poll-write-error";
+        let Some(path) = &self.control_file else {
+            return false;
+        };
+        let armed = std::fs::read_to_string(path)
+            .map(|value| value.trim() == POINT)
+            .unwrap_or(false);
+        if armed {
+            let _ = std::fs::write(path, "");
+        }
+        armed
+    }
+}
+
+#[cfg(coverage)]
+impl<I: AsyncRead + Unpin> AsyncRead for CoverageFaultIo<I> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_read(context, buffer)
+    }
+}
+
+#[cfg(coverage)]
+impl<I: AsyncWrite + Unpin> AsyncWrite for CoverageFaultIo<I> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        let this = self.get_mut();
+        if this.failed || this.take_write_error_fault() {
+            this.failed = true;
+            return Poll::Ready(Err(io::Error::other(
+                "coverage-injected TCP connection write error",
+            )));
+        }
+        Pin::new(&mut this.inner).poll_write(context, buffer)
+    }
+
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffers: &[io::IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        let this = self.get_mut();
+        if this.failed || this.take_write_error_fault() {
+            this.failed = true;
+            return Poll::Ready(Err(io::Error::other(
+                "coverage-injected TCP connection write error",
+            )));
+        }
+        Pin::new(&mut this.inner).poll_write_vectored(context, buffers)
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        self.inner.is_write_vectored()
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_flush(context)
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_shutdown(context)
+    }
+}
 
 /// Test-only HTTP/3 client that exercises the server crate's QUIC adapter.
 ///
@@ -167,6 +257,8 @@ pub struct CoveragePeerReadAdapter<I> {
     pub io: I,
     /// Reports whether the peer closed its write half.
     pub observer: PeerReadHalfClosed,
+    /// Reports a terminal raw socket read error, such as a peer reset.
+    pub failed_observer: PeerReadFailed,
     /// Drives observation independently from application reads.
     pub pump: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
 }
@@ -178,10 +270,19 @@ pub struct CoveragePeerReadAdapter<I> {
 pub fn coverage_proactive_peer_read(
     stream: tokio::net::TcpStream,
 ) -> CoveragePeerReadAdapter<impl AsyncRead + AsyncWrite + Unpin + Send> {
-    let (io, observer, pump, _) =
+    let (io, observer, failed_observer, pump, _) =
         peer_read::observe_peer_read(stream, PeerReadHalfCloseMode::Proactive);
-    let pump = pump.map(|pump| Box::pin(pump) as Pin<Box<dyn Future<Output = ()> + Send>>);
-    CoveragePeerReadAdapter { io, observer, pump }
+    let pump = pump.map(|pump| {
+        Box::pin(async move {
+            let _ = pump.await;
+        }) as Pin<Box<dyn Future<Output = ()> + Send>>
+    });
+    CoveragePeerReadAdapter {
+        io,
+        observer,
+        failed_observer,
+        pump,
+    }
 }
 
 /// Arms a coverage-only HTTP/3 peer stream-credit gate.
@@ -1036,6 +1137,56 @@ impl Error for PeerReadHalfClosedUnavailable {
     }
 }
 
+/// A TCP connection-scoped signal that the raw socket reader encountered an
+/// I/O error, such as a peer reset. Requests served over TCP, including TLS
+/// over TCP, receive this signal. It remains distinct from clean TCP EOF.
+#[derive(Clone, Debug)]
+pub struct PeerReadFailed {
+    failed: watch::Receiver<Option<io::ErrorKind>>,
+}
+
+impl PeerReadFailed {
+    /// Returns the raw socket read error kind when one has been observed.
+    #[must_use]
+    pub fn error_kind(&self) -> Option<io::ErrorKind> {
+        *self.failed.borrow()
+    }
+
+    /// Waits until the raw socket reader observes an I/O error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PeerReadFailedUnavailable`] if the reader ends without
+    /// observing a read error.
+    pub async fn wait_until_failed(&mut self) -> Result<io::ErrorKind, PeerReadFailedUnavailable> {
+        loop {
+            if let Some(kind) = *self.failed.borrow_and_update() {
+                return Ok(kind);
+            }
+            self.failed
+                .changed()
+                .await
+                .map_err(|_| PeerReadFailedUnavailable)?;
+        }
+    }
+}
+
+/// The server stopped observing a peer read error before one was observed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PeerReadFailedUnavailable;
+
+impl fmt::Display for PeerReadFailedUnavailable {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("peer read-error observation ended without a read error")
+    }
+}
+
+impl Error for PeerReadFailedUnavailable {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+
 /// A connection-scoped signal inserted into each request's extensions.
 ///
 /// This handle describes the lifetime of the underlying HTTP connection. It
@@ -1210,26 +1361,45 @@ impl Drop for ConnectionLifetimeGuard {
 
 struct RequestLifetimeGuard {
     ended: watch::Sender<Option<RequestEndReason>>,
+    response_body_activity: Option<watch::Sender<usize>>,
     drop_reason: RequestEndReason,
+    response_body_active: bool,
     finished: bool,
 }
 
 impl RequestLifetimeGuard {
-    fn new() -> (RequestLifetime, Self) {
+    fn new(response_body_activity: Option<watch::Sender<usize>>) -> (RequestLifetime, Self) {
         let (ended, receiver) = watch::channel(None);
         (
             RequestLifetime { ended: receiver },
             Self {
                 ended,
+                response_body_activity,
                 drop_reason: RequestEndReason::ServiceFutureDropped,
+                response_body_active: false,
                 finished: false,
             },
         )
     }
 
+    fn response_body_started(&mut self) {
+        if !self.finished && !self.response_body_active {
+            self.response_body_active = true;
+            if let Some(response_body_activity) = &self.response_body_activity {
+                response_body_activity.send_modify(|active| *active = active.saturating_add(1));
+            }
+        }
+    }
+
     fn finish(&mut self, reason: RequestEndReason) {
         if !self.finished {
             self.finished = true;
+            if self.response_body_active {
+                self.response_body_active = false;
+                if let Some(response_body_activity) = &self.response_body_activity {
+                    response_body_activity.send_modify(|active| *active = active.saturating_sub(1));
+                }
+            }
             self.ended.send_replace(Some(reason));
         }
     }
@@ -1330,6 +1500,16 @@ where
     ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         let mut this = self.project();
         let frame = this.body.as_mut().poll_frame(context);
+        if matches!(
+            &frame,
+            Poll::Ready(Some(Ok(frame)))
+                if frame.data_ref().is_some_and(|data| !data.is_empty())
+                    || frame.trailers_ref().is_some()
+        ) {
+            if let Some(guard) = this.guard.as_mut() {
+                guard.response_body_started();
+            }
+        }
         let reason = match &frame {
             Poll::Ready(None) => Some(RequestEndReason::ResponseBodyConsumed),
             Poll::Ready(Some(Err(_))) => Some(RequestEndReason::ResponseBodyFailed),
@@ -1786,8 +1966,14 @@ where
             break;
         };
 
-        let (stream, peer_read_half_closed, read_pump, prioritize_receiver_close_fault) =
-            peer_read::observe_peer_read(stream, config.peer_read_half_close);
+        let (
+            stream,
+            peer_read_half_closed,
+            peer_read_failed,
+            read_pump,
+            prioritize_receiver_close_fault,
+        ) = peer_read::observe_peer_read(stream, config.peer_read_half_close);
+        let (response_body_activity, mut response_body_activity_receiver) = watch::channel(0usize);
 
         let service = service.clone();
         let shutdown = shutdown_receiver.clone();
@@ -1811,6 +1997,8 @@ where
                                     transport: TransportKind::Tcp,
                                 },
                                 peer_read_half_closed.clone(),
+                                peer_read_failed.clone(),
+                                response_body_activity.clone(),
                                 shutdown,
                                 error_observer.as_ref(),
                                 service_error_policy,
@@ -1829,6 +2017,8 @@ where
                                 transport: TransportKind::Tcp,
                             },
                             peer_read_half_closed,
+                            peer_read_failed,
+                            response_body_activity.clone(),
                             shutdown,
                             error_observer.as_ref(),
                             service_error_policy,
@@ -1852,7 +2042,18 @@ where
                 } else {
                     tokio::select! {
                         result = &mut connection => result,
-                        () = &mut read_pump => connection.await,
+                        outcome = &mut read_pump => match outcome {
+                            peer_read::PeerReadPumpOutcome::ReceiverClosed
+                            | peer_read::PeerReadPumpOutcome::ReadHalfClosed => connection.await,
+                            peer_read::PeerReadPumpOutcome::ReadFailed(kind) => {
+                                wait_for_connection_or_response_after_peer_read_error(
+                                    connection.as_mut(),
+                                    &mut response_body_activity_receiver,
+                                    kind,
+                                )
+                                .await
+                            }
+                        },
                     }
                 }
             } else {
@@ -1871,6 +2072,10 @@ where
         });
     }
 
+    // Stop admitting connections before the graceful drain starts. Keeping
+    // the bound socket alive here would let new clients enter while existing
+    // connections are being drained.
+    drop(listener);
     shutdown_sender.send_replace(true);
     let shutdown_deadline = graceful_shutdown_deadline(config.graceful_shutdown_timeout)?;
     let shutdown_deadline = tokio::time::sleep_until(shutdown_deadline);
@@ -1943,11 +2148,40 @@ async fn next_listener_event(
     }
 }
 
+async fn wait_for_connection_or_response_after_peer_read_error<F>(
+    mut connection: Pin<&mut F>,
+    response_body_activity: &mut watch::Receiver<usize>,
+    error_kind: io::ErrorKind,
+) -> Result<(), ConnectionError>
+where
+    F: Future<Output = Result<(), ConnectionError>>,
+{
+    loop {
+        if *response_body_activity.borrow_and_update() > 0 {
+            // Let Hyper consume a reset while the service is still reading
+            // the request body. Once it has returned a response, drop Hyper
+            // so a pending response body also drops and cancels its app task.
+            return Err(ConnectionError::PeerRead(error_kind));
+        }
+        tokio::select! {
+            biased;
+            result = connection.as_mut() => return result,
+            changed = response_body_activity.changed() => {
+                if changed.is_err() {
+                    return connection.await;
+                }
+            }
+        }
+    }
+}
+
 async fn serve_connection<I, S, B>(
     stream: I,
     service: S,
     connection_info: ConnectionInfo,
     peer_read_half_closed: PeerReadHalfClosed,
+    peer_read_failed: PeerReadFailed,
+    response_body_activity: watch::Sender<usize>,
     mut shutdown: watch::Receiver<bool>,
     error_observer: Option<&ServerErrorObserver>,
     service_error_policy: ServiceErrorPolicy,
@@ -1979,12 +2213,16 @@ where
             connection_lifetime,
             Some(connection_upgrade),
             Some(peer_read_half_closed),
+            Some(peer_read_failed),
+            Some(response_body_activity),
         ),
         error_observer.cloned(),
         peer_addr,
         service_error_policy,
     );
     let service = TowerToHyperService::new(application);
+    #[cfg(coverage)]
+    let stream = CoverageFaultIo::new(stream);
     let connection = builder.serve_connection_with_upgrades(TokioIo::new(stream), service);
     tokio::pin!(connection);
 
@@ -2059,6 +2297,8 @@ struct ConnectionInfoService<S, RequestBody, B> {
     connection_lifetime: ConnectionLifetime,
     connection_upgrade: Option<ConnectionUpgrade>,
     peer_read_half_closed: Option<PeerReadHalfClosed>,
+    peer_read_failed: Option<PeerReadFailed>,
+    response_body_activity: Option<watch::Sender<usize>>,
     _types: std::marker::PhantomData<fn(RequestBody) -> B>,
 }
 
@@ -2073,6 +2313,8 @@ where
             connection_lifetime: self.connection_lifetime.clone(),
             connection_upgrade: self.connection_upgrade.clone(),
             peer_read_half_closed: self.peer_read_half_closed.clone(),
+            peer_read_failed: self.peer_read_failed.clone(),
+            response_body_activity: self.response_body_activity.clone(),
             _types: std::marker::PhantomData,
         }
     }
@@ -2085,6 +2327,8 @@ impl<S, RequestBody, B> ConnectionInfoService<S, RequestBody, B> {
         connection_lifetime: ConnectionLifetime,
         connection_upgrade: Option<ConnectionUpgrade>,
         peer_read_half_closed: Option<PeerReadHalfClosed>,
+        peer_read_failed: Option<PeerReadFailed>,
+        response_body_activity: Option<watch::Sender<usize>>,
     ) -> Self {
         Self {
             inner,
@@ -2092,6 +2336,8 @@ impl<S, RequestBody, B> ConnectionInfoService<S, RequestBody, B> {
             connection_lifetime,
             connection_upgrade,
             peer_read_half_closed,
+            peer_read_failed,
+            response_body_activity,
             _types: std::marker::PhantomData,
         }
     }
@@ -2122,13 +2368,17 @@ where
                 .extensions_mut()
                 .insert(peer_read_half_closed.clone());
         }
+        if let Some(peer_read_failed) = &self.peer_read_failed {
+            request.extensions_mut().insert(peer_read_failed.clone());
+        }
         let request_version = request.version();
         insert_http1_upgrade_extension(
             request.extensions_mut(),
             request_version,
             self.connection_upgrade.as_ref(),
         );
-        let (request_lifetime, guard) = RequestLifetimeGuard::new();
+        let (request_lifetime, guard) =
+            RequestLifetimeGuard::new(self.response_body_activity.clone());
         request.extensions_mut().insert(request_lifetime);
         RequestLifetimeFuture::new(self.inner.call(request), guard)
     }
@@ -2151,6 +2401,7 @@ enum ConnectionError {
     Http(Box<dyn Error + Send + Sync>),
     Upgrade(BoxBodyError),
     Tls(io::Error),
+    PeerRead(io::ErrorKind),
 }
 
 impl Error for ConnectionError {
@@ -2159,6 +2410,7 @@ impl Error for ConnectionError {
             Self::Http(error) => Some(error.as_ref()),
             Self::Upgrade(error) => Some(error.as_ref()),
             Self::Tls(error) => Some(error),
+            Self::PeerRead(_) => None,
         }
     }
 }
@@ -2169,6 +2421,7 @@ impl fmt::Display for ConnectionError {
             Self::Http(error) => write!(formatter, "HTTP connection failed: {error}"),
             Self::Upgrade(error) => write!(formatter, "upgraded session failed: {error}"),
             Self::Tls(error) => write!(formatter, "TLS handshake failed: {error}"),
+            Self::PeerRead(kind) => write!(formatter, "TCP peer read failed: {kind}"),
         }
     }
 }

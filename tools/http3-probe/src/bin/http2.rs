@@ -228,7 +228,9 @@ async fn run(config: Value) -> Result<Value, BenchError> {
     }
 
     let deadline = Instant::now() + Duration::from_secs_f64(seconds);
-    let request_timeout = Duration::from_secs(10);
+    // Keep the timeout as a deadlock guard without rejecting slow, large
+    // uploads on shared CI hosts. The full request duration remains measured.
+    let request_timeout = Duration::from_secs(20);
     let workers = (0..concurrency).map(|worker_index| {
         let mut sender = senders[worker_index % senders.len()].clone();
         let uri = uri.clone();

@@ -47,8 +47,10 @@ continues to run on its owning asyncio loop. The live inputs verify accepted
 and rejected configuration paths, not the effective concurrency limit. This
 is not a Uvicorn CLI option.
 
-The CLI runs the Python ASGI implementation in `uvicorn-rs-py`. The separately
-packaged native `uvicorn-rs` server is not yet its transport backend.
+The CLI runs the Python ASGI implementation in `uvicorn-rs-py`. Its HTTP/1.1
+and HTTP/2 TCP/TLS path uses the separately packaged native `uvicorn-rs`
+transport; HTTP/3 remains in the extension's Rust server layer. ASGI callables
+still run on their Python-owned event loop through the PyO3 bridge.
 
 Native Rust services can choose how a TCP peer's read-half closure is observed
 through `ServerConfig.peer_read_half_close`. The default `OnRead` mode adds no
@@ -56,8 +58,11 @@ read-ahead queue; `Proactive` uses one owned read future and a bounded queue to
 observe EOF while an HTTP/1 service is waiting. Proactive mode holds at most two
 queued 16 KiB chunks plus the chunk currently being consumed and adds an input
 copy. Both modes preserve response writes and incomplete-body errors. This
-native option does not configure the Python CLI and does not emit ASGI
-`http.disconnect`; see [transport ownership and buffering](architecture.md#native-tcp-peer-read-half-closure).
+The Python CLI currently selects `Proactive` for its native HTTP/1.1 and HTTP/2
+TCP/TLS path. Peer EOF and reset are mapped to ASGI `http.disconnect` by the
+Python bridge for the cases listed in the [support matrix](support-matrix.md).
+See [transport ownership and buffering](architecture.md#native-tcp-peer-read-half-closure)
+for the queue and copy costs of `Proactive` mode.
 
 Ctrl-C and SIGTERM initiate shutdown. The server runs ASGI lifespan startup
 before serving and lifespan shutdown after draining/cancelling active work.

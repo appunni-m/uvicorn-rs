@@ -382,24 +382,19 @@
       }
     },
     {
-      "case_id": "fault.http2.connection-disconnect-completes-eof-recheck",
+      "case_id": "http2.connection-disconnect-after-eof",
       "profile": "http2",
       "operation": "http.client-disconnect",
       "covers": [
         "http.client-disconnect"
       ],
       "disconnect": {
-        "path": "/disconnect-read-thrice",
+        "path": "/disconnect-read-once",
         "followup_path": "/disconnect-status",
         "content_length": 8,
         "partial_body_base64": "YWJj",
         "wait_event": "http.disconnect.waiting",
-        "wait_event_after_disconnect": "http.disconnect.third:http.disconnect"
-      },
-      "verification": "fault-contract",
-      "fault": {
-        "point": "server.connection-io.eof-recheck.pause",
-        "contract": "http-read-eof-recheck-completes"
+        "wait_event_after_disconnect": "http.disconnect"
       }
     },
     {

@@ -389,6 +389,8 @@ where
         connection_lifetime,
         None,
         None,
+        None,
+        None,
     );
     let application =
         ServiceErrorResponse::<_, crate::RequestLifetimeBody<B>, Http3RequestBody>::new(

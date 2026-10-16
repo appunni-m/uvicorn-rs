@@ -184,12 +184,13 @@ protocol category and a zero-grace lifecycle case:
 | `websocket.concurrent-sessions-slow-reader-resource-bound` | 16 sessions; 16 echoed messages of 4 KiB each; 100 ms pause; four rounds | Message lengths and SHA-256 match; sessions close cleanly; task and follow-up checks pass. |
 | `lifespan.zero-timeout-shutdown-cancels-16-active-streams` | Hold 16 HTTP/1.1 ASGI responses, request SIGTERM with graceful timeout 0, and reset the clients | All 16 applications observe cancellation, none completes its response, lifespan shutdown completes, and the server exits within the case's three-second bound. |
 
-The load cases sample process RSS, OS threads, and the ASGI app's Python task
-count every 5 ms. They require no net idle Python-task growth from the first
-to the final round and a spread of at most 16 MiB across late-round RSS
-samples. The RSS condition is a fixed-workload stability threshold, not an
-absolute cap. A response fingerprint is retained instead of duplicating the
-full repeated body in the report.
+The load cases sample server-process-tree RSS, OS threads, and the ASGI app's
+Python task count every 5 ms. They require no net idle Python-task growth from
+the first to the final round and a spread of at most 16 MiB between the last
+two round-end RSS samples. The sampler includes worker children and can count
+shared pages more than once. The RSS condition is a fixed-workload stability
+threshold, not an absolute cap. A response fingerprint is retained instead of
+duplicating the full repeated body in the report.
 
 This acceptance adds no body-size, byte-queue, or global connection cap. The
 observed RSS stability applies only to these bounded inputs and does not
