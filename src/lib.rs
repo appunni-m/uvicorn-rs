@@ -4471,8 +4471,9 @@ async fn serve_forever(
             error_observer: Some(Arc::new(|event| {
                 if event.phase() == uvicorn_rs::ServerErrorPhase::Connection {
                     log_error(format_args!(
-                        "uvicorn-rs: HTTP connection from {:?} failed: {}",
+                        "uvicorn-rs: HTTP connection from {:?} failed: {} ({:?})",
                         event.peer_addr(),
+                        event.error(),
                         event.error()
                     ));
                 }
