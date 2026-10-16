@@ -2,8 +2,9 @@ name: ASGI performance matrix
 
 on:
   push:
-    branches: [main]
+    branches: [main, h2-debug]
     paths:
+      - .github/workflows/benchmark-categories.yml
       - Cargo.toml
       - Cargo.lock
       - pyproject.toml
@@ -112,7 +113,7 @@ env:
 jobs:
   categories:
     name: ${{ matrix.system.id }} · parity and sequential categories
-    if: ${{ inputs.run_mode != 'focused-h2' }}
+    if: ${{ inputs.run_mode != 'focused-h2' && !(github.event_name == 'push' && github.ref == 'refs/heads/h2-debug') }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -396,7 +397,7 @@ jobs:
 
   focused-h2-diagnostic:
     name: ${{ inputs.h2_system || 'linux-x86_64' }} · one HTTP/2 diagnostic case
-    if: ${{ inputs.run_mode == 'focused-h2' }}
+    if: ${{ inputs.run_mode == 'focused-h2' || (github.event_name == 'push' && github.ref == 'refs/heads/h2-debug') }}
     runs-on: ${{ inputs.h2_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.h2_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     steps:
@@ -482,7 +483,7 @@ jobs:
   aggregate:
     name: Validate and render the multi-system evidence
     needs: categories
-    if: always() && inputs.run_mode != 'focused-h2' && needs.categories.result != 'cancelled'
+    if: always() && inputs.run_mode != 'focused-h2' && !(github.event_name == 'push' && github.ref == 'refs/heads/h2-debug') && needs.categories.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
