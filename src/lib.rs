@@ -1520,6 +1520,7 @@ impl ConnectionClosed {
             Self::Watch(closed) => {
                 let _ = closed.wait_for(|is_closed| *is_closed).await;
             }
+            #[cfg(feature = "native-tcp")]
             Self::Native {
                 lifetime,
                 peer_read_half_closed,

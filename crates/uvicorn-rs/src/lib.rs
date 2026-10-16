@@ -1996,9 +1996,11 @@ where
                                     tls: Some(TlsInfo { alpn_protocol }),
                                     transport: TransportKind::Tcp,
                                 },
-                                peer_read_half_closed.clone(),
-                                peer_read_failed.clone(),
-                                response_body_activity.clone(),
+                                ConnectionSignals {
+                                    peer_read_half_closed: peer_read_half_closed.clone(),
+                                    peer_read_failed: peer_read_failed.clone(),
+                                    response_body_activity: response_body_activity.clone(),
+                                },
                                 shutdown,
                                 error_observer.as_ref(),
                                 service_error_policy,
@@ -2016,9 +2018,11 @@ where
                                 tls: None,
                                 transport: TransportKind::Tcp,
                             },
-                            peer_read_half_closed,
-                            peer_read_failed,
-                            response_body_activity.clone(),
+                            ConnectionSignals {
+                                peer_read_half_closed,
+                                peer_read_failed,
+                                response_body_activity: response_body_activity.clone(),
+                            },
                             shutdown,
                             error_observer.as_ref(),
                             service_error_policy,
@@ -2175,13 +2179,18 @@ where
     }
 }
 
+#[derive(Clone)]
+struct ConnectionSignals {
+    peer_read_half_closed: PeerReadHalfClosed,
+    peer_read_failed: PeerReadFailed,
+    response_body_activity: watch::Sender<usize>,
+}
+
 async fn serve_connection<I, S, B>(
     stream: I,
     service: S,
     connection_info: ConnectionInfo,
-    peer_read_half_closed: PeerReadHalfClosed,
-    peer_read_failed: PeerReadFailed,
-    response_body_activity: watch::Sender<usize>,
+    signals: ConnectionSignals,
     mut shutdown: watch::Receiver<bool>,
     error_observer: Option<&ServerErrorObserver>,
     service_error_policy: ServiceErrorPolicy,
@@ -2195,6 +2204,11 @@ where
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
     let peer_addr = connection_info.peer_addr;
+    let ConnectionSignals {
+        peer_read_half_closed,
+        peer_read_failed,
+        response_body_activity,
+    } = signals;
     let (connection_lifetime, _connection_lifetime_guard) = ConnectionLifetimeGuard::new();
     let (upgrade_sender, mut upgrade_receiver) = mpsc::unbounded_channel();
     let (upgrade_shutdown_sender, upgrade_shutdown_receiver) = watch::channel(false);
