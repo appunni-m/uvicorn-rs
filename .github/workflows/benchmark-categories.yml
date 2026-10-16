@@ -396,9 +396,9 @@ jobs:
           retention-days: 90
 
   focused-h2-diagnostic:
-    name: ${{ inputs.h2_system || 'linux-x86_64' }} · one HTTP/2 diagnostic case
+    name: ${{ inputs.h2_system || (github.event_name == 'push' && github.ref == 'refs/heads/h2-debug' && 'linux-aarch64' || 'linux-x86_64') }} · one HTTP/2 diagnostic case
     if: ${{ inputs.run_mode == 'focused-h2' || (github.event_name == 'push' && github.ref == 'refs/heads/h2-debug') }}
-    runs-on: ${{ inputs.h2_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.h2_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/h2-debug') && 'ubuntu-24.04-arm' || inputs.h2_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.h2_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -473,7 +473,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: h2-focused-${{ inputs.h2_system || 'linux-x86_64' }}-${{ github.sha }}
+          name: h2-focused-${{ inputs.h2_system || (github.event_name == 'push' && github.ref == 'refs/heads/h2-debug' && 'linux-aarch64' || 'linux-x86_64') }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/benchmark-categories/
