@@ -30,6 +30,36 @@ on:
     - cron: "23 3 * * 1"
   workflow_dispatch:
     inputs:
+      run_mode:
+        description: Run the full comparison or one focused HTTP/2 diagnostic case
+        default: full
+        required: true
+        type: choice
+        options:
+          - full
+          - focused-h2
+      h2_system:
+        description: Runner for the focused HTTP/2 diagnostic
+        default: linux-x86_64
+        required: true
+        type: choice
+        options:
+          - linux-x86_64
+          - linux-aarch64
+          - macos-arm64
+      h2_workload:
+        description: One HTTP/2 workload for focused diagnosis
+        default: protocol-scope
+        required: true
+        type: choice
+        options:
+          - protocol-scope
+          - fixed
+          - large-response
+          - many-response-chunks
+          - request-upload
+          - request-upload-small-chunks
+          - slow-reader-backpressure
       duration:
         description: Seconds of sustained load per sample
         default: "5"
@@ -82,6 +112,7 @@ env:
 jobs:
   categories:
     name: ${{ matrix.system.id }} · parity and sequential categories
+    if: ${{ inputs.run_mode != 'focused-h2' }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -363,10 +394,95 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
+  focused-h2-diagnostic:
+    name: ${{ inputs.h2_system || 'linux-x86_64' }} · one HTTP/2 diagnostic case
+    if: ${{ inputs.run_mode == 'focused-h2' }}
+    runs-on: ${{ inputs.h2_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.h2_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Prepare one-case diagnostic environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/benchmark-preparation target/benchmark-categories
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcurl4-openssl-dev
+          else
+            brew install curl pkg-config openssl@3
+            brew_paths="$(brew --prefix curl)/bin:$(brew --prefix openssl@3)/bin"
+            echo "$brew_paths" | tr ':' '\n' >> "$GITHUB_PATH"
+            export PATH="$brew_paths:$PATH"
+          fi
+          uv sync --python "$PYTHON_VERSION" --group benchmark --group fastapi-benchmark --frozen --no-install-project
+          .venv/bin/python --version
+          rustc --version --verbose
+          openssl version
+          uname -a
+      - name: Build and install the normal release server wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/benchmark-preparation/server-wheels
+          uvx --from maturin==1.14.1 maturin build --release --locked \
+            --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
+            --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
+            2>&1 | tee target/benchmark-preparation/server-build.log
+          server_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path("target/benchmark-preparation/server-wheels").glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one server wheel")')"
+          uv pip install --python .venv/bin/python --no-deps "$server_wheel" \
+            2>&1 | tee target/benchmark-preparation/server-install.log
+      - name: Build the normal HTTP/2 probe client
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bin http2 \
+            2>&1 | tee target/benchmark-preparation/http2-client-build.log
+      - name: Run one selected HTTP/2 workload on uvicorn-rs asyncio
+        shell: bash
+        env:
+          BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
+          BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
+          BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
+          BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
+          BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
+          BENCHMARK_H2_WORKLOAD: ${{ inputs.h2_workload || 'protocol-scope' }}
+          RUST_BACKTRACE: "1"
+          PYTHONFAULTHANDLER: "1"
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_h2_category_bench.py \
+            --servers uvicorn-rs-asyncio \
+            --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
+            --output target/benchmark-categories/h2-focused.json \
+            --workloads "$BENCHMARK_H2_WORKLOAD" \
+            --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
+            --concurrency "$BENCHMARK_CONCURRENCY" \
+            2>&1 | tee target/benchmark-preparation/h2-focused-driver.log
+      - name: Retain focused diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: h2-focused-${{ inputs.h2_system || 'linux-x86_64' }}-${{ github.sha }}
+          path: |
+            target/benchmark-preparation/
+            target/benchmark-categories/
+          if-no-files-found: warn
+          retention-days: 90
+
   aggregate:
     name: Validate and render the multi-system evidence
     needs: categories
-    if: always() && needs.categories.result != 'cancelled'
+    if: always() && inputs.run_mode != 'focused-h2' && needs.categories.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -409,7 +525,7 @@ jobs:
   update-docs:
     name: Record benchmark status and update documentation
     needs: [categories, aggregate]
-    if: always() && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
+    if: always() && inputs.run_mode != 'focused-h2' && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
