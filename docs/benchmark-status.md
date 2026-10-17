@@ -2,6 +2,41 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Latest full benchmark attempt (2026-10-17)
+
+The [full matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146)
+measured commit
+[`5dbd981332080e289ef416357606f49c8e2503b4`](https://github.com/appunni-m/uvicorn-rs/commit/5dbd981332080e289ef416357606f49c8e2503b4).
+It did not complete across all three systems, so it does not qualify a
+multi-system performance result.
+
+| System | Outcome |
+|---|---|
+| Linux x86-64 | Stopped before timed categories: the installed wheel failed public parity at `http3.scope-preserves-duplicate-headers`. A later installed-wheel run on the current commit passed that case within 248/248 public cases, so no current mismatch is established; this matrix still has no qualified category result. |
+| macOS ARM64 | Stopped in HTTP/2 `many-response-chunks` on `hypercorn-uvloop`; the H2 client connection driver did not shut down within its timeout. No complete multi-category result. |
+| Linux ARM64 | All selected categories completed with qualified local pairs. In HTTP/2 `many-response-chunks`, uvicorn-rs throughput was 0.092× Hypercorn under asyncio and 0.084× under uvloop. Median throughput was about 6.97 vs 75.66 requests/s (asyncio) and 7.08 vs 84.28 requests/s (uvloop). This is a measured regression for that workload, not a cross-system conclusion. |
+
+The ARM64 HTTP/2 rows also had substantially higher median p50 latency on
+uvicorn-rs (about 8.88 s under asyncio and 8.70 s under uvloop) than on
+Hypercorn (about 0.85 s and 0.77 s). Server CPU per operation was about 27.8
+ms and 19.8 ms for uvicorn-rs versus 13.2 ms and 11.85 ms for Hypercorn.
+These numbers are retained as a diagnosis lead; they do not identify the cause.
+The [Linux x86-64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146/artifacts/12087490643),
+[Linux ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146/artifacts/12089425539),
+and [macOS ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146/artifacts/12088867853)
+retain the reports and logs.
+
+A focused macOS ARM64 rerun
+[completed](https://github.com/appunni-m/uvicorn-rs/actions/runs/39001707728)
+the `hypercorn-uvloop` / `many-response-chunks` case with 5/5 response and
+shutdown checks passing. All timing samples were rejected by the host CPU
+guard, and the case has no matched Rust-server comparison. It is a correctness
+diagnostic only. SHA-256 identities for `src/lib.rs`, the H2 category runner,
+and the FastAPI benchmark app match the current checkout; later changes were
+workflow selectors, release-evidence metadata, and documentation. This links
+the diagnostic to current runtime source without presenting the run as an
+exact-commit full matrix.
+
 ## Latest hosted benchmark attempt (2026-10-16)
 
 The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828500975)

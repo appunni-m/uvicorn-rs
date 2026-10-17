@@ -19,15 +19,20 @@ reference timeouts. The maintained full-suite runner now gives H3 its own
 recorded concurrency setting, defaulting to 1, while the other categories keep
 their requested concurrency (64 by default). This permits a matched low-load
 H3 comparison; it does not claim high-concurrency H3 capacity. The run uses one
-configured Tokio async worker and no FastAPI-RS or Starlette-RS. See
-[benchmark status](benchmark-status.md) for the latest hosted CI and
-three-system workflow outcomes. The latest hosted attempt,
-[run 38828500975](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828500975),
-passed parity and the FastAPI-only comparison, but its category jobs stopped
-on HTTP/2 diagnostics, one Hypercorn/uvloop HTTP/3 timeout, and lifecycle log
-normalization. It does not establish a current-source multi-system performance
-result. Later source-bound local batches and earlier hosted matrices are
-partial or incomplete; they do not supersede the completed comparison above.
+configured Tokio async worker and no FastAPI-RS or Starlette-RS.
+
+The latest full hosted matrix,
+[run 38995794146](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146),
+did not complete across all three systems. Linux x86-64 stopped at the exact
+wheel's HTTP/3 duplicate-header parity case; macOS ARM64 stopped on an HTTP/2
+client-driver shutdown timeout. Linux ARM64 completed its selected categories
+and measured a severe uvicorn-rs regression on HTTP/2 `many-response-chunks`
+(0.092× Hypercorn under asyncio and 0.084× under uvloop). A focused macOS
+rerun passed correctness and shutdown but all timing samples were invalidated
+by host load. These results do not qualify a multi-system performance gain;
+see [benchmark status](benchmark-status.md) for artifacts, per-system details,
+and evidence boundaries. The earlier FastAPI report remains historical
+comparison data only.
 
 These are loopback application-server benchmarks, not end-to-end production
 capacity tests. They measure the combined server, Python ASGI app, event loops,
@@ -140,12 +145,17 @@ pushes keep running the full matrix. This mode builds the normal
 release wheel and H2 probe client, then runs only the selected server for the
 selected workload. `workflow_dispatch` can select one server, workload, and
 runner; the focused Git-push form also accepts these commit-message tokens:
-`[h2-server=hypercorn-uvloop]`, `[h2-workload=many-response-chunks]`, and
-`[h2-system=macos-arm64]`. Together with `[focused-h2]`, they isolate the
-previously failing Hypercorn/uvloop HTTP/2 chunk workload on macOS ARM64. The
-repetition count, duration, warmup, and concurrency
-inputs keep their normal values. It skips the full category matrix and aggregate
-step, and retains the report and server logs as a 90-day artifact.
+`[h2-server=hypercorn-uvloop]`, `[h2-workload=many-response-chunks]`,
+`[h2-system=macos-arm64]`, and `[h2-system=linux-aarch64]`. Without selectors,
+the Git-push form defaults to `uvicorn-rs-asyncio`, `protocol-scope`, and Linux
+x86-64. For example, combining `[focused-h2]`, `[h2-system=linux-aarch64]`, and
+`[h2-workload=many-response-chunks]` runs Rust/asyncio on that workload and
+runner. The combination `[h2-server=hypercorn-uvloop]`,
+`[h2-workload=many-response-chunks]`, and `[h2-system=macos-arm64]` isolates the
+previously failing Hypercorn/uvloop chunk workload. The repetition count,
+duration, warmup, and concurrency inputs keep their normal values. It skips the
+full category matrix and aggregate step, and retains the report and server logs
+as a 90-day artifact.
 
 This is a troubleshooting mode. It checks responses, server diagnostics, and
 clean shutdown for that case, but produces no reference comparison or
