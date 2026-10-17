@@ -199,17 +199,33 @@ are descriptive only:
 | asyncio | 3 | 2236.030 | 616.172 | 0.276× | 33.425 / 80.043 | 443.774 / 1401.492 |
 | uvloop | 3 | 2432.870 | 725.883 | 0.298× | 28.494 / 67.815 | 410.319 / 1135.295 |
 
-Across the two 2 ms trials, the Rust/reference throughput ratio changed from
-0.357× to 0.276× under asyncio and from 0.292× to 0.298× under uvloop. The
-initial 1 ms to 2 ms comparison was also mixed by loop. The change therefore
-has no repeatable performance result and was reverted to 1 ms; the latest
-focused run will establish a fresh 1 ms reference. The Rust server remains
-slower for this upload workload, and the measurements do not isolate the
-remaining cause. The earlier exact-source diagnosis in
+The fresh 1 ms follow-up is [run 39049003942](https://github.com/appunni-m/uvicorn-rs/actions/runs/39049003942).
+It also failed qualification: two Rust uvloop repetitions hit the client's
+15-second request timeout, and one Uvicorn asyncio repetition was excluded for
+unrelated host CPU activity. Four matched asyncio pairs and three matched
+uvloop pairs remained:
+
+| Loop | Valid matched pairs | Uvicorn requests/s | uvicorn-rs requests/s | Rust/reference | Uvicorn/Rust p95 ms | Uvicorn/Rust server CPU µs/request |
+|---|---:|---:|---:|---:|---:|---:|
+| asyncio | 4 | 1973.688 | 475.405 | 0.253× | 37.311 / 110.194 | 502.896 / 1795.912 |
+| uvloop | 3 | 2295.477 | 608.067 | 0.265× | 30.591 / 77.228 | 434.292 / 1280.570 |
+
+Both runs remain unqualified, so their valid rows are descriptive, not a
+performance claim. Comparing only exact repetition numbers valid in both the
+2 ms repeat and this 1 ms follow-up leaves three asyncio pairs and two uvloop
+pairs. The 2 ms throughput ratio changes by +106%, −23%, and +12% across the
+three asyncio repetitions, and by +16% and +1% across the two uvloop
+repetitions. That spread is not repeatable evidence for a deadline change.
+The 2 ms candidate remains reverted to 1 ms pending a focused stage diagnosis.
+
+The Rust server remains slower for this upload workload, and the current
+measurements do not isolate the remaining cause. The earlier exact-source diagnosis in
 [`fastapi-exact-f260-one-tokio`](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md)
 found substantially more ASGI receive messages and Python bridge futures on
 uploads, but its instrumented run predates this source revision and does not
-attribute the current run's full CPU gap.
+attribute the current run's full CPU gap. The fresh 1 ms samples measure about
+3.6× Uvicorn's server CPU per request under asyncio and 3.0× under uvloop;
+they establish the gap, not its cause.
 
 ### Compare Tokio blocking-pool caps on FastAPI uploads
 
