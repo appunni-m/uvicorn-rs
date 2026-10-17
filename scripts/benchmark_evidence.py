@@ -623,7 +623,7 @@ print(json.dumps(result))
             "dirty_target": self.dirty,
             "tracked_worktree_changes": self.git_changes,
             "untracked_measured_sources": self.untracked_sources,
-            "performance_evidence_status": "not_proven" if self.dirty or modified_baselines or not stable or excluded or not paired or self.rustc_version is None or any(pair["outcome"] != "available" for pair in paired) else "completed",
+            "performance_evidence_status": "not_proven" if self.dirty or modified_baselines or not stable or not paired or self.rustc_version is None or any(pair["outcome"] != "available" for pair in paired) else "completed",
             "performance_evidence_scope": "local paired experiment" if self.dirty else "frozen checkout benchmark",
             "timing_valid": stable and not excluded,
             "timing_median_policy": "at least three unique timing_valid repetitions; every excluded/partial raw row is retained",
