@@ -460,6 +460,7 @@ async def _app_impl(scope, receive, send):
             return
         if scope["path"] == "/ws-abrupt-disconnect":
             await send({"type": "websocket.accept"})
+            _record("websocket.abrupt-waiting-for-disconnect")
             message = await receive()
             if message["type"] == "websocket.disconnect":
                 _record("websocket.disconnected-abrupt")

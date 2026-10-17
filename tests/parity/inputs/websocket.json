@@ -547,7 +547,8 @@
         "path": "/ws-abrupt-disconnect",
         "subprotocols": [],
         "messages": [],
-        "abrupt_disconnect": true
+        "abrupt_disconnect": true,
+        "wait_for_app_event": "websocket.abrupt-waiting-for-disconnect"
       }
     },
     {

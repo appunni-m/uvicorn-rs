@@ -2931,6 +2931,10 @@ def load_contract(
                             and fault.get("contract")
                             == "websocket-registration-failure-cancels-app-followup-200"
                         )
+                        or (
+                            case.get("operation") == "websocket.abrupt-disconnect"
+                            and websocket.get("abrupt_disconnect") is True
+                        )
                     )
                 ):
                     raise ParityError(
@@ -6352,9 +6356,10 @@ def websocket_observation(
     client_socket: socket.socket | None = None
     try:
         receive_buffer_bytes = specification.get("receive_buffer_bytes")
-        if receive_buffer_bytes is not None:
+        if receive_buffer_bytes is not None or specification.get("abrupt_disconnect", False):
             client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, receive_buffer_bytes)
+            if receive_buffer_bytes is not None:
+                client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, receive_buffer_bytes)
             client_socket.connect(("127.0.0.1", server["port"]))
         with websocket_connect(
             uri,
@@ -6370,6 +6375,20 @@ def websocket_observation(
             logger=client_logger,
         ) as websocket:
             if specification.get("abrupt_disconnect", False):
+                wait_for_app_event = specification.get("wait_for_app_event")
+                if wait_for_app_event is not None:
+                    deadline = time.monotonic() + 10
+                    application_events = read_events(events_path)[events_before:]
+                    while wait_for_app_event not in application_events and time.monotonic() < deadline:
+                        time.sleep(0.01)
+                        application_events = read_events(events_path)[events_before:]
+                    if wait_for_app_event not in application_events:
+                        raise ParityError(
+                            f"WebSocket app did not reach disconnect wait event {wait_for_app_event!r}"
+                        )
+                client_socket.setsockopt(
+                    socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
+                )
                 websocket.close_socket()
                 deadline = time.monotonic() + 3
                 application_events = []
