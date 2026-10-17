@@ -1797,7 +1797,34 @@
       "verification": "fault-contract",
       "fault": {
         "point": "http3.client.peer-stop-after-request-body-complete",
-        "contract": "http3-peer-stop-after-body-complete-cancels-app-followup-200"
+        "contract": "http3-peer-stop-after-body-complete-disconnect-followup-200"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-disconnect-after-body",
+        "headers": [
+          [
+            "content-length",
+            "1"
+          ]
+        ],
+        "body_base64": "dA==",
+        "h3_grease": false,
+        "peer_stop_after_body_complete": true,
+        "same_connection_followup_path": "/sync-callable"
+      }
+    },
+    {
+      "case_id": "fault.http3.native-peer-stop-cancelled-disconnect-send",
+      "profile": "http3",
+      "operation": "http3.disconnect-after-request-body-complete-cancelled-send",
+      "covers": [
+        "http3.disconnect-after-request-body-complete-cancelled-send"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-body-pump.disconnect-send-stop-wait",
+        "contract": "http3-peer-stop-cancelled-send-disconnect-followup-200"
       },
       "request": {
         "method": "POST",

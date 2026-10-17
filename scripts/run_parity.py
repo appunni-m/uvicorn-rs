@@ -231,6 +231,7 @@ FAULT_POINTS = {
     "http3.connection-info.missing",
     "http3.connection-lifetime.missing",
     "http3.native-body-pump.stop-wait",
+    "http3.native-body-pump.disconnect-send-stop-wait",
     "http3.native-body-pump.final-message-stop-wait",
     "http3.native-body-pump.final-message-send-error",
     "http3.native-body-pump.send-stop-wait",
@@ -447,7 +448,8 @@ FAULT_CONTRACTS = {
     "http2-500-empty-body",
     "http3-client-abort-disconnect-followup",
     "http3-peer-stop-cancels-held-app-followup-200",
-    "http3-peer-stop-after-body-complete-cancels-app-followup-200",
+    "http3-peer-stop-after-body-complete-disconnect-followup-200",
+    "http3-peer-stop-cancelled-send-disconnect-followup-200",
     "http3-body-pump-error-stop-disconnect-followup-200",
     "http3-legacy-body-pump-delivers-disconnect-followup-200",
     "http3-body-pump-reaps-cancelled-task",
@@ -1447,7 +1449,7 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: HTTP/3 peer-stop contract requires the held-app and same-connection recovery workflow"
                     )
-            elif fault["contract"] == "http3-peer-stop-after-body-complete-cancels-app-followup-200":
+            elif fault["contract"] == "http3-peer-stop-after-body-complete-disconnect-followup-200":
                 request = case.get("request", {})
                 if (
                     case.get("profile") != "http3"
@@ -1459,6 +1461,21 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: post-body peer-stop contract requires the complete-body and same-connection recovery workflow"
+                    )
+            elif fault["contract"] == "http3-peer-stop-cancelled-send-disconnect-followup-200":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation")
+                    != "http3.disconnect-after-request-body-complete-cancelled-send"
+                    or fault["point"]
+                    != "http3.native-body-pump.disconnect-send-stop-wait"
+                    or request.get("peer_stop_after_body_complete") is not True
+                    or request.get("path") != "/h3-disconnect-after-body"
+                    or request.get("same_connection_followup_path") != "/sync-callable"
+                ):
+                    raise ParityError(
+                        f"{case_id}: cancelled disconnect-send contract requires the post-body peer-stop and same-connection recovery workflow"
                     )
             elif fault["contract"] == "http3-body-pump-error-stop-disconnect-followup-200":
                 if (
@@ -2804,7 +2821,10 @@ def load_contract(
                 if (
                     request["peer_stop_after_body_complete"] is not True
                     or kind != "http3"
-                    or operation != "http3.disconnect-after-request-body-complete"
+                    or operation not in {
+                        "http3.disconnect-after-request-body-complete",
+                        "http3.disconnect-after-request-body-complete-cancelled-send",
+                    }
                     or request["method"] != "POST"
                     or request["path"] != "/h3-disconnect-after-body"
                     or body_length == 0
@@ -5470,9 +5490,7 @@ def http3_request(
         case_events = read_events(events_path)[events_before:] if events_path else []
         return {
             "client_aborted": True,
-            "application_cancelled": (
-                "http3.after-body.cancelled-before-disconnect" in case_events
-            ),
+            "application_cancelled": "http3.after-body.cancelled-before-disconnect" in case_events,
             "application_events": case_events,
             "disconnect_event": "http3.after-body.disconnected" in case_events,
             "followup_healthy": followup_observation["status"] == 200,
@@ -7096,6 +7114,17 @@ def execute_case(
                 events_path=server["events"],
                 events_before=events_before,
             )
+            if (
+                fault is not None
+                and fault["contract"]
+                == "http3-peer-stop-cancelled-send-disconnect-followup-200"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]
+                ):
+                    raise ParityError("HTTP/3 disconnect-send cancellation fault was not consumed")
+                observation["fault_consumed"] = True
             if request.get("abort_after_body"):
                 deadline = time.monotonic() + 3
                 while (
@@ -8322,17 +8351,22 @@ def fault_contract_matches(
             == base64.b64encode(b"sync-callable-awaitable").decode("ascii")
             and followup.get("connection_closed") is False
         )
-    if fault["contract"] == "http3-peer-stop-after-body-complete-cancels-app-followup-200":
+    if fault["contract"] in {
+        "http3-peer-stop-after-body-complete-disconnect-followup-200",
+        "http3-peer-stop-cancelled-send-disconnect-followup-200",
+    }:
         followup = observation.get("followup_response")
         application_events = observation.get("application_events")
         return (
             observation.get("client_aborted") is True
-            and observation.get("application_cancelled") is True
+            and observation.get("application_cancelled") is False
+            and observation.get("disconnect_event") is True
             and isinstance(application_events, list)
             and "http3.after-body.receive:http.request:True:1" in application_events
             and "http3.after-body.request-complete" in application_events
             and "http3.after-body.waiting-for-disconnect" in application_events
-            and "http3.after-body.cancelled-before-disconnect" in application_events
+            and "http3.after-body.disconnected" in application_events
+            and "http3.after-body.cancelled-before-disconnect" not in application_events
             and observation.get("followup_healthy") is True
             and isinstance(followup, dict)
             and followup.get("status") == 200
@@ -8340,6 +8374,11 @@ def fault_contract_matches(
             and followup.get("body_base64")
             == base64.b64encode(b"sync-callable-awaitable").decode("ascii")
             and followup.get("connection_closed") is False
+            and (
+                fault["contract"]
+                != "http3-peer-stop-cancelled-send-disconnect-followup-200"
+                or observation.get("fault_consumed") is True
+            )
         )
     if fault["contract"] in {
         "http3-body-pump-error-stop-disconnect-followup-200",

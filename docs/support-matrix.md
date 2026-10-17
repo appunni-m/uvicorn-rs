@@ -191,8 +191,14 @@ contract: it observes `ServiceFutureDropped`, verifies the connection remains
 open, serves a recovery request on that connection, and then observes
 connection closure. The generic reason does not distinguish peer reset,
 connection failure, or server cancellation and does not establish ASGI
-`http.disconnect`. HTTP/3 idle-reset notification and tracked HTTP/1 upgrade
-sessions remain open transport-consolidation gates. The opt-in error
+`http.disconnect`. A target-only public input contract verifies that response-
+side `STOP_SENDING` after request-body completion reaches a pending ASGI
+`receive()` as `http.disconnect`, while a same-connection follow-up remains
+healthy. Hypercorn 0.18.0 did not complete this same input with a disconnect
+event, so the ASGI specification governs this case and the input is not counted
+as oracle parity. A separate H3 held-app case verifies cancellation when no
+receive is pending. Tracked HTTP/1 upgrade sessions remain an open
+transport-consolidation gate. The opt-in error
 observer preserves typed readiness, service, and committed response-body
 causes with peer metadata; TLS cases verify
 negotiated ALPN bytes in request extensions. This is separate from and not

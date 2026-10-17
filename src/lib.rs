@@ -263,6 +263,7 @@ enum CoverageFaultPoint {
     Http3ConnectionInfoMissing,
     Http3ConnectionLifetimeMissing,
     Http3NativeBodyPumpStopWait,
+    Http3NativeBodyPumpDisconnectSendStopWait,
     Http3NativeBodyPumpFinalMessageStopWait,
     Http3NativeBodyPumpFinalMessageSendError,
     Http3NativeBodyPumpSendStopWait,
@@ -599,6 +600,9 @@ impl CoverageFaultPoint {
             Self::Http3ConnectionInfoMissing => "http3.connection-info.missing",
             Self::Http3ConnectionLifetimeMissing => "http3.connection-lifetime.missing",
             Self::Http3NativeBodyPumpStopWait => "http3.native-body-pump.stop-wait",
+            Self::Http3NativeBodyPumpDisconnectSendStopWait => {
+                "http3.native-body-pump.disconnect-send-stop-wait"
+            }
             Self::Http3NativeBodyPumpFinalMessageStopWait => {
                 "http3.native-body-pump.final-message-stop-wait"
             }
@@ -1837,7 +1841,10 @@ struct AbortOnDrop<T> {
 impl<T> AbortOnDrop<T> {
     fn new(handle: tokio::task::JoinHandle<T>) -> Self {
         Self {
-            guard: TaskAbortGuard(Some(handle.abort_handle())),
+            guard: TaskAbortGuard {
+                handle: Some(handle.abort_handle()),
+                keep_running_if: None,
+            },
             handle,
         }
     }
@@ -1847,21 +1854,34 @@ impl<T> AbortOnDrop<T> {
     }
 
     fn into_handle(mut self) -> tokio::task::JoinHandle<T> {
-        self.guard.0.take();
+        self.guard.handle.take();
         self.handle
     }
 
     fn leave_running(&mut self) {
-        self.guard.0.take();
+        self.guard.handle.take();
+    }
+
+    fn leave_running_if(&mut self, condition: Arc<AtomicBool>) {
+        self.guard.keep_running_if = Some(condition);
     }
 }
 
-struct TaskAbortGuard(Option<tokio::task::AbortHandle>);
+struct TaskAbortGuard {
+    handle: Option<tokio::task::AbortHandle>,
+    keep_running_if: Option<Arc<AtomicBool>>,
+}
 
 impl Drop for TaskAbortGuard {
     fn drop(&mut self) {
-        if let Some(handle) = self.0.take() {
-            handle.abort();
+        if let Some(handle) = self.handle.take() {
+            let keep_running = self
+                .keep_running_if
+                .as_ref()
+                .is_some_and(|condition| condition.load(Ordering::Acquire));
+            if !keep_running {
+                handle.abort();
+            }
         }
     }
 }
@@ -2625,6 +2645,7 @@ struct AsgiIo {
     connection_closed: ConnectionClosed,
     request_cancellation: CancellationToken,
     request_disconnected: Arc<AtomicBool>,
+    preserve_application_on_disconnect: Arc<AtomicBool>,
     response_start_attempted: Arc<AtomicBool>,
     response_started: Arc<AtomicBool>,
     start: mpsc::Sender<ResponseStart>,
@@ -2638,6 +2659,8 @@ struct AsgiIo {
 impl AsgiIo {
     fn receive<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         if slf.request_disconnected.load(Ordering::Acquire) || slf.connection_closed.is_closed() {
+            slf.preserve_application_on_disconnect
+                .store(true, Ordering::Release);
             slf.diagnostics.http_receive_immediate();
             #[cfg(coverage)]
             let request_message = if coverage_fault_is_armed(
@@ -2687,6 +2710,13 @@ impl AsgiIo {
         };
         if let Some(request) = immediate {
             slf.diagnostics.http_receive_immediate();
+            if request
+                .as_ref()
+                .map_or(true, |request| request.disconnected)
+            {
+                slf.preserve_application_on_disconnect
+                    .store(true, Ordering::Release);
+            }
             return Ok(make_http_request_message(
                 py,
                 request,
@@ -2699,9 +2729,16 @@ impl AsgiIo {
         let mut connection_closed = slf.connection_closed.clone();
         let request_cancellation = slf.request_cancellation.clone();
         let request_disconnected = Arc::clone(&slf.request_disconnected);
+        let preserve_application_on_disconnect =
+            Arc::clone(&slf.preserve_application_on_disconnect);
+        let receive_guard = PendingReceiveGuard::new(
+            Arc::clone(&preserve_application_on_disconnect),
+            Arc::clone(&request_disconnected),
+        );
         slf.diagnostics.http_receive_bridge_future();
         let diagnostics = slf.diagnostics.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let _receive_guard = receive_guard;
             #[cfg(coverage)]
             if coverage_fault_take(CoverageFaultPoint::HttpReceiveDisconnectedBeforeFuturePoll) {
                 request_disconnected.store(true, Ordering::Release);
@@ -2723,6 +2760,12 @@ impl AsgiIo {
                 }
             };
             Python::attach(|py| {
+                if request
+                    .as_ref()
+                    .map_or(true, |request| request.disconnected)
+                {
+                    preserve_application_on_disconnect.store(true, Ordering::Release);
+                }
                 make_http_request_message(py, request, &request_disconnected, &diagnostics)
             })
         })
@@ -2867,6 +2910,33 @@ impl AsgiIo {
                 "unsupported ASGI HTTP event: {}",
                 other.as_str()
             ))),
+        }
+    }
+}
+
+struct PendingReceiveGuard {
+    preserve_application_on_disconnect: Arc<AtomicBool>,
+    request_disconnected: Arc<AtomicBool>,
+}
+
+impl PendingReceiveGuard {
+    fn new(
+        preserve_application_on_disconnect: Arc<AtomicBool>,
+        request_disconnected: Arc<AtomicBool>,
+    ) -> Self {
+        preserve_application_on_disconnect.store(true, Ordering::Release);
+        Self {
+            preserve_application_on_disconnect,
+            request_disconnected,
+        }
+    }
+}
+
+impl Drop for PendingReceiveGuard {
+    fn drop(&mut self) {
+        if !self.request_disconnected.load(Ordering::Acquire) {
+            self.preserve_application_on_disconnect
+                .store(false, Ordering::Release);
         }
     }
 }
@@ -5562,6 +5632,8 @@ async fn pump_native_http3_request_body(
     cancellation: CancellationToken,
     request_cancellation: CancellationToken,
 ) {
+    let mut peer_stop_notification = Box::pin(body.peer_stop_notification());
+    let mut peer_stop_notification_open = true;
     #[cfg(coverage)]
     let mut pending_coverage_data: Option<Bytes> = None;
     #[cfg(coverage)]
@@ -5593,6 +5665,19 @@ async fn pump_native_http3_request_body(
                 }
                 body.frame().await
             } => frame,
+            peer_stopped = &mut peer_stop_notification, if peer_stop_notification_open => {
+                if peer_stopped {
+                    send_native_http3_disconnect(
+                        &sender,
+                        &mut connection_closed,
+                        &cancellation,
+                        &request_cancellation,
+                    ).await;
+                    return;
+                }
+                peer_stop_notification_open = false;
+                continue;
+            }
         };
         match frame {
             Some(Ok(frame)) => {
@@ -5691,11 +5776,46 @@ async fn pump_native_http3_request_body(
                     return;
                 }
                 tokio::select! {
+                    biased;
                     _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
                     _ = sender.closed() => return,
+                    peer_stopped = &mut peer_stop_notification, if peer_stop_notification_open => {
+                        if peer_stopped {
+                            send_native_http3_disconnect(
+                                &sender,
+                                &mut connection_closed,
+                                &cancellation,
+                                &request_cancellation,
+                            ).await;
+                        }
+                        return;
+                    }
                 }
             }
         }
+    }
+}
+
+async fn send_native_http3_disconnect(
+    sender: &mpsc::Sender<RequestMessage>,
+    connection_closed: &mut ConnectionClosed,
+    cancellation: &CancellationToken,
+    request_cancellation: &CancellationToken,
+) {
+    #[cfg(coverage)]
+    if coverage_fault_take(CoverageFaultPoint::Http3NativeBodyPumpDisconnectSendStopWait) {
+        request_cancellation.cancel();
+    }
+
+    let disconnected = RequestMessage {
+        body: RequestBody::Single(Bytes::new()),
+        more_body: false,
+        disconnected: true,
+    };
+    tokio::select! {
+        biased;
+        _ = wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation) => {},
+        _ = sender.send(disconnected) => {},
     }
 }
 
@@ -6088,6 +6208,8 @@ async fn handle_request_parts(
     let response_started = Arc::new(AtomicBool::new(false));
     let app_response_start_attempted = Arc::clone(&response_start_attempted);
     let app_response_started = Arc::clone(&response_started);
+    let preserve_application_on_disconnect = Arc::new(AtomicBool::new(false));
+    let app_preserve_application_on_disconnect = Arc::clone(&preserve_application_on_disconnect);
     let app_task_tracker = context.server.pending_python_tasks.clone();
     let cancellation_tracker = app_task_tracker.clone();
     let force_application_shutdown = context.server.force_application_shutdown.clone();
@@ -6113,6 +6235,7 @@ async fn handle_request_parts(
                         connection_closed: context.connection_closed,
                         request_cancellation,
                         request_disconnected: Arc::new(AtomicBool::new(false)),
+                        preserve_application_on_disconnect: app_preserve_application_on_disconnect,
                         response_start_attempted: app_response_start_attempted,
                         response_started: app_response_started,
                         start: start_tx,
@@ -6158,6 +6281,11 @@ async fn handle_request_parts(
         // stream. Keep the tracked ASGI task alive long enough for the
         // request-body pump to deliver http.disconnect on that stream.
         app_task.leave_running();
+    } else if http_version == Version::HTTP_3 {
+        // HTTP/3 can stop only the response direction while ASGI is waiting
+        // for another receive event. Keep that task alive for the disconnect
+        // message; requests that are not receiving retain cancellation-on-drop.
+        app_task.leave_running_if(preserve_application_on_disconnect);
     }
 
     #[cfg(coverage)]

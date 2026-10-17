@@ -55,15 +55,32 @@ pin_project! {
     pub struct Http3RequestBody {
         stream: h3::server::RequestStream<transport::RecvStream, Bytes>,
         finished: bool,
+        peer_stopped: watch::Receiver<bool>,
     }
 }
 
 impl Http3RequestBody {
-    fn new(stream: h3::server::RequestStream<transport::RecvStream, Bytes>) -> Self {
+    fn new(
+        stream: h3::server::RequestStream<transport::RecvStream, Bytes>,
+        peer_stopped: watch::Receiver<bool>,
+    ) -> Self {
         Self {
             stream,
             finished: false,
+            peer_stopped,
         }
+    }
+
+    /// Returns whether the client stopped receiving this request's response.
+    ///
+    /// The future resolves to `true` after the peer sends QUIC `STOP_SENDING`
+    /// for the response direction. It resolves to `false` if the request
+    /// handler retires without observing a peer stop. Adapters can use this
+    /// notification to deliver their protocol-level disconnect event while
+    /// preserving the request body stream API.
+    pub fn peer_stop_notification(&self) -> impl Future<Output = bool> + Send + 'static {
+        let mut peer_stopped = self.peer_stopped.clone();
+        async move { peer_stopped.wait_for(|stopped| *stopped).await.is_ok() }
     }
 }
 
@@ -517,7 +534,8 @@ where
         .map_err(Http3RequestStreamError::H3)?;
     *request.version_mut() = Version::HTTP_3;
     let (mut send_stream, receive_stream) = stream.split();
-    let request = request.map(|()| Http3RequestBody::new(receive_stream));
+    let (peer_stopped_tx, peer_stopped_rx) = watch::channel(false);
+    let request = request.map(|()| Http3RequestBody::new(receive_stream, peer_stopped_rx));
     let Some(mut peer_stopped) = peer_stops.take(send_stream.send_id()) else {
         #[cfg(coverage)]
         crate::observe_http3_peer_stop_observer_unavailable_fault();
@@ -549,7 +567,10 @@ where
         tokio::select! {
             biased;
             stopped = &mut peer_stopped => match stopped {
-                Ok(Some(code)) => code,
+                Ok(Some(code)) => {
+                    peer_stopped_tx.send_replace(true);
+                    code
+                }
                 // Quinn also returns None after the local send side has been
                 // fully retired. It is not evidence that the peer cancelled
                 // the application, and the completed observer must not be

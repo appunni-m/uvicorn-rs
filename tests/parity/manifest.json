@@ -1650,14 +1650,36 @@
       "observe": [
         "client_aborted",
         "application_cancelled",
+        "disconnect_event",
         "application_events",
         "followup_response",
         "followup_healthy"
       ],
       "required_observations": {
         "client_aborted": true,
-        "application_cancelled": true,
+        "application_cancelled": false,
+        "disconnect_event": true,
         "followup_healthy": true
+      }
+    },
+    {
+      "id": "http3.disconnect-after-request-body-complete-cancelled-send",
+      "kind": "protocol_operation",
+      "observe": [
+        "client_aborted",
+        "application_cancelled",
+        "disconnect_event",
+        "application_events",
+        "followup_response",
+        "followup_healthy",
+        "fault_consumed"
+      ],
+      "required_observations": {
+        "client_aborted": true,
+        "application_cancelled": false,
+        "disconnect_event": true,
+        "followup_healthy": true,
+        "fault_consumed": true
       }
     },
     {

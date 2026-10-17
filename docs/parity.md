@@ -377,15 +377,15 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 
 | Profile group | Cases | Reference | Why |
 |---|---:|---|---|
-| HTTP/1.1, including TLS | 95 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, and WebSocket-upgrade validation. |
-| WebSocket, including TLS | 46 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, and shutdown cases. |
+| HTTP/1.1, including TLS | 97 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, and WebSocket-upgrade validation. |
+| WebSocket, including TLS | 47 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, and shutdown cases. |
 | Startup configuration | 9 | Uvicorn 0.54.0 and the public `uvicorn_rs.Server` API | Same invalid-host and TLS startup configurations on both implementations. |
 | Lifespan and shutdown | 35 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
-| HTTP/2 | 26 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
-| HTTP/3 | 32 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, explicit typed H3 clean close and a fresh connection afterward. |
+| HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
+| HTTP/3 | 33 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 
-These six groups account for all 243 oracle-parity cases. The other 268 cases
-are target-only fault/support contracts. Five of those exercise
+These six groups account for all 248 current oracle-parity cases. The other
+289 cases are target-only fault/support contracts. Five of those exercise
 `UVICORN_RS_MAX_BLOCKING_THREADS`; they are described in the
 [ASGI behavior inventory](asgi-case-inventory.md#declared-behavior-map), not
 counted as oracle parity.

@@ -128,6 +128,17 @@ request-body materialization is not a likely explanation for that particular
 route gap. HTTP upload workloads still materialize Python `bytes` ASGI request
 messages from Rust body storage.
 
+The locked [PyO3 dependency](../Cargo.lock#L528) is 0.29.3. Its `Bytes`
+extractor retains immutable Python `bytes` with `PyBackedBytes` and
+`Bytes::from_owner`; for a Python `bytearray`, it copies into Rust-owned
+immutable storage so later mutation cannot change a response while it is being
+streamed. In the other direction, [`RequestBody::into_py_bytes`](../src/lib.rs#L1962)
+allocates and fills one Python `bytes` object per ASGI request message. A
+segmented Rust batch is coalesced in that single materialization, so transport
+segment count does not create one Python-body copy per segment. These are
+source-level ownership facts, not measured CPU attribution. The bodyless
+validated GET takes neither request-body conversion path.
+
 The small-route result does not point to SIMD as the first optimization.
 First isolate parser/runtime work, Python task scheduling, scope construction,
 and ASGI send/receive stages with the existing diagnostic-only flags

@@ -336,7 +336,10 @@ that a client-side write-half-close does not mean it no longer wants the
 response; it does not exercise the server's staged teardown procedure. This generic reason
 does not identify whether a peer reset, connection error, or server
 cancellation dropped the service future, and it is not ASGI `http.disconnect`.
-H3 idle-reset delivery and HTTP/1 Upgrade session tracking remain open gates.
+The H3 adapter forwards response-side peer stop to a pending ASGI `receive()`
+as `http.disconnect`; a target-only public input contract checks same-connection
+recovery because the pinned Hypercorn oracle did not complete this case.
+HTTP/1 Upgrade session tracking remains an open gate.
 H3 stream errors and closed receivers end the request pump in the PyO3 path.
 The server joins all remaining pumps within the unused transport grace period.
 If that deadline expires, it logs the timeout, aborts the pumps, and drains
