@@ -2710,10 +2710,7 @@ impl AsgiIo {
         };
         if let Some(request) = immediate {
             slf.diagnostics.http_receive_immediate();
-            if request
-                .as_ref()
-                .is_none_or(|request| request.disconnected)
-            {
+            if request.as_ref().is_none_or(|request| request.disconnected) {
                 slf.preserve_application_on_disconnect
                     .store(true, Ordering::Release);
             }
@@ -2760,10 +2757,7 @@ impl AsgiIo {
                 }
             };
             Python::attach(|py| {
-                if request
-                    .as_ref()
-                    .is_none_or(|request| request.disconnected)
-                {
+                if request.as_ref().is_none_or(|request| request.disconnected) {
                     preserve_application_on_disconnect.store(true, Ordering::Release);
                 }
                 make_http_request_message(py, request, &request_disconnected, &diagnostics)
