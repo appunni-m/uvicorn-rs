@@ -25,14 +25,15 @@ The latest full hosted matrix,
 [run 38995794146](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146),
 did not complete across all three systems. Linux x86-64 stopped at the exact
 wheel's HTTP/3 duplicate-header parity case; macOS ARM64 stopped on an HTTP/2
-client-driver shutdown timeout. Linux ARM64 completed its selected categories
-and measured a severe uvicorn-rs regression on HTTP/2 `many-response-chunks`
-(0.092× Hypercorn under asyncio and 0.084× under uvloop). A focused macOS
-rerun passed correctness and shutdown but all timing samples were invalidated
-by host load. These results do not qualify a multi-system performance gain;
-see [benchmark status](benchmark-status.md) for artifacts, per-system details,
-and evidence boundaries. The earlier FastAPI report remains historical
-comparison data only.
+client-driver shutdown timeout. Linux ARM64 completed its selected categories.
+Within HTTP/2, uvicorn-rs reached 2.342×/2.982× Hypercorn throughput on the
+small `protocol-scope` workload, but only 0.092×/0.084× on
+`many-response-chunks` (asyncio/uvloop respectively). A focused macOS rerun
+passed correctness and shutdown but all timing samples were invalidated by host
+load. The mixed workload results do not qualify a multi-system performance
+gain; see [benchmark status](benchmark-status.md) for artifacts, per-system
+details, and evidence boundaries. The earlier FastAPI report remains
+historical comparison data only.
 
 These are loopback application-server benchmarks, not end-to-end production
 capacity tests. They measure the combined server, Python ASGI app, event loops,

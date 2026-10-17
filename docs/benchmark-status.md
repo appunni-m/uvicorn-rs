@@ -16,11 +16,38 @@ multi-system performance result.
 | macOS ARM64 | Stopped in HTTP/2 `many-response-chunks` on `hypercorn-uvloop`; the H2 client connection driver did not shut down within its timeout. No complete multi-category result. |
 | Linux ARM64 | All selected categories completed with qualified local pairs. In HTTP/2 `many-response-chunks`, uvicorn-rs throughput was 0.092× Hypercorn under asyncio and 0.084× under uvloop. Median throughput was about 6.97 vs 75.66 requests/s (asyncio) and 7.08 vs 84.28 requests/s (uvloop). This is a measured regression for that workload, not a cross-system conclusion. |
 
-The ARM64 HTTP/2 rows also had substantially higher median p50 latency on
-uvicorn-rs (about 8.88 s under asyncio and 8.70 s under uvloop) than on
+The same ARM64 run shows that HTTP/2 is not uniformly slower in Rust. On
+`protocol-scope`, each server had five valid repetitions with zero failures;
+uvicorn-rs reached 2.342× Hypercorn throughput under asyncio and 2.982× under
+uvloop. Median rates were 5,894.7 vs 2,562.2 requests/s and 7,542.4 vs
+2,533.0 requests/s. Rust p50/p95/p99 latency was 10.924/16.646/18.936 ms
+under asyncio and 8.586/12.745/14.838 ms under uvloop; Hypercorn measured
+24.211/35.689/36.679 ms and 24.469/36.517/37.470 ms. Rust server CPU per
+request was 199/155 µs versus 390/394 µs; peak RSS was 48/50 MiB versus
+95/97 MiB. These matched rows use the same ARM64 host and app. They coexist
+with the chunk-streaming regression below and do not establish a category-wide
+or multi-system win.
+
+The ARM64 `many-response-chunks` rows also had substantially higher median p50
+latency on uvicorn-rs (about 8.88 s under asyncio and 8.70 s under uvloop) than on
 Hypercorn (about 0.85 s and 0.77 s). Server CPU per operation was about 27.8
 ms and 19.8 ms for uvicorn-rs versus 13.2 ms and 11.85 ms for Hypercorn.
-These numbers are retained as a diagnosis lead; they do not identify the cause.
+This gap is much larger in wall time than in server CPU: it points away from a
+CPU-bound or byte-copy bottleneck as the first explanation and toward time spent
+waiting for stream progress, backpressure, or scheduling. That is an inference
+from aggregate CPU and latency, not a proven cause.
+
+The same raw rows report a median of about 509 client `RecvStream.data()`
+results per 1 MiB Rust response, versus about 70 for Hypercorn under asyncio
+and 66 under uvloop. The counter records chunks returned by the H2 client API;
+it is not a packet capture and does not establish wire-frame boundaries. It
+does justify measuring whether response chunk granularity and transport
+backpressure amplify per-send scheduling. The existing instrumented profile
+collects ASGI send-await time, body-channel-full events and wait duration, and
+final-body availability. A local preflight on 2026-10-17 rejected the host
+because four unrelated Python processes each used roughly one core; no
+instrumented profile was started.
+
 The [Linux x86-64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146/artifacts/12087490643),
 [Linux ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146/artifacts/12089425539),
 and [macOS ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146/artifacts/12088867853)
@@ -36,6 +63,16 @@ and the FastAPI benchmark app match the current checkout; later changes were
 workflow selectors, release-evidence metadata, and documentation. This links
 the diagnostic to current runtime source without presenting the run as an
 exact-commit full matrix.
+
+The [focused Linux x86-64 rerun](https://github.com/appunni-m/uvicorn-rs/actions/runs/39003779460)
+on the current commit exercised only `uvicorn-rs-asyncio` / `protocol-scope`;
+all five repetitions passed response and shutdown checks with zero unexpected
+native errors or panics. Four timing rows passed the host guard; repetition 1
+was excluded for unrelated host CPU activity. The four valid rows had median
+throughput 5,175 requests/s, p50/p95/p99 latency 12.40/19.36/22.43 ms, server
+CPU 244 µs/request, and peak RSS 48.6 MiB. The [artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39003779460/artifacts/12090680106)
+contains the raw rows. This target-only x86-64 diagnostic has no reference
+server and must not be compared with the ARM64 rates above.
 
 ## Latest hosted benchmark attempt (2026-10-16)
 
