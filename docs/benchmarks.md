@@ -312,9 +312,12 @@ The same selectors are available on a push-triggered run. Include
 `[blocking-pool-cap=4]`, plus one of
 `[blocking-pool-workload=fastapi-request-upload]` or
 `[blocking-pool-workload=fastapi-upload-1m-write-256k]` in the commit subject.
-For example, the failed cap-4/256-KiB sample can be retried without rerunning
-the other five combinations. The Git trigger skips the broad platform matrix
-for this focused mode.
+For example, one cap-4/256-KiB retry completed in
+[run 39051369699](benchmark-status.md#focused-cap-4--256-kib-upload-retry-run-39051369699-2026-10-17):
+five asyncio and four uvloop pairs passed timing validity; one Uvicorn/uvloop
+sample was excluded by the unrelated-host-CPU guard. Cap 4 remained slower than
+Uvicorn on this workload. The Git trigger skips the broad platform matrix for
+this focused mode.
 
 ### Run one focused FastAPI stage diagnostic
 

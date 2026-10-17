@@ -2,6 +2,43 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Focused cap-4 / 256-KiB upload retry (run 39051369699; 2026-10-17)
+
+The [focused run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39051369699)
+tested commit `b0d2e94dd` with the selected cap-4
+`fastapi-upload-1m-write-256k` case on Linux x86-64,
+with CPython 3.12.13, Uvicorn 0.54.0, uvloop 0.23.0, FastAPI 0.142.4,
+concurrency 64, five 5-second samples, and a 1-second warmup. The upload body
+was 1 MiB, sent in 256-KiB client writes. All measured responses matched the
+workload oracle; all server lifecycle and shutdown gates passed; there were no
+request failures, unexpected panic events, or native errors. The source and
+native extension identities remained stable. The recorded benchmark-source
+fingerprint is `79563deddca10546b0b6fe8467708b40e26ce91d726b6307f992da2d81a8db8b`;
+the native extension SHA-256 is
+`ead8c6a5122f2b4418b4626453732b005cb40ba4edbe19ecb1fdcfbeb75d7cf7`.
+
+Five asyncio pairs and four uvloop pairs passed timing validity. The Uvicorn
+uvloop reference's repetition 1 was excluded because the host observer detected
+unrelated CPU activity; the corresponding Rust repetition was retained only in
+raw data and not used in the matched comparison. The [retained artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39051369699/artifacts/12107737092)
+contains the raw rows, host observations, identity hashes, and logs.
+
+| Loop | Valid matched pairs | Throughput, Uvicorn / uvicorn-rs | Rust/Uvicorn | p50 ms, Uvicorn / Rust | p95 ms, Uvicorn / Rust | p99 ms, Uvicorn / Rust |
+|---|---:|---:|---:|---:|---:|---:|
+| asyncio | 5 | 1,108.7 / 352.3 req/s | 0.319x | 56.45 / 178.42 | 67.19 / 252.22 | 84.07 / 296.82 |
+| uvloop | 4 | 1,157.1 / 485.1 req/s | 0.420x | 54.52 / 128.21 | 59.36 / 172.32 | 61.85 / 236.72 |
+
+| Loop | Server CPU µs/request, Uvicorn / Rust | Peak server RSS MiB, Uvicorn / Rust | Client CPU µs/request, Uvicorn / Rust | Peak client RSS MiB, Uvicorn / Rust |
+|---|---:|---:|---:|---:|
+| asyncio | 892 / 4,368 | 109.7 / 142.8 | 569 / 424 | 21.12 / 21.10 |
+| uvloop | 860 / 2,905 | 106.4 / 140.6 | 486 / 433 | 21.11 / 21.13 |
+
+Cap 4 remains substantially slower than Uvicorn on this upload workload under
+both loops. This retry does not justify changing the runtime default. The
+four-pair uvloop estimate is descriptive, not a significance claim, and this is
+one workload on one shared hosted runner. The cap-1 and cap-4 64-KiB upload
+cases remain to be measured before closing the blocking-pool experiment.
+
 ## Push-triggered matrix snapshot (run 39036702600; 2026-10-17 13:53 UTC)
 
 The [matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)
