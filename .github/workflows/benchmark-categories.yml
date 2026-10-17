@@ -506,7 +506,7 @@ jobs:
             brew list --versions curl pkg-config openssl@3 > target/benchmark-preparation/system-packages.txt
             system_profiler SPHardwareDataType > target/benchmark-preparation/hardware.txt
           fi
-          uv sync --python "$PYTHON_VERSION" --group benchmark --group fastapi-benchmark --frozen --no-install-project
+          uv sync --python "$PYTHON_VERSION" --group benchmark --group fastapi-benchmark --frozen
           .venv/bin/python --version | tee target/benchmark-preparation/python-version.txt
           rustc --version --verbose > target/benchmark-preparation/rust-version.txt
           node --version > target/benchmark-preparation/node-version.txt
