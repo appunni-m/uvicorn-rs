@@ -102,17 +102,23 @@ impl<I> CoverageFaultIo<I> {
     }
 
     fn take_write_error_fault(&mut self) -> bool {
-        const POINT: &str = "server.connection-io.poll-write-error";
         let Some(path) = &self.control_file else {
             return false;
         };
-        let armed = std::fs::read_to_string(path)
-            .map(|value| value.trim() == POINT)
-            .unwrap_or(false);
+        let armed = self.write_error_fault_is_armed();
         if armed {
             let _ = std::fs::write(path, "");
         }
         armed
+    }
+
+    fn write_error_fault_is_armed(&self) -> bool {
+        const POINT: &str = "server.connection-io.poll-write-error";
+        self.control_file.as_ref().is_some_and(|path| {
+            std::fs::read_to_string(path)
+                .map(|value| value.trim() == POINT)
+                .unwrap_or(false)
+        })
     }
 }
 
@@ -135,11 +141,17 @@ impl<I: AsyncWrite + Unpin> AsyncWrite for CoverageFaultIo<I> {
         buffer: &[u8],
     ) -> Poll<io::Result<usize>> {
         let this = self.get_mut();
-        if this.failed || this.take_write_error_fault() {
-            this.failed = true;
+        if this.failed {
             return Poll::Ready(Err(io::Error::other(
                 "coverage-injected TCP connection write error",
             )));
+        }
+        if this.take_write_error_fault() {
+            this.failed = true;
+            // Re-poll once so this public fault contract also covers the
+            // persistent-failure guard after the injected error is consumed.
+            context.waker().wake_by_ref();
+            return Poll::Pending;
         }
         Pin::new(&mut this.inner).poll_write(context, buffer)
     }
@@ -160,6 +172,11 @@ impl<I: AsyncWrite + Unpin> AsyncWrite for CoverageFaultIo<I> {
     }
 
     fn is_write_vectored(&self) -> bool {
+        // The fault contract uses the scalar path so it can verify both
+        // AsyncWrite entry points without changing production dispatch.
+        if self.failed || self.write_error_fault_is_armed() {
+            return false;
+        }
         self.inner.is_write_vectored()
     }
 
@@ -246,6 +263,22 @@ pub async fn coverage_http3_finish_after_reset(
     connection: h3_quinn::quinn::Connection,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     http3::coverage_finish_after_reset(connection).await
+}
+
+/// Collects a response body through the request-lifetime wrapper without a guard.
+///
+/// This coverage-build-only contract verifies the defensive missing-guard path;
+/// normal server construction always transfers a guard to the response body.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub async fn coverage_request_lifetime_body_missing_guard(body: Bytes) -> Bytes {
+    use http_body_util::{BodyExt, Full};
+
+    let body = RequestLifetimeBody::new(Full::new(body), None);
+    match body.collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(never) => match never {},
+    }
 }
 
 /// Result of installing the proactive peer-read adapter for a coverage
@@ -366,9 +399,19 @@ pub(crate) fn observe_http3_peer_bidi_stream_credit_granted() {
     );
 }
 
+#[cfg(coverage)]
+mod coverage;
 mod http3;
 mod peer_read;
 mod websocket;
+
+#[cfg(coverage)]
+#[doc(hidden)]
+pub use coverage::{
+    connection_error_source_variants as coverage_connection_error_source_variants,
+    http1_on_read_peer_read as coverage_http1_on_read_peer_read,
+    http1_response_activity_watch_outcomes as coverage_http1_response_activity_watch_outcomes,
+};
 
 #[cfg(coverage)]
 static GRACEFUL_SHUTDOWN_DEADLINE_OVERFLOW_FAULT: AtomicU8 = AtomicU8::new(0);
@@ -380,6 +423,8 @@ static LISTENER_ADMISSION_CLOSED_FAULT: AtomicU8 = AtomicU8::new(0);
 static HTTP1_UPGRADE_RECEIVER_CLOSED_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static HTTP1_PEER_READ_RECEIVER_CLOSED_FAULT: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static HTTP1_PEER_READ_FAILURE_AFTER_DATA_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static HTTP3_PEER_STOP_OBSERVER_UNAVAILABLE_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
@@ -396,6 +441,8 @@ static HTTP3_RESPONSE_SEND_DATA_FAULT_STAGE: AtomicU8 = AtomicU8::new(0);
 static HTTP3_RESPONSE_SEND_DATA_FAULT_CALLS: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static HTTP3_SEND_DATA_PENDING_FAULT: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static HTTP3_REQUEST_BODY_TRAILERS_PENDING_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static HTTP3_RESPONSE_FINISH_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
@@ -485,6 +532,41 @@ fn take_http1_peer_read_receiver_closed_fault() -> bool {
 #[cfg(coverage)]
 fn observe_http1_peer_read_receiver_closed_fault() {
     let _ = HTTP1_PEER_READ_RECEIVER_CLOSED_FAULT.compare_exchange(
+        2,
+        3,
+        Ordering::AcqRel,
+        Ordering::Acquire,
+    );
+}
+
+/// Arms a coverage-only HTTP/1 peer-read failure after the pump has delivered
+/// request bytes. The write half remains usable so a service can observe the
+/// input error and start a response before the test releases its body.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_http1_peer_read_failure_after_data_fault() -> bool {
+    HTTP1_PEER_READ_FAILURE_AFTER_DATA_FAULT
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only peer-read failure contract.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_http1_peer_read_failure_after_data_fault() -> bool {
+    HTTP1_PEER_READ_FAILURE_AFTER_DATA_FAULT.swap(0, Ordering::AcqRel) == 3
+}
+
+#[cfg(coverage)]
+pub(crate) fn take_http1_peer_read_failure_after_data_fault() -> bool {
+    HTTP1_PEER_READ_FAILURE_AFTER_DATA_FAULT
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+#[cfg(coverage)]
+pub(crate) fn observe_http1_peer_read_failure_after_data_fault() {
+    let _ = HTTP1_PEER_READ_FAILURE_AFTER_DATA_FAULT.compare_exchange(
         2,
         3,
         Ordering::AcqRel,
@@ -694,6 +776,34 @@ pub fn finish_http3_send_data_pending_fault() -> bool {
 #[cfg(coverage)]
 pub(crate) fn take_http3_send_data_pending_fault() -> bool {
     HTTP3_SEND_DATA_PENDING_FAULT
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms one synthetic pending result while polling HTTP/3 request trailers.
+///
+/// The current H3 stream API does not expose a state where request data has
+/// ended but trailers are not ready. This coverage-only scheduling seam checks
+/// that the body adapter remains pending and resumes without changing the
+/// externally observed request body or response.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_http3_request_body_trailers_pending_fault() -> bool {
+    HTTP3_REQUEST_BODY_TRAILERS_PENDING_FAULT
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the one-shot HTTP/3 request-trailer pending-state contract.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_http3_request_body_trailers_pending_fault() -> bool {
+    HTTP3_REQUEST_BODY_TRAILERS_PENDING_FAULT.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+pub(crate) fn take_http3_request_body_trailers_pending_fault() -> bool {
+    HTTP3_REQUEST_BODY_TRAILERS_PENDING_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
 }

@@ -93,7 +93,20 @@ impl Body for Http3RequestBody {
             Poll::Ready(Ok(None)) => {}
         }
 
-        match this.stream.poll_recv_trailers(context) {
+        #[cfg(coverage)]
+        let trailers = if crate::take_http3_request_body_trailers_pending_fault() {
+            // The current H3 implementation has no network state that can
+            // produce this transition, so coverage builds synthesize one
+            // wakeable Pending result to verify that the body poll resumes.
+            context.waker().wake_by_ref();
+            Poll::Pending
+        } else {
+            this.stream.poll_recv_trailers(context)
+        };
+        #[cfg(not(coverage))]
+        let trailers = this.stream.poll_recv_trailers(context);
+
+        match trailers {
             Poll::Pending => {
                 // `poll_recv_data` can return `None` at the end of an empty
                 // DATA frame. Poll data again after returning Pending so a

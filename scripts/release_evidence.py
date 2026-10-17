@@ -490,6 +490,18 @@ def _extract_checked_rust_crate(path: Path, package_name: str, version: str, des
             target.write_bytes(reader.read())
 
 
+def candidate_publication_blockers(dirty: bool) -> list[str]:
+    """Report known reasons a candidate artifact cannot be consumed safely."""
+    blockers = ["dirty source checkout"] if dirty else []
+    workspace = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
+    h3_patch = workspace.get("patch", {}).get("crates-io", {}).get("h3")
+    if h3_patch is not None:
+        blockers.append(
+            "standalone uvicorn-rs crate archive cannot inherit the workspace-only h3 patch"
+        )
+    return blockers
+
+
 def verify_rust_crate_archives(
     directory: Path,
     version: str,
@@ -692,7 +704,7 @@ def record(args: argparse.Namespace) -> None:
              "commit": args.commit, "version": version, "platform": args.platform, "target": host,
              "source_dirty": dirty, "source_hashes": inputs, "source_sha256": inputs["src/lib.rs"],
              "recorded_at": datetime.now(timezone.utc).isoformat(), "license_expression": LICENSE_EXPRESSION,
-             "publication_blockers": ["dirty source checkout"] if dirty else [],
+             "publication_blockers": candidate_publication_blockers(dirty),
              "toolchain": {"rustc": rustc, "cargo": command_output(["cargo", "--version"]),
                            "maturin": command_output(["maturin", "--version"]), "python": sys.version},
              "build": build,

@@ -21,10 +21,13 @@ their requested concurrency (64 by default). This permits a matched low-load
 H3 comparison; it does not claim high-concurrency H3 capacity. The run uses one
 configured Tokio async worker and no FastAPI-RS or Starlette-RS. See
 [benchmark status](benchmark-status.md) for the latest hosted CI and
-three-system workflow outcomes. Later source-bound local batches and the
-2026-10-10/12 hosted matrix are partial or incomplete; they do not supersede
-this as a completed full comparison or establish a current-source multi-system
-performance result.
+three-system workflow outcomes. The latest hosted attempt,
+[run 38828500975](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828500975),
+passed parity and the FastAPI-only comparison, but its category jobs stopped
+on HTTP/2 diagnostics, one Hypercorn/uvloop HTTP/3 timeout, and lifecycle log
+normalization. It does not establish a current-source multi-system performance
+result. Later source-bound local batches and earlier hosted matrices are
+partial or incomplete; they do not supersede the completed comparison above.
 
 These are loopback application-server benchmarks, not end-to-end production
 capacity tests. They measure the combined server, Python ASGI app, event loops,
@@ -125,6 +128,21 @@ qualified performance pairs and then makes no speed claim.
 The latest attempt status and latest completed measurements are tracked
 separately. Historical local measurements below remain tied to their own source
 revisions and must not be read as results for the current commit.
+
+### Run one focused HTTP/2 diagnostic case
+
+Use `workflow_dispatch` with `Run mode: focused-h2` to isolate one HTTP/2
+workload on one runner. Select the runner and workload in the inputs; the
+default selects Linux x86-64 and `protocol-scope`. This mode builds the normal
+release wheel and H2 probe client, then runs only `uvicorn-rs-asyncio` for the
+selected workload. The repetition count, duration, warmup, and concurrency
+inputs keep their normal values. It skips the full category matrix and aggregate
+step, and retains the report and server logs as a 90-day artifact.
+
+This is a troubleshooting mode. It checks responses, server diagnostics, and
+clean shutdown for that case, but produces no reference comparison or
+release-qualified performance result. After a failure, use the retained server
+log to diagnose that case before advancing to another workload.
 
 Required tools are `uv`, Python 3.12, Rust/Cargo, a C compiler and `curl-config`
 for the native H1 load client, Node.js for the slow-reader fallback, and
@@ -464,12 +482,16 @@ Measured shutdown sends SIGTERM to the owned leader. Rust must exit 0;
 Uvicorn may exit 0 or re-raise SIGTERM only after the exact lifespan completion
 marker. The active phase must first observe `APP_HOLD_STARTED` while the server
 is alive, then cancellation before lifespan completion. Its strict log gate
-normalizes at most one exact Rust `CancelledError` line, or Uvicorn's single
-intentional held-task timeout plus its exact four-frame `CancelledError`
-traceback verified against the installed sources. Required markers and official
-exit must pass first. Raw logs and `diagnostic_normalization_receipt` retain the
-accepted block; every other error, traceback, chain, unhandled task or panic
-fails. The exact policy is in `metadata.cancellation_diagnostic_normalization`.
+normalizes at most one exact Rust `CancelledError` line and, only for the active
+Rust held-request phase, one native TCP graceful-timeout line that precedes the
+ASGI cancellation marker. This is the native transport's report that it reached
+the same configured deadline before aborting the deliberately held connection.
+Uvicorn's single intentional held-task timeout plus its exact four-frame
+`CancelledError` traceback is verified against the installed sources. Required
+markers and official exit must pass first. Raw logs and
+`diagnostic_normalization_receipt` retain each accepted line or block; every
+other error, traceback, chain, unhandled task or panic fails. The exact policy
+is in `metadata.cancellation_diagnostic_normalization`.
 
 `idle_phase_server_cpu_seconds` / `active_phase_server_cpu_seconds`, their
 `*_server_cpu_percent_elapsed` values and `*_server_rss_peak_mib` describe each

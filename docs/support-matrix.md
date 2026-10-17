@@ -11,14 +11,15 @@ Starlette-RS → Uvicorn-RS path does not load Python. The Python ASGI path uses
 `uvicorn-rs-py` and necessarily calls Python application code through the
 ASGI boundary.
 
-The workspace now packages the PyO3 extension as `uvicorn-rs-py` and the
-Python-free Tower server as `uvicorn-rs`. The Python extension still contains
-its earlier protocol implementation and is not yet thin or backed by the
-native server, so the transport consolidation remains incomplete. Evidence
-below is attributed to the current source locations. Python compatibility
-matrices across supported Python and upstream framework/server versions are
-not implemented yet. The old Python distribution name, import path, Cargo
-shape, and CLI are not backward-compatibility requirements.
+The workspace packages the PyO3 extension as `uvicorn-rs-py` and the
+Python-free Tower server as `uvicorn-rs`. The default `native-tcp` build routes
+HTTP/1.1, HTTP/2 over TCP/TLS, and HTTP/3 over Quinn through the Rust server
+crate. Python ASGI callables, event conversion, and the asyncio loop remain at
+the Python/PyO3 boundary. Builds without `native-tcp` retain the legacy
+protocol path. Python compatibility matrices across supported Python and
+upstream framework/server versions are not implemented yet. The old Python
+distribution name, import path, Cargo shape, and CLI are not backward-
+compatibility requirements.
 
 The planned Python compatibility surfaces have separate scopes. `uvicorn-rs-py`
 will publish Python/runtime and standard ASGI support, plus exact upstream
@@ -30,42 +31,51 @@ generic ASGI test does not itself establish framework-version support, and no
 full Cartesian product of versions is implied. Uvicorn versions used only as
 parity oracles are not automatically supported API versions.
 
-The latest complete full-source matrix, dated 2026-10-15, covers 511 Python
-ASGI cases and 185 Python-free native cases (696 total). All 696 passed
-per-case attribution; three full ASGI repeats passed 511/511 each and three
-native repeats passed 185/185 each, with zero failures, retries, or
-infrastructure errors.
+The latest local full-source aggregate executed all 748 manifest cases: 534
+Python ASGI cases and 214 Python-free native cases. Three repeats of each
+matrix passed, and coverage measured 100% executable source-span and
+normalized physical-line coverage. The aggregate is marked incomplete because
+one WebSocket TLS attribution attempt had a transient infrastructure failure
+before a passing retry; a separate clean single-case rerun then passed. Its
+fully paginated Coverage-MCP receipt matches source/build and reports zero
+missing regions or lines, while recording the aggregate test status as failed.
+The report is bound to a dirty worktree; it is not clean hosted release
+evidence. The latest clean hosted run,
+[38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888),
+passed its older 712-case manifest but measured 8,496/8,650 regions and
+6,486/6,592 lines, leaving 154 regions and 106 lines uncovered. It does not
+describe the current local source. These results describe tested
+inputs and are not a claim of complete Uvicorn compatibility.
 
-The source coverage gate remains incomplete: 8,123/8,288 LLVM regions and
-6,094/6,215 lines, leaving 165 regions and 121 lines. Coverage-MCP fully
-paginated the report and matched its source/build receipt with all tests
-passing; missing coverage keeps the gate open. This result describes the
-tested runtime surface and is not a claim of complete Uvicorn compatibility.
-The exact dirty-source report, evidence hashes, support-limiting gaps, and
-input proposals are recorded in the
-[unified coverage record](coverage.md#current-unified-coverage-status-2026-10-15)
-and [gap inventory](coverage-current-gaps-2026-10-15.md). Generated reports
+Exact local report, source identity, MCP receipt, and the clean-candidate gate
+are recorded in the [unified coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
+The [2026-10-15 gap inventory](coverage-current-gaps-2026-10-15.md) describes
+an earlier source snapshot and is historical guidance only. Generated reports
 remain Git-ignored.
 
-The 2026-10-12 dirty macOS ARM64 adapter-only receipt verifies its recorded
-root `src/lib.rs` hash, but not a clean hosted release. It covers that file,
-not the native workspace sources, and does not establish that the Python adapter uses the separate
-Rust-native `uvicorn-rs` transport. Re-run after transport integration before
-claiming support for that combined path. A narrower candidate-wheel smoke
-passed on the current source; its generated per-run receipt is Git-ignored.
+The 2026-10-12 dirty macOS ARM64 adapter-only receipt is historical: it verifies
+its recorded root `src/lib.rs` hash, but covers neither the native workspace
+sources nor a clean hosted release. Since then, the default `native-tcp` path
+has been exercised by the current source-bound unified matrix, which includes
+the Python ASGI and Python-free native cases. That 748-case dirty-worktree
+aggregate measured 100% of its executable regions and normalized lines, but
+is marked incomplete after one attribution infrastructure failure before a
+passing retry. It is not clean hosted release evidence. A narrower
+candidate-wheel smoke passed on the current source; its per-run receipt is
+Git-ignored.
 The Python-free
-`uvicorn-rs` crate currently has a 185-case live contract manifest covering
+`uvicorn-rs` crate currently has a 214-case live contract manifest covering
 cleartext HTTP/1.1, cleartext HTTP/2 prior knowledge, TLS HTTP/1.1 and HTTP/2,
 HTTP/3 over a caller-configured Quinn endpoint, and selected native HTTP/1.1
 WebSocket handshakes and sessions. The historical 36-case
 snapshot passed three sequential local repeats (108/108) on macOS ARM64; source
 and input hashes are recorded in the local request-lifetime receipt, which is
 Git-ignored; the historical contract and its limits are summarized here.
-That receipt does not cover the current 185-case manifest. The current HTTP/3
+That receipt does not cover the current 214-case manifest. The current HTTP/3
 service-panic recovery case passed its selected live run 1/1: it returns an
 empty 500 before response commitment and keeps the same QUIC connection usable
 for a recovery request. The current unified coverage status records its focused
-result and remaining acceptance gates in [the coverage record](coverage.md#current-unified-coverage-status-2026-10-15).
+result and remaining acceptance gates in [the coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
 The new HTTP/3 readiness-panic contract returns an empty 500 with a typed
 readiness diagnostic and verifies recovery on the same connection. A new
 HTTP/1 upgrade-handler panic contract verifies session termination, healthy
@@ -73,15 +83,17 @@ listener recovery, and bounded shutdown; that join failure is logged through
 tracing. Both passed in an eight-case selected run with neighboring recovery
 contracts. The deliberate panics are confined to the excluded example harness.
 That selected result does not qualify its then-130-case native manifest or
-the current combined 696-case coverage gate.
+the current 748-case unified coverage gate.
 The native error policy now defaults to an empty 500 and optionally propagates
 the original readiness/service error to the protocol driver. Six new live
 inputs verify pre-header H1 connection termination or H2/H3 stream reset,
 original typed diagnostics, recovery, and bounded shutdown. A default H3 service
 error control and nine neighboring controls bring the selected pass to 16/16.
 Changing only the policy to the default makes each propagation case fail its
-abort/reset assertion. This is native transport evidence; the Python adapter
-has not been routed through this policy or the native server. See the
+abort/reset assertion. These policy-specific inputs exercise the native
+service API. The default Python ASGI build uses the same native transport with
+`ServiceErrorPolicy::Propagate`; the ASGI matrix separately exercises the
+Python bridge and its error behavior. See the
 [selected policy record](coverage.md#selected-native-service-error-policy-evidence).
 The TCP `PeerReadHalfClosed` extension observes actual raw EOF, including below
 TLS, and returns a typed unavailable result if observation ends without EOF.
@@ -90,7 +102,7 @@ verify response delivery after peer write-half closure, observation after
 response completion, HTTP/2 reset remaining distinct from TCP EOF, and no TCP
 extension on HTTP/3. They do not prove prompt notification during a held HTTP/1
 service in the default mode. See the
-[selected EOF record](coverage.md#selected-native-tcp-eof-evidence).
+[selected EOF record](coverage.md#historical-selected-native-tcp-eof-evidence).
 The `Proactive` mode uses one raw reader future in the connection task and a
 bounded input queue (two 16 KiB queued chunks plus one consumer chunk). The
 Python ASGI adapter selects this mode for HTTP/1.1 and HTTP/2 TCP/TLS. Its cases
@@ -105,16 +117,17 @@ The HTTP/3 response-cancel cases now require the held service/body to drop
 before release and then verify a recovery request on the same QUIC connection.
 This tests Quinn `STOP_SENDING` while application readiness, service, or
 response-body work is pending. Normal response completion is not treated as
-peer cancellation. These cases exercise the Python-free native crate's HTTP/3 service
-API. They do not exercise the Python adapter's HTTP/3 serving path, which
-remains in the extension's Rust layer.
+peer cancellation. These cases exercise the Python-free native crate's HTTP/3
+service API. The default Python ASGI build also delegates HTTP/3 transport to
+that crate, but these native-only cases do not exercise Python event conversion
+or the ASGI bridge on HTTP/3.
 The 35-case instrumented selection passed all three HTTP/3 cancellation
 inputs, 13 HTTP/1.1 raw-EOF inputs, 18 HTTP/3 request/transport regressions,
 and a WebSocket close-receive cancellation contract. The ordinary build passed
 the 33 target-contract inputs; HTTP/3 admission-closed and WebSocket
 close-reply cancellation fault contracts run only under coverage
 instrumentation. This is selected evidence and does not close the current
-696-case coverage gate.
+748-case unified coverage gate.
 The current set includes an H2 stream-reset lifetime observation, a
 synchronized H1 peer write-half-close case that completes the held response
 while the connection-lifetime handle remains open, and 13 native HTTP/1.1
@@ -157,7 +170,7 @@ observer preserves typed readiness, service, and committed response-body
 causes with peer metadata; TLS cases verify
 negotiated ALPN bytes in request extensions. This is separate from and not
 covered by the ASGI matrix, and does not claim full RFC 9114 conformance. See
-[the current unified coverage status](coverage.md#current-unified-coverage-status-2026-10-15),
+[the current unified coverage status](coverage.md#current-unified-coverage-status-2026-10-17),
 [the Rust-native core row below](#supported-behaviors), and [latest hosted status](benchmark-status.md).
 
 The project targets the ASGI 3 callable interface and implements a documented
@@ -240,17 +253,17 @@ Uvicorn compatibility or full ASGI conformance. See the [parity contract](parity
 
 | Area | Status and live evidence | Limits |
 |---|---|---|
-| Rust-native server crate | **Current Python-free uvicorn-rs library.** It accepts generic Tower services over http request/response types and http_body::Body payloads. The shared native-app-contract crate adds optional startup/shutdown hooks without a runtime dependency. The current native manifest declares 206 live contract cases covering cleartext H1/H2, TLS H1/H2, and H3 over caller-configured Quinn; the source-bound unified report passed all 206 native cases in each of three repeats, but it comes from a dirty worktree and is not hosted release evidence. The earlier 36-case receipt is historical and does not verify this manifest. The native request and connection lifetime handles now have one H2 reset contract: observe ServiceFutureDropped, confirm connection survival, recover on the same connection, then observe connection closure. The H1 half-close case holds a streamed response until the bodyless request is dispatched and the client shuts down its write side; the response completes with the connection-lifetime handle still open. Hyper HTTP/1 `half_close(true)` is enabled; the observed response-lifetime case is consistent with [the note in RFC 9112 §9.6](https://www.rfc-editor.org/rfc/rfc9112.html#section-9.6), not the server-initiated staged teardown described there. Four earlier selected HTTP/1.1 upgrade-session inputs passed 4/4: successful handoff and drain, session-handler error observation, rejected registration without an available upgrade, and registration rejection after connection close. Two additional current-source cases exercise active registration over TCP and TLS and error-source propagation. A new keep-alive input sends two ordinary requests on one connection, verifies both responses, and exercises multiple failed upgrade sessions during connection teardown. Two cases exercise lifecycle-enabled WebSocket handshake, message exchange, and shutdown over TCP and TLS. A selected H3 lifecycle startup-failure input verifies that the QUIC listener does not serve before startup succeeds. These finite target-only contracts do not establish full protocol or WebSocket conformance. Seven H3 inputs cover QUIC/TLS/ALPN metadata, streamed request bodies and request trailers, response trailers, early streaming, bounded slow-reader flow control with producer cancellation, and graceful drain. An archived FastAPI-native composition run recorded 17 real-socket inputs
+| Rust-native server crate | **Current Python-free uvicorn-rs library.** It accepts generic Tower services over http request/response types and http_body::Body payloads. The shared native-app-contract crate adds optional startup/shutdown hooks without a runtime dependency. The current native manifest declares 214 live contract cases covering cleartext H1/H2, TLS H1/H2, and H3 over caller-configured Quinn; the current post-format report passed all 214 native cases in each of three repeats, but the aggregate is incomplete after one ASGI attribution infrastructure retry and comes from a dirty worktree. It is not hosted release evidence. The earlier 36-case receipt is historical and does not verify this manifest. The native request and connection lifetime handles now have one H2 reset contract: observe ServiceFutureDropped, confirm connection survival, recover on the same connection, then observe connection closure. The H1 half-close case holds a streamed response until the bodyless request is dispatched and the client shuts down its write side; the response completes with the connection-lifetime handle still open. Hyper HTTP/1 `half_close(true)` is enabled; the observed response-lifetime case is consistent with [the note in RFC 9112 §9.6](https://www.rfc-editor.org/rfc/rfc9112.html#section-9.6), not the server-initiated staged teardown described there. Four earlier selected HTTP/1.1 upgrade-session inputs passed 4/4: successful handoff and drain, session-handler error observation, rejected registration without an available upgrade, and registration rejection after connection close. Two additional current-source cases exercise active registration over TCP and TLS and error-source propagation. A new keep-alive input sends two ordinary requests on one connection, verifies both responses, and exercises multiple failed upgrade sessions during connection teardown. Two cases exercise lifecycle-enabled WebSocket handshake, message exchange, and shutdown over TCP and TLS. A selected H3 lifecycle startup-failure input verifies that the QUIC listener does not serve before startup succeeds. These finite target-only contracts do not establish full protocol or WebSocket conformance. Seven H3 inputs cover QUIC/TLS/ALPN metadata, streamed request bodies and request trailers, response trailers, early streaming, bounded slow-reader flow control with producer cancellation, and graceful drain. An archived FastAPI-native composition run recorded 17 real-socket inputs
 and three repeats (51/51) on an earlier dirty, path-linked sibling snapshot,
 including H1/H2 request-body progress before upload completion. Its generated
-receipt is Git-ignored and is not current composition evidence. The current [native composition example](../examples/native-fastapi-contracts/README.md) targets `fastapi-rs::native` in the sole FastAPI crate and passed 17 H1/H2 socket inputs once from clean detached checkouts at the revisions recorded in [composition evidence](native-fastapi-composition.md). This is local prototype evidence, not hosted CI or release proof. | These are target-only service contracts, not Python FastAPI/ASGI parity or full protocol conformance. ServiceFutureDropped does not identify peer reset versus connection failure or server cancellation, and does not prove ASGI http.disconnect. The H1 input proves only the recorded half-close/response-lifetime behavior, not broad HTTP/1 conformance. The native lifecycle hook is not ASGI lifespan and is not yet consumed by Starlette-RS/FastAPI-RS. Native WebSocket TLS/H2/H3, composed TLS/H3, repeated/hosted pinned composition CI, Python FastAPI parity, package release, and performance remain open. The Python ASGI adapter now delegates HTTP/1.1 and HTTP/2 over TCP/TLS to this library; HTTP/3 remains in the extension's Rust server layer. The ASGI event bridge remains Python-backed. H3 idle-reset delivery remains open. The HTTP/1.1 `ConnectionUpgrade` API now registers and drains application-owned upgrade sessions; a focused input verifies that lifecycle. The selected 13-case cleartext HTTP/1.1 WebSocket subset passes with per-case attribution, but the full handshake inventory, native TLS/H2/H3 WebSockets, ASGI mapping, and framework-native WebSocket integration remain open; H3 cases do not establish full RFC 9114 conformance or broad interoperability. Caller-supplied TLS/QUIC configuration and declared slow-reader bounds are limited to the cases; they are not performance or general memory-cap claims. See ADR 0003 and ADR 0004. |
+receipt is Git-ignored and is not current composition evidence. The current [native composition example](../examples/native-fastapi-contracts/README.md) targets `fastapi-rs::native` in the sole FastAPI crate and passed 17 H1/H2 socket inputs once from clean detached checkouts at the revisions recorded in [composition evidence](native-fastapi-composition.md). The latest dedicated [hosted composition job](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888/job/116848350492) also passed these 17 inputs once, with a PyO3-free integrated dependency graph. Its parent workflow failed the separate unified 100% coverage gate, so this is not an all-green release result. | These are target-only service contracts, not Python FastAPI/ASGI parity or full protocol conformance. ServiceFutureDropped does not identify peer reset versus connection failure or server cancellation, and does not prove ASGI http.disconnect. The H1 input proves only the recorded half-close/response-lifetime behavior, not broad HTTP/1 conformance. The native lifecycle hook is not ASGI lifespan and is not yet consumed by Starlette-RS/FastAPI-RS. Native WebSocket TLS/H2/H3, composed TLS/H3, repeated composition, Python FastAPI parity, package release, and performance remain open. The hosted composition job is a one-time H1/H2 result from its recorded pinned revisions, not proof for the current dirty source or the full failed workflow. With the default `native-tcp` feature, the Python ASGI adapter delegates HTTP/1.1, HTTP/2 over TCP/TLS, and HTTP/3 over Quinn to this library; builds without that feature retain the legacy protocol implementation. The ASGI event bridge remains Python-backed. The current H3 adapter discards request trailer frames; ASGI 2.5 defines a response-trailers extension but no request-trailers event. The Python adapter therefore exposes request body bytes only, while the native Rust service preserves H3 trailer frames. H3 idle-reset delivery remains open. The HTTP/1.1 `ConnectionUpgrade` API now registers and drains application-owned upgrade sessions; a focused input verifies that lifecycle. The selected 13-case cleartext HTTP/1.1 WebSocket subset passes with per-case attribution, but the full handshake inventory, native TLS/H2/H3 WebSockets, ASGI mapping, and framework-native WebSocket integration remain open; H3 cases do not establish full RFC 9114 conformance or broad interoperability. Caller-supplied TLS/QUIC configuration and declared slow-reader bounds are limited to the cases; they are not performance or general memory-cap claims. See ADR 0003 and ADR 0004. |
 | ASGI callable and Python loop | **Targeted cases pass.** Async apps, a synchronous callable returning an awaitable, execution on the loop that called `Server.serve()`, caller `ContextVar`, and standard event names carried by a `str` subclass are covered by [the HTTP probe](../scripts/probe_http.py) and HTTP/1.1 cases. Both asyncio and uvloop were measured. | Full protocol parity uses CPython 3.12.13. An installed-wheel HTTP/loop/context/lifespan/cancellation smoke also passes on CPython 3.9.25; this is not full Python-version parity. Other event loops and nested context/task combinations are unverified. |
 | Context and exceptions | **Targeted cases pass.** Caller context crosses the boundary; an app exception produces HTTP 500 and retains the Python traceback. The exception benchmark checks 200 responses per sample at one in-flight request. | Exception benchmark samples are capped, short fixed-count runs. Exceptions at every ASGI message boundary and under concurrency are not covered. |
 | Response completion and background work | **HTTP/1.1 and HTTP/2 live parity cases pass the historical shared-write full matrix.** The final ASGI body completes the response before application return, and the application's finite background work finishes afterward. The adapter transfers the application to a tracked observer when it emits the final frame. A target-only late native task-panic case checks response preservation and error logging. | Throughput and latency effects need a fresh benchmark. |
 | HTTP/1.1 | **Implemented and exercised.** The probe checks request scope, upload, response status/body, exceptions, streaming, disconnect, and send-after-disconnect. The legacy ASGI probe benchmark defines 11 standard workloads plus two optional upstream FastAPI workloads when `fastapi-benchmark` is installed. This is a different harness from the maintained stock-FastAPI category benchmark, which covers 15 FastAPI workloads across routes, request bodies, and response streams. The October 4 historical run measured 11 available workloads across four configurations and three repetitions (132 rows); it predates the FastAPI workloads. FastAPI cases use upstream FastAPI, Starlette, and Pydantic, and do not use FastAPI-RS or Starlette-RS. | HTTP/1.0 scope and host synthesis have targeted parity cases; broader HTTP/1.0 behavior is unverified. Request-smuggling/security suites, malformed framing, and the complete HTTP edge-case inventory have not been run. |
-| HTTP/2 | **Implemented; black-box scope and benchmark cases pass.** TLS ALPN and cleartext h2c prior knowledge report `http_version == "2"`. The latest five-repetition benchmark report records 140/140 correct rows across protocol scope, fixed response, 1 MiB response, many response chunks, 1 MiB upload, 64 KiB upload in 1 KiB pieces, and a rate-paced slow reader. A 32-stream synchronized slow-reader parity case also passes four rounds. | h2c upgrade is unverified. Extended CONNECT WebSockets are unsupported. Higher stream counts, packet loss, and broad flow-control stress remain untested. Hypercorn 0.18.0 is the same-protocol performance baseline because Uvicorn does not support HTTP/2. |
+| HTTP/2 | **Implemented; selected black-box cases pass, while the latest full category run remains unresolved.** TLS ALPN and cleartext h2c prior knowledge report `http_version == "2"`. A historical five-repetition full H2 category matrix recorded 140/140 correct rows across protocol scope, fixed response, 1 MiB response, many response chunks, 1 MiB upload, 64 KiB upload in 1 KiB pieces, and rate-paced slow-reader cases. In the latest multi-system run [38828500975](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828500975), all three H2 category jobs stopped after successful response checks and clean shutdown while logging a generic connection error. Subsequent focused hosted diagnostics passed five correctness repetitions each: Linux x86-64 `protocol-scope` ([run 38863229176](https://github.com/appunni-m/uvicorn-rs/actions/runs/38863229176), four valid timing samples), Linux ARM64 `protocol-scope` ([run 38863847199](https://github.com/appunni-m/uvicorn-rs/actions/runs/38863847199)), and macOS ARM64 `request-upload` ([run 38864179333](https://github.com/appunni-m/uvicorn-rs/actions/runs/38864179333)). The generic error did not recur. These target-only diagnostics have no paired Hypercorn result and do not establish comparative performance or resolve the intermittent full-matrix failure. A 32-stream synchronized slow-reader parity case also passes four rounds. | h2c upgrade is unverified. Extended CONNECT WebSockets are unsupported. Higher stream counts, packet loss, and broad flow-control stress remain untested. Hypercorn 0.18.0 is the same-protocol performance baseline because Uvicorn does not support HTTP/2. |
 | HTTP/3 | **Experimental; targeted protocol/parity cases pass.** An archived October 4 66-row comparison checked responses against Hypercorn for its recorded inputs. Its metadata says non-upload requests carried a one-byte body, including ordinary GET workloads; those results are superseded and do not establish RFC-aligned GET correctness or comparable performance. Current ordinary GET workloads are bodyless; the consumed-request workload uses POST. Public cases verify an HTTP/3 response while a partial POST upload remains open, typed H3_NO_ERROR (`0x100`), unknown remote application close codes (zero, reserved GREASE, an unknown code, and maximum u62), and registered HTTP/3-family application codes. Unknown application codes follow the RFC 9114 clean-close behavior; registered codes retain their error path. | Hypercorn 0.18.0 upload cases remain excluded because its upload path failed earlier correctness gates. This comparison is not against Uvicorn, which has no H3 server. H3 uses experimental Rust dependencies. QUIC transport `CONNECTION_CLOSE` behavior is unverified; loss/recovery and broad interoperability remain open. The malformed short `Content-Length` case is a robustness/reference observation: it records the oracle's status only. [RFC 9114 §4.1.2](https://www.rfc-editor.org/rfc/rfc9114.html#section-4.1.2) classifies a content-length mismatch as malformed and requires a detected malformed request/response to be treated as a stream error of type `H3_MESSAGE_ERROR`; the observed status is not a normative expectation and must not force parity. [RFC 9110 §9.3.1](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.1) says GET content has no generally defined semantics and a client SHOULD NOT generate it absent prior agreement. Response-body behavior for invalid framing remains outside the compatibility claim. WebSockets over HTTP/3 are unsupported. |
-| HTTP/3 task ownership | **Historical 2026-10-12 adapter-only evidence:** the 511-case instrumented gate passed. It includes the held-response accept-error contract with remote `0x102` application-close termination, incomplete body, ordered cancellation/error diagnostics, application cleanup and a healthy fresh connection. The 128-request one-connection sequence passes all three repeats; instrumented attribution records 128 completed request-body pumps joined. A 16-stream slow-reader case passes three rounds with response fingerprints and resource checks. Clean and registered peer-close cases pass too. | The held-response injection is target-only and excluded from the normal build. The probe's `stream_reset` is a `recv_data` error convention and does not alone identify a QUIC `RESET_STREAM` frame. Higher stream counts, loss/recovery, and broad interoperability remain unverified. This local dirty-tree receipt is not hosted release evidence. See [current unified coverage status](coverage.md#current-unified-coverage-status-2026-10-15) and [workflow contracts](parity.md#current-http3-workflows). |
+| HTTP/3 task ownership | **Historical 2026-10-12 adapter-only evidence:** the 511-case instrumented gate passed. It includes the held-response accept-error contract with remote `0x102` application-close termination, incomplete body, ordered cancellation/error diagnostics, application cleanup and a healthy fresh connection. The 128-request one-connection sequence passes all three repeats; instrumented attribution records 128 completed request-body pumps joined. A 16-stream slow-reader case passes three rounds with response fingerprints and resource checks. Clean and registered peer-close cases pass too. | The held-response injection is target-only and excluded from the normal build. The probe's `stream_reset` is a `recv_data` error convention and does not alone identify a QUIC `RESET_STREAM` frame. Higher stream counts, loss/recovery, and broad interoperability remain unverified. This local dirty-tree receipt is not hosted release evidence. See [current unified coverage status](coverage.md#current-unified-coverage-status-2026-10-17) and [workflow contracts](parity.md#current-http3-workflows). |
 | Oracle-parity cases | **Historical 2026-10-12 adapter-only evidence:** the dirty-source instrumented matrix passed 243/243 oracle cases in attribution and each of three full repeats. The synchronous callable/awaitable, caller loop, context, HTTP, WebSocket, lifespan, protocol, concurrent load, and shutdown cases are represented by that matrix. H1, WebSockets, and lifecycle use Uvicorn 0.54.0; H2/H3 use Hypercorn 0.18.0 because Uvicorn has no matching server modes. See the [suite contract](parity.md) and [coverage results](coverage.md). | This is not a separate normal-extension parity run or a hosted clean-commit result. The 268 target-only contracts are not oracle parity; they include public-input support contracts as well as native fault cases. This does not provide the official full ASGI suite, a complete protocol security corpus, or Uvicorn CLI compatibility. |
 | Response header order | **Known narrow ASGI deviation, measured by the three input-driven response-header cases.** H1/H2 observations record the wire sequence and show that the target groups fields by name while retaining each name's values in input order. The H3 probe parses fields through `http::HeaderMap`, so it does not establish raw wire order. The focused per-run receipt is Git-ignored. | ASGI HTTP 2.5 says response header order must be preserved. The current Python adapter does not preserve order across distinct field names on H1/H2. RFC 9110 §5.3 says order across different field names is not significant to HTTP semantics, while same-name value order is significant. This is HTTP-semantically valid but is not full ASGI response-order conformance. The documented contract preserves repeated values' per-name order; cross-name order is unspecified. See [RFC 9110 §5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3), the [ASGI HTTP specification](https://asgi.readthedocs.io/en/latest/specs/www.html), and the [behavior inventory](asgi-case-inventory.md#known-gaps-and-unsupported-surface). |
 | HTTP scope and multiplexing | **Targeted cases pass on H1, H2, and H3.** The negotiated protocol version is checked; H2 clients multiplex requests over four TLS connections, and H3 clients multiplex over up to four QUIC connections. New input cases cover ordered duplicate fields on H1, duplicate fields and cookies on H2/H3, encoded path/query bytes, and matching custom `Host`/`:authority` values. | This is a focused scope inventory, not a complete pseudo-header or request-target corpus. H2/H3 combine repeated Cookie fields as `name=value; name=value` for oracle comparison, as allowed by ASGI. The H2/H3 clients and concurrency differ by transport; compare results within each protocol. |
@@ -269,6 +282,33 @@ receipt is Git-ignored and is not current composition evidence. The current [nat
 | Full ASGI conformance | **Not run.** The live probes below are focused black-box cases. | Passing these cases is not a claim that every ASGI 3, HTTP/WebSocket 2.5, or lifespan 2.0 requirement is covered. |
 | Rust source coverage | **Historical 2026-10-12 adapter-only evidence:** the dirty-source local PyO3 ASGI-adapter report measured 5,561/5,561 LLVM regions and 3,997/3,997 lines. All 511 attribution cases and three 511-case repeats passed; Coverage-MCP found zero missing region/line groups with `source: matches_receipt` and `tests: passed`. See [coverage analysis](coverage.md). | This macOS ARM64 receipt is bound to the recorded dirty `src/lib.rs` and instrumented extension hashes. It does not cover the separate native `uvicorn-rs` crate, Python code, dependencies, other features/platforms, the official ASGI suite, or performance. Hosted run [38087300590](https://github.com/appunni-m/uvicorn-rs/actions/runs/38087300590) passed all eight gates on clean commit `16ed349`, which predates this local source. Do not use the instrumented extension for benchmarks. |
 | Performance | **The latest exact-source FastAPI matrix completed H1, H2, WebSocket, and lifecycle correctness and produced 32 qualified workload/loop pairs.** It has no broad speed advantage: results vary by workload, and H3 at concurrency 64 stopped on Hypercorn reference timeouts. The [benchmark results](benchmark-results.md) link full throughput, p50/p95/p99 latency, CPU, RSS, and retained exclusions. | Local evidence is one M3 Pro/macOS/CPython environment from a dirty checkout. H1/WebSocket/lifecycle compare with Uvicorn; H2/H3 compare with Hypercorn. The automatic three-system run failed before producing an aggregate. Exact on-CPU function shares and total-allocation counts have not been measured. See [benchmark status](benchmark-status.md). |
+
+### HTTP/3 request trailers at the ASGI boundary
+
+The Python-free Rust service preserves HTTP/3 request trailers as
+`http_body::Frame::trailers`. The standard Python ASGI adapter consumes those
+frames and delivers the request body through ordinary `http.request` events;
+it does not expose the trailers to the application. ASGI HTTP 2.5 defines
+`http.request` with `type`, `body`, and `more_body`, and the ASGI extensions
+specification defines response trailers but no request-trailer event. This is
+an explicit Python ASGI support limit, not a claim that trailer fields are
+part of the request body. See the [ASGI HTTP specification](https://asgi.readthedocs.io/en/stable/specs/www.html#request-receive-event)
+and [ASGI HTTP trailers extension](https://asgi.readthedocs.io/en/latest/extensions.html#http-trailers).
+
+The corresponding input remains a target-only support contract because the
+pinned Hypercorn 0.18.0 HTTP/3 oracle raises `UnboundLocalError` while opening a
+stream for the trailing HEADERS frame, before ASGI dispatch. A focused local run
+of that single target case passed 1/1; it does not establish oracle parity or
+clean-source release evidence. HTTP/3 permits a trailing HEADERS section after
+the content ([RFC 9114, §4.1](https://www.rfc-editor.org/rfc/rfc9114.html#section-4.1)).
+Retain the target-only result until the oracle can execute this input.
+
+The HTTP/3 malformed-frame probe sends a valid HEADERS frame and a DATA frame
+whose declared payload is truncated by a clean stream FIN. RFC 9114 section 7.1
+requires `H3_FRAME_ERROR`; the focused uvicorn-rs case observed code `0x106`
+and verified a healthy fresh-connection response. Hypercorn's different ASGI
+body events are retained in the parity result as diagnostics and are not used
+as the expected behavior for this RFC case. See the [case notes](parity.md#current-http3-workflows).
 
 ## Live black-box probes
 

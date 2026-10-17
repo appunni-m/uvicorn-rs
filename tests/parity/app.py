@@ -554,6 +554,15 @@ async def _app_impl(scope, receive, send):
                 _record("websocket.app-cancelled")
                 raise
             return
+        if scope["path"] == "/ws-registration-failure-hold":
+            await send({"type": "websocket.accept"})
+            _record("websocket.registration-failure.hold")
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                _record("websocket.registration-failure.cancelled")
+                raise
+            return
         offered = scope.get("subprotocols", [])
         protocol = "parity" if "parity" in offered else None
         accept_type = (
@@ -693,6 +702,27 @@ async def _app_impl(scope, receive, send):
             "body_base64": base64.b64encode(body).decode("ascii"),
         }
         await _respond(send, json.dumps(observed, separators=(",", ":")).encode(), content_type=b"application/json")
+        return
+
+    if path == "/h3-request-trailers":
+        body = bytearray()
+        receive_types = []
+        while True:
+            message = await receive()
+            receive_types.append(message["type"])
+            body.extend(message.get("body", b""))
+            if not message.get("more_body", False):
+                break
+        observed = {
+            "receive_types": receive_types,
+            "body_base64": base64.b64encode(body).decode("ascii"),
+            "scope_extensions": sorted(scope.get("extensions", {})),
+        }
+        await _respond(
+            send,
+            json.dumps(observed, separators=(",", ":")).encode(),
+            content_type=b"application/json",
+        )
         return
 
     if path == "/event-type-subclass":

@@ -128,6 +128,8 @@ async fn pump_peer_read(
     closed: watch::Sender<bool>,
     failed: watch::Sender<Option<io::ErrorKind>>,
 ) -> PeerReadPumpOutcome {
+    #[cfg(coverage)]
+    let mut delivered_data = false;
     loop {
         // Reserve before reading so pressure from HTTP/TLS also bounds socket
         // read-ahead. The consumer may hold one additional, partly read chunk.
@@ -136,6 +138,18 @@ async fn pump_peer_read(
             super::observe_http1_peer_read_receiver_closed_fault();
             return PeerReadPumpOutcome::ReceiverClosed;
         };
+        #[cfg(coverage)]
+        if delivered_data && super::take_http1_peer_read_failure_after_data_fault() {
+            let error = io::Error::new(
+                io::ErrorKind::ConnectionReset,
+                "injected peer-read failure after request data",
+            );
+            let kind = error.kind();
+            failed.send_replace(Some(kind));
+            permit.send(ReadEvent::Error(error));
+            super::observe_http1_peer_read_failure_after_data_fault();
+            return PeerReadPumpOutcome::ReadFailed(kind);
+        }
         let mut chunk = BytesMut::with_capacity(READ_CHUNK_SIZE);
         let mut destination = (&mut chunk).limit(READ_CHUNK_SIZE);
         match reader.read_buf(&mut destination).await {
@@ -147,6 +161,10 @@ async fn pump_peer_read(
                 return PeerReadPumpOutcome::ReadHalfClosed;
             }
             Ok(_) => {
+                #[cfg(coverage)]
+                {
+                    delivered_data = true;
+                }
                 permit.send(ReadEvent::Data(chunk.freeze()));
             }
             Err(error) => {
@@ -165,9 +183,6 @@ impl BufferedReadIo {
         context: &mut Context<'_>,
         buffer: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        if buffer.remaining() == 0 {
-            return Poll::Ready(Ok(()));
-        }
         loop {
             if !self.current.is_empty() {
                 let count = buffer.remaining().min(self.current.len());
@@ -213,6 +228,9 @@ impl AsyncRead for PeerReadIo {
         context: &mut Context<'_>,
         buffer: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
+        if buffer.remaining() == 0 {
+            return Poll::Ready(Ok(()));
+        }
         match &mut self.get_mut().inner {
             ReadMode::OnRead {
                 stream,

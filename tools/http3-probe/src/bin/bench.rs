@@ -194,7 +194,14 @@ async fn main() -> Result<(), BenchError> {
                             expected_status
                         ));
                     }
+                    let response_status = response.status();
+                    let declared_content_length = response
+                        .headers()
+                        .get("content-length")
+                        .map(|value| value.to_str().unwrap_or("<invalid>").to_owned());
+                    let request_index = latencies.len() + 1;
                     let mut offset = 0_usize;
+                    let mut request_data_chunks = 0_u64;
                     let pacing_started = Instant::now();
                     loop {
                         let mut data =
@@ -215,6 +222,7 @@ async fn main() -> Result<(), BenchError> {
                             };
                         let length = data.remaining();
                         response_data_chunks += 1;
+                        request_data_chunks += 1;
                         if offset + length > expected_body.len()
                             || data.chunk() != &expected_body[offset..offset + length]
                         {
@@ -235,9 +243,13 @@ async fn main() -> Result<(), BenchError> {
                     }
                     if offset != expected_body.len() {
                         failure = Some(format!(
-                            "response body length {} did not match expected {}",
+                            "response body length {} did not match expected {} (request={}, status={}, content-length={:?}, data_chunks={})",
                             offset,
-                            expected_body.len()
+                            expected_body.len(),
+                            request_index,
+                            response_status,
+                            declared_content_length,
+                            request_data_chunks
                         ));
                     }
                     if failure.is_some() {

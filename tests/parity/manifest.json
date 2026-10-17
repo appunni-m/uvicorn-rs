@@ -937,6 +937,35 @@
       }
     },
     {
+      "id": "http3.truncated-data-frame-recovery",
+      "kind": "protocol_operation",
+      "observe": [
+        "application_events",
+        "peer_close_code",
+        "followup_response",
+        "followup_healthy"
+      ],
+      "compare": [
+        "followup_response",
+        "followup_healthy"
+      ],
+      "required_observations": {
+        "followup_healthy": true
+      },
+      "target_requirements": {
+        "peer_close_code": 262
+      }
+    },
+    {
+      "id": "http3.peer-stop-cancels-held-request",
+      "kind": "protocol_operation",
+      "observe": [
+        "application_cancelled",
+        "application_events",
+        "followup_response"
+      ]
+    },
+    {
       "id": "http.request-streaming",
       "kind": "protocol_operation",
       "observe": [
@@ -1097,6 +1126,25 @@
       }
     },
     {
+      "id": "websocket.raw-frame-disconnect",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "handshake_accept_valid",
+        "frame_sent",
+        "disconnect_event",
+        "disconnect_code",
+        "followup_status"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "handshake_accept_valid": true,
+        "frame_sent": true,
+        "disconnect_event": true,
+        "followup_status": 200
+      }
+    },
+    {
       "id": "websocket.server-close",
       "kind": "protocol_operation",
       "observe": [
@@ -1147,6 +1195,15 @@
     },
     {
       "id": "websocket.fault-contract",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "application_events",
+        "followup_response"
+      ]
+    },
+    {
+      "id": "websocket.registration-failure-cleanup",
       "kind": "protocol_operation",
       "observe": [
         "handshake_status",
@@ -1489,7 +1546,9 @@
       "id": "http3.connection-task-shutdown",
       "kind": "protocol_operation",
       "observe": [
-        "process_terminated"
+        "status",
+        "process_terminated",
+        "process_exit_code"
       ],
       "required_observations": {
         "process_terminated": true
@@ -1534,7 +1593,8 @@
         "stream_reset",
         "followup_response",
         "process_terminated",
-        "process_exit_code"
+        "process_exit_code",
+        "server_error_observed"
       ],
       "required_observations": {
         "status": 200,

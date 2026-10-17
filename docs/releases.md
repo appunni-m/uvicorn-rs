@@ -8,7 +8,86 @@ Rust crate archives (`native-app-contract` and `uvicorn-rs`). The native
 crates are library packages; this repository does not currently provide a
 standalone native executable.
 
-As of 2026-10-16, a release candidate is not established. Exact-source CI
+## Current release status (2026-10-17)
+
+No release candidate is established. The latest clean CI run
+[38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888)
+on `27de9f3ac7d259a3a9b612c3247ab2c60eb27306` passed Rust quality and MSRV
+checks, installed-wheel public parity, pinned native FastAPI-RS composition,
+and all 712 indexed cases. Its older manifest measured 8,496/8,650 regions and
+6,486/6,592 lines (154 regions and 106 lines missing); package-artifact and
+Python-floor jobs were skipped. The preceding run 38828501018 had 155 regions and 107 lines
+missing.
+
+The latest local unified run on the current dirty worktree executed and passed
+748/748 cases (534 ASGI, 214 native), all three ASGI and native repeats, and
+measured 8,997/8,997 executable source-span regions plus 6,629/6,629
+normalized physical executable lines. Attribution and repeats had zero
+failures, infrastructure failures, retries, or unrun cases. Coverage-MCP
+matches source/build and reports zero missing regions or lines with
+`tests=passed`; the offline evidence checker independently reconstructed the
+retained profiles and passed. This local result is not clean committed-source
+or hosted release evidence; see the
+[coverage record](coverage.md#current-unified-coverage-status-2026-10-17) for
+its identities and limitations.
+
+Benchmark run
+[38828500975](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828500975)
+passed exact-binary parity and the FastAPI-only comparison on all three
+platforms. All three category jobs failed. Each Linux system had two Rust
+HTTP/1 upload timeouts; macOS completed 30 matched H1 pairs, but 27/30 Rust
+throughput ratios were below Uvicorn and the median ratio was 0.748×. HTTP/2
+emitted native connection-error diagnostics, Linux x86-64 Hypercorn/uvloop
+HTTP/3 `fixed` timed out waiting for response headers, and lifecycle analysis
+rejected the expected Rust TCP graceful-timeout diagnostic. There is no
+complete qualified performance result. The local worktree contains
+uncommitted tracked changes; the hosted evidence is from the clean commit and
+does not include those edits.
+Three focused hosted H2 diagnostics passed five correctness repetitions each: Linux x86-64 `protocol-scope` ([run 38863229176](https://github.com/appunni-m/uvicorn-rs/actions/runs/38863229176)), Linux ARM64 `protocol-scope` ([run 38863847199](https://github.com/appunni-m/uvicorn-rs/actions/runs/38863847199)), and macOS ARM64 `request-upload` ([run 38864179333](https://github.com/appunni-m/uvicorn-rs/actions/runs/38864179333)). The Linux x86-64 diagnostic was rerun as attempt 7 on the same commit; its five correctness checks passed, with four timing-valid samples and the refreshed [artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38863229176/artifacts/12078313679). None of these single-server diagnostics has a matched Hypercorn comparison. They did not reproduce the generic connection error, identify the original matrix failure, or clear the benchmark gate.
+
+The focused HTTP/3 malformed-frame parity case
+`http3.truncated-data-frame-recovery-after-protocol-error` passed 1/1 on the
+current local source. It observes `H3_FRAME_ERROR` (`0x106`) for a DATA frame
+whose declared payload is truncated at clean stream FIN, as required by
+[RFC 9114 §7.1](https://www.rfc-editor.org/rfc/rfc9114.html#section-7.1).
+This result exercises the workspace build, which patches crates.io `h3` to
+the [local vendored source](../vendor/h3/src/frame.rs); it does not prove that
+the standalone Rust crate archive contains or uses that patch. The
+`uvicorn-rs` manifest still declares
+registry `h3 = "0.0.8"`, and `cargo package --list -p uvicorn-rs` does not
+include `vendor/h3`. The focused `cargo package --manifest-path
+crates/uvicorn-rs/Cargo.toml --allow-dirty --locked --no-verify` command exits
+101 because the versioned `native-app-contract` dependency cannot be resolved
+from the crates.io index. Cargo nevertheless left a diagnostic archive at
+`target/package/uvicorn-rs-0.1.0.crate`; its presence does not make the failed
+package command valid release evidence. Its embedded Cargo VCS stamp records
+`c2de34a08a0b5083f830cc59c88182378a7d1a81` with `dirty: true`. I extracted it
+into a temporary consumer, supplied only the unpublished `native-app-contract`
+from the local checkout, and built the Python extension against the archive
+with registry `h3 0.0.8` and no `vendor/h3` patch. The adapter used dirty local
+revision `27de9f3ac7d259a3a9b612c3247ab2c60eb27306` (Python 3.12.13, Rust
+1.98.1, macOS ARM64). The focused
+`http3.truncated-data-frame-recovery-after-protocol-error` input then failed:
+the oracle completed the upload and returned a healthy follow-up response;
+the extracted target reported an ASGI disconnect, produced no peer close code,
+and panicked inside registry `h3 0.0.8` at `frame.rs:57` with “There is still
+data to read, please call poll_data() until it returns None.” The target's
+follow-up response remained healthy, but the required `H3_FRAME_ERROR`
+(`0x106`) behavior was absent. The workspace parity pass still exercises the
+patched vendored source only. Do not accept the standalone Rust crate archive
+for external consumption until its publishable dependency path carries the
+framing correction and the extracted-archive case passes. The candidate
+evidence generator records this in `publication_blockers`, and candidate
+verification rejects non-empty blocker lists.
+
+The release workflows do not publish packages or create tags. The release
+candidate remains blocked by the dirty uncommitted changes and incomplete
+qualified performance evidence; the old hosted coverage failure must be
+replaced with clean release-candidate evidence before release acceptance.
+
+### Earlier status snapshot (superseded by current results)
+
+As of the earlier 2026-10-16 snapshot, a release candidate was not established. Exact-source CI
 [run 38790016719](https://github.com/appunni-m/uvicorn-rs/actions/runs/38790016719)
 on commit `5a32e3c0d84a02c95fe8a3f01712c895419ea571` has passed Rust quality,
 Rust 1.85, native FastAPI-RS composition, and installed-wheel public parity.
@@ -22,7 +101,7 @@ advanced through archive packaging fixes to
 native TCP/TLS integration described below; the corrected coverage gate still
 needs a source-matched hosted receipt.
 
-The latest local 717-case/three-repeat report is from an earlier dirty source
+An earlier local 717-case/three-repeat report is from a dirty source
 snapshot and is not evidence for this commit. Multi-system benchmark
 [run 38787712815](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815)
 completed on Linux x86-64, Linux ARM64, and macOS ARM64, but every platform
@@ -33,10 +112,10 @@ activity invalidated their timings. No qualified performance result is
 available. The previously reported
 `http1.disconnect-before-first-asgi-receive` discrepancy also passed as a
 single local parity case on the current checkout. See the
-[coverage record](coverage.md#current-unified-coverage-status-2026-10-15)
+[coverage record](coverage.md#current-unified-coverage-status-2026-10-17)
 and [benchmark status](benchmark-status.md).
 
-The current working-tree unified-coverage attempt ran the 506-case Python
+An earlier working-tree unified-coverage attempt ran the 506-case Python
 matrix three times: repeats one and two passed 506/506; repeat three passed
 505/506. The only failed observation was
 `http3.concurrent-stream-load-slow-reader-resource-bound`, where the RSS
@@ -54,7 +133,7 @@ move tags. The project is licensed under
 [BSD-3-Clause or MIT](../LICENSE), at the recipient's option, with copyright
 © 2026 Appunni M and the original Uvicorn/Hypercorn license notices retained.
 
-## Current state
+## Earlier state before c2de34a (superseded)
 
 The latest complete CI results cited here cover commit
 [`5a32e3c0d84a02c95fe8a3f01712c895419ea571`](https://github.com/appunni-m/uvicorn-rs/commit/5a32e3c0d84a02c95fe8a3f01712c895419ea571).
@@ -103,14 +182,15 @@ is tracked by `zep3`.
 
 | Pending gate | Current evidence | Required completion |
 |---|---|---|
-| Canonical Rust transport and thin Python adapter (`sw8s`) | The current default Python ASGI path delegates HTTP/1.1 and HTTP/2 over TCP/TLS to `uvicorn-rs`; HTTP/3 remains in the extension's Rust server layer. Python ASGI scope/events and app execution still cross the asyncio/PyO3 boundary. | Complete exact-source live coverage for the new transport, verify the documented support matrix, and preserve Python loop, context, callable, exception, lifespan, disconnect, cancellation, and streaming behavior. Then measure the path against matched Uvicorn workloads. |
-| Native framework composition (`wb4y`) | The pinned native FastAPI-RS composition inputs passed in exact-source hosted CI run 38790016719. | Retain the Python-free dependency graph and verify each composition behavior claimed by the released support matrix. Composed TLS/H3, WebSockets, and full framework lifecycle remain outside the current hosted evidence. |
+| Canonical Rust transport and thin Python adapter (`sw8s`) | With default `native-tcp`, the Python ASGI path delegates HTTP/1.1, HTTP/2 over TCP/TLS, and HTTP/3 over Quinn to the Python-free `uvicorn-rs` crate. Python ASGI scope/events and app execution still cross the asyncio/PyO3 boundary. The native Rust service preserves H3 request trailer frames; the ASGI 2.5 adapter presents request body bytes only because the specification defines a response-trailers extension but no request-trailers event. Current dirty-source local coverage passed 748/748 cases, all six full repeats, 8,997/8,997 regions, 6,629/6,629 lines, Coverage-MCP, and offline evidence validation. Clean committed-source and hosted acceptance remain pending. | Verify the native H3 trailer contract and the documented ASGI boundary on the reviewed commit, preserve Python loop, context, callable, exception, lifespan, disconnect, cancellation, and streaming behavior, and keep the support matrix explicit. Do not invent a standard ASGI request-trailer event. Then measure the path against matched Uvicorn workloads. |
+| Native framework composition (`wb4y`) | The pinned native FastAPI-RS composition inputs passed 17/17 once in exact-source hosted CI run 38862681888 on `27de9f3`. | Retain the Python-free dependency graph and verify each composition behavior claimed by the released support matrix. Composed TLS/H3, WebSockets, and full framework lifecycle remain outside the current hosted evidence. |
 | Python compatibility matrix (`sw8s`) | An abi3 Python floor and individual framework/oracle versions are recorded; a maintained client compatibility matrix is not implemented. | Publish and exercise the exact Python, asyncio/uvloop, ASGI, and upstream integration combinations claimed by each Python client after transport migration. |
-| Unified coverage on current source | Exact-source CI run 38790016719 completed 717 indexed cases and measured 8,654/8,654 regions and 6,521/6,521 lines. Its evidence checker failed because producer and checker disagreed on pending Coverage-MCP request wording; the producer wording is now aligned. | Run the corrected exact source through hosted coverage and obtain a passing source-matched Coverage-MCP receipt. Diagnose the first failing case only; do not restart the full matrix for a report-contract mismatch. |
-| Representative performance (`wh9k`, `k8ft`) | Multi-system run 38787712815 completed but all three systems stopped in HTTP/2. The run uses older commit `5cb4b7b84`. Focused current-source reproductions of the three HTTP/2 failure classes passed correctness; local timings were invalid because unrelated host CPU activity exceeded the guard. `performance-acceptance.json` remains `not_proven`. | Run the correctness-gated categories on the exact release commit, with at least three valid repetitions per workload/loop/system, and retain latency, throughput, CPU, memory, and source/build identities. If the Python ASGI path cannot show a reviewed meaningful gain, revise the performance scope from measured evidence before release. |
-| Clean commit and hosted CI (`zep3`) | CI run 38790016719 uses clean commit `5a32e3c0d84a02c95fe8a3f01712c895419ea571`; four jobs passed and the coverage evidence check failed after all indexed cases passed. Main has since advanced to `6c00d536c52f8f9dd2dc90ac67eb12bd0c58ca59`, and the native TCP/TLS integration has no exact-source hosted validation yet. | Commit the reviewed transport and documentation changes, push them to `main`, then run the affected hosted coverage, Rust, parity, and package gates. Re-run only gates affected by later source changes. |
-| Packaged consumer evidence (`zep3`) | Exact-source CI verified the installed normal wheel's public parity, Rust 1.85, and native composition. No candidate bundle has been produced or inspected. | Verify the three supported wheels, sdist, and two Rust archives from the final clean commit, including fresh installed consumers, the Python floor, extracted Rust archive builds, licenses, versions, and checksums. |
-| Performance acceptance in candidate verification (`q9pv`, blocking `zep3`) | Run 38787712815 is complete but incomplete as evidence: HTTP/2 failed on every platform and it measures older source. `performance-acceptance.json` remains `not_proven`. | Complete the correctness-gated matrix on the exact release commit and record measured gain claims or a documented scope revision. Candidate assembly rejects `not_proven`, partial/stale artifacts, and unsupported or underqualified claims. |
+| Unified coverage on current source | The current local dirty-source run passed 748/748 cases in three ASGI and three native repeats, with no retries or infrastructure failures. It measured 8,997/8,997 regions and 6,629/6,629 normalized physical executable lines. Coverage-MCP and offline evidence validation passed on matching source/build receipts. Latest clean CI run 38862681888 passed 712 cases but its older manifest measured 8,496/8,650 regions and 6,486/6,592 lines. | Bind the passing 748-case matrix and 100% report to the reviewed release-candidate commit with exact-source hosted evidence. Add or change cases only if that source-bound run exposes a concrete gap or failure. |
+| Representative performance (`wh9k`, `k8ft`) | Multi-system run 38828500975 passed parity and FastAPI-only comparison. The Linux H1 category also failed: two Rust upload rows on each Linux system timed out in libcurl after about 15.4–18.0 seconds, followed by Starlette `ClientDisconnect`; macOS completed H1 with 30 matched pairs, 27/30 below Uvicorn and median throughput ratio 0.748×. HTTP/2 emitted a generic connection diagnostic on all systems, one Linux x86-64 Hypercorn/uvloop HTTP/3 fixed-workload header timeout occurred, and lifecycle diagnostic normalization rejected an expected timeout. Three later focused H2 hosted runs passed five correctness repetitions each but did not reproduce the H2 connection error. A single local macOS replay of the 1 MiB/1 KiB-chunk H1 upload passed on both servers, but host contention invalidated timing and did not reproduce the Linux timeout. `performance-acceptance.json` remains `not_proven`. | Diagnose the Linux upload timeout and retained full-matrix HTTP/2 error, resolve the HTTP/3 timeout and lifecycle normalization, then complete the exact-commit matrix with at least three valid repetitions per workload/loop/system and retain throughput, latency, CPU, memory, and source/build identities. Reassess the performance scope against the matched FastAPI evidence; do not claim a broad gain from the current results. |
+| Clean commit and hosted CI (`zep3`) | Main commit 27de9f3 has passing Rust quality and MSRV checks, installed-wheel public parity, and native composition; all 712 hosted parity cases passed. Local current-source coverage now passes 748 cases, all six repeats, 100% regions/lines, Coverage-MCP, and offline validation, but the evidence is from a dirty worktree. Benchmark gates remain incomplete and the worktree has uncommitted tracked changes. | Review and commit the intended changes, then run only the hosted gates affected by those changes. Require clean exact-source coverage and benchmark receipts before candidate assembly. |
+| Packaged consumer evidence (`zep3`) | Exact-source CI verified the installed normal wheel's public parity. Release artifact jobs were skipped; no candidate bundle has been produced or inspected. | Verify the three supported wheels, sdist, and two Rust archives from the final clean commit, including fresh installed consumers, Python floor, extracted Rust archive builds, licenses, versions, and checksums. |
+| Standalone Rust crate H3 dependency | The workspace parity case passes and records the RFC-required `H3_FRAME_ERROR` (`0x106`) with the workspace-only `vendor/h3` patch. A focused consumer build from the diagnostic `.crate` instead resolved registry `h3 0.0.8`; the same malformed-frame input failed because the ASGI app saw disconnect, no peer close code was observed, and the dependency panicked at `frame.rs:57`. The oracle completed the upload and the same-connection follow-up remained healthy. | Make the framing correction available through a publishable dependency path for external Rust consumers. Rebuild a clean archive from the selected dependency source and rerun only this malformed-frame case against that extracted archive. Keep standalone `.crate` distribution blocked until it passes. |
+| Performance acceptance in candidate verification (`wh9k`, `k8ft`; release gate `zep3`) | Run 38828500975 is complete but incomplete as evidence: its category jobs failed and `performance-acceptance.json` remains `not_proven`. | Complete the correctness-gated matrix on the exact release commit and record measured gain claims or a documented scope revision. Candidate assembly rejects `not_proven`, partial/stale artifacts, and unsupported or underqualified claims. |
 | Immutable candidate and final documentation (`zep3`) | No current candidate or tag exists. | Reconcile support, deployment, feasibility, benchmark, and coverage claims with the final evidence; assemble the bundle from the successful CI run/attempt; verify the annotated tag object and commit; retain candidate manifests and SHA256SUMS. Keep generated logs, profiles, and coverage reports out of Git. |
 
 The current workflow stops at a verified candidate artifact. Registry
@@ -137,10 +217,13 @@ RSS measurements present; throughput or latency must support a gain claim,
 while CPU and RSS provide required resource context. A scope revision must cite
 a checked-in document and retained qualified measurements. A complete matrix
 on its own is not a gain claim. The current record is `not_proven`. Benchmark
-run 38787712815 is active on older source and has no final category evidence.
-Its predecessor, run 38537208330, has incomplete HTTP/2 and Linux HTTP/3
-categories; run 38526995006 is partial. No tag can currently produce a
-verified candidate. The gate does
+run 38828500975 is complete, but its category jobs failed on Linux H1 uploads,
+HTTP/2, one Linux HTTP/3 workload, and lifecycle diagnostic normalization.
+The macOS H1 comparisons qualified 30 workload/loop pairs, with a median
+Rust/Uvicorn throughput ratio of 0.748×. A local single-case replay passed
+but was host-contended and cannot explain the Linux timeout. Earlier runs
+38787712815, 38537208330, and 38526995006 are superseded snapshots. No tag can
+currently produce a verified candidate. The gate does
 not publish packages, create a public release, or create or move tags.
 
 ### Historical focused migration and coverage evidence
@@ -179,7 +262,7 @@ incomplete uploads; it passed three repeats but is still dirty local evidence.
 The Python ASGI TCP/TLS path now uses the native transport, but these
 generic native cases do not by themselves establish ASGI disconnect delivery.
 See the
-[selected EOF evidence](coverage.md#selected-native-tcp-eof-evidence).
+[selected EOF evidence](coverage.md#historical-selected-native-tcp-eof-evidence).
 
 Normal native CI selects 149 target contracts and retains the one declared
 fault contract in unified coverage. A normal build rejects that fault input;
@@ -204,9 +287,16 @@ excludes PyO3, but its live composition job fails compiling the pinned
 Starlette-RS source: `file_response.rs:89` declares an unnecessary `mut`, and
 that checkout denies `unused` warnings. The current worktree caps dependency
 lint levels to warnings only for this composition smoke; the separate
-uvicorn-rs workspace lint gate remains warning-denied. This is a proposed CI
-remediation and does not count as a hosted pass until the exact-source run is
-green.
+uvicorn-rs workspace lint gate remains warning-denied. This was the status at
+run #110 and is superseded for the pinned composition slice by the dedicated
+jobs in [run 38828501018](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828501018/job/116741620164)
+and the latest [run 38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888/job/116848350492).
+The latest job passed all 17 H1/H2 inputs with Uvicorn-RS `27de9f3`, FastAPI-RS
+`f438a7c`, and Starlette-RS `b4c8a65`, and verified that the integrated
+normal/build dependency graph contained no PyO3. The parent workflow still
+failed its separate unified coverage gate; its package-artifact and Python-floor jobs
+were skipped. This does not supersede the other run #110 failures or establish
+a release candidate.
 
 Hosted CI #110 completed its then-current 633-case unified run, but coverage
 was below its 100% gate: 7,322/7,380 regions and 5,383/5,417 lines (58 regions and 34 lines
@@ -288,7 +378,7 @@ report confirms remaining gaps on its pre-refactor source; three complete
 current-manifest repeats, 100% regions
 and lines, zero-gap Coverage-MCP results, and a clean exact-commit hosted run
 remain required. See the
-[coverage record](coverage.md#current-unified-coverage-status-2026-10-15).
+[coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
 
 The release-preparation changes make both Rust library manifests publishable and give
 `uvicorn-rs` a versioned `native-app-contract` dependency. The Linux CI package

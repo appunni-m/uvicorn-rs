@@ -1436,6 +1436,66 @@
       }
     },
     {
+      "case_id": "fault.http3.peer-close-h3-no-error-legacy",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.legacy-path.selection",
+        "contract": "http3-legacy-peer-close-no-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 256
+      }
+    },
+    {
+      "case_id": "fault.http3.peer-close-qpack-error-legacy",
+      "profile": "http3",
+      "operation": "http3.peer-close-registered",
+      "covers": [
+        "http3.peer-close-registered"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.legacy-path.selection",
+        "contract": "http3-legacy-peer-close-classification-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 512
+      }
+    },
+    {
+      "case_id": "fault.http3.peer-close-unknown-code-legacy",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.legacy-path.selection",
+        "contract": "http3-legacy-peer-close-unknown-code-ignored"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 515
+      }
+    },
+    {
       "case_id": "http3.peer-close-unknown-zero",
       "profile": "http3",
       "operation": "http3.peer-close",
@@ -1586,6 +1646,42 @@
       }
     },
     {
+      "case_id": "http3.truncated-data-frame-recovery-after-protocol-error",
+      "profile": "http3",
+      "operation": "http3.truncated-data-frame-recovery",
+      "covers": [
+        "http3.truncated-data-frame-recovery"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/h3-upload-disconnect",
+        "headers": [],
+        "body_base64": "",
+        "malformed_data_frame_after_headers": true
+      }
+    },
+    {
+      "case_id": "http3.peer-stop-cancels-held-request-on-same-connection",
+      "profile": "http3",
+      "operation": "http3.peer-stop-cancels-held-request",
+      "covers": [
+        "http3.peer-stop-cancels-held-request"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.client.peer-stop-before-response-headers",
+        "contract": "http3-peer-stop-cancels-held-app-followup-200"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/hold",
+        "headers": [],
+        "body_base64": "",
+        "peer_stop_before_response_headers": true,
+        "same_connection_followup_path": "/sync-callable"
+      }
+    },
+    {
       "case_id": "http3.scope-query-header-and-body",
       "profile": "http3",
       "operation": "http.scope-and-body",
@@ -1602,6 +1698,36 @@
           ]
         ],
         "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.request-trailers-are-drained-without-asgi-event",
+      "profile": "http3",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "public.http3-request-trailers",
+        "contract": "http3-request-trailers-drained-as-body-only"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-request-trailers",
+        "headers": [
+          [
+            "x-parity",
+            "h3-trailers"
+          ]
+        ],
+        "body_base64": "aDMtdHJhaWxlcg==",
+        "trailers": [
+          [
+            "x-request-trailer",
+            "ignored-by-asgi"
+          ]
+        ]
       }
     },
     {
@@ -1726,6 +1852,65 @@
         "path": "/state",
         "headers": [],
         "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http3.native-app-task-panic-before-response-start",
+      "profile": "http3",
+      "operation": "http.application-error",
+      "covers": [
+        "http.application-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-app-task.panic-before-response-start",
+        "contract": "http3-500-error-body"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http3.connection-info-missing",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.connection-info.missing",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.connection-lifetime-missing",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.connection-lifetime.missing",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
       }
     },
     {
@@ -1855,6 +2040,116 @@
           ]
         ],
         "body_base64": "cGFydGlhbC11cGxvYWQ=",
+        "body_chunks_base64": [
+          "cGFydGlhbC0=",
+          "dXBsb2Fk"
+        ],
+        "leave_upload_open_until_response": true
+      }
+    },
+    {
+      "case_id": "fault.http3.native-body-pump-sender-closed-preserves-response",
+      "profile": "http3",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-body-pump.sender-closed",
+        "contract": "http3-native-body-pump-sender-closed-preserves-response"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-early-response-open-upload",
+        "headers": [
+          [
+            "content-length",
+            "100"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC11cGxvYWQ=",
+        "body_chunks_base64": [
+          "cGFydGlhbC0=",
+          "dXBsb2Fk"
+        ],
+        "leave_upload_open_until_response": true
+      }
+    },
+    {
+      "case_id": "fault.http3.native-body-pump-send-stop-preserves-response",
+      "profile": "http3",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-body-pump.send-stop-wait",
+        "contract": "http3-native-body-pump-send-stop-preserves-response"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-early-response-open-upload",
+        "headers": [
+          [
+            "content-length",
+            "100"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC11cGxvYWQ=",
+        "body_chunks_base64": [
+          "cGFydGlhbC0=",
+          "dXBsb2Fk"
+        ],
+        "leave_upload_open_until_response": true
+      }
+    },
+    {
+      "case_id": "fault.http3.native-body-pump-final-message-stop-preserves-response",
+      "profile": "http3",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-body-pump.final-message-stop-wait",
+        "contract": "http3-native-body-pump-final-message-stop-preserves-response"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/h3-early-response-open-upload",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http3.native-body-pump-cancel-before-first-poll-preserves-response",
+      "profile": "http3",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-body-pump.cancel-before-first-poll",
+        "contract": "http3-native-body-pump-pre-poll-cancel-preserves-response"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-early-response-open-upload",
+        "headers": [
+          [
+            "content-length",
+            "100"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC11cGxvYWQ=",
+        "body_chunks_base64": [
+          "cGFydGlhbC0=",
+          "dXBsb2Fk"
+        ],
         "leave_upload_open_until_response": true
       }
     },
@@ -1942,6 +2237,26 @@
       "covers": [
         "http3.handshake-recovery"
       ],
+      "request": {
+        "method": "GET",
+        "path": "/must-not-reach-app",
+        "headers": [],
+        "body_base64": "",
+        "invalid_alpn": true
+      }
+    },
+    {
+      "case_id": "fault.http3.legacy-invalid-alpn-handshake-recovers",
+      "profile": "http3",
+      "operation": "http3.handshake-recovery",
+      "covers": [
+        "http3.handshake-recovery"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.legacy-path.selection",
+        "contract": "http3-legacy-handshake-recovery"
+      },
       "request": {
         "method": "GET",
         "path": "/must-not-reach-app",
@@ -2314,6 +2629,75 @@
       }
     },
     {
+      "case_id": "fault.http3.native-body-pump-empty-data-frame-preserves-upload",
+      "profile": "http3",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-body-pump.empty-data-frame",
+        "contract": "http3-upload-body-pump-preserves-data"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/read-first-upload",
+        "headers": [],
+        "body_base64": "aDMtcmVxdWVzdC1ib2R5"
+      }
+    },
+    {
+      "case_id": "fault.http3.native-body-pump-stop-disconnect-followup",
+      "profile": "http3",
+      "operation": "http3.request-disconnect",
+      "covers": [
+        "http3.request-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-body-pump.stop-wait",
+        "contract": "http3-body-pump-error-stop-disconnect-followup-200"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-upload-disconnect",
+        "headers": [
+          [
+            "content-length",
+            "1000"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC1oM2JvZHk=",
+        "abort_after_body": true
+      }
+    },
+    {
+      "case_id": "fault.http3.native-body-pump-error-stop-disconnect-followup",
+      "profile": "http3",
+      "operation": "http3.request-disconnect",
+      "covers": [
+        "http3.request-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-body-pump.error-stop-wait",
+        "contract": "http3-body-pump-error-stop-disconnect-followup-200"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-upload-disconnect",
+        "headers": [
+          [
+            "content-length",
+            "1000"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC1oM2JvZHk=",
+        "abort_after_body": true
+      }
+    },
+    {
       "case_id": "fault.http3.body-pump-send-error-delivers-disconnect",
       "profile": "http3",
       "operation": "http.request-upload",
@@ -2381,6 +2765,26 @@
       "fault": {
         "point": "http3.connection-task.panic-during-shutdown",
         "contract": "http3-connection-task-shutdown-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "hold_open_for_shutdown": true
+      }
+    },
+    {
+      "case_id": "fault.http3.legacy-connection-task-shutdown-completes",
+      "profile": "http3",
+      "operation": "http3.connection-task-shutdown",
+      "covers": [
+        "http3.connection-task-shutdown"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.legacy-path.selection",
+        "contract": "http3-legacy-connection-task-shutdown-completes"
       },
       "request": {
         "method": "GET",
@@ -2567,6 +2971,31 @@
       "fault": {
         "point": "http3.body-pump.error.request-stop",
         "contract": "http3-body-pump-error-stop-disconnect-followup-200"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-upload-disconnect",
+        "headers": [
+          [
+            "content-length",
+            "1000"
+          ]
+        ],
+        "body_base64": "cGFydGlhbC1oM2JvZHk=",
+        "abort_after_body": true
+      }
+    },
+    {
+      "case_id": "fault.http3.legacy-body-pump-delivers-disconnect-followup",
+      "profile": "http3",
+      "operation": "http3.request-disconnect",
+      "covers": [
+        "http3.request-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.legacy-path.selection",
+        "contract": "http3-legacy-body-pump-delivers-disconnect-followup-200"
       },
       "request": {
         "method": "POST",

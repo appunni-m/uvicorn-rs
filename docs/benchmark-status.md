@@ -2,37 +2,160 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current hosted benchmark matrix: run #30 (2026-10-15/16)
+## Latest hosted benchmark attempt (2026-10-16)
 
-The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815)
-uses commit `5cb4b7b84`, which predates the current main commit
-`6c00d536c52f8f9dd2dc90ac67eb12bd0c58ca59`. Linux x86-64, Linux ARM64, and
-macOS ARM64 passed parity and the stock-FastAPI comparison. All three category
-jobs then failed in HTTP/2 before the planned 140 rows were complete. HTTP/1
-(300 rows), HTTP/3 (130 rows), WebSocket (60 rows), and lifecycle (20 rows)
-completed on each system. Timing-valid counts varied by host; the run has no
-complete multi-system acceptance result. The three platform artifacts are
-retained: [Linux ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815/artifacts/12001999347),
-[Linux x86-64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815/artifacts/12002004967),
-and [macOS ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38787712815/artifacts/12002479233).
+The [run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828500975)
+measured clean commit
+[`c2de34a08a0b5083f830cc59c88182378a7d1a81`](https://github.com/appunni-m/uvicorn-rs/commit/c2de34a08a0b5083f830cc59c88182378a7d1a81).
+Exact-binary public parity and the stock-FastAPI comparison completed on
+Linux x86-64, Linux ARM64, and macOS ARM64. All three category jobs stopped
+before the maintained matrix completed; no cross-system performance result is
+qualified.
 
-The matching exact-source CI
-[run 38790016719](https://github.com/appunni-m/uvicorn-rs/actions/runs/38790016719)
-has passed Rust quality, Rust 1.85, native FastAPI-RS composition, and
-installed-wheel public parity. Its coverage run completed all 717 indexed
-cases and measured 8,654/8,654 regions and 6,521/6,521 lines, then failed
-because the pending Coverage-MCP request text differed between the report
-producer and evidence checker. That wording is now aligned in source. Run #30
-is on an older commit and cannot establish performance for the current release
-candidate. Its first HTTP/2 failure on each host was: Rust/uvloop large response
-with two `BrokenPipe` diagnostics on Linux ARM64; Rust/uvloop multi-chunk
-response with eight client timeouts at the previous 10-second request deadline
-on Linux x86-64; and Rust/uvloop small upload with one `ConnectionReset`
-diagnostic on macOS ARM64. On this checkout, each exact workload/server pair
-passed a single correctness-gated replay with no unexpected server diagnostics.
-Those local timings are invalid because unrelated processes consumed roughly
-one or more CPU cores during sampling. Do not report a speedup without complete,
-qualified evidence on the release commit.
+| System | First HTTP/2 failure | Other category failures |
+|---|---|---|
+| Linux x86-64 | `protocol-scope`, `uvicorn-rs-asyncio`, repetition 1. All client response checks and graceful shutdown passed; the server emitted `HTTP connection failed: connection error`. | H1: `fastapi-request-upload`, Rust/uvloop repetition 5 (concurrency 64), and `fastapi-upload-1m-write-1k`, Rust/asyncio repetition 5 (concurrency 8), each hit a libcurl timeout. H3 `fixed`, `hypercorn-uvloop`, repetition 2: 2,573 responses passed before one response-header timeout; Hypercorn's log was empty. Lifecycle analysis rejected the Rust TCP graceful-timeout diagnostic. |
+| Linux ARM64 | `protocol-scope`, `uvicorn-rs-asyncio`, repetition 3, with the same generic connection diagnostic after successful responses and clean shutdown. | H1: `fastapi-upload-1m-write-1k`, Rust/uvloop repetition 4 and Rust/asyncio repetition 5 (both concurrency 8), each hit a libcurl timeout. Lifecycle analysis rejected the Rust TCP graceful-timeout diagnostic. |
+| macOS ARM64 | `request-upload`, `uvicorn-rs-asyncio`, repetition 1, with the same generic connection diagnostic after successful responses and clean shutdown. | H1 completed all 300 rows without request failures. Lifecycle analysis rejected the Rust TCP graceful-timeout diagnostic. |
+
+The H1 category processed all 300 planned rows on each system. Both Linux
+systems had 298 correctness-eligible rows; macOS had 300. The four failed
+Rust rows ran for about 15.4–18.0 seconds before libcurl reported
+`Timeout was reached`. The affected Starlette handlers then observed
+`ClientDisconnect`, and the Rust bridge logged a client disconnect before
+response start. These errors invalidate the affected samples and fail the
+Linux category jobs; their partial request rates are not performance data.
+On macOS, 30 matched H1 workload/loop pairs qualified. Twenty-seven Rust /
+Uvicorn throughput ratios were below 1.0; three were above 1.0. The median
+ratio was 0.748× (range 0.452–1.042×). This is evidence against a broad H1
+gain on that system, and does not provide the missing Linux measurements.
+
+The retained platform artifacts are
+[Linux x86-64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828500975/artifacts/12017648435),
+[Linux ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828500975/artifacts/12018946775),
+and [macOS ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828500975/artifacts/12019086925).
+
+### Focused hosted HTTP/2 diagnostic (latest rerun: 2026-10-17 local)
+
+The [focused Linux x86-64 run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38863229176)
+ran only `protocol-scope` against `uvicorn-rs-asyncio` on `h2-debug` commit
+`3d31e241cccfac939cb9403786f369d870f812da`. Attempt 7 completed all five
+correctness and lifecycle repetitions with zero request failures, empty server
+logs, and zero unexpected native errors or panic events. Repetitions 1, 3, 4,
+and 5 passed the host timing guard; repetition 2 was excluded for unrelated
+host CPU activity. Across the four valid samples, medians were 8,092
+requests/s, 7.58/13.09/15.55 ms p50/p95/p99 latency, 155 microseconds of
+server CPU per request, and 48.60 MiB peak server RSS. The retained
+[attempt-7 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38863229176/artifacts/12078313679)
+has SHA-256
+`8ccefead8c5144bd5ecf1859f0a663cdaaa7614ae51bc9bc7a2432450c71d58f`.
+
+Two additional focused hosted runs tested Linux ARM64 and the macOS upload
+case. Each completed all five correctness and lifecycle repetitions; all five
+timing samples on both systems passed the host guard. There were zero request
+failures, unexpected native errors, or generic connection diagnostics:
+
+| System and workload | Workflow run and artifact | Timing-valid samples | Median throughput | Median p50/p95/p99 | Server CPU/request | Peak server RSS |
+|---|---|---:|---:|---:|---:|---:|
+| Linux ARM64, `protocol-scope` | [run 38863847199](https://github.com/appunni-m/uvicorn-rs/actions/runs/38863847199), [artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38863847199/artifacts/12030229138); commit `4057bc320bf054ece2b3a1b511f5adcc5a72e79a` | 5/5 | 5,855 req/s | 10.98/16.70/19.19 ms | 202 µs | 48.47 MiB |
+| macOS ARM64, `request-upload` | [run 38864179333](https://github.com/appunni-m/uvicorn-rs/actions/runs/38864179333), [artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/38864179333/artifacts/12030394350); commit `31cf827cb732cb19152df9f458accb4770fedb1d` | 5/5 | 370 req/s | 161.59/268.77/321.99 ms | 3,294 µs | 177.13 MiB |
+
+These are target-only diagnostics with no matched Hypercorn reference. Their
+timings do not establish a speedup or satisfy comparative performance
+acceptance. Across the three focused hosted cases, the generic H2 connection
+error did not recur; the original full-matrix failures remain unexplained.
+The focused jobs do not cover other H2 workloads or runtime configurations.
+
+The current local source replayed the macOS `request-upload` case once with
+the same duration, warmup, concurrency, and server selection. Responses and
+shutdown passed with an empty server log; unrelated CPU activity invalidated
+the timing. This does not reproduce the hosted failure on Linux or prove a
+performance gain. Three additional focused replays on the current local
+source passed correctness and clean-shutdown checks:
+
+| Case | Result | Timing |
+|---|---|---|
+| H3 `fixed`, `hypercorn-uvloop`, repetition 1 | 9,583 responses, zero client failures, empty server log, graceful shutdown | Invalid: unrelated CPU spiked above the host limit, including Codex Renderer activity. |
+| H2 `protocol-scope`, `uvicorn-rs-asyncio`, repetition 1 | 38,117 responses, zero client failures, empty server log, graceful shutdown | Invalid: unrelated CPU exceeded the host limit, including `coverage-mcp` and `pillow-perfdb`. |
+| H2 `protocol-scope`, `uvicorn-rs-asyncio`, repetitions 1–5 | All five repetitions had zero client failures, clean server exit, empty logs, and no unexpected native errors. | Invalid in all five repetitions: unrelated host CPU activity. |
+
+The five-repetition H2 replay used 5-second duration, 1-second warmup, and
+concurrency 64 on the local Apple M3 Pro. Source identity was stable at
+`0b407a54c3baa9b0e33c3db3bad7b720ba686d6cbd4cb4c3daabf05093747918`; the
+normal native extension identity was stable at
+`2a5cbd4a2d4930430a51b65f9e6d8cbbabd894cf8c7dc43763d26ed44dfb0b3c`. The
+timing rows are not performance evidence. The raw ignored report is
+`target/benchmark-categories/h2-protocol-scope-singlecase-debug-current-20261016.json`.
+This local M3 replay did not reproduce the generic HTTP/2 connection
+diagnostic, so the hosted failure remains unresolved.
+
+### Focused FastAPI upload failure replay (2026-10-17)
+
+The current local source ran one matched repetition of
+`fastapi-upload-1m-write-1k` on Uvicorn/asyncio and uvicorn-rs/asyncio, using
+the stock FastAPI workload, 1 MiB requests sent in 1 KiB chunks, and
+concurrency 8. Both servers completed all requests and graceful shutdown with
+zero client failures. Throughput was 356.7 requests/s for Uvicorn and 351.5
+for uvicorn-rs; p50 latency was 21.92 ms and 22.56 ms, respectively. Both
+timing samples were rejected because unrelated host CPU activity ranged from
+about 256% to 340% of one core. This single macOS replay does not reproduce
+the hosted Linux timeout, and its measurements are not performance evidence.
+It identifies no root cause and supports no code change by itself. The raw
+ignored report is
+`target/benchmark-categories/fastapi-upload-1m-write-1k-focused-uvicorn-vs-rs-asyncio-20261017.json`.
+
+### HTTP/2 diagnostic status
+
+The benchmark client shares its H2 senders among workers, drops all sender
+handles after the workers finish, and awaits each H2 connection driver before
+reporting the sample. The hosted failure therefore is not explained by the
+client skipping its driver join. The original hosted server log contains only
+Hyper's generic `connection error`; that matrix commit did not log the
+concrete error detail. Focused debug-logging replays on Linux x86-64 and
+ARM64 passed five repetitions without reproducing it. The focused macOS
+upload replay also passed. These results narrow the issue to an intermittent
+or environment-specific failure, but do not identify whether it is a
+transport bug or expected peer-close condition. Preserve detailed connection
+logging and the strict lifecycle gate until a reproducing input provides the
+concrete error.
+
+These local runs and the later focused hosted H2 diagnostics do not explain
+the hosted H2 transport diagnostic or H3 timeout, and do not establish a
+performance gain. Their Git-ignored
+receipts are `target/benchmark-categories/h3-fixed-hypercorn-uvloop-retry2-20261016.json`,
+`target/benchmark-categories/h2-protocol-scope-rust-asyncio-single-20261016.json`,
+`target/benchmark-categories/h2-request-upload-rust-asyncio-exact-20261016.json`,
+and `target/benchmark-categories/h2-protocol-scope-singlecase-debug-current-20261016.json`.
+
+Latest clean hosted CI
+[run 38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888)
+on `27de9f3ac7d259a3a9b612c3247ab2c60eb27306` passed all 712 indexed cases,
+Rust quality and MSRV checks, installed-wheel public parity, and pinned native
+composition. Its older manifest measured 8,496/8,650 LLVM regions and
+6,486/6,592 lines, leaving 154 regions and 106 lines uncovered; package and
+Python-floor jobs were skipped. The preceding hosted run
+[38828501018](https://github.com/appunni-m/uvicorn-rs/actions/runs/38828501018)
+left 155 regions and 107 lines uncovered. A later local dirty-worktree
+run executed and passed all 748 current cases (534 ASGI and 214 native), with
+three clean full repeats of each matrix, and measured 100% executable
+source-span and normalized physical-line coverage. Its aggregate remains
+incomplete because one WebSocket TLS attribution attempt had a transient
+infrastructure failure before a passing retry; a separate focused rerun then
+passed cleanly. It does not replace a clean hosted release-candidate run.
+The release candidate remains blocked by the failed category matrix,
+`performance-acceptance.json` set to `not_proven`, and the need for clean
+exact-source release evidence. See [release status](releases.md)
+and the [current coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
+
+The latest local host-only preflight, recorded at
+`target/benchmark-preflight/kata-finish-20261017-04.json`, sampled eight
+0.25-second intervals on macOS 15.7.7 ARM64 (12 logical CPUs) and rejected
+timing before launch. Unrelated aggregate CPU ranged from 300.3% to 316.8%;
+three `python3.12` processes each reached 101.9–104.6% of one logical core.
+The aggregate and repeated per-process guards rejected the host. No timing
+benchmark started and no process was stopped. The receipt records process
+names and PIDs only; command lines were not read. Recheck the host before
+attempting a local matched pair.
 
 ## Previous completed hosted benchmark matrix: run #29 (2026-10-14)
 

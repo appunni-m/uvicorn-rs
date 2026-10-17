@@ -1703,6 +1703,22 @@
       }
     },
     {
+      "case_id": "http1.reset-after-complete-request-while-receive-waits",
+      "profile": "http1",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "disconnect": {
+        "path": "/disconnect-after-complete-request",
+        "followup_path": "/disconnect-status",
+        "empty_request": true,
+        "wait_event": "http.disconnect.waiting-after-complete-request",
+        "wait_event_after_disconnect": "http.disconnect.after-complete-request:http.disconnect",
+        "reset_after_complete_request": true
+      }
+    },
+    {
       "case_id": "fault.http1.scope-asgi-version-memory-error",
       "profile": "http1",
       "operation": "http.keepalive-sequence",
@@ -2979,6 +2995,134 @@
       ]
     },
     {
+      "case_id": "fault.http1.connection-info-missing",
+      "profile": "http1",
+      "operation": "http.keepalive-sequence",
+      "covers": [
+        "http.keepalive-sequence"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.connection-info.missing",
+        "contract": "http-native-service-error-close-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=missing-connection-info",
+          "headers": [
+            [
+              "Connection",
+              "close"
+            ]
+          ],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=followup",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "fault.http1.connection-lifetime-missing",
+      "profile": "http1",
+      "operation": "http.keepalive-sequence",
+      "covers": [
+        "http.keepalive-sequence"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.connection-lifetime.missing",
+        "contract": "http-native-service-error-close-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=missing-connection-lifetime",
+          "headers": [
+            [
+              "Connection",
+              "close"
+            ]
+          ],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=followup",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "fault.http1.peer-read-half-closed-missing",
+      "profile": "http1",
+      "operation": "http.keepalive-sequence",
+      "covers": [
+        "http.keepalive-sequence"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.peer-read-half-closed.missing",
+        "contract": "http-native-service-error-close-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=missing-peer-read-half-closed",
+          "headers": [
+            [
+              "Connection",
+              "close"
+            ]
+          ],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=followup",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "fault.http1.peer-read-failed-missing",
+      "profile": "http1",
+      "operation": "http.keepalive-sequence",
+      "covers": [
+        "http.keepalive-sequence"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.peer-read-failed.missing",
+        "contract": "http-native-service-error-close-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=missing-peer-read-failed",
+          "headers": [
+            [
+              "Connection",
+              "close"
+            ]
+          ],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=followup",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
       "case_id": "http1.connection-close-first-request-then-reconnect",
       "profile": "http1",
       "operation": "http.keepalive-sequence",
@@ -3055,6 +3199,26 @@
         "content_length": 8,
         "partial_body_base64": "YWJj",
         "reset": true
+      }
+    },
+    {
+      "case_id": "fault.http1.connection-lifetime-closed-disconnect",
+      "profile": "http1",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.connection-lifetime.wait-complete",
+        "contract": "http-connection-lifetime-closed-disconnect-followup-200"
+      },
+      "disconnect": {
+        "path": "/disconnect-after-complete-request",
+        "followup_path": "/disconnect-status",
+        "empty_request": true,
+        "wait_event": "http.disconnect.waiting-after-complete-request",
+        "wait_event_after_disconnect": "http.disconnect.after-complete-request:http.disconnect"
       }
     },
     {

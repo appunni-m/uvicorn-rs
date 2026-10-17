@@ -47,9 +47,9 @@ use tower_service::Service;
 use uvicorn_rs::{
     ApplicationLifecycle, ApplicationLifecycleError, ApplicationLifecycleFuture,
     ApplicationLifecycleStage, ConnectionInfo, ConnectionLifetime, ConnectionUpgrade,
-    PeerReadHalfClosed, RequestEndReason, RequestLifetime, ServerErrorEvent, ServerErrorObserver,
-    ServerErrorPhase, TransportKind, WebSocketCloseCode, WebSocketCloseFrame, WebSocketError,
-    WebSocketMessage, WebSocketSession, WebSocketUpgrade, WebSocketUpgradeError,
+    PeerReadFailed, PeerReadHalfClosed, RequestEndReason, RequestLifetime, ServerErrorEvent,
+    ServerErrorObserver, ServerErrorPhase, TransportKind, WebSocketCloseCode, WebSocketCloseFrame,
+    WebSocketError, WebSocketMessage, WebSocketSession, WebSocketUpgrade, WebSocketUpgradeError,
 };
 
 type AppBody = UnsyncBoxBody<Bytes, io::Error>;
@@ -343,10 +343,12 @@ struct AppState {
     peer_read_half_close_observation: watch::Sender<Option<String>>,
     proactive_peer_read: watch::Sender<Option<PeerReadHalfClosed>>,
     peer_read_half_close_unavailable_result: watch::Sender<Option<String>>,
+    peer_read_failed_unavailable_result: watch::Sender<Option<String>>,
     response_chunks_polled: Arc<AtomicUsize>,
     response_streams_dropped: Arc<AtomicUsize>,
     upload_bytes_received: AtomicUsize,
     upload_body_errors: AtomicUsize,
+    proactive_reset_response_release: watch::Sender<bool>,
     http3_body_pending: AtomicBool,
     http3_body_errors: AtomicUsize,
     http3_response_cancel_pending: Arc<AtomicBool>,
@@ -1000,6 +1002,7 @@ where
         let connection_lifetime = request.extensions().get::<ConnectionLifetime>().cloned();
         let connection_upgrade = request.extensions().get::<ConnectionUpgrade>().cloned();
         let peer_read_half_closed = request.extensions().get::<PeerReadHalfClosed>().cloned();
+        let peer_read_failed = request.extensions().get::<PeerReadFailed>().cloned();
         let peer_address = connection_info.as_ref().map(ConnectionInfo::peer_addr);
         let connection_security = connection_info.as_ref().map(|info| {
             let alpn = info
@@ -1237,6 +1240,29 @@ where
                             Err(error) => format!(
                                 "read_half_closed={};error={error};source_none={}\n",
                                 peer_read_half_closed.is_read_half_closed(),
+                                error.source().is_none()
+                            ),
+                        };
+                        outcome.send_replace(Some(value));
+                    });
+                    response(StatusCode::OK, b"watching\n")
+                }
+                "/peer-read-failed-shutdown-watch" => {
+                    let Some(mut peer_read_failed) = peer_read_failed else {
+                        return Err(io::Error::other(
+                            "peer read-failure observation extension is missing",
+                        ));
+                    };
+                    state.peer_read_failed_unavailable_result.send_replace(None);
+                    let outcome = state.peer_read_failed_unavailable_result.clone();
+                    tokio::spawn(async move {
+                        let result = peer_read_failed.wait_until_failed().await;
+                        let value = match result {
+                            Ok(kind) => format!(
+                                "read_failed=true;error=none;kind={kind:?};source_none=true\n"
+                            ),
+                            Err(error) => format!(
+                                "read_failed=false;error={error};source_none={}\n",
                                 error.source().is_none()
                             ),
                         };
@@ -1722,6 +1748,79 @@ where
                     }
                     response(StatusCode::OK, b"upload-complete\n")
                 }
+                "/proactive-upload-reset-response" => {
+                    state.upload_bytes_received.store(0, Ordering::Release);
+                    state.upload_body_errors.store(0, Ordering::Release);
+                    state.response_chunks_polled.store(0, Ordering::Release);
+                    state.response_streams_dropped.store(0, Ordering::Release);
+                    state.proactive_reset_response_release.send_replace(false);
+                    let mut request_body = Box::pin(request.into_body());
+                    let mut reset_observed = false;
+                    while let Some(frame) = request_body.frame().await {
+                        match frame {
+                            Ok(frame) => {
+                                if let Ok(data) = frame.into_data() {
+                                    state
+                                        .upload_bytes_received
+                                        .fetch_add(data.len(), Ordering::AcqRel);
+                                }
+                            }
+                            Err(_) => {
+                                state.upload_body_errors.fetch_add(1, Ordering::AcqRel);
+                                reset_observed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !reset_observed {
+                        return Err(io::Error::other(
+                            "active-response contract request ended without a body read error",
+                        ));
+                    }
+                    let signal = DropSignal(Arc::clone(&state.response_streams_dropped));
+                    let stream_state = Arc::clone(&state);
+                    let release = state.proactive_reset_response_release.subscribe();
+                    let body = stream::unfold(
+                        (0_u8, signal, stream_state, release),
+                        |(step, signal, state, mut release)| async move {
+                            if step != 0 {
+                                return std::future::pending::<
+                                    Option<(
+                                        Result<http_body::Frame<Bytes>, io::Error>,
+                                        (u8, DropSignal, Arc<AppState>, watch::Receiver<bool>),
+                                    )>,
+                                >()
+                                .await;
+                            }
+                            state.response_chunks_polled.fetch_add(1, Ordering::AcqRel);
+                            while !*release.borrow_and_update() {
+                                if release.changed().await.is_err() {
+                                    return None;
+                                }
+                            }
+                            Some((
+                                Ok(http_body::Frame::data(Bytes::from_static(b"first\n"))),
+                                (1, signal, state, release),
+                            ))
+                        },
+                    );
+                    stream_response(body)
+                }
+                "/proactive-upload-reset-response-release" => {
+                    state.proactive_reset_response_release.send_replace(true);
+                    response(StatusCode::OK, b"released\n")
+                }
+                "/proactive-upload-reset-response-state" => response(
+                    StatusCode::OK,
+                    format!(
+                        "bytes={};errors={};polled={};dropped={}\n",
+                        state.upload_bytes_received.load(Ordering::Acquire),
+                        state.upload_body_errors.load(Ordering::Acquire),
+                        state.response_chunks_polled.load(Ordering::Acquire),
+                        state.response_streams_dropped.load(Ordering::Acquire)
+                    )
+                    .as_bytes(),
+                ),
                 "/upload-cancel-state" => response(
                     StatusCode::OK,
                     format!(
@@ -2763,6 +2862,9 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http3-response-send-cancel"
             || operation == "native-http1-proactive-peer-eof"
             || operation == "native-http1-proactive-upload-reset"
+            || operation == "native-http1-peer-read-error-response-cancel"
+            || operation == "native-http1-peer-read-activity-watch-outcomes"
+            || operation == "native-connection-error-source-contract"
             || operation == "native-http1-proactive-upload-flood-shutdown"
             || operation == "native-http1-peer-read-receiver-closed"
             || operation == "native-http1-peer-read-adapter-contract"
@@ -2773,6 +2875,7 @@ async fn main() -> ProbeResult<()> {
             || operation == "native-http1-service-panic-recovery"
             || operation == "native-http1-upgrade-session"
             || operation == "native-http1-websocket"
+            || operation == "native-request-lifetime-body-missing-guard"
         {
             if operation.starts_with("native-lifecycle-") {
                 run_isolated_lifecycle_case(case).await?;
@@ -2790,6 +2893,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http1_upgrade_session_case(case).await?;
             } else if operation == "native-http1-websocket" {
                 run_isolated_http1_websocket_case(case).await?;
+            } else if operation == "native-request-lifetime-body-missing-guard" {
+                run_request_lifetime_body_missing_guard_case(case).await?;
             } else if operation == "native-server-graceful-deadline-overflow" {
                 run_isolated_graceful_deadline_overflow_case(case).await?;
             } else if operation == "native-server-listener-accept-error" {
@@ -2877,8 +2982,44 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http3_response_send_cancel_case(case).await?;
             } else if operation == "native-http1-proactive-peer-eof" {
                 run_isolated_proactive_peer_eof_case(case).await?;
-            } else if operation == "native-http1-proactive-upload-reset" {
+            } else if matches!(
+                operation,
+                "native-http1-proactive-upload-reset"
+                    | "native-http1-peer-read-error-response-cancel"
+            ) {
                 run_isolated_proactive_upload_reset_case(case).await?;
+            } else if operation == "native-http1-peer-read-activity-watch-outcomes" {
+                #[cfg(coverage)]
+                {
+                    uvicorn_rs::coverage_http1_response_activity_watch_outcomes().await?;
+                    let point = case["fault"]["point"].as_str().ok_or_else(|| {
+                        io::Error::new(io::ErrorKind::InvalidData, "fault point is missing")
+                    })?;
+                    let mut output = io::stdout().lock();
+                    writeln!(output, "FAULT_CONSUMED {point}")?;
+                    output.flush()?;
+                }
+                #[cfg(not(coverage))]
+                return Err(io::Error::other(
+                    "HTTP/1 response-activity watch contract requires a coverage build",
+                )
+                .into());
+            } else if operation == "native-connection-error-source-contract" {
+                #[cfg(coverage)]
+                {
+                    uvicorn_rs::coverage_connection_error_source_variants()?;
+                    let point = case["fault"]["point"].as_str().ok_or_else(|| {
+                        io::Error::new(io::ErrorKind::InvalidData, "fault point is missing")
+                    })?;
+                    let mut output = io::stdout().lock();
+                    writeln!(output, "FAULT_CONSUMED {point}")?;
+                    output.flush()?;
+                }
+                #[cfg(not(coverage))]
+                return Err(io::Error::other(
+                    "connection error source contract requires a coverage build",
+                )
+                .into());
             } else if operation == "native-http1-proactive-upload-flood-shutdown" {
                 run_isolated_proactive_upload_flood_case(case).await?;
             } else if operation == "native-http1-peer-read-receiver-closed" {
@@ -3098,6 +3239,47 @@ async fn run_isolated_lifecycle_case(case: &Value) -> ProbeResult<()> {
             format!("unsupported lifecycle protocol {protocol:?}"),
         )
         .into()),
+    }
+}
+
+async fn run_request_lifetime_body_missing_guard_case(case: &Value) -> ProbeResult<()> {
+    #[cfg(coverage)]
+    {
+        if required_str(case, "scenario")? != "guard-missing" {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unsupported request-lifetime body fault scenario",
+            )
+            .into());
+        }
+        let input = required_str(case, "body")?;
+        let expected = required_str(case, "expected_body")?;
+        let body = uvicorn_rs::coverage_request_lifetime_body_missing_guard(
+            Bytes::copy_from_slice(input.as_bytes()),
+        )
+        .await;
+        if body.as_ref() != expected.as_bytes() {
+            return Err(io::Error::other(format!(
+                "{}: missing-guard response body differed: {body:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        let point = case["fault"]["point"]
+            .as_str()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "fault point is missing"))?;
+        let mut output = io::stdout().lock();
+        writeln!(output, "FAULT_CONSUMED {point}")?;
+        output.flush()?;
+        Ok(())
+    }
+    #[cfg(not(coverage))]
+    {
+        let _ = case;
+        Err(
+            io::Error::other("request-lifetime missing-guard contract requires a coverage build")
+                .into(),
+        )
     }
 }
 
@@ -7607,8 +7789,10 @@ fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<A
     let (peer_read_half_close_observation, _) = watch::channel(None);
     let (proactive_peer_read, _) = watch::channel(None);
     let (peer_read_half_close_unavailable_result, _) = watch::channel(None);
+    let (peer_read_failed_unavailable_result, _) = watch::channel(None);
     let (http3_response_cancel_release, _) = watch::channel(false);
     let (http3_response_cancel_dropped, _) = watch::channel(false);
+    let (proactive_reset_response_release, _) = watch::channel(false);
     let (upgrade_registration_outcome, _) = watch::channel(None);
     let (websocket_error_observation, _) = watch::channel(None);
     let (websocket_receive_cancel_observation, _) = watch::channel(None);
@@ -7634,10 +7818,12 @@ fn contract_app_with_state(shutdown: watch::Sender<bool>) -> (ContractApp, Arc<A
         peer_read_half_close_observation,
         proactive_peer_read,
         peer_read_half_close_unavailable_result,
+        peer_read_failed_unavailable_result,
         response_chunks_polled: Arc::new(AtomicUsize::new(0)),
         response_streams_dropped: Arc::new(AtomicUsize::new(0)),
         upload_bytes_received: AtomicUsize::new(0),
         upload_body_errors: AtomicUsize::new(0),
+        proactive_reset_response_release,
         http3_body_pending: AtomicBool::new(false),
         http3_body_errors: AtomicUsize::new(0),
         http3_response_cancel_pending: Arc::new(AtomicBool::new(false)),
@@ -7705,6 +7891,9 @@ async fn run_cases(
             || operation == "native-http3-response-send-cancel"
             || operation == "native-http1-proactive-peer-eof"
             || operation == "native-http1-proactive-upload-reset"
+            || operation == "native-http1-peer-read-error-response-cancel"
+            || operation == "native-http1-peer-read-activity-watch-outcomes"
+            || operation == "native-connection-error-source-contract"
             || operation == "native-http1-proactive-upload-flood-shutdown"
             || operation == "native-http1-peer-read-receiver-closed"
             || operation == "native-http1-peer-read-adapter-contract"
@@ -7715,6 +7904,7 @@ async fn run_cases(
             || operation == "native-http1-service-panic-recovery"
             || operation == "native-http1-upgrade-session"
             || operation == "native-http1-websocket"
+            || operation == "native-request-lifetime-body-missing-guard"
         {
             continue;
         }
@@ -10091,34 +10281,78 @@ async fn run_http3_request_trailers_case(
     client_config: &quinn::ClientConfig,
     case: &Value,
 ) -> ProbeResult<()> {
-    let (endpoint, mut sender) = new_http3_client(address, client_config).await?;
-    let mut trailers = http::HeaderMap::new();
-    trailers.insert("x-contract-trailer", "verified".parse()?);
-    let mut stream = send_http3_request_with_trailers(
-        &mut sender,
-        address,
-        required_str(case, "method")?,
-        required_str(case, "path")?,
-        required_str(case, "body")?.as_bytes(),
-        Some(trailers),
-    )
-    .await?;
-    let (status, response_body, _) = collect_http3_response(&mut stream).await?;
-    let expected_status = case["expected_status"]
-        .as_u64()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected_status is missing"))?
-        as u16;
-    let expected_body = required_str(case, "expected_body")?;
-    endpoint.close(quinn::VarInt::from_u32(0), b"HTTP/3 case complete");
-    endpoint.wait_idle().await;
-    if status != expected_status || response_body != expected_body.as_bytes() {
-        return Err(io::Error::other(format!(
-            "{}: HTTP/3 request trailer was not preserved: status={status}, body={:?}",
-            required_str(case, "id")?,
-            String::from_utf8_lossy(&response_body)
-        ))
-        .into());
+    const FAULT_POINT: &str = "http3.request-body.trailers-pending-once";
+    let fault_point = case
+        .get("fault")
+        .and_then(|fault| fault.get("point"))
+        .and_then(Value::as_str);
+    let fault_requested = fault_point.is_some();
+    if fault_requested {
+        if case.get("verification").and_then(Value::as_str) != Some("fault-contract")
+            || required_str(case, "scenario")? != "trailers-pending"
+            || fault_point != Some(FAULT_POINT)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "HTTP/3 request-trailer pending fault metadata differs from its scenario",
+            )
+            .into());
+        }
+        #[cfg(coverage)]
+        if !uvicorn_rs::arm_http3_request_body_trailers_pending_fault() {
+            return Err(io::Error::other(format!("{FAULT_POINT} could not be armed")).into());
+        }
+        #[cfg(not(coverage))]
+        return Err(io::Error::other(format!("{FAULT_POINT} requires a coverage build")).into());
     }
+
+    let outcome = async {
+        let (endpoint, mut sender) = new_http3_client(address, client_config).await?;
+        let mut trailers = http::HeaderMap::new();
+        trailers.insert("x-contract-trailer", "verified".parse()?);
+        let mut stream = send_http3_request_with_trailers(
+            &mut sender,
+            address,
+            required_str(case, "method")?,
+            required_str(case, "path")?,
+            required_str(case, "body")?.as_bytes(),
+            Some(trailers),
+        )
+        .await?;
+        let (status, response_body, _) = collect_http3_response(&mut stream).await?;
+        let expected_status = case["expected_status"].as_u64().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "expected_status is missing")
+        })? as u16;
+        let expected_body = required_str(case, "expected_body")?;
+        endpoint.close(quinn::VarInt::from_u32(0), b"HTTP/3 case complete");
+        endpoint.wait_idle().await;
+        if status != expected_status || response_body != expected_body.as_bytes() {
+            return Err(io::Error::other(format!(
+                "{}: HTTP/3 request trailer was not preserved: status={status}, body={:?}",
+                required_str(case, "id")?,
+                String::from_utf8_lossy(&response_body)
+            ))
+            .into());
+        }
+        Ok::<(), Box<dyn Error + Send + Sync>>(())
+    }
+    .await;
+
+    if fault_requested {
+        #[cfg(coverage)]
+        {
+            let fault_consumed = uvicorn_rs::finish_http3_request_body_trailers_pending_fault();
+            if !fault_consumed {
+                outcome?;
+                return Err(io::Error::other(format!(
+                    "{FAULT_POINT} was not consumed while reading the request trailers"
+                ))
+                .into());
+            }
+            writeln!(std::io::stdout().lock(), "FAULT_CONSUMED {FAULT_POINT}")?;
+        }
+    }
+    outcome?;
     Ok(())
 }
 
@@ -12316,8 +12550,10 @@ async fn run_graceful_drain_case(address: std::net::SocketAddr, case: &Value) ->
 }
 
 async fn run_isolated_graceful_case(case: &Value) -> ProbeResult<()> {
-    if case["peer_read_half_close_unavailable"].as_bool() == Some(true) {
-        return run_isolated_peer_read_half_close_unavailable_case(case).await;
+    if case["peer_read_half_close_unavailable"].as_bool() == Some(true)
+        || case["peer_read_failed_unavailable"].as_bool() == Some(true)
+    {
+        return run_isolated_peer_read_observer_unavailable_case(case).await;
     }
     if required_str(case, "operation")? == "http3-graceful-drain" {
         return run_isolated_http3_graceful_case(case).await;
@@ -12510,9 +12746,53 @@ async fn run_isolated_proactive_peer_eof_case(case: &Value) -> ProbeResult<()> {
 }
 
 async fn run_isolated_proactive_upload_reset_case(case: &Value) -> ProbeResult<()> {
+    const FAULT_POINT: &str = "http1.peer-read.failure-after-data";
+    let fault_requested = case
+        .get("fault")
+        .and_then(|fault| fault.get("point"))
+        .and_then(Value::as_str)
+        == Some(FAULT_POINT);
+    if case.get("verification").and_then(Value::as_str) == Some("fault-contract")
+        && (!fault_requested || required_str(case, "scenario")? != "failure-after-data")
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "HTTP/1 peer-read failure fault metadata differs from its scenario",
+        )
+        .into());
+    }
+    #[cfg(coverage)]
+    let fault_armed =
+        !fault_requested || uvicorn_rs::arm_http1_peer_read_failure_after_data_fault();
+    #[cfg(not(coverage))]
+    let fault_armed = !fault_requested;
+    if !fault_armed {
+        return Err(io::Error::other(format!(
+            "{FAULT_POINT} could not be armed; this case requires a coverage build"
+        ))
+        .into());
+    }
+
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let observed_errors = Arc::new(Mutex::new(Vec::<ObservedServerError>::new()));
+    let error_observer = case.get("expected_server_error_message").map(|_| {
+        let error_log = Arc::clone(&observed_errors);
+        Arc::new(move |event: ServerErrorEvent<'_>| {
+            if let Ok(mut observations) = error_log.lock() {
+                observations.push(ObservedServerError {
+                    phase: event.phase(),
+                    peer_addr: event.peer_addr(),
+                    is_io_error: error_chain_contains::<io::Error>(event.error()),
+                    is_direct_io_error: event.error().is::<io::Error>(),
+                    has_error_source: event.error().source().is_some(),
+                    h3_error_code: h3_connection_error_code(event.error()),
+                    message: event.error().to_string(),
+                });
+            }
+        }) as ServerErrorObserver
+    });
     let server = tokio::spawn(uvicorn_rs::serve_tcp(
         listener,
         contract_app(shutdown_sender.clone()),
@@ -12520,16 +12800,40 @@ async fn run_isolated_proactive_upload_reset_case(case: &Value) -> ProbeResult<(
         uvicorn_rs::ServerConfig {
             peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::Proactive,
             graceful_shutdown_timeout: Duration::from_secs(1),
+            error_observer,
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
 
-    let result = run_request_upload_disconnect_case(address, case).await;
+    let result =
+        if case["connection_completes_before_response_body_activity"].as_bool() == Some(true) {
+            run_proactive_upload_reset_until_connection_completion(address, case).await
+        } else if case["response_after_request_body_error"].as_bool() == Some(true) {
+            run_proactive_upload_reset_with_active_response(address, case).await
+        } else {
+            run_request_upload_disconnect_case(address, case).await
+        };
     shutdown_sender.send_replace(true);
     let server_result = timeout(Duration::from_secs(3), server).await;
+    #[cfg(coverage)]
+    let fault_consumed =
+        fault_requested && uvicorn_rs::finish_http1_peer_read_failure_after_data_fault();
+    #[cfg(not(coverage))]
+    let fault_consumed = false;
+    if fault_consumed {
+        let mut output = io::stdout().lock();
+        writeln!(output, "FAULT_CONSUMED {FAULT_POINT}")?;
+        output.flush()?;
+    }
     result?;
+    if fault_requested && !fault_consumed {
+        return Err(io::Error::other(format!("{FAULT_POINT} was not consumed")).into());
+    }
     match server_result {
-        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Ok(()))) => {
+            verify_server_error_observation(case, observed_errors.as_ref())?;
+            Ok(())
+        }
         Ok(Ok(Err(error))) => Err(error.into()),
         Ok(Err(error)) => Err(error.into()),
         Err(_) => Err(io::Error::new(
@@ -12538,6 +12842,369 @@ async fn run_isolated_proactive_upload_reset_case(case: &Value) -> ProbeResult<(
         )
         .into()),
     }
+}
+
+fn verify_server_error_observation(
+    case: &Value,
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+) -> ProbeResult<()> {
+    let Some(expected_message) = case
+        .get("expected_server_error_message")
+        .and_then(Value::as_str)
+    else {
+        return Ok(());
+    };
+    let expected_phase = required_str(case, "expected_server_error_phase")?;
+    let expected_has_source = case["expected_server_error_has_source"]
+        .as_bool()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "expected_server_error_has_source must be a boolean",
+            )
+        })?;
+    let observations = observed_errors
+        .lock()
+        .map_err(|_| io::Error::other("server error observation lock was poisoned"))?;
+    let matching = observations
+        .iter()
+        .filter(|observation| {
+            server_error_phase_name(observation.phase) == expected_phase
+                && observation.message == expected_message
+        })
+        .collect::<Vec<_>>();
+    if matching.len() != 1
+        || matching[0].peer_addr.is_none()
+        || matching[0].has_error_source != expected_has_source
+    {
+        return Err(io::Error::other(format!(
+            "{}: server error observation differed: expected phase={expected_phase}, message={expected_message:?}, has_source={expected_has_source}; observations={observations:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn run_proactive_upload_reset_until_connection_completion(
+    address: SocketAddr,
+    case: &Value,
+) -> ProbeResult<()> {
+    let path = required_str(case, "path")?;
+    let partial_body = required_str(case, "partial_body")?.as_bytes();
+    let declared_length = case["declared_content_length"].as_u64().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "case has no declared_content_length",
+        )
+    })?;
+    if partial_body.is_empty() || partial_body.len() as u64 >= declared_length {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "connection-completion reset requires a partial request body",
+        )
+        .into());
+    }
+
+    let mut upload = TcpStream::connect(address).await?;
+    write_partial_http1_upload(&mut upload, case, path, partial_body, declared_length).await?;
+
+    let expected_received = case["expected_received_bytes"].as_u64().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "case has no expected_received_bytes",
+        )
+    })?;
+    if partial_body.len() as u64 != expected_received {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "partial body length differs from expected_received_bytes",
+        )
+        .into());
+    }
+    let expected_errors = case["expected_body_errors"].as_u64().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "case has no expected_body_errors",
+        )
+    })?;
+    let expected_dropped = case["expected_dropped_tasks"].as_u64().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "case has no expected_dropped_tasks",
+        )
+    })?;
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let (received, errors, dropped) =
+            read_upload_state(address, required_str(case, "state_path")?).await?;
+        if received == expected_received && errors == expected_errors && dropped == expected_dropped
+        {
+            break;
+        }
+        if received > expected_received || errors > expected_errors || dropped > expected_dropped {
+            return Err(io::Error::other(format!(
+                "{}: injected peer-read failure state differs (bytes={received}, errors={errors}, dropped={dropped})",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        if Instant::now() >= deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!(
+                    "{}: application did not finish after the injected peer-read failure (bytes={received}, errors={errors}, dropped={dropped})",
+                    required_str(case, "id")?
+                ),
+            )
+            .into());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
+    let (status, headers) = read_response_head(&mut upload).await?;
+    let (response_body, complete) = read_response_body(&mut upload, &headers).await?;
+    if status != required_status(case, "expected_error_response_status")?
+        || response_body != required_str(case, "expected_error_response_body")?.as_bytes()
+        || !complete
+    {
+        return Err(io::Error::other(format!(
+            "{}: application error response differed (status={status}, complete={complete}, body={response_body:?})",
+            required_str(case, "id")?,
+        ))
+        .into());
+    }
+
+    let (status, body, complete) = read_http1_case_response(
+        address,
+        None,
+        "GET",
+        required_str(case, "recovery_path")?,
+        b"",
+    )
+    .await?;
+    if status != required_status(case, "recovery_status")?
+        || body != required_str(case, "recovery_body")?.as_bytes()
+        || !complete
+    {
+        return Err(io::Error::other(format!(
+            "{}: listener did not recover after connection completion",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
+}
+
+async fn write_partial_http1_upload(
+    upload: &mut TcpStream,
+    case: &Value,
+    path: &str,
+    partial_body: &[u8],
+    declared_length: u64,
+) -> ProbeResult<()> {
+    let headers = format!(
+        "{} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: {declared_length}\r\n\r\n",
+        required_str(case, "method")?
+    );
+    // A separate header write lets the injected peer-read error race ahead of
+    // the request body. Keep both parts in one write so the fault case always
+    // starts after the partial body is available to the HTTP parser.
+    let mut request = Vec::with_capacity(headers.len() + partial_body.len());
+    request.extend_from_slice(headers.as_bytes());
+    request.extend_from_slice(partial_body);
+    upload.write_all(&request).await?;
+    upload.flush().await?;
+    Ok(())
+}
+
+async fn run_proactive_upload_reset_with_active_response(
+    address: SocketAddr,
+    case: &Value,
+) -> ProbeResult<()> {
+    let path = required_str(case, "path")?;
+    let partial_body = required_str(case, "partial_body")?.as_bytes();
+    let declared_length = case["declared_content_length"].as_u64().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "case has no declared_content_length",
+        )
+    })?;
+    if partial_body.is_empty() || partial_body.len() as u64 >= declared_length {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "active-response reset requires a partial request body",
+        )
+        .into());
+    }
+
+    let mut upload = TcpStream::connect(address).await?;
+    write_partial_http1_upload(&mut upload, case, path, partial_body, declared_length).await?;
+
+    let state_path = required_str(case, "state_path")?;
+    let bytes = partial_body.len();
+    let expected_bytes = case["expected_received_bytes"].as_u64().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "case has no expected_received_bytes",
+        )
+    })?;
+    if bytes as u64 != expected_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "partial body length differs from expected_received_bytes",
+        )
+        .into());
+    }
+    let expected_body_errors = case["expected_body_errors"].as_u64().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "case has no expected_body_errors",
+        )
+    })?;
+    let expected_polled = case["expected_response_chunks_polled"]
+        .as_u64()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "case has no expected_response_chunks_polled",
+            )
+        })?;
+    let expected_dropped = case["expected_response_stream_drops"]
+        .as_u64()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "case has no expected_response_stream_drops",
+            )
+        })?;
+    let ready_state = format!("bytes={expected_bytes};errors=0;polled=0;dropped=0\n");
+    let injected_failure = case["injected_peer_read_failure"].as_bool() == Some(true);
+    if !injected_failure {
+        let ready_deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let (status, state, complete) =
+                read_http1_case_response(address, None, "GET", state_path, b"").await?;
+            if status != StatusCode::OK.as_u16() || !complete {
+                return Err(io::Error::other(format!(
+                    "{}: upload state request did not complete before reset",
+                    required_str(case, "id")?
+                ))
+                .into());
+            }
+            if state == ready_state.as_bytes() {
+                break;
+            }
+            if Instant::now() >= ready_deadline {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!(
+                        "{}: service did not consume the partial upload before reset (state={:?})",
+                        required_str(case, "id")?,
+                        String::from_utf8_lossy(&state)
+                    ),
+                )
+                .into());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    if !injected_failure {
+        socket2::SockRef::from(&upload).set_linger(Some(Duration::ZERO))?;
+        drop(upload);
+    }
+    let pending_state = format!(
+        "bytes={expected_bytes};errors={expected_body_errors};polled={expected_polled};dropped=0\n"
+    );
+    let pending_deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let (status, state, complete) =
+            read_http1_case_response(address, None, "GET", state_path, b"").await?;
+        if status != StatusCode::OK.as_u16() || !complete {
+            return Err(io::Error::other(format!(
+                "{}: pending response state request did not complete",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        if state == pending_state.as_bytes() {
+            break;
+        }
+        if Instant::now() >= pending_deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!(
+                    "{}: app did not hold its response before release (state={:?})",
+                    required_str(case, "id")?,
+                    String::from_utf8_lossy(&state)
+                ),
+            )
+            .into());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
+    let (status, body, complete) = read_http1_case_response(
+        address,
+        None,
+        "GET",
+        required_str(case, "release_path")?,
+        b"",
+    )
+    .await?;
+    if status != StatusCode::OK.as_u16() || body != b"released\n" || !complete {
+        return Err(io::Error::other(format!(
+            "{}: response release control request failed",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let expected_state = format!(
+        "bytes={expected_bytes};errors={expected_body_errors};polled={expected_polled};dropped={expected_dropped}\n"
+    );
+    loop {
+        let (status, state, complete) =
+            read_http1_case_response(address, None, "GET", state_path, b"").await?;
+        if status == StatusCode::OK.as_u16() && complete && state == expected_state.as_bytes() {
+            break;
+        }
+        if Instant::now() >= deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!(
+                    "{}: active response body was not dropped after peer reset (status={status}, complete={complete}, state={:?})",
+                    required_str(case, "id")?,
+                    String::from_utf8_lossy(&state)
+                ),
+            )
+            .into());
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
+    let (status, body, complete) = read_http1_case_response(
+        address,
+        None,
+        "GET",
+        required_str(case, "recovery_path")?,
+        b"",
+    )
+    .await?;
+    if status != required_status(case, "recovery_status")?
+        || body != required_str(case, "recovery_body")?.as_bytes()
+        || !complete
+    {
+        return Err(io::Error::other(format!(
+            "{}: listener did not recover after active-response peer reset",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    Ok(())
 }
 
 async fn run_isolated_proactive_upload_flood_case(case: &Value) -> ProbeResult<()> {
@@ -12886,6 +13553,7 @@ async fn run_isolated_peer_read_adapter_contract_case(case: &Value) -> ProbeResu
     let adapter = uvicorn_rs::coverage_proactive_peer_read(accepted);
     let mut peer_io = adapter.io;
     let observer = adapter.observer;
+    let mut failed_observer = adapter.failed_observer;
     let pump = adapter.pump;
     let pump = pump.ok_or_else(|| {
         io::Error::other("proactive peer-read adapter did not create its reader pump")
@@ -12963,6 +13631,19 @@ async fn run_isolated_peer_read_adapter_contract_case(case: &Value) -> ProbeResu
         );
     }
 
+    // Arm the public observer before the reset so this contract covers its
+    // pending watch path as well as the already-observed fast path.
+    let mut failed_observation = Box::pin(failed_observer.wait_until_failed());
+    let wait_is_pending = std::future::poll_fn(|context| {
+        Poll::Ready(failed_observation.as_mut().poll(context).is_pending())
+    })
+    .await;
+    if !wait_is_pending {
+        return Err(
+            io::Error::other("peer-read failure observer completed before the peer reset").into(),
+        );
+    }
+
     // An abortive close produces a read error, not a clean EOF. The adapter
     // must keep reporting that terminal error on subsequent reads.
     socket2::SockRef::from(&client).set_linger(Some(Duration::ZERO))?;
@@ -12993,7 +13674,166 @@ async fn run_isolated_peer_read_adapter_contract_case(case: &Value) -> ProbeResu
         )
         .into());
     }
+    let observed_error_kind = timeout(Duration::from_secs(2), &mut failed_observation).await??;
+    drop(failed_observation);
+    if observed_error_kind != first_error.kind()
+        || failed_observer.error_kind() != Some(first_error.kind())
+    {
+        return Err(io::Error::other(
+            "peer-read failure observer did not preserve the raw reset error kind",
+        )
+        .into());
+    }
     timeout(Duration::from_secs(2), pump).await??;
+
+    // A clean peer half-close is delivered as an explicit EOF event in
+    // Proactive mode, after already-buffered request bytes.
+    let eof_listener = TcpListener::bind("127.0.0.1:0").await?;
+    let eof_address = eof_listener.local_addr()?;
+    let mut eof_client = timeout(Duration::from_secs(2), TcpStream::connect(eof_address)).await??;
+    let (eof_accepted, _) = timeout(Duration::from_secs(2), eof_listener.accept()).await??;
+    let eof_adapter = uvicorn_rs::coverage_proactive_peer_read(eof_accepted);
+    let mut eof_peer_io = eof_adapter.io;
+    let eof_observer = eof_adapter.observer;
+    let eof_failed_observer = eof_adapter.failed_observer;
+    let eof_pump = eof_adapter
+        .pump
+        .ok_or_else(|| io::Error::other("Proactive EOF contract has no read pump"))?;
+    let eof_pump = tokio::spawn(eof_pump);
+    let eof_input = b"proactive-eof-input";
+    timeout(Duration::from_secs(2), eof_client.write_all(eof_input)).await??;
+    timeout(Duration::from_secs(2), eof_client.shutdown()).await??;
+    let mut eof_received = vec![0; eof_input.len()];
+    timeout(
+        Duration::from_secs(2),
+        eof_peer_io.read_exact(&mut eof_received),
+    )
+    .await??;
+    let eof_count = timeout(Duration::from_secs(2), eof_peer_io.read(&mut byte)).await??;
+    if eof_received != eof_input
+        || eof_count != 0
+        || !eof_observer.is_read_half_closed()
+        || eof_failed_observer.error_kind().is_some()
+    {
+        return Err(io::Error::other(
+            "Proactive peer half-close did not preserve data-before-EOF semantics",
+        )
+        .into());
+    }
+    timeout(Duration::from_secs(2), eof_pump).await??;
+
+    // Dropping the producer closes the private channel; that is a read error,
+    // and subsequent reads must keep reporting the terminal error.
+    let dropped_listener = TcpListener::bind("127.0.0.1:0").await?;
+    let dropped_address = dropped_listener.local_addr()?;
+    let dropped_client =
+        timeout(Duration::from_secs(2), TcpStream::connect(dropped_address)).await??;
+    let (dropped_accepted, _) =
+        timeout(Duration::from_secs(2), dropped_listener.accept()).await??;
+    let dropped_adapter = uvicorn_rs::coverage_proactive_peer_read(dropped_accepted);
+    let mut dropped_peer_io = dropped_adapter.io;
+    let dropped_pump = dropped_adapter
+        .pump
+        .ok_or_else(|| io::Error::other("dropped-producer contract has no read pump"))?;
+    drop(dropped_pump);
+    let dropped_error = match timeout(Duration::from_secs(2), dropped_peer_io.read(&mut byte)).await
+    {
+        Ok(Err(error)) => error,
+        Ok(Ok(_)) => {
+            return Err(io::Error::other("dropped peer-read producer was reported as EOF").into());
+        }
+        Err(error) => return Err(error.into()),
+    };
+    let repeated_dropped_error =
+        match timeout(Duration::from_secs(2), dropped_peer_io.read(&mut byte)).await {
+            Ok(Err(error)) => error,
+            Ok(Ok(_)) => {
+                return Err(
+                    io::Error::other("producer-close error did not remain terminal").into(),
+                );
+            }
+            Err(error) => return Err(error.into()),
+        };
+    if dropped_error.kind() != io::ErrorKind::ConnectionAborted
+        || repeated_dropped_error.kind() != dropped_error.kind()
+    {
+        return Err(io::Error::other("dropped peer-read producer changed error kind").into());
+    }
+    drop(dropped_client);
+
+    // OnRead mode observes EOF and reset only while the HTTP stack polls the
+    // socket, preserving the same distinction as the proactive adapter.
+    let on_read_listener = TcpListener::bind("127.0.0.1:0").await?;
+    let on_read_address = on_read_listener.local_addr()?;
+    let mut on_read_client =
+        timeout(Duration::from_secs(2), TcpStream::connect(on_read_address)).await??;
+    let (on_read_accepted, _) =
+        timeout(Duration::from_secs(2), on_read_listener.accept()).await??;
+    let on_read_adapter = uvicorn_rs::coverage_http1_on_read_peer_read(on_read_accepted);
+    if on_read_adapter.pump.is_some() {
+        return Err(io::Error::other("OnRead adapter unexpectedly created a read pump").into());
+    }
+    let mut on_read_peer_io = on_read_adapter.io;
+    let on_read_observer = on_read_adapter.observer;
+    let on_read_failed_observer = on_read_adapter.failed_observer;
+    let mut empty = [];
+    let mut zero_capacity = ReadBuf::new(&mut empty);
+    timeout(
+        Duration::from_secs(2),
+        std::future::poll_fn(|context| {
+            Pin::new(&mut on_read_peer_io).poll_read(context, &mut zero_capacity)
+        }),
+    )
+    .await??;
+    if !zero_capacity.filled().is_empty() || on_read_observer.is_read_half_closed() {
+        return Err(io::Error::other("zero-capacity OnRead was reported as peer EOF").into());
+    }
+    let on_read_input = b"on-read-eof-input";
+    timeout(
+        Duration::from_secs(2),
+        on_read_client.write_all(on_read_input),
+    )
+    .await??;
+    timeout(Duration::from_secs(2), on_read_client.shutdown()).await??;
+    let mut on_read_received = vec![0; on_read_input.len()];
+    timeout(
+        Duration::from_secs(2),
+        on_read_peer_io.read_exact(&mut on_read_received),
+    )
+    .await??;
+    let on_read_eof = timeout(Duration::from_secs(2), on_read_peer_io.read(&mut byte)).await??;
+    if on_read_received != on_read_input
+        || on_read_eof != 0
+        || !on_read_observer.is_read_half_closed()
+        || on_read_failed_observer.error_kind().is_some()
+    {
+        return Err(io::Error::other("OnRead adapter did not observe clean EOF after data").into());
+    }
+
+    let reset_client =
+        timeout(Duration::from_secs(2), TcpStream::connect(on_read_address)).await??;
+    let (reset_accepted, _) = timeout(Duration::from_secs(2), on_read_listener.accept()).await??;
+    let reset_adapter = uvicorn_rs::coverage_http1_on_read_peer_read(reset_accepted);
+    let mut reset_peer_io = reset_adapter.io;
+    let reset_observer = reset_adapter.observer;
+    let reset_failed_observer = reset_adapter.failed_observer;
+    socket2::SockRef::from(&reset_client).set_linger(Some(Duration::ZERO))?;
+    drop(reset_client);
+    let reset_error = match timeout(Duration::from_secs(2), reset_peer_io.read(&mut byte)).await {
+        Ok(Err(error)) => error,
+        Ok(Ok(0)) => {
+            return Err(io::Error::other("OnRead reset was reported as clean EOF").into());
+        }
+        Ok(Ok(count)) => {
+            return Err(io::Error::other(format!("OnRead reset yielded {count} bytes")).into());
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if reset_observer.is_read_half_closed()
+        || reset_failed_observer.error_kind() != Some(reset_error.kind())
+    {
+        return Err(io::Error::other("OnRead reset did not preserve its raw error kind").into());
+    }
 
     // Verify that the isolated adapter failure did not affect a real server
     // listener running on the same process.
@@ -13064,7 +13904,7 @@ async fn check_proactive_peer_eof_pending(
     Ok(())
 }
 
-async fn run_isolated_peer_read_half_close_unavailable_case(case: &Value) -> ProbeResult<()> {
+async fn run_isolated_peer_read_observer_unavailable_case(case: &Value) -> ProbeResult<()> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let address = listener.local_addr()?;
     let server_wait_ms = case["server_wait_ms"]
@@ -13072,7 +13912,11 @@ async fn run_isolated_peer_read_half_close_unavailable_case(case: &Value) -> Pro
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "server_wait_ms is missing"))?;
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     let (application, state) = contract_app_with_state(shutdown_sender.clone());
-    let mut outcome = state.peer_read_half_close_unavailable_result.subscribe();
+    let mut outcome = if case["peer_read_failed_unavailable"].as_bool() == Some(true) {
+        state.peer_read_failed_unavailable_result.subscribe()
+    } else {
+        state.peer_read_half_close_unavailable_result.subscribe()
+    };
     let mut server = tokio::spawn(uvicorn_rs::serve_tcp(
         listener,
         application,

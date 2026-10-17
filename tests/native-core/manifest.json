@@ -59,6 +59,86 @@
       ]
     },
     {
+      "id": "http1.proactive-upload-reset-drops-active-response-body",
+      "protocol": "native-core",
+      "operation": "native-http1-peer-read-error-response-cancel",
+      "scenario": "failure-after-data",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http1.peer-read.failure-after-data"
+      },
+      "method": "POST",
+      "path": "/proactive-upload-reset-response",
+      "partial_body": "partial",
+      "declared_content_length": 1048576,
+      "expected_received_bytes": 7,
+      "expected_body_errors": 1,
+      "expected_response_chunks_polled": 1,
+      "expected_response_stream_drops": 1,
+      "response_after_request_body_error": true,
+      "injected_peer_read_failure": true,
+      "expected_server_error_phase": "connection",
+      "expected_server_error_message": "TCP peer read failed: connection reset",
+      "expected_server_error_has_source": false,
+      "state_path": "/proactive-upload-reset-response-state",
+      "release_path": "/proactive-upload-reset-response-release",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "covers": [
+        "http.request-upload",
+        "http.response-stream-reset"
+      ]
+    },
+    {
+      "id": "fault.http1.proactive-peer-read-error-completes-connection",
+      "protocol": "native-core",
+      "operation": "native-http1-peer-read-error-response-cancel",
+      "scenario": "failure-after-data",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http1.peer-read.failure-after-data"
+      },
+      "method": "POST",
+      "path": "/upload-cancel",
+      "partial_body": "partial",
+      "declared_content_length": 1048576,
+      "expected_received_bytes": 7,
+      "expected_body_errors": 1,
+      "expected_dropped_tasks": 1,
+      "injected_peer_read_failure": true,
+      "connection_completes_before_response_body_activity": true,
+      "expected_error_response_status": 500,
+      "expected_error_response_body": "",
+      "state_path": "/upload-cancel-state",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "covers": [
+        "http.request-upload"
+      ]
+    },
+    {
+      "id": "fault.http1.peer-read-activity-watch-outcomes",
+      "protocol": "native-core",
+      "operation": "native-http1-peer-read-activity-watch-outcomes",
+      "scenario": "watch-outcomes",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http1.response-body-activity.watch-outcomes"
+      }
+    },
+    {
+      "id": "fault.connection-error.source-variants",
+      "protocol": "native-core",
+      "operation": "native-connection-error-source-contract",
+      "scenario": "source-variants",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "connection-error.source-variants"
+      }
+    },
+    {
       "id": "http1.proactive-reader-stops-on-shutdown-with-flooded-upload",
       "protocol": "native-core",
       "operation": "native-http1-proactive-upload-flood-shutdown",
@@ -347,6 +427,16 @@
       "path": "/ready",
       "expected_status": 200,
       "expected_body": "ready\n",
+      "blocked_ms": 100,
+      "reconnect_requests": 64
+    },
+    {
+      "id": "http1.max-connections-one-streamed-response-releases-slot-after-peer-close",
+      "protocol": "native-core",
+      "operation": "native-http1-connection-slot-reuse",
+      "path": "/peer-read-half-close-stream",
+      "expected_status": 200,
+      "expected_body": "complete\n",
       "blocked_ms": 100,
       "reconnect_requests": 64
     },
@@ -1974,6 +2064,24 @@
       "expected_body": "received=4;trailer=verified\n"
     },
     {
+      "id": "fault.http3.request-body-trailers-pending-resumes",
+      "protocol": "http3",
+      "operation": "http3-request-trailers",
+      "verification": "fault-contract",
+      "scenario": "trailers-pending",
+      "fault": {
+        "point": "http3.request-body.trailers-pending-once"
+      },
+      "method": "POST",
+      "path": "/consume-trailers",
+      "body": "h3up",
+      "expected_status": 200,
+      "expected_body": "received=4;trailer=verified\n",
+      "covers": [
+        "http.request-upload"
+      ]
+    },
+    {
       "id": "http3.data-after-request-trailers-is-connection-error",
       "protocol": "http3",
       "operation": "http3-invalid-trailer-sequence",
@@ -2114,6 +2222,18 @@
       "shutdown_body": "shutting down\n",
       "server_wait_ms": 3000,
       "expected_observer_state": "read_half_closed=false;error=peer read-half closure observation ended without EOF;source_none=true\n"
+    },
+    {
+      "id": "http1.peer-read-failed-wait-returns-unavailable-after-server-shutdown",
+      "protocol": "http/1.1",
+      "operation": "graceful-drain",
+      "peer_read_failed_unavailable": true,
+      "method": "GET",
+      "path": "/peer-read-failed-shutdown-watch",
+      "shutdown_path": "/shutdown",
+      "shutdown_body": "shutting down\n",
+      "server_wait_ms": 3000,
+      "expected_observer_state": "read_failed=false;error=peer read-error observation ended without a read error;source_none=true\n"
     },
     {
       "id": "http1.graceful-shutdown-timeout-aborts-held-response",
@@ -2747,6 +2867,18 @@
           "message": "HTTP connection failed: error from user's Body stream"
         }
       ]
+    },
+    {
+      "id": "fault.native.request-lifetime-body-missing-guard-preserves-response",
+      "protocol": "native-core",
+      "operation": "native-request-lifetime-body-missing-guard",
+      "scenario": "guard-missing",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "native.request-lifetime.body-missing-guard"
+      },
+      "body": "guardless response\n",
+      "expected_body": "guardless response\n"
     }
   ]
 }

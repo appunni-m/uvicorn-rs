@@ -2,7 +2,49 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current unified coverage status (2026-10-15)
+## Current unified coverage status (2026-10-17)
+
+The latest local aggregate executed all **748/748** manifest cases (534 ASGI
+and 214 Python-free native Rust). Three complete ASGI repeats each passed
+534/534, and three native repeats each passed 214/214. Attribution passed
+748/748. There were zero case failures, infrastructure failures, transient
+infrastructure retries, or unrun cases.
+
+The aggregate measured **8,997/8,997 executable source-span regions** and
+**6,629/6,629 normalized physical executable lines**. Coverage-MCP fully
+paginated the exact report: 26 region pages covered all 509 diagnostic groups,
+and the line page reported zero groups because no line gaps remain. Source and
+build identities match, and the MCP gate reports `tests=passed` with zero
+missing regions or lines. The 509 region groups are per-function-instantiation
+diagnostics, not uncovered source spans; the accepted denominator is the
+validated source-span and physical-line union, not duplicated generic
+instantiation counters in raw LLVM summaries.
+
+The offline evidence checker independently reconstructed the retained LLVM
+profiles and passed. It verified all 748 attribution cases, the three ASGI and
+three native repeats, and both 100% coverage totals without rerunning the
+cases.
+
+The local-only report is bound to dirty revision
+`27de9f3ac7d259a3a9b612c3247ab2c60eb27306`, source SHA-256
+`f1627a340a49b8d62d74b2630e4e3e43136461e98ab018328a9294173b332ada`,
+instrumented extension SHA-256
+`e5d67ee18d1b5a2960f323266d6775b54346d7c1154d1982491611c2bc6812b0`, run ID
+`84fa54ad4c9d4218b4ffba79d111098a`, and report SHA-256
+`cc83cf9928c2f8bf924ab94463b75a4d6d9d0dfb0a0830387663ef135c50c197`. The
+Coverage-MCP build ID is
+`4ddfed70ecc82d6dc3d6b9d6b1e55c04c2b3330e7d765254ebfa8d37ee468c88`; the 27
+page receipt SHA-256 is
+`c884c4db25dee6192adb9f667b2306d8f2ca832fd0654463ea2a9a718932bc5f`. The
+report, page receipt, and context receipt are ignored local artifacts under
+`target/`. This validates the current dirty source, not a clean committed
+release candidate. Clean committed-source and exact-source hosted CI evidence
+remain required. The latest hosted run
+[38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888)
+passed its older 712-case manifest but measured 8,496/8,650 regions and
+6,486/6,592 lines; it does not validate this source snapshot.
+
+### Historical 717-case report (2026-10-15)
 
 Exact-source hosted CI [run 38790016719](https://github.com/appunni-m/uvicorn-rs/actions/runs/38790016719)
 on commit `5a32e3c0d84a02c95fe8a3f01712c895419ea571` completed all 717 indexed
@@ -212,7 +254,12 @@ change. The selector's six CLI controls also passed in that snapshot: a valid
 normal case declaring a fault, and a fault case without a point. Its local
 receipt is `target/native-contracts/selector-controls/receipt.json`.
 
-### Selected native TCP EOF evidence
+### Historical selected native TCP EOF evidence
+
+The 18-case report below predates the current full matrix. Its observations
+remain useful design history, but its denominator and coverage totals are not
+current; use the 2026-10-17 unified result at the top of this document for
+current-source status.
 
 `PeerReadHalfClosed` is a TCP request extension, including TLS over TCP. It
 records a successful raw-socket EOF read with nonempty buffer capacity, below
@@ -241,28 +288,35 @@ have no missing groups at the wait method; the raw-read query retains one
 uncovered generic region and no missing lines. The filtered receipt is stored
 beside the report and is not a full aggregate zero-gap receipt.
 
-The EOF cases observe the signal **after response completion**. Hyper's
+In that selected snapshot, the EOF cases observed the signal **after response completion**. Hyper's
 `half_close(true)` preserves response delivery but does not promise a socket
 read while an HTTP/1 service is held. Kata `1m58` tracks prompt FIN observation
 at the protocol-driver level. Suppressing EOF for the entire service lifetime
 would also suppress incomplete request-body errors and can stall an app
 awaiting its body; that approach was rejected. No timer, second socket reader,
 probe write, or fabricated disconnect was added. This selected evidence does
-not qualify the 661-case gate or migrate the Python ASGI transport.
+not qualify the 661-case gate at that time.
 The later fault-harness correction changed the source receipt; the 18-case
 report is a historical selected snapshot.
 
 The current native implementation adds opt-in `PeerReadHalfCloseMode::Proactive`:
 one owned raw TCP reader feeds TLS/HTTP through a bounded queue while the
-protocol driver remains the sole consumer. The 717-case source-bound unified
-report includes bodyless, complete-upload, incomplete-upload, cleartext, and
-TLS cases that hold the service until raw EOF; all 206 native cases passed in
-each of three repeats with 100% executable-region and line coverage. The
-report is from a dirty worktree and is not hosted release evidence. One
-bodyless cleartext held-service case was also rerun individually on the current
-build and passed. The default `OnRead` mode still observes EOF only when the
-protocol driver reads, and neither mode routes this signal through the Python
-ASGI adapter or emits `http.disconnect`.
+protocol driver remains the sole consumer. The Python ASGI adapter selects this
+mode for HTTP/1.1 and HTTP/2 over TCP/TLS. Its native `ConnectionClosed` bridge
+observes the peer-read signal and supplies a repeatable `http.disconnect` when
+the app calls `receive()`. The current-source parity input
+`http1.disconnect-before-first-asgi-receive` passed once against Uvicorn's
+oracle. That single case verifies this boundary for its recorded input only;
+it is not full ASGI disconnect conformance.
+
+The 2026-10-17 full matrix at the top includes the current ASGI and native
+manifests, including the TCP/TLS peer-read and disconnect cases. Its passing
+aggregate is the current local coverage evidence. The latest hosted run
+[38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888)
+passed 712 cases on an older manifest but left 154 regions and 106 lines
+uncovered; run `38828501018` is earlier historical evidence. Single-case
+reports use a selected-subset denominator and do not establish aggregate
+coverage.
 
 ### Selected native connection-limit evidence
 
@@ -1042,11 +1096,11 @@ quality, the minimum-version build, installed-wheel public parity, and unified
 coverage passed. Public parity was 239/239; hosted coverage was 491/491 cases,
 5,121/5,121 regions, and 3,624/3,624 lines. The hosted matrix predates the
 local strengthening of the H2 EOF fault contract described below. Platform
-package job failures are recorded in [release status](releases.md#current-state).
+package job failures are recorded in [release status](releases.md#current-release-status-2026-10-17).
 The retained unified-coverage artifact is ID `11506803058`, SHA-256
 `d107cfb007ae41673feb025253cdd00706168f51df411fa5fdfc6c6fdb3a910c`.
 
-## Hosted verification (runs #36–#39)
+## Historical hosted verification (runs #36–#39)
 
 Runs [#36](https://github.com/appunni-m/uvicorn-rs/actions/runs/37679543470)
 and [#37](https://github.com/appunni-m/uvicorn-rs/actions/runs/37684421046)
@@ -1054,11 +1108,10 @@ passed the unified coverage job. Run #37 is on exact main commit `e617f13`;
 its check annotation reports 491/491 cases, 5,121/5,121 regions and 3,624/3,624
 lines. The job runs one attribution pass and three complete matrix repetitions.
 The separate installed-wheel parity gate passed 239/239. Run #37 failed
-afterward in the platform package jobs; see [release status](releases.md#current-state).
-The retained hosted report artifact cannot be downloaded without repository
-authentication from this environment. This closes the hosted coverage gate for
-the current committed source; the local Coverage-MCP receipt requirement for a
-public release remains separate.
+afterward in the platform package jobs; see [release status](releases.md#current-release-status-2026-10-17).
+This result closed hosted coverage for commit `e617f13` only. It does not
+cover later commits or the current dirty worktree. The local Coverage-MCP
+receipt requirement for a public release remains separate.
 
 Run [#38](https://github.com/appunni-m/uvicorn-rs/actions/runs/37688528361)
 on commit `226ab13` also passed hosted attribution and all three complete
@@ -1066,7 +1119,7 @@ repeats: 491/491 cases, 5,121/5,121 regions, and 3,624/3,624 lines. Its normal
 installed-wheel public parity passed 239/239. The run failed later in the
 macOS package consumer because the probe certificate had a duplicate
 extension OID; Linux and Windows package jobs passed, while Python-floor was
-skipped. See [release status](releases.md#current-state). This updates hosted
+skipped. See [release status](releases.md#current-release-status-2026-10-17). This updates hosted
 coverage evidence for `226ab13`; the source-matched local Coverage-MCP receipt
 requirement for a public release remains separate.
 
@@ -1074,8 +1127,11 @@ Run [#39](https://github.com/appunni-m/uvicorn-rs/actions/runs/37692260364)
 on exact main commit `a78b4a925654ee0a5fb80814074ca2b0224bb094` passed hosted
 parity (239/239), attribution and all three complete repeats (491/491 cases),
 with 5,121/5,121 regions and 3,624/3,624 lines. Its package matrix and Python
-3.9.25 consumer also passed. This is the current hosted commit-bound coverage
-result.
+3.9.25 consumer also passed. This was the latest hosted coverage result for
+its October 8 commit at the time. The newer hosted run
+[38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888)
+is summarized in [current unified coverage status](#current-unified-coverage-status-2026-10-17);
+its older 712-case manifest left 154 regions and 106 lines uncovered.
 
 Coverage-MCP also re-reviewed the local full report for the EOF recheck
 archive. The generated report and MCP response are local-only and not

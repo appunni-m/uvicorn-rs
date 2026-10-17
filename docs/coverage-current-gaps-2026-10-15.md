@@ -1,16 +1,33 @@
-# Current unified coverage gaps — 2026-10-15
+# Historical unified coverage-gap inventory — 2026-10-15
 
-> **Superseded by the final local report:** This inventory describes the earlier
-> 696-case snapshot, which had 165 uncovered regions and 121 uncovered lines.
-> The later [unified coverage report](coverage.md#current-unified-coverage-status-2026-10-15)
-> records 717/717 passing cases and 100% executable-source region and line
-> coverage. The entries below are retained as the historical input-design
-> record; they are not current release gaps.
+> **Current status (2026-10-17):** This is a historical gap inventory, not a
+> list of current missing regions. The latest local 748-case aggregate passed
+> attribution and all three ASGI plus three native repeats with zero failures,
+> infrastructure failures, retries, or unrun cases. It measured 8,997/8,997
+> executable source-span regions and 6,629/6,629 normalized physical lines.
+> Coverage-MCP matches source/build and reports zero gaps with `tests=passed`;
+> the offline profile reconstruction also passed. The report is from a dirty
+> worktree; clean committed-source and hosted evidence remain required. The
+> gap tables below describe older source snapshots only. See the
+> [current coverage report](coverage.md#current-unified-coverage-status-2026-10-17)
+> before proposing additional cases.
+
+## Current-source line-summary correction superseded (2026-10-17)
+
+The earlier 747-case profile's raw LLVM file-summary line total differed from
+the physical executable-line set. The current schema-`@8` aggregate validates
+normalized physical lines against LCOV records and executable region spans.
+It measures 6,629/6,629 physical lines and 8,997/8,997 source-span regions.
+All 748 attribution cases and all three ASGI/native repeats passed without
+retries. Coverage-MCP and offline evidence validation both passed. The
+historical gap tables remain useful for design context; their missing-region
+counts are superseded. Current hashes and the remaining hosted-release gate
+are in the [coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
 
 
-## Latest full-source evidence
+## Historical full-source evidence: 696-case snapshot
 
-The current exact-source report is
+The historical exact-source report is
 `target/asgi-coverage/current-696-fault-fixes-20261015/full-report.json`
 (run `237b548248eb403993ab3bc593b99f99`, source SHA-256
 `6fb2b5abedbdd73e6f8745587c807cbbdaacf74707a2ae23fbdff9abf290c2c2`).

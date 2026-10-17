@@ -56,6 +56,7 @@ RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 # supplies the evidence that the injected native task actually panicked.
 COVERAGE_PANIC_MESSAGES = {
     "http.app-task.panic-before-response-start": "coverage-injected ASGI request task panic",
+    "http3.native-app-task.panic-before-response-start": "coverage-injected ASGI request task panic",
     "python.task-future.panic-after-completion": "coverage-injected ASGI app task panic after final response body",
     "websocket.handshake.mutex.poison": "coverage-injected WebSocket handshake mutex poison",
     "http3.connection-task.panic": "coverage-injected HTTP/3 connection task panic",
@@ -75,6 +76,7 @@ FAULT_POINTS = {
     "python.task-cancel.context.set-item",
     "python.task-cancel.schedule-call",
     "http.receive.disconnected-before-future-poll",
+    "http.connection-lifetime.wait-complete",
     "http.body-pump.batch-limit.one-byte",
     "http.body-pump.batch-threshold.send-connection-closed",
     "http.body-pump.oversized.send-connection-closed",
@@ -136,6 +138,7 @@ FAULT_POINTS = {
     "http.response.body-consumer.pause",
     "http.response.body-poll.receiver-pending.pause",
     "http.app-task.panic-before-response-start",
+    "http3.native-app-task.panic-before-response-start",
     "websocket.asgi.send.type.get-item",
     "websocket.accept.subprotocol.get-item",
     "websocket.accept.subprotocol.extract",
@@ -201,6 +204,10 @@ FAULT_POINTS = {
     "http.receive.immediate-disconnect-message-error",
     "http.receive.lock-contention",
     "server.connection-task.service-error",
+    "server.connection-info.missing",
+    "server.connection-lifetime.missing",
+    "server.peer-read-half-closed.missing",
+    "server.peer-read-failed.missing",
     "server.connection-io.poll-write-error",
     "http.asgi-io.allocate",
     "http.asgi.app-invoke",
@@ -213,12 +220,23 @@ FAULT_POINTS = {
     "lifespan.app-invoke",
     "websocket.io.allocate",
     "websocket.app-invoke",
+    "websocket.native-upgrade.missing",
+    "websocket.native-upgrade.register-closed",
     "http3.connection-task.panic",
     "http3.endpoint.accept-closed",
     "http3.connection-task.panic-during-shutdown",
     "http3.connection-task.shutdown-hang",
     "http3.connection.create-error",
     "http3.connection.accept-error",
+    "http3.connection-info.missing",
+    "http3.connection-lifetime.missing",
+    "http3.native-body-pump.stop-wait",
+    "http3.native-body-pump.final-message-stop-wait",
+    "http3.native-body-pump.send-stop-wait",
+    "http3.native-body-pump.error-stop-wait",
+    "http3.native-body-pump.cancel-before-first-poll",
+    "http3.native-body-pump.sender-closed",
+    "http3.legacy-path.selection",
     "http3.peer-close.unexpected-error-kind",
     "http3.peer-close.close-reason-unavailable",
     "http3.request.resolve-error",
@@ -234,6 +252,7 @@ FAULT_POINTS = {
     "http3.body-pump.final-message-connection-closed-select",
     "http3.body-pump.final-message-send-error",
     "http3.body-pump.empty-data-frame",
+    "http3.native-body-pump.empty-data-frame",
     "http3.body-pump.send-error",
     "websocket.handshake.mutex.poison",
     "websocket.accept-key.header-value-error",
@@ -302,11 +321,51 @@ ASGI_SCOPE_SUPPORT_CONTRACT_POINTS = {"public.asgi-spec-version"}
 # These selectors describe real protocol/application input. They are never
 # native injection points and must not arm the coverage fault control.
 HARNESS_FAULT_POINTS = (
-    {"http3.client.abort-after-body"}
+    {
+        "http3.client.abort-after-body",
+        "http3.client.peer-stop-before-response-headers",
+        "public.http3-request-trailers",
+    }
     | PUBLIC_INPUT_CONTRACT_POINTS
     | ASGI_SCOPE_SUPPORT_CONTRACT_POINTS
     | {"public.server-runtime-configuration"}
 )
+# These fault contracts exercise the legacy HTTP/3 server implementation,
+# which is selected at process startup when its fault point is armed. Keep
+# their target processes isolated so the input can arm the fault before the
+# server chooses between the legacy and native HTTP/3 paths.
+LEGACY_HTTP3_FAULT_POINTS = {
+    "http3.request-task.panic",
+    "http3.request-task.panic-after-response",
+    "http3.connection.accept-finished",
+    "http3.connection-task.panic",
+    "http3.endpoint.accept-closed",
+    "http3.connection-task.panic-during-shutdown",
+    "http3.connection-task.shutdown-hang",
+    "http3.connection.create-error",
+    "http3.connection.accept-error",
+    "http3.legacy-path.selection",
+    "http3.peer-close.unexpected-error-kind",
+    "http3.peer-close.close-reason-unavailable",
+    "http3.request.resolve-error",
+    "http3.response.builder-error",
+    "http3.response.send-error",
+    "http3.response.body-frame-error",
+    "http3.response.non-data-frame",
+    "http3.response.body-send-error",
+    "http3.response.finish-error",
+    "http3.body-pump.connection-closed",
+    "http3.body-pump.connection-closed-select",
+    "http3.body-pump.sender-closed-select",
+    "http3.body-pump.final-message-connection-closed-select",
+    "http3.body-pump.final-message-send-error",
+    "http3.body-pump.empty-data-frame",
+    "http3.body-pump.send-error",
+    "http3.body-pump.send.connection-closed",
+    "http3.body-pump.error.request-stop",
+    "server.http3-task.shutdown-hang",
+    "http.app-task.panic-before-response-start",
+}
 MAX_BLOCKING_THREADS_ENV = "UVICORN_RS_MAX_BLOCKING_THREADS"
 PYTHON_TASK_START_ERRORS = {
     "python.task-starter.import-asyncio": "MemoryError: coverage-only injected MemoryError at PythonTaskStarterImportAsyncio",
@@ -330,6 +389,7 @@ EAGER_REGISTRATION_CLEANUP_CONTRACTS = (
 )
 FAULT_CONTRACTS = {
     "asgi-spec-version-2.5",
+    "http3-request-trailers-drained-as-body-only",
     "http-response-reset-cancels-deferred-task",
     "server-cancellation-schedule-error-bounded-shutdown",
     "http-500-then-followup-200",
@@ -361,20 +421,31 @@ FAULT_CONTRACTS = {
     "http-response-body-queued-after-receiver-pending",
     "http3-500-error-body",
     "http3-connection-task-error-followup-200",
+    "http3-legacy-handshake-recovery",
     "http3-connection-error-cancels-held-response-followup-200",
     "http3-peer-close-classification-defensive-error",
+    "http3-legacy-peer-close-no-error",
+    "http3-legacy-peer-close-unknown-code-ignored",
+    "http3-legacy-peer-close-classification-error",
     "http3-stream-reset-on-runtime-error",
     "http3-request-task-error-before-peer-close-followup-200",
     "http3-body-pump-early-exit-500",
     "http3-upload-body-pump-preserves-data",
+    "http3-native-body-pump-pre-poll-cancel-preserves-response",
+    "http3-native-body-pump-sender-closed-preserves-response",
+    "http3-native-body-pump-send-stop-preserves-response",
+    "http3-native-body-pump-final-message-stop-preserves-response",
     "http3-upload-body-pump-send-error-disconnect",
     "http3-upload-body-pump-completes-final-message",
     "http3-connection-task-shutdown-error",
+    "http3-legacy-connection-task-shutdown-completes",
     "http3-connection-task-shutdown-hang-aborted",
     "http3-endpoint-accept-closes-http3",
     "http2-500-empty-body",
     "http3-client-abort-disconnect-followup",
+    "http3-peer-stop-cancels-held-app-followup-200",
     "http3-body-pump-error-stop-disconnect-followup-200",
+    "http3-legacy-body-pump-delivers-disconnect-followup-200",
     "http3-body-pump-reaps-cancelled-task",
     "http3-server-shutdown-force-abort",
     "http-final-body-preserved-after-app-task-panic",
@@ -386,6 +457,7 @@ FAULT_CONTRACTS = {
     "http-task-completion-error-followup-200",
     "http-start-response-preserved-followup-200",
     "http-disconnect-error-followup-200",
+    "http-connection-lifetime-closed-disconnect-followup-200",
     "http-immediate-disconnect-message-error-followup-200",
     "server-startup-failure",
     "server-runtime-configuration-accepted",
@@ -397,6 +469,7 @@ FAULT_CONTRACTS = {
     "websocket-server-shutdown-force-abort",
     "websocket-driver-send-error-followup-200",
     "websocket-driver-send-error-cancels-app",
+    "websocket-registration-failure-cancels-app-followup-200",
     "websocket-handshake-error-followup-200",
     "websocket-teardown-and-followup-200",
 }
@@ -449,6 +522,8 @@ WEBSOCKET_HANDSHAKE_FAULT_POINTS = {
     "websocket.handshake.send-closed",
     "websocket.io.allocate",
     "websocket.app-invoke",
+    "websocket.native-upgrade.missing",
+    "websocket.native-upgrade.register-closed",
     "websocket.accept-key.header-value-error",
 }
 LIFESPAN_STARTUP_AUTO_FALLBACK_FAULT_POINTS = {
@@ -755,7 +830,8 @@ def load_contract(
         "status", "content_type", "body_bytes", "ordered_body_bytes", "early_body_bytes",
         "ordered_response_headers", "response_header_values_by_name",
         "streamed_before_completion", "disconnect_event", "followup_response",
-        "handshake_status", "handshake_established", "subprotocol", "ordered_messages", "state_response",
+        "handshake_status", "handshake_established", "handshake_accept_valid", "frame_sent",
+        "disconnect_code", "followup_status", "subprotocol", "ordered_messages", "state_response",
         "ordered_message_payload_bytes", "last_ordered_message",
         "process_terminated", "process_exit_code", "application_events", "close_code", "close_reason",
         "connection_closed", "listener_closed_before_release", "idle_connection_closed",
@@ -786,6 +862,13 @@ def load_contract(
             expected_operation_keys.add("required_observations")
             if not set(operation["required_observations"]).issubset(observation_fields):
                 raise ParityError(f"{operation.get('id')}: unknown required observation")
+        if "target_requirements" in operation:
+            expected_operation_keys.add("target_requirements")
+            if (
+                not isinstance(operation["target_requirements"], dict)
+                or not set(operation["target_requirements"]).issubset(observation_fields)
+            ):
+                raise ParityError(f"{operation.get('id')}: unknown target requirement")
         exact_keys(operation, expected_operation_keys, "manifest operation")
         if (
             not isinstance(operation["observe"], list)
@@ -804,6 +887,14 @@ def load_contract(
         required = operation.get("required_observations", {})
         if not isinstance(required, dict) or not set(required).issubset(operation["observe"]):
             raise ParityError(f"{operation.get('id')}: required observations must be declared in observe")
+        target_requirements = operation.get("target_requirements", {})
+        if (
+            not isinstance(target_requirements, dict)
+            or not set(target_requirements).issubset(operation["observe"])
+        ):
+            raise ParityError(
+                f"{operation.get('id')}: target requirements must be declared in observe"
+            )
 
     profiles = {profile["id"]: profile for profile in manifest["profiles"]}
     operations = {operation["id"]: operation for operation in manifest["operations"]}
@@ -900,6 +991,20 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: the ASGI spec-version contract requires its declared public scope probe"
                     )
+            elif fault["contract"] == "http3-request-trailers-drained-as-body-only":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http.scope-and-body"
+                    or fault["point"] != "public.http3-request-trailers"
+                    or request.get("method") != "POST"
+                    or request.get("path") != "/h3-request-trailers"
+                    or not request.get("body_base64")
+                    or not request.get("trailers")
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 request-trailer conformance requires a body upload with trailing headers"
+                    )
             elif fault["contract"] in {
                 "http-500-then-followup-200", "http-callback-error-followup-200",
                 "http-original-task-start-error-followup-200",
@@ -979,11 +1084,15 @@ def load_contract(
                 if (
                     case.get("profile") != "http3"
                     or case.get("operation") != "http.application-error"
-                    or fault["point"] != "http.app-task.panic-before-response-start"
+                    or fault["point"]
+                    not in {
+                        "http.app-task.panic-before-response-start",
+                        "http3.native-app-task.panic-before-response-start",
+                    }
                     or case.get("request", {}).get("path") != "/state"
                 ):
                     raise ParityError(
-                        f"{case_id}: HTTP/3 panic injection requires the pre-response application-failure workflow"
+                        f"{case_id}: HTTP/3 500-body contract requires a pre-response task failure on /state"
                     )
             elif fault["contract"] == "http3-connection-task-error-followup-200":
                 if (
@@ -994,6 +1103,16 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 connection-task fault requires a rejected first connection and healthy follow-up"
+                    )
+            elif fault["contract"] == "http3-legacy-handshake-recovery":
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.handshake-recovery"
+                    or fault["point"] != "http3.legacy-path.selection"
+                    or case.get("request", {}).get("invalid_alpn") is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: legacy HTTP/3 handshake recovery requires a rejected ALPN handshake and healthy follow-up"
                     )
             elif fault["contract"] == "http3-request-task-error-before-peer-close-followup-200":
                 requests = case.get("request_sequence", [])
@@ -1029,6 +1148,8 @@ def load_contract(
                         "http3.connection.accept-finished",
                         "http3.connection.create-error",
                         "http3.connection.accept-error",
+                        "http3.connection-info.missing",
+                        "http3.connection-lifetime.missing",
                         "http3.request.resolve-error",
                         "http3.response.builder-error",
                         "http3.response.send-error",
@@ -1054,6 +1175,36 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 peer-close classifier faults require the GREASE peer-close workflow"
+                    )
+            elif fault["contract"] == "http3-legacy-peer-close-no-error":
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.peer-close"
+                    or fault["point"] != "http3.legacy-path.selection"
+                    or case.get("request", {}).get("close_error_code") != 256
+                ):
+                    raise ParityError(
+                        f"{case_id}: legacy HTTP/3 no-error classification requires a real H3_NO_ERROR peer close"
+                    )
+            elif fault["contract"] == "http3-legacy-peer-close-unknown-code-ignored":
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.peer-close"
+                    or fault["point"] != "http3.legacy-path.selection"
+                    or case.get("request", {}).get("close_error_code") != 515
+                ):
+                    raise ParityError(
+                        f"{case_id}: legacy HTTP/3 unknown-code classification requires a real 0x203 peer close"
+                    )
+            elif fault["contract"] == "http3-legacy-peer-close-classification-error":
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.peer-close-registered"
+                    or fault["point"] != "http3.legacy-path.selection"
+                    or case.get("request", {}).get("close_error_code") != 512
+                ):
+                    raise ParityError(
+                        f"{case_id}: legacy HTTP/3 error classification requires a real QPACK_DECOMPRESSION_FAILED peer close"
                     )
             elif fault["contract"] == "http3-body-pump-early-exit-500":
                 request = case.get("request", {})
@@ -1081,12 +1232,40 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: HTTP/3 body-pump early exits require a supported POST probe"
                     )
+            elif fault["contract"] == "http3-legacy-body-pump-delivers-disconnect-followup-200":
+                request = case.get("request", {})
+                content_lengths = [
+                    value for name, value in request.get("headers", [])
+                    if name.lower() == "content-length"
+                ]
+                try:
+                    body_length = len(
+                        base64.b64decode(request.get("body_base64", ""), validate=True)
+                    )
+                except (ValueError, TypeError) as error:
+                    raise ParityError(f"{case_id}: invalid HTTP/3 disconnect body base64") from error
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.request-disconnect"
+                    or fault["point"] != "http3.legacy-path.selection"
+                    or request.get("method") != "POST"
+                    or request.get("path") != "/h3-upload-disconnect"
+                    or request.get("abort_after_body") is not True
+                    or not request.get("body_base64")
+                    or len(content_lengths) != 1
+                    or not content_lengths[0].isdigit()
+                    or int(content_lengths[0]) <= body_length
+                ):
+                    raise ParityError(
+                        f"{case_id}: legacy HTTP/3 disconnect delivery requires a partial POST upload and peer reset"
+                    )
             elif fault["contract"] == "http3-upload-body-pump-preserves-data":
                 if (
                     case.get("profile") != "http3"
                     or case.get("operation") != "http.request-upload"
                     or fault["point"] not in {
                         "http3.body-pump.empty-data-frame",
+                        "http3.native-body-pump.empty-data-frame",
                     }
                     or case.get("request", {}).get("path") != "/read-first-upload"
                     or case.get("request", {}).get("method") != "POST"
@@ -1094,6 +1273,61 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 body-pump upload faults require a nonempty POST read probe"
+                    )
+            elif fault["contract"] == "http3-native-body-pump-pre-poll-cancel-preserves-response":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http.application-status"
+                    or fault["point"] != "http3.native-body-pump.cancel-before-first-poll"
+                    or request.get("method") != "POST"
+                    or request.get("path") != "/h3-early-response-open-upload"
+                    or request.get("leave_upload_open_until_response") is not True
+                    or not request.get("body_base64")
+                ):
+                    raise ParityError(
+                        f"{case_id}: native HTTP/3 pre-poll cancellation requires the open-upload early-response workflow"
+                    )
+            elif fault["contract"] == "http3-native-body-pump-sender-closed-preserves-response":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http.application-status"
+                    or fault["point"] != "http3.native-body-pump.sender-closed"
+                    or request.get("method") != "POST"
+                    or request.get("path") != "/h3-early-response-open-upload"
+                    or request.get("leave_upload_open_until_response") is not True
+                    or not request.get("body_base64")
+                ):
+                    raise ParityError(
+                        f"{case_id}: native HTTP/3 sender-close observation requires the open-upload early-response workflow"
+                    )
+            elif fault["contract"] == "http3-native-body-pump-send-stop-preserves-response":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http.application-status"
+                    or fault["point"] != "http3.native-body-pump.send-stop-wait"
+                    or request.get("method") != "POST"
+                    or request.get("path") != "/h3-early-response-open-upload"
+                    or request.get("leave_upload_open_until_response") is not True
+                    or not request.get("body_base64")
+                ):
+                    raise ParityError(
+                        f"{case_id}: native HTTP/3 send-stop observation requires the open-upload early-response workflow"
+                    )
+            elif fault["contract"] == "http3-native-body-pump-final-message-stop-preserves-response":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http.application-status"
+                    or fault["point"] != "http3.native-body-pump.final-message-stop-wait"
+                    or request.get("method") != "GET"
+                    or request.get("path") != "/h3-early-response-open-upload"
+                    or request.get("body_base64") != ""
+                ):
+                    raise ParityError(
+                        f"{case_id}: final-message stop requires a bodyless GET response probe"
                     )
             elif fault["contract"] == "http3-upload-body-pump-completes-final-message":
                 if (
@@ -1129,6 +1363,16 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 shutdown error requires the held-connection workflow"
+                    )
+            elif fault["contract"] == "http3-legacy-connection-task-shutdown-completes":
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.connection-task-shutdown"
+                    or fault["point"] != "http3.legacy-path.selection"
+                    or case.get("request", {}).get("hold_open_for_shutdown") is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: legacy HTTP/3 shutdown requires the held-connection workflow"
                     )
             elif fault["contract"] == "http3-connection-task-shutdown-hang-aborted":
                 if (
@@ -1171,11 +1415,28 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: HTTP/3 client-abort contract requires the partial-body disconnect workflow"
                     )
+            elif fault["contract"] == "http3-peer-stop-cancels-held-app-followup-200":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.peer-stop-cancels-held-request"
+                    or fault["point"] != "http3.client.peer-stop-before-response-headers"
+                    or request.get("peer_stop_before_response_headers") is not True
+                    or request.get("path") != "/hold"
+                    or request.get("same_connection_followup_path") != "/sync-callable"
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 peer-stop contract requires the held-app and same-connection recovery workflow"
+                    )
             elif fault["contract"] == "http3-body-pump-error-stop-disconnect-followup-200":
                 if (
                     case.get("profile") != "http3"
                     or case.get("operation") != "http3.request-disconnect"
-                    or fault["point"] != "http3.body-pump.error.request-stop"
+                    or fault["point"] not in {
+                        "http3.body-pump.error.request-stop",
+                        "http3.native-body-pump.stop-wait",
+                        "http3.native-body-pump.error-stop-wait",
+                    }
                     or case.get("request", {}).get("abort_after_body") is not True
                     or case.get("request", {}).get("path") != "/h3-upload-disconnect"
                 ):
@@ -1282,7 +1543,13 @@ def load_contract(
                 if (
                     case.get("profile") != "http1"
                     or case.get("operation") != "http.keepalive-sequence"
-                    or fault["point"] != "server.connection-task.service-error"
+                    or fault["point"] not in {
+                        "server.connection-task.service-error",
+                        "server.connection-info.missing",
+                        "server.connection-lifetime.missing",
+                        "server.peer-read-half-closed.missing",
+                        "server.peer-read-failed.missing",
+                    }
                     or "request_sequence" not in case
                     or len(case["request_sequence"]) != 2
                     or not any(
@@ -1613,6 +1880,23 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: disconnect-message faults require a reset during an incomplete request body"
                     )
+            elif fault["contract"] == "http-connection-lifetime-closed-disconnect-followup-200":
+                disconnect = case.get("disconnect", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.client-disconnect"
+                    or fault["point"] != "http.connection-lifetime.wait-complete"
+                    or disconnect.get("path") != "/disconnect-after-complete-request"
+                    or disconnect.get("followup_path") != "/disconnect-status"
+                    or disconnect.get("empty_request") is not True
+                    or disconnect.get("wait_event")
+                    != "http.disconnect.waiting-after-complete-request"
+                    or disconnect.get("wait_event_after_disconnect")
+                    != "http.disconnect.after-complete-request:http.disconnect"
+                ):
+                    raise ParityError(
+                        f"{case_id}: connection-lifetime completion requires the synchronized complete-request disconnect workflow"
+                    )
             elif fault["contract"] == "http-immediate-disconnect-message-error-followup-200":
                 disconnect = case.get("disconnect", {})
                 if (
@@ -1807,6 +2091,21 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: public WebSocket header capacity requires its finite handshake and recovery workflow"
                     )
+            elif fault["contract"] == "websocket-registration-failure-cancels-app-followup-200":
+                specification = case.get("websocket", {})
+                if (
+                    case.get("profile") != "websocket"
+                    or case.get("operation") != "websocket.registration-failure-cleanup"
+                    or fault["point"] != "websocket.native-upgrade.register-closed"
+                    or specification.get("path") != "/ws-registration-failure-hold"
+                    or specification.get("messages") != []
+                    or specification.get("followup_path") != "/state"
+                    or specification.get("wait_for_app_event")
+                    != "websocket.registration-failure.cancelled"
+                ):
+                    raise ParityError(
+                        f"{case_id}: native WebSocket registration failure requires the held-app cancellation and follow-up workflow"
+                    )
             elif fault["contract"] == "websocket-handshake-error-followup-200":
                 if (
                     case.get("profile") != "websocket"
@@ -1974,6 +2273,17 @@ def load_contract(
                 disconnect_keys.add("reset")
                 if case["disconnect"]["reset"] is not True:
                     raise ParityError(f"{case_id}: reset must be true when present")
+            if "reset_after_complete_request" in case["disconnect"]:
+                disconnect_keys.add("reset_after_complete_request")
+                if (
+                    case["disconnect"]["reset_after_complete_request"] is not True
+                    or kind != "http1"
+                    or case["disconnect"].get("empty_request") is not True
+                    or "wait_event" not in case["disconnect"]
+                ):
+                    raise ParityError(
+                        f"{case_id}: reset_after_complete_request requires an empty HTTP/1 request and a wait_event"
+                    )
             if "content_length" in case["disconnect"]:
                 disconnect_keys.update({"content_length", "partial_body_base64"})
                 if not isinstance(case["disconnect"]["content_length"], int) or case["disconnect"]["content_length"] <= 0:
@@ -2386,10 +2696,66 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: an empty HTTP/3 DATA frame probe needs a nonempty POST body"
                     )
+            if "trailers" in request:
+                request_keys.add("trailers")
+                if kind != "http3":
+                    raise ParityError(f"{case_id}: request trailers are currently supported only for HTTP/3")
+                trailers = request["trailers"]
+                if (
+                    not isinstance(trailers, list)
+                    or not trailers
+                    or any(
+                        not isinstance(header, list)
+                        or len(header) != 2
+                        or not all(isinstance(part, str) for part in header)
+                        for header in trailers
+                    )
+                ):
+                    raise ParityError(f"{case_id}: request trailers must be nonempty pairs of strings")
+                if request["method"] != "POST" or not request["body_base64"]:
+                    raise ParityError(f"{case_id}: HTTP/3 request trailers require a nonempty POST body")
             if "abort_after_body" in request:
                 request_keys.add("abort_after_body")
                 if request["abort_after_body"] is not True or kind != "http3":
                     raise ParityError(f"{case_id}: abort_after_body is supported only for HTTP/3")
+            if "malformed_data_frame_after_headers" in request:
+                request_keys.add("malformed_data_frame_after_headers")
+                if (
+                    request["malformed_data_frame_after_headers"] is not True
+                    or kind != "http3"
+                    or operation != "http3.truncated-data-frame-recovery"
+                    or request["method"] != "POST"
+                    or request["path"] != "/h3-upload-disconnect"
+                    or request["headers"] != []
+                    or request["body_base64"] != ""
+                ):
+                    raise ParityError(
+                        f"{case_id}: truncated HTTP/3 DATA input requires the declared empty POST disconnect workflow"
+                    )
+            if "peer_stop_before_response_headers" in request:
+                request_keys.update({
+                    "peer_stop_before_response_headers",
+                    "same_connection_followup_path",
+                })
+                followup_path = request.get("same_connection_followup_path")
+                if (
+                    request["peer_stop_before_response_headers"] is not True
+                    or kind != "http3"
+                    or operation != "http3.peer-stop-cancels-held-request"
+                    or request["method"] != "GET"
+                    or request["path"] != "/hold"
+                    or request["body_base64"] != ""
+                    or request["headers"] != []
+                    or not isinstance(followup_path, str)
+                    or not followup_path.startswith("/")
+                ):
+                    raise ParityError(
+                        f"{case_id}: held-request peer-stop requires the declared HTTP/3 GET and same-connection follow-up"
+                    )
+            elif "same_connection_followup_path" in request:
+                raise ParityError(
+                    f"{case_id}: same_connection_followup_path requires peer_stop_before_response_headers"
+                )
             if "invalid_alpn" in request:
                 request_keys.add("invalid_alpn")
                 if request["invalid_alpn"] is not True or kind != "http3":
@@ -2403,6 +2769,29 @@ def load_contract(
                     "method", "path", "headers", "body_base64", "close_error_code"
                 }:
                     raise ParityError(f"{case_id}: peer closure requires a completed ordinary request")
+            if "body_chunks_base64" in request:
+                request_keys.add("body_chunks_base64")
+                if kind != "http3":
+                    raise ParityError(
+                        f"{case_id}: explicit request DATA-frame segmentation is supported only for HTTP/3"
+                    )
+                chunks = request["body_chunks_base64"]
+                if not isinstance(chunks, list) or len(chunks) < 2:
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 body_chunks_base64 requires at least two nonempty chunks"
+                    )
+                try:
+                    decoded_chunks = [base64.b64decode(chunk, validate=True) for chunk in chunks]
+                except (ValueError, TypeError) as error:
+                    raise ParityError(f"{case_id}: invalid HTTP/3 body chunk base64") from error
+                if any(not chunk for chunk in decoded_chunks):
+                    raise ParityError(f"{case_id}: HTTP/3 body chunks must be nonempty")
+                if b"".join(decoded_chunks) != base64.b64decode(
+                    request["body_base64"], validate=True
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 body chunks must concatenate to body_base64"
+                    )
             if operation in {"http3.peer-close", "http3.peer-close-registered"} and (
                 kind != "http3" or "close_error_code" not in request
             ):
@@ -2433,6 +2822,27 @@ def load_contract(
             exact_case_keys(case, case_keys, case_id)
             websocket = case["websocket"]
             websocket_keys = {"path", "subprotocols", "messages"}
+            if case["operation"] == "websocket.raw-frame-disconnect":
+                websocket_keys.add("raw_frame_base64")
+                if (
+                    case["profile"] != "websocket"
+                    or websocket.get("messages") != []
+                    or not isinstance(websocket.get("followup_path"), str)
+                ):
+                    raise ParityError(
+                        f"{case_id}: raw WebSocket frames require a plain WebSocket profile, "
+                        "no high-level messages, and a follow-up path"
+                    )
+                try:
+                    raw_frame = base64.b64decode(websocket["raw_frame_base64"], validate=True)
+                except (ValueError, TypeError) as error:
+                    raise ParityError(f"{case_id}: invalid raw WebSocket frame base64") from error
+                if not raw_frame:
+                    raise ParityError(f"{case_id}: raw WebSocket frame must not be empty")
+            elif "raw_frame_base64" in websocket:
+                raise ParityError(
+                    f"{case_id}: raw_frame_base64 requires websocket.raw-frame-disconnect"
+                )
             if case.get("operation") == "websocket.concurrent-session-load":
                 if websocket.get("path") != "/ws/load" or websocket.get("messages") != []:
                     raise ParityError(
@@ -2488,16 +2898,26 @@ def load_contract(
                     raise ParityError(f"{case_id}: WebSocket followup_path must be origin-form")
             if "wait_for_app_event" in websocket:
                 websocket_keys.add("wait_for_app_event")
+                fault = case.get("fault", {})
                 if (
                     not isinstance(websocket["wait_for_app_event"], str)
                     or not websocket["wait_for_app_event"]
                     or case.get("profile") != "websocket"
-                    or case.get("operation") != "websocket.final-frame-drain"
-                    or websocket.get("expect_close") is not True
-                    or websocket.get("messages") != []
+                    or not (
+                        (
+                            case.get("operation") == "websocket.final-frame-drain"
+                            and websocket.get("expect_close") is True
+                            and websocket.get("messages") == []
+                        )
+                        or (
+                            case.get("operation") == "websocket.registration-failure-cleanup"
+                            and fault.get("contract")
+                            == "websocket-registration-failure-cancels-app-followup-200"
+                        )
+                    )
                 ):
                     raise ParityError(
-                        f"{case_id}: deferred WebSocket reads require the final-frame drain workflow"
+                        f"{case_id}: deferred WebSocket event waits require a supported workflow"
                     )
             if "receive_buffer_bytes" in websocket:
                 websocket_keys.add("receive_buffer_bytes")
@@ -3521,6 +3941,7 @@ def http1_request_sequence(
 ) -> dict[str, Any]:
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
     responses = []
+    write_error_fault_consumed: bool | None = None
     try:
         for index, request in enumerate(requests):
             arm_fault_after_headers = request.get("fault_after_response_headers", False)
@@ -3545,6 +3966,15 @@ def http1_request_sequence(
             try:
                 response = connection.getresponse()
             except http.client.RemoteDisconnected:
+                if (
+                    index == 0
+                    and fault_control_path is not None
+                    and fault_point == "server.connection-io.poll-write-error"
+                ):
+                    write_error_fault_consumed = (
+                        fault_control_path.read_text(encoding="utf-8").strip()
+                        != fault_point
+                    )
                 responses.append({
                     "status": None,
                     "content_type": None,
@@ -3577,6 +4007,15 @@ def http1_request_sequence(
             try:
                 response_body = response.read()
             except http.client.IncompleteRead as error:
+                if (
+                    index == 0
+                    and fault_control_path is not None
+                    and fault_point == "server.connection-io.poll-write-error"
+                ):
+                    write_error_fault_consumed = (
+                        fault_control_path.read_text(encoding="utf-8").strip()
+                        != fault_point
+                    )
                 responses.append({
                     "status": response.status,
                     "content_type": content_type,
@@ -3593,6 +4032,15 @@ def http1_request_sequence(
             if (
                 index == 0
                 and fault_control_path is not None
+                and fault_point == "server.connection-io.poll-write-error"
+            ):
+                write_error_fault_consumed = (
+                    fault_control_path.read_text(encoding="utf-8").strip()
+                    != fault_point
+                )
+            if (
+                index == 0
+                and fault_control_path is not None
                 and fault_point in {
                     "python.task-starter.inline-completion.borrow-conflict",
                     "python.task-starter.registration-error.borrow-conflict",
@@ -3602,7 +4050,10 @@ def http1_request_sequence(
                 and fault_control_path.read_text(encoding="utf-8").strip() == fault_point
             ):
                 raise ParityError("callback cleanup fault was not consumed by the target")
-        return {"responses": responses}
+        observation = {"responses": responses}
+        if write_error_fault_consumed is not None:
+            observation["fault_consumed"] = write_error_fault_consumed
+        return observation
     finally:
         if fault_control_path is not None:
             fault_control_path.write_text("", encoding="utf-8")
@@ -4654,18 +5105,154 @@ def http3_request(
         "body_hex": base64.b64decode(request["body_base64"], validate=True).hex(),
         "abort_after_body": request.get("abort_after_body", False),
         "abort_response_after_headers": request.get("abort_response_after_headers", False),
+        "peer_stop_before_response_headers": request.get("peer_stop_before_response_headers", False),
+        "same_connection_followup_path": request.get("same_connection_followup_path", "/"),
+        "malformed_data_frame_after_headers": request.get("malformed_data_frame_after_headers", False),
         "expect_response_error": request.get("expect_response_error", False),
         "leave_upload_open_until_response": request.get("leave_upload_open_until_response", False),
         "empty_data_frame_before_body": request.get("empty_data_frame_before_body", False),
+        "trailers": request.get("trailers", []),
         "invalid_alpn": request.get("invalid_alpn", False),
     }
+    if "body_chunks_base64" in request:
+        specification["body_chunks_hex"] = [
+            base64.b64decode(chunk, validate=True).hex()
+            for chunk in request["body_chunks_base64"]
+        ]
     if "authority" in request:
         specification["authority"] = request["authority"]
     if "close_error_code" in request:
         specification["close_error_code"] = request["close_error_code"]
     command = [str(client), f"127.0.0.1:{port}", str(trust_anchor)]
     input_data = json.dumps(specification)
-    if request.get("abort_after_body") and events_path is not None:
+    application_cancelled = False
+    malformed_disconnect_observed = False
+    if request.get("malformed_data_frame_after_headers"):
+        if events_path is None:
+            raise ParityError("truncated HTTP/3 DATA workflow requires ASGI event observation")
+        ready_path = events_path.with_suffix(".http3-truncated-data-ready")
+        release_path = events_path.with_suffix(".http3-truncated-data-release")
+        ready_path.unlink(missing_ok=True)
+        release_path.unlink(missing_ok=True)
+        specification["malformed_result_file"] = str(ready_path)
+        specification["malformed_release_file"] = str(release_path)
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stdout = stderr = ""
+        try:
+            if process.stdin is None:
+                raise ParityError("truncated HTTP/3 DATA client has no stdin pipe")
+            process.stdin.write(json.dumps(specification))
+            process.stdin.close()
+            process.stdin = None
+
+            deadline = time.monotonic() + 5
+            while not ready_path.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.01)
+            if not ready_path.exists():
+                raise ParityError("truncated HTTP/3 DATA client did not send its request")
+
+            deadline = time.monotonic() + 5
+            observed_events = read_events(events_path)[events_before:]
+            while (
+                "http3.upload.disconnected" not in observed_events
+                and process.poll() is None
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.01)
+                observed_events = read_events(events_path)[events_before:]
+            malformed_disconnect_observed = "http3.upload.disconnected" in observed_events
+            release_path.touch()
+            try:
+                stdout, stderr = process.communicate(timeout=20)
+            except subprocess.TimeoutExpired as error:
+                raise ParityError(
+                    "truncated HTTP/3 DATA client did not exit after releasing the probe"
+                ) from error
+        finally:
+            release_path.touch()
+            if process.poll() is None:
+                process.kill()
+                stdout, stderr = process.communicate()
+        returncode = process.returncode
+    elif request.get("peer_stop_before_response_headers"):
+        if events_path is None:
+            raise ParityError("HTTP/3 peer-stop workflow requires ASGI event observation")
+        stop_release_path = events_path.with_suffix(".http3-peer-stop-release")
+        followup_release_path = events_path.with_suffix(".http3-peer-stop-followup-release")
+        stop_release_path.unlink(missing_ok=True)
+        followup_release_path.unlink(missing_ok=True)
+        specification["peer_stop_release_file"] = str(stop_release_path)
+        specification["peer_stop_followup_release_file"] = str(followup_release_path)
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stdout = stderr = ""
+        try:
+            if process.stdin is None:
+                raise ParityError("HTTP/3 peer-stop client has no stdin pipe")
+            process.stdin.write(json.dumps(specification))
+            process.stdin.close()
+            process.stdin = None
+
+            deadline = time.monotonic() + 5
+            observed_events = read_events(events_path)[events_before:]
+            while (
+                time.monotonic() < deadline
+                and "request.hold" not in observed_events
+                and process.poll() is None
+            ):
+                time.sleep(0.01)
+                observed_events = read_events(events_path)[events_before:]
+            if "request.hold" not in observed_events:
+                raise ParityError(
+                    "HTTP/3 peer-stop client did not reach the held ASGI request: "
+                    f"events={observed_events!r}"
+                )
+
+            stop_release_path.touch()
+            deadline = time.monotonic() + 5
+            observed_events = read_events(events_path)[events_before:]
+            while (
+                time.monotonic() < deadline
+                and "request.cancelled" not in observed_events
+                and process.poll() is None
+            ):
+                time.sleep(0.01)
+                observed_events = read_events(events_path)[events_before:]
+            application_cancelled = "request.cancelled" in observed_events
+            if not application_cancelled:
+                raise ParityError(
+                    "HTTP/3 peer STOP_SENDING did not cancel the held ASGI task: "
+                    f"events={observed_events!r}"
+                )
+
+            followup_release_path.touch()
+            try:
+                stdout, stderr = process.communicate(timeout=20)
+            except subprocess.TimeoutExpired as error:
+                raise ParityError(
+                    "HTTP/3 same-connection follow-up did not finish after ASGI cancellation"
+                ) from error
+        finally:
+            stop_release_path.touch()
+            followup_release_path.touch()
+            if process.poll() is None:
+                process.kill()
+                stdout, stderr = process.communicate()
+        returncode = process.returncode
+    elif request.get("abort_after_body") and events_path is not None:
         release_path = events_path.with_suffix(".http3-abort-release")
         release_path.unlink(missing_ok=True)
         specification["abort_release_file"] = str(release_path)
@@ -4738,6 +5325,15 @@ def http3_request(
         raise ParityError(
             f"HTTP/3 probe client returned invalid JSON: {diagnostic[-800:]}"
         ) from error
+    if request.get("malformed_data_frame_after_headers"):
+        if response.get("malformed_data_frame_sent") is not True:
+            raise ParityError("HTTP/3 probe did not report sending the truncated DATA frame")
+        case_events = read_events(events_path)[events_before:] if events_path else []
+        return {
+            "disconnect_event": malformed_disconnect_observed,
+            "application_events": case_events,
+            "peer_close_code": response.get("peer_close_code"),
+        }
     if response.get("response_timeout") is True:
         return {
             "status": None,
@@ -4752,6 +5348,36 @@ def http3_request(
                 "HTTP/3 probe did not report the requested client-side abort"
             )
         return {"aborted": True}
+    if request.get("peer_stop_before_response_headers"):
+        if response.get("peer_stop_sent") is not True:
+            raise ParityError("HTTP/3 probe did not report sending STOP_SENDING")
+        followup = response.get("followup")
+        if not isinstance(followup, dict):
+            raise ParityError("HTTP/3 peer-stop probe omitted its same-connection follow-up")
+        try:
+            followup_body = bytes.fromhex(followup["body_hex"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ParityError("HTTP/3 peer-stop follow-up returned an invalid body") from error
+        followup_observation = response_observation(
+            followup["status"],
+            [("content-type", followup.get("content_type") or "")],
+            followup_body,
+        )
+        followup_observation["ordered_response_headers"] = followup.get(
+            "ordered_response_headers", []
+        )
+        response_header_values_by_name: dict[str, list[str]] = {}
+        for name, value in followup_observation["ordered_response_headers"]:
+            response_header_values_by_name.setdefault(name, []).append(value)
+        followup_observation["response_header_values_by_name"] = [
+            [name, values] for name, values in sorted(response_header_values_by_name.items())
+        ]
+        case_events = read_events(events_path)[events_before:] if events_path else []
+        return {
+            "application_cancelled": application_cancelled,
+            "application_events": case_events,
+            "followup": followup_observation,
+        }
     if request.get("abort_response_after_headers"):
         if response.get("client_aborted") is not True:
             raise ParityError(
@@ -5432,8 +6058,102 @@ def http3_shutdown_request(
         bytes.fromhex(response["body_hex"]),
     )
     observation["process_terminated"] = exit_code is not None
+    observation["process_exit_code"] = exit_code
     observation["server_log"] = server_log
     return observation
+
+
+def websocket_raw_frame_observation(
+    server: dict[str, Any], specification: dict[str, Any]
+) -> dict[str, Any]:
+    events_path = server["events"]
+    events_before = len(read_events(events_path))
+    client = socket.create_connection(("127.0.0.1", server["port"]), timeout=10)
+    client.settimeout(10)
+    handshake_status: int | None = None
+    handshake_accept_valid = False
+    frame_sent = False
+    application_events: list[str] = []
+    raw_key = "dGhlIHNhbXBsZSBub25jZQ=="
+    expected_accept = base64.b64encode(
+        hashlib.sha1(
+            (raw_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")
+        ).digest()
+    ).decode("ascii")
+    raw_request = (
+        f"GET {specification['path']} HTTP/1.1\r\n"
+        f"Host: 127.0.0.1:{server['port']}\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: {raw_key}\r\n"
+        "Sec-WebSocket-Version: 13\r\n\r\n"
+    ).encode("ascii")
+    try:
+        client.sendall(raw_request)
+        response = bytearray()
+        while b"\r\n\r\n" not in response:
+            chunk = client.recv(4096)
+            if not chunk:
+                break
+            response.extend(chunk)
+        if b"\r\n\r\n" in response:
+            header_block = bytes(response).split(b"\r\n\r\n", 1)[0]
+            lines = header_block.split(b"\r\n")
+            status_parts = lines[0].split()
+            if len(status_parts) >= 2 and status_parts[1].isdigit():
+                handshake_status = int(status_parts[1])
+            response_headers = {}
+            for line in lines[1:]:
+                name, separator, value = line.partition(b":")
+                if separator:
+                    response_headers[name.strip().lower()] = value.strip()
+            handshake_accept_valid = (
+                response_headers.get(b"sec-websocket-accept") == expected_accept.encode("ascii")
+            )
+        if handshake_status == 101:
+            raw_frame = base64.b64decode(specification["raw_frame_base64"], validate=True)
+            try:
+                client.sendall(raw_frame)
+                frame_sent = True
+            except OSError:
+                frame_sent = False
+            deadline = time.monotonic() + 3
+            while time.monotonic() < deadline:
+                application_events = read_events(events_path)[events_before:]
+                if any(event.startswith("websocket.disconnect:") for event in application_events):
+                    break
+                if server["process"].poll() is not None:
+                    break
+                time.sleep(0.01)
+    finally:
+        client.close()
+
+    disconnect_event = next(
+        (event for event in application_events if event.startswith("websocket.disconnect:")),
+        None,
+    )
+    disconnect_code = None
+    if disconnect_event is not None:
+        parts = disconnect_event.split(":", 2)
+        if len(parts) >= 2:
+            try:
+                disconnect_code = int(parts[1])
+            except ValueError:
+                pass
+    followup = http1_request(server["port"], {
+        "method": "GET",
+        "path": specification["followup_path"],
+        "headers": [],
+        "body_base64": "",
+    })
+    return {
+        "handshake_status": handshake_status,
+        "handshake_accept_valid": handshake_accept_valid,
+        "frame_sent": frame_sent,
+        "disconnect_event": disconnect_event is not None,
+        "disconnect_code": disconnect_code,
+        "followup_status": followup["status"],
+    }
 
 
 def websocket_observation(
@@ -5528,7 +6248,13 @@ def websocket_observation(
         if fault_control_path is not None:
             fault_control_path.write_text("", encoding="utf-8")
         application_events = read_events(events_path)[events_before:]
-        if wait_for_events or public_contract:
+        wait_for_app_event = specification.get("wait_for_app_event")
+        if wait_for_app_event is not None:
+            deadline = time.monotonic() + 2
+            while wait_for_app_event not in application_events and time.monotonic() < deadline:
+                time.sleep(0.01)
+                application_events = read_events(events_path)[events_before:]
+        elif wait_for_events or public_contract:
             deadline = time.monotonic() + 2
             while time.monotonic() < deadline and (
                 "websocket.header-capacity.cleanup-completed" not in application_events
@@ -5789,6 +6515,10 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "application_cancelled": "application_cancelled",
         "handshake_status": "handshake_status",
         "handshake_established": "handshake_established",
+        "handshake_accept_valid": "handshake_accept_valid",
+        "frame_sent": "frame_sent",
+        "disconnect_code": "disconnect_code",
+        "followup_status": "followup_status",
         "handshake_rejected": "handshake_rejected",
         "pong_received": "pong_received",
         "subprotocol": "subprotocol",
@@ -6114,7 +6844,13 @@ def execute_case(
         profile_id = profile["id"]
         fault = case.get("fault")
         fault_control_path = server.get("coverage_fault_control_path") if fault else None
-        if fault_control_path is not None:
+        # This selector is consumed when the target process starts, before
+        # its server path is chosen. Re-arming it here would leave a stale
+        # token that falsely reports startup selection as unconsumed.
+        if (
+            fault_control_path is not None
+            and fault["point"] != "http3.legacy-path.selection"
+        ):
             control_point = fault["point"] if fault["point"] in FAULT_POINTS else ""
             fault_control_path.write_text(control_point, encoding="utf-8")
         if profile["protocol"].startswith("http/1.1"):
@@ -6131,10 +6867,25 @@ def execute_case(
                 raise ParityError("HTTP/3 adapter is missing its certificate or client")
             request = case["request"]
             if case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}:
-                return http3_peer_close_request(server, trust_anchor, request, h3_client)
+                observation = http3_peer_close_request(server, trust_anchor, request, h3_client)
+                if fault is not None and fault["contract"] in {
+                    "http3-legacy-peer-close-no-error",
+                    "http3-legacy-peer-close-unknown-code-ignored",
+                    "http3-legacy-peer-close-classification-error",
+                }:
+                    observation["fault_consumed"] = (
+                        fault_control_path.read_text(encoding="utf-8").strip()
+                        != fault["point"]
+                    )
+                return observation
             if request.get("hold_open_for_shutdown"):
                 observation = http3_shutdown_request(server, trust_anchor, request, h3_client)
                 if fault is not None and fault["point"] == "server.http3-task.shutdown-hang":
+                    observation["fault_consumed"] = (
+                        fault_control_path.read_text(encoding="utf-8").strip()
+                        != fault["point"]
+                    )
+                elif fault is not None and fault["point"] == "http3.legacy-path.selection":
                     observation["fault_consumed"] = (
                         fault_control_path.read_text(encoding="utf-8").strip()
                         != fault["point"]
@@ -6154,9 +6905,42 @@ def execute_case(
                         "body_base64": "",
                     }, h3_client,
                 )
-                return {
+                observation = {
                     "handshake_rejected": handshake_rejected,
                     "followup": followup,
+                }
+                if (
+                    fault is not None
+                    and fault["contract"] == "http3-legacy-handshake-recovery"
+                ):
+                    observation["fault_consumed"] = (
+                        fault_control_path.read_text(encoding="utf-8").strip()
+                        != fault["point"]
+                    )
+                return observation
+            if request.get("malformed_data_frame_after_headers"):
+                events_before = len(read_events(server["events"]))
+                malformed_observation = http3_request(
+                    server["port"],
+                    trust_anchor,
+                    request,
+                    h3_client,
+                    events_path=server["events"],
+                    events_before=events_before,
+                )
+                followup = http3_request(
+                    server["port"], trust_anchor, {
+                        "method": "GET",
+                        "path": "/state",
+                        "headers": [],
+                        "body_base64": "",
+                    }, h3_client,
+                )
+                return {
+                    "application_events": malformed_observation["application_events"],
+                    "peer_close_code": malformed_observation["peer_close_code"],
+                    "followup": followup,
+                    "followup_healthy": followup.get("status") == 200,
                 }
             events_before = len(read_events(server["events"]))
             observation = http3_request(
@@ -6184,8 +6968,10 @@ def execute_case(
                 )
                 if (
                     fault is not None
-                    and fault["contract"]
-                    == "http3-body-pump-error-stop-disconnect-followup-200"
+                    and fault["contract"] in {
+                        "http3-body-pump-error-stop-disconnect-followup-200",
+                        "http3-legacy-body-pump-delivers-disconnect-followup-200",
+                    }
                     and fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]
                 ):
                     raise ParityError("HTTP/3 body-pump error-stop fault was not consumed")
@@ -6193,9 +6979,41 @@ def execute_case(
                     "disconnect_event": "http3.upload.disconnected" in read_events(server["events"])[events_before:],
                     "followup": followup,
                 }
-                if fault is not None and fault["contract"] == "http3-body-pump-error-stop-disconnect-followup-200":
+                if fault is not None and fault["contract"] in {
+                    "http3-body-pump-error-stop-disconnect-followup-200",
+                    "http3-legacy-body-pump-delivers-disconnect-followup-200",
+                }:
                     result["fault_consumed"] = True
                 return result
+            if fault is not None and fault["contract"] == "http3-upload-body-pump-preserves-data":
+                if fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
+                    raise ParityError("HTTP/3 empty-data body-pump fault was not consumed")
+                observation["fault_consumed"] = True
+            if (
+                fault is not None
+                and fault["contract"]
+                in {
+                    "http3-native-body-pump-pre-poll-cancel-preserves-response",
+                    "http3-native-body-pump-final-message-stop-preserves-response",
+                }
+            ):
+                if fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
+                    raise ParityError("HTTP/3 body-pump cancellation fault was not consumed")
+                observation["fault_consumed"] = True
+            if (
+                fault is not None
+                and fault["contract"] == "http3-native-body-pump-sender-closed-preserves-response"
+            ):
+                if fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
+                    raise ParityError("HTTP/3 sender-closed body-pump fault was not consumed")
+                observation["fault_consumed"] = True
+            if (
+                fault is not None
+                and fault["contract"] == "http3-native-body-pump-send-stop-preserves-response"
+            ):
+                if fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
+                    raise ParityError("HTTP/3 body-pump send-stop fault was not consumed")
+                observation["fault_consumed"] = True
             if request.get("abort_response_after_headers"):
                 followup = http3_request(
                     server["port"], trust_anchor, {
@@ -6222,6 +7040,11 @@ def execute_case(
             return run_websocket_load_case(
                 server, profile, case, trust_anchor, h3_client
             )
+        if case.get("operation") == "websocket.raw-frame-disconnect":
+            log_offset = len(read_server_log(server))
+            observation = websocket_raw_frame_observation(server, case["websocket"])
+            observation["server_log"] = read_server_log(server)[log_offset:]
+            return observation
         fault = case.get("fault")
         log_offset = len(read_server_log(server))
         observation = websocket_observation(
@@ -6304,10 +7127,10 @@ def execute_case(
                 deadline = time.monotonic() + 3
                 while (
                     time.monotonic() < deadline
-                    and "http.disconnect" not in read_events(server["events"])
+                    and "http.disconnect" not in application_events()
                 ):
                     time.sleep(0.01)
-                if "http.disconnect" not in read_events(server["events"]):
+                if "http.disconnect" not in application_events():
                     raise ParityError("malformed chunk body did not reach ASGI as a disconnect")
             elif disconnect.get("empty_request"):
                 client.sendall(
@@ -6320,6 +7143,12 @@ def execute_case(
                 if waiting_event not in application_events():
                     raise ParityError(
                         f"ASGI app did not reach disconnect checkpoint {waiting_event!r}"
+                    )
+                if disconnect.get("reset_after_complete_request"):
+                    client.setsockopt(
+                        socket.SOL_SOCKET,
+                        socket.SO_LINGER,
+                        struct.pack("ii", 1, 0),
                     )
             elif "content_length" in disconnect:
                 prefix = base64.b64decode(disconnect["partial_body_base64"], validate=True)
@@ -6380,7 +7209,7 @@ def execute_case(
             if after_close_delay_ms:
                 time.sleep(after_close_delay_ms / 1000)
                 server["events"].with_suffix(".disconnect-release").touch()
-            if disconnect.get("reset"):
+            if disconnect.get("reset") or disconnect.get("reset_after_complete_request"):
                 reset_elapsed_seconds = time.monotonic() - disconnect_started
         after_disconnect_event = disconnect.get("wait_event_after_disconnect")
         deadline = time.monotonic() + (0 if fault and not after_disconnect_event else 3)
@@ -6853,6 +7682,23 @@ def fault_contract_matches(
             isinstance(payload, dict)
             and payload.get("asgi_spec_version") == "2.5"
         )
+    if fault["contract"] == "http3-request-trailers-drained-as-body-only":
+        body = observation.get("body_bytes")
+        if not isinstance(body, str):
+            return False
+        try:
+            payload = json.loads(base64.b64decode(body, validate=True))
+        except (ValueError, json.JSONDecodeError):
+            return False
+        return (
+            observation.get("status") == 200
+            and isinstance(payload, dict)
+            and payload.get("receive_types")
+            and all(event_type == "http.request" for event_type in payload["receive_types"])
+            and payload.get("body_base64")
+            == base64.b64encode(b"h3-trailer").decode("ascii")
+            and "http.request.trailers" not in payload.get("scope_extensions", [])
+        )
     if fault["contract"] == "http-body-pump-drain-shutdown-joined":
         return (
             observation.get("status") == 200
@@ -7161,6 +8007,47 @@ def fault_contract_matches(
             and observation.get("process_exit_code") == 0
             and observation.get("server_error_observed") is True
         )
+    if fault["contract"] == "http3-legacy-peer-close-no-error":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("status") == 200
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("server_error_observed") is False
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http3-legacy-peer-close-unknown-code-ignored":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("status") == 200
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("server_error_observed") is False
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http3-legacy-peer-close-classification-error":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("status") == 200
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("server_error_observed") is True
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http3-legacy-handshake-recovery":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("handshake_rejected") is True
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and observation.get("fault_consumed") is True
+        )
     if fault["contract"] == "http3-request-task-error-before-peer-close-followup-200":
         responses = observation.get("responses")
         followup = observation.get("followup_response")
@@ -7187,6 +8074,35 @@ def fault_contract_matches(
             observation.get("status") == 200
             and observation.get("ordered_body_bytes")
             == base64.b64encode(b"read-once").decode("ascii")
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http3-native-body-pump-pre-poll-cancel-preserves-response":
+        return (
+            observation.get("status") == 200
+            and observation.get("body_bytes")
+            == base64.b64encode(b"response-before-upload-complete").decode("ascii")
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http3-native-body-pump-sender-closed-preserves-response":
+        return (
+            observation.get("status") == 200
+            and observation.get("body_bytes")
+            == base64.b64encode(b"response-before-upload-complete").decode("ascii")
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http3-native-body-pump-send-stop-preserves-response":
+        return (
+            observation.get("status") == 200
+            and observation.get("body_bytes")
+            == base64.b64encode(b"response-before-upload-complete").decode("ascii")
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "http3-native-body-pump-final-message-stop-preserves-response":
+        return (
+            observation.get("status") == 200
+            and observation.get("body_bytes")
+            == base64.b64encode(b"response-before-upload-complete").decode("ascii")
+            and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "http3-upload-body-pump-send-error-disconnect":
         return observation.get("status") == 500 and observation.get("ordered_body_bytes") == ""
@@ -7200,6 +8116,13 @@ def fault_contract_matches(
         return (
             observation.get("process_terminated") is True
             and "HTTP/3 connection task failed during shutdown" in observation.get("server_log", "")
+        )
+    if fault["contract"] == "http3-legacy-connection-task-shutdown-completes":
+        return (
+            observation.get("status") == 200
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "http3-connection-task-shutdown-hang-aborted":
         return (
@@ -7225,7 +8148,23 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
         )
-    if fault["contract"] == "http3-body-pump-error-stop-disconnect-followup-200":
+    if fault["contract"] == "http3-peer-stop-cancels-held-app-followup-200":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("application_cancelled") is True
+            and observation.get("application_events")
+            == ["request.hold", "request.cancelled"]
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and followup.get("content_type") == "text/plain; charset=utf-8"
+            and followup.get("body_base64")
+            == base64.b64encode(b"sync-callable-awaitable").decode("ascii")
+            and followup.get("connection_closed") is False
+        )
+    if fault["contract"] in {
+        "http3-body-pump-error-stop-disconnect-followup-200",
+        "http3-legacy-body-pump-delivers-disconnect-followup-200",
+    }:
         followup = observation.get("followup")
         return (
             observation.get("disconnect_event") is True
@@ -7328,6 +8267,7 @@ def fault_contract_matches(
             and responses[0].get("status") is None
             and responses[0].get("connection_closed") is True
             and responses[1].get("status") == 200
+            and observation.get("fault_consumed") is True
             and "uvicorn-rs: HTTP connection from" in observation.get("server_log", "")
             and "HTTP connection failed:" in observation.get("server_log", "")
         )
@@ -7413,6 +8353,12 @@ def fault_contract_matches(
         )
     if fault["contract"] == "http-disconnect-error-followup-200":
         followup = observation.get("followup_response")
+        return isinstance(followup, dict) and followup.get("status") == 200
+    if fault["contract"] == "http-connection-lifetime-closed-disconnect-followup-200":
+        followup = observation.get("followup_response")
+        # The disconnect runner independently requires the exact
+        # wait_event_after_disconnect checkpoint before returning this
+        # observation; the public observation schema exposes recovery only.
         return isinstance(followup, dict) and followup.get("status") == 200
     if fault["contract"] == "http-immediate-disconnect-message-error-followup-200":
         followup = observation.get("followup_response")
@@ -7518,6 +8464,19 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
         )
+    if fault["contract"] == "websocket-registration-failure-cancels-app-followup-200":
+        events = observation.get("application_events", [])
+        followup = observation.get("followup_response")
+        held = "websocket.registration-failure.hold"
+        cancelled = "websocket.registration-failure.cancelled"
+        return (
+            observation.get("handshake_status") != 101
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and events.count(held) == 1
+            and events.count(cancelled) == 1
+            and events.index(held) < events.index(cancelled)
+        )
     if fault["contract"] == "websocket-handshake-error-followup-200":
         followup = observation.get("followup_response")
         return (
@@ -7617,7 +8576,7 @@ def start_profile_servers(
     if needs_native_fault_control:
         coverage_fault_control_path = tempdir / "coverage-fault.txt"
     if has_fault_contract and coverage_fault_control_path is not None:
-        startup_fault_point = next(
+        initial_fault_point = next(
             (
                 case["fault"]["point"]
                 for case in cases
@@ -7632,7 +8591,17 @@ def start_profile_servers(
             ),
             "",
         )
-        coverage_fault_control_path.write_text(startup_fault_point, encoding="utf-8")
+        if not initial_fault_point and profile_id == "http3":
+            initial_fault_point = next(
+                (
+                    case["fault"]["point"]
+                    for case in cases
+                    if case.get("verification") == "fault-contract"
+                    and case["fault"]["point"] in LEGACY_HTTP3_FAULT_POINTS
+                ),
+                "",
+            )
+        coverage_fault_control_path.write_text(initial_fault_point, encoding="utf-8")
     servers: dict[str, dict[str, Any]] = {}
     # Fault contracts execute only the instrumented target. Starting an
     # unused reference can introduce unrelated startup/shutdown failures,
@@ -7642,7 +8611,15 @@ def start_profile_servers(
         server_ids.insert(0, profile["oracle"])
     try:
         for server_id in server_ids:
-            port = free_port(tcp_and_udp=profile_id == "http3")
+            # uvicorn-rs enables its QUIC endpoint whenever TLS credentials are
+            # configured, including HTTPS-only parity profiles. Ensure the
+            # selected port is free for both TCP and UDP before starting it.
+            port = free_port(
+                tcp_and_udp=(
+                    profile_id == "http3"
+                    or (server_id == "uvicorn-rs" and certificate is not None)
+                )
+            )
             events = tempdir / f"{server_id}-events.jsonl"
             servers[server_id] = start_server(
                 server_id,
@@ -7716,14 +8693,22 @@ def execute_profile(
             "server-eager-lifespan-registration-cleanup-timeout",
         }
     ]
-    if startup_cases and (len(cases) != 1 or len(startup_cases) != 1):
-        # Startup faults are loaded before the target process starts. Isolate
-        # each such case so its process-wide fault cannot disable the other
-        # cases grouped under the same protocol profile.
-        startup_case_ids = {case["case_id"] for case in startup_cases}
+    legacy_http3_fault_cases = [
+        case for case in cases
+        if profile["id"] == "http3"
+        and case.get("verification") == "fault-contract"
+        and case["fault"]["point"] in LEGACY_HTTP3_FAULT_POINTS
+    ]
+    isolated_case_ids = {
+        case["case_id"] for case in (*startup_cases, *legacy_http3_fault_cases)
+    }
+    if isolated_case_ids and (len(cases) != 1 or len(isolated_case_ids) != 1):
+        # Startup faults and legacy HTTP/3 route-selection faults must be
+        # armed before the target process starts. Isolate each so its
+        # process-wide fault cannot disable or reroute sibling cases.
         case_groups = [
-            [case for case in cases if case["case_id"] not in startup_case_ids],
-            *([case] for case in startup_cases),
+            [case for case in cases if case["case_id"] not in isolated_case_ids],
+            *([case] for case in cases if case["case_id"] in isolated_case_ids),
         ]
         grouped_outcomes: dict[str, dict[str, Any]] = {}
         infrastructure_errors = []
@@ -7850,6 +8835,20 @@ def execute_profile(
                         oracle_result = None
                         fault_observation = target_result
                         if case["fault"]["contract"] in {
+                            "http3-legacy-peer-close-no-error",
+                            "http3-legacy-peer-close-unknown-code-ignored",
+                            "http3-legacy-peer-close-classification-error",
+                        }:
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] == "http3-legacy-handshake-recovery":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] in {
                             "http-callback-error-followup-200",
                             "http-original-task-start-error-followup-200",
                             "http-callback-error-cleans-task-followup-200",
@@ -7904,7 +8903,13 @@ def execute_profile(
                             "http-body-pump-shutdown-cancelled-join",
                             "http-body-pump-shutdown-aborts-hung-pump",
                             "http-body-pump-shutdown-completes-task-before-abort",
+                            "http3-upload-body-pump-preserves-data",
+                            "http3-native-body-pump-pre-poll-cancel-preserves-response",
+                            "http3-native-body-pump-sender-closed-preserves-response",
+                            "http3-native-body-pump-send-stop-preserves-response",
+                            "http3-native-body-pump-final-message-stop-preserves-response",
                             "http3-body-pump-error-stop-disconnect-followup-200",
+                            "http3-legacy-body-pump-delivers-disconnect-followup-200",
                             "http3-body-pump-reaps-cancelled-task",
                         }:
                             fault_observation = {**target_result, **target_raw}
@@ -7928,6 +8933,7 @@ def execute_profile(
                             fault_observation = {
                                 **target_result,
                                 "server_log": target_raw["server_log"],
+                                "fault_consumed": target_raw.get("fault_consumed"),
                             }
                         elif case["fault"]["contract"] == "websocket-server-shutdown-force-abort":
                             fault_observation = {
@@ -7970,6 +8976,11 @@ def execute_profile(
                             fault_observation = {
                                 **target_result,
                                 "server_log": target_raw["server_log"],
+                            }
+                        elif case["fault"]["contract"] == "http3-legacy-connection-task-shutdown-completes":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
                             }
                         matches = fault_contract_matches(
                             case["fault"], fault_observation, case
@@ -8019,10 +9030,19 @@ def execute_profile(
                             for field, value in required.items()
                         ):
                             matches = False
+                        target_requirements = operation.get("target_requirements", {})
+                        if any(
+                            target_result.get(field) != value
+                            for field, value in target_requirements.items()
+                        ):
+                            matches = False
                         if oracle_comparison != target_comparison:
                             difference = "observed public fields differ exactly"
                         elif not matches:
-                            difference = f"required observation did not match {required!r}"
+                            difference = (
+                                f"required observation did not match {required!r}; "
+                                f"target requirement did not match {target_requirements!r}"
+                            )
                         else:
                             difference = None
                     outcomes.append({

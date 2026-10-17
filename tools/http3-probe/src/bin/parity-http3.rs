@@ -5,8 +5,50 @@ use std::sync::Arc;
 
 use bytes::{Buf, Bytes};
 use h3_quinn::quinn::{self, rustls};
-use http::{header::HeaderName, Request};
+use http::{header::HeaderName, HeaderMap, HeaderValue, Request};
 use serde_json::{json, Value};
+
+async fn send_truncated_data_frame(
+    connection: &quinn::Connection,
+    authority: &str,
+    path: &str,
+) -> Result<quinn::RecvStream, Box<dyn Error>> {
+    let mut field_section = vec![
+        0x00, // required insert count
+        0x00, // delta base
+        0xd4, // static :method POST
+        0xd7, // static :scheme https
+    ];
+    if path.len() >= 127 || authority.len() >= 127 {
+        return Err("malformed HTTP/3 probe authority/path is too long".into());
+    }
+    // QPACK literal without a name reference (:path), followed by a literal
+    // value. The short test path keeps both string lengths single-byte.
+    field_section.push(0x20 | u8::try_from(b":path".len())?);
+    field_section.extend_from_slice(b":path");
+    field_section.push(u8::try_from(path.len())?);
+    field_section.extend_from_slice(path.as_bytes());
+    // QPACK literal with a static name reference to :authority (index zero).
+    field_section.push(0x50);
+    field_section.push(u8::try_from(authority.len())?);
+    field_section.extend_from_slice(authority.as_bytes());
+    if field_section.len() >= 64 {
+        return Err("malformed HTTP/3 probe header block exceeds one-byte frame length".into());
+    }
+
+    let (mut send, receive) = connection.open_bi().await?;
+    let mut wire = Vec::with_capacity(field_section.len() + 5);
+    wire.push(0x01); // HEADERS frame
+    wire.push(u8::try_from(field_section.len())?);
+    wire.extend_from_slice(&field_section);
+    wire.extend_from_slice(&[0x00, 0x01]); // DATA frame declares one byte
+                                           // Deliberately omit the declared DATA byte, then cleanly FIN the request
+                                           // stream. This is the minimal input that distinguishes empty DATA from a
+                                           // truncated DATA frame in h3 0.0.8.
+    send.write_all(&wire).await?;
+    send.finish()?;
+    Ok(receive)
+}
 
 fn report_stream_error() -> std::io::Result<()> {
     writeln!(
@@ -328,6 +370,18 @@ async fn concurrent_request_sequence(
     Ok(())
 }
 
+async fn wait_for_file(path: &str, purpose: &str) -> Result<(), Box<dyn Error>> {
+    let path = std::path::Path::new(path);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !path.exists() {
+        if tokio::time::Instant::now() >= deadline {
+            return Err(format!("timed out waiting for {purpose}").into());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args().skip(1);
@@ -344,6 +398,49 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_str()
         .ok_or("missing request body")?;
     let request_body = decode_hex(body_hex)?;
+    let request_body_chunks = match specification.get("body_chunks_hex") {
+        Some(Value::Array(chunks)) => chunks
+            .iter()
+            .map(|chunk| {
+                decode_hex(
+                    chunk
+                        .as_str()
+                        .ok_or("request body chunk must be hexadecimal text")?,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(_) => return Err("body_chunks_hex must be an array".into()),
+        None if request_body.is_empty() => Vec::new(),
+        None => vec![request_body.clone()],
+    };
+    if request_body_chunks
+        .iter()
+        .flatten()
+        .copied()
+        .collect::<Vec<_>>()
+        != request_body
+    {
+        return Err("body_chunks_hex must concatenate to body_hex".into());
+    }
+    let mut request_trailers = HeaderMap::new();
+    if let Some(trailers) = specification.get("trailers").and_then(Value::as_array) {
+        for trailer in trailers {
+            let pair = trailer.as_array().ok_or("request trailer must be a pair")?;
+            if pair.len() != 2 {
+                return Err("request trailer must contain exactly two values".into());
+            }
+            let name = pair[0]
+                .as_str()
+                .ok_or("request trailer name must be text")?;
+            let value = pair[1]
+                .as_str()
+                .ok_or("request trailer value must be text")?;
+            request_trailers.append(
+                HeaderName::from_bytes(name.as_bytes())?,
+                HeaderValue::from_bytes(value.as_bytes())?,
+            );
+        }
+    }
     let h3_grease = match specification.get("h3_grease") {
         Some(Value::Bool(value)) => *value,
         Some(_) => return Err("h3_grease must be a boolean".into()),
@@ -353,6 +450,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let abort_response_after_headers = specification["abort_response_after_headers"]
         .as_bool()
         .unwrap_or(false);
+    let peer_stop_before_response_headers = specification["peer_stop_before_response_headers"]
+        .as_bool()
+        .unwrap_or(false);
+    let same_connection_followup_path = specification["same_connection_followup_path"].as_str();
     let expect_response_error = specification["expect_response_error"]
         .as_bool()
         .unwrap_or(false);
@@ -360,6 +461,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .as_bool()
         .unwrap_or(false);
     let empty_data_frame_before_body = specification["empty_data_frame_before_body"]
+        .as_bool()
+        .unwrap_or(false);
+    let malformed_data_frame_after_headers = specification["malformed_data_frame_after_headers"]
         .as_bool()
         .unwrap_or(false);
     let invalid_alpn = specification["invalid_alpn"].as_bool().unwrap_or(false);
@@ -372,6 +476,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         None => quinn::VarInt::from_u32(0),
     };
     let abort_release_file = specification["abort_release_file"].as_str();
+    let peer_stop_release_file = specification["peer_stop_release_file"].as_str();
+    let peer_stop_followup_release_file = specification["peer_stop_followup_release_file"].as_str();
     let hold_result_file = specification["hold_result_file"].as_str();
     let hold_release_file = specification["hold_release_file"].as_str();
     let hold_response_stream_for_shutdown = specification["hold_response_stream_for_shutdown"]
@@ -383,12 +489,41 @@ async fn main() -> Result<(), Box<dyn Error>> {
         && (specification.get("request_sequence").is_some()
             || abort_after_body
             || abort_response_after_headers
+            || peer_stop_before_response_headers
             || expect_response_error
             || leave_upload_open_until_response
             || invalid_alpn
             || hold_response_stream_for_shutdown)
     {
         return Err("held response trigger cannot be combined with another client workflow".into());
+    }
+    if peer_stop_before_response_headers
+        && (specification.get("request_sequence").is_some()
+            || abort_after_body
+            || abort_response_after_headers
+            || expect_response_error
+            || leave_upload_open_until_response
+            || invalid_alpn
+            || hold_response_stream_for_shutdown
+            || !request_body.is_empty())
+    {
+        return Err(
+            "held-request peer stop cannot be combined with another client workflow".into(),
+        );
+    }
+    if malformed_data_frame_after_headers
+        && (specification.get("request_sequence").is_some()
+            || abort_after_body
+            || abort_response_after_headers
+            || peer_stop_before_response_headers
+            || expect_response_error
+            || leave_upload_open_until_response
+            || invalid_alpn
+            || hold_response_stream_for_shutdown
+            || method != "POST"
+            || !request_body.is_empty())
+    {
+        return Err("truncated DATA probe cannot be combined with another workflow".into());
     }
 
     let certificate_file = std::fs::File::open(certfile)?;
@@ -431,6 +566,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .get("request_sequence")
         .or(request_after_first_response_chunk)
         .map(|_| connection.clone());
+    let raw_connection = connection.clone();
     let client_connection = tokio::time::timeout(
         std::time::Duration::from_secs(2),
         h3::client::builder()
@@ -484,6 +620,45 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .and_then(Value::as_str)
         .map(str::to_owned)
         .unwrap_or_else(|| format!("localhost:{}", address.port()));
+    if malformed_data_frame_after_headers {
+        let path = specification["path"]
+            .as_str()
+            .ok_or("missing malformed DATA request path")?;
+        let ready_file = specification["malformed_result_file"]
+            .as_str()
+            .ok_or("malformed DATA workflow is missing its ready file")?;
+        let release_file = specification["malformed_release_file"]
+            .as_str()
+            .ok_or("malformed DATA workflow is missing its release file")?;
+        let _malformed_response =
+            send_truncated_data_frame(&raw_connection, &authority, path).await?;
+        let temporary_ready = std::path::Path::new(ready_file).with_extension("ready.partial");
+        std::fs::write(&temporary_ready, b"sent")?;
+        std::fs::rename(temporary_ready, ready_file)?;
+        wait_for_file(release_file, "the truncated HTTP/3 DATA recovery release").await?;
+        let peer_close_code =
+            match tokio::time::timeout(std::time::Duration::from_secs(2), raw_connection.closed())
+                .await
+            {
+                Ok(quinn::ConnectionError::ApplicationClosed(close)) => {
+                    Some(close.error_code.into_inner())
+                }
+                Ok(_) | Err(_) => None,
+            };
+        drop(_malformed_response);
+        drop(sender);
+        endpoint.close(quinn::VarInt::from_u32(0), b"truncated DATA probe complete");
+        tokio::time::timeout(std::time::Duration::from_secs(2), endpoint.wait_idle()).await?;
+        writeln!(
+            std::io::stdout().lock(),
+            "{}",
+            json!({
+                "malformed_data_frame_sent": true,
+                "peer_close_code": peer_close_code
+            })
+        )?;
+        return Ok(());
+    }
     let uri: http::Uri = format!("https://{authority}{path}").parse()?;
     let mut request_builder = Request::builder().method(method).uri(uri);
     let headers = specification["headers"]
@@ -551,12 +726,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 return Err(error.into());
             }
         }
-        if let Err(error) = stream.send_data(Bytes::from(request_body)).await {
-            if expect_response_error {
-                report_stream_error()?;
-                return Ok(());
+        for chunk in request_body_chunks {
+            if let Err(error) = stream.send_data(Bytes::from(chunk)).await {
+                if expect_response_error {
+                    report_stream_error()?;
+                    return Ok(());
+                }
+                return Err(error.into());
             }
-            return Err(error.into());
         }
         let _ = writeln!(std::io::stderr().lock(), "HTTP/3 probe: request body sent");
     }
@@ -582,6 +759,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
     if !leave_upload_open_until_response {
+        if !request_trailers.is_empty() {
+            if let Err(error) = stream.send_trailers(request_trailers).await {
+                if expect_response_error {
+                    report_stream_error()?;
+                    return Ok(());
+                }
+                return Err(error.into());
+            }
+        }
         if let Err(error) = stream.finish().await {
             if expect_response_error {
                 report_stream_error()?;
@@ -589,6 +775,83 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
             return Err(error.into());
         }
+    }
+    if peer_stop_before_response_headers {
+        let release_file = peer_stop_release_file
+            .ok_or("HTTP/3 peer-stop workflow is missing its request release file")?;
+        let followup_release_file = peer_stop_followup_release_file
+            .ok_or("HTTP/3 peer-stop workflow is missing its follow-up release file")?;
+        let followup_path = same_connection_followup_path
+            .ok_or("HTTP/3 peer-stop workflow is missing its follow-up path")?;
+        if !followup_path.starts_with('/') {
+            return Err("HTTP/3 peer-stop follow-up path must be origin-form".into());
+        }
+
+        wait_for_file(release_file, "the held-request peer-stop release").await?;
+        stream.stop_sending(h3::error::Code::H3_REQUEST_CANCELLED);
+        wait_for_file(followup_release_file, "the ASGI cancellation observation").await?;
+        drop(stream);
+
+        let followup_request = Request::builder()
+            .method("GET")
+            .uri(format!(
+                "https://localhost:{}{followup_path}",
+                address.port()
+            ))
+            .body(())?;
+        let mut followup_stream = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            sender.send_request(followup_request),
+        )
+        .await??;
+        followup_stream.finish().await?;
+        let followup_response = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            followup_stream.recv_response(),
+        )
+        .await??;
+        let content_type = followup_response
+            .headers()
+            .get(http::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok());
+        let ordered_response_headers = followup_response
+            .headers()
+            .iter()
+            .filter(|(name, _)| name.as_str().starts_with("x-asgi-"))
+            .map(|(name, value)| {
+                json!([
+                    name.as_str(),
+                    String::from_utf8_lossy(value.as_bytes()).into_owned()
+                ])
+            })
+            .collect::<Vec<_>>();
+        let mut followup_body = Vec::new();
+        while let Some(mut data) = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            followup_stream.recv_data(),
+        )
+        .await??
+        {
+            let length = data.remaining();
+            followup_body.extend_from_slice(data.chunk());
+            data.advance(length);
+        }
+        let observation = json!({
+            "peer_stop_sent": true,
+            "followup": {
+                "status": followup_response.status().as_u16(),
+                "content_type": content_type,
+                "ordered_response_headers": ordered_response_headers,
+                "body_hex": followup_body.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+                "body_stream_error": false
+            }
+        });
+        drop(followup_stream);
+        drop(sender);
+        endpoint.close(quinn::VarInt::from_u32(0), b"parity peer stop observed");
+        tokio::time::timeout(std::time::Duration::from_secs(2), endpoint.wait_idle()).await?;
+        writeln!(std::io::stdout().lock(), "{observation}")?;
+        return Ok(());
     }
     let response_result =
         tokio::time::timeout(std::time::Duration::from_secs(2), stream.recv_response()).await;

@@ -37,7 +37,7 @@ run_parity = importlib.import_module("run_parity")
 
 RUNNER = ROOT / "scripts" / "run_parity.py"
 BUILD_SCRIPT = ROOT / "scripts" / "build_coverage_extension.py"
-RESULT_SCHEMA = "uvicorn-rs-coverage/unified@7"
+RESULT_SCHEMA = "uvicorn-rs-coverage/unified@8"
 LLVM_EXTENSION_KEY = "uvicorn_rs_unified"
 SOURCE_PATHS = (
     "src",
@@ -59,6 +59,7 @@ PRODUCTION_SOURCE_SET = (
 )
 # Sources compiled only to drive coverage contracts, not production code.
 COVERAGE_SUPPORT_SOURCE_SET = (
+    "crates/uvicorn-rs/src/coverage.rs",
     "crates/uvicorn-rs/src/http3/coverage.rs",
 )
 EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
@@ -73,6 +74,10 @@ PYTHON_SOURCE_SET = (
 NATIVE_MANIFEST = ROOT / "tests" / "native-core" / "manifest.json"
 NATIVE_RUNNER = ROOT / "target" / "asgi-native-coverage" / "release" / "examples" / "native_core_contracts"
 NATIVE_FAULT_CONTRACTS = {
+    "native.request-lifetime.body-missing-guard": {
+        "operation": "native-request-lifetime-body-missing-guard",
+        "scenario": "guard-missing",
+    },
     "http1.upgrade.receiver-closed": {
         "operation": "native-http1-upgrade-session",
         "scenario": "receiver-closed",
@@ -81,9 +86,25 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-peer-read-receiver-closed",
         "scenario": "receiver-closed",
     },
+    "http1.peer-read.failure-after-data": {
+        "operation": "native-http1-peer-read-error-response-cancel",
+        "scenario": "failure-after-data",
+    },
+    "http1.response-body-activity.watch-outcomes": {
+        "operation": "native-http1-peer-read-activity-watch-outcomes",
+        "scenario": "watch-outcomes",
+    },
+    "connection-error.source-variants": {
+        "operation": "native-connection-error-source-contract",
+        "scenario": "source-variants",
+    },
     "http3.peer-stop-observer.unavailable": {
         "operation": "http3-peer-stop-observer-unavailable",
         "scenario": "observer-unavailable",
+    },
+    "http3.request-body.trailers-pending-once": {
+        "operation": "http3-request-trailers",
+        "scenario": "trailers-pending",
     },
     "http3.peer-stop-observer.error": {
         "operation": "http3-peer-stop-observer-error",
@@ -391,6 +412,149 @@ def llvm_export(
     if report.get("type") != "llvm.coverage.json.export" or not report.get("data"):
         raise CoverageError("llvm-cov export returned an unsupported report")
     return report
+
+
+def llvm_export_lcov(
+    llvm_cov: Path,
+    binaries: list[Path],
+    profile_data: Path,
+    allowed_sources: set[str],
+    *,
+    timeout: int = 120,
+) -> dict[str, dict[int, int]]:
+    """Return LLVM's per-physical-line counts for the declared source files."""
+    ignored_dependencies = r".*/\.cargo/registry/.*"
+    command = [
+        str(llvm_cov),
+        "export",
+        "--format=lcov",
+        "--check-binary-ids",
+        f"--instr-profile={profile_data}",
+        f"--ignore-filename-regex={ignored_dependencies}",
+    ]
+    for binary in binaries:
+        command.append(f"--object={binary}")
+    result = subprocess.run(
+        command,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if result.returncode:
+        detail = (result.stderr or result.stdout)[-6000:]
+        raise CoverageError(f"command failed ({result.returncode}): {command!r}\n{detail}")
+    if result.stderr.strip():
+        raise CoverageError(f"llvm-cov LCOV export emitted diagnostics:\n{result.stderr[-6000:]}")
+
+    source_lines: dict[str, dict[int, int]] = {}
+    current_path: str | None = None
+    for line in result.stdout.splitlines():
+        if line.startswith("SF:"):
+            filename = str(Path(line[3:]).resolve())
+            absolute_path = Path(filename)
+            if not absolute_path.is_relative_to(ROOT.resolve()):
+                current_path = None
+                continue
+            relative_path = str(absolute_path.relative_to(ROOT.resolve()))
+            current_path = relative_path if relative_path in allowed_sources else None
+            if current_path is not None:
+                if current_path in source_lines:
+                    raise CoverageError(f"LCOV export duplicates production file row: {current_path}")
+                source_lines[current_path] = {}
+            continue
+        if current_path is None or not line.startswith("DA:"):
+            continue
+        fields = line[3:].split(",")
+        if len(fields) < 2:
+            raise CoverageError(f"LCOV export has an invalid line record: {line!r}")
+        try:
+            line_number, count = int(fields[0]), int(fields[1])
+        except ValueError as error:
+            raise CoverageError(f"LCOV export has an invalid line record: {line!r}") from error
+        if line_number < 1 or count < 0:
+            raise CoverageError(f"LCOV export has an out-of-range line record: {line!r}")
+        if line_number in source_lines[current_path]:
+            raise CoverageError(
+                f"LCOV export repeats line {line_number} in production file {current_path}"
+            )
+        source_lines[current_path][line_number] = count
+
+    return source_lines
+
+
+def source_lines_for_region(region: dict[str, Any]) -> set[int]:
+    """Return physical source lines intersected by one executable LLVM region."""
+    start = region["start"]
+    end = region["end"]
+    start_line = int(start["line"])
+    start_column = int(start["column"])
+    end_line = int(end["line"])
+    end_column = int(end["column"])
+    if start_line < 1 or end_line < start_line or start_column < 1 or end_column < 1:
+        raise CoverageError(f"LLVM region has invalid source coordinates: {region!r}")
+    if start_line == end_line and end_column <= start_column:
+        raise CoverageError(f"executable LLVM region has an empty source span: {region!r}")
+    # LLVM source columns are one-based and the end coordinate is exclusive.
+    # A region ending at column 1 on a later line does not contain code there.
+    last_line = end_line if end_column > 1 else end_line - 1
+    return set(range(start_line, last_line + 1))
+
+
+def physical_line_summaries(
+    lcov_lines: dict[str, dict[int, int]],
+    regions: dict[str, dict[str, Any]],
+) -> tuple[dict[str, dict[str, int]], dict[str, dict[str, int]]]:
+    """Validate LCOV line records against the union of executable source spans."""
+    summaries = {path: {"lines": 0, "lines_total": 0} for path in PRODUCTION_SOURCE_SET}
+    evidence: dict[str, dict[str, int]] = {}
+    for path in EXECUTABLE_SOURCE_SET:
+        records = lcov_lines.get(path)
+        if records is None:
+            raise CoverageError(f"LLVM LCOV export omitted executable production source {path}")
+        region_lines: set[int] = set()
+        covered_region_lines: set[int] = set()
+        for region in regions.values():
+            if region["file"] != path:
+                continue
+            span_lines = source_lines_for_region(region)
+            region_lines.update(span_lines)
+            if region["covered"]:
+                covered_region_lines.update(span_lines)
+        lcov_line_numbers = set(records)
+        if region_lines != lcov_line_numbers:
+            missing_spans = sorted(lcov_line_numbers - region_lines)
+            missing_lcov = sorted(region_lines - lcov_line_numbers)
+            raise CoverageError(
+                f"LLVM LCOV physical lines differ from executable region spans for {path}: "
+                f"unattributed_lcov={missing_spans[:12]}, unrecorded_spans={missing_lcov[:12]}"
+            )
+        lcov_covered_lines = {line for line, count in records.items() if count > 0}
+        if covered_region_lines != lcov_covered_lines:
+            missing_hits = sorted(lcov_covered_lines - covered_region_lines)
+            missing_records = sorted(covered_region_lines - lcov_covered_lines)
+            raise CoverageError(
+                f"LLVM LCOV hit lines differ from covered executable region spans for {path}: "
+                f"unattributed_hits={missing_hits[:12]}, span_without_hit={missing_records[:12]}"
+            )
+        summaries[path] = {
+            "lines": len(lcov_covered_lines),
+            "lines_total": len(lcov_line_numbers),
+        }
+        evidence[path] = {
+            "lcov_lines": len(lcov_line_numbers),
+            "region_span_lines": len(region_lines),
+            "lcov_covered_lines": len(lcov_covered_lines),
+            "covered_region_span_lines": len(covered_region_lines),
+        }
+
+    for path in NO_COUNTER_SOURCE_SET:
+        if lcov_lines.get(path):
+            raise CoverageError(f"source classified as no-counter has LCOV line records: {path}")
+        if any(region["file"] == path for region in regions.values()):
+            raise CoverageError(f"source classified as no-counter has executable regions: {path}")
+    return summaries, evidence
 
 
 def source_region_map(
@@ -1515,6 +1679,16 @@ def main() -> int:
     aggregate_regions, aggregate_summaries, canonical_functions = source_region_map(
         aggregate_llvm, source["sha256"], set(PRODUCTION_SOURCE_SET)
     )
+    aggregate_lcov_lines = llvm_export_lcov(
+        llvm_cov,
+        [extension, native_runner_snapshot],
+        combined_profdata,
+        set(PRODUCTION_SOURCE_SET),
+        timeout=180,
+    )
+    physical_line_summary, physical_line_evidence = physical_line_summaries(
+        aggregate_lcov_lines, aggregate_regions
+    )
 
     all_case_regions = {
         region_id: {**region, "hit_by": []}
@@ -1587,7 +1761,11 @@ def main() -> int:
     case_index_by_key = {case_key: index for index, case_key in enumerate(case_index)}
 
     source_region_summaries = {
-        path: {"regions": 0, "regions_total": 0}
+        path: {
+            "regions": 0,
+            "regions_total": 0,
+            **physical_line_summary[path],
+        }
         for path in PRODUCTION_SOURCE_SET
     }
     for region in aggregate_regions.values():
@@ -1603,11 +1781,11 @@ def main() -> int:
     }
 
     llvm_source_summary = {
-        metric: sum(normalized_aggregate_summaries[path][metric] for path in EXECUTABLE_SOURCE_SET)
+        metric: sum(aggregate_summaries[path][metric] for path in EXECUTABLE_SOURCE_SET)
         for metric in ("regions", "lines")
     } | {
         f"{metric}_total": sum(
-            normalized_aggregate_summaries[path][f"{metric}_total"]
+            aggregate_summaries[path][f"{metric}_total"]
             for path in EXECUTABLE_SOURCE_SET
         )
         for metric in ("regions", "lines")
@@ -1617,8 +1795,10 @@ def main() -> int:
         "regions_total": sum(
             source_region_summaries[path]["regions_total"] for path in EXECUTABLE_SOURCE_SET
         ),
-        "lines": llvm_source_summary["lines"],
-        "lines_total": llvm_source_summary["lines_total"],
+        "lines": sum(source_region_summaries[path]["lines"] for path in EXECUTABLE_SOURCE_SET),
+        "lines_total": sum(
+            source_region_summaries[path]["lines_total"] for path in EXECUTABLE_SOURCE_SET
+        ),
     }
     if source_region_summary["regions"] != len(aggregate_hits):
         raise CoverageError("per-file source region summaries differ from the attributed union")
@@ -1706,6 +1886,7 @@ def main() -> int:
             "path": path,
             "classification": "no-executable-counters" if path in NO_COUNTER_SOURCE_SET else "executable",
             "summary": normalized_aggregate_summaries[path],
+            "llvm_summary": aggregate_summaries[path],
         }
         for path in all_source_paths
     ]
@@ -1776,8 +1957,15 @@ def main() -> int:
             "source_files": source_file_rows,
             "llvm_normalization": {
                 "regions": "source-span union across Rust function instantiations",
-                "lines": "LLVM file-level line summary",
+                "lines": "physical source-line union from LLVM LCOV DA records, validated against executable region spans",
                 "function_counters": "raw LLVM instantiation counters retained",
+            },
+            "line_validation": {
+                "source": "llvm-cov export --format=lcov DA records",
+                "span_coordinates": "one-based LLVM source columns with an exclusive end coordinate",
+                "physical_line_sets_match": True,
+                "covered_line_sets_match": True,
+                "source_files": physical_line_evidence,
             },
             "summary": {
                 "regions": {

@@ -7,7 +7,7 @@ passed attribution and each of three full repeats: 243 oracle-parity cases and
 268 target-only contracts. The report records 5,561/5,561 native regions and
 3,997/3,997 lines. This is dirty macOS ARM64 source evidence, not hosted release
 evidence or full ASGI conformance; see the
-[coverage report](coverage.md#current-unified-coverage-status-2026-10-15) and the
+[coverage report](coverage.md#current-unified-coverage-status-2026-10-17) and the
 current candidate-wheel smoke (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 
 ## CLI
@@ -47,10 +47,12 @@ continues to run on its owning asyncio loop. The live inputs verify accepted
 and rejected configuration paths, not the effective concurrency limit. This
 is not a Uvicorn CLI option.
 
-The CLI runs the Python ASGI implementation in `uvicorn-rs-py`. Its HTTP/1.1
-and HTTP/2 TCP/TLS path uses the separately packaged native `uvicorn-rs`
-transport; HTTP/3 remains in the extension's Rust server layer. ASGI callables
-still run on their Python-owned event loop through the PyO3 bridge.
+The CLI runs the Python ASGI implementation in `uvicorn-rs-py`. With the
+default `native-tcp` feature, its HTTP/1.1, HTTP/2 over TCP/TLS, and HTTP/3
+over Quinn paths use the separately packaged native `uvicorn-rs` transport.
+Builds without `native-tcp` retain the legacy Rust protocol implementation.
+ASGI callables still run on their Python-owned event loop through the PyO3
+bridge.
 
 Native Rust services can choose how a TCP peer's read-half closure is observed
 through `ServerConfig.peer_read_half_close`. The default `OnRead` mode adds no

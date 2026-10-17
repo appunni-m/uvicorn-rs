@@ -551,6 +551,21 @@
       }
     },
     {
+      "case_id": "websocket.reserved-opcode-disconnect",
+      "profile": "websocket",
+      "operation": "websocket.raw-frame-disconnect",
+      "covers": [
+        "websocket.raw-frame-disconnect"
+      ],
+      "websocket": {
+        "path": "/ws-wait-for-disconnect",
+        "subprotocols": [],
+        "messages": [],
+        "raw_frame_base64": "g4ABAgME",
+        "followup_path": "/scope"
+      }
+    },
+    {
       "case_id": "websocket.invalid-accept-header-container",
       "profile": "websocket",
       "operation": "websocket.handshake-rejected",
@@ -1668,6 +1683,45 @@
         "subprotocols": [],
         "messages": [],
         "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.native-upgrade-missing-handshake-rejected",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.native-upgrade.missing",
+        "contract": "websocket-handshake-error-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [],
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.native-upgrade-register-closed-cancels-held-app",
+      "profile": "websocket",
+      "operation": "websocket.registration-failure-cleanup",
+      "covers": [
+        "websocket.registration-failure-cleanup"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.native-upgrade.register-closed",
+        "contract": "websocket-registration-failure-cancels-app-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-registration-failure-hold",
+        "subprotocols": [],
+        "messages": [],
+        "followup_path": "/state",
+        "wait_for_app_event": "websocket.registration-failure.cancelled"
       }
     },
     {

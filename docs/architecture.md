@@ -3,14 +3,17 @@
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
 This document describes the PyO3/ASGI implementation distributed as
-`uvicorn-rs-py` and the Python-free `uvicorn-rs` server crate. The current
-default Python-server path delegates HTTP/1.1 and HTTP/2 over TCP/TLS to the
-native crate through a Rust Tower service. HTTP/3 remains in the Rust server
-layer in the PyO3 extension. Python app loading, the caller-owned event loop,
-ASGI scope/messages, context, and app exceptions remain on the Python side.
-This transport migration is new and still needs exact-source hosted coverage
-and benchmark evidence. The previous root Python distribution and CLI names
-are not compatibility requirements.
+`uvicorn-rs-py` and the Python-free `uvicorn-rs` server crate. With the default
+`native-tcp` feature, the Python server delegates HTTP/1.1, HTTP/2 over
+TCP/TLS, and HTTP/3 over Quinn to the native crate through Rust services.
+Python app loading, the caller-owned event loop, ASGI scope/messages, context,
+and app exceptions remain on the Python side. Builds without `native-tcp`
+retain the older protocol implementation; coverage builds also compile a
+limited legacy HTTP/3 path for fault contracts.
+This transport migration has a passing dirty-worktree full-source coverage
+report, but still needs clean exact-source hosted coverage and qualified
+benchmark evidence. The previous root Python distribution and CLI names are
+not compatibility requirements.
 
 The native crate exposes an opt-in proactive TCP EOF observer through
 [`PeerReadHalfCloseMode`](../crates/uvicorn-rs/src/lib.rs). The Python ASGI
@@ -21,19 +24,16 @@ lifetime observations into ASGI behavior at its boundary.
 For the proposed Rust-native integration with Starlette-RS and FastAPI-RS, see
 the [detailed architecture diagram](rust-native-integration-architecture.html).
 
-There is no completed full-source coverage report for the current native
-TCP/TLS integration. The most recent completed local coverage report predates
-this transport change and measured 243 live oracle comparisons plus 268
-target-only fault/support contracts, with 5,561/5,561 regions and 3,997/3,997
-lines. Those totals do not cover the current native crate integration or the
-revised coverage inventory and do not establish a clean hosted release. The
-current source completed two 506-case local matrix repeats; its third repeat
-stopped on the HTTP/3 resource probe's root-process RSS sample. The probe now
-samples the Hypercorn process tree, and the focused H3 case passes, but no full
-post-fix report has been produced. No normal-build parity run was included in
-the older report. See the
-[coverage evidence](coverage.md#current-unified-coverage-status-2026-10-15) and the
-current candidate-wheel smoke (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
+The current native TCP/TLS integration has a local unified report for 747
+cases: 533 ASGI and 214 native. All three repeats of each matrix passed, with
+8,997/8,997 executable regions and 6,628/6,628 normalized physical executable
+lines. The fully paginated Coverage-MCP receipt matches its source and build.
+The report is tied to a dirty worktree and does not establish clean hosted
+release evidence. No normal-build parity run was included in that instrumented
+report. See the
+[coverage evidence](coverage.md#current-unified-coverage-status-2026-10-17) and
+the current candidate-wheel smoke
+(`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 Older 506-, 494-, 485-, 451-, and 448-case results below are historical and do not
 attest the current checkout.
 
@@ -55,15 +55,16 @@ flowchart LR
 ```
 
 The `uvicorn-rs-py` CLI imports `module:attribute`, selects asyncio or optional
-uvloop, and starts the Rust server from that event loop. For HTTP/1.1 and
-HTTP/2 over TCP/TLS, the Python adapter creates a Rust Tower service and passes
-it to `uvicorn_rs::serve_tcp` or `serve_tls`; the native crate owns parsing,
-connection state, TLS transport, flow control, and graceful connection drain.
-HTTP/3 is served by the extension's Rust QUIC path. PyO3's asyncio integration
-dispatches ASGI calls back to the captured Python loop. Application code never
-runs on Tokio workers. The bridge constructs the ASGI scope and wraps
-Rust-backed `receive()` and `send()` operations in the callable shape; each
-ASGI event and callback still crosses the Python boundary.
+uvloop, and starts the Rust server from that event loop. With the default
+`native-tcp` feature, the Python adapter creates Rust services for HTTP/1.1,
+HTTP/2 over TCP/TLS, and HTTP/3 over Quinn; the native crate owns network I/O,
+protocol state, transport flow control, and connection draining. PyO3's
+asyncio integration dispatches ASGI calls back to the captured Python loop.
+Application code never runs on Tokio workers. The bridge constructs the ASGI
+scope and wraps Rust-backed `receive()` and `send()` operations in the callable
+shape; each ASGI event and callback still crosses the Python boundary. The
+current HTTP/3 adapter discards request trailer frames instead of exposing them
+as ASGI request trailers.
 
 The native module builds its Tokio runtime at import with one worker thread
 and registers the completed runtime with PyO3's async integration. A
@@ -290,7 +291,7 @@ matrix's fresh full verification covers both through this case and passes all
 termination/cancellation; the probe's `stream_reset` error convention alone
 does not identify a QUIC `RESET_STREAM` frame. See the
 [workflow contract](parity.md#current-http3-workflows) and
-[source-bound status](coverage.md#current-unified-coverage-status-2026-10-15).
+[source-bound status](coverage.md#current-unified-coverage-status-2026-10-17).
 
 ## Shutdown ownership and stages
 
@@ -347,7 +348,7 @@ The one-connection HTTP/3 case completes 128 one-byte uploads; its instrumented
 attribution records 128/128 body pumps joined, and each of the three complete
 matrix repeats returns 128/128 responses matching Hypercorn in the recorded
 source snapshot. The current 511-case matrix passes these recorded ASGI
-workflows; see [latest local evidence](coverage.md#current-unified-coverage-status-2026-10-15).
+workflows; see [latest local evidence](coverage.md#current-unified-coverage-status-2026-10-17).
 
 Lifespan has a dedicated cleanup tracker. Its main native task remains outside
 that tracker while startup and shutdown run, so request cleanup does not wait

@@ -8,7 +8,7 @@ comparisons plus 268 target-only contracts, with zero failures or transient
 infrastructure failures. The unified report records 5,561/5,561 regions and
 3,997/3,997 lines. Coverage-MCP independently found zero missing groups on a
 compact projection and matched its source/build receipt. See the
-[current coverage evidence](coverage.md#current-unified-coverage-status-2026-10-15).
+[current coverage evidence](coverage.md#current-unified-coverage-status-2026-10-17).
 This is dirty macOS ARM64 evidence for the PyO3 adapter's `src/lib.rs`; it does
 not establish hosted release readiness, full ASGI conformance, coverage of the
 Python-free crate, or performance improvement.
@@ -100,7 +100,18 @@ the enabled arm timed out receiving headers for the first reference request.
 The selected pair also enables full-profile HTTPS readiness after lifespan
 startup and public reference ERROR logging. The input controls the client,
 defaults to `true` when omitted, and adds no server option. See the
-[latest recorded source-bound evidence](coverage.md#current-unified-coverage-status-2026-10-15).
+[latest recorded source-bound evidence](coverage.md#current-unified-coverage-status-2026-10-17).
+
+`http3.truncated-data-frame-recovery-after-protocol-error` sends valid request
+headers followed by a DATA frame that declares one payload byte, then cleanly
+ends the QUIC stream without that byte. RFC 9114 section 7.1 requires this to
+produce the `H3_FRAME_ERROR` connection error. The focused live case observed
+close code `0x106` (262) from uvicorn-rs and a healthy `200` request on a fresh
+connection. Hypercorn 0.18.0 instead passed two empty body messages to the ASGI
+app and completed the request. The app events and peer close code remain in the
+result for diagnosis; parity compares the fresh-connection response, while the
+target requirement enforces the RFC error code. This preserves the normative
+behavior when the oracle differs.
 
 The target-only `http3.request-task-drain-on-accept-error` operation starts
 `/stream-cancel-until-reset` and receives a real status-200 `first/` body chunk.
@@ -326,6 +337,16 @@ and ordinary valid ASGI input. They do not write a native fault-control file.
 They declare the target's finite-capacity rejection and recovery contract in
 the same result envelope, and remain outside the oracle-parity denominator.
 
+The HTTP/3 request-trailer input is another target-only support contract using
+ordinary protocol input, not an injected Rust fault. The current result schema
+has no separate `support-contract` verification mode, so the input travels in
+the `fault-contract` envelope while remaining outside the oracle denominator.
+The pinned Hypercorn 0.18.0 HTTP/3 server raises `UnboundLocalError` when it
+receives the trailing HEADERS section, before it dispatches the ASGI app. A
+focused local run passed 1/1 on the target. Keep the result labeled target-only
+until the oracle can execute the request; this result is not an
+oracle-equivalence claim.
+
 Production Rust errors propagate through `Result`/`PyResult`. Task-unwind and
 mutex-poisoning contracts use the instrumented build's `coverage_panic` helper,
 which is absent from production builds. The runner checks every Rust panic-hook
@@ -418,7 +439,11 @@ For this operation, manifest `observe` retains the wire order and its optional
 `compare` list selects the normalized fields used for parity; other operations
 compare every observed field by default. The offline CI evidence checker uses
 the same comparison projection while still requiring the full observed fields
-to be present in both live observations.
+to be present in both live observations. An operation may declare
+`target_requirements` for a normative target behavior when the oracle has a
+known protocol deviation; the runner and offline evidence checker enforce those
+values on the target observation, while retaining but not comparing the
+reference-specific diagnostic fields.
 
 The previous combined input is retained in `tests/parity/archive/` because an
 older result artifact records its digest.

@@ -1,11 +1,13 @@
 # Native FastAPI-RS composition evidence
 
 **Result:** 17 of 17 real-socket H1/H2 inputs passed once from clean, detached
-source checkouts on macOS ARM64. This is local prototype evidence. It is not a
-hosted CI result, a full FastAPI contract, a Python parity result, or a
+source checkouts locally and in each of two dedicated hosted CI jobs. The
+latest hosted job is part of workflow run 38862681888; that overall workflow
+failed its separate 100% coverage gate. This is limited composition evidence, not a full FastAPI
+contract, Python parity result, release candidate, repeated result, or
 performance measurement.
 
-## Source identities
+## Local prototype source identities
 
 | Repository | Revision | State |
 |---|---|---|
@@ -83,10 +85,21 @@ http1.graceful-shutdown-drains-active-response
 http2.graceful-shutdown-drains-active-response
 ```
 
-The Uvicorn-RS CI workflow now has a dedicated job that fetches the pinned
-FastAPI-RS and Starlette-RS revisions, checks the integrated dependency graph,
-and runs this same manifest. The hosted result for the commit adding that job
-is separate from this local receipt and is not included here.
+## Hosted composition verification
+
+The latest dedicated [pinned native FastAPI-RS composition job](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888/job/116848350492)
+passed on Uvicorn-RS commit `27de9f3ac7d259a3a9b612c3247ab2c60eb27306`.
+It fetched FastAPI-RS `f438a7cbb2308e6c1f795aef98e333de23388533` and
+Starlette-RS `b4c8a65c85e1b0d251ca05874412811eaa3ac7b8`, verified the
+integrated normal/build dependency graph had no PyO3 package, and passed all
+17 manifest inputs over H1/H2 once. The earlier dedicated job in run
+38828501018 passed the same 17-input slice on Uvicorn-RS commit `c2de34a`.
+
+The overall [latest workflow run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888)
+was not green: its separate unified coverage job failed the 100% gate at
+8,496/8,650 regions and 6,486/6,592 lines. Package-artifact and Python-floor jobs were
+skipped. This hosted job proves the recorded composition slice only; it does
+not verify the current dirty checkout, repeated runs, or release readiness.
 
 The build emitted one non-fatal `dead_code` warning for
 `FastApiOperationRouter::find_slash_redirect_path` in this no-Python native
@@ -94,10 +107,11 @@ build.
 
 ## Limits
 
-This single run exercises only the example's cleartext HTTP/1.1 and HTTP/2
-contracts. It does not cover composed TLS, HTTP/3, WebSockets, framework
+These single runs exercise only the example's cleartext HTTP/1.1 and HTTP/2
+contracts. They do not cover composed TLS, HTTP/3, WebSockets, framework
 lifespan integration, the full FastAPI validation/dependency/Pydantic/OpenAPI
-surface, Python FastAPI parity, hosted CI, or performance. The older 51/51
+surface, Python FastAPI parity, repeated composition, a fully green hosted
+workflow, or performance. The older 51/51
 receipt used a separate `fastapi-rs-native` crate and is historical; it is not
 evidence for the current single-core API. The pinned FastAPI-RS revision is a
 feature branch, not a claim that the native API is already in its default
