@@ -215,8 +215,10 @@ performance claim. Comparing only exact repetition numbers valid in both the
 2 ms repeat and this 1 ms follow-up leaves three asyncio pairs and two uvloop
 pairs. The 2 ms throughput ratio changes by +106%, −23%, and +12% across the
 three asyncio repetitions, and by +16% and +1% across the two uvloop
-repetitions. That spread is not repeatable evidence for a deadline change.
-The 2 ms candidate remains reverted to 1 ms pending a focused stage diagnosis.
+repetitions. That spread is not repeatable evidence for a deadline change or
+an accepted production default. A profile-only 2 ms follow-up below checks
+whether the longer deadline reduces ASGI receive events before another
+normal-build timing run is considered.
 
 The Rust server remains slower for this upload workload, and the current
 measurements do not isolate the remaining cause. The earlier exact-source diagnosis in
@@ -226,6 +228,40 @@ uploads, but its instrumented run predates this source revision and does not
 attribute the current run's full CPU gap. The fresh 1 ms samples measure about
 3.6× Uvicorn's server CPU per request under asyncio and 3.0× under uvloop;
 they establish the gap, not its cause.
+
+#### Upload receive-stage diagnosis
+
+[Run 39049538954](https://github.com/appunni-m/uvicorn-rs/actions/runs/39049538954)
+used the same 1 MiB FastAPI upload at concurrency 64, with three repetitions
+per server and loop. All 12 instrumented rows completed with zero request
+failures and passed lifecycle checks. The runtime diagnostics build is
+`diagnostic_only`; its throughput and latency are not performance evidence.
+The table shows the median across repetitions of the per-request ASGI receive
+wait and receive-message count:
+
+| Loop | Server | ASGI receive p50/p95 ms | Receive calls p50 | Python body messages / bridge futures per request | Python bytes materialization µs/request |
+|---|---|---:|---:|---:|---:|
+| asyncio | Uvicorn | 22.921 / 28.971 | 5 | — | — |
+| asyncio | uvicorn-rs | 62.309 / 93.251 | 11 | 11.1 / 10.9 | 92.4 |
+| uvloop | Uvicorn | 21.400 / 23.843 | 5 | — | — |
+| uvloop | uvicorn-rs | 47.044 / 73.268 | 9 | 9.5 / 9.4 | 92.8 |
+
+The Rust ASGI app wait is almost entirely inside `receive()`: app wall and
+receive p50 differ by about 0.2 ms, while `send()` p50 is 4–5 µs and Python
+work outside ASGI I/O awaits is about 0.15–0.17 ms. The Rust side retains
+`Bytes` segments and creates one Python `bytes` value per ASGI body event; the
+materialized bytes total exactly one 1 MiB request payload per request, not
+multiple full-payload copies. The copy costs about 92 µs per request in this
+instrumented run, far below the tens of milliseconds spent awaiting body
+events. This points to receive-event cadence and bridge scheduling as the
+next place to measure; it does not isolate time waiting on Hyper frames,
+batch-deadline flushes, or Python-loop scheduling, and it does not establish
+that the GIL is the cause.
+
+The next profile-only trial uses a diagnostic candidate with a 2 ms body batch
+deadline and records the same receive counts. It provides no normal-build
+performance evidence; a separate correctness-gated timing comparison is
+required before adopting that deadline.
 
 ### Compare Tokio blocking-pool caps on FastAPI uploads
 
