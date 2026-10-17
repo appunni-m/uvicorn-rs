@@ -137,8 +137,13 @@ default selects Linux x86-64 and `protocol-scope`. To run that default case
 through Git, push a commit to `main` whose message contains `[focused-h2]`.
 That opt-in runs only the Linux x86-64 `protocol-scope` diagnostic; ordinary
 pushes keep running the full matrix. This mode builds the normal
-release wheel and H2 probe client, then runs only `uvicorn-rs-asyncio` for the
-selected workload. The repetition count, duration, warmup, and concurrency
+release wheel and H2 probe client, then runs only the selected server for the
+selected workload. `workflow_dispatch` can select one server, workload, and
+runner; the focused Git-push form also accepts these commit-message tokens:
+`[h2-server=hypercorn-uvloop]`, `[h2-workload=many-response-chunks]`, and
+`[h2-system=macos-arm64]`. Together with `[focused-h2]`, they isolate the
+previously failing Hypercorn/uvloop HTTP/2 chunk workload on macOS ARM64. The
+repetition count, duration, warmup, and concurrency
 inputs keep their normal values. It skips the full category matrix and aggregate
 step, and retains the report and server logs as a 90-day artifact.
 

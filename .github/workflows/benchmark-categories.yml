@@ -48,6 +48,16 @@ on:
           - linux-x86_64
           - linux-aarch64
           - macos-arm64
+      h2_server:
+        description: One HTTP/2 server to exercise with the probe client
+        default: uvicorn-rs-asyncio
+        required: true
+        type: choice
+        options:
+          - uvicorn-rs-asyncio
+          - uvicorn-rs-uvloop
+          - hypercorn-asyncio
+          - hypercorn-uvloop
       h2_workload:
         description: One HTTP/2 workload for focused diagnosis
         default: protocol-scope
@@ -396,9 +406,9 @@ jobs:
           retention-days: 90
 
   focused-h2-diagnostic:
-    name: ${{ inputs.h2_system || 'linux-x86_64' }} · one HTTP/2 diagnostic case
+    name: ${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }} · ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h2') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]')) }}
-    runs-on: ${{ inputs.h2_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.h2_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
+    runs-on: ${{ (inputs.h2_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || (inputs.h2_system == 'macos-arm64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]'))) && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -448,7 +458,7 @@ jobs:
           set -euo pipefail
           cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bin http2 \
             2>&1 | tee target/benchmark-preparation/http2-client-build.log
-      - name: Run one selected HTTP/2 workload on uvicorn-rs asyncio
+      - name: Run one selected HTTP/2 workload on one selected server
         shell: bash
         env:
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
@@ -456,13 +466,14 @@ jobs:
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
           BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
           BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
-          BENCHMARK_H2_WORKLOAD: ${{ inputs.h2_workload || 'protocol-scope' }}
+          BENCHMARK_H2_SERVER: ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }}
+          BENCHMARK_H2_WORKLOAD: ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}
           RUST_BACKTRACE: "1"
           PYTHONFAULTHANDLER: "1"
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_h2_category_bench.py \
-            --servers uvicorn-rs-asyncio \
+            --servers "$BENCHMARK_H2_SERVER" \
             --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
             --output target/benchmark-categories/h2-focused.json \
             --workloads "$BENCHMARK_H2_WORKLOAD" \
@@ -473,7 +484,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: h2-focused-${{ inputs.h2_system || 'linux-x86_64' }}-${{ github.sha }}
+          name: h2-focused-${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }}-${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/benchmark-categories/
