@@ -255,10 +255,10 @@ work outside ASGI I/O awaits is about 0.15–0.17 ms. The Rust side retains
 materialized bytes total exactly one 1 MiB request payload per request, not
 multiple full-payload copies. The copy costs about 92 µs per request in this
 instrumented run, far below the tens of milliseconds spent awaiting body
-events. This points to receive-event cadence and bridge scheduling as the
-next place to measure; it does not isolate time waiting on Hyper frames,
-batch-deadline flushes, or Python-loop scheduling, and it does not establish
-that the GIL is the cause.
+events. At the time of this run, receive-event cadence and bridge scheduling
+were the next measurement targets; this profile did not isolate Hyper frame
+waits or batch-deadline age. Current builds expose those body-pump counters as
+described in [Diagnostic counters and profiling](#diagnostic-counters-and-profiling).
 
 [Run 39049908982](https://github.com/appunni-m/uvicorn-rs/actions/runs/39049908982)
 repeated the same instrumented case with a diagnostic candidate using a 2 ms
@@ -1196,6 +1196,20 @@ callback delay, so it is not a queue-only measurement. These are aggregate
 elapsed-time sums and call counts, not histograms. Interpret them alongside
 client latency and Python profiles; the instrumented build must never supply
 performance claims.
+
+For HTTP request uploads, the runtime diagnostics also report body-pump stages.
+`http_request_body_frame_poll_completions` and
+`http_request_body_frame_ready_wait_ns` count completed `body.frame()` polls
+and their elapsed wall time; polls canceled by a batch deadline or shutdown are
+not included. `http_request_body_batch_deadline_flushes` and
+`http_request_body_batch_age_at_deadline_ns` count deadline flushes and the age
+from the batch's first segment until the timer fires. Batch age includes frame
+arrival intervals and overlaps frame-ready wait, so do not add those two time
+sums. Size and EOF flush counts identify the other normal batch-finalization
+paths. Channel-send elapsed time covers sends that complete; the full-send
+counters are the subset whose bounded channel had no free slot when the send
+began. These are process-wide aggregate counters, not per-request histograms,
+and send elapsed time includes scheduling as well as any channel wait.
 
 Use this only to attribute behavior, not to compare throughput. Build the
 instrumented extension, collect fixed and chunk-heavy H1 rows, then restore the
