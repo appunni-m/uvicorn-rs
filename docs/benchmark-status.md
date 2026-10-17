@@ -2,6 +2,38 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Focused HTTP/2 close-diagnostic follow-up (2026-10-17)
+
+The focused Linux x86-64 run
+[39009246269](https://github.com/appunni-m/uvicorn-rs/actions/runs/39009246269),
+commit `93669808`, stopped in repetition 2 after the client completed its
+response checks with zero failures and its H2 drivers exited successfully. The
+server exited cleanly without forced shutdown, with two exact `BrokenPipe`
+connection diagnostics from distinct peer ports; the finalizer then allowed
+only one. Repetition 1 completed 25,192 requests, but its timing was excluded
+for unrelated runner CPU activity. The [artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39009246269/artifacts/12092605687)
+retains the raw rows and logs.
+
+The earlier focused run
+[39003779460](https://github.com/appunni-m/uvicorn-rs/actions/runs/39003779460)
+used four client connections and logged one exact peer-close line in
+repetitions 1 and 2, with no such lines in repetitions 3–5. Its five response
+and shutdown checks passed; four timings passed the host guard. The current
+local change bounds this exact Rust H2 diagnostic to one per
+configured client connection and continues to reject counts above the bound,
+other server errors, response failures, driver failures, and unclean shutdown.
+
+A local normal-wheel run of `protocol-scope` passed 5/5 response and shutdown
+checks with zero peer-close lines. All five timing rows were excluded for
+unrelated host CPU activity. A direct finalizer smoke check accepted 2/4 exact
+diagnostics and rejected 5/4. These results validate the gate behavior; they
+provide no performance evidence. This follow-up is local and awaits push.
+Exact-source CI run
+[39009246290](https://github.com/appunni-m/uvicorn-rs/actions/runs/39009246290)
+is still running unified coverage. Full multi-system benchmark run
+[39006451490](https://github.com/appunni-m/uvicorn-rs/actions/runs/39006451490)
+is still running its three platform category jobs.
+
 ## Latest full benchmark attempt (2026-10-17)
 
 The [full matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146)

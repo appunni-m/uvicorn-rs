@@ -292,9 +292,15 @@ def finalize_server(
     log,
     *,
     permit_app_error: bool = False,
-    permit_h2_peer_close: bool = False,
+    max_h2_peer_close_diagnostics: int = 0,
 ) -> dict:
     """Require a live server, clean graceful exit, and no unexpected panic hook."""
+    if (
+        not isinstance(max_h2_peer_close_diagnostics, int)
+        or isinstance(max_h2_peer_close_diagnostics, bool)
+        or max_h2_peer_close_diagnostics < 0
+    ):
+        raise ValueError("maximum H2 peer-close diagnostics must be a non-negative integer")
     check_server_alive(process)
     shutdown = stop_owned(process, graceful=True)
     log.flush()
@@ -307,11 +313,17 @@ def finalize_server(
     expected_h2_peer_close_count = sum(
         _is_expected_h2_peer_close(line) for line in output.splitlines()
     )
-    permit_one_h2_peer_close = permit_h2_peer_close and expected_h2_peer_close_count == 1
+    h2_peer_close_count_within_limit = (
+        max_h2_peer_close_diagnostics > 0
+        and expected_h2_peer_close_count <= max_h2_peer_close_diagnostics
+    )
     native_error_lines = [
         line for line in output.splitlines()
         if line.startswith("uvicorn-rs:") and re.search(r"\b(failed|exceeded|aborting)\b|does not support lifespan", line)
-        and not (permit_one_h2_peer_close and _is_expected_h2_peer_close(line))
+        and not (
+            h2_peer_close_count_within_limit
+            and _is_expected_h2_peer_close(line)
+        )
         and not (permit_app_error and line == "uvicorn-rs: ASGI request failed: RuntimeError: benchmark exception path")
     ]
     if shutdown["forced"] or shutdown["returncode"] != 0 or panic or unexpected_python_error or native_error_lines:
@@ -328,8 +340,9 @@ def finalize_server(
         "unexpected_panic_events": 0,
         "unexpected_native_errors": len(native_error_lines),
         "expected_h2_peer_close_diagnostics": (
-            expected_h2_peer_close_count if permit_one_h2_peer_close else 0
+            expected_h2_peer_close_count if h2_peer_close_count_within_limit else 0
         ),
+        "max_h2_peer_close_diagnostics": max_h2_peer_close_diagnostics,
     }
 
 

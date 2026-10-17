@@ -713,14 +713,20 @@ gates while preserving its separate phase metrics and resource boundary.
 See [the feasibility report](feasibility.md) for historical interpretation and
 [the implementation review](implementation-review.md) for remaining questions.
 
-The HTTP/2 Rust-server diagnostic gate permits one exact
-`uvicorn-rs: connection task failed: hyper::Error(Io, Kind(BrokenPipe))` line
-only after the benchmark client exits successfully with zero response failures
-and the server shuts down cleanly without forced termination. The row records
-this accepted diagnostic count. Any other native error, duplicate line, client
-failure, timeout, nonzero exit, or forced shutdown still fails the sample. This
-case is classified as a peer-close diagnostic under those conditions; it does
-not relax the HTTP/2 response or lifecycle checks.
+The HTTP/2 Rust-server diagnostic gate permits at most one exact
+`BrokenPipe` peer-close diagnostic per configured Rust H2 client connection.
+The benchmark client completes each response body, drops its request senders,
+and requires every H2 connection driver to shut down without error before the
+server lifecycle check. With no active streams or request senders, the H2
+client sends a `GOAWAY` with `NO_ERROR`; HTTP/2 permits an endpoint to end a
+connection and specifically describes the case where streams remain open or
+half-closed when the connection ends ([RFC 9113, Sections 5.4.1 and 5.4.3]
+(https://www.rfc-editor.org/rfc/rfc9113.html#section-5.4.1)).
+Under these conditions, Hyper may observe a peer-close `BrokenPipe` while
+finishing the connection. The report records both the accepted count and its
+per-sample connection bound. A count above that bound, any other native error,
+client failure, timeout, nonzero exit, or forced shutdown still fails the
+sample; HTTP/2 response and lifecycle checks remain strict.
 
 ## Run the complete comparison with one command interface
 
