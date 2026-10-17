@@ -365,8 +365,25 @@ def _build_native_client() -> Path | None:
     return NATIVE_CLIENT
 
 
+def _uses_node_client(case: dict) -> bool:
+    return (
+        case.get("read_delay_ms", 0) > 0
+        or case.get("read_rate_bytes_per_second", 0) > 0
+        or NATIVE_CLIENT is None
+    )
+
+
+def _client_description(case: dict) -> str:
+    if _uses_node_client(case):
+        return "Node.js HTTP/1.1 with complete response-body checks"
+    return (
+        "threaded libcurl C workers with persistent HTTP/1.1 connections "
+        "and complete response-body checks"
+    )
+
+
 def _client_command(port: int, seconds: float, concurrency: int, case: dict) -> list[str]:
-    if case.get("read_delay_ms", 0) > 0 or case.get("read_rate_bytes_per_second", 0) > 0 or NATIVE_CLIENT is None:
+    if _uses_node_client(case):
         config = {
             "host": "127.0.0.1",
             "port": port,
@@ -875,6 +892,15 @@ def main() -> None:
             }
 
     cpu_model = host_cpu_model()
+    clients_by_workload = {
+        name: _client_description(WORKLOADS[name]["client"]) for name in args.workloads
+    }
+    distinct_clients = set(clients_by_workload.values())
+    client_description = (
+        next(iter(distinct_clients))
+        if len(distinct_clients) == 1
+        else "per workload; see client_by_workload"
+    )
     report = {
         "status": (
             "stopped_after_consecutive_failures"
@@ -920,7 +946,8 @@ def main() -> None:
             "warmup_seconds": args.warmup,
             "repetitions": args.repetitions,
             "seed": args.seed,
-            "client": "threaded libcurl C workers with persistent HTTP/1.1 connections and complete response-body checks",
+            "client": client_description,
+            "client_by_workload": clients_by_workload,
             "correctness_gate": "every measured response status and complete body exactly matches the workload oracle",
             "runtime_diagnostics_required": args.require_runtime_diagnostics,
             "asgi_stage_diagnostics": args.asgi_stage_diagnostics,
@@ -932,7 +959,10 @@ def main() -> None:
                 if args.asgi_stage_diagnostics else None
             ),
             "native_client": "libcurl C client compiled from scripts/bench_http_client.c" if native_client is not None else "unavailable; Node.js fallback used",
-            "fallback_client": "Node.js HTTP/1.1 with full body checking; used for slow-reader backpressure",
+            "fallback_client": (
+                "Node.js HTTP/1.1 with complete response-body checks; selected for "
+                "slow-reader workloads or when the libcurl C client is unavailable"
+            ),
             "libcurl": subprocess.check_output(["curl-config", "--version"], text=True).strip() if native_client is not None else None,
             "planned_rows": planned_rows,
             "recorded_rows": len(rows),
