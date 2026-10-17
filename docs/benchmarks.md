@@ -135,6 +135,31 @@ The latest attempt status and latest completed measurements are tracked
 separately. Historical local measurements below remain tied to their own source
 revisions and must not be read as results for the current commit.
 
+### Run one focused FastAPI matched timing case
+
+Use `workflow_dispatch` with `Run mode: focused-fastapi-match` to compare one
+stock FastAPI workload on one runner using the normal, uninstrumented release
+wheel. The defaults select `fastapi-validated-route` on Linux x86-64. The job
+compares the same Python app through `uvicorn-rs` and stock Uvicorn under both
+asyncio and uvloop, with five repetitions by default. It skips the full
+category matrix, aggregate, and generated benchmark documentation jobs.
+
+The runner captures a host preflight before timing. The HTTP category client
+checks every complete response against the workload oracle, verifies server
+lifecycle and source/binary identity, and records host activity, throughput,
+latency percentiles, server/client CPU, and RSS. The summary gate requires at
+least three timing-valid matching repetitions for each event-loop pair. If a
+runner is noisy, its invalid rows remain in the artifact and do not count
+toward the gate.
+
+To trigger the default case through Git, push a commit to `main` whose subject
+contains `[focused-fastapi-match]`. This path runs only the focused timing job;
+the push also starts regular CI. Use `workflow_dispatch` when avoiding the
+additional CI run. The run retains raw repetitions, logs, host observations,
+identity hashes, and the matched-pair summary in a 90-day artifact. Benchmark
+outputs stay out of Git. A passing result applies to one workload and one
+runner only; it is not a whole-server or cross-system performance claim.
+
 ### Run one focused FastAPI stage diagnostic
 
 Use `workflow_dispatch` with `Run mode: focused-fastapi-stage` to profile one

@@ -32,17 +32,18 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Run the full comparison or one focused FastAPI, HTTP/2, or HTTP/3 diagnostic
+        description: Run the full comparison or one focused FastAPI timing/diagnostic, HTTP/2, or HTTP/3 diagnostic
         default: full
         required: true
         type: choice
         options:
           - full
+          - focused-fastapi-match
           - focused-fastapi-stage
           - focused-h2
           - focused-h3
       fastapi_system:
-        description: Runner for the focused FastAPI stage diagnostic
+        description: Runner for the focused FastAPI timing or stage diagnostic
         default: linux-x86_64
         required: true
         type: choice
@@ -51,7 +52,7 @@ on:
           - linux-aarch64
           - macos-arm64
       fastapi_workload:
-        description: One FastAPI workload for stage attribution
+        description: One maintained FastAPI workload for a focused comparison
         default: fastapi-validated-route
         required: true
         type: choice
@@ -189,7 +190,7 @@ env:
 jobs:
   categories:
     name: ${{ matrix.system.id }} · parity and sequential categories
-    if: ${{ !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -549,6 +550,143 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
+  focused-fastapi-match:
+    name: ${{ inputs.fastapi_system || 'linux-x86_64' }} · ${{ inputs.fastapi_workload || 'fastapi-validated-route' }} · normal-build matched timing
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-match') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-match]')) }}
+    runs-on: ${{ inputs.fastapi_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Prepare one-workload normal-build FastAPI environment
+        shell: bash
+        env:
+          BENCHMARK_SYSTEM_ID: ${{ inputs.fastapi_system || 'linux-x86_64' }}
+          BENCHMARK_RUNNER: ${{ inputs.fastapi_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/benchmark-preparation target/fastapi-match
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcurl4-openssl-dev
+            dpkg-query -W build-essential pkg-config libssl-dev libcurl4-openssl-dev > target/benchmark-preparation/system-packages.txt
+            lscpu -J > target/benchmark-preparation/lscpu.json
+            cpu_model="$(lscpu -J | python3 -c 'import json,sys; print(next((item["data"] for item in json.load(sys.stdin)["lscpu"] if item["field"].strip(":") == "Model name"), "unknown"))')"
+          else
+            brew install curl pkg-config openssl@3
+            brew_paths="$(brew --prefix curl)/bin:$(brew --prefix openssl@3)/bin"
+            echo "$brew_paths" | tr ':' '\n' >> "$GITHUB_PATH"
+            export PATH="$brew_paths:$PATH"
+            brew list --versions curl pkg-config openssl@3 > target/benchmark-preparation/system-packages.txt
+            system_profiler SPHardwareDataType > target/benchmark-preparation/hardware.txt
+            cpu_model="$(sysctl -n machdep.cpu.brand_string)"
+          fi
+          export BENCHMARK_CPU_MODEL="$cpu_model"
+          uv sync --python "$PYTHON_VERSION" --group benchmark --group fastapi-benchmark --frozen --no-install-project
+          .venv/bin/python --version | tee target/benchmark-preparation/python-version.txt
+          rustc --version --verbose > target/benchmark-preparation/rust-version.txt
+          node --version > target/benchmark-preparation/node-version.txt
+          cc --version > target/benchmark-preparation/compiler-version.txt
+          curl-config --version > target/benchmark-preparation/curl-version.txt
+          openssl version > target/benchmark-preparation/openssl-version.txt
+          uname -a > target/benchmark-preparation/uname.txt
+          .venv/bin/python - <<'PY'
+          import importlib.metadata as metadata
+          import json
+          import os
+          import platform
+          import psutil
+          from pathlib import Path
+          names = ("uvicorn", "uvloop", "httptools", "psutil", "h11", "fastapi", "starlette", "pydantic")
+          report = {
+              "system_id": os.environ["BENCHMARK_SYSTEM_ID"],
+              "runner_label": os.environ["BENCHMARK_RUNNER"],
+              "os": platform.system(),
+              "architecture": platform.machine(),
+              "cpu_model": os.environ.get("BENCHMARK_CPU_MODEL", "unknown"),
+              "logical_cpu_count": os.cpu_count(),
+              "physical_cpu_count": psutil.cpu_count(logical=False),
+              "memory_total_bytes": psutil.virtual_memory().total,
+              "python": platform.python_version(),
+              "platform": platform.platform(),
+              "packages": {name: metadata.version(name) for name in names},
+              "hosted_runner": {name: os.environ.get(name) for name in ("ImageOS", "ImageVersion", "RUNNER_ARCH", "RUNNER_NAME")},
+          }
+          Path("target/benchmark-preparation/environment.json").write_text(json.dumps(report, indent=2) + "\n")
+          PY
+      - name: Build and install the normal release server wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/benchmark-preparation/server-wheels
+          uvx --from maturin==1.14.1 maturin build --release --locked \
+            --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
+            --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
+            2>&1 | tee target/benchmark-preparation/server-build.log
+          server_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path("target/benchmark-preparation/server-wheels").glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one server wheel")')"
+          uv pip install --python .venv/bin/python --no-deps "$server_wheel" \
+            2>&1 | tee target/benchmark-preparation/server-install.log
+      - name: Capture read-only host preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/benchmark_host_preflight.py \
+            --output target/benchmark-preparation/host-preflight.json
+      - name: Run one normal-build FastAPI workload against Uvicorn
+        shell: bash
+        env:
+          BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || 'fastapi-validated-route' }}
+          BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
+          BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
+          BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
+          BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
+          BENCHMARK_SEED: ${{ inputs.seed || '20261017' }}
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_http_category_bench.py \
+            --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
+            --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
+              uvicorn-rs-uvloop uvicorn-uvloop-httptools \
+            --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
+            --concurrency "$BENCHMARK_CONCURRENCY" --repetitions "$BENCHMARK_REPETITIONS" \
+            --seed "$BENCHMARK_SEED" \
+            --output "target/fastapi-match/http1.json" \
+            2>&1 | tee target/fastapi-match/driver.log
+      - name: Require three correctness-gated matching repetitions per loop
+        if: always()
+        shell: bash
+        env:
+          BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || 'fastapi-validated-route' }}
+        run: |
+          set -euo pipefail
+          if ! test -f target/fastapi-match/http1.json; then
+            printf '%s\n' 'No raw FastAPI benchmark report was produced.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          .venv/bin/python scripts/summarize_focused_fastapi_match.py \
+            --input target/fastapi-match/http1.json \
+            --workload "$BENCHMARK_FASTAPI_WORKLOAD" \
+            --output-dir target/fastapi-match
+          cat target/fastapi-match/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain focused FastAPI matched timing evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fastapi-match-${{ inputs.fastapi_system || 'linux-x86_64' }}-${{ inputs.fastapi_workload || 'fastapi-validated-route' }}-${{ github.sha }}
+          path: |
+            target/benchmark-preparation/
+            target/fastapi-match/
+          if-no-files-found: warn
+          retention-days: 90
+
   focused-h2-diagnostic:
     name: ${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }} · ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h2') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]')) }}
@@ -725,7 +863,7 @@ jobs:
   aggregate:
     name: Validate and render the multi-system evidence
     needs: categories
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && needs.categories.result != 'cancelled'
+    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && needs.categories.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -768,7 +906,7 @@ jobs:
   update-docs:
     name: Record benchmark status and update documentation
     needs: [categories, aggregate]
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
+    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

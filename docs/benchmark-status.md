@@ -146,6 +146,53 @@ HTTP/1.1 and WebSocket category medians regress on all three systems, the small
 FastAPI route regresses on every qualified Linux pair, and the full matrix is
 incomplete. Keep the performance release gate open.
 
+## Focused FastAPI ASGI-stage diagnosis (2026-10-17)
+
+The hosted [run 39030988829](https://github.com/appunni-m/uvicorn-rs/actions/runs/39030988829)
+completed on commit `96fc66a9b44f583478c90b4de9d60fce07714884` using Linux
+x86-64, CPython 3.12.13, one Tokio worker, and the stock FastAPI workload
+`fastapi-validated-route`. Three repetitions ran for each of four servers.
+All twelve rows passed response checks, lifecycle checks, stable identity, and
+clean shutdown. Host preflight passed. The [retained artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39030988829/artifacts/12100785359)
+has SHA-256 `d953767bc30eb5f33155b822f178b4935e2818cf19e96162d09491a9de6ade32`.
+Its measured source SHA-256 is
+`bc8c9cc930c99532bb48e0da63fb26e37629144e0e9e2ca86e433350e75c0b11`; the
+runtime-diagnostics extension SHA-256 is
+`7116057ef6f3c50ef55df0b5432a3cbe8fd175901814c78af61d402342582589`.
+
+Every row is intentionally marked timing-invalid because both Rust runtime
+counters and the per-request FastAPI stage wrapper are enabled. The throughput,
+latency, and CPU columns below are observations from an instrumented build, not
+performance evidence. Stage columns are medians of the three repetition-level
+percentiles and use one request as the unit.
+
+| Server / loop | Observed req/s, non-rankable | Observed server CPU, non-rankable | ASGI app wall p50 | ASGI `send` wait p50 | App time outside ASGI I/O p50 |
+|---|---:|---:|---:|---:|---:|
+| uvicorn-rs / asyncio | 4,704.7 | 268.2 µs/request | 111.5 µs | 5.8 µs | 105.4 µs |
+| Uvicorn / asyncio | 8,292.4 | 120.7 µs/request | 89.6 µs | 23.1 µs | 64.6 µs |
+| uvicorn-rs / uvloop | 5,448.3 | 228.0 µs/request | 108.5 µs | 5.3 µs | 103.2 µs |
+| Uvicorn / uvloop | 8,336.9 | 120.0 µs/request | 91.2 µs | 23.0 µs | 66.6 µs |
+
+The Rust counters recorded one Python attachment and one Python task-starter
+schedule per request. Their median accumulated wall time per call was 134.5 µs
+and 77.3 µs under asyncio, and 118.2 µs and 34.5 µs under uvloop. They include
+thread/task scheduling and callback work; they are not exclusive CPU or pure
+GIL-wait measurements. The app-stage wrapper found no `receive()` calls, no
+request-body bytes, and no request-body materialization/copy for this GET. The
+response was 71 bytes over two ASGI sends, with no bounded response queue
+backpressure. Request-body copy removal or SIMD applied only to body copying
+cannot explain this workload's observed gap; the result does not assess SIMD
+in HTTP parsing or other paths.
+
+The measured Rust `send()` wait is shorter, while the ASGI app wall time and
+the app time outside awaited `send()`/`receive()` are longer. That outside-I/O
+time includes FastAPI route matching, parameter validation, response-model
+serialization, Python execution, and any other awaits; it is not CPU time. The
+evidence narrows the next measurement to per-request scheduling/task setup and
+the Python ASGI execution path, but does not yet isolate a causal component.
+The next focused case uses the normal uninstrumented release wheel and requires
+three valid matching repetitions per loop before reporting performance.
+
 ## Latest focused macOS HTTP/3 large-response comparison (2026-10-17)
 
 Focused run [39013640218](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013640218)
