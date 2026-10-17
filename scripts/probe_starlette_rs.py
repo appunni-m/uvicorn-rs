@@ -437,17 +437,30 @@ def _run_server(server: str) -> dict[str, object]:
 
             status, body = _http_request(port, "GET", "/background")
             background_marker = marker_dir / "background.txt"
-            deadline = time.monotonic() + 2
-            while not background_marker.exists() and time.monotonic() < deadline:
-                time.sleep(0.01)
-            if (
-                status != 200
-                or body != b"background:accepted"
-                or not background_marker.exists()
-                or background_marker.read_text(encoding="utf-8") != "complete\n"
-            ):
+            if status != 200 or body != b"background:accepted":
                 raise RuntimeError(
-                    "Starlette background task did not finish after the response"
+                    f"{server} background route response differed: {status} {body!r}"
+                )
+
+            started = time.monotonic()
+            deadline = started + 5
+            background_marker_value = None
+            while time.monotonic() < deadline:
+                try:
+                    background_marker_value = background_marker.read_text(
+                        encoding="utf-8"
+                    )
+                except FileNotFoundError:
+                    background_marker_value = None
+                if background_marker_value == "complete\n":
+                    break
+                time.sleep(0.01)
+            background_waited = time.monotonic() - started
+            if background_marker_value != "complete\n":
+                raise RuntimeError(
+                    "Starlette background task did not finish after the response "
+                    f"(marker={background_marker_value!r}, "
+                    f"waited_seconds={background_waited:.3f})"
                 )
             observations["background_task"] = {
                 "status": status,
