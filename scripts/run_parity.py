@@ -232,6 +232,7 @@ FAULT_POINTS = {
     "http3.connection-lifetime.missing",
     "http3.native-body-pump.stop-wait",
     "http3.native-body-pump.final-message-stop-wait",
+    "http3.native-body-pump.final-message-send-error",
     "http3.native-body-pump.send-stop-wait",
     "http3.native-body-pump.error-stop-wait",
     "http3.native-body-pump.cancel-before-first-poll",
@@ -435,6 +436,7 @@ FAULT_CONTRACTS = {
     "http3-native-body-pump-sender-closed-preserves-response",
     "http3-native-body-pump-send-stop-preserves-response",
     "http3-native-body-pump-final-message-stop-preserves-response",
+    "http3-native-body-pump-final-message-send-error-preserves-response",
     "http3-upload-body-pump-send-error-disconnect",
     "http3-upload-body-pump-completes-final-message",
     "http3-connection-task-shutdown-error",
@@ -1328,6 +1330,21 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: final-message stop requires a bodyless GET response probe"
+                    )
+            elif fault["contract"] == (
+                "http3-native-body-pump-final-message-send-error-preserves-response"
+            ):
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http.application-status"
+                    or fault["point"] != "http3.native-body-pump.final-message-send-error"
+                    or request.get("method") != "GET"
+                    or request.get("path") != "/h3-early-response-open-upload"
+                    or request.get("body_base64") != ""
+                ):
+                    raise ParityError(
+                        f"{case_id}: final-message send-error requires the bodyless GET probe"
                     )
             elif fault["contract"] == "http3-upload-body-pump-completes-final-message":
                 if (
@@ -7002,6 +7019,14 @@ def execute_case(
                 observation["fault_consumed"] = True
             if (
                 fault is not None
+                and fault["contract"]
+                == "http3-native-body-pump-final-message-send-error-preserves-response"
+            ):
+                if fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
+                    raise ParityError("HTTP/3 final-message send-error fault was not consumed")
+                observation["fault_consumed"] = True
+            if (
+                fault is not None
                 and fault["contract"] == "http3-native-body-pump-sender-closed-preserves-response"
             ):
                 if fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
@@ -8104,6 +8129,13 @@ def fault_contract_matches(
             == base64.b64encode(b"response-before-upload-complete").decode("ascii")
             and observation.get("fault_consumed") is True
         )
+    if fault["contract"] == "http3-native-body-pump-final-message-send-error-preserves-response":
+        return (
+            observation.get("status") == 200
+            and observation.get("body_bytes")
+            == base64.b64encode(b"response-before-upload-complete").decode("ascii")
+            and observation.get("fault_consumed") is True
+        )
     if fault["contract"] == "http3-upload-body-pump-send-error-disconnect":
         return observation.get("status") == 500 and observation.get("ordered_body_bytes") == ""
     if fault["contract"] == "http3-upload-body-pump-completes-final-message":
@@ -8908,6 +8940,7 @@ def execute_profile(
                             "http3-native-body-pump-sender-closed-preserves-response",
                             "http3-native-body-pump-send-stop-preserves-response",
                             "http3-native-body-pump-final-message-stop-preserves-response",
+                            "http3-native-body-pump-final-message-send-error-preserves-response",
                             "http3-body-pump-error-stop-disconnect-followup-200",
                             "http3-legacy-body-pump-delivers-disconnect-followup-200",
                             "http3-body-pump-reaps-cancelled-task",

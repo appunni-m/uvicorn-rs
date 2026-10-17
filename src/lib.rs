@@ -264,6 +264,7 @@ enum CoverageFaultPoint {
     Http3ConnectionLifetimeMissing,
     Http3NativeBodyPumpStopWait,
     Http3NativeBodyPumpFinalMessageStopWait,
+    Http3NativeBodyPumpFinalMessageSendError,
     Http3NativeBodyPumpSendStopWait,
     Http3NativeBodyPumpErrorStopWait,
     Http3NativeBodyPumpCancelBeforeFirstPoll,
@@ -600,6 +601,9 @@ impl CoverageFaultPoint {
             Self::Http3NativeBodyPumpStopWait => "http3.native-body-pump.stop-wait",
             Self::Http3NativeBodyPumpFinalMessageStopWait => {
                 "http3.native-body-pump.final-message-stop-wait"
+            }
+            Self::Http3NativeBodyPumpFinalMessageSendError => {
+                "http3.native-body-pump.final-message-send-error"
             }
             Self::Http3NativeBodyPumpSendStopWait => "http3.native-body-pump.send-stop-wait",
             Self::Http3NativeBodyPumpErrorStopWait => "http3.native-body-pump.error-stop-wait",
@@ -5673,7 +5677,15 @@ async fn pump_native_http3_request_body(
                             &request_cancellation,
                         ).await;
                     } => return,
-                    result = sender.send(completed) => result,
+                    result = async {
+                        #[cfg(coverage)]
+                        if coverage_fault_take(
+                            CoverageFaultPoint::Http3NativeBodyPumpFinalMessageSendError,
+                        ) {
+                            return Err(tokio::sync::mpsc::error::SendError(completed));
+                        }
+                        sender.send(completed).await
+                    } => result,
                 };
                 if result.is_err() {
                     return;

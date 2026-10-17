@@ -2125,6 +2125,25 @@
       }
     },
     {
+      "case_id": "fault.http3.native-body-pump-final-message-send-error-preserves-response",
+      "profile": "http3",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-body-pump.final-message-send-error",
+        "contract": "http3-native-body-pump-final-message-send-error-preserves-response"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/h3-early-response-open-upload",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "fault.http3.native-body-pump-cancel-before-first-poll-preserves-response",
       "profile": "http3",
       "operation": "http.application-status",
