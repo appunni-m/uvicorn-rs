@@ -164,6 +164,29 @@ artifact. Benchmark outputs stay out of Git. A passing result applies to one
 workload and one runner only; it is not a whole-server or cross-system
 performance claim.
 
+#### First 2 ms upload batch-window trial
+
+On 2026-10-17, the correctness-gated Linux x86-64 `fastapi-upload-1m-write-256k`
+trial changed the Hyper request-body batch deadline from 1 ms to 2 ms. Both
+runs used CPython 3.12.13, the same FastAPI workload, 64 concurrent clients,
+5-second samples, a 1-second warmup, and the libcurl C client. The baseline is
+the complete default-cap report in [run 39044400046](https://github.com/appunni-m/uvicorn-rs/actions/runs/39044400046);
+that workflow later stopped in its separate cap-4 segment. The candidate is
+[run 39047748945](https://github.com/appunni-m/uvicorn-rs/actions/runs/39047748945).
+Both runs passed response correctness and server lifecycle checks. The
+candidate passed the HTTP/1 streaming-progress parity gate and hosted-runner
+preflight. It had five valid asyncio pairs and four valid uvloop pairs.
+
+| Loop | Valid pairs, 1 ms → 2 ms | Rust requests/s, 1 ms → 2 ms | Rust/Uvicorn, 1 ms → 2 ms | p95 ms, 1 ms → 2 ms | Server CPU µs/request, 1 ms → 2 ms | RSS MiB, 1 ms → 2 ms |
+|---|---:|---:|---:|---:|---:|---:|
+| asyncio | 5 → 5 | 361.598 → 429.217 (+19%) | 0.311× → 0.357× | 242.170 → 196.667 | 4267.171 → 3463.262 | 140.023 → 152.414 |
+| uvloop | 5 → 4 | 508.536 → 390.337 (−23%) | 0.394× → 0.292× | 159.278 → 133.982 | 2739.261 → 2363.871 | 138.547 → 143.818 |
+
+The first comparison shows lower p95 latency and server CPU per request under
+both loops, with higher RSS. Throughput moves in opposite directions by loop.
+This single comparison does not establish a repeatable server-wide gain; a
+second focused run is required before accepting the 2 ms deadline as a default.
+
 ### Compare Tokio blocking-pool caps on FastAPI uploads
 
 Use `workflow_dispatch` with `Run mode: focused-blocking-pool` to compare
