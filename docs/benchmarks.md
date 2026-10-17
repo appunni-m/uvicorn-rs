@@ -184,8 +184,32 @@ preflight. It had five valid asyncio pairs and four valid uvloop pairs.
 
 The first comparison shows lower p95 latency and server CPU per request under
 both loops, with higher RSS. Throughput moves in opposite directions by loop.
-This single comparison does not establish a repeatable server-wide gain; a
-second focused run is required before accepting the 2 ms deadline as a default.
+It does not establish a repeatable server-wide gain.
+
+The second 2 ms trial is [run 39048349822](https://github.com/appunni-m/uvicorn-rs/actions/runs/39048349822).
+It used the same source and workload, and retained a stable source and native
+extension identity, but the report is `incomplete_or_unqualified`: three Rust
+repetitions hit the client's 15-second request timeout, and one Uvicorn
+asyncio repetition was excluded for unrelated host CPU activity. Three
+correctness-valid matched pairs remained per loop; these partial measurements
+are descriptive only:
+
+| Loop | Valid matched pairs | Uvicorn requests/s | uvicorn-rs requests/s | Rust/reference | Uvicorn/Rust p95 ms | Uvicorn/Rust server CPU µs/request |
+|---|---:|---:|---:|---:|---:|---:|
+| asyncio | 3 | 2236.030 | 616.172 | 0.276× | 33.425 / 80.043 | 443.774 / 1401.492 |
+| uvloop | 3 | 2432.870 | 725.883 | 0.298× | 28.494 / 67.815 | 410.319 / 1135.295 |
+
+Across the two 2 ms trials, the Rust/reference throughput ratio changed from
+0.357× to 0.276× under asyncio and from 0.292× to 0.298× under uvloop. The
+initial 1 ms to 2 ms comparison was also mixed by loop. The change therefore
+has no repeatable performance result and was reverted to 1 ms; the latest
+focused run will establish a fresh 1 ms reference. The Rust server remains
+slower for this upload workload, and the measurements do not isolate the
+remaining cause. The earlier exact-source diagnosis in
+[`fastapi-exact-f260-one-tokio`](../benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md)
+found substantially more ASGI receive messages and Python bridge futures on
+uploads, but its instrumented run predates this source revision and does not
+attribute the current run's full CPU gap.
 
 ### Compare Tokio blocking-pool caps on FastAPI uploads
 
