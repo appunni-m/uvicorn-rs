@@ -202,6 +202,10 @@ benchmark push filter. The push also starts regular CI; use the workflow's
 can select one of the maintained FastAPI workloads and one runner. The Git
 trigger defaults to Linux x86-64 and `fastapi-validated-route`.
 
+To select the 1 MiB upload written in 256 KiB chunks from a Git push, include
+`[fastapi-upload-1m-write-256k]` with `[focused-fastapi-stage]` in the commit
+subject. Other Git-triggered stage runs use `fastapi-validated-route`.
+
 The host preflight must pass before the timer starts, and each measured row is
 still checked by the category runner's live contention guard. A rejected
 preflight or invalidated timing row is retained in the artifact and must not be
