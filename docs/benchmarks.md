@@ -210,6 +210,22 @@ the failure but does not prove the earlier full-matrix failure is resolved;
 keep that gate open until the complete multi-system run passes. See
 [`benchmark-status.md`](benchmark-status.md) for the retained run results.
 
+To isolate the Linux ARM64 HTTP/3 `many-response-chunks` truncation observed
+with Hypercorn/uvloop in run 39020268578, push a commit to `main` with this
+selector:
+`[focused-h3] [h3-system=linux-aarch64] [h3-server=hypercorn-uvloop] [h3-workload=many-response-chunks]`.
+This runs only the failing reference server and workload, with the normal five
+repetitions, so it can establish whether the correctness failure reproduces.
+It is a diagnostic, not a matched performance comparison. Preserve the
+response-validation gate and server logs; do not change timeouts or exclude the
+workload based only on one passing rerun.
+
+```sh
+git add docs/benchmarks.md docs/benchmark-status.md
+git commit -m "docs: reproduce H3 reference truncation [focused-h3] [h3-system=linux-aarch64] [h3-server=hypercorn-uvloop] [h3-workload=many-response-chunks]"
+git push origin main
+```
+
 Required tools are `uv`, Python 3.12, Rust/Cargo, a C compiler and `curl-config`
 for the native H1 load client, Node.js for the slow-reader fallback, and
 OpenSSL for test certificates. Build the H2, H3, and WebSocket Rust clients

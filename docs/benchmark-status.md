@@ -4,36 +4,69 @@
 
 ## Latest focused HTTP/2 candidate diagnostic (2026-10-17)
 
-The push-triggered [run 39023002413](https://github.com/appunni-m/uvicorn-rs/actions/runs/39023002413)
-tested commit `93d1217dbb04d438b3157f4e07fd15290ede89b6` on a GitHub-hosted
-Linux x86-64 runner. It ran `examples.bench_fastapi:app` through
-`uvicorn-rs-asyncio` with CPython 3.12.13 and Rust 1.98.1. The selected
-`protocol-scope` workload used TLS with H2 ALPN verified, concurrency 64, four
-client connections, five repetitions, a 1-second warmup, and a 5-second
-measurement per repetition. The runner's exact CPU model was not recorded.
+The Git-push-triggered [run 39025351808](https://github.com/appunni-m/uvicorn-rs/actions/runs/39025351808)
+tested commit `a8d84d0a3b4a90d5737617a76a62be5395264110` on Linux x86-64. It ran
+`examples.bench_fastapi:app` through `uvicorn-rs-asyncio` with CPython 3.12.13
+and Rust 1.98.1. The selected `protocol-scope` workload used verified H2 ALPN,
+concurrency 64, four client connections, five repetitions, a 1-second warmup,
+and a 5-second measurement per repetition.
 
-All five response and clean-shutdown checks passed. Repetition 2 was excluded
+All five response and clean-shutdown checks passed. Repetition 1 was excluded
 because the host monitor detected unrelated CPU activity, leaving four valid
 timing rows. The table reports the median of those four rows; latency values
 are medians of the per-row percentiles.
 
 | Metric | `uvicorn-rs-asyncio` |
 |---|---:|
-| Throughput | 5,012 req/s |
-| p50 latency | 12.851 ms |
-| p95 latency | 20.097 ms |
-| p99 latency | 23.497 ms |
-| Server CPU | 252.4 µs/request (124.1% of elapsed time) |
-| Client CPU | 29.3 µs/request (14.4% of elapsed time) |
+| Throughput | 5,196.56 req/s |
+| p50 latency | 12.37 ms |
+| p95 latency | 19.52 ms |
+| p99 latency | 23.07 ms |
+| Server CPU | 243.65 µs/request (123.37% of elapsed time) |
+| Client CPU | 14.03% of elapsed time |
 | Peak server RSS | 48.64 MiB |
-| Peak client RSS | 6.03 MiB |
+| Peak client RSS | 6.02 MiB |
 
 This diagnostic ran only uvicorn-rs and has no matched Hypercorn result. It is
-not a performance comparison and establishes no speedup. The
-[workflow artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39023002413/artifacts/12097124058)
-contains the raw repetitions, host-activity observations, source and binary
-hashes, and server logs. The full three-system benchmark remains necessary for
-the performance gate.
+not a performance comparison and establishes no speedup. Source SHA-256 is
+`fead54a838f7658419b8f0f621a9ca00bb13579b0322859b3b322e93d4208a08`; the
+normal native binary SHA-256 is
+`4ec09abc9b547370ea4bafbf1d4d5843551f4719d214d07e1e48c28ae5cba893`. The
+[workflow artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39025351808/artifacts/12098656237)
+contains raw repetitions, host observations, hashes, and server logs.
+
+## Latest three-system matrix status (2026-10-17 snapshot)
+
+The [matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268578)
+measures commit `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e`. Exact-binary public
+parity and the FastAPI-only comparison passed on all three systems. macOS ARM64
+completed its category matrix. Linux ARM64 failed its H3 correctness gate
+during `many-response-chunks`, and Linux x86-64 was still running categories at
+the latest verified snapshot. The Linux ARM64 artifact retained 90 of 130 H3
+rows before stopping.
+
+The first divergence was on repetition 3 of `hypercorn-uvloop`: request 43
+returned HTTP 200 with 4,096 response bytes in four data chunks where the
+client expected 1,048,576 bytes; there was no Content-Length header. The
+retained Hypercorn server log then reports its UDP task failing with
+`KeyError(164)` while looking up the H3 stream in `protocol/h3.py` during
+teardown. This is the observed sequence, not a proven root cause. It could be
+an intermittent Hypercorn H3 stream-lifecycle failure or another interaction
+in that reference/client path; the targeted rerun is recorded separately when
+available. This correctness failure invalidates the H3 workload comparison and
+prevents a completed three-system aggregate. Do not infer a Rust performance
+win from these partial rows.
+
+The run predates the H3 cancellation case on `93d1217` and does not cover that
+new conformance input. A Git comparison from `aa4c938` to current main commit
+`a8d84d0a3b4a90d5737617a76a62be5395264110` shows changes only in documentation,
+parity scripts/fixtures/manifest, and the HTTP/3 probe; runtime Rust sources,
+Python bridge, and dependency manifests are unchanged. Exact-head CI run
+[39024130047](https://github.com/appunni-m/uvicorn-rs/actions/runs/39024130047)
+for `77e1f425` had native composition, installed-wheel parity, Rust
+minimum-version, and Rust quality green; unified coverage was still running.
+The documentation-only push has queued CI
+[39025351817](https://github.com/appunni-m/uvicorn-rs/actions/runs/39025351817).
 
 ## Latest focused macOS HTTP/3 large-response comparison (2026-10-17)
 
@@ -127,10 +160,11 @@ later passed five Linux x86-64 `uvicorn-rs-asyncio` / `protocol-scope`
 correctness and shutdown checks; four timings passed the host guard. It was a
 target-only diagnostic, not a paired performance comparison. Exact-source CI
 run [39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
-completed successfully on `e22df3a`. Current-head CI
-[39013640499](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013640499)
-is still running its three-pass coverage matrix; Rust, native composition, and
-installed-wheel parity jobs have passed.
+completed successfully on `e22df3a`. The later coverage run
+[39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
+passed its 749-case matrix and all reported source regions and lines. Current
+exact-head CI [39024130047](https://github.com/appunni-m/uvicorn-rs/actions/runs/39024130047)
+is in progress; its current state is summarized at the top of this document.
 
 ## Earlier full benchmark attempt (2026-10-17)
 
