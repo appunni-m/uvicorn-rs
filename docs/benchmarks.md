@@ -153,12 +153,16 @@ runner is noisy, its invalid rows remain in the artifact and do not count
 toward the gate.
 
 To trigger the default case through Git, push a commit to `main` whose subject
-contains `[focused-fastapi-match]`. This path runs only the focused timing job;
-the push also starts regular CI. Use `workflow_dispatch` when avoiding the
-additional CI run. The run retains raw repetitions, logs, host observations,
-identity hashes, and the matched-pair summary in a 90-day artifact. Benchmark
-outputs stay out of Git. A passing result applies to one workload and one
-runner only; it is not a whole-server or cross-system performance claim.
+contains `[focused-fastapi-match]`. To select the 1 MiB upload written in
+256 KiB blocks, include both `[focused-fastapi-match]` and
+`[fastapi-upload-1m-write-256k]` in the subject. The job runs the HTTP/1
+streaming-progress parity case before timing. This path runs only the focused
+timing job; the push also starts regular CI. Use `workflow_dispatch` when
+avoiding the additional CI run. The run retains raw repetitions, logs, host
+observations, identity hashes, and the matched-pair summary in a 90-day
+artifact. Benchmark outputs stay out of Git. A passing result applies to one
+workload and one runner only; it is not a whole-server or cross-system
+performance claim.
 
 ### Compare Tokio blocking-pool caps on FastAPI uploads
 

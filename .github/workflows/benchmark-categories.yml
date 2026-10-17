@@ -557,7 +557,7 @@ jobs:
           retention-days: 90
 
   focused-fastapi-match:
-    name: ${{ inputs.fastapi_system || 'linux-x86_64' }} · ${{ inputs.fastapi_workload || 'fastapi-validated-route' }} · normal-build matched timing
+    name: ${{ inputs.fastapi_system || 'linux-x86_64' }} · ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-upload-1m-write-256k]')) && 'fastapi-upload-1m-write-256k' || inputs.fastapi_workload || 'fastapi-validated-route' }} · normal-build matched timing
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-match') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-match]')) }}
     runs-on: ${{ inputs.fastapi_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
@@ -640,6 +640,14 @@ jobs:
           server_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path("target/benchmark-preparation/server-wheels").glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one server wheel")')"
           uv pip install --python .venv/bin/python --no-deps "$server_wheel" \
             2>&1 | tee target/benchmark-preparation/server-install.log
+      - name: Gate HTTP/1 streaming progress parity before timing
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_parity.py \
+            --case-id http1.request-streaming-progress-before-upload-complete \
+            --output target/benchmark-preparation/http1-streaming-progress-parity.json \
+            2>&1 | tee target/benchmark-preparation/http1-streaming-progress-parity.log
       - name: Capture read-only host preflight
         shell: bash
         run: |
@@ -649,7 +657,7 @@ jobs:
       - name: Run one normal-build FastAPI workload against Uvicorn
         shell: bash
         env:
-          BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || 'fastapi-validated-route' }}
+          BENCHMARK_FASTAPI_WORKLOAD: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-upload-1m-write-256k]')) && 'fastapi-upload-1m-write-256k' || inputs.fastapi_workload || 'fastapi-validated-route' }}
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
@@ -670,7 +678,7 @@ jobs:
         if: always()
         shell: bash
         env:
-          BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || 'fastapi-validated-route' }}
+          BENCHMARK_FASTAPI_WORKLOAD: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-upload-1m-write-256k]')) && 'fastapi-upload-1m-write-256k' || inputs.fastapi_workload || 'fastapi-validated-route' }}
         run: |
           set -euo pipefail
           if ! test -f target/fastapi-match/http1.json; then
@@ -686,7 +694,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: fastapi-match-${{ inputs.fastapi_system || 'linux-x86_64' }}-${{ inputs.fastapi_workload || 'fastapi-validated-route' }}-${{ github.sha }}
+          name: fastapi-match-${{ inputs.fastapi_system || 'linux-x86_64' }}-${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-upload-1m-write-256k]')) && 'fastapi-upload-1m-write-256k' || inputs.fastapi_workload || 'fastapi-validated-route' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/fastapi-match/
