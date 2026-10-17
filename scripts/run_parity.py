@@ -209,6 +209,7 @@ FAULT_POINTS = {
     "server.peer-read-half-closed.missing",
     "server.peer-read-failed.missing",
     "server.connection-io.poll-write-error",
+    "server.tcp-nodelay.set-error",
     "http.asgi-io.allocate",
     "http.asgi.app-invoke",
     "server.listener.accept-error",
@@ -1631,6 +1632,7 @@ def load_contract(
                         "server.connection-lifetime.missing",
                         "server.peer-read-half-closed.missing",
                         "server.peer-read-failed.missing",
+                        "server.tcp-nodelay.set-error",
                     }
                     or "request_sequence" not in case
                     or len(case["request_sequence"]) != 2
@@ -4134,14 +4136,25 @@ def http1_request_sequence(
                 selected_point = fault_point if index == 0 and not arm_fault_after_headers else ""
                 fault_control_path.write_text(selected_point or "", encoding="utf-8")
             body = base64.b64decode(request["body_base64"], validate=True)
-            connection.request(
-                request["method"],
-                request["path"],
-                body=body,
-                headers=dict(request["headers"]),
-            )
             try:
+                connection.request(
+                    request["method"],
+                    request["path"],
+                    body=body,
+                    headers=dict(request["headers"]),
+                )
                 response = connection.getresponse()
+            except ConnectionResetError:
+                if index != 0 or fault_point != "server.tcp-nodelay.set-error":
+                    raise
+                responses.append({
+                    "status": None,
+                    "content_type": None,
+                    "body_base64": "",
+                    "connection_closed": True,
+                })
+                connection.close()
+                continue
             except http.client.RemoteDisconnected:
                 if (
                     index == 0

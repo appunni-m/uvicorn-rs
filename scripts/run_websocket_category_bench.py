@@ -21,7 +21,21 @@ from pathlib import Path
 
 import psutil
 
-from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_coverage_environment, median_valid, stop_client, owned_process, stop_owned, run_bounded_client, collect_bounded_client, finalize_server)
+from benchmark_evidence import (
+    FASTAPI_BENCHMARK_DISTRIBUTIONS,
+    BenchmarkEvidence,
+    SampleMonitor,
+    assert_clean_coverage_environment,
+    host_cpu_model,
+    median_valid,
+    stop_client,
+    owned_process,
+    stop_owned,
+    run_bounded_client,
+    collect_bounded_client,
+    finalize_server,
+    workspace_rust_source_paths,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -107,17 +121,19 @@ def run_client(port: int, seconds: float, concurrency: int, workload: dict, serv
 
 
 def source_digest() -> str:
-    paths = (
+    paths = set((
         "scripts/run_websocket_category_bench.py",
         "tools/http3-probe/src/bin/websocket.rs",
+        "scripts/benchmark_evidence.py",
         "src/lib.rs",
         "python/uvicorn_rs/server.py",
         "examples/bench_fastapi.py",
         "pyproject.toml",
         "uv.lock",
-    )
+    ))
+    paths.update(workspace_rust_source_paths(ROOT))
     digest = hashlib.sha256()
-    for name in paths:
+    for name in sorted(paths):
         digest.update(name.encode())
         digest.update(b"\0")
         digest.update((ROOT / name).read_bytes())
@@ -190,6 +206,7 @@ def main() -> None:
          "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         artifacts_dir=args.output.with_suffix(".artifacts"),
+        extra_dependencies=FASTAPI_BENCHMARK_DISTRIBUTIONS,
     )
     checkpoint_path = args.output.with_suffix(".jsonl")
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -228,16 +245,13 @@ def main() -> None:
                     "client_cpu_percent_elapsed", "client_cpu_microseconds_per_request", "client_rss_peak_mib",
                 )
             }
-    try:
-        cpu_model = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip()
-    except (OSError, subprocess.CalledProcessError):
-        cpu_model = platform.processor()
+    cpu_model = host_cpu_model()
     report = {
         "metadata": {
             "date": date.today().isoformat(), "platform": platform.platform(), "machine": platform.machine(),
             "logical_cpus": psutil.cpu_count(logical=True), "cpu_model": cpu_model,
             "python": platform.python_version(),
-            "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
+            "rustc": evidence.rustc_version,
             "source_sha256": source_digest(),
             **evidence_metadata,
             "response_header_policy": {"date": "enabled by protocol implementations", "server": "disabled on Uvicorn; absent in Rust"},

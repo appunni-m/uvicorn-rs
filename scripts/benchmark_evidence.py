@@ -12,8 +12,10 @@ import hashlib
 import json
 import math
 import os
+import platform
 import re
 import signal
+import shutil
 import socket
 import ssl
 import statistics
@@ -58,6 +60,68 @@ def median_valid(rows: list[dict], metric: str):
     ]
     repetitions = {row["repetition"] for row in rows if row.get("timing_valid", True) and row.get(metric) is not None}
     return statistics.median(values) if len(repetitions) >= 3 else None
+
+
+def workspace_rust_source_paths(root: Path) -> list[str]:
+    """Return Rust sources and Cargo manifests present in the benchmark checkout."""
+    workspace_files = subprocess.check_output(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=root,
+    ).decode().split("\0")
+    return sorted(
+        name for name in workspace_files
+        if name and (name.endswith(".rs") or Path(name).name == "Cargo.toml")
+    )
+
+
+def host_cpu_model() -> str:
+    """Identify the processor on macOS and Linux for benchmark receipts."""
+    try:
+        model = subprocess.check_output(
+            ["sysctl", "-n", "machdep.cpu.brand_string"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        model = ""
+    if model:
+        return model
+
+    cpu_info = Path("/proc/cpuinfo")
+    try:
+        lines = cpu_info.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        lines = []
+    for line in lines:
+        key, separator, value = line.partition(":")
+        if separator and key.strip().lower() in {"model name", "hardware", "processor"}:
+            model = value.strip()
+            if model and not model.isdecimal():
+                return model
+    return platform.processor() or platform.machine()
+
+
+def rustc_version() -> str | None:
+    """Return the local Rust compiler version without depending on PATH setup."""
+    candidates = []
+    configured = os.environ.get("RUSTC")
+    if configured:
+        candidates.append(shutil.which(configured) or configured)
+    located = shutil.which("rustc")
+    if located:
+        candidates.append(located)
+    cargo_bin = Path.home() / ".cargo" / "bin" / ("rustc.exe" if os.name == "nt" else "rustc")
+    if cargo_bin.is_file():
+        candidates.append(str(cargo_bin))
+
+    for candidate in dict.fromkeys(candidates):
+        try:
+            return subprocess.check_output(
+                [candidate, "--version"], text=True, stderr=subprocess.DEVNULL
+            ).strip()
+        except (OSError, subprocess.CalledProcessError):
+            continue
+    return None
 
 
 def assert_clean_coverage_environment() -> None:
@@ -367,6 +431,7 @@ class BenchmarkEvidence:
         self.sample_name = "unlabeled"
         self.extra_dependencies = extra_dependencies or {}
         self.started_at = datetime.now(timezone.utc).isoformat()
+        self.rustc_version = rustc_version()
         code = (
             "import json,sys,uvicorn_rs._native as n; "
             "print(json.dumps({'native':n.__file__,'python':sys.executable,'version':sys.version}))"
@@ -375,13 +440,14 @@ class BenchmarkEvidence:
         self.native = Path(runtime["native"]).resolve()
         self.runtime = runtime
         self.clients = [path.resolve() for path in clients]
+        rust_sources = workspace_rust_source_paths(root)
         common = [
             "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "src/lib.rs",
             "python/uvicorn_rs/__init__.py", "python/uvicorn_rs/__main__.py",
             "python/uvicorn_rs/_bridge.py", "python/uvicorn_rs/cli.py", "python/uvicorn_rs/server.py",
             "scripts/benchmark_evidence.py",
         ]
-        self.source_paths = sorted(set(common + source_paths))
+        self.source_paths = sorted(set(common + rust_sources + source_paths))
         native_bytes = self.native.read_bytes()
         markers = (b"coverage-injected", b"UVICORN_RS_COVERAGE_", b"__llvm_profile", b"__llvm_covmap")
         if any(marker in native_bytes for marker in markers):
@@ -422,6 +488,7 @@ class BenchmarkEvidence:
             "started_at": self.started_at,
             "identity_before": self.before,
             "installed_dependencies_before": self.dependencies_before,
+            "rustc": self.rustc_version,
             "git_revision": self.git_revision,
             "dirty_target": self.dirty,
             "minimum_valid_paired_repetitions": 3,
@@ -549,13 +616,14 @@ print(json.dumps(result))
             "identity_stable": stable,
             "installed_dependencies_before": self.dependencies_before,
             "installed_dependencies_after": dependencies_after,
+            "rustc": self.rustc_version,
             "modified_or_unrecorded_dependencies": modified_baselines,
             "python_runtime": self.runtime,
             "git_revision": self.git_revision,
             "dirty_target": self.dirty,
             "tracked_worktree_changes": self.git_changes,
             "untracked_measured_sources": self.untracked_sources,
-            "performance_evidence_status": "not_proven" if self.dirty or modified_baselines or not stable or excluded or not paired or any(pair["outcome"] != "available" for pair in paired) else "completed",
+            "performance_evidence_status": "not_proven" if self.dirty or modified_baselines or not stable or excluded or not paired or self.rustc_version is None or any(pair["outcome"] != "available" for pair in paired) else "completed",
             "performance_evidence_scope": "local paired experiment" if self.dirty else "frozen checkout benchmark",
             "timing_valid": stable and not excluded,
             "timing_median_policy": "at least three unique timing_valid repetitions; every excluded/partial raw row is retained",

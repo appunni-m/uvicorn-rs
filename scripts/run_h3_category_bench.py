@@ -20,7 +20,22 @@ from pathlib import Path
 
 import psutil
 
-from benchmark_evidence import (BenchmarkEvidence, SampleMonitor, assert_clean_coverage_environment, median_valid, stop_client, owned_process, stop_owned, run_bounded_client, collect_bounded_client, finalize_server, wait_tls_ready)
+from benchmark_evidence import (
+    FASTAPI_BENCHMARK_DISTRIBUTIONS,
+    BenchmarkEvidence,
+    SampleMonitor,
+    assert_clean_coverage_environment,
+    host_cpu_model,
+    median_valid,
+    stop_client,
+    owned_process,
+    stop_owned,
+    run_bounded_client,
+    collect_bounded_client,
+    finalize_server,
+    wait_tls_ready,
+    workspace_rust_source_paths,
+)
 from benchmark_certificates import generate_server_certificate
 
 
@@ -225,13 +240,14 @@ def sample(
 
 
 def source_digest() -> str:
-    files = [
+    files = {
         "scripts/run_h3_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/bench.rs",
-        "src/lib.rs", "python/uvicorn_rs/server.py", "examples/bench_fastapi.py",
+        "scripts/benchmark_evidence.py", "src/lib.rs", "python/uvicorn_rs/server.py", "examples/bench_fastapi.py",
         "pyproject.toml", "uv.lock",
-    ]
+    }
+    files.update(workspace_rust_source_paths(ROOT))
     digest = hashlib.sha256()
-    for name in files:
+    for name in sorted(files):
         digest.update(name.encode())
         digest.update(b"\0")
         digest.update((ROOT / name).read_bytes())
@@ -276,6 +292,7 @@ def main() -> None:
          "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         artifacts_dir=args.output.with_suffix(".artifacts"),
+        extra_dependencies=FASTAPI_BENCHMARK_DISTRIBUTIONS,
     )
     checkpoint_path = args.output.with_suffix(".jsonl")
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -314,6 +331,7 @@ def main() -> None:
 
     evidence_metadata = evidence.finish(rows)
     summaries = {}
+    cpu_model = host_cpu_model()
     for workload in args.workloads:
         summaries[workload] = {}
         for name in WORKLOADS[workload].get("servers", SERVERS):
@@ -329,16 +347,12 @@ def main() -> None:
                     "client_cpu_percent_elapsed", "client_cpu_microseconds_per_request", "client_rss_peak_mib",
                 )
             }
-    try:
-        cpu_model = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip()
-    except (OSError, subprocess.CalledProcessError):
-        cpu_model = platform.processor()
     report = {
         "metadata": {
             "date": date.today().isoformat(), "platform": platform.platform(),
             "machine": platform.machine(), "logical_cpus": psutil.cpu_count(logical=True),
             "cpu_model": cpu_model, "python": platform.python_version(),
-            "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
+            "rustc": evidence.rustc_version,
             "hypercorn": subprocess.check_output([str(PYTHON), "-c", "import importlib.metadata as m; print(m.version('hypercorn'))"], text=True).strip(),
             "readiness": "trusted TLS HTTP/1.1 HEAD /fixed with Connection: close, outside measured H2/H3 workload",
             "hypercorn_config": {"keep_alive_max_requests": 100000000, "include_server_header": False, "include_date_header": False, "accesslog": None},

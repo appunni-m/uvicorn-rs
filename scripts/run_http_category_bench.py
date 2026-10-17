@@ -27,6 +27,7 @@ from benchmark_evidence import (
     BenchmarkEvidence,
     SampleMonitor,
     assert_clean_coverage_environment,
+    host_cpu_model,
     median_valid,
     stop_client,
     owned_process,
@@ -672,6 +673,20 @@ def main() -> None:
         raise SystemExit(f"Python interpreter does not exist: {python}")
     assert_clean_coverage_environment()
     native_client = _build_native_client()
+    node_executable = shutil.which("node")
+    node_required = native_client is None or any(
+        WORKLOADS[name]["client"].get("read_delay_ms", 0) > 0
+        or WORKLOADS[name]["client"].get("read_rate_bytes_per_second", 0) > 0
+        for name in args.workloads
+    )
+    if node_required and node_executable is None:
+        raise SystemExit(
+            "Node.js is required for the selected HTTP workloads because the native libcurl client is unavailable"
+        )
+    node_version = (
+        subprocess.check_output([node_executable, "--version"], text=True).strip()
+        if node_executable is not None else None
+    )
     selected_servers = {name: SERVERS[name] for name in args.servers}
     if args.asgi_stage_diagnostics:
         if not args.require_runtime_diagnostics:
@@ -859,12 +874,7 @@ def main() -> None:
                 )
             }
 
-    try:
-        cpu_model = subprocess.check_output(
-            ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
-        ).strip()
-    except (OSError, subprocess.CalledProcessError):
-        cpu_model = platform.processor()
+    cpu_model = host_cpu_model()
     report = {
         "status": (
             "stopped_after_consecutive_failures"
@@ -880,8 +890,8 @@ def main() -> None:
             "logical_cpus": psutil.cpu_count(logical=True),
             "cpu_model": cpu_model,
             "python_environment": _versions(python),
-            "node": subprocess.check_output(["node", "--version"], text=True).strip(),
-            "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
+            "node": node_version,
+            "rustc": evidence.rustc_version,
             "source_sha256": _source_digest(args.workloads, args.asgi_stage_diagnostics),
             "workloads": args.workloads,
             "runtime_configuration": {

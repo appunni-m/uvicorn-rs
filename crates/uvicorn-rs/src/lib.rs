@@ -912,6 +912,20 @@ fn take_listener_accept_fault() -> bool {
         .is_ok()
 }
 
+#[cfg(coverage)]
+fn take_tcp_nodelay_set_error_fault() -> bool {
+    let Some(path) = std::env::var_os("UVICORN_RS_COVERAGE_FAULT_FILE") else {
+        return false;
+    };
+    let armed = std::fs::read_to_string(&path)
+        .map(|value| value.trim() == "server.tcp-nodelay.set-error")
+        .unwrap_or(false);
+    if armed {
+        let _ = std::fs::write(path, "");
+    }
+    armed
+}
+
 /// Arms the coverage-only connection-admission close fault.
 ///
 /// This hook is compiled only for instrumented coverage builds and is absent
@@ -2075,6 +2089,30 @@ where
         else {
             break;
         };
+
+        // Match asyncio's accepted-socket default. Small HTTP/2 writes can
+        // otherwise wait on Nagle and delayed acknowledgements.
+        #[cfg(coverage)]
+        let nodelay_result = if take_tcp_nodelay_set_error_fault() {
+            Err(io::Error::other(
+                "coverage-injected TCP_NODELAY configuration failure",
+            ))
+        } else {
+            stream.set_nodelay(true)
+        };
+        #[cfg(not(coverage))]
+        let nodelay_result = stream.set_nodelay(true);
+
+        if let Err(error) = nodelay_result {
+            observe_error(
+                config.error_observer.as_ref(),
+                ServerErrorPhase::Connection,
+                Some(peer),
+                &error,
+            );
+            tracing::debug!(%peer, %error, "failed to enable TCP_NODELAY on accepted connection");
+            continue;
+        }
 
         let (
             stream,

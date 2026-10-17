@@ -3123,6 +3123,38 @@
       ]
     },
     {
+      "case_id": "fault.http1.tcp-nodelay-option-error-closes-only-connection",
+      "profile": "http1",
+      "operation": "http.keepalive-sequence",
+      "covers": [
+        "http.keepalive-sequence"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.tcp-nodelay.set-error",
+        "contract": "http-native-service-error-close-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=tcp-nodelay-option-error",
+          "headers": [
+            [
+              "Connection",
+              "close"
+            ]
+          ],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=followup",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
       "case_id": "http1.connection-close-first-request-then-reconnect",
       "profile": "http1",
       "operation": "http.keepalive-sequence",

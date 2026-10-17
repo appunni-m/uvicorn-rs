@@ -2,6 +2,61 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Focused FastAPI HTTP/2 chunk-streaming result (Ubuntu x86-64; 2026-10-18)
+
+This matched experiment measured the stock FastAPI `StreamingResponse` route
+`/chunks/256/4096`: 256 chunks of 4 KiB (1 MiB per response), HTTP/2 over TLS,
+concurrency 64, four multiplexed client connections, a 1-second warmup, five
+5-second repetitions, and seed `20261005`. The native Rust client verified
+full response-body equality. Both servers used CPython 3.12.13, FastAPI
+0.142.4, Starlette 1.7.0, Pydantic 2.13.5, and the same app. Hypercorn
+0.18.0/asyncio is the HTTP/2 reference. The host was Ubuntu 24.04 on an AMD
+Ryzen 5 2600X (6 cores/12 threads).
+
+The clean baseline was commit `33a705dc93e0803043994f9c4b57831f2aafc38c`
+before setting `TCP_NODELAY` on accepted Rust sockets. The baseline Rust
+transport source hash is `1f760cb86d860109991f4c8565194e5d44522fd1f0fa4e552a1d79461bdb53db`.
+The candidate uses the same base commit with the socket option enabled; its
+Rust transport source hash is
+`8f2c1169409781926632004a75b8f9d18dc92f55fbdbb2b3542c63023f551d29`. The
+candidate's source and native binary fingerprints stayed stable during the
+run. The working tree was dirty, so the receipt labels this a local paired
+experiment and `performance_evidence_status: not_proven` rather than clean
+release evidence.
+
+| Build | Server | Valid reps | Requests/s | p50 ms | p95 ms | p99 ms | Server CPU µs/request | Server CPU % elapsed | Peak RSS MiB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline | `uvicorn-rs` / asyncio | 5 | 7.0 | 8,935 | 9,196 | 9,196 | 43,594 | 29.2 | 49.7 |
+| Baseline | Hypercorn / asyncio | 5 | 74.0 | 867 | 950 | 1,002 | 13,439 | 93.8 | 161.2 |
+| TCP_NODELAY | `uvicorn-rs` / asyncio | 5 | 135.5 | 470 | 564 | 593 | 11,615 | 153.5 | 50.4 |
+| TCP_NODELAY | Hypercorn / asyncio | 5 | 74.5 | 867 | 949 | 1,013 | 13,301 | 93.4 | 161.0 |
+
+All five paired repetitions were timing-valid. Every row had zero request
+failures, passed full response checks, and passed graceful shutdown. Relative
+to the clean Rust baseline, the candidate delivered about 19.5× the throughput
+and cut p95 latency by 93.9%. It reached 1.82× the Hypercorn throughput on
+this workload. Rust's total CPU utilization was higher because it completed
+more requests; CPU per request was 11.6 ms versus Hypercorn's 13.3 ms. Peak
+RSS was about 50 MiB versus 161 MiB for Hypercorn.
+
+The focused change matches asyncio's accepted-socket behavior by enabling
+`TCP_NODELAY`. The preceding stage diagnostic showed most time for this
+many-chunk response was spent waiting on the Rust bounded response queue. The
+measured improvement is specific to this H2 chunk-streaming route; it does not
+establish a general FastAPI or protocol-wide speedup. The coverage-only fault
+contract `fault.http1.tcp-nodelay-option-error-closes-only-connection` passed
+on the Ubuntu host, confirming that a socket-option failure closes that
+connection while a follow-up connection still succeeds. This was one focused
+case, not a full parity or coverage run.
+
+The local-only raw receipts are
+`benchmarks/results/2026-10-18-ubuntu-x86-h2-many-response-chunks/h2.json`
+and
+`benchmarks/results/2026-10-18-ubuntu-x86-h2-many-response-chunks-tcp-nodelay-final.json`.
+The final receipt records FastAPI dependency versions, Rust workspace sources,
+Cargo manifests, and the processor model. Server logs and coverage reports
+remain excluded from the repository.
+
 ## Focused FastAPI upload measurement (Ubuntu x86-64; 2026-10-18)
 
 This is one HTTP/1.1 workload, not a complete category or release benchmark.
@@ -49,6 +104,36 @@ about 47–51 ms in those awaits. The 5 ms batch window therefore reduced
 Rust/Python receive crossings and the associated waiting in this workload.
 The ASGI receive measurement is elapsed await time, not CPU time.
 
+### Isolated Linux x86 upload-timeout probe
+
+To check the intermittent HTTP/1 upload timeout from matrix run 39036702600,
+the same `fastapi-request-upload` input was run on the supplied Ubuntu x86-64
+host against Uvicorn and `uvicorn-rs`, both with uvloop: 1 MiB POST bodies,
+64 KiB client writes, concurrency 64, a 1-second warmup, three 5-second
+repetitions, and seed `20261005`. Both used CPython 3.12.13, FastAPI 0.142.4,
+uvloop 0.23.0, Uvicorn 0.54.0, and httptools 0.8.0. The native C libcurl
+client was unavailable in that work directory, so both servers used the same
+Node.js 25.1.0 client with full response-body checks.
+
+All six samples passed with zero request failures and clean shutdowns; the
+timeout did not recur. The medians were:
+
+| Server | Requests/s | p50 ms | p95 ms | p99 ms | Server CPU µs/request | Peak RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn + uvloop + httptools | 1,051.0 | 58.4 | 72.5 | 87.5 | 946 | 105.3 |
+| `uvicorn-rs` + uvloop | 645.9 | 97.9 | 126.3 | 154.5 | 2,213 | 158.9 |
+
+The Rust server reached 61.5% of Uvicorn throughput on this input, with
+1.74× p95 latency and 2.34× server CPU per request. This is not a clean
+performance result: the worktree was dirty, the report records
+`performance_evidence_status: not_proven`, the Linux CPU model field contains
+only `x86_64`, and one sample saw a brief unrelated host CPU spike. The Node
+client was the same for both servers and used less than one CPU core, but this
+fallback-client run is not directly comparable to the earlier C-client H1
+measurements. It also does not explain why the earlier multi-system run
+timed out. Raw JSON, JSONL checkpoints, and provenance are in
+`benchmarks/results/2026-10-18-ubuntu-x86-h1-upload-diagnostic/`.
+
 The Rust runtime materialized one Python `bytes` body per message. The
 instrumented counter measured about 0.25–0.28 ms for that materialization per
 1 MiB request, far below the receive-await wall time. Avoiding this required
@@ -71,8 +156,10 @@ and is not used to select the setting. The 5 ms build passed the existing
 case per profile. In the push-triggered
 [CI run 39066848395](https://github.com/appunni-m/uvicorn-rs/actions/runs/39066848395),
 Rust quality, MSRV, native composition, and installed-wheel public parity have
-passed. The repeated unified parity/fault-coverage matrix is still running;
-the full performance matrix has not been rerun for this change.
+passed. The unified parity/fault-coverage matrix also completed 753/753 cases
+with three ASGI and three native repeats, 9,131/9,131 regions, and 6,741/6,741
+lines. That run predates the current dirty checkout; the full performance
+matrix has not been rerun for this change.
 
 Local-only JSON receipts are in
 `benchmarks/results/2026-10-18-ubuntu-x86-focused-upload/`: baseline and 5 ms
@@ -192,7 +279,9 @@ source digest
 `5ac198689cc5331e30e808819c753603fc234661185f2ec8ff21d217bc49713e`.
 The full parity/fault-coverage CI run
 [39066848395](https://github.com/appunni-m/uvicorn-rs/actions/runs/39066848395)
-is still running its three-repeat matrix; its other four jobs have passed.
+passed 753/753 cases with three ASGI and three native repeats, 9,131/9,131
+regions, and 6,741/6,741 lines. Its exact-source coverage report still awaits
+Coverage-MCP review, and the run predates this dirty local checkout.
 
 ## Latest full multi-system matrix (run 39036702600; 2026-10-17)
 
