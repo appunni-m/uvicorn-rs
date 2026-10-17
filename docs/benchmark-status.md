@@ -189,9 +189,66 @@ the app time outside awaited `send()`/`receive()` are longer. That outside-I/O
 time includes FastAPI route matching, parameter validation, response-model
 serialization, Python execution, and any other awaits; it is not CPU time. The
 evidence narrows the next measurement to per-request scheduling/task setup and
-the Python ASGI execution path, but does not yet isolate a causal component.
-The next focused case uses the normal uninstrumented release wheel and requires
-three valid matching repetitions per loop before reporting performance.
+the Python ASGI execution path, but does not isolate a causal component. The
+normal-build matched result below confirms this route regresses without
+instrumentation; it still does not attribute the additional CPU to a specific
+function or boundary operation.
+
+## Focused normal-build FastAPI matched result (2026-10-17)
+
+The hosted [run 39031849682](https://github.com/appunni-m/uvicorn-rs/actions/runs/39031849682)
+compared the stock `fastapi-validated-route` workload on commit
+`951c67b15faa8eef047432604e5a1785dd18776b`. Its
+[retained artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39031849682/artifacts/12100423931)
+has SHA-256 `bcd1e543e669b968867ea2657b7b5ad84dbd9483f90757321d78e414dbc9fcc5`.
+This used the normal release wheel with runtime and ASGI-stage diagnostics
+disabled. The accepted host preflight identified an AMD EPYC 7763 runner with
+4 logical CPUs and 2 physical CPUs. The run used CPython 3.12.13, FastAPI
+0.142.4, Starlette 1.7.0, Pydantic 2.13.5, Uvicorn 0.54.0, uvloop 0.23.0,
+and httptools 0.8.0. Rust used one Tokio scheduler worker. The five-second
+closed-loop load ran at concurrency 64 after a one-second warmup; it used a
+bodyless GET and verified each complete response against the exact workload
+oracle.
+
+All 20 measured responses passed correctness, lifecycle, and shutdown checks.
+Five repetitions formed valid asyncio pairs. Four formed valid uvloop pairs;
+Uvicorn uvloop repetition 1 passed correctness and shutdown but was excluded
+from timing for unrelated host CPU activity. The benchmark's pairwise medians
+are:
+
+| Loop | Matched reps | Uvicorn / Rust req/s (Rust ÷ Uvicorn) | Uvicorn / Rust p50 ms | Uvicorn / Rust p95 ms | Uvicorn / Rust p99 ms | Uvicorn / Rust server CPU µs/request | Uvicorn / Rust server RSS MiB |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| asyncio | 5 | 5,541 / 3,625 (0.652×) | 11.55 / 17.70 | 12.09 / 21.31 | 12.30 / 22.96 | 180.4 / 353.0 | 47.6 / 51.1 |
+| uvloop | 4 | 5,469 / 3,996 (0.726×) | 11.46 / 16.07 | 12.22 / 19.12 | 22.77 / 20.52 | 182.2 / 319.0 | 50.4 / 53.6 |
+
+For this route, Rust delivered 27–35% lower throughput while using 75–96%
+more server CPU per request. Its p50 latency was 40–53% higher and p95 was
+56–76% higher. The uvloop p99 median was lower for Rust in this one comparison;
+the other tail results and the short closed-loop run should be interpreted
+with the matched raw repetitions, not as a general latency claim. Client CPU
+per request was 62.2 / 70.6 µs (Uvicorn / Rust) under asyncio and 66.1 / 69.5
+µs under uvloop. Peak sampled server RSS was 47.6 / 51.1 MiB and 50.4 / 53.6
+MiB, respectively.
+
+The parity and host gates passed, but this is one workload on one hosted
+runner, not a whole-server result or statistical-significance claim. The
+load generator is closed-loop and does not correct for coordinated omission.
+The measured source identity was
+`0958da8681d648dea51f51fef39fb7872becbcd75e14031c32d16813ef854bee`; the
+normal Rust extension SHA-256 was
+`4ec09abc9b547370ea4bafbf1d4d5843551f4719d214d07e1e48c28ae5cba893`.
+
+The request has no body, so request-body copying is not on this workload's
+path. The server-process CPU delta is real for this run, but does not identify
+whether it comes from protocol handling, scope creation, Python task
+scheduling, bridge callbacks, or another component. The earlier instrumented
+stage sample suggests the Python ASGI path is slower while Rust `send()` waits
+are shorter; that is a lead for attribution, not proof of cause. The result
+does not support SIMD or body-copy optimization as the first fix. It also does
+not show the required performance gain, so the performance release gate stays
+open. Continue with the underqualified H1 workloads and loop pairs, the small
+WebSocket text-echo case, and the default/cap-1/cap-4 upload comparison after
+their correctness gates; preserve the exact identities and rejected samples.
 
 ## Latest focused macOS HTTP/3 large-response comparison (2026-10-17)
 

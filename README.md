@@ -30,6 +30,15 @@ result. See the [complete results](docs/benchmark-results.md),
 [benchmark status](docs/benchmark-status.md), and
 [feasibility report](docs/feasibility.md).
 
+A focused normal-build FastAPI comparison on 2026-10-17 confirmed the
+validated-route regression on Linux x86-64: Rust/Uvicorn throughput was
+0.652× with asyncio and 0.726× with uvloop, while server CPU per request was
+1.96× and 1.75× higher. This one-workload result is not a whole-server score.
+The documented scope keeps Python ASGI as a compatibility path and targets
+performance claims at Python-free Rust-native application composition. See
+the [performance decision](docs/performance-acceptance.json) and the
+[retained run record](docs/benchmark-status.md#focused-normal-build-fastapi-matched-result-2026-10-17).
+
 The previous local ASGI-adapter evidence snapshot is dated 2026-10-12: 511 cases,
 comprising 243 live oracle comparisons and 268 target-only contracts, passed
 attribution and three complete repeats. The dirty source snapshot measured

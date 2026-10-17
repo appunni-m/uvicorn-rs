@@ -11,10 +11,20 @@ standalone native executable.
 ## Current release status (2026-10-17)
 
 No release candidate is established. Current `main` is
-[`76379e2d64abc33e01827a9f160223e761858779`](https://github.com/appunni-m/uvicorn-rs/commit/76379e2d64abc33e01827a9f160223e761858779),
-a documentation-only update over the H3 parity input on `93d1217`. Current-head
-CI [39026041176](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
-is queued. Older CI
+[`951c67b15faa8eef047432604e5a1785dd18776b`](https://github.com/appunni-m/uvicorn-rs/commit/951c67b15faa8eef047432604e5a1785dd18776b),
+which adds a focused benchmark workflow and report for the normal-build FastAPI
+route comparison. Current-head CI
+[39031849683](https://github.com/appunni-m/uvicorn-rs/actions/runs/39031849683)
+is pending. Focused normal-build benchmark
+[39031849682](https://github.com/appunni-m/uvicorn-rs/actions/runs/39031849682)
+passed its response, lifecycle, and shutdown gates with five valid asyncio
+pairs and four valid uvloop pairs, but Rust measured 0.652×/0.726× Uvicorn
+throughput and 1.96×/1.75× server CPU per request. The retained run and scope
+revision are documented in the [benchmark record](benchmark-status.md) and
+[`performance-acceptance.json`](performance-acceptance.json). This focused run
+does not replace the required complete exact-commit multi-system matrix.
+
+Older CI
 [39024130047](https://github.com/appunni-m/uvicorn-rs/actions/runs/39024130047)
 passed its unified coverage matrix and the native composition, installed-wheel
 parity, MSRV, Rust quality, and Windows package jobs on `77e1f425`. Linux
@@ -46,12 +56,12 @@ do not establish a general speedup. See the [benchmark record](benchmark-status.
 for the category table, exact inputs, and limits.
 
 The exact-source Coverage-MCP receipt is also pending. Hosted CI proves
-9,004/9,004 regions and 6,636/6,636 lines, but the report's MCP status is
-`awaiting_query`. The prior local projection query and timed-out exact-commit
-query were for older report 39011984443 and do not review the latest report
-39020268579. No source-verified, fully paginated receipt exists for the latest
-report yet. Current-head CI is queued and exact-head coverage remains open. See
-the [coverage record](coverage.md).
+9,004/9,004 regions and 6,636/6,636 lines on an earlier commit, but the report's
+MCP status is `awaiting_query`. The prior local projection query and timed-out
+exact-commit query were for older report 39011984443 and do not review report
+39020268579. No source-verified, fully paginated receipt exists for that report
+yet. Current-head CI and exact-head coverage remain open. See the
+[coverage record](coverage.md).
 The repository workflows do not publish packages or create releases.
 
 The standalone Rust crate remains blocked by the documented vendored `h3`
@@ -298,15 +308,14 @@ claimed workload, event loop, and system, with throughput, latency, CPU, and
 RSS measurements present; throughput or latency must support a gain claim,
 while CPU and RSS provide required resource context. A scope revision must cite
 a checked-in document and retained qualified measurements. A complete matrix
-on its own is not a gain claim. The current record is `not_proven`. Benchmark
-run 38828500975 is complete, but its category jobs failed on Linux H1 uploads,
-HTTP/2, one Linux HTTP/3 workload, and lifecycle diagnostic normalization.
-The macOS H1 comparisons qualified 30 workload/loop pairs, with a median
-Rust/Uvicorn throughput ratio of 0.748×. A local single-case replay passed
-but was host-contended and cannot explain the Linux timeout. Earlier runs
-38787712815, 38537208330, and 38526995006 are superseded snapshots. No tag can
-currently produce a verified candidate. The gate does
-not publish packages, create a public release, or create or move tags.
+on its own is not a gain claim. The current record is `scope_revised`: Python
+ASGI remains the compatibility and regression path; performance claims target
+Python-free Rust-native application composition. The exact-commit focused result
+supports that revision, but candidate verification still requires a complete
+exact-commit multi-system artifact. The prior run 39020268578 is incomplete
+because Linux ARM64 failed an HTTP/3 correctness gate. No tag can currently
+produce a verified candidate. The gate does not publish packages, create a
+public release, or create or move tags.
 
 ### Historical focused migration and coverage evidence
 
