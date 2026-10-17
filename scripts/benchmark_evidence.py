@@ -273,6 +273,18 @@ def collect_bounded_client(process, seconds: float, server, monitor, *, interval
 _EXPECTED_H2_PEER_CLOSE = (
     "uvicorn-rs: connection task failed: hyper::Error(Io, Kind(BrokenPipe))"
 )
+_EXPECTED_H2_CONNECTION_CLOSE = re.compile(
+    r"uvicorn-rs: HTTP connection from Some\([^\r\n]+\) failed: "
+    r"HTTP connection failed: connection error \(Http\(hyper::Error\(Io, "
+    r"Kind\(BrokenPipe\)\)\)\)"
+)
+
+
+def _is_expected_h2_peer_close(line: str) -> bool:
+    return (
+        line == _EXPECTED_H2_PEER_CLOSE
+        or _EXPECTED_H2_CONNECTION_CLOSE.fullmatch(line) is not None
+    )
 
 
 def finalize_server(
@@ -292,12 +304,14 @@ def finalize_server(
     unexpected_python_error = not permit_app_error and (
         "Traceback (most recent call last):" in output or "Task exception was never retrieved" in output
     )
-    expected_h2_peer_close_count = output.splitlines().count(_EXPECTED_H2_PEER_CLOSE)
+    expected_h2_peer_close_count = sum(
+        _is_expected_h2_peer_close(line) for line in output.splitlines()
+    )
     permit_one_h2_peer_close = permit_h2_peer_close and expected_h2_peer_close_count == 1
     native_error_lines = [
         line for line in output.splitlines()
         if line.startswith("uvicorn-rs:") and re.search(r"\b(failed|exceeded|aborting)\b|does not support lifespan", line)
-        and not (permit_one_h2_peer_close and line == _EXPECTED_H2_PEER_CLOSE)
+        and not (permit_one_h2_peer_close and _is_expected_h2_peer_close(line))
         and not (permit_app_error and line == "uvicorn-rs: ASGI request failed: RuntimeError: benchmark exception path")
     ]
     if shutdown["forced"] or shutdown["returncode"] != 0 or panic or unexpected_python_error or native_error_lines:
