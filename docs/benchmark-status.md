@@ -2,6 +2,55 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Focused matched HTTP/3 large-response comparison (2026-10-17)
+
+The [focused run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013025705)
+on commit `e2a39c55594eb4aab2ac922c2e9128e970ca7f7e` compared Hypercorn and
+uvicorn-rs with asyncio on one Linux ARM64 runner. Both served the same standard
+FastAPI app (`examples.bench_fastapi:app`) under Python 3.12.13. The workload
+was a bodyless HTTP/3 GET returning a cached 1 MiB response; server order was
+randomized for each of five repetitions.
+
+This exercises the Rust transport and HTTP/3 implementation with a real Python
+FastAPI ASGI app. It does not remove the Python boundary, and it does not
+measure a future Rust-native FastAPI/Starlette composition.
+
+All five repetitions on both servers passed complete response validation and
+clean, unforced shutdown. Rust repetition 1 was excluded from timing because
+the monitor detected unrelated host CPU activity, leaving four valid matched
+pairs (repetitions 2–5). The table reports each metric's median over that same
+four-pair cohort.
+
+| Metric | Hypercorn asyncio | uvicorn-rs asyncio | Change |
+|---|---:|---:|---:|
+| Throughput | 19.84 req/s | 483.74 req/s | 24.38× |
+| p50 latency | 38.58 ms | 2.00 ms | 94.8% lower |
+| p95 latency | 75.60 ms | 2.56 ms | 96.6% lower |
+| p99 latency | 77.31 ms | 2.77 ms | 96.4% lower |
+| Server CPU | 31,089 µs/request | 1,813 µs/request | 94.2% lower |
+| Peak server RSS | 114.94 MiB | 49.06 MiB | 57.3% lower |
+
+The valid per-repetition throughput ratios ranged from 23.91× to 26.48×.
+This is a focused, single-workload Linux ARM64 result; it does not establish a
+general or multi-system speedup and does not close the full benchmark gate. The
+[raw artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013025705/artifacts/12093617960)
+retains all rows, validity reasons, hashes, and server logs.
+
+## Latest multi-system benchmark attempt (2026-10-17)
+
+The [multi-system run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39006451490)
+on commit `128aa2721aa78a289a93952539fa584d8412be14` did not produce a complete
+three-system result. Linux x86-64 completed; macOS ARM64 and Linux ARM64 failed
+the HTTP/3 `large-response` correctness gate when Hypercorn asyncio timed out
+waiting for response headers (repetition 2 on macOS and repetition 5 on Linux
+ARM64). A later focused Linux ARM64 run, above, passed all five Hypercorn and
+all five Rust correctness/shutdown samples, so the timeout is intermittent and
+still unexplained. Do not treat the focused pass as resolving the matrix
+failure. The [Linux x86-64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39006451490/artifacts/12093376239),
+[Linux ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39006451490/artifacts/12093050892),
+and [macOS ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39006451490/artifacts/12093037005)
+retain each platform's raw results.
+
 ## Focused HTTP/2 close-diagnostic follow-up (2026-10-17)
 
 The focused Linux x86-64 run
@@ -18,8 +67,8 @@ The earlier focused run
 [39003779460](https://github.com/appunni-m/uvicorn-rs/actions/runs/39003779460)
 used four client connections and logged one exact peer-close line in
 repetitions 1 and 2, with no such lines in repetitions 3–5. Its five response
-and shutdown checks passed; four timings passed the host guard. The current
-local change bounds this exact Rust H2 diagnostic to one per
+and shutdown checks passed; four timings passed the host guard. The pushed
+change bounds this exact Rust H2 diagnostic to one per
 configured client connection and continues to reject counts above the bound,
 other server errors, response failures, driver failures, and unclean shutdown.
 
@@ -27,14 +76,16 @@ A local normal-wheel run of `protocol-scope` passed 5/5 response and shutdown
 checks with zero peer-close lines. All five timing rows were excluded for
 unrelated host CPU activity. A direct finalizer smoke check accepted 2/4 exact
 diagnostics and rejected 5/4. These results validate the gate behavior; they
-provide no performance evidence. This follow-up is local and awaits push.
-Exact-source CI run
-[39009246290](https://github.com/appunni-m/uvicorn-rs/actions/runs/39009246290)
-is still running unified coverage. Full multi-system benchmark run
-[39006451490](https://github.com/appunni-m/uvicorn-rs/actions/runs/39006451490)
-is still running its three platform category jobs.
+provide no performance evidence. Focused run
+[39010673595](https://github.com/appunni-m/uvicorn-rs/actions/runs/39010673595)
+later passed five Linux x86-64 `uvicorn-rs-asyncio` / `protocol-scope`
+correctness and shutdown checks; four timings passed the host guard. It was a
+target-only diagnostic, not a paired performance comparison. Exact-source CI
+run [39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
+is still running its three-pass coverage matrix. The next exact-commit CI run
+is queued behind it.
 
-## Latest full benchmark attempt (2026-10-17)
+## Earlier full benchmark attempt (2026-10-17)
 
 The [full matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146)
 measured commit

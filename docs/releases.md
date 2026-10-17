@@ -10,6 +10,29 @@ standalone native executable.
 
 ## Current release status (2026-10-17)
 
+No release candidate is established. Commit `e2a39c55594eb4aab2ac922c2e9128e970ca7f7e`
+is on `main`. Its focused Linux ARM64 HTTP/3 comparison passed all response
+and shutdown checks and produced four valid matched timing pairs for the
+1 MiB FastAPI response workload. The measured 24.38× throughput result is
+limited to that focused workload; the [benchmark record](benchmark-status.md)
+shows the full multi-system run still failed on intermittent Hypercorn HTTP/3
+response-header timeouts on macOS ARM64 and Linux ARM64.
+
+Exact-source CI run
+[39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
+is still running its three-pass coverage matrix for the preceding commit. CI
+for the current main head is queued behind it. The Python packaging,
+Python-floor, clean-source coverage, and complete multi-system performance
+gates have not yet passed on the current commit. The repository workflows do
+not publish packages or create releases.
+
+The standalone Rust crate also remains blocked by the documented vendored
+`h3` framing fix not being carried by its external package dependency path. The
+workspace parity result does not establish that the published Rust crate
+contains the fix; see the package-consumer investigation below.
+
+## Previous release status snapshot (2026-10-17; superseded by e2a39c5)
+
 No release candidate is established. The latest clean CI run
 [38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888)
 on `27de9f3ac7d259a3a9b612c3247ab2c60eb27306` passed Rust quality and MSRV
@@ -85,7 +108,7 @@ candidate remains blocked by the dirty uncommitted changes and incomplete
 qualified performance evidence; the old hosted coverage failure must be
 replaced with clean release-candidate evidence before release acceptance.
 
-### Earlier status snapshot (superseded by current results)
+### Earlier status snapshot (historical)
 
 As of the earlier 2026-10-16 snapshot, a release candidate was not established. Exact-source CI
 [run 38790016719](https://github.com/appunni-m/uvicorn-rs/actions/runs/38790016719)
