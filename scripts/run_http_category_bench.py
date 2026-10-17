@@ -884,12 +884,6 @@ def main() -> None:
             "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
             "source_sha256": _source_digest(args.workloads, args.asgi_stage_diagnostics),
             "workloads": args.workloads,
-            "runtime_configuration": {
-                "uvicorn_rs_max_blocking_threads": os.environ.get(
-                    "UVICORN_RS_MAX_BLOCKING_THREADS"
-                ),
-                "unset_uses_tokio_default": True,
-            },
             "workload_parameters": {
                 name: {
                     "concurrency": WORKLOADS[name].get("concurrency", args.concurrency),

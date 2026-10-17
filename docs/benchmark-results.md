@@ -45,8 +45,9 @@ These are diagnostic profiles, not CPU-per-request or speed results. The OS
 shared-cache functions remain unresolved, profiles perturb scheduling, and
 only part of the load interval was sampled. At the time these profiles were
 reviewed, the host-clean matched timing gate rejected the machine, so the next
-performance step was the existing blocking-pool cap comparison after a clean
-preflight. The raw profiles, source
+performance step was a blocking-pool cap comparison after a clean preflight.
+That experiment completed on Linux x86-64 on 2026-10-17 and did not justify a
+cap; see the [current benchmark status](benchmark-status.md). The raw profiles, source
 snapshots, receipts, machine-readable analysis, and profile guide are in the
 Samply attribution report (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-samply-attribution/README.md`).
 A subsequent eight-interval host preflight also rejected: unrelated aggregate

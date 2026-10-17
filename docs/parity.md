@@ -385,10 +385,11 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | HTTP/3 | 33 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 
 These six groups account for all 248 current oracle-parity cases. The other
-289 cases are target-only fault/support contracts. Five of those exercise
-`UVICORN_RS_MAX_BLOCKING_THREADS`; they are described in the
-[ASGI behavior inventory](asgi-case-inventory.md#declared-behavior-map), not
-counted as oracle parity.
+284 cases are target-only fault/support contracts. Earlier archived matrices
+included five contracts for the experimental Tokio blocking-pool cap; the cap
+and its contracts were removed after the matched FastAPI upload measurements
+did not establish a repeatable benefit. The archived results remain in
+[benchmark status](benchmark-status.md).
 
 The H2/H3 rows are same-protocol ASGI observations against Hypercorn. They are
 not described as Uvicorn parity. Server versions and protocol components are

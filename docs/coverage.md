@@ -835,13 +835,11 @@ only and must not be used for performance timing. The report excludes the
 Python-free `uvicorn-rs` crate and other feature sets or platforms; it is not
 the current unified acceptance report.
 
-The five added target-only cases exercise `UVICORN_RS_MAX_BLOCKING_THREADS`:
-unset and positive values start and serve an HTTP request; non-Unicode,
-malformed, and zero values fail before ASGI lifespan startup. They establish
-configuration acceptance and rejection paths, not the effective blocking-pool
-concurrency limit. The related public setting and limits are documented in
-[configuration](configuration.md#tokio-blocking-pool-limit) and the
-[support matrix](support-matrix.md#supported-behaviors).
+The historical reports include five target-only cases for the experimental
+`UVICORN_RS_MAX_BLOCKING_THREADS` setting. Those cases were removed along with
+the setting after matched FastAPI upload measurements failed to establish a
+repeatable performance benefit. Archived coverage counts still include the
+cases where they were present; the current manifest no longer does.
 
 ### Previous local evidence (2026-10-11)
 

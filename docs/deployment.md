@@ -24,15 +24,6 @@ server has no separate flag to disable QUIC while retaining TLS.
 The current CLI and its defaults are listed in the
 [configuration reference](configuration.md#cli).
 
-The PyO3 extension also accepts the optional
-`UVICORN_RS_MAX_BLOCKING_THREADS` environment variable to set the maximum
-Tokio blocking-pool size. Use a positive integer; an invalid value prevents
-native module initialization before the application receives ASGI lifespan
-startup. The Tokio core remains a single worker, and Python application code
-remains on its asyncio event loop. This setting is specific to `uvicorn-rs-py`;
-the documented cases cover startup acceptance and rejection, not a measured
-concurrency effect. See [configuration](configuration.md#tokio-blocking-pool-limit).
-
 ## Service-manager example
 
 This example shows the documented process boundary for a Linux systemd

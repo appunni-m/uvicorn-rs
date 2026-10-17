@@ -7271,33 +7271,6 @@ fn response(status: StatusCode, body: ResponseBody, headers: HeaderMap) -> Respo
     response
 }
 
-fn max_blocking_threads_from_environment() -> Result<Option<usize>, std::io::Error> {
-    const VARIABLE: &str = "UVICORN_RS_MAX_BLOCKING_THREADS";
-    let value = match std::env::var(VARIABLE) {
-        Ok(value) => value,
-        Err(std::env::VarError::NotPresent) => return Ok(None),
-        Err(std::env::VarError::NotUnicode(_)) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("{VARIABLE} must be valid Unicode"),
-            ));
-        }
-    };
-    let maximum = value.parse::<usize>().map_err(|_| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!("{VARIABLE} must be a positive integer"),
-        )
-    })?;
-    if maximum == 0 {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            format!("{VARIABLE} must be a positive integer"),
-        ));
-    }
-    Ok(Some(maximum))
-}
-
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     const TOKIO_WORKER_THREADS: usize = 1;
@@ -7311,9 +7284,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
         runtime_builder
             .worker_threads(TOKIO_WORKER_THREADS)
             .enable_all();
-        if let Some(maximum) = max_blocking_threads_from_environment()? {
-            runtime_builder.max_blocking_threads(maximum);
-        }
         #[cfg(coverage)]
         {
             if coverage_fault_take(CoverageFaultPoint::NativeRuntimeBuildError) {

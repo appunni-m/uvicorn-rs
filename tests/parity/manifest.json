@@ -737,16 +737,6 @@
       ]
     },
     {
-      "id": "startup-runtime-configuration",
-      "oracle": "uvicorn",
-      "protocol": "http/1.1 + lifespan",
-      "oracle_config": [
-        "uvloop",
-        "httptools",
-        "target-only Tokio blocking-pool environment configuration contract"
-      ]
-    },
-    {
       "id": "startup-fault-native-add-function-serve",
       "oracle": "uvicorn",
       "protocol": "http/1.1 + lifespan",
@@ -1421,18 +1411,6 @@
       }
     },
     {
-      "id": "lifespan.runtime-configuration-failure",
-      "kind": "protocol_operation",
-      "observe": [
-        "startup_failed",
-        "application_events",
-        "server_log"
-      ],
-      "required_observations": {
-        "startup_failed": true
-      }
-    },
-    {
       "id": "lifespan.startup-auto-fallback",
       "kind": "protocol_operation",
       "observe": [
@@ -1923,7 +1901,6 @@
     "inputs/startup-fault-native-add-class-lifespan-io.json",
     "inputs/startup-fault-lifespan-bridge.json",
     "inputs/startup-fault-native-add-class-server-control.json",
-    "inputs/startup-runtime-configuration.json",
     "inputs/startup-fault-native-add-function-serve.json",
     "inputs/startup-fault-listener-accept.json",
     "inputs/lifecycle-tls.json",

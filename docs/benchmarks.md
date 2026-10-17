@@ -280,45 +280,32 @@ optimization should reduce body-event/future crossings or improve their
 producer-consumer scheduling; changing the timer or targeting SIMD is not
 supported by this evidence.
 
-### Compare Tokio blocking-pool caps on FastAPI uploads
+### Tokio blocking-pool cap experiment
 
-Use `workflow_dispatch` with `Run mode: focused-blocking-pool` to compare
-uvicorn-rs with the default Tokio blocking-pool limit and explicit limits of
-one and four blocking threads. Select one runner with `FastAPI system`; the
-default is Linux x86-64. Use `Blocking pool cap` and `Blocking pool workload`
-to run one cap/workload combination while diagnosing a failure, or leave both
-at `all` to run the full six-combination comparison on that host and source.
-The workloads are upstream FastAPI 1 MiB uploads with 64 KiB and 256 KiB client
-write targets; each is compared with Uvicorn under asyncio and uvloop. The app,
-Python 3.12.13, release wheel, client, concurrency, warmup, duration, and
-repetition count remain matched. Defaults are five repetitions, 5-second
-samples, 1-second warmup, concurrency 64, and seed `20261005`.
+The Linux x86-64 FastAPI upload experiment compared Tokio's default blocking
+pool with explicit limits of one and four threads, using 1 MiB uploads with 64
+KiB and 256 KiB client writes. Every cap/workload pair produced at least four
+valid matched repetitions per Python loop, with exact response and lifecycle
+checks. The detailed per-run throughput, latency, CPU, memory, and host
+exclusions are in the [benchmark status](benchmark-status.md#focused-cap-4--64-kib-upload-run-39052457474-2026-10-17).
 
-The job first runs focused HTTP/1 upload and streaming-progress parity cases,
-then checks the host before timing. The maintained full-response correctness
-and lifecycle gates also run for every server sample. Each cap/workload pair
-gets its own raw report and matched summary, with source and binary identities,
-host invalidations, throughput, latency percentiles, server/client CPU, and RSS.
-`UVICORN_RS_MAX_BLOCKING_THREADS` affects only uvicorn-rs; Uvicorn receives the
-same environment but ignores that variable. A cap is a candidate only if the
-same-host reports show a repeatable end-to-end improvement without lifecycle,
-correctness, or tail-latency regressions. This is one system and two upload
-workloads, not a broad performance claim. The 90-day artifact retains results
-and logs; the workflow commits none of them.
+| Upload write size | Tokio setting | asyncio Rust/Uvicorn throughput ratio | uvloop Rust/Uvicorn throughput ratio |
+|---|---|---:|---:|
+| 64 KiB | Default | 0.304x | 0.247x |
+| 64 KiB | 1 thread | 0.314x | 0.337x |
+| 64 KiB | 4 threads | 0.304x | 0.411x |
+| 256 KiB | Default | 0.311x | 0.394x |
+| 256 KiB | 1 thread | 0.275x | 0.445x |
+| 256 KiB | 4 threads | 0.319x | 0.420x |
 
-The same selectors are available on a push-triggered run. Include
-`[focused-blocking-pool]` and, when narrowing the run, one of
-`[blocking-pool-cap=default]`, `[blocking-pool-cap=1]`, or
-`[blocking-pool-cap=4]`, plus one of
-`[blocking-pool-workload=fastapi-request-upload]` or
-`[blocking-pool-workload=fastapi-upload-1m-write-256k]` in the commit subject.
-The focused [cap-4/256-KiB retry](benchmark-status.md#focused-cap-4--256-kib-upload-retry-run-39051369699-2026-10-17)
-qualified five asyncio and four uvloop pairs; cap 4 remained slower than
-Uvicorn. The focused [cap-1/64-KiB comparison](benchmark-status.md#focused-cap-1--64-kib-upload-run-39052022411-2026-10-17)
-qualified four asyncio and five uvloop pairs; cap 1 was also slower. Each report
-excludes one reference sample for unrelated host CPU activity. Cross-run host
-variation means these runs do not isolate cap effects. The Git trigger skips
-the broad platform matrix for this focused mode.
+Uvicorn was faster in every measured pair. The cap effects vary by loop and
+write size, and the follow-up runs used separate hosted runner instances, so
+the results do not establish a repeatable end-to-end benefit from a specific
+limit. The experimental `UVICORN_RS_MAX_BLOCKING_THREADS` override and its
+configuration contracts were removed; Tokio's default blocking-pool behavior
+remains in effect. The measurements identify a Rust server-path cost but do not
+isolate its cause; the ASGI/PyO3 boundary and request-body bridge remain areas
+for separate profiling.
 
 ### Run one focused FastAPI stage diagnostic
 

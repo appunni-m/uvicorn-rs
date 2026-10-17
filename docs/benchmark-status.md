@@ -2,6 +2,38 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Focused cap-4 / 64-KiB upload (run 39052457474; 2026-10-17)
+
+The [focused run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39052457474)
+tested commit `3e23ae0d3` with cap 4 and `fastapi-request-upload` on Linux
+x86-64, using CPython 3.12.13, Uvicorn 0.54.0, uvloop 0.23.0, FastAPI 0.142.4,
+concurrency 64, five 5-second samples, and a 1-second warmup. The client
+uploaded 1 MiB in 64-KiB writes. Every response matched the status and body
+oracle; lifecycle and shutdown passed; there were no request failures,
+unexpected panics, or native errors. Source and native extension identities
+were stable and match the cap-1 run above. The [retained artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39052457474/artifacts/12108078416)
+contains raw rows, host observations, identities, and logs.
+
+Four asyncio pairs and five uvloop pairs passed timing validity. The Rust
+asyncio repetition 1 was excluded after the host monitor detected unrelated
+CPU activity.
+
+| Loop | Valid matched pairs | Throughput, Uvicorn / uvicorn-rs | Rust/Uvicorn | p50 ms, Uvicorn / Rust | p95 ms, Uvicorn / Rust | p99 ms, Uvicorn / Rust |
+|---|---:|---:|---:|---:|---:|---:|
+| asyncio | 4 | 1,223.7 / 379.3 req/s | 0.304x | 51.04 / 166.01 | 58.96 / 232.49 | 67.87 / 270.60 |
+| uvloop | 5 | 1,339.6 / 554.5 req/s | 0.411x | 47.03 / 112.54 | 51.71 / 150.61 | 56.39 / 176.86 |
+
+| Loop | Server CPU µs/request, Uvicorn / Rust | Peak server RSS MiB, Uvicorn / Rust | Client CPU µs/request, Uvicorn / Rust | Peak client RSS MiB, Uvicorn / Rust |
+|---|---:|---:|---:|---:|
+| asyncio | 802 / 4,010 | 108.9 / 144.6 | 536 / 402 | 21.13 / 21.06 |
+| uvloop | 743 / 2,582 | 107.2 / 136.4 | 476 / 411 | 21.07 / 21.13 |
+
+Cap 4 is slower than Uvicorn in both loops on the 64-KiB upload workload as
+well. Together, the cap-4 64-KiB and 256-KiB results do not justify changing
+the default. The cap comparison remains observational across separately
+scheduled runner instances, so it does not establish that the cap itself
+caused any difference among Rust runs.
+
 ## Focused cap-1 / 64-KiB upload (run 39052022411; 2026-10-17)
 
 The [focused run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39052022411)
@@ -34,7 +66,7 @@ contains raw rows, host observations, identities, and logs.
 Cap 1 is slower than Uvicorn in both loops. This run does not isolate cap 1's
 effect from the default cap: the default-cap observations were collected in a
 separate run, and cross-run host variation prevents a causal cap comparison.
-No default change is justified. The cap-4 / 64-KiB case remains.
+No default change is justified. The cap-4 / 64-KiB result is recorded above.
 
 ## Focused cap-4 / 256-KiB upload retry (run 39051369699; 2026-10-17)
 
@@ -70,8 +102,8 @@ contains the raw rows, host observations, identity hashes, and logs.
 Cap 4 remains substantially slower than Uvicorn on this upload workload under
 both loops. This retry does not justify changing the runtime default. The
 four-pair uvloop estimate is descriptive, not a significance claim, and this is
-one workload on one shared hosted runner. The cap-1 and cap-4 64-KiB upload
-cases remain to be measured before closing the blocking-pool experiment.
+one workload on one shared hosted runner. The later 64-KiB cap-1 and cap-4
+comparisons are recorded in the sections above.
 
 ## Push-triggered matrix snapshot (run 39036702600; 2026-10-17 13:53 UTC)
 
@@ -355,9 +387,10 @@ stage sample suggests the Python ASGI path is slower while Rust `send()` waits
 are shorter; that is a lead for attribution, not proof of cause. The result
 does not support SIMD or body-copy optimization as the first fix. It also does
 not show the required performance gain, so the performance release gate stays
-open. Continue with the underqualified H1 workloads and loop pairs, the small
-WebSocket text-echo case, and the default/cap-1/cap-4 upload comparison after
-their correctness gates; preserve the exact identities and rejected samples.
+open. At this report's snapshot, underqualified H1 workloads, the small
+WebSocket text-echo case, and the default/cap-1/cap-4 upload comparison still
+needed follow-up. The blocking-pool measurements are now complete as documented
+above; the remaining HTTP/1 and WebSocket work stays open.
 
 ## Latest focused macOS HTTP/3 large-response comparison (2026-10-17)
 
@@ -1051,13 +1084,13 @@ the old runtime correct or incorrect for an immediate post-disconnect receive,
 and it is not a hosted rerun. See the archived-row review and repeat
 evidence (`benchmarks/results/2026-10-12/http1-disconnect-before-first-receive-repro/README.md`).
 
-The Tokio blocking-pool experiment passed 243/243 public parity cases with the
+At this earlier checkpoint, the Tokio blocking-pool experiment passed 243/243 public parity cases with the
 default, 1-thread, and 4-thread settings. Its first timing slice has one
 qualified descriptive pair: default pool, stock FastAPI, 1 MiB request body,
 64 KiB client callback cap, three host-valid repetitions per server. Uvicorn
 handled 4,149 requests/s and Rust 3,840 (0.925×); Rust p50/p95/p99 and observed
-server CPU were higher. The setting comparison is incomplete: cap 1 had no
-qualified pairs, and cap 4 has not been timed. See the full experiment
+server CPU were higher. At that time, the setting comparison was incomplete:
+cap 1 had no qualified pairs, and cap 4 had not been timed. See the full experiment
 report (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/README.md`).
 
 Twelve earlier consecutive host preflights (receipts 5–16) rejected before
@@ -1097,7 +1130,8 @@ the process named `python3.12` used 85.3–104.3% of one core in all eight
 intervals, and unrelated aggregate CPU ranged from 100.4% to 151.4%. The
 receipt captures names and PIDs, not the process command. No timed benchmark
 started in that rejected window and no process was stopped. Later short windows
-accepted for default and cap 1, but the cap comparison remains incomplete. See
+accepted for default and cap 1, but the cap comparison remained incomplete at
+that time. It was completed in the hosted Linux runs recorded above. See
 the preflight receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-post-doc-audit.json`).
 
 ### Hosted Tokio blocking-pool follow-up (2026-10-17)
@@ -1119,8 +1153,9 @@ lifecycle checks.
 It completed the default 64-KiB and 256-KiB write-target workloads and cap-1
 256-KiB workload. The cap-4 256-KiB workload recorded four valid uvloop pairs
 and five asyncio pairs, but one uvloop repetition failed with a libcurl
-timeout. The workflow stopped before cap-1/cap-4 results for the 64-KiB
-workload were produced. The cap-4 setting is therefore unqualified overall.
+timeout. This initial attempt stopped before the cap-1/cap-4 64-KiB workloads;
+the cap-4/256-KiB retry and both 64-KiB follow-ups are recorded in the focused
+run sections at the top of this page.
 
 Each throughput cell reports Rust / Uvicorn, with the median paired throughput
 ratio in parentheses. Latency cells list Rust p50 / p95 / p99 ms, then Uvicorn
@@ -1146,11 +1181,11 @@ closes the large Uvicorn gap, and no pool-cap default change is justified.
 Rust used about 2.3–4.3 ms of server CPU per request versus 0.75–0.81 ms for
 Uvicorn on the 256-KiB workload.
 
-The remaining cases are cap 1 and cap 4 on the 64-KiB workload, plus a focused
-retry of the failed cap-4/256-KiB case. The selectors documented in
-[the benchmark guide](benchmarks.md#compare-tokio-blocking-pool-caps-on-fastapi-uploads)
-allow each cap/workload combination to run independently. These are one-host
-results, not a cross-system performance claim.
+The focused cap-4/256-KiB retry and the two 64-KiB follow-ups are now complete;
+their individual reports appear at the top of this page. Across the six
+cap/workload combinations, no setting provides a repeatable, loop-independent
+gain without latency or CPU regressions. The experimental runtime override was
+removed; the default Tokio blocking-pool configuration remains in effect.
 
 ### HTTP/2 benchmark-client shutdown check (2026-10-12)
 

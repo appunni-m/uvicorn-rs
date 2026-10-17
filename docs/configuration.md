@@ -34,19 +34,6 @@ HTTP/3 on the same port. Without certificate/key files, the server accepts
 cleartext HTTP/1.1 and HTTP/2 prior-knowledge (h2c). It does not support h2c
 upgrade.
 
-## Tokio blocking-pool limit
-
-The PyO3 extension reads the optional `UVICORN_RS_MAX_BLOCKING_THREADS`
-environment variable when the native module initializes. When unset, Tokio's
-default blocking-pool limit is used. When set, the value must be a positive
-integer representable as `usize`; a non-Unicode value, malformed integer, or
-zero fails extension initialization before ASGI lifespan startup. This
-target-specific environment variable sets the maximum size of Tokio's blocking
-pool; the Tokio core runtime still uses one worker thread, and Python ASGI code
-continues to run on its owning asyncio loop. The live inputs verify accepted
-and rejected configuration paths, not the effective concurrency limit. This
-is not a Uvicorn CLI option.
-
 The CLI runs the Python ASGI implementation in `uvicorn-rs-py`. With the
 default `native-tcp` feature, its HTTP/1.1, HTTP/2 over TCP/TLS, and HTTP/3
 over Quinn paths use the separately packaged native `uvicorn-rs` transport.
