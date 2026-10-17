@@ -190,6 +190,15 @@ valid matched repetitions for any release performance claim. In particular,
 do not raise client timeouts or exclude an H3 workload based only on one
 passing focused run.
 
+To recheck the intermittent Hypercorn response-header timeout seen on macOS
+ARM64, use this push selector for one matched asyncio workload:
+`[focused-h3] [h3-system=macos-arm64] [h3-server=asyncio-pair] [h3-workload=large-response]`.
+It compares the same FastAPI 1 MiB response on Hypercorn and uvicorn-rs, with
+randomized server order and five repetitions. A passing focused rerun narrows
+the failure but does not prove the earlier full-matrix failure is resolved;
+keep that gate open until the complete multi-system run passes. See
+[`benchmark-status.md`](benchmark-status.md) for the retained run results.
+
 Required tools are `uv`, Python 3.12, Rust/Cargo, a C compiler and `curl-config`
 for the native H1 load client, Node.js for the slow-reader fallback, and
 OpenSSL for test certificates. Build the H2, H3, and WebSocket Rust clients
