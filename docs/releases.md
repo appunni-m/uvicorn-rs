@@ -10,31 +10,48 @@ standalone native executable.
 
 ## Current release status (2026-10-17)
 
-No release candidate is established. Current `main` is documentation-only
-commit `f815728ded987419123a786ce5a9c04c669c80cb`. Exact-source CI run
-[39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
-on its parent `e22df3afaa2c04ce3cced230e2f4e612d2872594` completed successfully:
-749/749 unified cases passed with three ASGI and three native repeats,
-9,004/9,004 regions, and 6,636/6,636 lines. Installed-wheel parity, Rust
-quality/MSRV, pinned native composition, cross-platform package artifacts, and
-the declared Python floor also passed on that commit. Current-head CI
-[39013640499](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013640499)
-has passed its Rust, composition, and installed-wheel jobs; its exact-head
-coverage matrix is still in progress.
+No release candidate is established. Current `main` is
+[`76379e2d64abc33e01827a9f160223e761858779`](https://github.com/appunni-m/uvicorn-rs/commit/76379e2d64abc33e01827a9f160223e761858779),
+a documentation-only update over the H3 parity input on `93d1217`. Current-head
+CI [39026041176](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
+is queued. Older CI
+[39024130047](https://github.com/appunni-m/uvicorn-rs/actions/runs/39024130047)
+passed its unified coverage matrix and the native composition, installed-wheel
+parity, MSRV, Rust quality, and Windows package jobs on `77e1f425`. Linux
+candidate-wheel parity is still running and macOS packaging is queued; these
+results do not replace the required check on the current head. The earlier exact-head run
+[39023002405](https://github.com/appunni-m/uvicorn-rs/actions/runs/39023002405)
+was cancelled and is not a pass.
 
-The full multi-system performance gate remains open. The focused Linux ARM64
-HTTP/3 comparison measured 24.38× throughput for one 1 MiB FastAPI response
-workload across four valid matched pairs. A later macOS ARM64 H3 run passed
-all correctness and shutdown checks but produced only one valid timing row,
-so it had no matched pair. The full matrix still fails intermittently on
-Hypercorn HTTP/3 response-header timeouts. See the
-[benchmark record](benchmark-status.md); these results do not establish a
-general speedup.
+Prior CI
+[39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
+on `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e` passed 749/749 unified cases
+with three ASGI and three native repeats, 9,004/9,004 regions, and 6,636/6,636
+lines. Installed-wheel parity, Rust quality/MSRV, and pinned native composition
+also passed. Linux, Windows, and macOS package artifacts and the declared
+Python-floor job passed. These results predate `93d1217` and do not establish
+exact-head acceptance.
+
+The full multi-system performance gate remains open. Matrix run
+[39020268578](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268578)
+on `aa4c938` is terminal but incomplete: Linux x86-64 and macOS ARM64 category
+runs completed; Linux ARM64 failed the H3 correctness gate in
+`many-response-chunks`. A same-source focused rerun passed five correctness
+and shutdown repetitions but does not resolve the intermittent failure. The
+qualified workload ratios show repeated HTTP/1.1 and WebSocket regressions;
+the small stock-FastAPI validated route also ran at 0.654–0.870x Uvicorn
+throughput on qualified Linux pairs, with higher server CPU per request. HTTP/2
+and HTTP/3 results vary substantially by workload and system. These results
+do not establish a general speedup. See the [benchmark record](benchmark-status.md)
+for the category table, exact inputs, and limits.
 
 The exact-source Coverage-MCP receipt is also pending. Hosted CI proves
 9,004/9,004 regions and 6,636/6,636 lines, but the report's MCP status is
-`awaiting_query`; the local projection query was source-unverified and the
-exact-commit query did not finish. See the [coverage record](coverage.md).
+`awaiting_query`. The prior local projection query and timed-out exact-commit
+query were for older report 39011984443 and do not review the latest report
+39020268579. No source-verified, fully paginated receipt exists for the latest
+report yet. Current-head CI is queued and exact-head coverage remains open. See
+the [coverage record](coverage.md).
 The repository workflows do not publish packages or create releases.
 
 The standalone Rust crate remains blocked by the documented vendored `h3`

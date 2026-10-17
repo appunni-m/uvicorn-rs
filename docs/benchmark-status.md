@@ -2,7 +2,7 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Latest focused HTTP/2 candidate diagnostic (2026-10-17)
+## Focused HTTP/2 candidate diagnostic (2026-10-17)
 
 The Git-push-triggered [run 39025351808](https://github.com/appunni-m/uvicorn-rs/actions/runs/39025351808)
 tested commit `a8d84d0a3b4a90d5737617a76a62be5395264110` on Linux x86-64. It ran
@@ -35,15 +35,15 @@ normal native binary SHA-256 is
 [workflow artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39025351808/artifacts/12098656237)
 contains raw repetitions, host observations, hashes, and server logs.
 
-## Latest three-system matrix status (2026-10-17 snapshot)
+## Full three-system matrix result (2026-10-17)
 
 The [matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268578)
 measures commit `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e`. Exact-binary public
-parity and the FastAPI-only comparison passed on all three systems. macOS ARM64
-completed its category matrix. Linux ARM64 failed its H3 correctness gate
-during `many-response-chunks`, and Linux x86-64 was still running categories at
-the latest verified snapshot. The Linux ARM64 artifact retained 90 of 130 H3
-rows before stopping.
+parity and selected FastAPI-only comparisons passed on all three systems.
+Linux x86-64 and macOS ARM64 completed their category runs; Linux ARM64 stopped
+at its H3 correctness gate during `many-response-chunks`. The Linux ARM64
+artifact retained 90 of 130 H3 rows before stopping. The matrix is terminal but
+incomplete as a three-system result.
 
 The first divergence was on repetition 3 of `hypercorn-uvloop`: request 43
 returned HTTP 200 with 4,096 response bytes in four data chunks where the
@@ -52,21 +52,99 @@ retained Hypercorn server log then reports its UDP task failing with
 `KeyError(164)` while looking up the H3 stream in `protocol/h3.py` during
 teardown. This is the observed sequence, not a proven root cause. It could be
 an intermittent Hypercorn H3 stream-lifecycle failure or another interaction
-in that reference/client path; the targeted rerun is recorded separately when
-available. This correctness failure invalidates the H3 workload comparison and
-prevents a completed three-system aggregate. Do not infer a Rust performance
-win from these partial rows.
+in that reference/client path. The focused same-source
+[run 39026041230](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041230)
+passed all five full-response, lifecycle, and clean-shutdown repetitions;
+four timing rows passed the host guard, but this reference-only run is not a
+comparison. Causality remains unproven. The matrix failure invalidates the
+affected H3 comparison and prevents a completed three-system aggregate. Do not
+infer a Rust performance win from these partial rows.
 
 The run predates the H3 cancellation case on `93d1217` and does not cover that
-new conformance input. A Git comparison from `aa4c938` to current main commit
-`a8d84d0a3b4a90d5737617a76a62be5395264110` shows changes only in documentation,
-parity scripts/fixtures/manifest, and the HTTP/3 probe; runtime Rust sources,
-Python bridge, and dependency manifests are unchanged. Exact-head CI run
+new conformance input. Runtime Rust sources, the Python bridge, and dependency
+manifests are unchanged between this matrix source and current main
+`76379e2d64abc33e01827a9f160223e761858779`. Current-head CI
+[39026041176](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
+has not started its jobs yet. Older exact-head CI
 [39024130047](https://github.com/appunni-m/uvicorn-rs/actions/runs/39024130047)
-for `77e1f425` had native composition, installed-wheel parity, Rust
-minimum-version, and Rust quality green; unified coverage was still running.
-The documentation-only push has queued CI
-[39025351817](https://github.com/appunni-m/uvicorn-rs/actions/runs/39025351817).
+has passed unified coverage, native composition, installed-wheel parity, MSRV,
+Rust quality, and the Windows package job on `77e1f425`. Its Linux candidate
+wheel parity job is running and its macOS package job is queued. Those results
+do not substitute for current-head CI.
+
+## Cross-system category and FastAPI-only findings (2026-10-17)
+
+The category ratios below are medians across qualified workload/loop pairs
+within each system. They are not request-weighted aggregates or one overall
+speed score. H1 and WebSocket use stock Uvicorn references; H2 and H3 use stock
+Hypercorn references.
+
+| Category | Linux x86-64 | Linux ARM64 | macOS ARM64 |
+|---|---:|---:|---:|
+| HTTP/1.1 | 0.663x (6/30 faster) | 0.651x (5/30 faster) | 0.730x (7/28 faster) |
+| HTTP/2 | 2.208x (8/14 faster) | 2.495x (10/14 faster) | 2.958x (13/14 faster) |
+| HTTP/3 | 2.259x (11/12 faster) | no qualified rows; correctness gate failed | 3.145x (10/12 faster) |
+| WebSocket | 0.559x (2/6 faster) | 0.705x (2/6 faster) | 0.777x (2/6 faster) |
+
+These medians hide workload reversals. HTTP/2 `many-response-chunks` measured
+0.069x on Linux x86-64 and 0.083x on Linux ARM64, while macOS ARM64 was near
+parity at 0.992x. HTTP/1.1 upload workloads reached 0.237x on Linux x86-64 and
+0.265x on Linux ARM64. WebSocket text echo ranged from 0.365x to 0.487x across
+the systems; handshake-only workloads were faster.
+
+The stock FastAPI-only comparison used the same `examples.bench_fastapi:app`,
+Python 3.12.13, FastAPI 0.142.4, Starlette 1.7.0, and Pydantic 2.13.5 for both
+servers. Four selected pairs qualified on each Linux system; two of four
+qualified on macOS. The small validated route exposes a repeated regression:
+
+| System and loop | Rust/Uvicorn throughput | Server CPU per request, Rust/Uvicorn | p50, Rust/Uvicorn |
+|---|---:|---:|---:|
+| Linux x86-64, asyncio | 0.654x | 262 / 141 µs | 13.64 / 8.98 ms |
+| Linux x86-64, uvloop | 0.705x | 226 / 130 µs | 11.94 / 8.25 ms |
+| Linux ARM64, asyncio | 0.759x | 295 / 183 µs | 15.63 / 11.59 ms |
+| Linux ARM64, uvloop | 0.870x | 260 / 185 µs | 13.72 / 11.75 ms |
+
+For the Python CPU workload, Rust/Uvicorn throughput was 0.918x and 0.931x on
+Linux x86-64, 0.963x and 0.984x on Linux ARM64, and 0.922x and 1.030x on macOS
+ARM64 (asyncio/uvloop where available). Near parity on this Python-heavy route
+contrasts with the small validated route and suggests fixed server-path work
+is a substantial part of the latter gap. This is an inference from aggregate
+measurements, not a profiled causal breakdown.
+
+The source confirms several candidate costs: each Python app request is
+scheduled onto its owning event loop with `call_soon_threadsafe`, then wrapped
+in an asyncio task and completion callback ([`python_task_future`](../src/lib.rs#L2508));
+the Python bridge creates per-request async `receive` and `send` wrappers
+([`_bridge.py`](../python/uvicorn_rs/_bridge.py#L4)); and `build_scope` creates
+Python scope dictionaries, header tuples, bytes, and address values for every
+request ([`build_scope`](../src/lib.rs#L7013)). The Rust server also uses
+Hyper's HTTP/1 path while the reference uses Uvicorn's `httptools` backend.
+The benchmark does not isolate any one of these costs.
+
+Immutable Python `bytes` response bodies use PyO3's `bytes::Bytes` extraction
+backed by `PyBackedBytes`, retaining the Python owner instead of copying the
+response body into a Rust allocation. The validated GET has no request body, so
+request-body materialization is not a likely explanation for that particular
+route gap. HTTP upload workloads still materialize Python `bytes` ASGI request
+messages from Rust body storage.
+
+The small-route result does not point to SIMD as the first optimization.
+First isolate parser/runtime work, Python task scheduling, scope construction,
+and ASGI send/receive stages with the existing diagnostic-only flags
+`--require-runtime-diagnostics` and `--asgi-stage-diagnostics`. Instrumented
+timing must not be treated as performance evidence. A sandboxed host preflight
+could not enumerate processes. The read-only preflight with process access then
+rejected all eight intervals: unrelated CPU ranged from 472% to 524%, with
+multiple sustained processes above the guard. It started no benchmark. Its
+ignored local receipt is
+`target/benchmark-preflight/kata-continuation-20261017-escalated.json`; retry
+the focused diagnostic only after a clean preflight or on a clean hosted
+runner.
+
+The matrix does **not** demonstrate a general performance gain over Uvicorn:
+HTTP/1.1 and WebSocket category medians regress on all three systems, the small
+FastAPI route regresses on every qualified Linux pair, and the full matrix is
+incomplete. Keep the performance release gate open.
 
 ## Latest focused macOS HTTP/3 large-response comparison (2026-10-17)
 

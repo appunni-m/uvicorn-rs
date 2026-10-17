@@ -4,36 +4,40 @@
 
 ## Current unified coverage status (2026-10-17)
 
-Hosted CI run
-[39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
-on clean commit `e22df3afaa2c04ce3cced230e2f4e612d2872594` completed the
+The latest completed hosted report is CI run
+[39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
+on clean commit `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e`. It completed the
 749-case manifest: 535 ASGI and 214 Python-free native Rust cases. Attribution
 passed 749/749, all three ASGI repeats and all three native repeats passed, and
 there were zero failures, infrastructure failures, retries, or unrun cases.
 The hosted gate measured **9,004/9,004 executable source-span regions** and
 **6,636/6,636 normalized physical executable lines**; per-case attribution
 matched the profile union. The report source SHA-256 is
-`0debfb500916abc4eccf6415588f5cbeb81b0d1a5e2d97a41242a0924bdd0e5a`; the
+`6005f3b617f09df31d7271ab0ef891809cef0e6148cc2a8cd02c415ec9d96f64`; the
 instrumented extension SHA-256 is
 `1739528ddbccd3c131ddbb232f8411c5f98a1da3ccc67529c60f1cade3b41711`.
-Artifact 12093933045 is retained at
-`target/asgi-coverage/ci-39011984443/coverage-report.json` with its context
-receipt. These are hosted exact-commit results, not a local dirty-worktree
-measurement.
+The [retained coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579/artifacts/12097831254)
+contains the report, context receipt, and case profiles. These are hosted
+results for that exact commit, not a local dirty-worktree measurement.
 
-Coverage-MCP acceptance is still open. The hosted report extension says
-`awaiting_query`. A local query against a standard LLVM projection returned
-9,004/9,004 covered regions and zero missing regions, but reported
-`source=unverified`, even though all seven recorded production-source hashes
-match the current checkout. A query from a detached checkout of the recorded commit did not
-complete within 120 seconds. There is no source-verified, fully paginated
-region-and-line MCP receipt yet, so this document does not claim MCP acceptance.
+The H3 post-body cancellation input was added after `aa4c938`. Current committed
+main is `76379e2d64abc33e01827a9f160223e761858779`; runtime Rust sources, the
+Python bridge, and dependency manifests remain unchanged from the 749-case
+report, but that report does not cover the added input or prove its attribution.
+Current-head CI
+[39026041176](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
+has not started its jobs yet. Older CI
+[39024130047](https://github.com/appunni-m/uvicorn-rs/actions/runs/39024130047)
+passed the unified coverage matrix on `77e1f425`, including the newer H3 input;
+its report does not establish current-head attribution. The earlier exact-head
+run 39023002405 was cancelled.
 
-Current `main` is the documentation-only commit `f815728`. Its exact-head CI
-run [39013640499](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013640499)
-is still in progress on the three-repeat coverage job. The prior hosted run
-already proves the same production-source hashes, but it is not a substitute
-for that current-head workflow result.
+Coverage-MCP acceptance for run 39020268579 remains open: its hosted report
+metadata says `awaiting_query`, and there is no source-verified, fully
+paginated region-and-line receipt for that report. The local projection query
+that returned `source=unverified` and the detached-checkout query that timed
+out belong to the older 39011984443 report; they do not count as review of
+39020268579.
 
 ### Previous local 748-case aggregate (2026-10-17)
 

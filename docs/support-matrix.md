@@ -36,18 +36,22 @@ parity oracles are not automatically supported API versions.
 
 ### Current verified coverage and open review (2026-10-17)
 
-Hosted CI run
-[39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
-on commit `e22df3afaa2c04ce3cced230e2f4e612d2872594` passed all 749 indexed
+The latest completed hosted coverage run
+[39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
+on commit `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e` passed all 749 indexed
 cases: 535 Python ASGI cases and 214 Python-free native Rust cases. Attribution
 and three repeats of each matrix passed with zero failures, retries, or
 unrun cases. The report measured 9,004/9,004 executable source-span regions
-and 6,636/6,636 normalized physical executable lines. The exact-source
-Coverage-MCP review is still pending; see the
+and 6,636/6,636 normalized physical executable lines. Its Coverage-MCP status
+is still `awaiting_query`; see the
 [coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
-Current-head CI run 39013640499 is still executing its coverage matrix. These
-results establish the named live inputs only; they do not imply complete
-Uvicorn CLI or API compatibility.
+Current committed main is `76379e2d64abc33e01827a9f160223e761858779`. Its
+exact-head CI run
+[39026041176](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
+has not started its jobs yet. Older run 39024130047 passed unified coverage on
+`77e1f425`, including the newer H3 cancellation input. Its report is not an
+exact-current-head result. These results establish the named live inputs only;
+they do not imply complete Uvicorn CLI or API compatibility.
 
 ### Previous local 748-case aggregate (2026-10-17)
 

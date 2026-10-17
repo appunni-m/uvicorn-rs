@@ -1,21 +1,23 @@
 # Historical unified coverage-gap inventory — 2026-10-15
 
 > **Current status (2026-10-17):** This is a historical gap inventory, not a
-> list of current missing regions. Hosted CI run
-> [39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
+> list of current missing regions. Latest completed hosted report
+> [39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
 > passed all 749 cases and three ASGI plus three native repeats with zero
 > failures, infrastructure failures, retries, or unrun cases. It measured
 > 9,004/9,004 source-span regions and 6,636/6,636 normalized physical lines.
-> The exact-source Coverage-MCP review is still open: a local projection query
-> returned `source=unverified`, and an exact-commit query did not finish within
-> 120 seconds. Current-head CI 39013640499 is still running. The gap tables
-> below describe older source snapshots only. See the
-> [current coverage report](coverage.md#current-unified-coverage-status-2026-10-17)
+> Its Coverage-MCP status remains `awaiting_query`; earlier MCP attempts were
+> for report 39011984443 and do not review this report. Current main is
+> `76379e2d64abc33e01827a9f160223e761858779`; its exact-head CI
+> [39026041176](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
+> has not started its jobs yet. Older CI 39024130047 passed unified coverage
+> on `77e1f425`; it is no longer the current-head check. The gap tables below describe older
+> source snapshots only. See the [current coverage report](coverage.md#current-unified-coverage-status-2026-10-17)
 > before proposing additional cases.
 
 ## Hosted coverage supersedes this gap inventory (2026-10-17)
 
-Hosted run 39011984443 on commit `e22df3afaa2c04ce3cced230e2f4e612d2872594`
+Hosted run 39020268579 on commit `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e`
 measures 9,004/9,004 regions and 6,636/6,636 normalized physical lines. These
 totals supersede the source snapshot and missing-region counts in the
 historical tables below. Coverage-MCP acceptance is not established; see the

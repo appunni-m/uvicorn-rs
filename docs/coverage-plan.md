@@ -2,23 +2,35 @@
 
 ## Current acceptance status (2026-10-17)
 
-Hosted CI run [39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
-on `e22df3afaa2c04ce3cced230e2f4e612d2872594` passed all 749 indexed cases
-(535 ASGI, 214 native), attribution, and three repeats of each matrix. It
-measured 9,004/9,004 source-span regions and 6,636/6,636 normalized physical
-executable lines, with zero failures, infrastructure failures, retries, or
-unrun cases. Per-case attribution matched the profile union. Source and
-extension identities are recorded in
+The latest completed hosted report is CI run
+[39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
+on `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e`. It passed all 749 indexed
+cases (535 ASGI, 214 native), attribution, and three repeats of each matrix.
+It measured 9,004/9,004 source-span regions and 6,636/6,636 normalized
+physical executable lines, with zero failures, infrastructure failures,
+retries, or unrun cases. Per-case attribution matched the profile union.
+Source and extension identities are recorded in
 [coverage status](coverage.md#current-unified-coverage-status-2026-10-17).
 
-Coverage-MCP has not accepted this report: it says `awaiting_query`; a local
-projection query returned `source=unverified`, and the exact-commit query did
-not finish within 120 seconds. All seven production source hashes match the
-receipt, but no source-verified, fully paginated region-and-line receipt is
-available. Current `main` is documentation-only commit `f815728`; its exact-
-head CI run 39013640499 is still executing the coverage matrix. Keep the MCP
-and current-head CI gates open. Add cases only if authoritative current-source
-evidence exposes a concrete gap or failed behavior.
+Coverage-MCP has not accepted this report: its report metadata says
+`awaiting_query`, and no source-verified, fully paginated region-and-line
+receipt exists for this report. A prior query against an older 39011984443
+projection returned `source=unverified`; the exact-commit query for that older
+report did not finish within 120 seconds. Do not treat that older query as a
+receipt for 39020268579.
+
+Current committed main is documentation-only commit
+`76379e2d64abc33e01827a9f160223e761858779` over the H3 test-input commit
+`93d1217`. Runtime Rust sources, Python bridge, and dependency manifests are
+unchanged from the 749-case report. The newer H3 input passed the unified
+coverage matrix on older exact-source commit `77e1f425`; current-head attribution
+still needs to complete. CI run
+[`39026041176`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
+for the current head has not started its jobs yet. Older run 39024130047 passed
+coverage on `77e1f425`; it cannot satisfy the current-head gate. Keep the MCP
+and current-head CI gates open. Add cases only if
+authoritative current-source evidence exposes a concrete gap or failed
+behavior.
 
 ### Previous local 748-case acceptance snapshot (2026-10-17)
 
