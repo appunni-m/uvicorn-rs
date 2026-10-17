@@ -38,5 +38,6 @@ features = ["pyo3/extension-module"]
 exclude = [
     ".kata.toml", "benchmarks/**", ".coverage-mcp/**", "build/**", "target/**",
     "tests/**", "scripts/**", "examples/**", ".github/**", ".venv/**",
+    "vendor/h3/src/tests/**",
     "**/__pycache__/**", "**/*.profraw", "**/*.profdata", "**/*.pem", "**/*.key",
 ]
