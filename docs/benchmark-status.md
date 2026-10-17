@@ -16,28 +16,27 @@ latency; they do not use open-loop offered load or correct for coordinated
 omission.
 
 The baseline is clean commit `01658e119662a30ec88cf6cb09107abd28251e56` with
-the 1 ms request-body batch wait. The tuning trial changes only
-`HTTP_REQUEST_BODY_BATCH_MAX_WAIT` to 5 ms in a temporary worktree based on
-that commit. It is a measured candidate, not exact-release-revision evidence:
-the raw candidate receipt records `dirty_target: true` and the harness marks
-`performance_evidence_status: not_proven`. All rows below had zero request
-failures and passed graceful server shutdown. The baseline
-Uvicorn repetition 1 was excluded for unrelated host CPU activity; the
-baseline medians therefore use matching valid repetitions 2–5. The 5 ms trial
-had five valid repetitions for both servers.
+the 1 ms request-body batch wait. The candidate is clean commit
+`33a705dc93e0803043994f9c4b57831f2aafc38c` and changes only
+`HTTP_REQUEST_BODY_BATCH_MAX_WAIT` to 5 ms. Its raw receipt records
+`dirty_target: false` and `performance_evidence_status: completed`. All rows
+below had zero request failures and passed graceful server shutdown. The
+baseline Uvicorn repetition 1 was excluded for unrelated host CPU activity;
+the baseline medians therefore use matching valid repetitions 2–5. The
+candidate had five valid repetitions for both servers.
 
 | Build | Server | Valid repetitions | Requests/s | p50 ms | p95 ms | p99 ms | Server CPU µs/request | Peak RSS MiB |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Baseline, 1 ms | Uvicorn + uvloop + httptools | 4 | 1,109.8 | 56.9 | 61.4 | 66.2 | 894.6 | 105.3 |
 | Baseline, 1 ms | `uvicorn-rs` + uvloop | 4 | 532.5 | 120.4 | 153.0 | 167.8 | 2,774.2 | 131.6 |
-| Trial, 5 ms | Uvicorn + uvloop + httptools | 5 | 1,149.8 | 54.8 | 58.6 | 61.4 | 862.3 | 105.9 |
-| Trial, 5 ms | `uvicorn-rs` + uvloop | 5 | 634.4 | 100.3 | 128.0 | 142.5 | 2,236.9 | 155.4 |
+| Candidate, 5 ms | Uvicorn + uvloop + httptools | 5 | 1,091.6 | 57.9 | 62.0 | 63.8 | 907.3 | 106.3 |
+| Candidate, 5 ms | `uvicorn-rs` + uvloop | 5 | 633.3 | 99.9 | 129.8 | 143.1 | 2,249.4 | 156.7 |
 
-On this workload the 5 ms trial improved `uvicorn-rs` throughput by 19% over
-its 1 ms baseline and reduced p50/p95/p99 latency by 16–17% and server CPU per
-request by 19%. Peak RSS increased by 23.8 MiB (18%). The throughput ratio to
-Uvicorn rose from 48% to 55%; `uvicorn-rs` remained slower, with 2.18× Uvicorn's
-p95 latency and 2.59× its server CPU per request. This is a useful local
+On this workload the 5 ms candidate improved `uvicorn-rs` throughput by 19%
+over its 1 ms baseline and reduced p50/p95/p99 latency by 15–17% and server
+CPU per request by 19%. Peak RSS increased by 25.2 MiB (19%). The throughput
+ratio to Uvicorn rose from 48% to 58%; `uvicorn-rs` remained slower, with 2.09×
+Uvicorn's p95 latency and 2.48× its server CPU per request. This is a useful local
 optimization, not evidence that the Python ASGI server is faster than Uvicorn.
 The configured coalescing window increases from 1 ms to 5 ms; both tested
 streaming-progress cases passed with this bound.
@@ -57,18 +56,93 @@ Python `bytes` construction cannot by itself explain or remove the observed
 latency gap; request chunk delivery and bridge scheduling are higher-priority
 targets for this case. This attribution is specific to `fastapi-request-upload`.
 
+The remaining server CPU difference is not yet attributed to individual CPU
+frames. The host sets `perf_event_paranoid=4`, and `perf stat` rejected even a
+user-space task-clock sample. A separate 99 Hz `py-spy --native` sample for
+each server includes `epoll_pwait` and other wait stacks, so it is not treated
+as on-CPU accounting. The two Speedscope profiles are retained for exploration;
+a permitted on-CPU profiler is still needed to locate the residual CPU cost.
+
 The 10 ms follow-up had only two common valid repetition IDs across the two
 servers, below the benchmark's three-repetition minimum, so it is inconclusive
 and is not used to select the setting. The 5 ms build passed the existing
 `http1.request-streaming-progress-before-upload-complete` and
 `http2.request-streaming-progress-before-upload-complete` parity cases, one
-case per profile. The full parity suite and multi-system matrix have not been
-rerun for this change.
+case per profile. In the push-triggered
+[CI run 39066848395](https://github.com/appunni-m/uvicorn-rs/actions/runs/39066848395),
+Rust quality, MSRV, native composition, and installed-wheel public parity have
+passed. The repeated unified parity/fault-coverage matrix is still running;
+the full performance matrix has not been rerun for this change.
 
 Local-only JSON receipts are in
 `benchmarks/results/2026-10-18-ubuntu-x86-focused-upload/`: baseline and 5 ms
-normal runs, their diagnostic-only stage runs, the 10 ms trial, and the two
-parity results. No server logs or coverage reports are part of these receipts.
+normal runs (including the clean exact-commit confirmation), their
+diagnostic-only stage runs, the 10 ms trial, two parity results, and two
+diagnostic-only Speedscope profiles. No server logs or coverage reports are
+part of these receipts.
+
+### Separate 1 KiB upload workload
+
+The same 5 ms candidate commit was also measured on a distinct FastAPI input:
+1 MiB POST bodies delivered in 1 KiB client writes at concurrency 8. This run
+used five valid repetitions per server, with zero request failures and clean
+shutdowns. It is an x86-64 result and does not clear the earlier ARM64
+correctness failures for this workload.
+
+| Server | Requests/s | p50 ms | p95 ms | p99 ms | Server CPU µs/request | Peak RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn + uvloop + httptools | 626.7 | 12.62 | 16.65 | 18.40 | 1,580.1 | 57.9 |
+| `uvicorn-rs` + uvloop | 561.8 | 14.32 | 17.55 | 19.18 | 2,376.6 | 60.5 |
+
+On this case, `uvicorn-rs` reached 89.6% of Uvicorn throughput, with 1.05×
+the p95 latency and 1.50× the server CPU per request. The receipt records
+CPython 3.12.13, FastAPI 0.142.4, uvloop 0.23.0, Uvicorn 0.54.0, and the same
+candidate source files before and after the run. This separate workload does
+not measure the effect of the 5 ms setting against a 1 ms baseline; it only
+compares both servers on the same 1 KiB-write input. Its local-only receipt is
+`benchmarks/results/2026-10-18-ubuntu-x86-focused-upload/upload-1k-exact.json`.
+
+### Ordinary FastAPI validated route
+
+To check whether the gap was limited to request-body handling, the same clean
+candidate commit was measured on FastAPI's validated `/items/7?repeat=3` route
+at concurrency 64. The run used five valid repetitions per server, a 1-second
+warmup, and 5-second samples; every row passed response checks and graceful
+shutdown. Both servers used the same CPython 3.12.13, FastAPI 0.142.4, uvloop
+0.23.0, Uvicorn 0.54.0, and httptools 0.8.0 environment. The native C client
+was unavailable in this shell, so both servers used the benchmark's Node.js
+25.1.0 fallback with full response-body checking.
+
+| Server | Requests/s | p50 ms | p95 ms | p99 ms | Server CPU µs/request | Peak RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn + uvloop + httptools | 6,103.0 | 9.88 | 12.02 | 19.87 | 162.8 | 50.0 |
+| `uvicorn-rs` + uvloop | 4,705.1 | 13.75 | 16.39 | 19.71 | 277.2 | 53.6 |
+
+On this route, `uvicorn-rs` reached 77% of Uvicorn throughput, with 1.36× the
+p95 latency and 1.70× the server CPU per request; p99 was near parity in this
+five-repetition sample. Because this route does not read an upload body, the
+remaining gap is not explained by request-body coalescing alone. The run shows
+where more attribution is needed; it does not identify the responsible server
+functions. Its local-only receipt is
+`benchmarks/results/2026-10-18-ubuntu-x86-focused-upload/validated-route-exact.json`.
+
+### Client-limited FastAPI `/fixed` diagnostic
+
+A separate five-repetition `/fixed` run at concurrency 64 passed all response
+checks and clean shutdowns, but the native C client was unavailable and the
+Node.js 25.1.0 fallback consumed 97.2% of one CPU for Uvicorn (74.1% for Rust).
+The harness host-activity guard marked the rows timing-valid; the Uvicorn-side
+load generator was nevertheless close to its single-core limit. Treat the
+throughput and latency values as client-limited diagnostics, not a rankable
+server comparison. The raw receipt is
+`benchmarks/results/2026-10-18-ubuntu-x86-focused-upload/fastapi-fixed-exact.json`.
+A lower-concurrency check at concurrency 32 confirmed the same cap: the two
+Uvicorn samples reached about 10.1k requests/s while the Node process used
+95.0% and 98.8% of one CPU. That run was stopped after the first paired sample;
+it retained that Rust/Uvicorn pair and one additional Uvicorn sample. Its
+partial JSONL checkpoint is retained as
+`benchmarks/results/2026-10-18-ubuntu-x86-focused-upload/fastapi-fixed-c32-diagnostic.jsonl`.
+These samples are correctness evidence only and are not used for ranking.
 
 ## Latest full multi-system matrix (run 39036702600; 2026-10-17)
 
