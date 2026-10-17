@@ -501,7 +501,7 @@ multi-system performance result.
 | System | Outcome |
 |---|---|
 | Linux x86-64 | Stopped before timed categories: the installed wheel failed public parity at `http3.scope-preserves-duplicate-headers`. A later installed-wheel run on the current commit passed that case within 248/248 public cases, so no current mismatch is established; this matrix still has no qualified category result. |
-| macOS ARM64 | Stopped in HTTP/2 `many-response-chunks` on `hypercorn-uvloop`; the H2 client connection driver did not shut down within its timeout. No complete multi-category result. |
+| macOS ARM64 | Stopped in HTTP/2 `many-response-chunks` on `hypercorn-uvloop`; the H2 client connection driver did not shut down within its timeout. Later source review found the same benchmark client was pinned to `h2 0.4.19`, which has a last-sender shutdown wake race; the candidate requires `h2 >= 0.4.20`. The original run remains incomplete. |
 | Linux ARM64 | All selected categories completed with qualified local pairs. In HTTP/2 `many-response-chunks`, uvicorn-rs throughput was 0.092× Hypercorn under asyncio and 0.084× under uvloop. Median throughput was about 6.97 vs 75.66 requests/s (asyncio) and 7.08 vs 84.28 requests/s (uvloop). This is a measured regression for that workload, not a cross-system conclusion. |
 
 The same ARM64 run shows that HTTP/2 is not uniformly slower in Rust. On
@@ -668,20 +668,28 @@ ignored report is
 
 The benchmark client shares its H2 senders among workers, drops all sender
 handles after the workers finish, and awaits each H2 connection driver before
-reporting the sample. The hosted failure therefore is not explained by the
-client skipping its driver join. The original hosted server log contains only
-Hyper's generic `connection error`; that matrix commit did not log the
-concrete error detail. Focused debug-logging replays on Linux x86-64 and
-ARM64 passed five repetitions without reproducing it. The focused macOS
-upload replay also passed. These results narrow the issue to an intermittent
-or environment-specific failure, but do not identify whether it is a
-transport bug or expected peer-close condition. Preserve detailed connection
-logging and the strict lifecycle gate until a reproducing input provides the
-concrete error.
+reporting the sample. Matrix run
+[39036702600](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)
+failed during the `request-upload` warm-up against Hypercorn asyncio on macOS
+ARM64 after 193 completed requests; the client then timed out waiting for the
+driver. This was benchmark-client teardown, not an ASGI or uvicorn-rs server
+failure. Comparing the locked `h2 0.4.19` source with `0.4.20` identified the
+race: 0.4.19 checked shutdown before snapshotting sender references, while
+0.4.20 snapshots first and self-wakes if the final reference is dropped during
+polling. The probe now requires `h2 >= 0.4.20` and retains strict request,
+driver-error, and server-lifecycle checks.
+
+A focused local replay on macOS ARM64 ran only `request-upload` against
+Hypercorn asyncio at concurrency 64. It completed 320 requests with zero
+request failures and clean driver/server shutdown. Its timing was invalidated
+by unrelated host CPU activity of 350–393% of one core and is not performance
+evidence. The ignored diagnostic is
+`target/diag-h2-request-upload-20261017-retry1.json`. It does not reproduce the
+old dependency race; the candidate still needs the exact single-case hosted
+rerun before the full category is repeated.
 
 These local runs and the later focused hosted H2 diagnostics do not explain
-the hosted H2 transport diagnostic or H3 timeout, and do not establish a
-performance gain. Their Git-ignored
+the separate hosted H3 timeout, and do not establish a performance gain. Their Git-ignored
 receipts are `target/benchmark-categories/h3-fixed-hypercorn-uvloop-retry2-20261016.json`,
 `target/benchmark-categories/h2-protocol-scope-rust-asyncio-single-20261016.json`,
 `target/benchmark-categories/h2-request-upload-rust-asyncio-exact-20261016.json`,

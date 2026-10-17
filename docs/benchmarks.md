@@ -1000,6 +1000,14 @@ per-sample connection bound. A count above that bound, any other native error,
 client failure, timeout, nonzero exit, or forced shutdown still fails the
 sample; HTTP/2 response and lifecycle checks remain strict.
 
+The native H2 probe requires `h2 >= 0.4.20`. Version 0.4.19 can miss a wake
+when its last `SendRequest` is dropped between the connection shutdown check
+and sender-reference snapshot, leaving the driver pending after every request
+and response completed. Version 0.4.20 snapshots references before checking
+shutdown and wakes the connection if the last reference disappears during
+polling. Keep the strict driver completion gate; this dependency race is a
+benchmark-client failure, not evidence about the server under test.
+
 ## Run the complete comparison with one command interface
 
 [`run_benchmark_categories.py`](../scripts/run_benchmark_categories.py) runs the
