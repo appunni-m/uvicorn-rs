@@ -28,6 +28,21 @@ The server logs show Starlette observing `ClientDisconnect` after the client
 has timed out. They do not show why the stalled request exceeded the timeout,
 so the Linux H1 issue remains open.
 
+The current worktree adds client-side failure detail for future focused
+reproductions: `first_failure.transfer` will report bytes passed to libcurl's
+upload callback versus bytes libcurl reports uploaded, along with response
+status and transfer-stage timings. This is not present in run 39036702600 and
+does not identify bytes received by the server. It narrows the next failure
+capture; it is not a diagnosis or performance measurement.
+
+The telemetry was checked with one synthetic loopback timeout: the handler
+accepted the request headers, did not read the upload body, and withheld its
+response. At libcurl's 15-second timeout, the client reported 851,834 bytes
+returned from its upload callback, 801,286 bytes uploaded, zero response bytes,
+and no HTTP status. This confirms the failure record distinguishes client-side
+upload progress from response progress. It is an instrumentation check, not a
+reproduction of the FastAPI failure or proof of what reached the server socket.
+
 The macOS HTTP/2 failure was different. `request-upload` on `hypercorn-asyncio`
 failed in warm-up after 193 response-checked requests because the H2 probe's
 connection driver did not stop within its five-second cleanup deadline. The
@@ -50,10 +65,10 @@ requests, zero failures, and clean server shutdown. Its timing was also
 rejected for unrelated host CPU activity. This different-architecture replay
 does not explain or clear the Linux upload timeouts.
 
-This matrix is older than current code commit
-`8d1f16950971a56e35ce566d38b5d700d0d039e7` and therefore is not exact-source
-candidate evidence. No complete multi-system benchmark result is available for
-that commit. The current decision in
+This matrix predates the current branch commit
+`a009d9ede77ad81a4d06c40dc4676b70119790fb` and is not exact-source candidate
+evidence. No complete multi-system benchmark result is available for that
+commit or the failure-diagnostic change. The current decision in
 [`performance-acceptance.json`](performance-acceptance.json) is `scope_revised`:
 Python ASGI remains the compatibility and regression path, without a general
 speed-superiority claim; performance claims target Python-free Rust-native

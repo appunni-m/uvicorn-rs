@@ -11,6 +11,17 @@ sample failures by default. It still exits nonzero if any sample fails. Other
 category runners may stop earlier. Failed or incomplete runs cannot qualify as
 performance comparisons.
 
+When the native HTTP/1.1 client reports a libcurl transfer failure, its
+`first_failure.transfer` object records the worker and attempt, expected upload
+size, bytes supplied by the upload callback, libcurl-reported uploaded and
+downloaded byte counts, response status, connection count, and connect,
+first-response-byte, and total durations. These values describe the client
+side; callback bytes are not proof that the server received those bytes. They
+help distinguish an upload that stopped before libcurl consumed the body from
+one that reached the response-wait stage. The extra fields appear only on a
+failed libcurl transfer, so successful benchmark rows keep their existing
+shape. Byte counts are `-1` when the installed libcurl does not expose them.
+
 The latest completed full FastAPI comparison is the
 FastAPI five-category report (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md`):
 520 correctness rows passed across H1, H2, WebSockets, and lifecycle, with 32

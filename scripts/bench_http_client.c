@@ -27,15 +27,32 @@ typedef struct {
     atomic_ullong *response_bytes;
     atomic_uint *failures;
     pthread_mutex_t *failure_lock;
-    char *first_failure;
+    struct FirstFailure *first_failure;
 } Shared;
 
 typedef struct {
     Shared *shared;
+    unsigned int worker_index;
     double *latencies;
     size_t latency_count;
     size_t latency_capacity;
 } Worker;
+
+typedef struct FirstFailure {
+    char reason[256];
+    int has_transfer_diagnostics;
+    unsigned int worker_index;
+    unsigned long long worker_attempt;
+    size_t expected_upload_bytes;
+    size_t upload_callback_bytes;
+    curl_off_t curl_uploaded_bytes;
+    curl_off_t curl_downloaded_bytes;
+    long response_code;
+    long new_connections;
+    double connect_time_seconds;
+    double starttransfer_time_seconds;
+    double total_time_seconds;
+} FirstFailure;
 
 typedef struct {
     const char *expected;
@@ -86,8 +103,55 @@ static size_t read_upload(char *buffer, size_t size, size_t count, void *user_da
 static void set_failure(Shared *shared, const char *reason) {
     atomic_fetch_add(shared->failures, 1);
     pthread_mutex_lock(shared->failure_lock);
-    if (shared->first_failure[0] == '\0') {
-        snprintf(shared->first_failure, 256, "%s", reason);
+    if (shared->first_failure->reason[0] == '\0') {
+        snprintf(
+            shared->first_failure->reason,
+            sizeof(shared->first_failure->reason),
+            "%s",
+            reason
+        );
+    }
+    pthread_mutex_unlock(shared->failure_lock);
+}
+
+static void set_transfer_failure(
+    Shared *shared,
+    CURL *curl,
+    const UploadCursor *upload,
+    unsigned int worker_index,
+    unsigned long long worker_attempt,
+    const char *reason
+) {
+    atomic_fetch_add(shared->failures, 1);
+    pthread_mutex_lock(shared->failure_lock);
+    FirstFailure *failure = shared->first_failure;
+    if (failure->reason[0] == '\0') {
+        snprintf(failure->reason, sizeof(failure->reason), "%s", reason);
+        failure->has_transfer_diagnostics = 1;
+        failure->worker_index = worker_index;
+        failure->worker_attempt = worker_attempt;
+        failure->expected_upload_bytes = shared->upload_bytes;
+        failure->upload_callback_bytes = upload->offset;
+        failure->curl_uploaded_bytes = -1;
+        failure->curl_downloaded_bytes = -1;
+        failure->response_code = 0;
+        failure->new_connections = -1;
+        failure->connect_time_seconds = -1.0;
+        failure->starttransfer_time_seconds = -1.0;
+        failure->total_time_seconds = -1.0;
+#if LIBCURL_VERSION_NUM >= 0x073700
+        (void)curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD_T, &failure->curl_uploaded_bytes);
+        (void)curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &failure->curl_downloaded_bytes);
+#endif
+        (void)curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &failure->response_code);
+        (void)curl_easy_getinfo(curl, CURLINFO_NUM_CONNECTS, &failure->new_connections);
+        (void)curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &failure->connect_time_seconds);
+        (void)curl_easy_getinfo(
+            curl,
+            CURLINFO_STARTTRANSFER_TIME,
+            &failure->starttransfer_time_seconds
+        );
+        (void)curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &failure->total_time_seconds);
     }
     pthread_mutex_unlock(shared->failure_lock);
 }
@@ -134,9 +198,11 @@ static void *run_worker(void *argument) {
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)shared->upload_bytes);
     }
 
+    unsigned long long worker_attempt = 0;
     while (now_seconds() < shared->deadline
         && (shared->max_requests == 0
             || atomic_load(shared->request_count) < shared->max_requests)) {
+        worker_attempt++;
         ResponseCheck check = {
             .expected = shared->expected_body,
             .expected_bytes = shared->expected_bytes,
@@ -151,7 +217,14 @@ static void *run_worker(void *argument) {
         if (result != CURLE_OK) {
             char reason[256];
             snprintf(reason, sizeof(reason), "libcurl: %s", curl_easy_strerror(result));
-            set_failure(shared, reason);
+            set_transfer_failure(
+                shared,
+                curl,
+                &upload,
+                worker->worker_index,
+                worker_attempt,
+                reason
+            );
             break;
         }
 
@@ -255,7 +328,7 @@ int main(int argc, char **argv) {
     atomic_ullong requests = 0, request_bytes = 0, response_bytes_total = 0;
     atomic_uint failures = 0;
     pthread_mutex_t failure_lock = PTHREAD_MUTEX_INITIALIZER;
-    char first_failure[256] = "";
+    FirstFailure first_failure = {0};
     double started = now_seconds();
     Shared shared = {
         .url = url,
@@ -274,7 +347,7 @@ int main(int argc, char **argv) {
         .response_bytes = &response_bytes_total,
         .failures = &failures,
         .failure_lock = &failure_lock,
-        .first_failure = first_failure,
+        .first_failure = &first_failure,
     };
 
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return 2;
@@ -284,6 +357,7 @@ int main(int argc, char **argv) {
     int created = 0;
     for (int index = 0; index < concurrency; index++) {
         workers[index].shared = &shared;
+        workers[index].worker_index = (unsigned int)index;
         if (pthread_create(&threads[index], NULL, run_worker, &workers[index]) != 0) {
             set_failure(&shared, "pthread_create failed");
             break;
@@ -312,14 +386,35 @@ int main(int argc, char **argv) {
     printf("{\"requests\":%llu,\"duration_seconds\":%.9f,\"requests_per_second\":%.3f,\"request_body_bytes\":%llu,\"response_body_bytes\":%llu,\"application_bytes_per_second\":%.3f,\"p50_ms\":%.6f,\"p95_ms\":%.6f,\"p99_ms\":%.6f,\"failures\":%u,\"first_failure\":",
         count, elapsed, count / elapsed, sent, received, (sent + received) / elapsed,
         percentile(latencies, latency_count, 0.50), percentile(latencies, latency_count, 0.95), percentile(latencies, latency_count, 0.99), failure_count);
-    if (first_failure[0] == '\0') printf("null");
+    if (first_failure.reason[0] == '\0') printf("null");
     else {
         printf("{\"reason\":\"");
-        for (const char *p = first_failure; *p != '\0'; p++) {
+        for (const char *p = first_failure.reason; *p != '\0'; p++) {
             if (*p == '"' || *p == '\\') putchar('\\');
             if (*p >= 0x20) putchar(*p);
         }
-        printf("\"}");
+        printf("\"");
+        if (first_failure.has_transfer_diagnostics) {
+            printf(
+                ",\"transfer\":{\"worker_index\":%u,\"worker_attempt\":%llu,"
+                "\"expected_upload_bytes\":%zu,\"upload_callback_bytes\":%zu,"
+                "\"curl_uploaded_bytes\":%lld,\"curl_downloaded_bytes\":%lld,"
+                "\"response_code\":%ld,\"new_connections\":%ld,"
+                "\"connect_time_seconds\":%.9f,\"starttransfer_time_seconds\":%.9f,"
+                "\"total_time_seconds\":%.9f}",
+                first_failure.worker_index,
+                first_failure.worker_attempt,
+                first_failure.expected_upload_bytes,
+                first_failure.upload_callback_bytes,
+                (long long)first_failure.curl_uploaded_bytes,
+                (long long)first_failure.curl_downloaded_bytes,
+                first_failure.response_code,
+                first_failure.new_connections,
+                first_failure.connect_time_seconds,
+                first_failure.starttransfer_time_seconds,
+                first_failure.total_time_seconds);
+        }
+        printf("}");
     }
     printf("}\n");
 
