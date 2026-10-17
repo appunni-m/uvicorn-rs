@@ -2,6 +2,33 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Push-triggered matrix snapshot (run 39036702600; 2026-10-17 13:53 UTC)
+
+The [matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)
+is measuring clean main commit
+`b27ee4dcf810c0815c7ff76af426bf1a27fd7d45`. As of 2026-10-17 13:53 UTC,
+all three system jobs are active. Linux x86-64, Linux ARM64, and macOS ARM64
+each passed the exact normal-binary public parity gate and the stock-FastAPI
+comparison. All three are now running sequential protocol-category
+benchmarks. The matrix has not produced a completed category report or
+performance conclusion yet. Skipped focused diagnostic jobs are not part of
+this matrix's evidence.
+
+The preceding main push triggered this run. It remains pinned to the commit
+above even when a later commit starts another workflow run. Exact-head CI run
+[39036702718](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702718)
+has passed native FastAPI-RS composition, installed-wheel public parity, and
+the Rust 1.85 minimum-version check. The three-repeat unified coverage matrix
+remains active. Rust quality failed because Clippy 1.98 rejected two
+`Option::map_or(true, ...)` predicates in `src/lib.rs`; replacing them with
+`is_none_or(...)` passed the exact local CI Clippy command. The later artifact
+retention step also failed because the native-input producer was skipped after
+the lint failure, so its missing directory is secondary. That source fix is
+not yet pushed and has not received exact-head CI at this snapshot time.
+Workflow concurrency is safe for a later push: the benchmark run is keyed to
+its commit SHA and does not cancel in progress, while main-branch CI only
+cancels prior pull-request runs.
+
 ## Focused HTTP/2 candidate diagnostic (2026-10-17)
 
 The Git-push-triggered [run 39025351808](https://github.com/appunni-m/uvicorn-rs/actions/runs/39025351808)

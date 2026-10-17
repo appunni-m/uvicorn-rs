@@ -8,7 +8,59 @@ Rust crate archives (`native-app-contract` and `uvicorn-rs`). The native
 crates are library packages; this repository does not currently provide a
 standalone native executable.
 
-## Current release status (2026-10-17)
+## Release status snapshot (2026-10-17 13:53 UTC; source b27ee4d)
+
+No release candidate is established. Current `main` is
+[`b27ee4dcf810c0815c7ff76af426bf1a27fd7d45`](https://github.com/appunni-m/uvicorn-rs/commit/b27ee4dcf810c0815c7ff76af426bf1a27fd7d45).
+Exact-head CI
+[39036702718](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702718)
+passed native FastAPI-RS composition, installed-wheel public parity, and the
+Rust 1.85 minimum-version check. The three-repeat unified coverage matrix
+remains active. Rust quality failed because Clippy rejected two equivalent
+`Option::map_or(true, ...)` predicates; replacing them with `is_none_or(...)`
+passed the exact local CI Clippy command. The following native-input artifact
+retention failure is secondary because its producer step was skipped. The fix
+is not yet pushed and has no exact-head CI result. Workflow concurrency permits
+the fix to be pushed without cancelling the matrix, which is keyed to its
+source SHA; main-branch CI only cancels prior pull-request runs. The active
+matrix remains pinned to the clean commit and will continue independently. The
+push-triggered
+three-system benchmark
+[39036702600](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)
+is active: all three systems passed exact-binary public parity and the
+stock-FastAPI comparison and are now running sequential categories. The matrix
+has not produced a completed category report or performance conclusion.
+
+The previous qualified measurements still show repeated HTTP/1.1, WebSocket,
+and small stock-FastAPI regressions; the validated FastAPI route measured
+0.654–0.870× Uvicorn throughput on qualified Linux pairs, with higher Rust
+server CPU per request. Prior HTTP/2 and HTTP/3 outcomes vary by workload and
+system. This does not establish a general speedup. The performance gate and
+`performance-acceptance.json` remain `not_proven` pending complete qualified
+matched repetitions on the active matrix. See the [benchmark record](benchmark-status.md).
+
+The latest 749-case hosted coverage, package, and Python-floor results predate
+this commit. Current-head CI and the source-bound Coverage-MCP receipt remain
+unverified; see the [coverage record](coverage.md). No package publication or
+GitHub release is performed by the workflows.
+
+The standalone Rust crate remains blocked because the workspace-only H3
+framing correction is absent from its external package dependency path. Cargo
+reads `[patch]` settings from the consuming workspace root and ignores patches
+in dependencies; crates.io also rejects dependencies on external Git/path code.
+The vendored source therefore does not propagate to external consumers.
+As checked on 2026-10-17, docs.rs lists `h3 0.0.8` as the latest published
+version, and the upstream default branch still maps end-of-stream during a
+partial DATA frame to normal completion in [`h3/src/frame.rs`](https://github.com/hyperium/h3/blob/master/h3/src/frame.rs#L123).
+The correction is therefore neither in the latest registry release nor in the
+upstream source checked here.
+Resolve this with an upstream H3 release, a separately publishable maintained
+fork, or an equivalent in-package design, then build a clean extracted-archive
+consumer and pass the malformed-frame case. See the detailed package-consumer
+investigation below and Cargo's guidance on [dependency patches](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html)
+and [published path dependencies](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html); see also the [`h3` registry release](https://docs.rs/crate/h3/latest).
+
+### Superseded release status snapshot (2026-10-17; main 951c67b)
 
 No release candidate is established. Current `main` is
 [`951c67b15faa8eef047432604e5a1785dd18776b`](https://github.com/appunni-m/uvicorn-rs/commit/951c67b15faa8eef047432604e5a1785dd18776b),

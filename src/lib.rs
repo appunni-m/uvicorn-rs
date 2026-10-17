@@ -2712,7 +2712,7 @@ impl AsgiIo {
             slf.diagnostics.http_receive_immediate();
             if request
                 .as_ref()
-                .map_or(true, |request| request.disconnected)
+                .is_none_or(|request| request.disconnected)
             {
                 slf.preserve_application_on_disconnect
                     .store(true, Ordering::Release);
@@ -2762,7 +2762,7 @@ impl AsgiIo {
             Python::attach(|py| {
                 if request
                     .as_ref()
-                    .map_or(true, |request| request.disconnected)
+                    .is_none_or(|request| request.disconnected)
                 {
                     preserve_application_on_disconnect.store(true, Ordering::Release);
                 }
