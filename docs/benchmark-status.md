@@ -1029,6 +1029,58 @@ started in that rejected window and no process was stopped. Later short windows
 accepted for default and cap 1, but the cap comparison remains incomplete. See
 the preflight receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-post-doc-audit.json`).
 
+### Hosted Tokio blocking-pool follow-up (2026-10-17)
+
+The focused Linux x86-64 run
+[#64 / run 39044400046](https://github.com/appunni-m/uvicorn-rs/actions/runs/39044400046)
+passed its 243-case public HTTP/1 parity gate and recorded default, cap-1, and
+cap-4 settings on source commit `6efd8271bdfad775d96ce629bb4c915238bdf416`
+(benchmark source fingerprint
+`31ba04f063cb87bf7ad3b9ad6471a2d071cb159c8ed48869fcbe13be30ce11c9`, native
+extension SHA-256
+`ead8c6a5122f2b4418b4626453732b005cb40ba4edbe19ecb1fdcfbeb75d7cf7`). The
+host was Linux x86-64 with four logical CPUs and CPython 3.12.13; Uvicorn was
+0.54.0, uvloop 0.23.0, and httptools 0.8.0. Each workload used 64 concurrent
+clients, five 5-second repetitions, a 1-second warmup, and the same libcurl
+client. Every valid row passed complete response correctness and server
+lifecycle checks.
+
+It completed the default 64-KiB and 256-KiB write-target workloads and cap-1
+256-KiB workload. The cap-4 256-KiB workload recorded four valid uvloop pairs
+and five asyncio pairs, but one uvloop repetition failed with a libcurl
+timeout. The workflow stopped before cap-1/cap-4 results for the 64-KiB
+workload were produced. The cap-4 setting is therefore unqualified overall.
+
+Each throughput cell reports Rust / Uvicorn, with the median paired throughput
+ratio in parentheses. Latency cells list Rust p50 / p95 / p99 ms, then Uvicorn
+p50 / p95 / p99 ms after `·`. Resource cells list Rust / Uvicorn server CPU
+µs/request and peak RSS MiB.
+
+| Workload | Cap | Loop | Valid matched pairs | Requests/s (ratio) | Latency p50 / p95 / p99 ms | CPU µs/request | Peak RSS MiB |
+|---|---|---|---:|---:|---|---:|---:|
+| 1 MiB, 64 KiB writes | default | asyncio | 5/5 | 370.9 / 1,233.2 (0.304×) | 169.78 / 232.91 / 268.92 · 50.86 / 60.20 / 67.66 | 4,127 / 802 | 141.0 / 106.4 |
+| 1 MiB, 64 KiB writes | default | uvloop | 5/5 | 325.2 / 1,319.0 (0.247×) | 114.67 / 155.16 / 288.27 · 47.91 / 52.15 / 55.48 | 2,685 / 756 | 140.3 / 106.2 |
+| 1 MiB, 256 KiB writes | default | asyncio | 5/5 | 361.6 / 1,225.0 (0.311×) | 174.89 / 242.17 / 274.42 · 51.46 / 58.82 / 69.69 | 4,267 / 813 | 140.0 / 109.0 |
+| 1 MiB, 256 KiB writes | default | uvloop | 5/5 | 508.5 / 1,320.7 (0.394×) | 117.96 / 159.28 / 187.93 · 48.02 / 51.08 / 54.11 | 2,739 / 755 | 138.5 / 105.9 |
+| 1 MiB, 256 KiB writes | 1 | asyncio | 4/5 | 347.8 / 1,214.3 (0.275×) | 144.19 / 202.85 / 241.87 · 51.39 / 61.07 / 67.90 | 3,516 / 815 | 142.5 / 109.7 |
+| 1 MiB, 256 KiB writes | 1 | uvloop | 5/5 | 584.8 / 1,318.0 (0.445×) | 103.64 / 143.67 / 235.18 · 48.07 / 51.63 / 56.13 | 2,326 / 756 | 137.4 / 105.4 |
+| 1 MiB, 256 KiB writes | 4 | asyncio | 5/5 | 249.2 / 1,230.7 (0.211×) | 169.40 / 239.78 / 276.23 · 51.12 / 58.97 / 68.60 | 4,166 / 807 | 139.7 / 106.9 |
+| 1 MiB, 256 KiB writes | 4 | uvloop | 4/5 | 528.9 / 1,315.5 (0.401×) | 117.32 / 154.79 / 187.17 · 48.31 / 52.28 / 54.59 | 2,666 / 757 | 138.2 / 107.4 |
+
+The cap-1 result is mixed by loop: asyncio throughput fell 4% from default,
+while uvloop throughput rose 15%. Cap 4 reduced asyncio throughput 31% and
+its four available uvloop pairs were only about 4% above default; its failed
+repetition prevents a clean cap-4 qualification. None of these settings
+closes the large Uvicorn gap, and no pool-cap default change is justified.
+Rust used about 2.3–4.3 ms of server CPU per request versus 0.75–0.81 ms for
+Uvicorn on the 256-KiB workload.
+
+The remaining cases are cap 1 and cap 4 on the 64-KiB workload, plus a focused
+retry of the failed cap-4/256-KiB case. The selectors documented in
+[the benchmark guide](benchmarks.md#compare-tokio-blocking-pool-caps-on-fastapi-uploads)
+allow each cap/workload combination to run independently. These are one-host
+results, not a cross-system performance claim.
+
 ### HTTP/2 benchmark-client shutdown check (2026-10-12)
 
 The two hosted HTTP/2 failures had successful client response checks, clean

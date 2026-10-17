@@ -99,12 +99,14 @@ sample both; loopback load clients can themselves become the bottleneck.
 ### Automated multi-system matrix
 
 The [ASGI performance matrix workflow](../.github/workflows/benchmark-categories.yml)
-runs on benchmark-harness changes pushed to `main`, weekly, or by manual
-dispatch. Each hosted job builds the same commit with CPython 3.12.13, Rust
-1.98.1, the locked Python dependencies, the normal release server wheel, and the
-same protocol clients. The runners are Ubuntu 24.04 x86_64, Ubuntu 24.04 arm64,
-and macOS 15 arm64. The workflow records the runner image, CPU model and core
-counts, total memory, operating system, architecture, and installed system
+runs weekly, through `workflow_dispatch` with `Run mode: full`, or on a push
+whose commit subject explicitly contains `[full-benchmark-matrix]`. Focused
+push markers run only their selected benchmark; ordinary pushes do not start
+the full matrix. Each hosted job builds the same commit with CPython 3.12.13,
+Rust 1.98.1, the locked Python dependencies, the normal release server wheel,
+and the same protocol clients. The runners are Ubuntu 24.04 x86_64, Ubuntu
+24.04 arm64, and macOS 15 arm64. The workflow records the runner image, CPU
+model and core counts, total memory, operating system, architecture, and installed system
 package versions because hosted images and allocations can change.
 
 Each system runs the public parity gate before timed work, then runs a separate
@@ -283,8 +285,9 @@ supported by this evidence.
 Use `workflow_dispatch` with `Run mode: focused-blocking-pool` to compare
 uvicorn-rs with the default Tokio blocking-pool limit and explicit limits of
 one and four blocking threads. Select one runner with `FastAPI system`; the
-default is Linux x86-64. One job runs all six cap/workload combinations
-sequentially in an order shuffled from the seed, on that same host and source.
+default is Linux x86-64. Use `Blocking pool cap` and `Blocking pool workload`
+to run one cap/workload combination while diagnosing a failure, or leave both
+at `all` to run the full six-combination comparison on that host and source.
 The workloads are upstream FastAPI 1 MiB uploads with 64 KiB and 256 KiB client
 write targets; each is compared with Uvicorn under asyncio and uvloop. The app,
 Python 3.12.13, release wheel, client, concurrency, warmup, duration, and
@@ -302,6 +305,16 @@ same-host reports show a repeatable end-to-end improvement without lifecycle,
 correctness, or tail-latency regressions. This is one system and two upload
 workloads, not a broad performance claim. The 90-day artifact retains results
 and logs; the workflow commits none of them.
+
+The same selectors are available on a push-triggered run. Include
+`[focused-blocking-pool]` and, when narrowing the run, one of
+`[blocking-pool-cap=default]`, `[blocking-pool-cap=1]`, or
+`[blocking-pool-cap=4]`, plus one of
+`[blocking-pool-workload=fastapi-request-upload]` or
+`[blocking-pool-workload=fastapi-upload-1m-write-256k]` in the commit subject.
+For example, the failed cap-4/256-KiB sample can be retried without rerunning
+the other five combinations. The Git trigger skips the broad platform matrix
+for this focused mode.
 
 ### Run one focused FastAPI stage diagnostic
 
@@ -340,12 +353,14 @@ Use `workflow_dispatch` with `Run mode: focused-h2` to isolate one HTTP/2
 workload on one runner. Select the runner and workload in the inputs; the
 default selects Linux x86-64 and `protocol-scope`. To run that default case
 through Git, push a commit to `main` whose message contains `[focused-h2]`.
-That opt-in runs only the Linux x86-64 `protocol-scope` diagnostic; ordinary
-pushes keep running the full matrix. The commit must also change a path in the
-workflow's push filter; this file is included, while `benchmark-status.md` is
-not. A Git push to `main` also starts the regular CI workflow; use the Actions
-`workflow_dispatch` inputs when you want only the focused benchmark without a
-second full CI run. This mode builds the normal
+That opt-in runs only the Linux x86-64 `protocol-scope` diagnostic. Ordinary
+pushes do not run the full benchmark matrix. Full runs start on the weekly
+schedule, through `workflow_dispatch` with `Run mode: full`, or from an
+explicit `[full-benchmark-matrix]` commit subject. The focused commit must also
+change a path in the workflow's push filter; this file is included, while
+`benchmark-status.md` is not. A Git push to `main` also starts the regular CI
+workflow; use the Actions `workflow_dispatch` inputs when you want only the
+focused benchmark without a second full CI run. This mode builds the normal
 release wheel and H2 probe client, then runs only the selected server for the
 selected workload. `workflow_dispatch` can select one server, workload, and
 runner; the focused Git-push form also accepts these commit-message tokens:
@@ -1154,7 +1169,8 @@ dedicated physical hardware or an absence of noisy neighbors; compare servers
 within each system and retain host contention and client CPU limits.
 
 To request a full run, select **Actions → ASGI performance matrix → Run
-workflow** from `main`. To request the focused H2 diagnostic through Git, use
+workflow** from `main`, or include `[full-benchmark-matrix]` in a commit
+subject. Ordinary pushes do not start the full matrix. To request the focused H2 diagnostic through Git, use
 the `[focused-h2]` commit-message opt-in described above. The
 [status page](benchmark-status.md) records the latest attempt;
 the [results page](benchmark-results.md) links the latest completed report to

@@ -75,6 +75,25 @@ on:
           - fastapi-slow-reader-backpressure
           - fastapi-scope-32-headers
           - fastapi-contextvars
+      blocking_pool_cap:
+        description: Run all blocking-pool caps or one selected cap
+        default: all
+        required: true
+        type: choice
+        options:
+          - all
+          - default
+          - "1"
+          - "4"
+      blocking_pool_workload:
+        description: Run both upload workloads or one selected workload
+        default: all
+        required: true
+        type: choice
+        options:
+          - all
+          - fastapi-request-upload
+          - fastapi-upload-1m-write-256k
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -193,7 +212,7 @@ env:
 jobs:
   categories:
     name: ${{ matrix.system.id }} · parity and sequential categories
-    if: ${{ !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-blocking-pool' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-blocking-pool]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'full') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-benchmark-matrix]')) }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -800,7 +819,7 @@ jobs:
           set -euo pipefail
           .venv/bin/python scripts/benchmark_host_preflight.py \
             --output target/benchmark-preparation/host-preflight.json
-      - name: Run default, cap-1, and cap-4 comparisons sequentially
+      - name: Run selected blocking-pool cap/workload comparisons
         shell: bash
         env:
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
@@ -808,15 +827,34 @@ jobs:
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
           BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
           BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
+          BENCHMARK_BLOCKING_POOL_CAP: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[blocking-pool-cap=default]') && 'default') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[blocking-pool-cap=1]') && '1') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[blocking-pool-cap=4]') && '4') || inputs.blocking_pool_cap || 'all' }}
+          BENCHMARK_BLOCKING_POOL_WORKLOAD: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[blocking-pool-workload=fastapi-request-upload]') && 'fastapi-request-upload') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[blocking-pool-workload=fastapi-upload-1m-write-256k]') && 'fastapi-upload-1m-write-256k') || inputs.blocking_pool_workload || 'all' }}
         run: |
           set -euo pipefail
           .venv/bin/python - <<'PY' > target/blocking-pool/experiment-order.txt
           import os
           import random
+          selected_cap = os.environ["BENCHMARK_BLOCKING_POOL_CAP"]
+          selected_workload = os.environ["BENCHMARK_BLOCKING_POOL_WORKLOAD"]
+          allowed_caps = ("default", "1", "4")
+          allowed_workloads = (
+              "fastapi-request-upload",
+              "fastapi-upload-1m-write-256k",
+          )
+          if selected_cap not in ("all", *allowed_caps):
+              raise SystemExit(f"unsupported blocking-pool cap: {selected_cap}")
+          if selected_workload not in ("all", *allowed_workloads):
+              raise SystemExit(
+                  f"unsupported blocking-pool workload: {selected_workload}"
+              )
+          caps = allowed_caps if selected_cap == "all" else (selected_cap,)
+          workloads = (
+              allowed_workloads if selected_workload == "all" else (selected_workload,)
+          )
           experiments = [
               f"{cap}:{workload}"
-              for cap in ("default", "1", "4")
-              for workload in ("fastapi-request-upload", "fastapi-upload-1m-write-256k")
+              for cap in caps
+              for workload in workloads
           ]
           random.Random(int(os.environ["BENCHMARK_SEED"])).shuffle(experiments)
           print("\n".join(experiments))
@@ -1034,7 +1072,7 @@ jobs:
   aggregate:
     name: Validate and render the multi-system evidence
     needs: categories
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-blocking-pool' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-blocking-pool]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && needs.categories.result != 'cancelled'
+    if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'full') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-benchmark-matrix]'))) && needs.categories.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -1077,7 +1115,7 @@ jobs:
   update-docs:
     name: Record benchmark status and update documentation
     needs: [categories, aggregate]
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-blocking-pool' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-blocking-pool]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
+    if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'full') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-benchmark-matrix]'))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
