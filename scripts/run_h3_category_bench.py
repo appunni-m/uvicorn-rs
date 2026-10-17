@@ -253,6 +253,18 @@ def main() -> None:
     args = parser.parse_args()
     assert_clean_coverage_environment()
     selected_servers = {name: SERVERS[name] for name in args.servers}
+    for workload in args.workloads:
+        supported_servers = WORKLOADS[workload].get("servers", SERVERS)
+        if any(name in supported_servers for name in selected_servers):
+            continue
+        excluded = WORKLOADS[workload].get("excluded_servers", {})
+        details = "; ".join(
+            f"{name}: {excluded[name]}" if name in excluded else f"{name}: not enabled for this workload"
+            for name in args.servers
+        )
+        raise SystemExit(
+            f"no selected HTTP/3 server supports workload {workload!r}; {details}"
+        )
     if not PYTHON.exists():
         raise SystemExit("install the benchmark dependency group before running HTTP/3 cases")
     if not CLIENT.exists():

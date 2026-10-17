@@ -163,6 +163,27 @@ clean shutdown for that case, but produces no reference comparison or
 release-qualified performance result. After a failure, use the retained server
 log to diagnose that case before advancing to another workload.
 
+### Run one focused HTTP/3 diagnostic case
+
+Use `workflow_dispatch` with `Run mode: focused-h3` to isolate one HTTP/3
+workload on one runner and one server. The defaults select Linux x86-64,
+Hypercorn with asyncio, and `large-response`. To select the failing baseline
+case on Linux ARM64 from a Git push, include these commit-message tokens:
+`[focused-h3] [h3-system=linux-aarch64] [h3-server=hypercorn-asyncio] [h3-workload=large-response]`.
+The push form also accepts `macos-arm64` and `linux-x86_64` runner selectors,
+all four server/loop configurations, and each workload listed in the workflow
+inputs. Duration, warmup, concurrency, repetition count, and seed use the
+workflow's normal inputs.
+
+The focused H3 mode builds the normal release wheel and H3 client, checks the
+selected server's complete responses and shutdown, and retains the raw report
+and logs as a 90-day artifact. It skips the multi-system aggregate and docs
+update. A single-server run is diagnostic evidence only; it is neither a
+matched performance comparison nor a release-qualified result. Keep the full
+matrix correctness gate and matching valid repetitions for any performance
+claim. In particular, do not raise client timeouts or exclude an H3 workload
+based only on one passing focused run.
+
 Required tools are `uv`, Python 3.12, Rust/Cargo, a C compiler and `curl-config`
 for the native H1 load client, Node.js for the slow-reader fallback, and
 OpenSSL for test certificates. Build the H2, H3, and WebSocket Rust clients
