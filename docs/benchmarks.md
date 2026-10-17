@@ -258,10 +258,25 @@ next place to measure; it does not isolate time waiting on Hyper frames,
 batch-deadline flushes, or Python-loop scheduling, and it does not establish
 that the GIL is the cause.
 
-The next profile-only trial uses a diagnostic candidate with a 2 ms body batch
-deadline and records the same receive counts. It provides no normal-build
-performance evidence; a separate correctness-gated timing comparison is
-required before adopting that deadline.
+[Run 39049908982](https://github.com/appunni-m/uvicorn-rs/actions/runs/39049908982)
+repeated the same instrumented case with a diagnostic candidate using a 2 ms
+deadline. All 12 rows again completed without request failures and passed
+lifecycle checks. The longer deadline did not reduce receive-message counts:
+
+| Loop | Deadline | Rust receive calls p50 | Rust body messages / bridge futures per request | Uvicorn receive calls p50 |
+|---|---:|---:|---:|---:|
+| asyncio | 1 ms | 11 | 11.1 / 10.9 | 5 |
+| asyncio | 2 ms | 12 | 12.5 / 12.1 | 5 |
+| uvloop | 1 ms | 9 | 9.5 / 9.4 | 5 |
+| uvloop | 2 ms | 11 | 11.2 / 11.0 | 5 |
+
+The diagnostic timings are instrumented and come from separate runner
+allocations, so they are not a direct performance comparison. The 2 ms trial
+failed its intended mechanism check: it produced more receive events per
+request in both loops. The runtime default is restored to 1 ms. The next
+optimization should reduce body-event/future crossings or improve their
+producer-consumer scheduling; changing the timer or targeting SIMD is not
+supported by this evidence.
 
 ### Compare Tokio blocking-pool caps on FastAPI uploads
 
