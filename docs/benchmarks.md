@@ -210,9 +210,11 @@ x86-64. For example, combining `[focused-h2]`, `[h2-system=linux-aarch64]`, and
 runner. The combination `[h2-server=hypercorn-uvloop]`,
 `[h2-workload=many-response-chunks]`, and `[h2-system=macos-arm64]` isolates the
 previously failing Hypercorn/uvloop chunk workload. The repetition count,
-duration, warmup, and concurrency inputs keep their normal values. It skips the
-full category matrix and aggregate step, and retains the report and server logs
-as a 90-day artifact.
+duration, warmup, and concurrency inputs keep their normal values: five
+repetitions, 5-second samples, a 1-second warmup, requested concurrency 64, and
+seed `20261005`. Workload-specific settings can override requested concurrency.
+It skips the full category matrix and aggregate step, and retains the report and
+server logs as a 90-day artifact.
 
 This is a troubleshooting mode. It checks responses, server diagnostics, and
 clean shutdown for that case, but produces no reference comparison or
