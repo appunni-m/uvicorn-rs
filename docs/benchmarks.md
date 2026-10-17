@@ -160,6 +160,31 @@ identity hashes, and the matched-pair summary in a 90-day artifact. Benchmark
 outputs stay out of Git. A passing result applies to one workload and one
 runner only; it is not a whole-server or cross-system performance claim.
 
+### Compare Tokio blocking-pool caps on FastAPI uploads
+
+Use `workflow_dispatch` with `Run mode: focused-blocking-pool` to compare
+uvicorn-rs with the default Tokio blocking-pool limit and explicit limits of
+one and four blocking threads. Select one runner with `FastAPI system`; the
+default is Linux x86-64. One job runs all six cap/workload combinations
+sequentially in an order shuffled from the seed, on that same host and source.
+The workloads are upstream FastAPI 1 MiB uploads with 64 KiB and 256 KiB client
+write targets; each is compared with Uvicorn under asyncio and uvloop. The app,
+Python 3.12.13, release wheel, client, concurrency, warmup, duration, and
+repetition count remain matched. Defaults are five repetitions, 5-second
+samples, 1-second warmup, concurrency 64, and seed `20261005`.
+
+The job first runs focused HTTP/1 upload and streaming-progress parity cases,
+then checks the host before timing. The maintained full-response correctness
+and lifecycle gates also run for every server sample. Each cap/workload pair
+gets its own raw report and matched summary, with source and binary identities,
+host invalidations, throughput, latency percentiles, server/client CPU, and RSS.
+`UVICORN_RS_MAX_BLOCKING_THREADS` affects only uvicorn-rs; Uvicorn receives the
+same environment but ignores that variable. A cap is a candidate only if the
+same-host reports show a repeatable end-to-end improvement without lifecycle,
+correctness, or tail-latency regressions. This is one system and two upload
+workloads, not a broad performance claim. The 90-day artifact retains results
+and logs; the workflow commits none of them.
+
 ### Run one focused FastAPI stage diagnostic
 
 Use `workflow_dispatch` with `Run mode: focused-fastapi-stage` to profile one
