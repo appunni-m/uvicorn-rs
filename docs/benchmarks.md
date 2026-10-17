@@ -144,7 +144,9 @@ through Git, push a commit to `main` whose message contains `[focused-h2]`.
 That opt-in runs only the Linux x86-64 `protocol-scope` diagnostic; ordinary
 pushes keep running the full matrix. The commit must also change a path in the
 workflow's push filter; this file is included, while `benchmark-status.md` is
-not. This mode builds the normal
+not. A Git push to `main` also starts the regular CI workflow; use the Actions
+`workflow_dispatch` inputs when you want only the focused benchmark without a
+second full CI run. This mode builds the normal
 release wheel and H2 probe client, then runs only the selected server for the
 selected workload. `workflow_dispatch` can select one server, workload, and
 runner; the focused Git-push form also accepts these commit-message tokens:
