@@ -82,7 +82,7 @@ on:
           - linux-aarch64
           - macos-arm64
       h3_server:
-        description: One HTTP/3 server to exercise with the probe client
+        description: One HTTP/3 server or matched asyncio/uvloop server pair
         default: hypercorn-asyncio
         required: true
         type: choice
@@ -91,6 +91,8 @@ on:
           - uvicorn-rs-uvloop
           - hypercorn-asyncio
           - hypercorn-uvloop
+          - asyncio-pair
+          - uvloop-pair
       h3_workload:
         description: One HTTP/3 workload for focused diagnosis
         default: large-response
@@ -525,7 +527,7 @@ jobs:
           retention-days: 90
 
   focused-h3-diagnostic:
-    name: ${{ inputs.h3_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.h3_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-asyncio]') && 'uvicorn-rs-asyncio') || 'hypercorn-asyncio' }} · ${{ inputs.h3_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope-consumed-request]') && 'protocol-scope-consumed-request') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope]') && 'protocol-scope') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=fixed]') && 'fixed') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=request-upload]') && 'request-upload') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=slow-reader-backpressure]') && 'slow-reader-backpressure') || 'large-response' }}
+    name: focused HTTP/3 diagnostic
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h3') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h3]')) }}
     runs-on: ${{ (inputs.h3_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || (inputs.h3_system == 'macos-arm64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-system=macos-arm64]'))) && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 30
@@ -577,7 +579,7 @@ jobs:
           set -euo pipefail
           cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bin bench \
             2>&1 | tee target/benchmark-preparation/http3-client-build.log
-      - name: Run one selected HTTP/3 workload on one selected server
+      - name: Run one selected HTTP/3 workload on selected server(s)
         shell: bash
         env:
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
@@ -585,14 +587,15 @@ jobs:
           BENCHMARK_H3_CONCURRENCY: ${{ inputs.h3_concurrency || '1' }}
           BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
           BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
-          BENCHMARK_H3_SERVER: ${{ inputs.h3_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-asyncio]') && 'uvicorn-rs-asyncio') || 'hypercorn-asyncio' }}
+          BENCHMARK_H3_SERVERS: ${{ (inputs.h3_server == 'asyncio-pair' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=asyncio-pair]'))) && 'hypercorn-asyncio uvicorn-rs-asyncio' || (inputs.h3_server == 'uvloop-pair' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvloop-pair]'))) && 'hypercorn-uvloop uvicorn-rs-uvloop' || inputs.h3_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-asyncio]') && 'uvicorn-rs-asyncio') || 'hypercorn-asyncio' }}
           BENCHMARK_H3_WORKLOAD: ${{ inputs.h3_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope-consumed-request]') && 'protocol-scope-consumed-request') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope]') && 'protocol-scope') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=fixed]') && 'fixed') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=request-upload]') && 'request-upload') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=slow-reader-backpressure]') && 'slow-reader-backpressure') || 'large-response' }}
           RUST_BACKTRACE: "1"
           PYTHONFAULTHANDLER: "1"
         run: |
           set -euo pipefail
+          read -r -a h3_servers <<<"$BENCHMARK_H3_SERVERS"
           .venv/bin/python scripts/run_h3_category_bench.py \
-            --servers "$BENCHMARK_H3_SERVER" \
+            --servers "${h3_servers[@]}" \
             --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
             --output target/benchmark-categories/h3-focused.json \
             --workloads "$BENCHMARK_H3_WORKLOAD" \
@@ -603,7 +606,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: h3-focused-${{ inputs.h3_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.h3_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-asyncio]') && 'uvicorn-rs-asyncio') || 'hypercorn-asyncio' }}-${{ inputs.h3_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope-consumed-request]') && 'protocol-scope-consumed-request') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope]') && 'protocol-scope') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=fixed]') && 'fixed') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=request-upload]') && 'request-upload') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=slow-reader-backpressure]') && 'slow-reader-backpressure') || 'large-response' }}-${{ github.sha }}
+          name: h3-focused-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/benchmark-categories/
