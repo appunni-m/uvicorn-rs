@@ -914,11 +914,14 @@ fn take_listener_accept_fault() -> bool {
 
 #[cfg(coverage)]
 fn take_tcp_nodelay_set_error_fault() -> bool {
+    // Release evidence scans this registry and rejects the hook in normal wheels.
+    const POINT: &str = "server.tcp-nodelay.set-error";
+
     let Some(path) = std::env::var_os("UVICORN_RS_COVERAGE_FAULT_FILE") else {
         return false;
     };
     let armed = std::fs::read_to_string(&path)
-        .map(|value| value.trim() == "server.tcp-nodelay.set-error")
+        .map(|value| value.trim() == POINT)
         .unwrap_or(false);
     if armed {
         let _ = std::fs::write(path, "");
