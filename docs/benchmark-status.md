@@ -144,6 +144,56 @@ partial JSONL checkpoint is retained as
 `benchmarks/results/2026-10-18-ubuntu-x86-focused-upload/fastapi-fixed-c32-diagnostic.jsonl`.
 These samples are correctness evidence only and are not used for ranking.
 
+## Focused HTTP/2 `protocol-scope` diagnostic (Ubuntu x86-64; 2026-10-18)
+
+This focused comparison used the same clean commit, FastAPI app, native Rust
+H2 probe, Python environment, and Ubuntu x86-64 host for both servers. The host
+was Ubuntu 24.04.5 on an AMD Ryzen 5 2600X (6 cores/12 threads); the run used
+CPython 3.12.13, Rust 1.91.1, and Hypercorn 0.18.0. The `protocol-scope`
+workload sent GET `/protocol` over TLS with verified H2 ALPN, concurrency 64,
+four client connections, 16 streams per connection, a 1-second warmup, 5-second
+samples, and five repetitions. The native client checked status and every
+response byte.
+
+Because Uvicorn does not provide an HTTP/2 server, the reference is Hypercorn
+asyncio. The Rust/asyncio and Hypercorn/asyncio runs were separate sequential
+invocations (Rust first, reference second), not an interleaved randomized
+comparison. The median figures below use four timing-valid Rust repetitions
+and five timing-valid Hypercorn repetitions. Rust repetition 3 was excluded
+for unrelated host CPU activity. All ten samples had zero request failures
+and passed graceful shutdown; common valid repetition labels are 1, 2, 4, and
+5, but separate runs mean they are not randomized within-run pairs. Neither
+the focused harness reports qualifies this one-workload comparison as general
+performance evidence.
+
+| Server | Valid repetitions | Requests/s | p50 ms | p95 ms | p99 ms | Server CPU µs/request | Peak RSS MiB | Client CPU |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `uvicorn-rs-asyncio` | 4/5 | 5,640.8 | 11.33 | 17.64 | 20.57 | 218.6 | 48.1 | 19.9% |
+| Hypercorn asyncio | 5/5 | 2,585.7 | 23.99 | 39.51 | 42.38 | 383.3 | 91.9 | 35.8% |
+
+Across these valid-sample medians, Rust reached 2.18× the Hypercorn throughput,
+with 0.47× p50, 0.45× p95, 0.49× p99 latency, 0.57× server CPU per request,
+and 0.52× peak RSS. The native client was not saturated. This is promising
+evidence for this small H2 scope response on this x86-64 host; it does not
+establish a multi-workload, multi-system gain or explain the slower H1 FastAPI
+results. The runs are diagnostic and should be followed by an interleaved
+matched H2 workload set before using them in a release performance claim.
+
+The candidate's five measured rows were fully checkpointed, but its first
+invocation lacked `rustc` on the SSH `PATH` during final report generation. The
+report was recovered from those rows after rechecking source, binary, client,
+and dependency identities; no timing repetition was rerun. The reference run
+used the corrected `PATH`. Local-only reports, JSONL checkpoints, metadata,
+and server logs are in
+`benchmarks/results/2026-10-18-ubuntu-x86-focused-h2-protocol-scope/`.
+
+Both runs used clean commit `33a705dc93e0803043994f9c4b57831f2aafc38c` and
+source digest
+`5ac198689cc5331e30e808819c753603fc234661185f2ec8ff21d217bc49713e`.
+The full parity/fault-coverage CI run
+[39066848395](https://github.com/appunni-m/uvicorn-rs/actions/runs/39066848395)
+is still running its three-repeat matrix; its other four jobs have passed.
+
 ## Latest full multi-system matrix (run 39036702600; 2026-10-17)
 
 The [matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)
