@@ -325,6 +325,7 @@ HARNESS_FAULT_POINTS = (
     {
         "http3.client.abort-after-body",
         "http3.client.peer-stop-before-response-headers",
+        "http3.client.peer-stop-after-request-body-complete",
         "public.http3-request-trailers",
     }
     | PUBLIC_INPUT_CONTRACT_POINTS
@@ -446,6 +447,7 @@ FAULT_CONTRACTS = {
     "http2-500-empty-body",
     "http3-client-abort-disconnect-followup",
     "http3-peer-stop-cancels-held-app-followup-200",
+    "http3-peer-stop-after-body-complete-cancels-app-followup-200",
     "http3-body-pump-error-stop-disconnect-followup-200",
     "http3-legacy-body-pump-delivers-disconnect-followup-200",
     "http3-body-pump-reaps-cancelled-task",
@@ -1444,6 +1446,19 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 peer-stop contract requires the held-app and same-connection recovery workflow"
+                    )
+            elif fault["contract"] == "http3-peer-stop-after-body-complete-cancels-app-followup-200":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.disconnect-after-request-body-complete"
+                    or fault["point"] != "http3.client.peer-stop-after-request-body-complete"
+                    or request.get("peer_stop_after_body_complete") is not True
+                    or request.get("path") != "/h3-disconnect-after-body"
+                    or request.get("same_connection_followup_path") != "/sync-callable"
+                ):
+                    raise ParityError(
+                        f"{case_id}: post-body peer-stop contract requires the complete-body and same-connection recovery workflow"
                     )
             elif fault["contract"] == "http3-body-pump-error-stop-disconnect-followup-200":
                 if (
@@ -2600,6 +2615,10 @@ def load_contract(
             exact_case_keys(case, {"case_id", "profile", "operation", "covers", "request"}, case_id)
             request = case["request"]
             request_keys = {"method", "path", "headers", "body_base64"}
+            if "h3_grease" in request:
+                request_keys.add("h3_grease")
+                if not isinstance(request["h3_grease"], bool) or kind != "http3":
+                    raise ParityError(f"{case_id}: h3_grease is a boolean HTTP/3 request option")
             if "http_version" in request:
                 request_keys.add("http_version")
                 if request["http_version"] not in {"1.0", "1.1"}:
@@ -2769,10 +2788,40 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: held-request peer-stop requires the declared HTTP/3 GET and same-connection follow-up"
                     )
-            elif "same_connection_followup_path" in request:
-                raise ParityError(
-                    f"{case_id}: same_connection_followup_path requires peer_stop_before_response_headers"
+            if "peer_stop_after_body_complete" in request:
+                request_keys.update({
+                    "peer_stop_after_body_complete",
+                    "same_connection_followup_path",
+                })
+                followup_path = request.get("same_connection_followup_path")
+                content_lengths = [
+                    value for name, value in request["headers"]
+                    if name.lower() == "content-length"
+                ]
+                body_length = len(
+                    base64.b64decode(request["body_base64"], validate=True)
                 )
+                if (
+                    request["peer_stop_after_body_complete"] is not True
+                    or kind != "http3"
+                    or operation != "http3.disconnect-after-request-body-complete"
+                    or request["method"] != "POST"
+                    or request["path"] != "/h3-disconnect-after-body"
+                    or body_length == 0
+                    or len(content_lengths) != 1
+                    or not content_lengths[0].isdigit()
+                    or int(content_lengths[0]) != body_length
+                    or not isinstance(followup_path, str)
+                    or not followup_path.startswith("/")
+                ):
+                    raise ParityError(
+                        f"{case_id}: post-body peer stop requires the declared complete HTTP/3 POST and same-connection follow-up"
+                    )
+            elif "same_connection_followup_path" in request:
+                if "peer_stop_before_response_headers" not in request:
+                    raise ParityError(
+                        f"{case_id}: same_connection_followup_path requires an HTTP/3 peer-stop workflow"
+                    )
             if "invalid_alpn" in request:
                 request_keys.add("invalid_alpn")
                 if request["invalid_alpn"] is not True or kind != "http3":
@@ -5124,9 +5173,11 @@ def http3_request(
         "path": request["path"],
         "headers": request["headers"],
         "body_hex": base64.b64decode(request["body_base64"], validate=True).hex(),
+        "h3_grease": request.get("h3_grease", True),
         "abort_after_body": request.get("abort_after_body", False),
         "abort_response_after_headers": request.get("abort_response_after_headers", False),
         "peer_stop_before_response_headers": request.get("peer_stop_before_response_headers", False),
+        "peer_stop_after_body_complete": request.get("peer_stop_after_body_complete", False),
         "same_connection_followup_path": request.get("same_connection_followup_path", "/"),
         "malformed_data_frame_after_headers": request.get("malformed_data_frame_after_headers", False),
         "expect_response_error": request.get("expect_response_error", False),
@@ -5202,7 +5253,10 @@ def http3_request(
                 process.kill()
                 stdout, stderr = process.communicate()
         returncode = process.returncode
-    elif request.get("peer_stop_before_response_headers"):
+    elif (
+        request.get("peer_stop_before_response_headers")
+        or request.get("peer_stop_after_body_complete")
+    ):
         if events_path is None:
             raise ParityError("HTTP/3 peer-stop workflow requires ASGI event observation")
         stop_release_path = events_path.with_suffix(".http3-peer-stop-release")
@@ -5227,36 +5281,54 @@ def http3_request(
             process.stdin.close()
             process.stdin = None
 
+            if request.get("peer_stop_after_body_complete"):
+                request_checkpoints = {
+                    "http3.after-body.request-complete",
+                    "http3.after-body.waiting-for-disconnect",
+                }
+                completion_events = {
+                    "http3.after-body.disconnected",
+                    "http3.after-body.cancelled-before-disconnect",
+                }
+            else:
+                request_checkpoints = {"request.hold"}
+                completion_events = {"request.cancelled"}
+
             deadline = time.monotonic() + 5
-            observed_events = read_events(events_path)[events_before:]
+            observed_events = set(read_events(events_path)[events_before:])
             while (
                 time.monotonic() < deadline
-                and "request.hold" not in observed_events
+                and not request_checkpoints.issubset(observed_events)
                 and process.poll() is None
             ):
                 time.sleep(0.01)
-                observed_events = read_events(events_path)[events_before:]
-            if "request.hold" not in observed_events:
+                observed_events = set(read_events(events_path)[events_before:])
+            if not request_checkpoints.issubset(observed_events):
+                if process.poll() is None:
+                    process.kill()
+                stdout, stderr = process.communicate()
+                client_diagnostic = (stderr or stdout).strip()[-800:]
                 raise ParityError(
-                    "HTTP/3 peer-stop client did not reach the held ASGI request: "
-                    f"events={observed_events!r}"
+                    "HTTP/3 peer-stop client did not reach the ASGI request checkpoint: "
+                    f"expected={sorted(request_checkpoints)!r}, events={sorted(observed_events)!r}, "
+                    f"client={client_diagnostic!r}"
                 )
 
             stop_release_path.touch()
             deadline = time.monotonic() + 5
-            observed_events = read_events(events_path)[events_before:]
+            observed_events = set(read_events(events_path)[events_before:])
             while (
                 time.monotonic() < deadline
-                and "request.cancelled" not in observed_events
+                and not completion_events.intersection(observed_events)
                 and process.poll() is None
             ):
                 time.sleep(0.01)
-                observed_events = read_events(events_path)[events_before:]
-            application_cancelled = "request.cancelled" in observed_events
+                observed_events = set(read_events(events_path)[events_before:])
+            application_cancelled = bool(completion_events.intersection(observed_events))
             if not application_cancelled:
                 raise ParityError(
-                    "HTTP/3 peer STOP_SENDING did not cancel the held ASGI task: "
-                    f"events={observed_events!r}"
+                    "HTTP/3 peer STOP_SENDING did not finish the ASGI request workflow: "
+                    f"expected one of={sorted(completion_events)!r}, events={sorted(observed_events)!r}"
                 )
 
             followup_release_path.touch()
@@ -5369,6 +5441,43 @@ def http3_request(
                 "HTTP/3 probe did not report the requested client-side abort"
             )
         return {"aborted": True}
+    if request.get("peer_stop_after_body_complete"):
+        if response.get("peer_stop_sent") is not True:
+            raise ParityError("HTTP/3 probe did not report sending STOP_SENDING")
+        if response.get("client_aborted") is not True:
+            raise ParityError("HTTP/3 probe did not report the client-side request cancellation")
+        followup = response.get("followup")
+        if not isinstance(followup, dict):
+            raise ParityError("HTTP/3 peer-stop probe omitted its same-connection follow-up")
+        try:
+            followup_body = bytes.fromhex(followup["body_hex"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ParityError("HTTP/3 peer-stop follow-up returned an invalid body") from error
+        followup_observation = response_observation(
+            followup["status"],
+            [("content-type", followup.get("content_type") or "")],
+            followup_body,
+        )
+        followup_observation["ordered_response_headers"] = followup.get(
+            "ordered_response_headers", []
+        )
+        response_header_values_by_name: dict[str, list[str]] = {}
+        for name, value in followup_observation["ordered_response_headers"]:
+            response_header_values_by_name.setdefault(name, []).append(value)
+        followup_observation["response_header_values_by_name"] = [
+            [name, values] for name, values in sorted(response_header_values_by_name.items())
+        ]
+        case_events = read_events(events_path)[events_before:] if events_path else []
+        return {
+            "client_aborted": True,
+            "application_cancelled": (
+                "http3.after-body.cancelled-before-disconnect" in case_events
+            ),
+            "application_events": case_events,
+            "disconnect_event": "http3.after-body.disconnected" in case_events,
+            "followup_healthy": followup_observation["status"] == 200,
+            "followup": followup_observation,
+        }
     if request.get("peer_stop_before_response_headers"):
         if response.get("peer_stop_sent") is not True:
             raise ParityError("HTTP/3 probe did not report sending STOP_SENDING")
@@ -7067,10 +7176,11 @@ def execute_case(
                         "body_base64": "",
                     }, h3_client,
                 )
-                return {
+                result = {
                     **observation,
                     "followup": followup,
                 }
+                return result
             if (
                 fault is not None
                 and fault["contract"] == "http3-body-pump-reaps-cancelled-task"
@@ -8205,6 +8315,25 @@ def fault_contract_matches(
             observation.get("application_cancelled") is True
             and observation.get("application_events")
             == ["request.hold", "request.cancelled"]
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+            and followup.get("content_type") == "text/plain; charset=utf-8"
+            and followup.get("body_base64")
+            == base64.b64encode(b"sync-callable-awaitable").decode("ascii")
+            and followup.get("connection_closed") is False
+        )
+    if fault["contract"] == "http3-peer-stop-after-body-complete-cancels-app-followup-200":
+        followup = observation.get("followup_response")
+        application_events = observation.get("application_events")
+        return (
+            observation.get("client_aborted") is True
+            and observation.get("application_cancelled") is True
+            and isinstance(application_events, list)
+            and "http3.after-body.receive:http.request:True:1" in application_events
+            and "http3.after-body.request-complete" in application_events
+            and "http3.after-body.waiting-for-disconnect" in application_events
+            and "http3.after-body.cancelled-before-disconnect" in application_events
+            and observation.get("followup_healthy") is True
             and isinstance(followup, dict)
             and followup.get("status") == 200
             and followup.get("content_type") == "text/plain; charset=utf-8"

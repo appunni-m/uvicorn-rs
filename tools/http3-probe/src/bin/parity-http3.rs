@@ -453,6 +453,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let peer_stop_before_response_headers = specification["peer_stop_before_response_headers"]
         .as_bool()
         .unwrap_or(false);
+    let peer_stop_after_body_complete = specification["peer_stop_after_body_complete"]
+        .as_bool()
+        .unwrap_or(false);
     let same_connection_followup_path = specification["same_connection_followup_path"].as_str();
     let expect_response_error = specification["expect_response_error"]
         .as_bool()
@@ -490,6 +493,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             || abort_after_body
             || abort_response_after_headers
             || peer_stop_before_response_headers
+            || peer_stop_after_body_complete
             || expect_response_error
             || leave_upload_open_until_response
             || invalid_alpn
@@ -501,6 +505,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         && (specification.get("request_sequence").is_some()
             || abort_after_body
             || abort_response_after_headers
+            || peer_stop_after_body_complete
             || expect_response_error
             || leave_upload_open_until_response
             || invalid_alpn
@@ -511,11 +516,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
             "held-request peer stop cannot be combined with another client workflow".into(),
         );
     }
+    if peer_stop_after_body_complete
+        && (specification.get("request_sequence").is_some()
+            || abort_after_body
+            || abort_response_after_headers
+            || peer_stop_before_response_headers
+            || expect_response_error
+            || leave_upload_open_until_response
+            || invalid_alpn
+            || hold_response_stream_for_shutdown
+            || method != "POST"
+            || request_body.is_empty()
+            || !same_connection_followup_path.is_some_and(|path| path.starts_with('/')))
+    {
+        return Err(
+            "post-body peer stop requires a complete POST and same-connection follow-up".into(),
+        );
+    }
     if malformed_data_frame_after_headers
         && (specification.get("request_sequence").is_some()
             || abort_after_body
             || abort_response_after_headers
             || peer_stop_before_response_headers
+            || peer_stop_after_body_complete
             || expect_response_error
             || leave_upload_open_until_response
             || invalid_alpn
@@ -776,7 +799,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             return Err(error.into());
         }
     }
-    if peer_stop_before_response_headers {
+    if peer_stop_before_response_headers || peer_stop_after_body_complete {
         let release_file = peer_stop_release_file
             .ok_or("HTTP/3 peer-stop workflow is missing its request release file")?;
         let followup_release_file = peer_stop_followup_release_file
@@ -838,6 +861,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         let observation = json!({
             "peer_stop_sent": true,
+            "client_aborted": true,
             "followup": {
                 "status": followup_response.status().as_u16(),
                 "content_type": content_type,

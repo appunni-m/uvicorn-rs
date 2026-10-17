@@ -1012,6 +1012,32 @@ async def _app_impl(scope, receive, send):
         await _respond(send, b"upload-disconnect-observed", content_type=b"text/plain; charset=utf-8")
         return
 
+    if path == "/h3-disconnect-after-body":
+        while True:
+            message = await receive()
+            _record(
+                "http3.after-body.receive:"
+                f"{message['type']}:{message.get('more_body')}:{len(message.get('body', b''))}"
+            )
+            if message["type"] == "http.disconnect":
+                _record("http3.after-body.disconnected-before-response")
+                return
+            if not message.get("more_body", False):
+                _record("http3.after-body.request-complete")
+                break
+
+        _record("http3.after-body.waiting-for-disconnect")
+        try:
+            message = await receive()
+        except asyncio.CancelledError:
+            _record("http3.after-body.cancelled-before-disconnect")
+            raise
+        if message["type"] == "http.disconnect":
+            _record("http3.after-body.disconnected")
+        else:
+            _record(f"http3.after-body.unexpected:{message['type']}")
+        return
+
     if path == "/stream-yield-after-start":
         await send(
             {

@@ -1645,6 +1645,22 @@
       }
     },
     {
+      "id": "http3.disconnect-after-request-body-complete",
+      "kind": "protocol_operation",
+      "observe": [
+        "client_aborted",
+        "application_cancelled",
+        "application_events",
+        "followup_response",
+        "followup_healthy"
+      ],
+      "required_observations": {
+        "client_aborted": true,
+        "application_cancelled": true,
+        "followup_healthy": true
+      }
+    },
+    {
       "id": "http.concurrent-streams",
       "kind": "protocol_operation",
       "observe": [
