@@ -44,6 +44,17 @@ CRATE_DIRS = {
     "uvicorn-rs": ROOT / "crates/uvicorn-rs",
 }
 CRATE_EXCLUDES = {"native-app-contract": set(), "uvicorn-rs": {"examples/native_core_contracts.rs"}}
+LEGACY_FEATURE_ONLY_FAULT_POINTS = frozenset({
+    "server.connection-io.eof-recheck.pause",
+    "server.connection-task.join-await-error",
+    "server.connection-task.join-error",
+    "server.connection-task.join-error-during-shutdown",
+    "server.connection-task.join-select-result",
+    "server.connection-task.service-await-error",
+    "server.connection-task.service-error-during-shutdown",
+    "server.connection-task.service-select-result",
+    "server.connection-task.shutdown-hang",
+})
 REQUIRED = (
     "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "README.md", "src/lib.rs", *LICENSES,
     "crates/native-app-contract/Cargo.toml", "crates/native-app-contract/README.md",
@@ -191,9 +202,46 @@ def runner_constant(name: str) -> object:
 def fault_points() -> list[str]:
     source = (ROOT / "src/lib.rs").read_text(encoding="utf-8")
     block = source.split("impl CoverageFaultPoint {", 1)[1].split("fn coverage_fault_is_armed", 1)[0]
-    points = sorted(set(re.findall(r'"([a-z][a-z0-9.-]+)"', block)))
-    if points != sorted(runner_constant("FAULT_POINTS")):
-        raise ValueError("source and parity fault point registries differ")
+    arm_pattern = re.compile(
+        r'Self::[A-Za-z_][A-Za-z0-9_]*\s*=>\s*(?:'
+        r'"(?P<literal>[a-z][a-z0-9.-]+)"|'
+        r'\{\s*"(?P<braced>[a-z][a-z0-9.-]+)"\s*\})',
+        re.DOTALL,
+    )
+    default_points: set[str] = set()
+    legacy_points: set[str] = set()
+    for arm in arm_pattern.finditer(block):
+        point = arm.group("literal") or arm.group("braced")
+        preceding_arm = block.rfind(",", 0, arm.start())
+        attributes = block[preceding_arm + 1 : arm.start()]
+        if re.search(
+            r'#\[cfg\(\s*not\(\s*feature\s*=\s*"native-tcp"\s*\)\s*\)\]',
+            attributes,
+        ):
+            legacy_points.add(point)
+        else:
+            default_points.add(point)
+
+    native_source = (ROOT / "crates/uvicorn-rs/src/lib.rs").read_text(encoding="utf-8")
+    native_points = set(re.findall(
+        r'const\s+POINT:\s*&str\s*=\s*"([a-z][a-z0-9.-]+)"', native_source
+    ))
+    legacy_only = legacy_points - native_points
+    if legacy_only != LEGACY_FEATURE_ONLY_FAULT_POINTS:
+        raise ValueError(
+            "legacy feature fault-point inventory changed: "
+            f"source-only={sorted(legacy_only - LEGACY_FEATURE_ONLY_FAULT_POINTS)}, "
+            f"removed={sorted(LEGACY_FEATURE_ONLY_FAULT_POINTS - legacy_only)}"
+        )
+
+    points = sorted(default_points | native_points)
+    parity_points = set(runner_constant("FAULT_POINTS"))
+    if set(points) != parity_points:
+        raise ValueError(
+            "default-feature source and parity fault point registries differ: "
+            f"source-only={sorted(set(points) - parity_points)}, "
+            f"parity-only={sorted(parity_points - set(points))}"
+        )
     return points
 
 
@@ -543,7 +591,8 @@ def verify_rust_crate_archives(
         commands = (
             ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["native-app-contract"] / "Cargo.toml")],
             ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"),
-             "--config", f'patch.crates-io.native-app-contract.path="{extracted["native-app-contract"].as_posix()}"'],
+             "--config", f'patch.crates-io.native-app-contract.path="{extracted["native-app-contract"].as_posix()}"',
+             "--config", f'patch.crates-io.h3.path="{(ROOT / "vendor" / "h3").as_posix()}"'],
         )
         for command in commands:
             result = subprocess.run(
@@ -696,7 +745,7 @@ def record(args: argparse.Namespace) -> None:
     if args.platform == "linux-x86_64":
         build["native_crate_commands"] = [
             "cargo package -p native-app-contract --no-verify --locked --offline",
-            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.native-app-contract.path=\"crates/native-app-contract\"'",
+            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.native-app-contract.path=\"crates/native-app-contract\"' --config 'patch.crates-io.h3.path=\"vendor/h3\"'",
             "copy target/native-package/package/*.crate to dist/",
         ]
         build["native_crate_consumer_check"] = crate_consumer_check

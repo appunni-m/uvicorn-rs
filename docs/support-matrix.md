@@ -15,9 +15,12 @@ The workspace packages the PyO3 extension as `uvicorn-rs-py` and the
 Python-free Tower server as `uvicorn-rs`. The default `native-tcp` build routes
 HTTP/1.1, HTTP/2 over TCP/TLS, and HTTP/3 over Quinn through the Rust server
 crate. Python ASGI callables, event conversion, and the asyncio loop remain at
-the Python/PyO3 boundary. Builds without `native-tcp` retain the legacy
-protocol path. Python compatibility matrices across supported Python and
-upstream framework/server versions are not implemented yet. The old Python
+the Python/PyO3 boundary. The default `native-tcp` feature is the supported
+deployment path. `--no-default-features` retains a legacy protocol path for
+migration diagnostics and is compile-checked, but it is not live-parity,
+coverage, or benchmark tested and is not a supported deployment configuration.
+Python compatibility matrices across supported Python and upstream
+framework/server versions are not implemented yet. The old Python
 distribution name, import path, Cargo shape, and CLI are not backward-
 compatibility requirements.
 

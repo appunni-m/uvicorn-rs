@@ -478,7 +478,8 @@ jobs:
           set -euo pipefail
           cargo package -p native-app-contract --no-verify --locked --offline
           cargo package -p uvicorn-rs --no-verify --locked --offline \
-            --config 'patch.crates-io.native-app-contract.path="crates/native-app-contract"'
+            --config 'patch.crates-io.native-app-contract.path="crates/native-app-contract"' \
+            --config 'patch.crates-io.h3.path="vendor/h3"'
           packages=(target/native-package/package/*.crate)
           test "${#packages[@]}" -eq 2
           cp "${packages[@]}" dist/
