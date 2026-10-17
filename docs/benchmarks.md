@@ -165,6 +165,15 @@ clean shutdown for that case, but produces no reference comparison or
 release-qualified performance result. After a failure, use the retained server
 log to diagnose that case before advancing to another workload.
 
+For example, the default Linux x86-64 Rust/asyncio `protocol-scope` diagnostic
+can be triggered with Git:
+
+```sh
+git add docs/benchmarks.md
+git commit -m "docs: trigger focused HTTP/2 diagnostic [focused-h2]"
+git push origin main
+```
+
 ### Run one focused HTTP/3 diagnostic case
 
 Use `workflow_dispatch` with `Run mode: focused-h3` to isolate one HTTP/3
