@@ -4144,17 +4144,6 @@ def http1_request_sequence(
                     headers=dict(request["headers"]),
                 )
                 response = connection.getresponse()
-            except ConnectionResetError:
-                if index != 0 or fault_point != "server.tcp-nodelay.set-error":
-                    raise
-                responses.append({
-                    "status": None,
-                    "content_type": None,
-                    "body_base64": "",
-                    "connection_closed": True,
-                })
-                connection.close()
-                continue
             except http.client.RemoteDisconnected:
                 if (
                     index == 0
@@ -4165,6 +4154,17 @@ def http1_request_sequence(
                         fault_control_path.read_text(encoding="utf-8").strip()
                         != fault_point
                     )
+                responses.append({
+                    "status": None,
+                    "content_type": None,
+                    "body_base64": "",
+                    "connection_closed": True,
+                })
+                connection.close()
+                continue
+            except ConnectionResetError:
+                if index != 0 or fault_point != "server.tcp-nodelay.set-error":
+                    raise
                 responses.append({
                     "status": None,
                     "content_type": None,

@@ -1275,18 +1275,26 @@ under profiling and must not be used as normal performance results.
 
 ### Separate event-loop CPU from other server threads
 
-On macOS, `scripts/profile_fastapi_loop_cpu.py` captures CPU during the same
-correctness-checked FastAPI H1 load used by the category benchmark. It records
-`time.thread_time_ns()` on the Python main/event-loop thread, `RUSAGE_SELF` for
-the full server process, and Mach per-thread user/system CPU deltas plus
-pthread names. The thread totals are checked against process CPU. They locate
-CPU by OS thread, not by Rust or Python function. The helper is profiling-only
-and does not modify the server extension; this runner currently requires
-macOS and the system C compiler. For Linux, use a native profiler such as
-`perf` or `samply` as described above. The `fastapi-python-cpu` workload also
-uses [`examples/profile_fastapi_cpu.py`](../examples/profile_fastapi_cpu.py)
-to measure the unchanged synchronous FastAPI endpoint on its AnyIO worker
-thread.
+On Linux or macOS, `scripts/profile_fastapi_loop_cpu.py` captures CPU during
+the same correctness-checked FastAPI H1 load used by the category benchmark.
+It records `time.thread_time_ns()` on the Python main/event-loop thread,
+`RUSAGE_SELF` for the full server process, and per-thread CPU deltas and names.
+On Linux, `/proc/self/task/<tid>/schedstat` supplies total on-CPU runtime and
+runqueue wait in nanosecond units plus timeslice counts;
+`/proc/self/task/<tid>/stat` supplies a coarser user/system split quantized to
+scheduler ticks. See the
+[Linux scheduler statistics documentation](https://docs.kernel.org/6.16/scheduler/sched-stats.html)
+for the `schedstat` fields. macOS uses Mach thread snapshots and requires the
+system C compiler to build its small profiling helper. The report includes
+process and per-thread totals together but does not validate one against the
+other. Runqueue wait measures time queued for CPU, not time waiting on I/O.
+These counters locate CPU by OS thread, not by Rust or Python function. The
+profiler is diagnostic-only and does not modify the server extension. For
+function-level attribution, use a native profiler such as `perf` or `samply`,
+subject to host permissions.
+The `fastapi-python-cpu` workload also uses
+[`examples/profile_fastapi_cpu.py`](../examples/profile_fastapi_cpu.py) to
+measure the unchanged synchronous FastAPI endpoint on its AnyIO worker thread.
 
 ```sh
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$(uuidgen)"
@@ -1294,7 +1302,6 @@ RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$(uuidgen)"
   --workloads fastapi-validated-route fastapi-request-upload \
   --servers uvicorn-uvloop-httptools uvicorn-rs-uvloop \
   --duration 6 --warmup 1 --concurrency 64 --repetitions 3 \
-  --native-stack-sampling \
   --output-dir "benchmarks/results/fastapi-loop-cpu-${RUN_ID}"
 ```
 
@@ -1306,11 +1313,13 @@ latency, and process-CPU results. A thread/process split locates extra CPU
 outside the app loop; use a native symbol-aware profiler to identify which
 Rust or PyO3 functions consumed it. On macOS, `--native-stack-sampling` also
 captures each server's thread stacks with `/usr/bin/sample` during the measured
-load. Those wall-time stacks include both active and waiting threads; their
-counts do not quantify per-function CPU use. The resulting `.sample.txt`
-profiles and hashes are listed in `profile-summary.json`. Sampling adds
-profiler overhead, and every row remains diagnostic-only. The
-current-source attribution report (`benchmarks/results/2026-10-09/fastapi-thread-cpu-mach-current-source-run2/README.md`)
+load. That option is available only on macOS. Those wall-time stacks include
+both active and waiting threads; their counts do not quantify per-function CPU
+use. The resulting `.sample.txt` profiles and hashes are listed in
+`profile-summary.json`. Sampling adds profiler overhead, and every row remains
+diagnostic-only. The current-source attribution report
+(`benchmarks/results/2026-10-09/fastapi-thread-cpu-mach-current-source-run2/README.md`)
 contains the run, raw thread samples, and its limitations. The earlier
-thread-level CPU report (`benchmarks/results/2026-10-09/fastapi-thread-cpu-attribution/README.md`)
+thread-level CPU report
+(`benchmarks/results/2026-10-09/fastapi-thread-cpu-attribution/README.md`)
 contains the synchronous-route CPU timer and asyncio/uvloop comparison.

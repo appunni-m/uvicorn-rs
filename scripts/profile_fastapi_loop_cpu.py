@@ -3,8 +3,8 @@
 This diagnostic-only runner uses the normal HTTP benchmark client and source
 identity gates. It measures the server's Python main/event-loop thread CPU
 immediately before the measured load, whole-process CPU, and per-thread CPU
-with macOS Mach thread snapshots over the same signal window. The resulting
-rows are diagnostic-only.
+over the same signal window. Linux reads procfs task counters; macOS uses Mach
+thread snapshots. The resulting rows are diagnostic-only.
 """
 
 from __future__ import annotations
@@ -49,31 +49,87 @@ if os.environ.get("UVICORN_RS_LOOP_CPU_PROFILE") == "1":
             ("name", ctypes.c_char * 64),
         ]
 
-    _thread_cpu_library = ctypes.CDLL(os.environ["UVICORN_RS_THREAD_CPU_LIBRARY"])
-    _thread_cpu_snapshot_fn = _thread_cpu_library.uvicorn_rs_thread_cpu_snapshot
-    _thread_cpu_snapshot_fn.argtypes = [ctypes.POINTER(_ThreadCpuSample), ctypes.c_int]
-    _thread_cpu_snapshot_fn.restype = ctypes.c_int
+    if sys.platform == "darwin":
+        _thread_cpu_backend = "macos-mach-thread-info"
+        _thread_cpu_library = ctypes.CDLL(os.environ["UVICORN_RS_THREAD_CPU_LIBRARY"])
+        _thread_cpu_snapshot_fn = _thread_cpu_library.uvicorn_rs_thread_cpu_snapshot
+        _thread_cpu_snapshot_fn.argtypes = [ctypes.POINTER(_ThreadCpuSample), ctypes.c_int]
+        _thread_cpu_snapshot_fn.restype = ctypes.c_int
 
-    def _thread_cpu_snapshot():
-        capacity = 4096
-        records = (_ThreadCpuSample * capacity)()
-        count = _thread_cpu_snapshot_fn(records, capacity)
-        if count < 0:
-            return None
-        return {
-            int(records[index].thread_id): {
-                "user_time_ns": int(records[index].user_time_ns),
-                "system_time_ns": int(records[index].system_time_ns),
-                "name": bytes(records[index].name).decode("utf-8", errors="replace"),
+        def _thread_cpu_snapshot():
+            capacity = 4096
+            records = (_ThreadCpuSample * capacity)()
+            count = _thread_cpu_snapshot_fn(records, capacity)
+            if count < 0:
+                return None
+            return {
+                int(records[index].thread_id): {
+                    "cpu_time_ns": (
+                        int(records[index].user_time_ns)
+                        + int(records[index].system_time_ns)
+                    ),
+                    "user_time_ns": int(records[index].user_time_ns),
+                    "system_time_ns": int(records[index].system_time_ns),
+                    "runqueue_wait_ns": None,
+                    "timeslices": None,
+                    "name": bytes(records[index].name).decode("utf-8", errors="replace"),
+                }
+                for index in range(count)
             }
-            for index in range(count)
-        }
+    elif sys.platform.startswith("linux"):
+        _thread_cpu_backend = "linux-procfs-schedstat"
+        _clock_ticks_per_second = os.sysconf("SC_CLK_TCK")
+
+        def _thread_cpu_snapshot():
+            records = {}
+            tasks = Path("/proc/self/task")
+            try:
+                thread_directories = list(tasks.iterdir())
+            except OSError:
+                return None
+            for directory in thread_directories:
+                try:
+                    stat = (directory / "stat").read_text(encoding="ascii")
+                    comm_end = stat.rfind(")")
+                    if comm_end < 0:
+                        continue
+                    fields = stat[comm_end + 2 :].split()
+                    user_ticks = int(fields[11])
+                    system_ticks = int(fields[12])
+                    schedstat = (directory / "schedstat").read_text(
+                        encoding="ascii"
+                    ).split()
+                    cpu_time_ns = int(schedstat[0])
+                    runqueue_wait_ns = int(schedstat[1])
+                    timeslices = int(schedstat[2])
+                    name = (directory / "comm").read_text(encoding="utf-8").strip()
+                    thread_id = int(directory.name)
+                except (OSError, UnicodeError, ValueError, IndexError):
+                    continue
+                records[thread_id] = {
+                    "cpu_time_ns": cpu_time_ns,
+                    "user_time_ns": (
+                        user_ticks * 1_000_000_000 // _clock_ticks_per_second
+                    ),
+                    "system_time_ns": (
+                        system_ticks * 1_000_000_000 // _clock_ticks_per_second
+                    ),
+                    "runqueue_wait_ns": runqueue_wait_ns,
+                    "timeslices": timeslices,
+                    "name": name,
+                }
+            return records or None
+    else:
+        _thread_cpu_backend = "unsupported"
+
+        def _thread_cpu_snapshot():
+            return None
 
     _started = False
     _thread_cpu_start = 0
     _process_cpu_start = (0.0, 0.0)
     _wall_start = 0
-    _mach_thread_cpu_start = None
+    _thread_cpu_start_snapshot = None
     _event_loop_native_id = None
 
     def _cpu_times():
@@ -82,13 +138,13 @@ if os.environ.get("UVICORN_RS_LOOP_CPU_PROFILE") == "1":
 
     def _start_profile(_signum, _frame):
         global _started, _thread_cpu_start, _process_cpu_start, _wall_start
-        global _mach_thread_cpu_start, _event_loop_native_id
+        global _thread_cpu_start_snapshot, _event_loop_native_id
         if _started:
             return
         route_module = sys.modules.get("examples.profile_fastapi_cpu")
         if route_module is not None:
             route_module._start_measurement()
-        _mach_thread_cpu_start = _thread_cpu_snapshot()
+        _thread_cpu_start_snapshot = _thread_cpu_snapshot()
         _event_loop_native_id = threading.get_native_id()
         _thread_cpu_start = time.thread_time_ns()
         _process_cpu_start = _cpu_times()
@@ -102,7 +158,7 @@ if os.environ.get("UVICORN_RS_LOOP_CPU_PROFILE") == "1":
         route_module = sys.modules.get("examples.profile_fastapi_cpu")
         if route_module is not None:
             route_module._stop_measurement()
-        mach_thread_cpu_end = _thread_cpu_snapshot()
+        thread_cpu_end = _thread_cpu_snapshot()
         python_threads = {
             thread.native_id: thread.name
             for thread in threading.enumerate()
@@ -119,12 +175,39 @@ if os.environ.get("UVICORN_RS_LOOP_CPU_PROFILE") == "1":
             + process_cpu_end[1] - _process_cpu_start[1]
         )
         per_thread_cpu = []
-        if _mach_thread_cpu_start is not None and mach_thread_cpu_end is not None:
-            for thread_id, ending in mach_thread_cpu_end.items():
-                beginning = _mach_thread_cpu_start.get(thread_id, {})
-                user_ns = max(0, ending["user_time_ns"] - beginning.get("user_time_ns", 0))
-                system_ns = max(0, ending["system_time_ns"] - beginning.get("system_time_ns", 0))
-                name = ending["name"] or beginning.get("name") or python_threads.get(thread_id, "")
+        if _thread_cpu_start_snapshot is not None and thread_cpu_end is not None:
+            for thread_id, ending in thread_cpu_end.items():
+                beginning = _thread_cpu_start_snapshot.get(thread_id, {})
+                cpu_ns = max(
+                    0,
+                    ending["cpu_time_ns"] - beginning.get("cpu_time_ns", 0),
+                )
+                user_ns = max(
+                    0, ending["user_time_ns"] - beginning.get("user_time_ns", 0)
+                )
+                system_ns = max(
+                    0,
+                    ending["system_time_ns"] - beginning.get("system_time_ns", 0),
+                )
+                wait_start = beginning.get("runqueue_wait_ns")
+                wait_end = ending["runqueue_wait_ns"]
+                runqueue_wait_ns = (
+                    max(0, wait_end - wait_start)
+                    if wait_start is not None and wait_end is not None
+                    else None
+                )
+                slices_start = beginning.get("timeslices")
+                slices_end = ending["timeslices"]
+                timeslices = (
+                    max(0, slices_end - slices_start)
+                    if slices_start is not None and slices_end is not None
+                    else None
+                )
+                name = (
+                    ending["name"]
+                    or beginning.get("name")
+                    or python_threads.get(thread_id, "")
+                )
                 if thread_id == _event_loop_native_id:
                     role = "python-event-loop-thread"
                 elif name.startswith("tokio"):
@@ -137,15 +220,18 @@ if os.environ.get("UVICORN_RS_LOOP_CPU_PROFILE") == "1":
                     "thread_id": thread_id,
                     "thread_name": name,
                     "role": role,
+                    "total_cpu_ns": cpu_ns,
                     "user_cpu_ns": user_ns,
                     "system_cpu_ns": system_ns,
-                    "total_cpu_ns": user_ns + system_ns,
+                    "runqueue_wait_ns": runqueue_wait_ns,
+                    "timeslices": timeslices,
                 })
             per_thread_cpu.sort(key=lambda item: item["total_cpu_ns"], reverse=True)
         report = {
-            "schema": "uvicorn-rs-python-loop-cpu-profile@2",
+            "schema": "uvicorn-rs-python-loop-cpu-profile@3",
             "profiled": True,
             "timer": "time.thread_time_ns; CPU on the Python event-loop thread",
+            "thread_snapshot_backend": _thread_cpu_backend,
             "interval_seconds": wall_ns / 1_000_000_000,
             "event_loop_thread_cpu_seconds": thread_cpu_seconds,
             "process_cpu_seconds": process_cpu_seconds,
@@ -153,25 +239,27 @@ if os.environ.get("UVICORN_RS_LOOP_CPU_PROFILE") == "1":
                 0.0, process_cpu_seconds - thread_cpu_seconds
             ),
             "event_loop_native_thread_id": _event_loop_native_id,
-            "mach_thread_snapshot_start_count": (
-                len(_mach_thread_cpu_start) if _mach_thread_cpu_start is not None else None
+            "thread_snapshot_start_count": (
+                len(_thread_cpu_start_snapshot) if _thread_cpu_start_snapshot is not None else None
             ),
-            "mach_thread_snapshot_end_count": (
-                len(mach_thread_cpu_end) if mach_thread_cpu_end is not None else None
+            "thread_snapshot_end_count": (
+                len(thread_cpu_end) if thread_cpu_end is not None else None
             ),
-            "mach_thread_snapshot_error": (
-                _mach_thread_cpu_start is None or mach_thread_cpu_end is None
+            "thread_snapshot_error": (
+                _thread_cpu_start_snapshot is None or thread_cpu_end is None
             ),
-            "mach_thread_cpu": per_thread_cpu,
-            "mach_thread_cpu_sum_seconds": sum(
+            "thread_cpu": per_thread_cpu,
+            "thread_cpu_sum_seconds": sum(
                 item["total_cpu_ns"] for item in per_thread_cpu
             ) / 1_000_000_000,
             "interpretation": (
                 "The main-thread timer measures Python event-loop thread CPU, including any "
                 "native calls made on that thread. Process CPU includes every server thread. "
-                "Mach thread snapshots add CPU time by OS thread and pthread name; they are "
-                "not a function-level Rust profile, and threads that exit before the final "
-                "snapshot are not included in the per-thread list."
+                "OS thread snapshots add CPU time by thread ID and name; they are not a "
+                "function-level Rust profile, and threads that exit before the final snapshot "
+                "are not included in the per-thread list. Linux schedstat provides CPU runtime "
+                "and runqueue wait in nanosecond units; its user/system split from task stat is "
+                "quantized to scheduler ticks. Runqueue wait is time queued for CPU, not I/O wait."
             ),
         }
         _output.parent.mkdir(parents=True, exist_ok=True)
@@ -219,8 +307,8 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
 
-    if sys.platform != "darwin":
-        parser.error("per-thread CPU snapshots currently require macOS Mach thread_info")
+    if not (sys.platform == "darwin" or sys.platform.startswith("linux")):
+        parser.error("per-thread CPU snapshots require Linux procfs or macOS Mach thread_info")
     if not all(name.startswith("fastapi-") for name in args.workloads):
         parser.error("only the ordinary FastAPI workloads are supported")
     if not any(name.startswith("uvicorn-rs-") for name in args.servers) or not any(
@@ -241,11 +329,17 @@ def main() -> None:
     sources_dir.mkdir()
     bootstrap_dir = output_dir / "bootstrap"
     bootstrap_dir.mkdir()
-    thread_cpu_library = bootstrap_dir / "libuvicorn_rs_thread_cpu.dylib"
-    thread_cpu_source = ROOT / "scripts" / "macos_thread_cpu.c"
+    thread_cpu_library = None
+    thread_cpu_source = None
+    if sys.platform == "darwin":
+        thread_cpu_library = bootstrap_dir / "libuvicorn_rs_thread_cpu.dylib"
+        thread_cpu_source = ROOT / "scripts" / "macos_thread_cpu.c"
     profile_script_source = Path(__file__).resolve()
     preserved_sources = {}
-    for source in (profile_script_source, thread_cpu_source):
+    sources_to_preserve = [profile_script_source]
+    if thread_cpu_source is not None:
+        sources_to_preserve.append(thread_cpu_source)
+    for source in sources_to_preserve:
         destination = sources_dir / source.name
         shutil.copyfile(source, destination)
         expected_hash = _sha256(source)
@@ -255,13 +349,14 @@ def main() -> None:
             "path": str(destination.relative_to(output_dir)),
             "sha256": expected_hash,
         }
-    subprocess.run(
-        ["cc", "-O2", "-dynamiclib", "-o", str(thread_cpu_library), str(thread_cpu_source)],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    if thread_cpu_library is not None and thread_cpu_source is not None:
+        subprocess.run(
+            ["cc", "-O2", "-dynamiclib", "-o", str(thread_cpu_library), str(thread_cpu_source)],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
     bootstrap_path = bootstrap_dir / "sitecustomize.py"
     bootstrap_path.write_text(BOOTSTRAP, encoding="utf-8")
 
@@ -269,7 +364,8 @@ def main() -> None:
     os.environ["PYTHONPATH"] = str(bootstrap_dir) + (
         os.pathsep + existing_pythonpath if existing_pythonpath else ""
     )
-    os.environ["UVICORN_RS_THREAD_CPU_LIBRARY"] = str(thread_cpu_library)
+    if thread_cpu_library is not None:
+        os.environ["UVICORN_RS_THREAD_CPU_LIBRARY"] = str(thread_cpu_library)
 
     current_sample: dict[str, str | int] = {}
     label_sample = BenchmarkEvidence.label_sample
@@ -428,8 +524,8 @@ def main() -> None:
         if not profile_path.is_file():
             raise RuntimeError(f"missing server profile for completed row: {profile_path}")
         profile = json.loads(profile_path.read_text(encoding="utf-8"))
-        if profile.get("mach_thread_snapshot_error"):
-            raise RuntimeError(f"Mach per-thread CPU snapshots failed: {profile_path}")
+        if profile.get("thread_snapshot_error"):
+            raise RuntimeError(f"per-thread CPU snapshots failed: {profile_path}")
         route_profile = None
         if row["workload"] == "fastapi-python-cpu":
             route_path = profiles_dir / f"{name}.route.json"
@@ -455,13 +551,10 @@ def main() -> None:
                 "other_process_thread_cpu_seconds": profile[
                     "other_process_thread_cpu_seconds"
                 ],
-                "mach_thread_cpu": profile["mach_thread_cpu"],
-                "mach_thread_cpu_sum_seconds": profile[
-                    "mach_thread_cpu_sum_seconds"
-                ],
-                "mach_thread_snapshot_error": profile[
-                    "mach_thread_snapshot_error"
-                ],
+                "thread_snapshot_backend": profile["thread_snapshot_backend"],
+                "thread_cpu": profile["thread_cpu"],
+                "thread_cpu_sum_seconds": profile["thread_cpu_sum_seconds"],
+                "thread_snapshot_error": profile["thread_snapshot_error"],
                 "sync_route_cpu": route_profile,
                 "native_stack_profile_path": (
                     str((profiles_dir / f"{name}.sample.txt").relative_to(output_dir))
@@ -511,15 +604,16 @@ def main() -> None:
         )
 
     manifest = {
-        "schema": "uvicorn-rs-fastapi-loop-cpu-profiles@2",
+        "schema": "uvicorn-rs-fastapi-loop-cpu-profiles@3",
         "application": "upstream FastAPI with its ordinary Starlette/Pydantic dependencies",
         "alternate_frameworks_used": False,
         "diagnostic_only": True,
         "diagnostic_method": (
             "time.thread_time_ns and RUSAGE_SELF are signal-gated around the measured client load. "
-            "RUSAGE_SELF captures process CPU; a local Mach helper snapshots per-thread user/system "
-            "CPU times and pthread names at both ends of that same interval. The client checks each "
-            "response body. Timing rows are explicitly marked diagnostic-only."
+            "RUSAGE_SELF captures process CPU. Linux schedstat supplies per-thread CPU runtime, "
+            "runqueue wait and timeslices; task stat adds tick-quantized user/system times. "
+            "macOS Mach supplies per-thread user/system CPU times and pthread names. "
+            "The client checks each response body. Timing rows are diagnostic-only."
             + (
                 " macOS sample(1) also records sampled call stacks for the server process during "
                 "the load; the profile is for call-site context and is not rankable timing evidence."
@@ -543,9 +637,20 @@ def main() -> None:
         ),
         "profile_bootstrap_sha256": _sha256(bootstrap_path),
         "profile_sources": preserved_sources,
-        "thread_cpu_helper_source": str(thread_cpu_source.relative_to(ROOT)),
-        "thread_cpu_helper_source_sha256": _sha256(thread_cpu_source),
-        "thread_cpu_helper_binary_sha256": _sha256(thread_cpu_library),
+        "thread_snapshot_backend": (
+            "linux-procfs-schedstat"
+            if sys.platform.startswith("linux")
+            else "macos-mach-thread-info"
+        ),
+        "thread_cpu_helper_source": (
+            str(thread_cpu_source.relative_to(ROOT)) if thread_cpu_source is not None else None
+        ),
+        "thread_cpu_helper_source_sha256": (
+            _sha256(thread_cpu_source) if thread_cpu_source is not None else None
+        ),
+        "thread_cpu_helper_binary_sha256": (
+            _sha256(thread_cpu_library) if thread_cpu_library is not None else None
+        ),
         "diagnostic_fastapi_wrapper": (
             "examples/profile_fastapi_cpu.py"
             if "fastapi-python-cpu" in args.workloads
@@ -566,9 +671,23 @@ def main() -> None:
         "profiles": profiles,
         "limitations": [
             "Event-loop-thread CPU includes Python and native calls on that thread.",
-            "Per-thread CPU time does not identify functions; pair it with native stack profiles for call-site context.",
-            "macOS sample(1) captures active and waiting thread stacks; stack counts are not per-function CPU shares, and missing symbols limit call-site attribution.",
-            "Threads that exit before the ending Mach snapshot are absent from the per-thread delta list.",
+            (
+                "Per-thread CPU time does not identify functions; pair it with permitted "
+                "on-CPU profiles for call-site context."
+            ),
+            (
+                "macOS sample(1) captures active and waiting thread stacks; stack counts "
+                "are not per-function CPU shares, and missing symbols limit call-site attribution."
+            ),
+            "Threads that exit before the ending snapshot are absent from the per-thread delta list.",
+            (
+                "Linux schedstat CPU runtime and runqueue wait use nanosecond units; task stat "
+                "user/system components are quantized to scheduler ticks."
+            ),
+            (
+                "Linux thread names come from /proc task comm and may be truncated; runqueue "
+                "wait is CPU scheduling delay, not I/O wait."
+            ),
             "Other-thread CPU can include synchronous FastAPI worker threads and Rust runtime threads; only the CPU route has a separate function timer.",
             "The synchronous route receipt measures endpoint CPU, not response validation or transport.",
             "Use the separate normal-build matrix for throughput, latency, and CPU-per-request comparisons.",
