@@ -2,6 +2,39 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Latest focused HTTP/2 candidate diagnostic (2026-10-17)
+
+The push-triggered [run 39023002413](https://github.com/appunni-m/uvicorn-rs/actions/runs/39023002413)
+tested commit `93d1217dbb04d438b3157f4e07fd15290ede89b6` on a GitHub-hosted
+Linux x86-64 runner. It ran `examples.bench_fastapi:app` through
+`uvicorn-rs-asyncio` with CPython 3.12.13 and Rust 1.98.1. The selected
+`protocol-scope` workload used TLS with H2 ALPN verified, concurrency 64, four
+client connections, five repetitions, a 1-second warmup, and a 5-second
+measurement per repetition. The runner's exact CPU model was not recorded.
+
+All five response and clean-shutdown checks passed. Repetition 2 was excluded
+because the host monitor detected unrelated CPU activity, leaving four valid
+timing rows. The table reports the median of those four rows; latency values
+are medians of the per-row percentiles.
+
+| Metric | `uvicorn-rs-asyncio` |
+|---|---:|
+| Throughput | 5,012 req/s |
+| p50 latency | 12.851 ms |
+| p95 latency | 20.097 ms |
+| p99 latency | 23.497 ms |
+| Server CPU | 252.4 µs/request (124.1% of elapsed time) |
+| Client CPU | 29.3 µs/request (14.4% of elapsed time) |
+| Peak server RSS | 48.64 MiB |
+| Peak client RSS | 6.03 MiB |
+
+This diagnostic ran only uvicorn-rs and has no matched Hypercorn result. It is
+not a performance comparison and establishes no speedup. The
+[workflow artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39023002413/artifacts/12097124058)
+contains the raw repetitions, host-activity observations, source and binary
+hashes, and server logs. The full three-system benchmark remains necessary for
+the performance gate.
+
 ## Latest focused macOS HTTP/3 large-response comparison (2026-10-17)
 
 Focused run [39013640218](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013640218)
