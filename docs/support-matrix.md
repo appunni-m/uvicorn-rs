@@ -34,24 +34,25 @@ generic ASGI test does not itself establish framework-version support, and no
 full Cartesian product of versions is implied. Uvicorn versions used only as
 parity oracles are not automatically supported API versions.
 
-### Current verified coverage and open review (2026-10-17)
+### Current verified coverage and open review (2026-10-18)
 
-The latest completed hosted coverage run
-[39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
-on commit `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e` passed all 749 indexed
-cases: 535 Python ASGI cases and 214 Python-free native Rust cases. Attribution
-and three repeats of each matrix passed with zero failures, retries, or
-unrun cases. The report measured 9,004/9,004 executable source-span regions
-and 6,636/6,636 normalized physical executable lines. Its Coverage-MCP status
-is still `awaiting_query`; see the
-[coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
-Current committed main is `76379e2d64abc33e01827a9f160223e761858779`. Its
-exact-head CI run
-[39026041176](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
-has not started its jobs yet. Older run 39024130047 passed unified coverage on
-`77e1f425`, including the newer H3 cancellation input. Its report is not an
-exact-current-head result. These results establish the named live inputs only;
-they do not imply complete Uvicorn CLI or API compatibility.
+Hosted exact-source CI run
+[39057925580](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580)
+passed on clean code commit **8d1f16950971a56e35ce566d38b5d700d0d039e7**.
+The coverage job passed 753 cases (539 Python ASGI and 214 Python-free Rust),
+attribution, and three full repeats of each matrix with zero failures, retries,
+or unrun cases. It measured 9,131/9,131 executable source-span regions and
+6,741/6,741 normalized physical executable lines. A separate local report from
+the same source commit fully paginated Coverage-MCP and passed the strict
+offline evidence checker. The hosted report itself still says
+`mcp_status=awaiting_query`; see the
+[coverage record](coverage.md#current-unified-coverage-status-2026-10-17) for
+both report identities and their distinct receipts.
+
+These results cover the recorded source revision and the listed inputs. They
+do not establish a release-candidate package or complete Uvicorn CLI/API
+compatibility. The support matrix remains limited to the specific protocol,
+lifecycle, and application inputs documented above.
 
 ### Previous local 748-case aggregate (2026-10-17)
 

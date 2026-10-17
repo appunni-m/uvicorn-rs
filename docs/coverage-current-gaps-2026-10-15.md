@@ -1,26 +1,27 @@
 # Historical unified coverage-gap inventory — 2026-10-15
 
-> **Current status (2026-10-17):** This is a historical gap inventory, not a
-> list of current missing regions. Latest completed hosted report
-> [39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
-> passed all 749 cases and three ASGI plus three native repeats with zero
-> failures, infrastructure failures, retries, or unrun cases. It measured
-> 9,004/9,004 source-span regions and 6,636/6,636 normalized physical lines.
-> Its Coverage-MCP status remains `awaiting_query`; earlier MCP attempts were
-> for report 39011984443 and do not review this report. Current main is
-> `76379e2d64abc33e01827a9f160223e761858779`; its exact-head CI
-> [39026041176](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
-> has not started its jobs yet. Older CI 39024130047 passed unified coverage
-> on `77e1f425`; it is no longer the current-head check. The gap tables below describe older
-> source snapshots only. See the [current coverage report](coverage.md#current-unified-coverage-status-2026-10-17)
+> **Current status (2026-10-18):** This is a historical gap inventory, not a
+> list of current missing regions. Hosted exact-source CI run
+> [39057925580](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580)
+> passed all 753 cases, all three repeats of the 539-case ASGI matrix and
+> 214-case native matrix, and measured 9,131/9,131 source-span regions and
+> 6,741/6,741 normalized physical lines on clean code commit
+> **8d1f16950971a56e35ce566d38b5d700d0d039e7**. A same-source local report
+> passed strict evidence checking and fully paginated Coverage-MCP with zero
+> missing regions or lines. The hosted report's MCP state remains
+> `awaiting_query`; the local receipt is not an attachment to that hosted
+> artifact. The gap tables below describe older source snapshots only. See the
+> [current coverage report](coverage.md#current-unified-coverage-status-2026-10-17)
 > before proposing additional cases.
 
-## Hosted coverage supersedes this gap inventory (2026-10-17)
+## Current-source coverage supersedes this gap inventory (2026-10-18)
 
-Hosted run 39020268579 on commit `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e`
-measures 9,004/9,004 regions and 6,636/6,636 normalized physical lines. These
-totals supersede the source snapshot and missing-region counts in the
-historical tables below. Coverage-MCP acceptance is not established; see the
+The exact-source hosted report on **8d1f16950971a56e35ce566d38b5d700d0d039e7**
+measures 9,131/9,131 regions and 6,741/6,741 normalized physical lines with
+zero misses. The matching-source local Coverage-MCP receipt also reports zero
+missing regions or lines. These results supersede the source snapshot and
+missing-region counts in the historical tables below. They do not establish
+package readiness or a performance gain; see the
 [current coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
 
 

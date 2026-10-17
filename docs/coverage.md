@@ -2,42 +2,65 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current unified coverage status (2026-10-17)
+<a id="current-unified-coverage-status-2026-10-17"></a>
 
-The latest completed hosted report is CI run
-[39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
-on clean commit `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e`. It completed the
-749-case manifest: 535 ASGI and 214 Python-free native Rust cases. Attribution
-passed 749/749, all three ASGI repeats and all three native repeats passed, and
-there were zero failures, infrastructure failures, retries, or unrun cases.
-The hosted gate measured **9,004/9,004 executable source-span regions** and
-**6,636/6,636 normalized physical executable lines**; per-case attribution
-matched the profile union. The report source SHA-256 is
-`6005f3b617f09df31d7271ab0ef891809cef0e6148cc2a8cd02c415ec9d96f64`; the
-instrumented extension SHA-256 is
-`1739528ddbccd3c131ddbb232f8411c5f98a1da3ccc67529c60f1cade3b41711`.
-The [retained coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579/artifacts/12097831254)
-contains the report, context receipt, and case profiles. These are hosted
-results for that exact commit, not a local dirty-worktree measurement.
+## Current unified coverage status (2026-10-18)
 
-The H3 post-body cancellation input was added after `aa4c938`. Current committed
-main is `76379e2d64abc33e01827a9f160223e761858779`; runtime Rust sources, the
-Python bridge, and dependency manifests remain unchanged from the 749-case
-report, but that report does not cover the added input or prove its attribution.
-Current-head CI
-[39026041176](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
-has not started its jobs yet. Older CI
-[39024130047](https://github.com/appunni-m/uvicorn-rs/actions/runs/39024130047)
-passed the unified coverage matrix on `77e1f425`, including the newer H3 input;
-its report does not establish current-head attribution. The earlier exact-head
-run 39023002405 was cancelled.
+Hosted exact-source CI run
+[39057925580](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580)
+passed on clean code commit
+[8d1f16950971a56e35ce566d38b5d700d0d039e7](https://github.com/appunni-m/uvicorn-rs/commit/8d1f16950971a56e35ce566d38b5d700d0d039e7).
+Its [coverage job](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580/job/117469646482)
+completed all 753 cases: 539 Python ASGI and 214 Python-free Rust cases.
+Attribution and all three repeats of each matrix passed with zero failures,
+infrastructure failures, retries, or unrun cases. The hosted report measured
+**9,131/9,131 source-span regions** and **6,741/6,741 normalized physical
+executable lines**. Its report records the matching source hash, zero missing
+regions or lines, and `mcp_status=awaiting_query`. The retained
+[hosted coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580/artifacts/12110619626)
+contains the report and per-case evidence.
 
-Coverage-MCP acceptance for run 39020268579 remains open: its hosted report
-metadata says `awaiting_query`, and there is no source-verified, fully
-paginated region-and-line receipt for that report. The local projection query
-that returned `source=unverified` and the detached-checkout query that timed
-out belong to the older 39011984443 report; they do not count as review of
-39020268579.
+A separate full local run on the same clean code commit was independently
+checked by the strict offline evidence checker and Coverage-MCP. Coverage-MCP
+fully paginated that report: 26 region pages covered all 513 diagnostic groups,
+and one line page returned zero gap groups. Both metrics reported
+`source=matches_receipt`, `tests=passed`, and zero missing regions or lines.
+This receipt is bound to the local instrumented build and same source hash; it
+is not an MCP receipt attached to the hosted artifact. Thus hosted CI confirms
+100% source coverage on the exact commit, while the complete MCP pagination
+receipt is from the matching-source local report.
+
+| Local evidence identity | Value |
+| --- | --- |
+| Recorded revision | `8d1f16950971a56e35ce566d38b5d700d0d039e7` (clean) |
+| Source SHA-256 | `0d42d33ef1a0b13bee09eef13772682fae709a6ade19683b0af1383a9cffa019` |
+| Instrumented extension SHA-256 | `cdecca74c0d98e66e054b1caeeaabd2c94cb8d24339b0bfdb4596506926c2bd4` |
+| Coverage run ID | `7ae7d556b5f941b5bdc9bd0f759fca1a` |
+| Coverage report SHA-256 (after MCP receipt attachment) | `71cff208637265eb4bbb1c9194fb8ee0dfcd49dfe4b917cdfa66bd0adb333de2` |
+| MCP page receipt SHA-256 | `d3d1a6357a9af11f44b4fb8af01384d072aab3ff85200a097750dbd9697ea9b3` |
+| Environment | macOS 15.7.7 ARM64, CPython 3.12.13, Rust 1.98.1, cargo-llvm-cov 0.8.7 |
+
+The ignored local artifacts are
+`target/asgi-coverage/full-local-8d1f169-ci-env/coverage-report.json`, its
+`.context.json`, and `coverage-mcp-pages.json`. The local artifacts are not
+hosted CI artifacts. Neither report establishes package readiness, full
+Uvicorn compatibility, or a performance gain. The release gates remain listed
+in [release status](releases.md).
+
+### Previous hosted report (2026-10-17)
+
+Hosted CI run [39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
+on clean commit `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e` completed its
+749-case manifest (535 ASGI, 214 native), all three repeats of each matrix,
+and per-case attribution. It measured 9,004/9,004 source-span regions and
+6,636/6,636 normalized physical executable lines. Its source SHA-256 was
+`6005f3b617f09df31d7271ab0ef891809cef0e6148cc2a8cd02c415ec9d96f64`, and its
+instrumented extension SHA-256 was
+`1739528ddbccd3c131ddbb232f8411c5f98a1da3ccc67529c60f1cade3b41711`. Its
+report metadata still says `awaiting_query` for Coverage-MCP. The retained
+[hosted artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579/artifacts/12097831254)
+is historical evidence for that commit and is superseded for current-source
+coverage by the exact-source local report above.
 
 ### Previous local 748-case aggregate (2026-10-17)
 
@@ -74,8 +97,8 @@ Coverage-MCP build ID is
 page receipt SHA-256 is
 `c884c4db25dee6192adb9f667b2306d8f2ca832fd0654463ea2a9a718932bc5f`. The
 report, page receipt, and context receipt are ignored local artifacts under
-`target/`. This local result is historical; the hosted 749-case report above
-supersedes it for current release coverage.
+`target/`. This local result is historical and is superseded for current-source coverage by
+the 753-case exact-source report above. It is not hosted release evidence.
 
 ### Historical 717-case report (2026-10-15)
 

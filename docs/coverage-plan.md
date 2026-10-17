@@ -1,36 +1,31 @@
 # Plan: unified black-box coverage for the ASGI adapter and Python-free Rust runtime
 
-## Current acceptance status (2026-10-17)
+## Current acceptance status (2026-10-18)
 
-The latest completed hosted report is CI run
-[39020268579](https://github.com/appunni-m/uvicorn-rs/actions/runs/39020268579)
-on `aa4c93836f5e2147462837bbd8b1bde6c0ebe84e`. It passed all 749 indexed
-cases (535 ASGI, 214 native), attribution, and three repeats of each matrix.
-It measured 9,004/9,004 source-span regions and 6,636/6,636 normalized
-physical executable lines, with zero failures, infrastructure failures,
-retries, or unrun cases. Per-case attribution matched the profile union.
-Source and extension identities are recorded in
+Hosted exact-source CI run
+[39057925580](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580)
+passed on clean code commit **8d1f16950971a56e35ce566d38b5d700d0d039e7**.
+Its coverage job passed all 753 indexed cases: 539 Python ASGI cases and 214
+Python-free Rust cases. Attribution and three repeats of each matrix passed
+with zero failures, infrastructure failures, retries, or unrun cases. The
+hosted report measured 9,131/9,131 source-span regions and 6,741/6,741
+normalized physical executable lines, with zero misses.
+
+Coverage-MCP fully paginated a separate local report from the same source
+commit and source hash: 26 region pages covered all 513 diagnostic groups,
+and one line page returned zero gap groups. Both metrics reported
+source=matches_receipt, tests=passed, and zero missing regions or lines. The
+strict offline evidence checker also passed without rerunning cases. The
+hosted artifact's own report still records mcp_status=awaiting_query; the local
+receipt is not represented as an attachment to that artifact. Full identities,
+environment, and report paths are in the
 [coverage status](coverage.md#current-unified-coverage-status-2026-10-17).
 
-Coverage-MCP has not accepted this report: its report metadata says
-`awaiting_query`, and no source-verified, fully paginated region-and-line
-receipt exists for this report. A prior query against an older 39011984443
-projection returned `source=unverified`; the exact-commit query for that older
-report did not finish within 120 seconds. Do not treat that older query as a
-receipt for 39020268579.
-
-Current committed main is documentation-only commit
-`76379e2d64abc33e01827a9f160223e761858779` over the H3 test-input commit
-`93d1217`. Runtime Rust sources, Python bridge, and dependency manifests are
-unchanged from the 749-case report. The newer H3 input passed the unified
-coverage matrix on older exact-source commit `77e1f425`; current-head attribution
-still needs to complete. CI run
-[`39026041176`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39026041176)
-for the current head has not started its jobs yet. Older run 39024130047 passed
-coverage on `77e1f425`; it cannot satisfy the current-head gate. Keep the MCP
-and current-head CI gates open. Add cases only if
-authoritative current-source evidence exposes a concrete gap or failed
-behavior.
+This proves complete measured coverage for the recorded code source. It does
+not establish package readiness, complete Uvicorn compatibility, or a
+performance gain. The run is hosted CI, but not a final release-candidate
+bundle. Add coverage cases only if authoritative evidence for a target source
+revision exposes a concrete gap or failed behavior.
 
 ### Previous local 748-case acceptance snapshot (2026-10-17)
 
@@ -53,8 +48,8 @@ pages receipt SHA-256
 The exact report path, instrumented extension hash, run identity, build ID,
 and context receipt are recorded in [coverage status](coverage.md#current-unified-coverage-status-2026-10-17).
 At the time of that local snapshot, the remaining gate was an exact-source
-hosted run. The later 749-case hosted report supersedes the local result; the
-current remaining gates are the exact-head CI run and source-verified
+hosted run. The later 749-case hosted report superseded that local result at
+that point; current status is the 753-case hosted report and same-source local
 Coverage-MCP receipt described above.
 
 ## Historical full-source baseline (2026-10-15)
