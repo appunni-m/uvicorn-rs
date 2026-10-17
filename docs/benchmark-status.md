@@ -2,6 +2,74 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Focused FastAPI upload measurement (Ubuntu x86-64; 2026-10-18)
+
+This is one HTTP/1.1 workload, not a complete category or release benchmark.
+It used the same FastAPI app and pinned environment on both servers: CPython
+3.12.13, FastAPI 0.142.4, uvloop 0.23.0, Uvicorn 0.54.0 with httptools 0.8.0,
+and Rust 1.98.1. The host was Ubuntu 24.04.5 on an AMD Ryzen 5 2600X
+(6 cores/12 threads). The workload POSTed a 1 MiB body in 64 KiB client chunks
+at concurrency 64, with a 1-second warmup, 5-second measurements, and five
+repetitions. A native libcurl 8.5.0 C client checked every response status and
+full body. The measurements use the closed-loop client and include client work in
+latency; they do not use open-loop offered load or correct for coordinated
+omission.
+
+The baseline is clean commit `01658e119662a30ec88cf6cb09107abd28251e56` with
+the 1 ms request-body batch wait. The tuning trial changes only
+`HTTP_REQUEST_BODY_BATCH_MAX_WAIT` to 5 ms in a temporary worktree based on
+that commit. It is a measured candidate, not exact-release-revision evidence:
+the raw candidate receipt records `dirty_target: true` and the harness marks
+`performance_evidence_status: not_proven`. All rows below had zero request
+failures and passed graceful server shutdown. The baseline
+Uvicorn repetition 1 was excluded for unrelated host CPU activity; the
+baseline medians therefore use matching valid repetitions 2–5. The 5 ms trial
+had five valid repetitions for both servers.
+
+| Build | Server | Valid repetitions | Requests/s | p50 ms | p95 ms | p99 ms | Server CPU µs/request | Peak RSS MiB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline, 1 ms | Uvicorn + uvloop + httptools | 4 | 1,109.8 | 56.9 | 61.4 | 66.2 | 894.6 | 105.3 |
+| Baseline, 1 ms | `uvicorn-rs` + uvloop | 4 | 532.5 | 120.4 | 153.0 | 167.8 | 2,774.2 | 131.6 |
+| Trial, 5 ms | Uvicorn + uvloop + httptools | 5 | 1,149.8 | 54.8 | 58.6 | 61.4 | 862.3 | 105.9 |
+| Trial, 5 ms | `uvicorn-rs` + uvloop | 5 | 634.4 | 100.3 | 128.0 | 142.5 | 2,236.9 | 155.4 |
+
+On this workload the 5 ms trial improved `uvicorn-rs` throughput by 19% over
+its 1 ms baseline and reduced p50/p95/p99 latency by 16–17% and server CPU per
+request by 19%. Peak RSS increased by 23.8 MiB (18%). The throughput ratio to
+Uvicorn rose from 48% to 55%; `uvicorn-rs` remained slower, with 2.18× Uvicorn's
+p95 latency and 2.59× its server CPU per request. This is a useful local
+optimization, not evidence that the Python ASGI server is faster than Uvicorn.
+The configured coalescing window increases from 1 ms to 5 ms; both tested
+streaming-progress cases passed with this bound.
+
+An instrumented-only stage run helps explain the result but is not timing
+evidence. The baseline Rust build made about 14–15 ASGI `receive()` calls per
+1 MiB request; the 5 ms build made about 8. Median `receive()` awaited time
+fell from about 117 ms to 90 ms. Uvicorn made about five receives and spent
+about 47–51 ms in those awaits. The 5 ms batch window therefore reduced
+Rust/Python receive crossings and the associated waiting in this workload.
+The ASGI receive measurement is elapsed await time, not CPU time.
+
+The Rust runtime materialized one Python `bytes` body per message. The
+instrumented counter measured about 0.25–0.28 ms for that materialization per
+1 MiB request, far below the receive-await wall time. Avoiding this required
+Python `bytes` construction cannot by itself explain or remove the observed
+latency gap; request chunk delivery and bridge scheduling are higher-priority
+targets for this case. This attribution is specific to `fastapi-request-upload`.
+
+The 10 ms follow-up had only two common valid repetition IDs across the two
+servers, below the benchmark's three-repetition minimum, so it is inconclusive
+and is not used to select the setting. The 5 ms build passed the existing
+`http1.request-streaming-progress-before-upload-complete` and
+`http2.request-streaming-progress-before-upload-complete` parity cases, one
+case per profile. The full parity suite and multi-system matrix have not been
+rerun for this change.
+
+Local-only JSON receipts are in
+`benchmarks/results/2026-10-18-ubuntu-x86-focused-upload/`: baseline and 5 ms
+normal runs, their diagnostic-only stage runs, the 10 ms trial, and the two
+parity results. No server logs or coverage reports are part of these receipts.
+
 ## Latest full multi-system matrix (run 39036702600; 2026-10-17)
 
 The [matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)
@@ -65,11 +133,12 @@ requests, zero failures, and clean server shutdown. Its timing was also
 rejected for unrelated host CPU activity. This different-architecture replay
 does not explain or clear the Linux upload timeouts.
 
-This matrix predates the current branch commit
-`a009d9ede77ad81a4d06c40dc4676b70119790fb` and is not exact-source candidate
-evidence. No complete multi-system benchmark result is available for that
-commit or the failure-diagnostic change. The current decision in
-[`performance-acceptance.json`](performance-acceptance.json) is `scope_revised`:
+This matrix predates the later branch changes, including
+`a009d9ede77ad81a4d06c40dc4676b70119790fb` and the focused upload tuning
+trial above; it is not exact-source candidate evidence for those changes. No
+complete multi-system benchmark result is available for them. The current
+decision in [`performance-acceptance.json`](performance-acceptance.json) is
+`scope_revised`:
 Python ASGI remains the compatibility and regression path, without a general
 speed-superiority claim; performance claims target Python-free Rust-native
 application composition. The remaining candidate gate still requires a

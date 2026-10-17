@@ -834,7 +834,7 @@ const RESPONSE_BODY_QUEUE_CAPACITY: usize = 16;
 // Coalesce already-arrived Hyper data frames into bounded ASGI body messages.
 // The time limit keeps slow or streaming uploads from waiting for a full batch.
 const HTTP_REQUEST_BODY_BATCH_BYTES: usize = 256 * 1024;
-const HTTP_REQUEST_BODY_BATCH_MAX_WAIT: std::time::Duration = std::time::Duration::from_millis(1);
+const HTTP_REQUEST_BODY_BATCH_MAX_WAIT: std::time::Duration = std::time::Duration::from_millis(5);
 
 /// Optional counters for attributing Python/Rust bridge work in diagnostic builds.
 ///
