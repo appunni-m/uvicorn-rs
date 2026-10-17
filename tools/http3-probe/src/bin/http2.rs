@@ -299,9 +299,12 @@ async fn run(config: Value) -> Result<Value, BenchError> {
     }
     // Let h2 observe that all request senders are gone so it can send GOAWAY,
     // flush TLS shutdown, and report any connection error before the runtime exits.
+    // Hypercorn's default keep-alive timeout is five seconds, so leave an extra
+    // idle interval for peer shutdown. This cleanup occurs after `elapsed` is
+    // captured and does not affect the measured request duration.
     drop(senders);
     for mut driver in connection_drivers {
-        match timeout(Duration::from_secs(5), &mut driver).await {
+        match timeout(Duration::from_secs(10), &mut driver).await {
             Ok(Ok(Ok(()))) => {}
             Ok(Ok(Err(error))) => {
                 failures.push(format!("HTTP/2 connection driver failed: {error}"))

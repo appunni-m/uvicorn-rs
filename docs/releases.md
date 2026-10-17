@@ -28,8 +28,9 @@ archive, Rust archive, and candidate-wheel consumer checks. Windows and macOS
 built and installed their ABI3 wheels, but their source archive, Rust archive,
 and complete candidate parity steps were skipped. The CI run therefore does
 not produce the complete three-platform candidate bundle required for release.
-The current worktree contains documentation updates only; they do not alter the
-source measured above.
+The follow-up HTTP/2 benchmark-client change only lengthens post-measurement
+connection cleanup; it does not alter server runtime code or the coverage
+evidence above.
 
 The full performance gate remains open. The latest full three-system matrix,
 [run 39036702600](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600),
@@ -37,7 +38,9 @@ failed correctness gates on all three systems and predates the recorded code
 commit. The checked-in decision is `scope_revised`: uvicorn-rs-py remains a
 compatibility and regression path without a general speed claim, while
 performance claims target Python-free Rust-native composition. A complete,
-qualified benchmark on the exact release commit is still required. See the
+qualified benchmark on the exact release commit is still required. The macOS
+HTTP/2 warm-up timeout has a focused cleanup fix, while the Linux HTTP/1 upload
+timeouts remain unexplained; local probes do not replace the full gate. See the
 [benchmark record](benchmark-status.md).
 
 The standalone Rust crate remains blocked by the external package dependency

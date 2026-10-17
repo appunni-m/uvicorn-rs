@@ -16,6 +16,40 @@ complete performance result. The failed step on all three systems was
 repetitions.” The artifacts retain the category reports and logs for focused
 root-cause work.
 
+### Failure diagnosis from the retained artifacts (2026-10-18)
+
+The Linux HTTP/1 failures share a client-timeout signature. On x86-64,
+`fastapi-request-upload` failed once on `uvicorn-rs-uvloop` at concurrency 64:
+the libcurl client timed out after 2,785 completed 1 MiB uploads and about
+2.9 GB of request data. On ARM64, `fastapi-upload-1m-write-1k` failed four
+times on Rust servers at concurrency 8; that input sends 1 MiB bodies with a
+1 KiB client read cap. Both reports use libcurl's 15-second request timeout.
+The server logs show Starlette observing `ClientDisconnect` after the client
+has timed out. They do not show why the stalled request exceeded the timeout,
+so the Linux H1 issue remains open.
+
+The macOS HTTP/2 failure was different. `request-upload` on `hypercorn-asyncio`
+failed in warm-up after 193 response-checked requests because the H2 probe's
+connection driver did not stop within its five-second cleanup deadline. The
+[`run_h2_category_bench.py`](../scripts/run_h2_category_bench.py) config leaves
+Hypercorn's default five-second keep-alive timeout in place. The retained
+environment identifies Hypercorn 0.18.0; its local
+`Config` default is `keep_alive_timeout=5.0`, matching the probe's old
+peer-close allowance.
+The H2 probe now allows ten seconds for this post-measurement cleanup; request
+timing is captured before that wait in
+[`http2.rs`](../tools/http3-probe/src/bin/http2.rs). A focused local macOS
+replay of only this workload and server passed both repetitions with zero
+request failures and clean server shutdown. The replay's timing was rejected
+because of unrelated host CPU activity; it validates cleanup handling, not
+performance, and the hosted matrix has not been rerun.
+
+A separate local macOS replay of the x86-64 H1 input on
+`uvicorn-rs-uvloop` completed one repetition at concurrency 64 with 7,078
+requests, zero failures, and clean server shutdown. Its timing was also
+rejected for unrelated host CPU activity. This different-architecture replay
+does not explain or clear the Linux upload timeouts.
+
 This matrix is older than current code commit
 `8d1f16950971a56e35ce566d38b5d700d0d039e7` and therefore is not exact-source
 candidate evidence. No complete multi-system benchmark result is available for
@@ -557,8 +591,10 @@ It identifies no root cause and supports no code change by itself. The raw
 ignored report is
 `target/benchmark-categories/fastapi-upload-1m-write-1k-focused-uvicorn-vs-rs-asyncio-20261017.json`.
 
-### HTTP/2 diagnostic status
+### Earlier generic HTTP/2 server diagnostic
 
+This section concerns the separate generic server-side diagnostic in the
+earlier focused H2 run, not the macOS client-driver timeout in run 39036702600.
 The benchmark client shares its H2 senders among workers, drops all sender
 handles after the workers finish, and awaits each H2 connection driver before
 reporting the sample. The hosted failure therefore is not explained by the
