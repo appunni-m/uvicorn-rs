@@ -133,7 +133,10 @@ revisions and must not be read as results for the current commit.
 
 Use `workflow_dispatch` with `Run mode: focused-h2` to isolate one HTTP/2
 workload on one runner. Select the runner and workload in the inputs; the
-default selects Linux x86-64 and `protocol-scope`. This mode builds the normal
+default selects Linux x86-64 and `protocol-scope`. To run that default case
+through Git, push a commit to `main` whose message contains `[focused-h2]`.
+That opt-in runs only the Linux x86-64 `protocol-scope` diagnostic; ordinary
+pushes keep running the full matrix. This mode builds the normal
 release wheel and H2 probe client, then runs only `uvicorn-rs-asyncio` for the
 selected workload. The repetition count, duration, warmup, and concurrency
 inputs keep their normal values. It skips the full category matrix and aggregate
@@ -862,8 +865,10 @@ rows, analysis, identity, and parity receipts. Hosted VMs do not establish
 dedicated physical hardware or an absence of noisy neighbors; compare servers
 within each system and retain host contention and client CPU limits.
 
-To request a run, select **Actions → ASGI performance matrix → Run workflow**
-from `main`. The [status page](benchmark-status.md) records the latest attempt;
+To request a full run, select **Actions → ASGI performance matrix → Run
+workflow** from `main`. To request the focused H2 diagnostic through Git, use
+the `[focused-h2]` commit-message opt-in described above. The
+[status page](benchmark-status.md) records the latest attempt;
 the [results page](benchmark-results.md) links the latest completed report to
 its exact workflow run and archived evidence after the docs update PR is merged.
 

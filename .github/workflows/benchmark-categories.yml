@@ -26,6 +26,7 @@ on:
       - parity/**
       - docs/benchmarks.md
       - docs/performance-acceptance.json
+      - .github/workflows/benchmark-categories.yml
   schedule:
     - cron: "23 3 * * 1"
   workflow_dispatch:
@@ -112,7 +113,7 @@ env:
 jobs:
   categories:
     name: ${{ matrix.system.id }} · parity and sequential categories
-    if: ${{ inputs.run_mode != 'focused-h2' }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h2') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]'))) }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -396,7 +397,7 @@ jobs:
 
   focused-h2-diagnostic:
     name: ${{ inputs.h2_system || 'linux-x86_64' }} · one HTTP/2 diagnostic case
-    if: ${{ inputs.run_mode == 'focused-h2' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h2') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]')) }}
     runs-on: ${{ inputs.h2_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.h2_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     steps:
@@ -482,7 +483,7 @@ jobs:
   aggregate:
     name: Validate and render the multi-system evidence
     needs: categories
-    if: always() && inputs.run_mode != 'focused-h2' && needs.categories.result != 'cancelled'
+    if: always() && !((github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h2') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]'))) && needs.categories.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -525,7 +526,7 @@ jobs:
   update-docs:
     name: Record benchmark status and update documentation
     needs: [categories, aggregate]
-    if: always() && inputs.run_mode != 'focused-h2' && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
+    if: always() && !((github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h2') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]'))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
