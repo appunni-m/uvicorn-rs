@@ -56,6 +56,8 @@ LEGACY_FEATURE_ONLY_FAULT_POINTS = frozenset({
     "server.connection-task.shutdown-hang",
 })
 REQUIRED = (
+    # Bind the LF checkout policy into otherwise byte-sensitive source receipts.
+    ".gitattributes",
     "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "README.md", "src/lib.rs", *LICENSES,
     "crates/native-app-contract/Cargo.toml", "crates/native-app-contract/README.md",
     *(f"crates/native-app-contract/{name}" for name in LICENSES),
