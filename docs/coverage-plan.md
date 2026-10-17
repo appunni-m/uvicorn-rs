@@ -2,7 +2,27 @@
 
 ## Current acceptance status (2026-10-17)
 
-The latest local aggregate executed all 748 ASGI/native cases and measured
+Hosted CI run [39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
+on `e22df3afaa2c04ce3cced230e2f4e612d2872594` passed all 749 indexed cases
+(535 ASGI, 214 native), attribution, and three repeats of each matrix. It
+measured 9,004/9,004 source-span regions and 6,636/6,636 normalized physical
+executable lines, with zero failures, infrastructure failures, retries, or
+unrun cases. Per-case attribution matched the profile union. Source and
+extension identities are recorded in
+[coverage status](coverage.md#current-unified-coverage-status-2026-10-17).
+
+Coverage-MCP has not accepted this report: it says `awaiting_query`; a local
+projection query returned `source=unverified`, and the exact-commit query did
+not finish within 120 seconds. All seven production source hashes match the
+receipt, but no source-verified, fully paginated region-and-line receipt is
+available. Current `main` is documentation-only commit `f815728`; its exact-
+head CI run 39013640499 is still executing the coverage matrix. Keep the MCP
+and current-head CI gates open. Add cases only if authoritative current-source
+evidence exposes a concrete gap or failed behavior.
+
+### Previous local 748-case acceptance snapshot (2026-10-17)
+
+The previous local aggregate executed all 748 ASGI/native cases and measured
 8,997/8,997 executable source-span regions and 6,629/6,629 physical executable
 lines. Attribution passed 748/748. All three ASGI repeats (534/534 each) and
 all three native repeats (214/214 each) passed with zero failures,
@@ -20,9 +40,10 @@ pages receipt SHA-256
 `c884c4db25dee6192adb9f667b2306d8f2ca832fd0654463ea2a9a718932bc5f`.
 The exact report path, instrumented extension hash, run identity, build ID,
 and context receipt are recorded in [coverage status](coverage.md#current-unified-coverage-status-2026-10-17).
-The remaining acceptance gate is an exact-source hosted run on the reviewed
-release-candidate commit. Add cases only if that run exposes a concrete gap
-or failed behavior.
+At the time of that local snapshot, the remaining gate was an exact-source
+hosted run. The later 749-case hosted report supersedes the local result; the
+current remaining gates are the exact-head CI run and source-verified
+Coverage-MCP receipt described above.
 
 ## Historical full-source baseline (2026-10-15)
 

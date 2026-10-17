@@ -34,7 +34,24 @@ generic ASGI test does not itself establish framework-version support, and no
 full Cartesian product of versions is implied. Uvicorn versions used only as
 parity oracles are not automatically supported API versions.
 
-The latest local full-source aggregate executed all 748 manifest cases: 534
+### Current verified coverage and open review (2026-10-17)
+
+Hosted CI run
+[39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
+on commit `e22df3afaa2c04ce3cced230e2f4e612d2872594` passed all 749 indexed
+cases: 535 Python ASGI cases and 214 Python-free native Rust cases. Attribution
+and three repeats of each matrix passed with zero failures, retries, or
+unrun cases. The report measured 9,004/9,004 executable source-span regions
+and 6,636/6,636 normalized physical executable lines. The exact-source
+Coverage-MCP review is still pending; see the
+[coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
+Current-head CI run 39013640499 is still executing its coverage matrix. These
+results establish the named live inputs only; they do not imply complete
+Uvicorn CLI or API compatibility.
+
+### Previous local 748-case aggregate (2026-10-17)
+
+The local full-source aggregate executed all 748 manifest cases: 534
 Python ASGI cases and 214 Python-free native cases. Three repeats of each
 matrix passed, and coverage measured 100% executable source-span and
 normalized physical-line coverage. The aggregate is marked incomplete because
@@ -43,14 +60,16 @@ before a passing retry; a separate clean single-case rerun then passed. Its
 fully paginated Coverage-MCP receipt matches source/build and reports zero
 missing regions or lines, while recording the aggregate test status as failed.
 The report is bound to a dirty worktree; it is not clean hosted release
-evidence. The latest clean hosted run,
+evidence. The then-latest clean hosted run,
 [38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888),
 passed its older 712-case manifest but measured 8,496/8,650 regions and
-6,486/6,592 lines, leaving 154 regions and 106 lines uncovered. It does not
-describe the current local source. These results describe tested
+6,486/6,592 lines, leaving 154 regions and 106 lines uncovered. It did not
+describe the 748-case local snapshot discussed in this historical section.
+These results describe tested
 inputs and are not a claim of complete Uvicorn compatibility.
 
-Exact local report, source identity, MCP receipt, and the clean-candidate gate
+The exact report, source identity, MCP receipt, and clean-candidate gate for
+that prior local aggregate
 are recorded in the [unified coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
 The [2026-10-15 gap inventory](coverage-current-gaps-2026-10-15.md) describes
 an earlier source snapshot and is historical guidance only. Generated reports
@@ -58,9 +77,10 @@ remain Git-ignored.
 
 The 2026-10-12 dirty macOS ARM64 adapter-only receipt is historical: it verifies
 its recorded root `src/lib.rs` hash, but covers neither the native workspace
-sources nor a clean hosted release. Since then, the default `native-tcp` path
-has been exercised by the current source-bound unified matrix, which includes
-the Python ASGI and Python-free native cases. That 748-case dirty-worktree
+sources nor a clean hosted release. At the time of this historical note, the
+default `native-tcp` path had been exercised by the then-current source-bound
+unified matrix, which included the Python ASGI and Python-free native cases.
+That 748-case dirty-worktree
 aggregate measured 100% of its executable regions and normalized lines, but
 is marked incomplete after one attribution infrastructure failure before a
 passing retry. It is not clean hosted release evidence. A narrower

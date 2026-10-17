@@ -4,7 +4,40 @@
 
 ## Current unified coverage status (2026-10-17)
 
-The latest local aggregate executed all **748/748** manifest cases (534 ASGI
+Hosted CI run
+[39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
+on clean commit `e22df3afaa2c04ce3cced230e2f4e612d2872594` completed the
+749-case manifest: 535 ASGI and 214 Python-free native Rust cases. Attribution
+passed 749/749, all three ASGI repeats and all three native repeats passed, and
+there were zero failures, infrastructure failures, retries, or unrun cases.
+The hosted gate measured **9,004/9,004 executable source-span regions** and
+**6,636/6,636 normalized physical executable lines**; per-case attribution
+matched the profile union. The report source SHA-256 is
+`0debfb500916abc4eccf6415588f5cbeb81b0d1a5e2d97a41242a0924bdd0e5a`; the
+instrumented extension SHA-256 is
+`1739528ddbccd3c131ddbb232f8411c5f98a1da3ccc67529c60f1cade3b41711`.
+Artifact 12093933045 is retained at
+`target/asgi-coverage/ci-39011984443/coverage-report.json` with its context
+receipt. These are hosted exact-commit results, not a local dirty-worktree
+measurement.
+
+Coverage-MCP acceptance is still open. The hosted report extension says
+`awaiting_query`. A local query against a standard LLVM projection returned
+9,004/9,004 covered regions and zero missing regions, but reported
+`source=unverified`, even though all seven recorded production-source hashes
+match the current checkout. A query from a detached checkout of the recorded commit did not
+complete within 120 seconds. There is no source-verified, fully paginated
+region-and-line MCP receipt yet, so this document does not claim MCP acceptance.
+
+Current `main` is the documentation-only commit `f815728`. Its exact-head CI
+run [39013640499](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013640499)
+is still in progress on the three-repeat coverage job. The prior hosted run
+already proves the same production-source hashes, but it is not a substitute
+for that current-head workflow result.
+
+### Previous local 748-case aggregate (2026-10-17)
+
+This earlier local aggregate executed all **748/748** manifest cases (534 ASGI
 and 214 Python-free native Rust). Three complete ASGI repeats each passed
 534/534, and three native repeats each passed 214/214. Attribution passed
 748/748. There were zero case failures, infrastructure failures, transient
@@ -37,12 +70,8 @@ Coverage-MCP build ID is
 page receipt SHA-256 is
 `c884c4db25dee6192adb9f667b2306d8f2ca832fd0654463ea2a9a718932bc5f`. The
 report, page receipt, and context receipt are ignored local artifacts under
-`target/`. This validates the current dirty source, not a clean committed
-release candidate. Clean committed-source and exact-source hosted CI evidence
-remain required. The latest hosted run
-[38862681888](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888)
-passed its older 712-case manifest but measured 8,496/8,650 regions and
-6,486/6,592 lines; it does not validate this source snapshot.
+`target/`. This local result is historical; the hosted 749-case report above
+supersedes it for current release coverage.
 
 ### Historical 717-case report (2026-10-15)
 

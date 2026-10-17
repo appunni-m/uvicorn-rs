@@ -10,6 +10,44 @@ standalone native executable.
 
 ## Current release status (2026-10-17)
 
+No release candidate is established. Current `main` is documentation-only
+commit `f815728ded987419123a786ce5a9c04c669c80cb`. Exact-source CI run
+[39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
+on its parent `e22df3afaa2c04ce3cced230e2f4e612d2872594` completed successfully:
+749/749 unified cases passed with three ASGI and three native repeats,
+9,004/9,004 regions, and 6,636/6,636 lines. Installed-wheel parity, Rust
+quality/MSRV, pinned native composition, cross-platform package artifacts, and
+the declared Python floor also passed on that commit. Current-head CI
+[39013640499](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013640499)
+has passed its Rust, composition, and installed-wheel jobs; its exact-head
+coverage matrix is still in progress.
+
+The full multi-system performance gate remains open. The focused Linux ARM64
+HTTP/3 comparison measured 24.38× throughput for one 1 MiB FastAPI response
+workload across four valid matched pairs. A later macOS ARM64 H3 run passed
+all correctness and shutdown checks but produced only one valid timing row,
+so it had no matched pair. The full matrix still fails intermittently on
+Hypercorn HTTP/3 response-header timeouts. See the
+[benchmark record](benchmark-status.md); these results do not establish a
+general speedup.
+
+The exact-source Coverage-MCP receipt is also pending. Hosted CI proves
+9,004/9,004 regions and 6,636/6,636 lines, but the report's MCP status is
+`awaiting_query`; the local projection query was source-unverified and the
+exact-commit query did not finish. See the [coverage record](coverage.md).
+The repository workflows do not publish packages or create releases.
+
+The standalone Rust crate remains blocked by the documented vendored `h3`
+framing fix not being carried by its external package dependency path. The
+workspace parity result does not establish that the published Rust crate
+contains the fix; see the package-consumer investigation below.
+
+## Prior release status snapshot (2026-10-17; superseded by run 39011984443)
+
+This is a timestamped historical snapshot. Its pending/running descriptions
+record the state before run 39011984443 completed; the current status is in the
+section above.
+
 No release candidate is established. Commit `e2a39c55594eb4aab2ac922c2e9128e970ca7f7e`
 is on `main`. Its focused Linux ARM64 HTTP/3 comparison passed all response
 and shutdown checks and produced four valid matched timing pairs for the
@@ -197,7 +235,11 @@ samples passed the per-sample host guard; no asyncio or uvloop pair reached
 three valid repetitions. A follow-up preflight rejected before another timing
 run. These replays establish case correctness, not a performance result.
 
-### Remaining release gates (2026-10-16)
+### Historical release-gate snapshot (2026-10-16)
+
+This table preserves the release-gate view from October 16. It predates the
+749-case hosted report and run 39013640499; use the current status above and
+the linked coverage and benchmark records for present evidence.
 
 These gates apply to the requested Rust-native server and thin Python client
 architecture. Kata records the work under `ec8x` and `wb4y`; candidate assembly

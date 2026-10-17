@@ -1,28 +1,25 @@
 # Historical unified coverage-gap inventory — 2026-10-15
 
 > **Current status (2026-10-17):** This is a historical gap inventory, not a
-> list of current missing regions. The latest local 748-case aggregate passed
-> attribution and all three ASGI plus three native repeats with zero failures,
-> infrastructure failures, retries, or unrun cases. It measured 8,997/8,997
-> executable source-span regions and 6,629/6,629 normalized physical lines.
-> Coverage-MCP matches source/build and reports zero gaps with `tests=passed`;
-> the offline profile reconstruction also passed. The report is from a dirty
-> worktree; clean committed-source and hosted evidence remain required. The
-> gap tables below describe older source snapshots only. See the
+> list of current missing regions. Hosted CI run
+> [39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
+> passed all 749 cases and three ASGI plus three native repeats with zero
+> failures, infrastructure failures, retries, or unrun cases. It measured
+> 9,004/9,004 source-span regions and 6,636/6,636 normalized physical lines.
+> The exact-source Coverage-MCP review is still open: a local projection query
+> returned `source=unverified`, and an exact-commit query did not finish within
+> 120 seconds. Current-head CI 39013640499 is still running. The gap tables
+> below describe older source snapshots only. See the
 > [current coverage report](coverage.md#current-unified-coverage-status-2026-10-17)
 > before proposing additional cases.
 
-## Current-source line-summary correction superseded (2026-10-17)
+## Hosted coverage supersedes this gap inventory (2026-10-17)
 
-The earlier 747-case profile's raw LLVM file-summary line total differed from
-the physical executable-line set. The current schema-`@8` aggregate validates
-normalized physical lines against LCOV records and executable region spans.
-It measures 6,629/6,629 physical lines and 8,997/8,997 source-span regions.
-All 748 attribution cases and all three ASGI/native repeats passed without
-retries. Coverage-MCP and offline evidence validation both passed. The
-historical gap tables remain useful for design context; their missing-region
-counts are superseded. Current hashes and the remaining hosted-release gate
-are in the [coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
+Hosted run 39011984443 on commit `e22df3afaa2c04ce3cced230e2f4e612d2872594`
+measures 9,004/9,004 regions and 6,636/6,636 normalized physical lines. These
+totals supersede the source snapshot and missing-region counts in the
+historical tables below. Coverage-MCP acceptance is not established; see the
+[current coverage record](coverage.md#current-unified-coverage-status-2026-10-17).
 
 
 ## Historical full-source evidence: 696-case snapshot

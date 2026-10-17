@@ -2,6 +2,18 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Latest focused macOS HTTP/3 large-response comparison (2026-10-17)
+
+Focused run [39013640218](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013640218)
+on commit `f815728ded987419123a786ce5a9c04c669c80cb` completed ten large-response
+samples on macOS ARM64: five Hypercorn asyncio and five uvicorn-rs asyncio.
+All response checks passed, and all servers shut down cleanly without force.
+Only one of ten timing rows was valid; unrelated host CPU activity invalidated
+the other nine, so there is no matched timing pair and no performance
+conclusion. Artifact 12094156939 retains the samples and host observations.
+The four-valid-pair Linux ARM64 result below remains scoped to one workload;
+neither result closes the full multi-system benchmark gate.
+
 ## Focused matched HTTP/3 large-response comparison (2026-10-17)
 
 The [focused run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013025705)
@@ -82,8 +94,10 @@ later passed five Linux x86-64 `uvicorn-rs-asyncio` / `protocol-scope`
 correctness and shutdown checks; four timings passed the host guard. It was a
 target-only diagnostic, not a paired performance comparison. Exact-source CI
 run [39011984443](https://github.com/appunni-m/uvicorn-rs/actions/runs/39011984443)
-is still running its three-pass coverage matrix. The next exact-commit CI run
-is queued behind it.
+completed successfully on `e22df3a`. Current-head CI
+[39013640499](https://github.com/appunni-m/uvicorn-rs/actions/runs/39013640499)
+is still running its three-pass coverage matrix; Rust, native composition, and
+installed-wheel parity jobs have passed.
 
 ## Earlier full benchmark attempt (2026-10-17)
 
