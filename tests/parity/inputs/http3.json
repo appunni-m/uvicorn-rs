@@ -1682,6 +1682,55 @@
       }
     },
     {
+      "case_id": "http3.peer-stop-delivers-disconnect-to-open-upload",
+      "profile": "http3",
+      "operation": "http3.peer-stop-disconnects-open-request-body",
+      "covers": [
+        "http3.peer-stop-disconnects-open-request-body"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.client.peer-stop-while-upload-open",
+        "contract": "http3-peer-stop-open-upload-disconnect-followup-200"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-open-upload-peer-stop",
+        "headers": [
+          [
+            "content-length",
+            "64"
+          ]
+        ],
+        "body_base64": "cGFydGlhbA==",
+        "h3_grease": false,
+        "peer_stop_while_upload_open": true,
+        "same_connection_followup_path": "/sync-callable"
+      }
+    },
+    {
+      "case_id": "http3.open-upload-body-pump-retires-after-app-response",
+      "profile": "http3",
+      "operation": "http3.open-upload-retires-body-pump",
+      "covers": [
+        "http3.open-upload-retires-body-pump"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.client.finish-upload-after-response",
+        "contract": "http3-open-upload-app-return-retires-body-pump"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/h3-open-upload-app-return",
+        "headers": [],
+        "body_base64": "cGFydGlhbA==",
+        "h3_grease": false,
+        "complete_upload_after_response": true,
+        "same_connection_followup_path": "/h3-open-upload-followup"
+      }
+    },
+    {
       "case_id": "http3.scope-query-header-and-body",
       "profile": "http3",
       "operation": "http.scope-and-body",

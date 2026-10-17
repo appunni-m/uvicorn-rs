@@ -17,6 +17,7 @@ _concurrent_arrivals = 0
 _concurrent_barrier = None
 _load_groups = {}
 _task_cleanup_tasks = []
+_h3_open_upload_receivers = []
 _state_copy_key = None
 _state_copy_source = None
 _state_copy_shared = None
@@ -1036,6 +1037,68 @@ async def _app_impl(scope, receive, send):
             _record("http3.after-body.disconnected")
         else:
             _record(f"http3.after-body.unexpected:{message['type']}")
+        return
+
+    if path == "/h3-open-upload-peer-stop":
+        message = await receive()
+        if message["type"] != "http.request":
+            _record(f"http3.open-upload.unexpected-first:{message['type']}")
+            return
+        _record("http3.open-upload.body-received")
+        _record(
+            "http3.open-upload.body-received:"
+            f"{message.get('more_body')}:{len(message.get('body', b''))}"
+        )
+        _record("http3.open-upload.waiting-for-disconnect")
+        try:
+            message = await receive()
+        except asyncio.CancelledError:
+            _record("http3.open-upload.cancelled-before-disconnect")
+            raise
+        if message["type"] == "http.disconnect":
+            _record("http3.open-upload.disconnected")
+        else:
+            _record(f"http3.open-upload.unexpected:{message['type']}")
+        return
+
+    if path == "/h3-open-upload-app-return":
+        message = await receive()
+        if message["type"] != "http.request":
+            _record(f"http3.open-upload-retired.unexpected-first:{message['type']}")
+            return
+        _record("http3.open-upload-retired.body-received")
+        _record(
+            "http3.open-upload-retired.body-received:"
+            f"{message.get('more_body')}:{len(message.get('body', b''))}"
+        )
+
+        async def receive_after_response():
+            try:
+                message = await receive()
+            except asyncio.CancelledError:
+                _record("http3.open-upload-retired.cancelled")
+                raise
+            _record(
+                "http3.open-upload-retired.receive:"
+                f"{message['type']}:{message.get('more_body')}:{len(message.get('body', b''))}"
+            )
+
+        _h3_open_upload_receivers.append(asyncio.create_task(receive_after_response()))
+        await _respond(
+            send,
+            b"response-before-open-upload-complete",
+            content_type=b"text/plain; charset=utf-8",
+        )
+        _record("http3.open-upload-retired.response-sent")
+        return
+
+    if path == "/h3-open-upload-followup":
+        pending = [task for task in _h3_open_upload_receivers if not task.done()]
+        if pending:
+            await asyncio.wait_for(asyncio.gather(*pending), timeout=2)
+        _h3_open_upload_receivers.clear()
+        _record("http3.open-upload-retired.followup-drained")
+        await _respond(send, b"open-upload-followup-healthy", content_type=b"text/plain; charset=utf-8")
         return
 
     if path == "/stream-yield-after-start":

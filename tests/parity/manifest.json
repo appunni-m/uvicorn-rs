@@ -966,6 +966,31 @@
       ]
     },
     {
+      "id": "http3.peer-stop-disconnects-open-request-body",
+      "kind": "protocol_operation",
+      "observe": [
+        "client_aborted",
+        "application_cancelled",
+        "application_events",
+        "disconnect_event",
+        "followup_response",
+        "followup_healthy"
+      ]
+    },
+    {
+      "id": "http3.open-upload-retires-body-pump",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes",
+        "application_cancelled",
+        "application_events",
+        "followup_response",
+        "followup_healthy"
+      ]
+    },
+    {
       "id": "http.request-streaming",
       "kind": "protocol_operation",
       "observe": [

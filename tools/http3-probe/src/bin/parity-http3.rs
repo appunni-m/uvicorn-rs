@@ -456,11 +456,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let peer_stop_after_body_complete = specification["peer_stop_after_body_complete"]
         .as_bool()
         .unwrap_or(false);
+    let peer_stop_while_upload_open = specification["peer_stop_while_upload_open"]
+        .as_bool()
+        .unwrap_or(false);
     let same_connection_followup_path = specification["same_connection_followup_path"].as_str();
     let expect_response_error = specification["expect_response_error"]
         .as_bool()
         .unwrap_or(false);
     let leave_upload_open_until_response = specification["leave_upload_open_until_response"]
+        .as_bool()
+        .unwrap_or(false);
+    let complete_upload_after_response = specification["complete_upload_after_response"]
         .as_bool()
         .unwrap_or(false);
     let empty_data_frame_before_body = specification["empty_data_frame_before_body"]
@@ -494,6 +500,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             || abort_response_after_headers
             || peer_stop_before_response_headers
             || peer_stop_after_body_complete
+            || peer_stop_while_upload_open
+            || complete_upload_after_response
             || expect_response_error
             || leave_upload_open_until_response
             || invalid_alpn
@@ -506,6 +514,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             || abort_after_body
             || abort_response_after_headers
             || peer_stop_after_body_complete
+            || complete_upload_after_response
             || expect_response_error
             || leave_upload_open_until_response
             || invalid_alpn
@@ -539,6 +548,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             || abort_response_after_headers
             || peer_stop_before_response_headers
             || peer_stop_after_body_complete
+            || peer_stop_while_upload_open
+            || complete_upload_after_response
             || expect_response_error
             || leave_upload_open_until_response
             || invalid_alpn
@@ -547,6 +558,42 @@ async fn main() -> Result<(), Box<dyn Error>> {
             || !request_body.is_empty())
     {
         return Err("truncated DATA probe cannot be combined with another workflow".into());
+    }
+    if peer_stop_while_upload_open
+        && (specification.get("request_sequence").is_some()
+            || abort_after_body
+            || abort_response_after_headers
+            || peer_stop_before_response_headers
+            || peer_stop_after_body_complete
+            || expect_response_error
+            || invalid_alpn
+            || hold_response_stream_for_shutdown
+            || method != "POST"
+            || request_body.is_empty()
+            || !same_connection_followup_path.is_some_and(|path| path.starts_with('/')))
+    {
+        return Err(
+            "open-upload peer stop requires a partial POST and same-connection follow-up".into(),
+        );
+    }
+    if complete_upload_after_response
+        && (specification.get("request_sequence").is_some()
+            || abort_after_body
+            || abort_response_after_headers
+            || peer_stop_before_response_headers
+            || peer_stop_after_body_complete
+            || peer_stop_while_upload_open
+            || expect_response_error
+            || invalid_alpn
+            || hold_response_stream_for_shutdown
+            || method != "POST"
+            || request_body.is_empty()
+            || !same_connection_followup_path.is_some_and(|path| path.starts_with('/')))
+    {
+        return Err(
+            "post-response upload completion requires a partial POST and same-connection follow-up"
+                .into(),
+        );
     }
 
     let certificate_file = std::fs::File::open(certfile)?;
@@ -706,7 +753,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .and_then(Value::as_str)
             .is_some_and(|name| name.eq_ignore_ascii_case("content-length"))
     });
-    if !request_body.is_empty() && !has_content_length {
+    if peer_stop_while_upload_open {
+        let content_lengths = headers
+            .iter()
+            .filter_map(|header| {
+                let pair = header.as_array()?;
+                let name = pair.first()?.as_str()?;
+                if name.eq_ignore_ascii_case("content-length") {
+                    pair.get(1)?.as_str()
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        if content_lengths.len() != 1
+            || !matches!(
+                content_lengths[0].parse::<usize>(),
+                Ok(length) if length > request_body.len()
+            )
+        {
+            return Err(
+                "open-upload peer stop requires Content-Length greater than the sent body".into(),
+            );
+        }
+    }
+    if !request_body.is_empty() && !has_content_length && !complete_upload_after_response {
         request_builder = request_builder.header(http::header::CONTENT_LENGTH, request_body.len());
     }
     let request = request_builder.body(())?;
@@ -781,7 +852,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         writeln!(std::io::stdout().lock(), "{}", json!({"aborted": true}))?;
         return Ok(());
     }
-    if !leave_upload_open_until_response {
+    if !leave_upload_open_until_response
+        && !peer_stop_while_upload_open
+        && !complete_upload_after_response
+    {
         if !request_trailers.is_empty() {
             if let Err(error) = stream.send_trailers(request_trailers).await {
                 if expect_response_error {
@@ -799,7 +873,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             return Err(error.into());
         }
     }
-    if peer_stop_before_response_headers || peer_stop_after_body_complete {
+    if peer_stop_before_response_headers
+        || peer_stop_after_body_complete
+        || peer_stop_while_upload_open
+    {
         let release_file = peer_stop_release_file
             .ok_or("HTTP/3 peer-stop workflow is missing its request release file")?;
         let followup_release_file = peer_stop_followup_release_file
@@ -1165,6 +1242,72 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "body_hex": body_hex,
         "body_stream_error": body_stream_error
     });
+    if complete_upload_after_response {
+        stream.finish().await?;
+        let followup_path = same_connection_followup_path
+            .ok_or("post-response upload workflow is missing its follow-up path")?;
+        let followup_request = Request::builder()
+            .method("GET")
+            .uri(format!(
+                "https://localhost:{}{followup_path}",
+                address.port()
+            ))
+            .body(())?;
+        let mut followup_stream = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            sender.send_request(followup_request),
+        )
+        .await??;
+        followup_stream.finish().await?;
+        let followup_response = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            followup_stream.recv_response(),
+        )
+        .await??;
+        let followup_content_type = followup_response
+            .headers()
+            .get(http::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok());
+        let mut followup_body = Vec::new();
+        while let Some(mut data) = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            followup_stream.recv_data(),
+        )
+        .await??
+        {
+            let length = data.remaining();
+            followup_body.extend_from_slice(data.chunk());
+            data.advance(length);
+        }
+        let followup = json!({
+            "status": followup_response.status().as_u16(),
+            "content_type": followup_content_type,
+            "body_hex": followup_body
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>(),
+            "body_stream_error": false
+        });
+        let final_observation = json!({
+            "status": status,
+            "content_type": content_type,
+            "ordered_response_headers": observation["ordered_response_headers"],
+            "body_hex": observation["body_hex"],
+            "body_stream_error": body_stream_error,
+            "upload_finished_after_response": true,
+            "followup": followup
+        });
+        drop(followup_stream);
+        drop(stream);
+        drop(sender);
+        endpoint.close(
+            quinn::VarInt::from_u32(0),
+            b"parity upload completion observed",
+        );
+        tokio::time::timeout(std::time::Duration::from_secs(2), endpoint.wait_idle()).await?;
+        writeln!(std::io::stdout().lock(), "{final_observation}")?;
+        return Ok(());
+    }
     if let (Some(result_file), Some(release_file)) = (hold_result_file, hold_release_file) {
         std::fs::write(result_file, serde_json::to_vec(&observation)?)?;
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
