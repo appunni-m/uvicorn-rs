@@ -135,6 +135,33 @@ The latest attempt status and latest completed measurements are tracked
 separately. Historical local measurements below remain tied to their own source
 revisions and must not be read as results for the current commit.
 
+### Run one focused FastAPI stage diagnostic
+
+Use `workflow_dispatch` with `Run mode: focused-fastapi-stage` to profile one
+upstream FastAPI workload on one hosted runner. The defaults select the Linux
+x86-64 `fastapi-validated-route` workload. The job builds the Rust server with
+`runtime-diagnostics`, captures a read-only host preflight, and runs the same
+FastAPI app through Rust/asyncio, Uvicorn/asyncio, Rust/uvloop, and
+Uvicorn/uvloop for three repetitions. It skips the full category matrix,
+aggregate, and generated benchmark documentation jobs.
+
+To trigger the default case through Git, push a commit to `main` whose subject
+contains `[focused-fastapi-stage]`. This workflow file is included in the
+benchmark push filter. The push also starts regular CI; use the workflow's
+`workflow_dispatch` inputs when avoiding that additional run. The manual inputs
+can select one of the maintained FastAPI workloads and one runner. The Git
+trigger defaults to Linux x86-64 and `fastapi-validated-route`.
+
+The host preflight must pass before the timer starts, and each measured row is
+still checked by the category runner's live contention guard. A rejected
+preflight or invalidated timing row is retained in the artifact and must not be
+used to rank implementations. Because Rust counters and ASGI-stage timers add
+overhead, every output is diagnostic-only: use it to locate work across the
+Rust/Python boundary, not as performance evidence. The `fastapi-stage-*`
+90-day artifact retains the report, per-repetition stage observations, build
+log, environment details, and preflight receipt. No benchmark output is
+committed by this focused mode.
+
 ### Run one focused HTTP/2 diagnostic case
 
 Use `workflow_dispatch` with `Run mode: focused-h2` to isolate one HTTP/2

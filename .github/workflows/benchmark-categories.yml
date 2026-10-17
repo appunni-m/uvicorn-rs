@@ -32,14 +32,45 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Run the full comparison or one focused HTTP/2 or HTTP/3 diagnostic case
+        description: Run the full comparison or one focused FastAPI, HTTP/2, or HTTP/3 diagnostic
         default: full
         required: true
         type: choice
         options:
           - full
+          - focused-fastapi-stage
           - focused-h2
           - focused-h3
+      fastapi_system:
+        description: Runner for the focused FastAPI stage diagnostic
+        default: linux-x86_64
+        required: true
+        type: choice
+        options:
+          - linux-x86_64
+          - linux-aarch64
+          - macos-arm64
+      fastapi_workload:
+        description: One FastAPI workload for stage attribution
+        default: fastapi-validated-route
+        required: true
+        type: choice
+        options:
+          - fastapi-fixed
+          - fastapi-validated-route
+          - fastapi-python-cpu
+          - fastapi-large-response
+          - fastapi-many-response-chunks
+          - fastapi-small-response-chunks
+          - fastapi-request-upload
+          - fastapi-request-upload-small-chunks
+          - fastapi-upload-1m-write-1k
+          - fastapi-upload-1m-write-16k
+          - fastapi-upload-1m-write-256k
+          - fastapi-upload-1m-write-1m
+          - fastapi-slow-reader-backpressure
+          - fastapi-scope-32-headers
+          - fastapi-contextvars
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -158,7 +189,7 @@ env:
 jobs:
   categories:
     name: ${{ matrix.system.id }} · parity and sequential categories
-    if: ${{ !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -440,6 +471,84 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
+  focused-fastapi-stage-diagnostic:
+    name: ${{ inputs.fastapi_system || 'linux-x86_64' }} · ${{ inputs.fastapi_workload || 'fastapi-validated-route' }} · matched ASGI stage diagnostic
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-stage') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
+    runs-on: ${{ inputs.fastapi_system == 'linux-aarch64' && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Prepare one-workload FastAPI diagnostic environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/benchmark-preparation target/fastapi-stage
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcurl4-openssl-dev
+            dpkg-query -W build-essential pkg-config libssl-dev libcurl4-openssl-dev > target/benchmark-preparation/system-packages.txt
+            lscpu
+            lscpu -J > target/benchmark-preparation/lscpu.json
+          else
+            brew install curl pkg-config openssl@3
+            brew_paths="$(brew --prefix curl)/bin:$(brew --prefix openssl@3)/bin"
+            echo "$brew_paths" | tr ':' '\n' >> "$GITHUB_PATH"
+            export PATH="$brew_paths:$PATH"
+            brew list --versions curl pkg-config openssl@3 > target/benchmark-preparation/system-packages.txt
+            system_profiler SPHardwareDataType > target/benchmark-preparation/hardware.txt
+          fi
+          uv sync --python "$PYTHON_VERSION" --group benchmark --group fastapi-benchmark --frozen --no-install-project
+          .venv/bin/python --version | tee target/benchmark-preparation/python-version.txt
+          rustc --version --verbose > target/benchmark-preparation/rust-version.txt
+          node --version > target/benchmark-preparation/node-version.txt
+          cc --version > target/benchmark-preparation/compiler-version.txt
+          uname -a > target/benchmark-preparation/uname.txt
+      - name: Build Rust runtime diagnostics extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --with maturin==1.14.1 --no-sync maturin develop --release --features runtime-diagnostics \
+            2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
+      - name: Capture read-only host preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/benchmark_host_preflight.py \
+            --output target/benchmark-preparation/host-preflight.json
+      - name: Run one FastAPI workload with matched ASGI stage diagnostics
+        shell: bash
+        env:
+          BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || 'fastapi-validated-route' }}
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_http_category_bench.py \
+            --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
+            --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
+              uvicorn-rs-uvloop uvicorn-uvloop-httptools \
+            --duration 2 --warmup 0 --concurrency 64 --repetitions 3 --seed 20261017 \
+            --require-runtime-diagnostics --asgi-stage-diagnostics \
+            --output "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
+            2>&1 | tee "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.log"
+      - name: Retain focused FastAPI diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fastapi-stage-${{ inputs.fastapi_system || 'linux-x86_64' }}-${{ inputs.fastapi_workload || 'fastapi-validated-route' }}-${{ github.sha }}
+          path: |
+            target/benchmark-preparation/
+            target/fastapi-stage/
+          if-no-files-found: warn
+          retention-days: 90
+
   focused-h2-diagnostic:
     name: ${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }} · ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h2') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]')) }}
@@ -616,7 +725,7 @@ jobs:
   aggregate:
     name: Validate and render the multi-system evidence
     needs: categories
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && needs.categories.result != 'cancelled'
+    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && needs.categories.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -659,7 +768,7 @@ jobs:
   update-docs:
     name: Record benchmark status and update documentation
     needs: [categories, aggregate]
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
+    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
