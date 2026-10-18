@@ -89,6 +89,153 @@ Its measured source digest is
 the normal native extension digest is
 `53922738aa0e2ed4bd5b38c5d26df2d77cd9cc74c1c85117bd01d7dfb42f67a0`.
 
+### FastAPI request-body receive attribution (diagnostic only; 2026-10-18)
+
+To locate the extra server CPU seen in the upload recheck, the exact clean
+source was rebuilt with the opt-in `runtime-diagnostics` feature. The probe
+wrapped the same FastAPI app with per-request ASGI stage timers and ran the
+1 MiB upload with 1 KiB and 256 KiB libcurl read-callback caps, at concurrency
+8, for three repetitions per server and loop. The C client, response checks,
+Python environment, and source commit were unchanged. These timings are
+diagnostic-only: stage instrumentation invalidates every timing row, and one
+1 KiB Rust/asyncio row was also rejected for unrelated host CPU activity. All
+24 rows completed with zero request failures; none qualifies as performance
+evidence.
+
+| Client read cap | Loop | Rust `receive()` p50 | Uvicorn `receive()` p50 | Rust app outside ASGI I/O-await p50 | Uvicorn app outside ASGI I/O-await p50 | Rust/Uvicorn `receive()` calls p50 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 KiB | asyncio | 13.414 ms | 9.020 ms | 0.443 ms | 0.346 ms | 6 / 5 |
+| 1 KiB | uvloop | 12.642 ms | 11.104 ms | 0.372 ms | 0.415 ms | 6 / 5 |
+| 256 KiB | asyncio | 8.086 ms | 6.759 ms | 0.409 ms | 0.295 ms | 6 / 5 |
+| 256 KiB | uvloop | 7.542 ms | 6.602 ms | 0.375 ms | 0.321 ms | 6 / 5 |
+
+The main measured difference sits in the awaited ASGI `receive()` path. The
+FastAPI app stage outside ASGI I/O-awaits stayed around 0.37–0.44 ms p50; this
+includes framework work and other awaits and is not CPU time. Converting each
+1 MiB request body to Python `bytes` took about 217–237 μs per request. The Rust
+runtime counted 5.47–5.66 receive bridge futures per request with 1 KiB client
+reads and 4.35–4.63 with 256 KiB reads. This narrows the investigation to
+streamed request-body delivery and its async bridge; it does not yet tell
+whether time is spent waiting for Hyper body frames, batch flushes, queue
+backpressure, or Python-loop scheduling. The receive timer includes all of
+those waits.
+
+Increasing the client callback cap reduced the measured `receive()` time for
+both servers, while the diagnostic Rust/Uvicorn gap narrowed. Because every
+row is diagnostic-only, treat this as directional attribution, not a speed
+comparison. The follow-up body-pump probe below separates frame/flush waits
+from bounded request-channel sends; it still cannot distinguish network pacing
+from Hyper wakeups or queue backpressure.
+
+The ignored raw reports are
+[`fastapi-upload-stage-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-stage-dd6ed.json)
+(SHA-256 `a8d06fa1531b9e2f0c440820942c93595955b661a39ffb06df6e2ab4005aeeeb`)
+and
+[`fastapi-upload-256k-stage-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-256k-stage-dd6ed.json)
+(SHA-256 `e103d2ae15fe82a9343aa0f81050d12b3f9d3896d2a1ef92ee4c432722d205c1`).
+Both record commit `dd6ed00f551c02196544ae9452c7b0747452a422`, Python 3.12.3,
+FastAPI 0.142.4, Uvicorn 0.54.0, and diagnostic extension SHA-256
+`f351922af07a909ea4708f3727d6d8440fa8868046b90bd9b7d3fa14b24461e8`.
+
+#### Rust HTTP body-pump breakdown (instrumented source; diagnostic only)
+
+A second opt-in diagnostic patch added counters around the Rust request-body
+pump. It records time in the select that awaits `Incoming::frame()` or the
+batch timer, threshold and timer flush counts, Hyper data-frame and byte counts,
+and bounded request-channel send waits. The measured source was commit
+`dd6ed00f551c02196544ae9452c7b0747452a422` plus this diagnostics-only patch
+(source SHA-256
+`53bd0a4be5f3c02f2df5dc8eff6c25764b5187332291d47ca1993b34c1fd9681`); the
+diagnostic extension SHA-256 was
+`5ee9c9de5698a3f6deed644fab3ae447754f1ee39c52c9c450dc420493a3132c`. The
+patch was gated by `runtime-diagnostics`; benchmark messages and handler
+behavior were unchanged. Each input used three 2-second repetitions, no
+warmup, concurrency 8, and seed `20261018`. All 24 rows completed without
+request failures. Instrumentation invalidated every timing row, and one 256
+KiB Rust/asyncio row also hit the host-CPU guard.
+
+| Client read cap | Loop | Body-frame/flush select wait per request | Request-channel send wait per request | Hyper data frames/request | Threshold flushes/request | 5 ms timeout flushes/request | Rust receive bridge futures/request |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 KiB | asyncio | 11.818 ms | 1.297 ms | 65.093 | 3.990 | 0.009 | 5.461 |
+| 1 KiB | uvloop | 11.341 ms | 1.096 ms | 65.148 | 3.990 | 0.007 | 5.750 |
+| 256 KiB | asyncio | 5.934 ms | 2.198 ms | 64.999 | 3.958 | 0.000 | 4.388 |
+| 256 KiB | uvloop | 5.432 ms | 2.249 ms | 65.007 | 3.948 | 0.000 | 4.585 |
+
+The body-frame/flush wait roughly doubles for the 1 KiB client callback cap,
+while the 5 ms batch timeout almost never fires. The queue sends take 1.1–2.2
+ms per request, and the Rust receive bridge creates about 4.4–5.8 futures per
+request. Python byte materialization remains about 0.25–0.28 ms for each 1 MiB
+body. This points to body arrival and Rust/Python streaming handoffs as the
+latency path; the counters do not separate network pacing from Hyper wakeups
+or queue backpressure, and they are not CPU profiles. Do not tune batch size
+or queue capacity from this evidence alone because that could change streaming
+latency and memory bounds.
+
+The ignored reports are
+[`fastapi-upload-pump-stage-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-pump-stage-dd6ed.json)
+(SHA-256 `544210b37410097828a9d2534197a9568f6a50d9c042894e0c795552da2b7ae7`)
+and
+[`fastapi-upload-256k-pump-stage-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-256k-pump-stage-dd6ed.json)
+(SHA-256 `db94c3926011f5799a7b23f7ef0cdfbbc814f193641dab7044cfd8bb44c546f9`).
+
+#### Normal-build timing recheck (same 1 KiB upload)
+
+The same workload was rerun without diagnostic instrumentation on clean commit
+`dd6ed00f551c02196544ae9452c7b0747452a422`: five repetitions, 5-second
+samples, 1-second warmup, concurrency 8, seed `20261018`, and the same
+CPython/FastAPI/Uvicorn/libcurl stack. All 10 rows passed response and lifecycle
+checks with zero request failures. Rust had two timing-valid repetitions;
+Uvicorn had five. Only repetitions 4 and 5 formed valid same-repetition pairs,
+below the required three-pair minimum. Their median Rust/Uvicorn ratios were
+0.784× throughput, 1.300× p95 latency, and 1.93× server CPU per request. This
+confirms a directional regression for this FastAPI upload workload, but does
+not meet the evidence threshold for a published performance claim. The earlier
+15-second upload timeout did not reproduce.
+
+The normal-build report is
+[`fastapi-upload-1k-normal-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1k-normal-dd6ed.json)
+(SHA-256 `7369a818d9cd316a7a013ceb5da07f04e3e3942103012ec39e8a58cac41d7950`);
+its ignored runner log is
+[`fastapi-upload-1k-normal-dd6ed.log`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1k-normal-dd6ed.log).
+
+#### Per-thread CPU attribution (signal-gated; diagnostic only)
+
+The repository's `/proc/self/task/*/schedstat` profiler was then applied to
+this same 1 MiB/1 KiB FastAPI upload on the clean `dd6ed00f551c02196544ae9452c7b0747452a422`
+worktree. It ran three 5-second repetitions per server at concurrency 8, with
+the same CPython 3.12.3, FastAPI 0.142.4, Uvicorn 0.54.0, and libcurl client.
+All six rows had zero request failures and clean shutdown. Unrelated host CPU
+activity invalidated every row's timing; treat the CPU split below as
+diagnostic direction, not rankable performance evidence.
+
+| Server | Process CPU per request, median | Python event-loop thread | Tokio-named threads | Tokio-named threads as share of Rust process CPU |
+| --- | ---: | ---: | ---: | ---: |
+| Uvicorn / asyncio / httptools | 1.634 ms | 1.634 ms | 0 ms | — |
+| `uvicorn-rs` / asyncio | 3.093 ms | 0.872 ms | 2.216 ms | 72% |
+
+For this transfer shape, nearly all of the Rust server's measured excess CPU
+is outside its Python event-loop thread. One Tokio-named thread accounts for
+about 1.88 ms/request; six additional Tokio-named threads together account
+for about 0.33 ms/request. The Python event-loop thread uses less CPU per
+request than Uvicorn in these samples. This points to Rust runtime/transport
+and cross-runtime scheduling work in the upload path, rather than Python body
+materialization (about 0.25 ms per 1 MiB) as the main CPU cost. Thread names
+cannot distinguish Tokio's async worker from its blocking pool, and these
+snapshots do not attribute CPU to functions. Linux `perf_event_paranoid=4`
+blocks the available on-CPU call-stack profiler on this host, so the precise
+Rust call sites remain unproven.
+
+The ignored receipts are
+[`fastapi-upload-thread-cpu-dd6ed-http1-benchmark.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-thread-cpu-dd6ed-http1-benchmark.json)
+(SHA-256 `8dabec5ebf77b2e7c824a8e4c43850578bca755cbf1b8ee77199fd345345c2e8`)
+and
+[`fastapi-upload-thread-cpu-dd6ed-profile-summary.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-thread-cpu-dd6ed-profile-summary.json)
+(SHA-256 `2ce69090d258c94a0f72b4fd9241d99c8c308ce7839ee1968b2110eb0c89a6b6`).
+The installed normal extension SHA-256 was
+`31d3046b8ecaa953a5953ca2eafd0c05af9503517fe566bd46553cd82e9e3bf7`; the
+profiling script SHA-256 was
+`6899b7a3fcb3ea0a83be8165181146adea3611d02d506e91cf37d34d8b63c9f2`.
+
 ## Focused FastAPI WebSocket connect-event fast path (Ubuntu x86-64; 2026-10-18)
 
 The first ASGI WebSocket `receive()` returns `websocket.connect` immediately.

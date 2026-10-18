@@ -872,6 +872,14 @@ struct RuntimeDiagnosticCounters {
     http_request_python_bytes_copied: AtomicU64,
     http_request_python_bytes_materialization_calls: AtomicU64,
     http_request_python_bytes_materialization_ns: AtomicU64,
+    http_body_frame_waits: AtomicU64,
+    http_body_frame_wait_ns: AtomicU64,
+    http_body_data_frames: AtomicU64,
+    http_body_data_bytes: AtomicU64,
+    http_body_batch_timeout_flushes: AtomicU64,
+    http_body_batch_threshold_flushes: AtomicU64,
+    http_body_channel_send_calls: AtomicU64,
+    http_body_channel_send_wait_ns: AtomicU64,
     tcp_read_poll_calls: AtomicU64,
     tcp_read_pending_calls: AtomicU64,
     tcp_read_bytes: AtomicU64,
@@ -1036,6 +1044,87 @@ impl RuntimeDiagnostics {
                     started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
                     Ordering::Relaxed,
                 );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = started;
+    }
+
+    #[inline]
+    fn http_body_frame_wait_started(&self) -> Option<std::time::Instant> {
+        #[cfg(feature = "runtime-diagnostics")]
+        return Some(std::time::Instant::now());
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        None
+    }
+
+    #[inline]
+    fn http_body_frame_wait_finished(&self, started: Option<std::time::Instant>) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(started) = started {
+            self.counters
+                .http_body_frame_waits
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters.http_body_frame_wait_ns.fetch_add(
+                started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                Ordering::Relaxed,
+            );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = started;
+    }
+
+    #[inline]
+    fn http_body_data_frame(&self, bytes: usize) {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.counters
+                .http_body_data_frames
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters
+                .http_body_data_bytes
+                .fetch_add(u64::try_from(bytes).unwrap_or(u64::MAX), Ordering::Relaxed);
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = bytes;
+    }
+
+    #[inline]
+    fn http_body_batch_timeout_flush(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .http_body_batch_timeout_flushes
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_body_batch_threshold_flush(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .http_body_batch_threshold_flushes
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_body_channel_send_started(&self) -> Option<std::time::Instant> {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.counters
+                .http_body_channel_send_calls
+                .fetch_add(1, Ordering::Relaxed);
+            return Some(std::time::Instant::now());
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        None
+    }
+
+    #[inline]
+    fn http_body_channel_send_finished(&self, started: Option<std::time::Instant>) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(started) = started {
+            self.counters.http_body_channel_send_wait_ns.fetch_add(
+                started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                Ordering::Relaxed,
+            );
         }
         #[cfg(not(feature = "runtime-diagnostics"))]
         let _ = started;
@@ -1263,6 +1352,14 @@ impl RuntimeDiagnostics {
                 "http_request_python_bytes_copied={} ",
                 "http_request_python_bytes_materialization_calls={} ",
                 "http_request_python_bytes_materialization_ns={} ",
+                "http_body_frame_waits={} ",
+                "http_body_frame_wait_ns={} ",
+                "http_body_data_frames={} ",
+                "http_body_data_bytes={} ",
+                "http_body_batch_timeout_flushes={} ",
+                "http_body_batch_threshold_flushes={} ",
+                "http_body_channel_send_calls={} ",
+                "http_body_channel_send_wait_ns={} ",
                 "tcp_read_poll_calls={} ",
                 "tcp_read_pending_calls={} ",
                 "tcp_read_bytes={} ",
@@ -1342,6 +1439,24 @@ impl RuntimeDiagnostics {
                 .load(Ordering::Relaxed),
             self.counters
                 .http_request_python_bytes_materialization_ns
+                .load(Ordering::Relaxed),
+            self.counters.http_body_frame_waits.load(Ordering::Relaxed),
+            self.counters
+                .http_body_frame_wait_ns
+                .load(Ordering::Relaxed),
+            self.counters.http_body_data_frames.load(Ordering::Relaxed),
+            self.counters.http_body_data_bytes.load(Ordering::Relaxed),
+            self.counters
+                .http_body_batch_timeout_flushes
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_body_batch_threshold_flushes
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_body_channel_send_calls
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_body_channel_send_wait_ns
                 .load(Ordering::Relaxed),
             self.counters.tcp_read_poll_calls.load(Ordering::Relaxed),
             self.counters.tcp_read_pending_calls.load(Ordering::Relaxed),
@@ -3725,6 +3840,7 @@ async fn pump_http_request_body(
     mut connection_closed: ConnectionClosed,
     cancellation: CancellationToken,
     request_cancellation: CancellationToken,
+    diagnostics: RuntimeDiagnostics,
 ) {
     #[cfg(coverage)]
     if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFirstPollPause) {
@@ -3765,6 +3881,7 @@ async fn pump_http_request_body(
             return;
         }
         let flush_deadline = body_started.map(|started| started + body_batch_max_wait);
+        let frame_wait_started = diagnostics.http_body_frame_wait_started();
         let frame = tokio::select! {
             biased;
             _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
@@ -3798,8 +3915,15 @@ async fn pump_http_request_body(
                 } else {
                     std::future::pending::<()>().await;
                 }
-            } => None,
-            frame = body.frame() => Some(frame),
+            } => {
+                diagnostics.http_body_frame_wait_finished(frame_wait_started);
+                diagnostics.http_body_batch_timeout_flush();
+                None
+            },
+            frame = body.frame() => {
+                diagnostics.http_body_frame_wait_finished(frame_wait_started);
+                Some(frame)
+            },
         };
         let Some(frame) = frame else {
             let message = RequestMessage {
@@ -3815,6 +3939,7 @@ async fn pump_http_request_body(
                 &cancellation,
                 &request_cancellation,
                 message,
+                &diagnostics,
                 RequestBodySendMode::Regular,
             )
             .await
@@ -3828,9 +3953,11 @@ async fn pump_http_request_body(
             Some(Ok(frame)) => {
                 if let Ok(data) = frame.into_data() {
                     if !data.is_empty() {
+                        diagnostics.http_body_data_frame(data.len());
                         if !body_segments.is_empty()
                             && body_len.saturating_add(data.len()) > body_batch_limit
                         {
+                            diagnostics.http_body_batch_threshold_flush();
                             let message = RequestMessage {
                                 body: RequestBody::take_batch(&mut body_segments, &mut body_len),
                                 more_body: true,
@@ -3844,6 +3971,7 @@ async fn pump_http_request_body(
                                 &cancellation,
                                 &request_cancellation,
                                 message,
+                                &diagnostics,
                                 RequestBodySendMode::Regular,
                             )
                             .await
@@ -3864,6 +3992,7 @@ async fn pump_http_request_body(
                                 &cancellation,
                                 &request_cancellation,
                                 message,
+                                &diagnostics,
                                 RequestBodySendMode::Regular,
                             )
                             .await
@@ -3916,6 +4045,7 @@ async fn pump_http_request_body(
                         &cancellation,
                         &request_cancellation,
                         message,
+                        &diagnostics,
                         send_mode,
                     )
                     .await
@@ -3948,6 +4078,7 @@ async fn pump_http_request_body(
                         &cancellation,
                         &request_cancellation,
                         message,
+                        &diagnostics,
                         RequestBodySendMode::Regular,
                     )
                     .await
@@ -3967,6 +4098,7 @@ async fn pump_http_request_body(
                     &cancellation,
                     &request_cancellation,
                     final_message,
+                    &diagnostics,
                     RequestBodySendMode::Final,
                 )
                 .await
@@ -3995,8 +4127,10 @@ async fn send_http_request_message(
     cancellation: &CancellationToken,
     request_cancellation: &CancellationToken,
     message: RequestMessage,
+    diagnostics: &RuntimeDiagnostics,
     _send_mode: RequestBodySendMode,
 ) -> bool {
+    let send_wait_started = diagnostics.http_body_channel_send_started();
     let result = tokio::select! {
         biased;
         _ = async {
@@ -4025,8 +4159,14 @@ async fn send_http_request_message(
                 return;
             }
             wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
-        } => return false,
-        result = sender.send(message) => result,
+        } => {
+            diagnostics.http_body_channel_send_finished(send_wait_started);
+            return false;
+        },
+        result = sender.send(message) => {
+            diagnostics.http_body_channel_send_finished(send_wait_started);
+            result
+        },
     };
     if result.is_err() {
         drain_http_request_body(body, connection_closed, cancellation, request_cancellation).await;
@@ -6155,6 +6295,7 @@ async fn handle_request_inner(
         let cancellation = context.server.cancellation.clone();
         let connection_closed = context.connection_closed.clone();
         let pump_request_cancellation = request_cancellation.clone();
+        let pump_diagnostics = context.server.diagnostics.clone();
         #[cfg(coverage)]
         let completed_pumps = Arc::clone(&context.server.completed_request_body_pumps);
         spawn_request_body_task(&request_body_tasks, async move {
@@ -6164,6 +6305,7 @@ async fn handle_request_inner(
                 connection_closed,
                 cancellation,
                 pump_request_cancellation,
+                pump_diagnostics,
             )
             .await;
             #[cfg(coverage)]
