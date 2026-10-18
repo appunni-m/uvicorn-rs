@@ -1111,7 +1111,7 @@ impl RuntimeDiagnostics {
             self.counters
                 .http_body_channel_send_calls
                 .fetch_add(1, Ordering::Relaxed);
-            return Some(std::time::Instant::now());
+            Some(std::time::Instant::now())
         }
         #[cfg(not(feature = "runtime-diagnostics"))]
         None
@@ -2072,6 +2072,11 @@ enum RequestBodySendMode {
     Final,
     #[cfg(coverage)]
     ContinueAfterStop,
+}
+
+struct RequestBodySendContext<'a> {
+    diagnostics: &'a RuntimeDiagnostics,
+    _mode: RequestBodySendMode,
 }
 
 impl RequestBody {
@@ -3939,8 +3944,10 @@ async fn pump_http_request_body(
                 &cancellation,
                 &request_cancellation,
                 message,
-                &diagnostics,
-                RequestBodySendMode::Regular,
+                RequestBodySendContext {
+                    diagnostics: &diagnostics,
+                    _mode: RequestBodySendMode::Regular,
+                },
             )
             .await
             {
@@ -3971,8 +3978,10 @@ async fn pump_http_request_body(
                                 &cancellation,
                                 &request_cancellation,
                                 message,
-                                &diagnostics,
-                                RequestBodySendMode::Regular,
+                                RequestBodySendContext {
+                                    diagnostics: &diagnostics,
+                                    _mode: RequestBodySendMode::Regular,
+                                },
                             )
                             .await
                             {
@@ -3992,8 +4001,10 @@ async fn pump_http_request_body(
                                 &cancellation,
                                 &request_cancellation,
                                 message,
-                                &diagnostics,
-                                RequestBodySendMode::Regular,
+                                RequestBodySendContext {
+                                    diagnostics: &diagnostics,
+                                    _mode: RequestBodySendMode::Regular,
+                                },
                             )
                             .await
                             {
@@ -4045,8 +4056,10 @@ async fn pump_http_request_body(
                         &cancellation,
                         &request_cancellation,
                         message,
-                        &diagnostics,
-                        send_mode,
+                        RequestBodySendContext {
+                            diagnostics: &diagnostics,
+                            _mode: send_mode,
+                        },
                     )
                     .await
                     {
@@ -4078,8 +4091,10 @@ async fn pump_http_request_body(
                         &cancellation,
                         &request_cancellation,
                         message,
-                        &diagnostics,
-                        RequestBodySendMode::Regular,
+                        RequestBodySendContext {
+                            diagnostics: &diagnostics,
+                            _mode: RequestBodySendMode::Regular,
+                        },
                     )
                     .await
                     {
@@ -4098,8 +4113,10 @@ async fn pump_http_request_body(
                     &cancellation,
                     &request_cancellation,
                     final_message,
-                    &diagnostics,
-                    RequestBodySendMode::Final,
+                    RequestBodySendContext {
+                        diagnostics: &diagnostics,
+                        _mode: RequestBodySendMode::Final,
+                    },
                 )
                 .await
                 {
@@ -4127,9 +4144,10 @@ async fn send_http_request_message(
     cancellation: &CancellationToken,
     request_cancellation: &CancellationToken,
     message: RequestMessage,
-    diagnostics: &RuntimeDiagnostics,
-    _send_mode: RequestBodySendMode,
+    send_context: RequestBodySendContext<'_>,
 ) -> bool {
+    let diagnostics = send_context.diagnostics;
+    let _send_mode = send_context._mode;
     let send_wait_started = diagnostics.http_body_channel_send_started();
     let result = tokio::select! {
         biased;
