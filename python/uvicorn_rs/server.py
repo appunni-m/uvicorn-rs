@@ -41,6 +41,16 @@ class Server:
         self.certfile = certfile
         self.keyfile = keyfile
         self.graceful_timeout = graceful_timeout
+        self._control = None
+
+    def shutdown(self):
+        """Request graceful native shutdown without cancelling the Python task.
+
+        The request is ignored before :meth:`serve` starts or after it exits.
+        """
+        control = self._control
+        if control is not None:
+            control.shutdown()
 
     async def serve(self):
         """Run the server until shutdown or task cancellation.
@@ -50,6 +60,7 @@ class Server:
         and lifespan failures propagate to the caller.
         """
         control = _native.ServerControl()
+        self._control = control
         native_task = asyncio.ensure_future(
             _native.serve(
                 self.app,
@@ -68,3 +79,6 @@ class Server:
             control.shutdown()
             await asyncio.shield(native_task)
             raise
+        finally:
+            if self._control is control:
+                self._control = None

@@ -3118,6 +3118,18 @@ def load_contract(
         elif "lifecycle" in case:
             exact_case_keys(case, {"case_id", "profile", "operation", "covers", "lifecycle"}, case_id)
             lifecycle_keys = {"graceful_timeout_seconds"}
+            if "shutdown_signal" in case["lifecycle"]:
+                lifecycle_keys.add("shutdown_signal")
+                if (
+                    case["lifecycle"]["shutdown_signal"] not in {"SIGINT", "SIGTERM"}
+                    or case["profile"] != "lifecycle"
+                    or case["operation"] != "lifespan.shutdown-cancellation"
+                    or case["lifecycle"].get("state_path") != "/state"
+                    or case["lifecycle"].get("hold_path") != "/hold"
+                ):
+                    raise ParityError(
+                        f"{case_id}: CLI signal shutdown requires the held HTTP/1.1 lifespan cancellation workflow"
+                    )
             if "unfinished_tls_handshake" in case["lifecycle"]:
                 lifecycle_keys.add("unfinished_tls_handshake")
                 if (case["lifecycle"]["unfinished_tls_handshake"] is not True
@@ -3757,7 +3769,8 @@ def start_server(
 
 
 def stop_server(
-    server: dict[str, Any], *, graceful: bool = False, signal_sent: bool = False
+    server: dict[str, Any], *, graceful: bool = False, signal_sent: bool = False,
+    signal_number: int | None = None,
 ) -> tuple[int | None, str]:
     process: subprocess.Popen = server["process"]
     log = server["log"]
@@ -3768,7 +3781,9 @@ def stop_server(
         if api_control_path is not None:
             api_control_path.touch()
         elif not signal_sent:
-            if graceful:
+            if signal_number is not None:
+                process.send_signal(signal_number)
+            elif graceful:
                 process.terminate()
             else:
                 process.send_signal(signal.SIGTERM)
@@ -8006,7 +8021,13 @@ def execute_case(
                     f"(events={read_events(server['events'])!r}, "
                     f"exit_code={server['process'].poll()!r}, state_response={state!r})"
                 )
-            exit_code, server_log = stop_server(server, graceful=True)
+            shutdown_signal = {
+                "SIGINT": signal.SIGINT,
+                "SIGTERM": signal.SIGTERM,
+            }.get(lifecycle.get("shutdown_signal"))
+            exit_code, server_log = stop_server(
+                server, graceful=True, signal_number=shutdown_signal
+            )
             events = read_events(server["events"])
         finally:
             pending.close()
@@ -9538,7 +9559,16 @@ def execute_profile(
                 captured_log = server.get("captured_log", logs)
                 if captured_log.strip():
                     print(f"--- {server['id']} server log ---\n{captured_log}", file=sys.stderr)
-                normal_signal_exit = server["id"] == "uvicorn" and exit_code == -signal.SIGTERM
+                normal_signal_exit = server["id"] == "uvicorn" and (
+                    exit_code == -signal.SIGTERM
+                    or (
+                        exit_code == -signal.SIGINT
+                        and any(
+                            case.get("lifecycle", {}).get("shutdown_signal") == "SIGINT"
+                            for case in server["attempted_cases"]
+                        )
+                    )
+                )
                 expected_startup_error = server.get("startup_failed", False)
                 expected_lifespan_shutdown_error = (
                     profile["id"].startswith("lifespan-shutdown-")

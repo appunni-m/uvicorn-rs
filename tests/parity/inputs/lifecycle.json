@@ -15,6 +15,34 @@
       }
     },
     {
+      "case_id": "lifespan.cli-sigint-cancels-and-shuts-down",
+      "profile": "lifecycle",
+      "operation": "lifespan.shutdown-cancellation",
+      "covers": [
+        "lifespan.shutdown-cancellation"
+      ],
+      "lifecycle": {
+        "state_path": "/state",
+        "hold_path": "/hold",
+        "graceful_timeout_seconds": 1,
+        "shutdown_signal": "SIGINT"
+      }
+    },
+    {
+      "case_id": "lifespan.cli-sigterm-drains-native-runtime",
+      "profile": "lifecycle",
+      "operation": "lifespan.shutdown-cancellation",
+      "covers": [
+        "lifespan.shutdown-cancellation"
+      ],
+      "lifecycle": {
+        "state_path": "/state",
+        "hold_path": "/hold",
+        "graceful_timeout_seconds": 1,
+        "shutdown_signal": "SIGTERM"
+      }
+    },
+    {
       "case_id": "lifespan.idle-keepalive-connection-closes-on-shutdown",
       "profile": "lifecycle",
       "operation": "lifespan.idle-keepalive-graceful-shutdown",
