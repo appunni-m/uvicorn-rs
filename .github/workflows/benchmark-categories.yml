@@ -25,6 +25,7 @@ on:
       - tests/parity/**
       - parity/**
       - docs/benchmarks.md
+      - docs/releases.md
       - docs/performance-acceptance.json
       - .github/workflows/benchmark-categories.yml
   schedule:
