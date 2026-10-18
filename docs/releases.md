@@ -71,8 +71,11 @@ requires the exact verified candidate, matching immutable PyPI files, and its
 protected Trusted Publisher. Exact-main performance and unified-coverage
 evidence remain candidate-wide gates. Maintainers must configure protected
 `crates-io` and `pypi` environments plus their Trusted Publishers. The
-publisher and documentation workflows currently exist only in the local
-working tree and have not run in hosted CI; no publisher has run.
+publisher and documentation workflows are committed on `main` at
+[`16d145564b906b454d0fb43e32d3eec22bc8c7d1`](https://github.com/appunni-m/uvicorn-rs/commit/16d145564b906b454d0fb43e32d3eec22bc8c7d1).
+The publisher has not run. The separate Pages workflow has not completed a
+hosted build or deployment, and GitHub Pages configuration still needs
+verification.
 
 ### Repository and registry setup
 
@@ -122,10 +125,10 @@ For documentation, follow the separate build-and-deploy pattern in
 build and check documentation from the release source before deployment. The
 `Documentation` workflow builds every maintained page with strict link checks,
 uploads the validated Pages artifact, and deploys only on a `main` push after
-the build job passes. Its workflow currently exists only in the local working
-tree and will not deploy until committed, merged, and GitHub Pages is configured
-for GitHub Actions. The docs.rs pages are generated from the published crate
-archives, so validate them after Cargo publication.
+the build job passes. The workflow is committed on `main`; a hosted build and
+deployment still need verification, and deployment requires GitHub Pages to be
+configured for GitHub Actions. The docs.rs pages are generated from the
+published crate archives, so validate them after Cargo publication.
 
 ## First-release execution plan
 
@@ -162,9 +165,51 @@ publish packages, create a tag, or deploy a public documentation site.
 Candidate assembly and each public distribution remain distinct stages. The
 current branch and evidence do not yet satisfy the exact-commit release gates.
 
-## Hosted status snapshot at branch CI run 39133909994 (2026-10-18)
+## Current hosted status snapshot (2026-10-19; main `16d145564b906b454d0fb43e32d3eec22bc8c7d1`)
 
-The latest connected GitHub check found remote `main` at
+Hosted CI run
+[39163196897](https://github.com/appunni-m/uvicorn-rs/actions/runs/39163196897)
+has passed installed-wheel public parity, the Rust 1.85 compile, formatting,
+lints, feature builds and Rust documentation, and the pinned native
+FastAPI-RS → Starlette-RS → Uvicorn-RS composition inputs. Its three-repeat
+matrix completed all 760 indexed cases without infrastructure failures, but
+the unified gate failed at 9,289/9,290 regions and 6,873/6,874 lines. The one
+uncovered region is the non-`Native` path in
+`ConnectionClosed::wait_for_peer_read_failure` (`src/lib.rs`, line 1737 at the
+tested commit). A local coverage-only fault contract now forces that fallback;
+the focused case passes, preserves the WebSocket handshake, and gets HTTP 200
+on a follow-up request. The full matrix and independent Coverage-MCP review
+have not yet been rerun on this change.
+
+Performance run
+[39163196763](https://github.com/appunni-m/uvicorn-rs/actions/runs/39163196763)
+has passed exact-binary public parity and the FastAPI-only comparison on Linux
+x86-64, Linux ARM64, and macOS ARM64. The sequential category measurements and
+analysis are still running on all three systems. These partial results do not
+establish a benchmark win.
+
+The current checkout contains uncommitted changes to the fallback fault
+contract and this status page; it is not a release candidate.
+
+The `v0.1.0` tag and matching GitHub Release do not exist. A read-only registry
+preflight on 2026-10-18 found none of the four Cargo crate names or the PyPI
+project `uvicorn-rs-py` published. No candidate artifact, registry upload, or
+documentation deployment has been produced for this exact commit. Remaining
+gates are a passing full coverage matrix plus independent Coverage-MCP review,
+complete multi-system benchmark results and performance acceptance, a hosted
+candidate build carrying the standalone H3 archive-consumer receipt, publisher
+and Pages environment configuration, and a hosted documentation
+build/deployment.
+
+The last recorded repository-settings check (run 39133909994, 2026-10-18)
+found `main` without required branch-protection checks. GitHub Pages settings
+have not been rechecked; an earlier `configure-pages` attempt failed because
+Pages was disabled or unavailable. These settings need a fresh check before
+publication or deployment.
+
+## Historical hosted status snapshot at branch CI run 39133909994 (2026-10-18)
+
+That historical GitHub check found remote `main` at
 [`025caf5b2f855c6a04a29692fba731e944d06559`](https://github.com/appunni-m/uvicorn-rs/commit/025caf5b2f855c6a04a29692fba731e944d06559),
 with branch protection disabled and no required status checks. The
 `v0.1.0` tag and matching GitHub Release do not exist. The preparation branch

@@ -355,6 +355,7 @@ enum CoverageFaultPoint {
     WebSocketDriverOutgoingChannelClosed,
     WebSocketPeerReadFailureWaitComplete,
     WebSocketPeerReadFailureUnavailable,
+    WebSocketPeerReadFailureWatchFallback,
     WebSocketDriverSendError,
     WebSocketDriverDrainSendError,
 }
@@ -729,6 +730,9 @@ impl CoverageFaultPoint {
                 "websocket.peer-read-failed.wait-complete"
             }
             Self::WebSocketPeerReadFailureUnavailable => "websocket.peer-read-failed.unavailable",
+            Self::WebSocketPeerReadFailureWatchFallback => {
+                "websocket.peer-read-failed.watch-fallback"
+            }
             Self::WebSocketDriverSendError => "websocket.driver.send-error",
             Self::WebSocketDriverDrainSendError => "websocket.driver.drain-send-error",
         }
@@ -1713,6 +1717,11 @@ impl ConnectionClosed {
     }
 
     async fn wait_for_peer_read_failure(&mut self) {
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::WebSocketPeerReadFailureWatchFallback) {
+            let (_closed_sender, closed_receiver) = watch::channel(false);
+            *self = Self::Watch(closed_receiver);
+        }
         #[cfg(feature = "native-tcp")]
         if let Self::Native {
             peer_read_failed, ..

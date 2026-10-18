@@ -1688,6 +1688,26 @@
       }
     },
     {
+      "case_id": "fault.websocket.peer-read-failed-watch-fallback-preserves-handshake",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.peer-read-failed.watch-fallback",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-close-default-after-accept",
+        "subprotocols": [],
+        "messages": [],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
       "case_id": "fault.websocket.io-allocation-failure",
       "profile": "websocket",
       "operation": "websocket.fault-contract",

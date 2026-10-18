@@ -311,6 +311,7 @@ FAULT_POINTS = {
     "websocket.driver.connection-closed",
     "websocket.peer-read-failed.wait-complete",
     "websocket.peer-read-failed.unavailable",
+    "websocket.peer-read-failed.watch-fallback",
     "websocket.driver.peer-eof",
     "websocket.driver.app-task-aborted",
     "websocket.driver.incoming-text-receiver-closed",
@@ -502,6 +503,7 @@ WEBSOCKET_FAULT_POINTS = {
     "websocket.receive.connection-closed",
     "websocket.driver.connection-closed",
     "websocket.peer-read-failed.unavailable",
+    "websocket.peer-read-failed.watch-fallback",
     "websocket.driver.peer-eof",
     "websocket.driver.app-task-aborted",
     "websocket.driver.incoming-text-receiver-closed",
@@ -9027,7 +9029,11 @@ def fault_contract_matches(
             return (
                 healthy_followup
                 and (
-                    fault["point"] != "websocket.peer-read-failed.unavailable"
+                    fault["point"]
+                    not in {
+                        "websocket.peer-read-failed.unavailable",
+                        "websocket.peer-read-failed.watch-fallback",
+                    }
                     or observation.get("fault_consumed") is True
                 )
             )
@@ -9413,8 +9419,10 @@ def execute_profile(
                             }
                         elif (
                             case["fault"]["contract"] == "websocket-teardown-and-followup-200"
-                            and case["fault"]["point"]
-                            == "websocket.peer-read-failed.unavailable"
+                            and case["fault"]["point"] in {
+                                "websocket.peer-read-failed.unavailable",
+                                "websocket.peer-read-failed.watch-fallback",
+                            }
                         ):
                             fault_observation = {
                                 **target_result,
