@@ -197,8 +197,9 @@ protocol category and a zero-grace lifecycle case:
 
 The load cases sample server-process-tree RSS, OS threads, and the ASGI app's
 Python task count every 5 ms. They require no net idle Python-task growth from
-the first to the final round and a spread of at most 16 MiB between the last
-two round-end RSS samples. The sampler includes worker children and can count
+the first to the final round, allowing one task of final-sample scheduling
+jitter, and a spread of at most 16 MiB between the last two round-end RSS
+samples. The sampler includes worker children and can count
 shared pages more than once. The RSS condition is a fixed-workload stability
 threshold, not an absolute cap. A response fingerprint is retained instead of
 duplicating the full repeated body in the report.

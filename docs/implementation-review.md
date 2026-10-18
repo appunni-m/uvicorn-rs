@@ -56,11 +56,21 @@ archive packaging, and full public parity on the candidate wheel. Windows and
 macOS built and installed their ABI3 wheels but skipped source and Rust archive
 consumers. The Python-floor job also passed. Exact-head run
 [39082487352](https://github.com/appunni-m/uvicorn-rs/actions/runs/39082487352)
-on `8161db582` is in progress. Documentation evidence commit `b45d7446b` has
-run [39084568469](https://github.com/appunni-m/uvicorn-rs/actions/runs/39084568469)
-pending. This documentation follow-up records the completed run and will be
-validated on its own exact commit after push. Exact-head hosted verification
-and release acceptance are not yet green.
+on `8161db582` completed with the unified matrix failing one H2 slow-reader
+case on repeat 3; the other reported jobs passed, while conditional package
+jobs were skipped. The matrix attributed all 754 cases and measured all
+9,163 regions and 6,766 executable lines, but the failed repeat leaves the
+matrix gate incomplete. The H2 case had Uvicorn idle-task snapshots
+`[24, 18, 18, 18]` and Rust snapshots `[4, 4, 4, 4]`: the old range-based
+stability check rejected the reference's settling background tasks although
+the final count was below its initial count. `scripts/run_parity.py` now checks
+for no net growth from the first to final snapshot, allowing one final-sample
+task of scheduling jitter. That exact case passed on the provided Ubuntu
+x86-64 host with the updated runner. This is focused evidence, not a full matrix
+rerun. The earlier documentation run
+[39084568469](https://github.com/appunni-m/uvicorn-rs/actions/runs/39084568469)
+was cancelled. Exact-current-source hosted verification remains pending until
+the current branch changes are pushed; release acceptance is not green.
 
 ## Latest completed historical evidence
 

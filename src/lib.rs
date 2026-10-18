@@ -2949,23 +2949,33 @@ struct WebSocketIo {
 impl WebSocketIo {
     fn receive<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let connect = !slf.connect_delivered.swap(true, Ordering::AcqRel);
+        if connect {
+            // The ASGI connect event is ready before the first application
+            // receive, so return it directly instead of scheduling a Tokio
+            // future and crossing back into Python to build the event.
+            let message = PyDict::new(py);
+            coverage_try!(
+                WebSocketReceiveConnectTypeSetItem,
+                message.set_item("type", "websocket.connect")
+            );
+            return Ok(message.into_any());
+        }
+
         let incoming = Arc::clone(&slf.incoming);
         let state = Arc::clone(&slf.state);
         slf.diagnostics.websocket_receive_bridge_future();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let incoming_message = if connect {
-                None
-            } else {
-                let queued_message = incoming.lock().await.try_recv();
-                #[cfg(coverage)]
-                let force_closed =
-                    coverage_fault_take(CoverageFaultPoint::WebSocketReceiveConnectionClosed);
-                #[cfg(not(coverage))]
-                let force_closed = false;
-                let state_closed = state.load(Ordering::Acquire) == 3 || force_closed;
-                if state_closed {
-                    state.store(3, Ordering::Release);
-                }
+            let queued_message = incoming.lock().await.try_recv();
+            #[cfg(coverage)]
+            let force_closed =
+                coverage_fault_take(CoverageFaultPoint::WebSocketReceiveConnectionClosed);
+            #[cfg(not(coverage))]
+            let force_closed = false;
+            let state_closed = state.load(Ordering::Acquire) == 3 || force_closed;
+            if state_closed {
+                state.store(3, Ordering::Release);
+            }
+            let incoming_message =
                 match queued_message {
                     Ok(message) => Some(message),
                     Err(_) if state_closed => Some(WebSocketIncoming::Disconnect {
@@ -2990,66 +3000,58 @@ impl WebSocketIo {
                         }
                         .await
                     }
-                }
-            };
+                };
             Python::attach(|py| -> PyResult<Py<PyAny>> {
                 let message = PyDict::new(py);
-                if connect {
-                    coverage_try!(
-                        WebSocketReceiveConnectTypeSetItem,
-                        message.set_item("type", "websocket.connect")
-                    );
-                } else {
-                    match incoming_message {
-                        Some(WebSocketIncoming::Text(text)) => {
-                            coverage_try!(
-                                WebSocketReceiveTextTypeSetItem,
-                                message.set_item("type", "websocket.receive")
-                            );
-                            coverage_try!(
-                                WebSocketReceiveTextValueSetItem,
-                                message.set_item("text", text)
-                            );
-                        }
-                        Some(WebSocketIncoming::Bytes(data)) => {
-                            coverage_try!(
-                                WebSocketReceiveBinaryTypeSetItem,
-                                message.set_item("type", "websocket.receive")
-                            );
-                            coverage_try!(
-                                WebSocketReceiveBinaryValueSetItem,
-                                message.set_item("bytes", PyBytes::new(py, &data))
-                            );
-                        }
-                        Some(WebSocketIncoming::Disconnect { code, reason }) => {
-                            coverage_try!(
-                                WebSocketReceiveDisconnectTypeSetItem,
-                                message.set_item("type", "websocket.disconnect")
-                            );
-                            coverage_try!(
-                                WebSocketReceiveDisconnectCodeSetItem,
-                                message.set_item("code", code)
-                            );
-                            coverage_try!(
-                                WebSocketReceiveDisconnectReasonSetItem,
-                                message.set_item("reason", reason)
-                            );
-                        }
-                        None => {
-                            state.store(3, Ordering::Release);
-                            coverage_try!(
-                                WebSocketReceiveClosedTypeSetItem,
-                                message.set_item("type", "websocket.disconnect")
-                            );
-                            coverage_try!(
-                                WebSocketReceiveClosedCodeSetItem,
-                                message.set_item("code", 1005)
-                            );
-                            coverage_try!(
-                                WebSocketReceiveClosedReasonSetItem,
-                                message.set_item("reason", "")
-                            );
-                        }
+                match incoming_message {
+                    Some(WebSocketIncoming::Text(text)) => {
+                        coverage_try!(
+                            WebSocketReceiveTextTypeSetItem,
+                            message.set_item("type", "websocket.receive")
+                        );
+                        coverage_try!(
+                            WebSocketReceiveTextValueSetItem,
+                            message.set_item("text", text)
+                        );
+                    }
+                    Some(WebSocketIncoming::Bytes(data)) => {
+                        coverage_try!(
+                            WebSocketReceiveBinaryTypeSetItem,
+                            message.set_item("type", "websocket.receive")
+                        );
+                        coverage_try!(
+                            WebSocketReceiveBinaryValueSetItem,
+                            message.set_item("bytes", PyBytes::new(py, &data))
+                        );
+                    }
+                    Some(WebSocketIncoming::Disconnect { code, reason }) => {
+                        coverage_try!(
+                            WebSocketReceiveDisconnectTypeSetItem,
+                            message.set_item("type", "websocket.disconnect")
+                        );
+                        coverage_try!(
+                            WebSocketReceiveDisconnectCodeSetItem,
+                            message.set_item("code", code)
+                        );
+                        coverage_try!(
+                            WebSocketReceiveDisconnectReasonSetItem,
+                            message.set_item("reason", reason)
+                        );
+                    }
+                    None => {
+                        state.store(3, Ordering::Release);
+                        coverage_try!(
+                            WebSocketReceiveClosedTypeSetItem,
+                            message.set_item("type", "websocket.disconnect")
+                        );
+                        coverage_try!(
+                            WebSocketReceiveClosedCodeSetItem,
+                            message.set_item("code", 1005)
+                        );
+                        coverage_try!(
+                            WebSocketReceiveClosedReasonSetItem,
+                            message.set_item("reason", "")
+                        );
                     }
                 }
                 Ok(message.into_any().unbind())

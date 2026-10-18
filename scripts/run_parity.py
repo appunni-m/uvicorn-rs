@@ -6043,11 +6043,12 @@ def _load_resource_result(
         and max(settled_rss) - min(settled_rss) <= 16 * 1024 * 1024
     )
     task_counts = [result["idle_python_tasks"] for result in resource_rounds]
-    # asyncio.all_tasks() is a point-in-time snapshot; allow one task of
-    # scheduling jitter while still rejecting growth across the load rounds.
+    # asyncio.all_tasks() is a point-in-time snapshot, so transient tasks can
+    # settle between rounds. Reject retained task growth across the workload
+    # while allowing one task of scheduling jitter at the final snapshot.
     tasks_stable = (
         len(task_counts) == rounds
-        and max(task_counts) - min(task_counts) <= 1
+        and task_counts[-1] <= task_counts[0] + 1
     )
     return {
         "responses": responses_by_round,

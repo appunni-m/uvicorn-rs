@@ -25,11 +25,19 @@ consumer checks. This successful run is not exact-current-source evidence.
 
 Exact-head run
 [39082487352](https://github.com/appunni-m/uvicorn-rs/actions/runs/39082487352)
-for `8161db582` is in progress. The preceding documentation snapshot at
-`b45d7446b750029867ad44f3e5950bdb4a630e4b` has CI run
+for `8161db582` completed with the unified matrix failing
+`http2.concurrent-stream-load-slow-reader-resource-bound` on repeat 3; the
+other reported jobs passed, and conditional package jobs were skipped. The
+matrix attributed all 754 cases and measured 9,163/9,163 regions and
+6,766/6,766 lines, but remains incomplete because of that failed repeat.
+Uvicorn's idle-task snapshots fell from 24 to 18 while Rust stayed at 4. The
+runner now checks for net growth between the first and final snapshots, with
+one task of final-sample jitter. The exact case passed once on the supplied
+Ubuntu x86-64 host with the updated runner; the complete hosted matrix has not
+yet rerun. The follow-up documentation run
 [39084568469](https://github.com/appunni-m/uvicorn-rs/actions/runs/39084568469)
-pending. This follow-up records the completion of run 39081302848 and will
-receive its own exact-commit CI run after the push.
+was cancelled. Current-source hosted validation will be triggered by the next
+push to this feature branch.
 
 Packaging evidence on run 39081302848 is not yet a release bundle. The run is
 also on a feature branch, not `main`; the release workflow selects successful

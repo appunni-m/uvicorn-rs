@@ -2,6 +2,60 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Focused FastAPI WebSocket connect-event fast path (Ubuntu x86-64; 2026-10-18)
+
+The first ASGI WebSocket `receive()` returns `websocket.connect` immediately.
+`WebSocketIo::receive` now constructs that event on the owning Python thread and
+returns its dictionary directly, skipping a `future_into_py`/Tokio handoff for
+this first event. The existing Python bridge already accepts either a direct
+dictionary or an awaitable. Later receives, application execution, message
+conversion, and the Python event loop remain unchanged; this removes one
+bridge scheduling step rather than the Python boundary.
+
+The workload used the same ordinary Python FastAPI/Starlette WebSocket app,
+CPython 3.12.13,
+Uvicorn 0.54.0, uvloop 0.23.0, a Rust WebSocket client, and an Ubuntu 24.04
+AMD Ryzen 5 2600X host (6 cores/12 threads). Each cohort used seed `20261018`
+and three repetitions. The handshake workload completed 500 connections per
+repetition; the text-echo workload used 32 persistent connections, 32-byte
+messages, and 5-second measured intervals. The baseline used clean source and
+source-bundle and native-binary SHA-256 values `677389c6…` and
+`0459657a…`. Candidate digests were stable at `8d5014e5…` and `c2031525…`;
+the candidate receipt marks the target dirty and
+`performance_evidence_status: not_proven`, so these figures are exploratory.
+Every candidate sample passed timing, message/handshake correctness, and
+graceful shutdown gates. The existing
+`websocket.text-and-binary-round-trip` parity case also passed on the candidate.
+
+| Workload/cohort | Server | Valid reps | Operations/s | p50 ms | p95 ms | p99 ms | Server CPU µs/op | Peak RSS MiB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Handshake, baseline | `uvicorn-rs` + uvloop | 3 | 2,329 | 0.353 | 0.596 | 0.629 | 360 | 48.5 |
+| Handshake, baseline | Uvicorn + uvloop | 3 | 1,638 | 0.532 | 0.752 | 0.931 | 520 | 49.9 |
+| Handshake, candidate | `uvicorn-rs` + uvloop | 3 | 2,478 | 0.365 | 0.488 | 0.550 | 380 | 48.7 |
+| Handshake, candidate | Uvicorn + uvloop | 3 | 1,577 | 0.560 | 0.777 | 1.080 | 520 | 50.0 |
+| Text echo, baseline | `uvicorn-rs` + uvloop | 3 | 15,731 | 2.166 | 2.757 | 3.053 | 106.1 | 55.2 |
+| Text echo, baseline | Uvicorn + uvloop | 3 | 23,203 | 1.390 | 1.569 | 1.704 | 42.9 | 51.1 |
+| Text echo, candidate | `uvicorn-rs` + uvloop | 3 | 16,089 | 2.087 | 2.788 | 3.108 | 102.6 | 55.0 |
+| Text echo, candidate | Uvicorn + uvloop | 3 | 23,897 | 1.262 | 1.578 | 1.785 | 41.6 | 51.1 |
+
+The handshake candidate's median rate was 6.4% above its baseline and p95 was
+18.1% lower; server CPU per handshake did not improve (380 vs 360 µs). The
+Rust/Uvicorn throughput ratio moved from 1.42× to 1.57× in this focused
+handshake workload. Persistent text echo changed only 2.3% in Rust throughput
+and 1.1% in p95, while remaining at about 0.67× Uvicorn throughput and using
+about 2.5× its server CPU per message. That is no clear steady-state echo gain
+and shows the optimization is specific to connection setup. The candidate
+does not establish a general FastAPI or server-wide speedup.
+
+The local-only raw receipts are
+`benchmarks/results/2026-10-18-ws-handshake-uvloop-baseline.json`,
+`benchmarks/results/2026-10-18-ws-handshake-uvloop-fast-connect.json`,
+`benchmarks/results/2026-10-18-ws-echo-uvloop.json`, and
+`benchmarks/results/2026-10-18-ws-echo-uvloop-fast-connect.json`. They remain
+ignored along with server logs and are not release artifacts. A clean committed
+build and a repeat on an independent quiet host are required before treating
+the handshake delta as accepted performance evidence.
+
 ## Focused FastAPI HTTP/2 chunk-streaming result (Ubuntu x86-64; 2026-10-18)
 
 This matched experiment measured the stock FastAPI `StreamingResponse` route
