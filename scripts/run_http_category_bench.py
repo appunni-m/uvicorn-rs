@@ -720,10 +720,13 @@ def main() -> None:
     ]
     if args.asgi_stage_diagnostics:
         source_files.append("examples/profile_fastapi.py")
+    client_identities = [native_client] if native_client is not None else []
+    if node_executable is not None:
+        client_identities.append(Path(node_executable))
     evidence = BenchmarkEvidence(
         ROOT, python,
         source_files,
-        [native_client] if native_client is not None else [],
+        client_identities,
         allow_runtime_diagnostics=args.require_runtime_diagnostics,
         artifacts_dir=args.output.with_suffix(".artifacts"),
         extra_dependencies=(FASTAPI_BENCHMARK_DISTRIBUTIONS

@@ -8,7 +8,64 @@ Rust crate archives (`native-app-contract` and `uvicorn-rs`). The native
 crates are library packages; this repository does not currently provide a
 standalone native executable.
 
-## Release status snapshot (2026-10-18; exact-head run 39107767728)
+## Distribution channels
+
+The candidate bundle groups build outputs for review. It does not publish any
+of them. Each channel has a separate package identity and release boundary.
+
+| Channel | Package or surface | Candidate artifact and order | Publication state |
+|---|---|---|---|
+| Cargo | `native-app-contract` and `uvicorn-rs`, both `0.1.0` | Two `.crate` archives. Publish `native-app-contract` before `uvicorn-rs`, which depends on its registry version. | No Cargo publish job is configured. The `uvicorn-rs` archive is blocked until the H3 framing correction works for a clean downstream consumer without the workspace patch. |
+| PyPI | Optional `uvicorn-rs-py` compatibility client, `0.1.0`, Python `>=3.9` | Three ABI3 wheels and one source distribution, each checked by the candidate workflow. The root Cargo package is marked `publish = false`; it is the PyPI client's extension build, not a crates.io package. | No PyPI publish job is configured. The package is optional and needs an explicit distribution decision. |
+| Documentation | Versioned `README.md` and `docs/`; crate API references point to docs.rs | Documentation changes ship in the reviewed Git commit. Check the rendered README and generated Rust API docs against the same package version and commit. | No separate documentation deployment workflow exists. The Python package links readers to the GitHub repository; docs.rs output is not part of the candidate bundle. |
+
+The release workflow currently assembles an immutable, checksummed candidate
+from exact successful `main` CI and performance evidence. Public uploads,
+package ownership changes, GitHub Releases, and documentation-site deployment
+are separate actions and are not enabled by that workflow.
+
+## Release status snapshot (2026-10-18; branch CI run 39115660595)
+
+No release candidate bundle or version tag exists. Remote `main` remains
+[`025caf5b2f855c6a04a29692fba731e944d06559`](https://github.com/appunni-m/uvicorn-rs/commit/025caf5b2f855c6a04a29692fba731e944d06559).
+At the time of CI run #195, the preparation branch
+[`codex/h3-native-open-upload-peer-stop`](https://github.com/appunni-m/uvicorn-rs/tree/codex/h3-native-open-upload-peer-stop)
+was at [`5df87f191abe3a16a393fcca980017e15178b70a`](https://github.com/appunni-m/uvicorn-rs/commit/5df87f191abe3a16a393fcca980017e15178b70a).
+Its exact-commit CI
+[39115660595](https://github.com/appunni-m/uvicorn-rs/actions/runs/39115660595)
+completed successfully across all nine jobs: Rust quality/lints/docs, the Rust
+1.85 compile, native framework composition, installed-wheel public parity,
+Python 3.9, and package artifact jobs. The unified coverage matrix passed
+757/757 cases (543 ASGI and 214 native), with three repeats of each matrix,
+9,219/9,219 source regions, and 6,823/6,823 executable lines. Its
+[coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39115660595/artifacts/12133981629)
+still records `mcp_status=awaiting_query`; Coverage-MCP review remains open.
+
+This branch run is not eligible for candidate assembly: the release workflow
+requires successful complete CI on `main` at the exact tagged commit. The
+latest complete multi-system performance evidence is from an earlier source
+revision and is not a passing exact-head artifact. A focused exact-source
+FastAPI upload run passed its response and shutdown checks but was invalid for
+timing: the retry accepted 7/20 samples but contained only one raw matched
+repetition per loop, below the required three. The summary also rejected those
+pairs because the Node.js executable was not fingerprinted. The benchmark
+runner now hashes that executable for future runs; the current reports remain
+unqualified. The checked-in performance decision scopes `uvicorn-rs-py` as a
+compatibility path without a general speed claim; exact-source multi-system
+evidence is still required by the candidate verifier. The exact-source unified
+coverage report also needs a Coverage-MCP review.
+
+The standalone Rust archive remains blocked by the external package dependency
+path for the vendored H3 framing correction; see the
+[package-consumer investigation](#standalone-rust-archive-h3-patch).
+Read-only Cargo registry lookups on 2026-10-18 returned no `uvicorn-rs` or
+`native-app-contract` result, and the official PyPI Simple index returned no
+distribution for `uvicorn-rs-py`. Recheck exact package
+identity and ownership immediately before any first upload; these lookups do
+not create a release candidate. No Cargo or PyPI publication or
+documentation-site deployment was initiated as part of this preparation.
+
+### Previous release status snapshot (2026-10-18; exact-head run 39107767728)
 
 No release candidate bundle or tag is established. Current `main` is
 [`025caf5b2f855c6a04a29692fba731e944d06559`](https://github.com/appunni-m/uvicorn-rs/commit/025caf5b2f855c6a04a29692fba731e944d06559);
@@ -878,14 +935,13 @@ hardcode the install version.
 
 ## Assemble an immutable tagged candidate
 
-First commit the complete source, input matrix, workflows, examples and
-packaging metadata together. The current worktree adds both Rust library
-crates to the candidate bundle, binds their source and dependency metadata to
-the build evidence, and locally verifies their archives with Rust 1.85.0;
-hosted validation of these changes is still pending. Require a clean checkout
-and successful complete
-`CI` on `main` for that exact commit. A maintainer can then request candidate
-assembly by pushing an annotated `vMAJOR.MINOR.PATCH` tag for that commit.
+Commit the complete source, input matrix, workflows, examples and packaging
+metadata together. The current preparation branch is not `main`; its status and
+remaining gates are listed in the snapshot above. Branch CI and local archive
+inspection are not substitutes for successful complete `CI` on `main` at the
+exact clean release commit. Only after that commit and the candidate evidence
+gates pass may a maintainer request assembly by pushing an annotated
+`vMAJOR.MINOR.PATCH` tag for that commit.
 
 [Release candidate](../.github/workflows/release.yml) follows the immutable
 artifact/evidence pattern used by `fontdone` and `image-slash-star`. It gathers

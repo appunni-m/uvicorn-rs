@@ -2,6 +2,49 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Focused exact-source FastAPI upload attempts (Ubuntu x86-64; 2026-10-18)
+
+The authorized Ubuntu host ran the `fastapi-upload-1m-write-1k` workload on
+exact source commit
+[`5df87f191abe3a16a393fcca980017e15178b70a`](https://github.com/appunni-m/uvicorn-rs/commit/5df87f191abe3a16a393fcca980017e15178b70a).
+It sent 1 MiB request bodies in 1 KiB client chunks at concurrency 8, with five
+5-second repetitions and a 1-second warmup. The four compared configurations
+were Uvicorn and `uvicorn-rs` on asyncio and uvloop. The host was an AMD Ryzen
+5 2600X with 12 logical CPUs; both used CPython 3.12.13, FastAPI 0.142.4,
+Uvicorn 0.54.0, uvloop 0.23.0, and the Node.js 22.15.0 HTTP/1.1 client.
+
+Both attempts passed all 20 response and server-shutdown checks, with no
+request failures. In the first attempt, unrelated host activity rejected
+18/20 timings. A retry began after a preflight sample showed 92% CPU idle; the
+timing guard accepted 7/20 rows and rejected 13 for unrelated activity. That
+retry contains one raw same-repetition valid pair per loop (asyncio repetition
+5 and uvloop repetition 3), below the required three pairs per loop.
+
+The summary validator also rejected those two pairs because the Node.js client
+binary was not fingerprinted (`client_sha256_before` and `client_sha256_after`
+are empty). The Node client script is included in the source fingerprint and
+Node 22.15.0 is recorded, but the executable identity was missing. The local
+benchmark runner has now been changed to hash the Node executable on future
+runs; these reports predate that change and remain unqualified. Therefore this
+work does not provide a throughput or latency comparison and does not identify
+the cause of the previously observed Rust CPU excess. Host
+`perf_event_paranoid=4` also prevents the available on-CPU call-stack profiler
+from resolving Rust function costs.
+
+These focused diagnostics are not the multi-system release matrix. The ignored
+raw reports are
+[`first attempt`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-5df-node22.json)
+(SHA-256 `3d615a1d4f7e89786c116466be13a58fcf0ed6081803907406671388d14e1ad0`)
+and
+[`timing retry`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-5df-node22-retry2.json)
+(SHA-256 `1befc73b9aa636660f850ea51517d4fca3da6d8e21c50536e2f65ad22699956f`).
+Both record source fingerprint
+`befff8ef619b18b70582d8714cd61a660496133c975111e7f0b88993da46f092` and
+normal native extension SHA-256
+`7136e0edaf84b0900300c0e38bcb8bf8efa68fd3a7cfb13bf5e2f69a81fffa73`.
+Keep both results classified as `not_proven`; do not use them to claim a
+speedup or regression ratio.
+
 ## Latest hosted multi-system matrix (run 39100156717; source 025caf5)
 
 The [ASGI performance matrix run 39100156717](https://github.com/appunni-m/uvicorn-rs/actions/runs/39100156717)
@@ -60,10 +103,12 @@ support a general Python-ASGI speed claim. The checked-in decision remains
 `scope_revised`: Python ASGI mode is a compatibility path; performance claims
 must target the Python-free Rust-native composition.
 
-This report predates current branch commit `dd6ed00f551c02196544ae9452c7b0747452a422`;
-it is not exact-current-source performance evidence. Current-head CI is run
-[39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
-and is tracked separately from this benchmark.
+This report predates source commit
+`5df87f191abe3a16a393fcca980017e15178b70a` and the subsequent focused
+benchmark tooling update; it is not evidence for that source revision or the
+updated tooling. CI run
+[39115660595](https://github.com/appunni-m/uvicorn-rs/actions/runs/39115660595)
+passed, but it is tracked separately from this older multi-system benchmark.
 
 ### Focused exact-source upload recheck (Ubuntu x86-64; 2026-10-18)
 

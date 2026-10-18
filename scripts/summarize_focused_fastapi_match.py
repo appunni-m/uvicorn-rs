@@ -135,6 +135,9 @@ def summarize(report: dict[str, Any], workload: str) -> tuple[dict[str, Any], st
         metrics: dict[str, Any] = {}
         for name, (label, required) in METRICS.items():
             pairs = [(reference_rows[n].get(name), candidate_rows[n].get(name)) for n in matching]
+            if not pairs:
+                metrics[name] = {"label": label, "reference": None, "rust": None}
+                continue
             if not all(all(finite_number(value) for value in pair) for pair in pairs):
                 metrics[name] = {"label": label, "reference": None, "rust": None}
                 if required and matching:
