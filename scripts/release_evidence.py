@@ -187,14 +187,21 @@ def license_contract() -> None:
             raise ValueError(f"empty license file: {name}")
     for crate_name, directory in CRATE_DIRS.items():
         manifest = tomllib.loads((directory / "Cargo.toml").read_text(encoding="utf-8"))["package"]
-        if manifest.get("license") != LICENSE_EXPRESSION or manifest.get("publish") is False:
-            raise ValueError(f"{crate_name} must have the shared license and be publishable")
+        expected_license = CRATE_LICENSE_EXPRESSIONS[crate_name]
+        expected_license_files = CRATE_LICENSE_FILES[crate_name]
+        if manifest.get("license") != expected_license or manifest.get("publish") is False:
+            raise ValueError(
+                f"{crate_name} must declare license {expected_license!r} and be publishable"
+            )
         if not manifest.get("readme"):
             raise ValueError(f"{crate_name} must declare its packaged README")
-        for name in LICENSES:
+        for name in expected_license_files:
             local = directory / name
-            if not local.is_file() or local.read_bytes() != (ROOT / name).read_bytes():
-                raise ValueError(f"{crate_name} license copy differs from the repository: {name}")
+            if not local.is_file() or not local.read_bytes().strip():
+                raise ValueError(f"{crate_name} is missing its declared license file: {name}")
+            if crate_name in {"native-app-contract", "uvicorn-rs"}:
+                if local.read_bytes() != (ROOT / name).read_bytes():
+                    raise ValueError(f"{crate_name} license copy differs from the repository: {name}")
 
 
 def safe_member(name: str, *, allowed_dirs: frozenset[str] = frozenset()) -> str:
