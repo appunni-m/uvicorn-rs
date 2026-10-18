@@ -24,7 +24,40 @@ from exact successful `main` CI and performance evidence. Public uploads,
 package ownership changes, GitHub Releases, and documentation-site deployment
 are separate actions and are not enabled by that workflow.
 
-## Release status snapshot (2026-10-18; branch CI run 39115660595)
+## Current release status snapshot (2026-10-18; branch CI run 39123565782)
+
+No release candidate bundle or version tag exists. Remote `main` remains
+[`025caf5b2f855c6a04a29692fba731e944d06559`](https://github.com/appunni-m/uvicorn-rs/commit/025caf5b2f855c6a04a29692fba731e944d06559).
+The preparation branch is at
+[`5e2ed84b604e09ef327ed75b9af8cf566149b550`](https://github.com/appunni-m/uvicorn-rs/commit/5e2ed84b604e09ef327ed75b9af8cf566149b550).
+Its exact-commit CI
+[39123565782](https://github.com/appunni-m/uvicorn-rs/actions/runs/39123565782)
+is still running the three-pass unified parity and coverage matrix. The Rust
+minimum-version compile, pinned native FastAPI-RS composition, installed-wheel
+public parity, and Rust quality/API documentation jobs have passed. CI has
+reported no failed job; the unified matrix is the remaining active job.
+
+The prior benchmark retry was discarded because it imported `uvicorn_rs` and
+its native extension from another Git checkout than the source commit named in
+the report. Commit `5e2ed84` adds a source-identity guard that rejects this
+configuration. A corrected exact-source run on Ubuntu x86-64 then qualified
+four matched asyncio pairs and five matched uvloop pairs for one stock FastAPI
+upload workload. Rust throughput was 0.854x Uvicorn with asyncio and 1.159x
+with uvloop; server CPU per request was higher in both cases. This is mixed,
+single-workload evidence, not a general performance pass. The exact workload,
+measurements, exclusions, and report hashes are in the
+[benchmark record](benchmark-status.md#corrected-exact-source-matched-run-commit-5e2ed84b-ubuntu-x86-64).
+
+Release readiness remains blocked on independent gates: CI must pass on the
+exact `main` commit selected for a tag; the matching coverage report needs its
+Coverage-MCP review; the complete exact-source multi-system performance gate
+has not passed; and a clean downstream consumer must verify the Rust crate's
+H3 framing behavior without the workspace-only Cargo patch. Cargo and PyPI
+publication jobs and a documentation deployment workflow are not configured.
+No package, tag, GitHub release, or documentation deployment has been
+published.
+
+### Previous release status snapshot (2026-10-18; branch CI run 39115660595)
 
 No release candidate bundle or version tag exists. Remote `main` remains
 [`025caf5b2f855c6a04a29692fba731e944d06559`](https://github.com/appunni-m/uvicorn-rs/commit/025caf5b2f855c6a04a29692fba731e944d06559).

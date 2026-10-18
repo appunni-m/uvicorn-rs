@@ -69,6 +69,66 @@ normal native extension SHA-256
 Keep both results classified as `not_proven`; do not use them to claim a
 speedup or regression ratio.
 
+### Corrected exact-source matched run (commit `5e2ed84b`; Ubuntu x86-64)
+
+The benchmark harness now records the imported Python package root and fails
+if it resolves under a different Git checkout than the measured source. The
+ten-repetition follow-up ran the stock `examples.bench_fastapi` FastAPI,
+Starlette, and Pydantic stack only; it did not use FastAPI-RS or Starlette-RS.
+It sent a 1 MiB request body in 1 KiB client writes at concurrency 8, with a
+1-second warmup and 5-second samples. The host was an AMD Ryzen 5 2600X with
+12 logical CPUs. The environment used CPython 3.12.13, FastAPI 0.142.4,
+Starlette 1.7.0, Pydantic 2.13.5, Uvicorn 0.54.0, uvloop 0.23.0,
+httptools 0.8.0, and Node.js 22.15.0.
+
+All 40 requests and server lifecycle checks passed. Thirteen of 40 timing rows
+were excluded by the unrelated-host-CPU guard; the remaining rows include
+four matched asyncio repetitions and five matched uvloop repetitions, both
+above the minimum of three. The worktree was clean, source and binary
+identities remained stable, and Python plus the native extension loaded from
+the exact measured worktree. Native extension SHA-256 was
+`7136e0edaf84b0900300c0e38bcb8bf8efa68fd3a7cfb13bf5e2f69a81fffa73`; the
+Node executable SHA-256 was
+`c43f3f73f6917481d2364daf7b7bf8c4fc4a7643580b4626f13f003131ec8716`.
+
+Metrics below are medians over the valid matched repetitions. Throughput ratio
+is the median of the per-repetition Rust/Uvicorn ratios. Each pair compares the
+same event loop and workload; do not compare the asyncio and uvloop columns as
+one pooled result.
+
+| Metric (Uvicorn / uvicorn-rs) | asyncio (4 matched) | uvloop (5 matched) |
+| --- | ---: | ---: |
+| Throughput, requests/s (Rust/Uvicorn ratio) | 963.5 / 812.4 (0.854×) | 764.7 / 935.3 (1.159×) |
+| p50 latency, ms | 7.86 / 9.64 | 10.19 / 8.42 |
+| p95 latency, ms | 12.43 / 13.07 | 14.62 / 12.22 |
+| p99 latency, ms | 14.59 / 14.91 | 16.59 / 14.55 |
+| Server CPU, µs/request | 956 / 2,007 | 1,284 / 1,626 |
+| Server peak RSS, MiB | 54.5 / 57.4 | 56.3 / 61.3 |
+| Client CPU, µs/request | 1,071 / 1,056 | 1,160 / 1,002 |
+| Client peak RSS, MiB | 98.4 / 95.6 | 96.9 / 96.6 |
+
+On this workload, uvicorn-rs with uvloop had 15.9% higher throughput and lower
+latency percentiles, at 27% more server CPU and about 5 MiB more peak server
+RSS. With asyncio, uvicorn-rs had 14.6% lower throughput, higher latency, and
+about 2.1× server CPU. This is a qualified result for one upload workload on
+one x86-64 host, not evidence of a general speedup or the complete release
+performance gate. The ignored [raw report](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-5e2ed84-node22-retry5.json)
+has SHA-256 `53f135e7ba23380e24972767071a38b14c47952d01ce67f5df076de9c6448e59`;
+the [matched summary](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-5e2ed84-node22-retry5-summary/summary.json)
+has SHA-256 `1f73ea32c8b210ac406c3108084575185c2d9c2b8edfc97391d3869ee44672f8`.
+
+A focused attempt to reproduce the historical x86-64
+`fastapi-request-upload` timeout (1 MiB body, 64 KiB client writes, concurrency
+64, uvicorn-rs with uvloop) did not start. Three fresh host preflights on the
+exact `5e2ed84` worktree rejected timing. The first recorded unrelated
+aggregate CPU of 109.6–152.0%, including a Python process using roughly
+95–112% of one CPU; the third recorded 121.6–137.9%. The second also rejected
+for aggregate activity over 100% and a process over 25% across consecutive
+intervals. The receipts are ignored files in the remote worktree under
+`target/benchmark-diagnostics/2026-10-18/`; they are not rankable benchmark
+rows. No process was stopped. Retry only this workload after the host passes
+preflight; these attempts give no evidence about server behavior.
+
 ## Latest hosted multi-system matrix (run 39100156717; source 025caf5)
 
 The [ASGI performance matrix run 39100156717](https://github.com/appunni-m/uvicorn-rs/actions/runs/39100156717)
