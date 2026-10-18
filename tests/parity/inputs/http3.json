@@ -1910,6 +1910,38 @@
       }
     },
     {
+      "case_id": "http3.post-first-upload-response-with-queued-chunks",
+      "profile": "http3",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "request": {
+        "method": "POST",
+        "path": "/read-first-upload-delayed-response?from=h3-queued-chunks",
+        "headers": [],
+        "body_base64": "MDEyMzQ1Njc4OWFiY2RlZg==",
+        "body_chunks_base64": [
+          "MA==",
+          "MQ==",
+          "Mg==",
+          "Mw==",
+          "NA==",
+          "NQ==",
+          "Ng==",
+          "Nw==",
+          "OA==",
+          "OQ==",
+          "YQ==",
+          "Yg==",
+          "Yw==",
+          "ZA==",
+          "ZQ==",
+          "Zg=="
+        ]
+      }
+    },
+    {
       "case_id": "http3.post-empty-data-frame-before-body",
       "profile": "http3",
       "operation": "http.request-upload",

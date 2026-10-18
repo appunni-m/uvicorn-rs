@@ -942,11 +942,16 @@ async def _app_impl(scope, receive, send):
         _record("http.body-pump.app-response-finished")
         return
 
-    if path == "/read-first-upload":
+    if path in {"/read-first-upload", "/read-first-upload-delayed-response"}:
         # Consume exactly one ASGI request event, then stop reading. The body
         # returned by the server may combine wire chunks differently, so the
         # observation is deliberately independent of the chunk boundary.
         await receive()
+        if path == "/read-first-upload-delayed-response":
+            # Keep the ASGI receiver alive while the HTTP/3 body pump fills its
+            # bounded request queue, then finish the response without reading
+            # the rest of the upload.
+            await asyncio.sleep(0.1)
         await _respond(
             send,
             b"read-once",
