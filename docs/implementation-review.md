@@ -54,10 +54,13 @@ Its public parity, Rust quality/MSRV, and native FastAPI composition jobs also
 passed. Linux x86-64 completed source archive rebuild, Python-free Rust
 archive packaging, and full public parity on the candidate wheel. Windows and
 macOS built and installed their ABI3 wheels but skipped source and Rust archive
-consumers. The Python-floor job is queued. Exact-head run
+consumers. The Python-floor job also passed. Exact-head run
 [39082487352](https://github.com/appunni-m/uvicorn-rs/actions/runs/39082487352)
-on `8161db582` remains queued behind run 39081302848. Exact-head hosted
-verification and release acceptance are not yet green.
+on `8161db582` is in progress. Documentation evidence commit `b45d7446b` has
+run [39084568469](https://github.com/appunni-m/uvicorn-rs/actions/runs/39084568469)
+pending. This documentation follow-up records the completed run and will be
+validated on its own exact commit after push. Exact-head hosted verification
+and release acceptance are not yet green.
 
 ## Latest completed historical evidence
 

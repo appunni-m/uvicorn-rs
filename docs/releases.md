@@ -8,31 +8,36 @@ Rust crate archives (`native-app-contract` and `uvicorn-rs`). The native
 crates are library packages; this repository does not currently provide a
 standalone native executable.
 
-## Release status snapshot (2026-10-18; latest hosted CI run 39081302848)
+## Release status snapshot (2026-10-18; exact-source run 39082487352)
 
 No release candidate bundle or tag is established. Hosted CI run
 [39081302848](https://github.com/appunni-m/uvicorn-rs/actions/runs/39081302848)
-on feature-branch commit
+completed successfully on feature-branch commit
 [`0c68cecfb89433703639006065ef51935b1c8018`](https://github.com/appunni-m/uvicorn-rs/commit/0c68cecfb89433703639006065ef51935b1c8018)
-is still in progress. Installed-wheel public parity, the three-repeat unified
+All nine jobs passed: installed-wheel public parity, the three-repeat unified
 parity/fault-coverage job, Rust formatting/lints/features/docs, Rust 1.85
-MSRV, and pinned native FastAPI-RS composition have passed. Its coverage
-artifact is available; Coverage-MCP review remains outstanding. Linux and
-Windows package jobs completed. Linux x86-64 passed source archive rebuild,
-Python-free Rust archive packaging, and complete public parity on the
-candidate wheel. Windows x86-64 built and installed its ABI3 wheel but skipped
-the source and Rust archive consumers. macOS ARM64 also produced its ABI3
-wheel only. The Python-floor job is queued. Exact-head run
+MSRV, pinned native FastAPI-RS composition, platform packaging, and Python
+floor. Its coverage artifact is available; Coverage-MCP review remains
+outstanding. Linux x86-64 passed source archive rebuild, Python-free Rust
+archive packaging, and complete public parity on the candidate wheel. Windows
+and macOS built and installed ABI3 wheels but skipped source and Rust archive
+consumer checks. This successful run is not exact-current-source evidence.
+
+Exact-head run
 [39082487352](https://github.com/appunni-m/uvicorn-rs/actions/runs/39082487352)
-for `8161db582` is queued behind run 39081302848.
+for `8161db582` is in progress. The preceding documentation snapshot at
+`b45d7446b750029867ad44f3e5950bdb4a630e4b` has CI run
+[39084568469](https://github.com/appunni-m/uvicorn-rs/actions/runs/39084568469)
+pending. This follow-up records the completion of run 39081302848 and will
+receive its own exact-commit CI run after the push.
 
 Packaging evidence on run 39081302848 is not yet a release bundle. The run is
 also on a feature branch, not `main`; the release workflow selects successful
 CI for the exact commit on `main`. Current `main` is
 [`36c1c92bfd2cf8ce960fc468314879b2c3c7590b`](https://github.com/appunni-m/uvicorn-rs/commit/36c1c92bfd2cf8ce960fc468314879b2c3c7590b).
-This checkout contains changes newer than that hosted run, so run 39081302848
-is not exact-source evidence for the current source. Exact-commit hosted checks
-are still required.
+This checkout contains changes newer than run 39081302848, so that successful
+run is not exact-source evidence for the current source. Exact-commit hosted
+checks are still required.
 
 The full performance gate remains open. The latest full three-system matrix,
 [run 39036702600](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600),
