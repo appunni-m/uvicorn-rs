@@ -47,11 +47,15 @@ jobs:
       - name: Check formatting and lints
         run: |
           cargo fmt --all -- --check
-          cargo clippy --workspace --lib --all-features --locked -- -D warnings
+          # Keep strict Clippy on project-owned Rust crates. The maintained H3
+          # forks retain upstream code with an existing Clippy baseline; Cargo
+          # still compiles them as dependencies, and their protocol behavior is
+          # checked by the focused black-box parity cases.
+          cargo clippy --workspace --exclude uvicorn-rs-h3 --exclude uvicorn-rs-h3-quinn --no-deps --lib --all-features --locked -- -D warnings
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
-            cargo clippy -p uvicorn-rs --all-targets --all-features --locked -- -D warnings
+            cargo clippy -p uvicorn-rs --no-deps --all-targets --all-features --locked -- -D warnings
           cargo fmt --manifest-path tools/http3-probe/Cargo.toml --all -- --check
-          cargo clippy --manifest-path tools/http3-probe/Cargo.toml --all-targets --all-features --locked -- -D warnings
+          cargo clippy --manifest-path tools/http3-probe/Cargo.toml --no-deps --all-targets --all-features --locked -- -D warnings
       - name: Compile feature modes (behavior is checked through live ASGI cases)
         run: |
           cargo check --lib --locked
@@ -470,18 +474,22 @@ jobs:
           test "${#sdists[@]}" -eq 1
           python scripts/check_sdist_build.py --sdist "${sdists[0]}" --output-dir target/sdist-consumer
           cp target/sdist-consumer/result.json dist/consumer-sdist.json
-      - name: Package the Python-free server and shared lifecycle crates
+      - name: Package the Python-free server, shared lifecycle, and HTTP/3 crates
         if: runner.os == 'Linux'
         env:
           CARGO_TARGET_DIR: target/native-package
         run: |
           set -euo pipefail
           cargo package -p native-app-contract --no-verify --locked --offline
+          cargo package -p uvicorn-rs-h3 --no-verify --locked --offline
+          cargo package -p uvicorn-rs-h3-quinn --no-verify --locked --offline \
+            --config 'patch.crates-io.uvicorn-rs-h3.path="crates/uvicorn-rs-h3"'
           cargo package -p uvicorn-rs --no-verify --locked --offline \
             --config 'patch.crates-io.native-app-contract.path="crates/native-app-contract"' \
-            --config 'patch.crates-io.h3.path="vendor/h3"'
+            --config 'patch.crates-io.uvicorn-rs-h3.path="crates/uvicorn-rs-h3"' \
+            --config 'patch.crates-io.uvicorn-rs-h3-quinn.path="crates/uvicorn-rs-h3-quinn"'
           packages=(target/native-package/package/*.crate)
-          test "${#packages[@]}" -eq 2
+          test "${#packages[@]}" -eq 4
           cp "${packages[@]}" dist/
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         if: runner.os == 'Linux'

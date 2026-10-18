@@ -1,0 +1,51 @@
+[package]
+name = "uvicorn-rs-h3"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+authors = [
+    "Sean McArthur <sean@seanmonstar.com>",
+    "Jean-Christophe BEGUE <jc.begue@pm.me>",
+    "Appunni M",
+]
+license = "MIT"
+description = "Maintained HTTP/3 protocol fork used by uvicorn-rs"
+documentation = "https://docs.rs/uvicorn-rs-h3"
+repository = "https://github.com/appunni-m/uvicorn-rs"
+readme = "README.md"
+keywords = ["http3", "quic", "h3"]
+categories = [
+    "network-programming",
+    "web-programming::http-client",
+    "web-programming::http-server",
+]
+exclude = ["src/tests/**", "UPSTREAM-README.md"]
+
+[lib]
+name = "h3"
+
+[features]
+i-implement-a-third-party-backend-and-opt-into-breaking-changes = []
+tracing = ["dep:tracing"]
+
+[dependencies]
+bytes = "1"
+fastrand = "2.0.1"
+futures-util = { version = "0.3", default-features = false, features = ["io"] }
+http = "1"
+pin-project-lite = { version = "0.2", default-features = false }
+tokio = { version = "1", features = ["sync"] }
+tracing = { version = "0.1.40", optional = true }
+
+[dev-dependencies]
+assert_matches = "1.5.0"
+futures = "0.3.28"
+futures-util = { version = "0.3", default-features = false, features = ["io"] }
+proptest = "1"
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls", "ring"] }
+quinn-proto = { version = "0.11", default-features = false }
+rcgen = "0.13"
+rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std"] }
+tokio = { version = "1", features = ["rt", "macros", "io-util", "io-std"] }
+tokio-util = "0.7.9"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi", "env-filter", "time", "tracing-log"] }

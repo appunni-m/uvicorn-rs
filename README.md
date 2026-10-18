@@ -193,6 +193,7 @@ the license texts retain the original Uvicorn and Hypercorn notices.
 
 ## Documentation map
 
+- [Documentation site](https://appunni-m.github.io/uvicorn-rs/) (available after the Pages workflow is enabled)
 - [Architecture decision record](docs/adr/0001-runtime-and-asyncio-bridge.md)
 - [Rust-native service contract ADR](docs/adr/0003-rust-native-service-contract.md)
 - [Architecture and memory ownership](docs/architecture.md)

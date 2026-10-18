@@ -1,18 +1,22 @@
-# HTTP/3 transport adapter
+# HTTP/3 third-party source notices
 
-The bidirectional stream buffering and transport error conversions in
-`src/http3/transport.rs` are adapted from h3-quinn 0.0.10, maintained by the h3
-authors at <https://github.com/hyperium/h3>.
+The HTTP/3 protocol and Quinn transport are separate registry packages:
 
-The reviewed upstream source is `h3-quinn/src/lib.rs` at commit
-`2dc3412bdf6083451920d5bfd7a9484d054c1859`. The crates.io archive SHA-256 is
-`8b2e732c8d91a74731663ac8479ab505042fbf547b9a207213ab7fbcbfc4f8b4`.
-The local adapter uses public h3 and Quinn APIs, adds a connection-scoped
-registry of owned send-stream stop futures, and delegates unidirectional
-streams to the unmodified h3-quinn dependency. Its receive wrapper polls
-Quinn's cancel-safe `read_chunk` future directly.
+- [`uvicorn-rs-h3`](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs-h3/README.md) is based on the MIT-licensed
+  `h3` 0.0.8 source from [hyperium/h3](https://github.com/hyperium/h3). The
+  upstream source README and license are preserved in that package. The fork
+  adds the receive-path corrections described in its README.
+- [`uvicorn-rs-h3-quinn`](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs-h3-quinn/README.md) is based on the
+  MIT-licensed `h3-quinn` 0.0.10 source from
+  [hyperium/h3](https://github.com/hyperium/h3). Its upstream source README and
+  license are preserved in that package. The fork uses `uvicorn-rs-h3` so both
+  crates share the same H3 protocol types.
+- `src/http3/transport.rs` adapts the Quinn stream buffering and error
+  conversion approach from `h3-quinn` 0.0.10. It adds request-scoped peer-stop
+  observation and uses the Quinn read future directly for cancellation-safe
+  request-body reads.
 
-The following upstream license applies to those adapted portions:
+The adapted transport code is available under the MIT license:
 
 Copyright (c) 2020 h3 authors
 
@@ -36,6 +40,6 @@ TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
 PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
 SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.

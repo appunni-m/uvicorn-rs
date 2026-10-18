@@ -2,11 +2,12 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-The release candidate is built from a reviewed commit. The current candidate
-workflow packages three `uvicorn-rs-py` wheels, an sdist, and two Python-free
-Rust crate archives (`native-app-contract` and `uvicorn-rs`). The native
-crates are library packages; this repository does not currently provide a
-standalone native executable.
+The release candidate is built from a reviewed commit. The candidate workflow
+packages three `uvicorn-rs-py` wheels, an sdist, and four Python-free Rust
+crate archives: `native-app-contract`, `uvicorn-rs-h3`,
+`uvicorn-rs-h3-quinn`, and `uvicorn-rs`. The native crates are library
+packages; this repository does not currently provide a standalone native
+executable.
 
 ## Distribution channels
 
@@ -15,9 +16,9 @@ of them. Each channel has a separate package identity and release boundary.
 
 | Channel | Package or surface | Candidate artifact and order | Publication state |
 |---|---|---|---|
-| Cargo | `native-app-contract` and `uvicorn-rs`, both `0.1.0` | Two `.crate` archives. Publish `native-app-contract` before `uvicorn-rs`, which depends on its registry version. | No Cargo publish job is configured. The `uvicorn-rs` archive is blocked until the H3 framing correction works for a clean downstream consumer without the workspace patch. |
-| PyPI | Optional `uvicorn-rs-py` compatibility client, `0.1.0`, Python `>=3.9` | Three ABI3 wheels and one source distribution, each checked by the candidate workflow. The root Cargo package is marked `publish = false`; it is the PyPI client's extension build, not a crates.io package. | Included in first-release preparation. No PyPI publish job is configured. |
-| Documentation | Versioned `README.md` and `docs/`; crate API references point to docs.rs | Documentation changes ship in the reviewed Git commit. Check the rendered README and generated Rust API docs against the same package version and commit. | No separate documentation deployment workflow exists. The Python package links readers to the GitHub repository; docs.rs output is not part of the candidate bundle. |
+| Cargo | `native-app-contract`, `uvicorn-rs-h3`, `uvicorn-rs-h3-quinn`, and `uvicorn-rs`, all `0.1.0` | Four `.crate` archives from the verified candidate. Publish the H3 protocol crate before its Quinn adapter, then `uvicorn-rs` after its registry dependencies are available. | The OIDC workflow is prepared for later releases. Initial crate creation needs one-time maintainer bootstrapping for the four package names. Cargo uploads remain blocked until the exact archive passes the standalone H3 consumer gate. |
+| PyPI | Optional `uvicorn-rs-py` compatibility client, `0.1.0`, Python `>=3.9` | Three ABI3 wheels and one source distribution from the same candidate. The root Cargo package is marked `publish = false`; it is the PyPI client's extension build, not a crates.io package. | A manual, gated workflow is prepared. It checks exact filenames and SHA-256 digests before using PyPI Trusted Publishing. |
+| Documentation | Versioned `README.md` and `docs/`; crate API references point to docs.rs | A hash-locked MkDocs site is built and link-checked separately from package publication. | A separate build/deploy workflow is prepared. It deploys only validated `main` builds; GitHub Pages must be configured to use Actions. |
 
 The release workflow currently assembles an immutable, checksummed candidate
 from exact successful `main` CI and performance evidence. Public uploads,
@@ -38,62 +39,214 @@ as the model for future publication automation:
    already released and must not be uploaded again.
 4. Publish the PyPI wheel and source archive through a PyPI Trusted Publisher.
    Keep registry credentials out of repository secrets and artifacts.
-5. Create the GitHub Release only after registry publication succeeds, and
-   attach the checksums and published artifacts with provenance.
+5. If a GitHub Release is desired, create it only after registry publication
+   succeeds and attach the verified checksums and artifacts.
 
-The existing `Release candidate` workflow implements the first two stages as
-candidate assembly only. It intentionally grants no publication or repository
-write permissions. Before adding publication jobs, the extracted
-`uvicorn-rs` crate must pass the malformed H3 frame case as an independent
-registry consumer; the workspace-only H3 patch does not satisfy that check.
-The repository also needs exact-main performance and unified-coverage evidence,
-and protected crates.io/PyPI publishing environments. The Cargo order is
-`native-app-contract` followed by `uvicorn-rs`.
+The `Release candidate` workflow implements candidate assembly without
+publication permissions. The separate `Publish packages` workflow is manual,
+defaults to `prepare-only`, verifies an immutable tag and the exact successful
+candidate artifact, and requires the typed confirmation `PUBLISH vX.Y.Z` for
+registry publication. Publisher jobs receive OIDC permission only when they
+run. Registry versions are immutable: an existing version is skipped only
+when its published checksums match the candidate exactly; partial or different
+uploads stop the workflow. Cargo publishes `native-app-contract`,
+`uvicorn-rs-h3`, `uvicorn-rs-h3-quinn`, and `uvicorn-rs` in dependency order.
+
+Cargo publication remains gated. The extracted `uvicorn-rs` archive must pass
+the malformed H3 frame input as an independent consumer using the published
+`uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` packages. The candidate must carry a
+matching `standalone-h3-consumer.json` receipt for that exact archive, with the
+peer observing `H3_FRAME_ERROR` (`262`) and a healthy follow-up over a fresh
+connection. RFC 9114 §7.1 makes a cleanly truncated final frame a connection
+error, so the failed connection cannot carry the follow-up. The local candidate
+workflow now runs an external consumer against the extracted candidate
+archives and stores that receipt in the candidate bundle. Its manifest has no
+path or workspace patch; Cargo temporarily substitutes the extracted,
+checksum-bound archive roots for the unpublished registry packages. The
+workflow change still needs a clean hosted candidate run before it is release
+evidence. The new package aliases remove dependence on a workspace-only H3
+patch, but they do not replace this black-box consumer check. A PyPI-only
+dispatch does not require that standalone Cargo archive receipt; it still
+requires the exact verified candidate, matching immutable PyPI files, and its
+protected Trusted Publisher. Exact-main performance and unified-coverage
+evidence remain candidate-wide gates. Maintainers must configure protected
+`crates-io` and `pypi` environments plus their Trusted Publishers. The
+publisher and documentation workflows currently exist only in the local
+working tree and have not run in hosted CI; no publisher has run.
+
+### Repository and registry setup
+
+Before enabling a publisher:
+
+1. Protect `main` with required CI, parity/coverage, and documentation checks;
+   restrict creation and mutation of `v*` tags to maintainers.
+2. For PyPI, register a pending Trusted Publisher for the not-yet-created
+   project `uvicorn-rs-py` under the maintainer account. Set owner `appunni-m`,
+   repository `uvicorn-rs`, workflow `publish.yml`, and environment `pypi`.
+   PyPI converts the pending publisher when its first upload creates the
+   project. Follow PyPI's [new-project Trusted Publisher
+   guide](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
+   Do not add a PyPI API token to GitHub secrets.
+3. For crates.io, first confirm that all four crate names are available. Trusted
+   Publishing cannot bootstrap an unpublished crate: after every candidate
+   gate passes, publish the exact reviewed first versions from a clean checkout
+   with short-lived, narrowly scoped maintainer credentials, in dependency
+   order (`native-app-contract`, `uvicorn-rs-h3`, `uvicorn-rs-h3-quinn`, then
+   `uvicorn-rs`). Keep credentials out of
+   GitHub, the repository, logs, and artifacts. Verify each registry checksum
+   and a clean downstream consumer, then configure its Trusted Publisher for
+   owner `appunni-m`, repository `uvicorn-rs`, workflow `publish.yml`, and
+   environment `crates-io`. Later Cargo releases use the OIDC publisher jobs.
+   This one-time bootstrap does not waive the standalone H3 archive receipt or
+   any other candidate gate. See the [crates.io Trusted Publishing setup
+   guide](https://forge.rust-lang.org/infra/docs/trusted-publishing.html), the
+   [crates.io announcement](https://blog.rust-lang.org/2025/07/11/crates-io-development-update-2025-07/),
+   and the [Cargo publishing guide](https://doc.rust-lang.org/cargo/reference/publishing.html).
+4. Create the GitHub `crates-io`, `pypi`, and `github-pages` environments. Add
+   required reviewers to the two package-publishing environments.
+5. Set repository Pages source to **GitHub Actions**. The site URL is
+   `https://appunni-m.github.io/uvicorn-rs/`.
+
+The two reference designs are
+[`pillow-rs` release automation](https://github.com/appunni-m/pillow-rs/blob/main/.github/workflows/release.yml)
+and its
+[separate documentation workflow](https://github.com/appunni-m/pillow-rs/blob/main/.github/workflows/docs.yml).
+The new local workflows are
+[`Release candidate`](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/release.yml),
+[`Publish packages`](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/publish.yml),
+and
+[`Documentation`](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/docs.yml).
 
 For documentation, follow the separate build-and-deploy pattern in
 [`pillow-rs`'s documentation workflow](https://github.com/appunni-m/pillow-rs/blob/main/.github/workflows/docs.yml):
-build and check documentation from the release source before deployment. This
-repository currently publishes versioned Markdown through GitHub and Rust API
-docs through docs.rs; it has no standalone documentation-site workflow. The
-docs.rs pages are generated from the published crate archives, so validate
-them after Cargo publication. Choose and configure a static documentation host
-as a separate release decision.
+build and check documentation from the release source before deployment. The
+`Documentation` workflow builds every maintained page with strict link checks,
+uploads the validated Pages artifact, and deploys only on a `main` push after
+the build job passes. Its workflow currently exists only in the local working
+tree and will not deploy until committed, merged, and GitHub Pages is configured
+for GitHub Actions. The docs.rs pages are generated from the published crate
+archives, so validate them after Cargo publication.
 
 ## First-release execution plan
 
-First-release preparation covers both Rust crates (`native-app-contract` and
-`uvicorn-rs`), the optional Python compatibility distribution
+First-release preparation covers four Rust crates (`native-app-contract`,
+`uvicorn-rs-h3`, `uvicorn-rs-h3-quinn`, and `uvicorn-rs`), the optional Python compatibility distribution
 (`uvicorn-rs-py`), and the repository/API documentation. Preparation does not
 publish packages, create a tag, or deploy a public documentation site.
 
 1. Finish the exact reviewed `main` candidate gate below. Candidate artifacts,
    correctness and coverage evidence, performance acceptance, and maintained
    documentation must identify the same source commit and version.
-2. Resolve the standalone Cargo dependency path for the H3 framing correction.
-   The workspace-only `vendor/h3` patch is not inherited by consumers of the
-   `uvicorn-rs` archive. Verify the extracted archive without that patch before
-   publication. Publish `native-app-contract` before `uvicorn-rs` because the
-   latter depends on the former.
+2. Verify the standalone Cargo dependency path for the H3 framing correction.
+   The maintained `uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` packages now have
+   registry identities, and server manifests refer to them directly. Verify
+   the extracted archive and malformed-frame input before publication. Publish
+   these dependencies before `uvicorn-rs`.
 3. Verify the PyPI wheel and source archive from the candidate commit, including
-   clean installation and the declared Python floor. Configure a protected
-   PyPI Trusted Publisher or document an explicitly approved manual route;
-   registry credentials must not enter the repository.
+   clean installation and the declared Python floor. Configure the protected
+   pending PyPI Trusted Publisher for the not-yet-created project; registry
+   credentials must not enter the repository.
 4. Ship `README.md` and `docs/` with the same reviewed Git revision. Build and
-   inspect docs.rs API documentation for each published crate. A separate
-   documentation website is not configured; select a host only if a standalone
-   site is required.
-5. After review and separate authorization, publish through protected release
-   environments. Verify exact registry versions, installed consumers, source
-   identity, checksums/provenance, and generated API documentation.
+   inspect docs.rs API documentation for each published crate, and deploy the
+   validated MkDocs site through the separate Pages workflow.
+5. Configure the `crates-io` and `pypi` environments and required reviewers.
+   Bootstrap each new crates.io name once from the verified clean candidate,
+   then configure its Trusted Publisher. The PyPI pending publisher can create
+   `uvicorn-rs-py` on first upload. Dispatch `Publish packages` from `main` in
+   `prepare-only` mode first; any publication requires a separate dispatch
+   with the exact tag and typed confirmation after all gates pass.
+6. Configure GitHub Pages to use GitHub Actions. Merge the documentation
+   workflow, then verify its deployed URL and inspect generated docs.rs API
+   pages after the Rust crates are published.
 
 Candidate assembly and each public distribution remain distinct stages. The
 current branch and evidence do not yet satisfy the exact-commit release gates.
 
-## Preparation status snapshot (2026-10-18; branch CI run 39125175964)
+## Current preparation status snapshot (2026-10-18; branch CI run 39133909994)
 
-No release candidate bundle or version tag exists. Remote `main` is
+The latest connected GitHub check found remote `main` at
+[`025caf5b2f855c6a04a29692fba731e944d06559`](https://github.com/appunni-m/uvicorn-rs/commit/025caf5b2f855c6a04a29692fba731e944d06559),
+with branch protection disabled and no required status checks. The
+`v0.1.0` tag and matching GitHub Release do not exist. The preparation branch
+head is [`0b12d28ce8e3e4a64339fe556c8b01705dd90032`](https://github.com/appunni-m/uvicorn-rs/commit/0b12d28ce8e3e4a64339fe556c8b01705dd90032).
+CI run [39133909994](https://github.com/appunni-m/uvicorn-rs/actions/runs/39133909994)
+passed all nine jobs on that commit, including the unified parity/coverage
+gate, Rust 1.85, installed-wheel parity, Python-floor install, and Linux,
+macOS, and Windows package builds. Its retained artifacts include the
+candidate packages, public-parity result, and unified-coverage report.
+
+That CI run validates the clean commit, not the current local worktree. The
+checkout now contains uncommitted source, package, workflow, and documentation
+changes; the release audit rejects packaging from this state. The publisher and
+Pages workflows have not passed hosted CI. The release-candidate workflow also
+cannot use this feature-branch run:
+candidate assembly requires successful CI and performance evidence for the
+exact tagged commit on `main`. There is no tag-triggered candidate bundle yet.
+
+Release blockers remain the unprotected `main` branch, candidate-wide exact-main
+performance and independent Coverage-MCP evidence, the standalone H3 archive
+consumer receipt, publisher environments and Trusted Publisher configuration,
+and Pages configuration. The H3 receipt is required for Cargo publication;
+PyPI publication still depends on the exact verified candidate and its gates.
+The local strict MkDocs build passes, but there has been no hosted docs build or
+deployment. No package, tag, GitHub Release, or documentation site has been
+published.
+
+### Local release-preparation update (2026-10-18; after run 39133909994)
+
+The checkout remains on `codex/h3-native-open-upload-peer-stop` at
+`0b12d28ce8e3e4a64339fe556c8b01705dd90032`, nine commits ahead of the locally
+recorded `origin/main` ref (`025caf5b2f855c6a04a29692fba731e944d06559`). It has
+154 modified, deleted, or untracked file entries (counted with
+`--untracked-files=all`) and is not a release source. The local
+changes split the H3 framing fix into registry-named `uvicorn-rs-h3` and
+`uvicorn-rs-h3-quinn` packages, replacing the server crate's reliance on a
+workspace-only Cargo patch. Those packages have not been published.
+
+Using the Pillow-RS release flow as a model, local candidate assembly remains
+separate from credentialed registry publishing, and the Pages workflow builds
+and validates documentation before deployment. The publisher's final registry
+check now covers the exact checksums for all four Cargo archives and requires
+the corresponding publisher jobs to succeed or be correctly skipped. Changes
+to the root README now trigger the documentation workflow as well as changes
+under `docs/`. Focused local packaging found that the offline Cargo commands
+needed explicit patches for renamed sibling crates. The CI artifact builder,
+build manifest, candidate verifier, and publish-time archive comparisons now
+use the same commands; all four local `.crate` archives packaged successfully
+after that correction.
+
+The standalone consumer is outside the workspace, has its own lockfile, and
+declares only the versioned `uvicorn-rs` registry dependency. A focused local
+run built it from the four extracted `.crate` files, observed
+`H3_FRAME_ERROR` (`262`), then received status 200 and the expected body over a
+new connection. Its diagnostic receipt is marked `source_dirty: true`; it is
+not valid release evidence. The consumer also passed `cargo +1.85.0 check`
+against the local crate sources, and the focused H3 parity case passed earlier
+on this worktree. The strict local MkDocs build passed earlier as well. These
+checks do not validate the workflow edits in hosted CI or a clean candidate.
+
+The strict Rust release audit reports one error because this worktree is dirty.
+Its six review findings are the manual `main`-only publisher trigger, the
+version check delegated to `scripts/check_release_version.py`, and the four
+`cargo publish --no-verify` jobs. The first two are intentional workflow
+choices documented above; each publish job first rebuilds and byte-compares
+the exact candidate archive. The audit does not replace the required clean
+candidate or hosted verification.
+
+Still open: the standalone consumer must pass from a clean exact candidate and
+emit a `source_dirty: false` receipt; exact-source main CI, independent
+Coverage-MCP review, and accepted exact-source performance evidence remain
+absent for this worktree; `main` protection, registry publisher environments
+and identities, and GitHub Pages configuration remain to be verified. No
+candidate, tag, registry upload, GitHub Release, or docs deployment has been
+created.
+
+### Earlier preparation status snapshot (2026-10-18; branch CI run 39125175964)
+
+No release candidate bundle or version tag exists. Remote `main` at the time
+of this recorded CI run was
 [`025caf5b2f855c6a04a29692fba731e944d06559`](https://github.com/appunni-m/uvicorn-rs/commit/025caf5b2f855c6a04a29692fba731e944d06559).
-The preparation branch is at
+The preparation branch at the time of that run was
 [`1c86cdfa615bc57597fa77a120cc17d2f8f0b8f5`](https://github.com/appunni-m/uvicorn-rs/commit/1c86cdfa615bc57597fa77a120cc17d2f8f0b8f5).
 Its exact-commit CI
 [39125175964](https://github.com/appunni-m/uvicorn-rs/actions/runs/39125175964)
@@ -137,10 +290,30 @@ framing behavior without the workspace-only Cargo patch. A focused HTTP/1
 optimization was rejected after it reduced throughput and increased CPU per
 request; it does not change the performance gate. The checked-in performance
 decision scopes `uvicorn-rs-py` as a compatibility path without a general
-speed claim. GitHub reports `main` as unprotected with no required status
-checks. Cargo and PyPI publication jobs and a documentation deployment
-workflow are not configured. No package, tag, GitHub release, or
-documentation deployment has been published.
+speed claim. The last recorded GitHub settings check found no required status
+checks on `main`; the current branch-protection endpoint is not readable by the
+connected GitHub integration, so verify it in repository settings before
+release. A manual Cargo/PyPI publisher and a separate documentation build and
+deployment workflow are prepared on this branch; they are not active on `main`
+until merged, and neither workflow has run. Protected registry environments,
+Trusted Publisher identities, and GitHub Pages configuration remain pending.
+No package, tag, GitHub Release, or documentation deployment has been
+published.
+
+Local documentation QA on the current dirty worktree (2026-10-18) passed with
+`mkdocs build --strict` using the hash-locked `requirements-docs.txt`. The run
+found and corrected four stale internal-link references and a pseudocode fence
+that prevented the following ADR heading from rendering. The generated site
+contains the expected release, coverage-plan, and native-runtime ADR anchors.
+This validates the local documentation tree only; it is not a hosted release
+or deployment result.
+
+A later focused FastAPI `/fixed` comparison on the same dirty branch passed all
+20 response and server-lifecycle checks, but unrelated host CPU activity
+invalidated 18 timing rows. There were zero same-repetition valid pairs for
+both asyncio and uvloop, so it provides no performance acceptance evidence.
+The Node.js client fallback was also near one logical CPU during samples. See
+the [retained benchmark analysis](benchmark-status.md#focused-fastapi-fixed-route-comparison-attempt-linux-x86-64-2026-10-18).
 
 ### Previous release status snapshot (2026-10-18; branch CI run 39115660595)
 
@@ -178,9 +351,12 @@ collector now rejects package imports resolved under another Git checkout, and
 the next run must load the package from the exact worktree. The exact-source unified
 coverage report also needs a Coverage-MCP review.
 
-The standalone Rust archive remains blocked by the external package dependency
-path for the vendored H3 framing correction; see the
-[package-consumer investigation](#standalone-rust-archive-h3-patch).
+The Rust archive now depends on separately named H3 registry packages. Its
+offline packaging commands and clean archive-consumer workflow have been
+corrected, and the local extracted-archive check passed with a dirty-source
+receipt. Cargo publication still requires the same check to pass on a clean
+candidate; see the
+[package-consumer investigation](#standalone-rust-archive-maintained-h3-registry-packages).
 Read-only Cargo registry lookups on 2026-10-18 returned no `uvicorn-rs` or
 `native-app-contract` result, and the official PyPI Simple index returned no
 distribution for `uvicorn-rs-py`. Recheck exact package
@@ -227,7 +403,7 @@ Python-free Rust-native composition.
 
 The standalone Rust crate remains blocked by the external package dependency
 path for the vendored H3 framing correction; see the
-[package-consumer investigation](#standalone-rust-archive-h3-patch). CI
+[package-consumer investigation](#standalone-rust-archive-maintained-h3-registry-packages). CI
 successfully produced the Rust crate archives using a workspace-local Cargo
 patch, but did not build a downstream consumer from the published `uvicorn-rs`
 archive with the registry `h3` dependency and without the workspace patch. The
@@ -238,53 +414,48 @@ accepted performance scope/result, and finish support, deployment, and release
 documentation. The workflows do not publish packages or create GitHub
 releases.
 
-<a id="standalone-rust-archive-h3-patch"></a>
+<a id="standalone-rust-archive-h3-package"></a>
 
-### Standalone Rust archive: H3 patch is workspace-only
+### Standalone Rust archive: maintained H3 registry packages
 
-The root workspace applies `[patch.crates-io] h3 = { path = "vendor/h3" }`,
-while [`crates/uvicorn-rs/Cargo.toml`](../crates/uvicorn-rs/Cargo.toml)
-declares the registry dependency `h3 = "0.0.8"`. That workspace override is
-used when this repository builds and tests its members. It is not a dependency
-that a consumer of the packaged `uvicorn-rs` archive inherits. Cargo's
-[dependency documentation](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
-explains that published crates need registry versions for dependencies; a
-local path-only or Git-only dependency is not a crates.io distribution path.
+The workspace no longer relies on a `[patch.crates-io]` override for HTTP/3.
+The `h3` import aliases the `uvicorn-rs-h3` package, and `h3-quinn` aliases
+`uvicorn-rs-h3-quinn`. Both packages retain the upstream library names, and the
+Quinn adapter depends on the same maintained H3 package. The H3 fork carries
+the fixes for empty DATA frames and truncated DATA payloads; both are licensed
+under the retained upstream MIT terms. Its datagram feature is excluded because
+HTTP/3 datagrams are outside the supported `uvicorn-rs` surface.
 
-This distinction affects protocol behavior. RFC 9114 [Section 7.1](https://www.rfc-editor.org/rfc/rfc9114.html#section-7.1)
+This package identity makes the corrected dependency graph publishable. Cargo
+will rewrite the in-workspace path dependencies to registry versions in each
+archive, so external consumers resolve the maintained packages without a
+workspace patch. The local release draft packages four crates and sequences
+the publication jobs by dependency order. Those workflow changes have not yet
+passed hosted CI, and no package has been published.
+
+RFC 9114 [Section 7.1](https://www.rfc-editor.org/rfc/rfc9114.html#section-7.1)
 requires a cleanly terminated stream with a truncated final frame to cause an
-`H3_FRAME_ERROR` connection error. The vendored H3 source reports an incomplete
-DATA payload at clean stream finish as `UnexpectedEnd`, which the server maps
-to that error. In the published
-[`h3` 0.0.8 frame reader](https://docs.rs/crate/h3/0.0.8/source/src/frame.rs),
-`poll_data` returns `Ok(None)` for `(None, true)` even while the frame still has
-payload remaining. A subsequent `poll_next` can then hit the outstanding-data
-assertion. A previously retained standalone-consumer diagnostic observed the
-required peer close missing and the dependency panic with registry `h3`; the
-same malformed-frame input passed with the workspace patch. This prior
-diagnostic is not an exact-current-archive consumer receipt; the current
-candidate still needs that focused consumer check.
+`H3_FRAME_ERROR` connection error. An earlier standalone-consumer diagnostic
+against registry `h3` 0.0.8 missed the peer error and panicked in the frame
+reader; the same malformed-frame input passed in the workspace with the local
+correction. That diagnostic is the reason for the maintained fork package,
+but it is not evidence for these new crate archives.
 
-On 2026-10-18, upstream `hyperium/h3` revision
-[`43745ad`](https://github.com/hyperium/h3/commit/43745ad87e95b0c035ac9c547aad467303213425)
-was checked and still contains the `Ok(None)` behavior. A local-only patch
-changes that arm to `UnexpectedEnd` and adds the upstream-style
-`poll_data_zero_byte_unexpected_end` regression. Both the implementation and
-regression now carry Duvet citations to RFC 9114 Section 7.1. The new test
-failed before the fix with `Ok(None)` and passed after it; the existing
-`poll_data_unexpected_end` test also passed. The citation-only edit was followed
-by `cargo fmt --all -- --check` and `git diff --check`. The current patch SHA-256
-is `72b806e72b219af3631d460c09416deba1825212821e50f93c247c0ca2d6146c`.
-This patch has not been sent upstream or released, so the Cargo dependency
-blocker remains.
-
-The release paths are to use a published upstream `h3` release containing the
-correction, or to maintain and publish a compatible fork crate to a registry,
-then rebuild the `uvicorn-rs` archive and pass the focused malformed-frame
-consumer case without a workspace patch. A Git or local patch in this
-repository alone does not make the fix available to downstream crate users.
-Until one of those paths is verified, the standalone Rust archive is not
-release-ready.
+Cargo publication remains blocked until candidate CI produces a receipt for
+the exact extracted `uvicorn-rs` archive, exercises
+`http3.truncated-data-frame-recovery-after-protocol-error` through the
+maintained H3 dependencies,
+observes `H3_FRAME_ERROR` (`262`), and verifies a healthy follow-up request on
+a fresh connection. RFC 9114 §7.1 defines a truncated final frame as a
+connection error, and §5.3 describes immediate application closure; reusing
+that failed connection would contradict the protocol. The local candidate
+workflow now runs `scripts/run_standalone_h3_consumer.py` against all four
+extracted archive files. It checks the consumer manifest for registry-only
+dependency declarations, builds with temporary overrides to those extracted
+archives, and writes the Cargo receipt into candidate evidence. A local run
+passed the error-code and fresh-connection checks, but it used dirty source and
+its receipt is rejected for publication. A clean exact-tag candidate still has
+to execute this gate in hosted CI.
 
 ### Superseded release status snapshot (2026-10-17; main 951c67b)
 
@@ -346,7 +517,7 @@ The standalone Rust crate remains blocked by the documented vendored `h3`
 framing fix not being carried by its external package dependency path. The
 workspace parity result does not establish that the published Rust crate
 contains the fix; see the
-[package-consumer investigation](#standalone-rust-archive-h3-patch).
+[package-consumer investigation](#standalone-rust-archive-maintained-h3-registry-packages).
 
 ## Prior release status snapshot (2026-10-17; superseded by run 39011984443)
 
@@ -374,7 +545,7 @@ The standalone Rust crate also remains blocked by the documented vendored
 `h3` framing fix not being carried by its external package dependency path. The
 workspace parity result does not establish that the published Rust crate
 contains the fix; see the
-[package-consumer investigation](#standalone-rust-archive-h3-patch).
+[package-consumer investigation](#standalone-rust-archive-maintained-h3-registry-packages).
 
 ## Previous release status snapshot (2026-10-17; superseded by e2a39c5)
 
@@ -419,7 +590,7 @@ current local source. It observes `H3_FRAME_ERROR` (`0x106`) for a DATA frame
 whose declared payload is truncated at clean stream FIN, as required by
 [RFC 9114 §7.1](https://www.rfc-editor.org/rfc/rfc9114.html#section-7.1).
 This result exercises the workspace build, which patches crates.io `h3` to
-the [local vendored source](../vendor/h3/src/frame.rs); it does not prove that
+the [local vendored source](https://github.com/appunni-m/uvicorn-rs/blob/main/vendor/h3/src/frame.rs); it does not prove that
 the standalone Rust crate archive contains or uses that patch. The
 `uvicorn-rs` manifest still declares
 registry `h3 = "0.0.8"`, and `cargo package --list -p uvicorn-rs` does not
@@ -498,7 +669,7 @@ coverage receipt; the exact-source hosted run remains required.
 The workflows upload candidate artifacts but do not publish Rust crates
 to crates.io, Python packages to PyPI, create a GitHub Release, or create or
 move tags. The project is licensed under
-[BSD-3-Clause or MIT](../LICENSE), at the recipient's option, with copyright
+[BSD-3-Clause or MIT](https://github.com/appunni-m/uvicorn-rs/blob/main/LICENSE), at the recipient's option, with copyright
 © 2026 Appunni M and the original Uvicorn/Hypercorn license notices retained.
 
 ## Earlier state before c2de34a (superseded)
@@ -561,7 +732,7 @@ is tracked by `zep3`.
 | Representative performance (`wh9k`, `k8ft`) | Multi-system run 38828500975 passed parity and FastAPI-only comparison. The Linux H1 category also failed: two Rust upload rows on each Linux system timed out in libcurl after about 15.4–18.0 seconds, followed by Starlette `ClientDisconnect`; macOS completed H1 with 30 matched pairs, 27/30 below Uvicorn and median throughput ratio 0.748×. HTTP/2 emitted a generic connection diagnostic on all systems, one Linux x86-64 Hypercorn/uvloop HTTP/3 fixed-workload header timeout occurred, and lifecycle diagnostic normalization rejected an expected timeout. Three later focused H2 hosted runs passed five correctness repetitions each but did not reproduce the H2 connection error. A single local macOS replay of the 1 MiB/1 KiB-chunk H1 upload passed on both servers, but host contention invalidated timing and did not reproduce the Linux timeout. `performance-acceptance.json` remains `not_proven`. | Diagnose the Linux upload timeout and retained full-matrix HTTP/2 error, resolve the HTTP/3 timeout and lifecycle normalization, then complete the exact-commit matrix with at least three valid repetitions per workload/loop/system and retain throughput, latency, CPU, memory, and source/build identities. Reassess the performance scope against the matched FastAPI evidence; do not claim a broad gain from the current results. |
 | Clean commit and hosted CI (`zep3`) | Main commit 27de9f3 has passing Rust quality and MSRV checks, installed-wheel public parity, and native composition; all 712 hosted parity cases passed. Local current-source coverage now passes 748 cases, all six repeats, 100% regions/lines, Coverage-MCP, and offline validation, but the evidence is from a dirty worktree. Benchmark gates remain incomplete and the worktree has uncommitted tracked changes. | Review and commit the intended changes, then run only the hosted gates affected by those changes. Require clean exact-source coverage and benchmark receipts before candidate assembly. |
 | Packaged consumer evidence (`zep3`) | Exact-source CI verified the installed normal wheel's public parity. Release artifact jobs were skipped; no candidate bundle has been produced or inspected. | Verify the three supported wheels, sdist, and two Rust archives from the final clean commit, including fresh installed consumers, Python floor, extracted Rust archive builds, licenses, versions, and checksums. |
-| Standalone Rust crate H3 dependency | The workspace parity case passes and records the RFC-required `H3_FRAME_ERROR` (`0x106`) with the workspace-only `vendor/h3` patch. A focused consumer build from the diagnostic `.crate` instead resolved registry `h3 0.0.8`; the same malformed-frame input failed because the ASGI app saw disconnect, no peer close code was observed, and the dependency panicked at `frame.rs:57`. The oracle completed the upload and the same-connection follow-up remained healthy. | Make the framing correction available through a publishable dependency path for external Rust consumers. Rebuild a clean archive from the selected dependency source and rerun only this malformed-frame case against that extracted archive. Keep standalone `.crate` distribution blocked until it passes. |
+| Standalone Rust crate H3 dependency | The workspace parity case passes and records the RFC-required `H3_FRAME_ERROR` (`0x106`) with the workspace-only `vendor/h3` patch. A focused consumer build from the diagnostic `.crate` instead resolved registry `h3 0.0.8`; the same malformed-frame input failed because the ASGI app saw disconnect, no peer close code was observed, and the dependency panicked at `frame.rs:57`. The oracle completed the upload and its fresh-connection follow-up remained healthy. | Make the framing correction available through a publishable dependency path for external Rust consumers. Rebuild a clean archive from the selected dependency source and rerun only this malformed-frame case against that extracted archive. Keep standalone `.crate` distribution blocked until it passes. |
 | Performance acceptance in candidate verification (`wh9k`, `k8ft`; release gate `zep3`) | Run 38828500975 is complete but incomplete as evidence: its category jobs failed and `performance-acceptance.json` remains `not_proven`. | Complete the correctness-gated matrix on the exact release commit and record measured gain claims or a documented scope revision. Candidate assembly rejects `not_proven`, partial/stale artifacts, and unsupported or underqualified claims. |
 | Immutable candidate and final documentation (`zep3`) | No current candidate or tag exists. | Reconcile support, deployment, feasibility, benchmark, and coverage claims with the final evidence; assemble the bundle from the successful CI run/attempt; verify the annotated tag object and commit; retain candidate manifests and SHA256SUMS. Keep generated logs, profiles, and coverage reports out of Git. |
 
@@ -651,7 +822,7 @@ completed with failure. The installed normal wheel passed the complete public
 input matrix (243/243), the two Starlette comparisons, and the transient
 systemd shutdown case. Rust 1.85 library compilation passed. The Rust quality
 job failed because Clippy also linted two intentional panic fault inputs in
-[`native_core_contracts.rs`](../crates/uvicorn-rs/examples/native_core_contracts.rs).
+[`native_core_contracts.rs`](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs/examples/native_core_contracts.rs).
 The current worktree keeps all-target Clippy enabled and uses
 `std::panic::resume_unwind` only in the test-only fault injector, without a
 `clippy::panic` allow or expectation. The targeted all-feature Clippy check for
@@ -987,7 +1158,7 @@ results are identified in [the investigation](performance-investigation-2026-10-
 
 ## Main CI gates
 
-[CI](../.github/workflows/ci.yml) runs on `main`, `codex/**` branches, pull
+[CI](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/ci.yml) runs on `main`, `codex/**` branches, pull
 requests and manual dispatch. Permissions are read-only and action references
 use full commit SHAs. Superseded branch runs can be cancelled; immutable tag
 candidate runs cannot cancel each other.
@@ -1079,7 +1250,7 @@ exact clean release commit. Only after that commit and the candidate evidence
 gates pass may a maintainer request assembly by pushing an annotated
 `vMAJOR.MINOR.PATCH` tag for that commit.
 
-[Release candidate](../.github/workflows/release.yml) follows the immutable
+[Release candidate](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/release.yml) follows the immutable
 artifact/evidence pattern used by `fontdone` and `image-slash-star`. It gathers
 the three Python wheels, source archive, two Rust crate archives and their
 matching CI evidence. Publication remains disabled:
@@ -1104,18 +1275,20 @@ publication, OIDC authentication, repository writes or GitHub Release creation.
 
 Candidate verification, hosted CI success and public publication are separate
 states. A public release additionally needs an explicit distribution decision
-that names both Rust crates (`native-app-contract` and `uvicorn-rs`) and whether
+that names all four Rust crates (`native-app-contract`, `uvicorn-rs-h3`,
+`uvicorn-rs-h3-quinn`, and `uvicorn-rs`) and whether
 to publish the optional `uvicorn-rs-py` compatibility client, reviewed release
 notes, the current support/known-limit matrix, exact-source Coverage-MCP
 review, source-bound performance evidence (or a reviewed performance-scope
 revision), and green hosted evidence. If the Rust crates are published to
-crates.io, publish `native-app-contract` before `uvicorn-rs`, which depends on
-its registry version. `starlette-rs-py` and `fastapi-rs-py` are owned by their framework
+crates.io, publish the H3 protocol crate before its Quinn adapter and publish
+both before `uvicorn-rs`; publish `native-app-contract` before `uvicorn-rs` as
+well. `starlette-rs-py` and `fastapi-rs-py` are owned by their framework
 repositories. Experimental H3 limitations and workload-specific benchmark
 results remain visible. Use a clean proven commit; do not distribute the dirty
 local preparation artifacts as an official release.
 
-The current version notes are in [CHANGELOG.md](../CHANGELOG.md). Keep them in
+The current version notes are in [CHANGELOG.md](https://github.com/appunni-m/uvicorn-rs/blob/main/CHANGELOG.md). Keep them in
 the `Unreleased` section until a clean candidate has passed the exact-commit
 gates and a distribution decision is made.
 

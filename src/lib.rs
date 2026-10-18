@@ -34,6 +34,7 @@ use bytes::Buf;
 use bytes::Bytes;
 #[cfg(not(feature = "native-tcp"))]
 use futures_util::task::AtomicWaker;
+#[cfg(not(feature = "native-tcp"))]
 use futures_util::{SinkExt, StreamExt};
 use http::header::{HeaderName, HeaderValue};
 use http::{HeaderMap, Request, Response, StatusCode, Version};
@@ -55,6 +56,7 @@ use pyo3::exceptions::{PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyString};
 use pyo3_async_runtimes::TaskLocals;
+#[cfg(not(feature = "native-tcp"))]
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 #[cfg(not(feature = "native-tcp"))]
@@ -65,13 +67,15 @@ use tokio::sync::mpsc::{
 };
 use tokio::sync::{oneshot, watch, Mutex};
 use tokio_rustls::{rustls, TlsAcceptor};
-use tokio_tungstenite::tungstenite::{
-    handshake::derive_accept_key,
-    protocol::{frame::coding::CloseCode, CloseFrame, Message, Role},
-};
-use tokio_tungstenite::WebSocketStream;
+use tokio_tungstenite::tungstenite::handshake::derive_accept_key;
+#[cfg(not(feature = "native-tcp"))]
+use tokio_tungstenite::{tungstenite::protocol::Role, WebSocketStream};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use uvicorn_rs::{
+    WebSocketCloseCode as CloseCode, WebSocketCloseFrame as CloseFrame,
+    WebSocketMessage as Message, WebSocketSession,
+};
 
 use h3_quinn::quinn::{self, crypto::rustls::QuicServerConfig};
 
@@ -1690,6 +1694,23 @@ impl ConnectionClosed {
         }
     }
 
+    async fn wait_for_peer_read_failure(&mut self) {
+        #[cfg(feature = "native-tcp")]
+        if let Self::Native {
+            peer_read_failed, ..
+        } = self
+        {
+            if peer_read_failed.error_kind().is_some()
+                || peer_read_failed.wait_until_failed().await.is_ok()
+            {
+                return;
+            }
+        }
+        // A clean reader shutdown is not evidence of a reset. Keep this
+        // branch pending so a TCP half-close can still receive a response.
+        std::future::pending::<()>().await;
+    }
+
     async fn wait_until_body_pump_stops(&mut self) {
         match self {
             #[cfg(any(not(feature = "native-tcp"), coverage))]
@@ -3070,9 +3091,8 @@ impl WebSocketIo {
     fn receive<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let connect = !slf.connect_delivered.swap(true, Ordering::AcqRel);
         if connect {
-            // The ASGI connect event is ready before the first application
-            // receive, so return it directly instead of scheduling a Tokio
-            // future and crossing back into Python to build the event.
+            // The internal bridge adapts this immediately available value to
+            // the awaitable `receive` callable presented at the ASGI boundary.
             let message = PyDict::new(py);
             coverage_try!(
                 WebSocketReceiveConnectTypeSetItem,
@@ -6702,8 +6722,18 @@ async fn handle_websocket_request_inner(
     };
     let mut app_task = AbortOnDrop::new(app_task_tracker.spawn(app_future));
 
+    let mut handshake_connection_closed = context.connection_closed.clone();
     let handshake = tokio::select! {
         biased;
+        _ = handshake_connection_closed.wait_for_peer_read_failure() => {
+            app_task.as_mut().abort();
+            let _ = app_task.as_mut().await;
+            return Ok(response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                full_body(Bytes::new()),
+                HeaderMap::new(),
+            ));
+        }
         handshake = &mut handshake_rx, if !inject_app_task_panic => handshake.map_err(|_| {
             std::io::Error::other("ASGI app returned before accepting or closing the WebSocket")
         })?,
@@ -6785,14 +6815,13 @@ async fn handle_websocket_request_inner(
     let connection_closed = context.connection_closed;
     #[cfg(feature = "native-tcp")]
     {
+        let upgrade_shutdown = native_upgrade.clone();
         #[cfg(coverage)]
         let inject_shutdown_panic =
             coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownPanic);
         #[cfg(coverage)]
         let inject_shutdown_hang =
             coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownHang);
-        #[cfg(coverage)]
-        let upgrade_shutdown = native_upgrade.clone();
         let session_cancellation = session_cancellation.clone();
         let session_handler = move |upgraded| async move {
             // Keep cancellation ownership until registration has succeeded.
@@ -6814,7 +6843,7 @@ async fn handle_websocket_request_inner(
                 let _ = app_task.await;
                 return std::future::pending::<Result<(), std::io::Error>>().await;
             }
-            let socket = WebSocketStream::from_raw_socket(upgraded, Role::Server, None).await;
+            let socket = WebSocketSession::from_accepted_upgrade(upgraded, upgrade_shutdown).await;
             if let Err(error) = drive_websocket(
                 socket,
                 incoming_tx,
@@ -6935,28 +6964,62 @@ fn websocket_key_error(value: &[u8]) -> Option<Option<String>> {
     None
 }
 
-async fn send_websocket_message<I>(
-    socket: &mut WebSocketStream<I>,
-    message: Message,
-) -> Result<(), BoxError>
+trait WebSocketTransport {
+    async fn send_message(&mut self, message: Message) -> Result<(), BoxError>;
+
+    async fn receive_message(&mut self) -> Result<Option<Message>, BoxError>;
+}
+
+impl WebSocketTransport for WebSocketSession {
+    async fn send_message(&mut self, message: Message) -> Result<(), BoxError> {
+        self.send(message)
+            .await
+            .map_err(|error| Box::new(error) as BoxError)
+    }
+
+    async fn receive_message(&mut self) -> Result<Option<Message>, BoxError> {
+        self.receive()
+            .await
+            .map_err(|error| Box::new(error) as BoxError)
+    }
+}
+
+#[cfg(not(feature = "native-tcp"))]
+impl<I> WebSocketTransport for WebSocketStream<I>
 where
     I: AsyncRead + AsyncWrite + Unpin,
 {
-    #[cfg(coverage)]
-    let result = if coverage_fault_take(CoverageFaultPoint::WebSocketDriverSendError)
-        || coverage_fault_take(CoverageFaultPoint::WebSocketDriverDrainSendError)
-    {
-        Err(tokio_tungstenite::tungstenite::Error::ConnectionClosed)
-    } else {
-        socket.send(message).await
-    };
-    #[cfg(not(coverage))]
-    let result = socket.send(message).await;
-    result.map_err(|error| Box::new(error) as BoxError)
+    async fn send_message(&mut self, message: Message) -> Result<(), BoxError> {
+        self.send(message)
+            .await
+            .map_err(|error| Box::new(error) as BoxError)
+    }
+
+    async fn receive_message(&mut self) -> Result<Option<Message>, BoxError> {
+        self.next()
+            .await
+            .transpose()
+            .map_err(|error| Box::new(error) as BoxError)
+    }
 }
 
-async fn drive_websocket<I>(
-    mut socket: WebSocketStream<I>,
+async fn send_websocket_message<S>(socket: &mut S, message: Message) -> Result<(), BoxError>
+where
+    S: WebSocketTransport,
+{
+    #[cfg(coverage)]
+    if coverage_fault_take(CoverageFaultPoint::WebSocketDriverSendError)
+        || coverage_fault_take(CoverageFaultPoint::WebSocketDriverDrainSendError)
+    {
+        return Err(Box::new(std::io::Error::other(
+            "coverage-injected WebSocket send failure",
+        )));
+    }
+    socket.send_message(message).await
+}
+
+async fn drive_websocket<S>(
+    mut socket: S,
     incoming: mpsc::Sender<WebSocketIncoming>,
     mut outgoing: mpsc::Receiver<WebSocketOutgoing>,
     mut app_task: tokio::task::JoinHandle<PyResult<Py<PyAny>>>,
@@ -6965,7 +7028,7 @@ async fn drive_websocket<I>(
     cancellation: CancellationToken,
 ) -> Result<(), BoxError>
 where
-    I: AsyncRead + AsyncWrite + Unpin,
+    S: WebSocketTransport,
 {
     let mut app_task_completed = false;
     let mut driver_error = None;
@@ -7007,7 +7070,7 @@ where
             _ = cancellation.cancelled() => {
                 let _ = tokio::time::timeout(
                     std::time::Duration::from_millis(100),
-                    socket.send(Message::Close(Some(CloseFrame {
+                    socket.send_message(Message::Close(Some(CloseFrame {
                         code: CloseCode::from(1012),
                         reason: "".into(),
                     }))),
@@ -7052,12 +7115,12 @@ where
             message = async {
                 #[cfg(coverage)]
                 if coverage_fault_is_armed(CoverageFaultPoint::WebSocketDriverPeerEof) {
-                    return None;
+                    return Ok(None);
                 }
-                socket.next().await
+                socket.receive_message().await
             } => {
                 match message {
-                    Some(Ok(Message::Text(text))) => {
+                    Ok(Some(Message::Text(text))) => {
                         #[cfg(coverage)]
                         let send_failed = coverage_fault_is_armed(
                             CoverageFaultPoint::WebSocketDriverIncomingTextReceiverClosed,
@@ -7068,7 +7131,7 @@ where
                             break;
                         }
                     }
-                    Some(Ok(Message::Binary(data))) => {
+                    Ok(Some(Message::Binary(data))) => {
                         #[cfg(coverage)]
                         let send_failed = coverage_fault_is_armed(
                             CoverageFaultPoint::WebSocketDriverIncomingBinaryReceiverClosed,
@@ -7079,7 +7142,7 @@ where
                             break;
                         }
                     }
-                    Some(Ok(Message::Close(frame))) => {
+                    Ok(Some(Message::Close(frame))) => {
                         let (code, reason) = frame
                             .map(|frame| (u16::from(frame.code), frame.reason.to_string()))
                             .unwrap_or((1005, String::new()));
@@ -7094,8 +7157,8 @@ where
                         .is_ok();
                         break;
                     }
-                    Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => {}
-                    Some(Err(error)) => {
+                    Ok(Some(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => {}
+                    Err(error) => {
                         let _ = incoming.send(WebSocketIncoming::Disconnect {
                             code: 1002,
                             reason: error.to_string(),
@@ -7108,7 +7171,7 @@ where
                         .is_ok();
                         break;
                     }
-                    None => {
+                    Ok(None) => {
                         let _ = incoming.send(WebSocketIncoming::Disconnect {
                             code: 1006,
                             reason: String::new(),

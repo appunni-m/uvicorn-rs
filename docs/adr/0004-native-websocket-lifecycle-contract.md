@@ -200,7 +200,8 @@ contract above:
   identify whether a peer reset, connection error, or server cancellation
   dropped the service future. This case does not prove delivery of ASGI
   http.disconnect or the required Python task behavior.
-- The current H3 adapter uses h3 0.0.8 and h3-quinn 0.0.10. It observes a
+- The current H3 adapter uses the maintained `uvicorn-rs-h3` package, based on
+  upstream h3 0.0.8, and `uvicorn-rs-h3-quinn`, based on h3-quinn 0.0.10. It observes a
   request-stream reset when the request body or response writer is polled, but
   it has no independent request-close future for an application waiting on an
   unrelated await. The locked Quinn 0.11.12 provides a passive

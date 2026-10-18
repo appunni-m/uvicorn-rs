@@ -421,7 +421,11 @@ async def _app_impl(scope, receive, send):
             await asyncio.sleep(0.2)
             await send({"type": "websocket.accept"})
             _record("websocket.upgrade.accepted")
-            await receive()
+            while True:
+                event = await receive()
+                if event["type"] == "websocket.disconnect":
+                    _record("websocket.upgrade.disconnected")
+                    break
             return
         if scope["path"] == "/ws-deny":
             await send({"type": "websocket.close", "code": 1008, "reason": "denied"})

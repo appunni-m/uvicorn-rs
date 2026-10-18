@@ -9,8 +9,8 @@ specification](https://asgi.readthedocs.io/en/latest/specs/main.html), [HTTP and
 WebSocket sub-specification 2.5](https://asgi.readthedocs.io/en/latest/specs/www.html),
 and [lifespan sub-specification 2.0](https://asgi.readthedocs.io/en/latest/specs/lifespan.html).
 
-The indexed, input-only cases live in [`tests/parity/manifest.json`](../tests/parity/manifest.json)
-and [`tests/parity/inputs/`](../tests/parity/inputs/). They start a live
+The indexed, input-only cases live in [`tests/parity/manifest.json`](https://github.com/appunni-m/uvicorn-rs/blob/main/tests/parity/manifest.json)
+and [`tests/parity/inputs/`](https://github.com/appunni-m/uvicorn-rs/tree/main/tests/parity/inputs). They start a live
 reference and target and compare wire-visible behavior. Cases marked
 `verification: fault-contract` are target-only contracts; they are not counted
 as oracle parity. The case IDs below name the current public input evidence.

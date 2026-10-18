@@ -1174,7 +1174,7 @@ quality, the minimum-version build, installed-wheel public parity, and unified
 coverage passed. Public parity was 239/239; hosted coverage was 491/491 cases,
 5,121/5,121 regions, and 3,624/3,624 lines. The hosted matrix predates the
 local strengthening of the H2 EOF fault contract described below. Platform
-package job failures are recorded in [release status](releases.md#current-release-status-2026-10-17).
+package job failures are recorded in [release status](releases.md#earlier-preparation-status-snapshot-2026-10-18-branch-ci-run-39125175964).
 The retained unified-coverage artifact is ID `11506803058`, SHA-256
 `d107cfb007ae41673feb025253cdd00706168f51df411fa5fdfc6c6fdb3a910c`.
 
@@ -1186,7 +1186,7 @@ passed the unified coverage job. Run #37 is on exact main commit `e617f13`;
 its check annotation reports 491/491 cases, 5,121/5,121 regions and 3,624/3,624
 lines. The job runs one attribution pass and three complete matrix repetitions.
 The separate installed-wheel parity gate passed 239/239. Run #37 failed
-afterward in the platform package jobs; see [release status](releases.md#current-release-status-2026-10-17).
+afterward in the platform package jobs; see [release status](releases.md#earlier-preparation-status-snapshot-2026-10-18-branch-ci-run-39125175964).
 This result closed hosted coverage for commit `e617f13` only. It does not
 cover later commits or the current dirty worktree. The local Coverage-MCP
 receipt requirement for a public release remains separate.
@@ -1197,7 +1197,7 @@ repeats: 491/491 cases, 5,121/5,121 regions, and 3,624/3,624 lines. Its normal
 installed-wheel public parity passed 239/239. The run failed later in the
 macOS package consumer because the probe certificate had a duplicate
 extension OID; Linux and Windows package jobs passed, while Python-floor was
-skipped. See [release status](releases.md#current-release-status-2026-10-17). This updates hosted
+skipped. See [release status](releases.md#earlier-preparation-status-snapshot-2026-10-18-branch-ci-run-39125175964). This updates hosted
 coverage evidence for `226ab13`; the source-matched local Coverage-MCP receipt
 requirement for a public release remains separate.
 

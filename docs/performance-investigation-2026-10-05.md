@@ -340,12 +340,12 @@ the older timings cannot be substituted for fresh matched measurements.
 
 ## Next acceptance gate
 
-The tracked [`run_benchmark_categories.py`](../scripts/run_benchmark_categories.py)
+The tracked [`run_benchmark_categories.py`](https://github.com/appunni-m/uvicorn-rs/blob/main/scripts/run_benchmark_categories.py)
 captures a normal binary/source/app/dependency identity before public parity,
 requires the complete current public matrix on that exact binary, and runs
 categories sequentially. Its pure JSON analyzer retains exclusions and requires
 three matching valid repetitions before producing ratios. The separate
-[manual benchmark workflow](../.github/workflows/benchmark-categories.yml) builds
+[manual benchmark workflow](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/benchmark-categories.yml) builds
 normal wheels and clients, records the Linux environment and uploads failures.
 It has been added and statically reviewed; its hosted execution remains unrun.
 

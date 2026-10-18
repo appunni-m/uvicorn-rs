@@ -16,7 +16,7 @@ benchmark evidence. The previous root Python distribution and CLI names are
 not compatibility requirements.
 
 The native crate exposes an opt-in proactive TCP EOF observer through
-[`PeerReadHalfCloseMode`](../crates/uvicorn-rs/src/lib.rs). The Python ASGI
+[`PeerReadHalfCloseMode`](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs/src/lib.rs). The Python ASGI
 adapter uses the native TCP/TLS serving path, but this observer does not by
 itself produce an ASGI `http.disconnect` event; the adapter maps transport
 lifetime observations into ASGI behavior at its boundary.

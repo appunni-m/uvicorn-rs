@@ -21,7 +21,7 @@ use http::{
     },
     Extensions, HeaderMap, HeaderName, HeaderValue, Method, Request, Response, StatusCode, Version,
 };
-use hyper::upgrade::{self, OnUpgrade};
+use hyper::upgrade::{self, OnUpgrade, Upgraded};
 use hyper_util::rt::TokioIo;
 #[cfg(coverage)]
 use tokio::sync::Notify;
@@ -262,13 +262,9 @@ impl WebSocketUpgrade {
         let session_shutdown = connection_upgrade.clone();
         connection_upgrade
             .register(on_upgrade, move |stream| async move {
-                let websocket = WebSocketStream::from_raw_socket(stream, Role::Server, None).await;
-                handler(WebSocketSession {
-                    stream: websocket,
-                    connection_upgrade: session_shutdown,
-                    pending_close: None,
-                })
-                .await
+                let session =
+                    WebSocketSession::from_accepted_upgrade(stream, session_shutdown).await;
+                handler(session).await
             })
             .map_err(|ConnectionUpgradeClosed| WebSocketUpgradeError::ConnectionClosed)?;
         Ok(response)
@@ -284,6 +280,24 @@ pub struct WebSocketSession {
 }
 
 impl WebSocketSession {
+    /// Creates a framed session for a stream accepted by an HTTP/1.1 upgrade.
+    ///
+    /// Use this inside the handler passed to [`ConnectionUpgrade::register`]
+    /// after returning the response that completes the protocol upgrade.
+    /// Prefer [`WebSocketUpgrade::accept`] for RFC 6455 handshakes; this
+    /// constructor is available to adapters that already own handshake
+    /// validation and response construction.
+    pub async fn from_accepted_upgrade(
+        stream: TokioIo<Upgraded>,
+        connection_upgrade: ConnectionUpgrade,
+    ) -> Self {
+        Self {
+            stream: WebSocketStream::from_raw_socket(stream, Role::Server, None).await,
+            connection_upgrade,
+            pending_close: None,
+        }
+    }
+
     /// Receives the next WebSocket message, including a peer close frame, or
     /// returns `None` when the underlying stream ends. On a peer close, it
     /// flushes the protocol close reply before returning the frame.

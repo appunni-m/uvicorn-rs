@@ -863,7 +863,7 @@ def load_contract(
         "response_incomplete", "peer_close_code", "trigger_request_sent", "fault_consumed",
         "request_task_cancellation_observed", "connection_error_observed", "diagnostics_ordered",
         "application_cleanup_before_followup", "server_log",
-        "body_stream_error", "trigger_error",
+        "body_stream_error", "trigger_error", "shutdown_clean",
     }
     for operation in manifest["operations"]:
         expected_operation_keys = {"id", "kind", "observe"}
@@ -6574,7 +6574,23 @@ def websocket_observation(
             "headers": [],
             "body_base64": "",
         })
-        return {"status": followup["status"]}
+        application_events = read_events(events_path)[events_before:]
+        exit_code, shutdown_log = stop_server(server, graceful=True)
+        shutdown_timeout = any(
+            marker in shutdown_log
+            for marker in (
+                "TCP shutdown exceeded the graceful timeout",
+                "active connections exceeded the graceful-shutdown deadline",
+                "timeout graceful shutdown exceeded",
+            )
+        )
+        return {
+            "status": followup["status"],
+            "application_events": application_events,
+            "shutdown_clean": exit_code is not None
+            and exit_code != -signal.SIGKILL
+            and not shutdown_timeout,
+        }
 
     def add_fault_followup(
         observation: dict[str, Any], *, wait_for_events: bool = True
@@ -6922,6 +6938,7 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "server_log": "server_log",
         "body_stream_error": "body_stream_error",
         "trigger_error": "trigger_error",
+        "shutdown_clean": "shutdown_clean",
     }
     projected = {}
     for field in operation["observe"]:
@@ -9239,6 +9256,7 @@ def execute_profile(
                 or case.get("request_stream", {}).get("hold_until_shutdown", False)
                 or case.get("websocket", {}).get("shutdown", False)
                 or case.get("websocket", {}).get("shutdown_during_upgrade", False)
+                or case.get("websocket", {}).get("drop_during_upgrade", False)
                 # Keep the TLS scope-close probe independent from the next
                 # WSS workflow. Both servers close this WebSocket normally,
                 # but their TLS transports can still be draining when the

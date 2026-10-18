@@ -74,7 +74,7 @@ caller-supplied runtime support must be explicit in the stable library API.
 
 Use the ecosystem's existing HTTP types and Tower service trait:
 
-```rust,ignore
+```text
 tower_service::Service<http::Request<IncomingBody>>
     -> http::Response<OutgoingBody>
 ```

@@ -2,6 +2,9 @@
 
 An async HTTP/3 implementation.
 
+> This upstream README is retained as attribution and historical context. Its
+> status and feature statements describe upstream `h3` 0.0.8, not this fork.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/hyperium/h3/workflows/CI/badge.svg)](https://github.com/hyperium/h3/actions?query=workflow%3ACI)
 [![Discord chat](https://img.shields.io/discord/500028886025895936.svg?logo=discord)](https://discord.gg/q5mVhMD)
@@ -9,7 +12,7 @@ An async HTTP/3 implementation.
 This crate provides an [HTTP/3][spec] implementation that is generic over a provided QUIC transport. This allows the project to focus on just HTTP/3, while letting users pick their QUIC implementation based on their specific needs. It includes client and server APIs. Check the original [design][] for more details.
 
 [spec]: https://www.rfc-editor.org/rfc/rfc9114
-[design]: docs/PROPOSAL.md
+[design]: https://github.com/hyperium/h3/blob/master/docs/PROPOSAL.md
 
 ## Status
 
@@ -28,16 +31,16 @@ Get more information about this tool in the [contributing][] document.
 [duvet crate]: https://crates.io/crates/duvet
 [spec]: https://www.rfc-editor.org/rfc/rfc9114
 [report]: https://hyper.rs/h3/ci/compliance/report.html#/
-[contributing]: CONTRIBUTING.md
+[contributing]: https://github.com/hyperium/h3/blob/master/CONTRIBUTING.md
 
 ## Features
 
 * HTTP/3 client and server implementation
 * Async only API
-* QUIC transport abstraction via traits in the [`quic`](./h3/src/quic.rs) module
+* QUIC transport abstraction via traits in the [`quic`](https://github.com/hyperium/h3/blob/master/h3/src/quic.rs) module
 * Runtime independent (h3 does not spawn tasks and works with any runtime)
 * Supported QUIC implementations to date are
-  [Quinn](https://github.com/quinn-rs/quinn) ([h3-quinn](./h3-quinn/))
+  [Quinn](https://github.com/quinn-rs/quinn) ([h3-quinn](https://github.com/hyperium/h3/tree/master/h3-quinn/))
   , [s2n-quic](https://github.com/aws/s2n-quic)
   ([s2n-quic-h3](https://github.com/aws/s2n-quic/tree/main/quic/s2n-quic-h3))
   and [MsQuic](https://github.com/microsoft/msquic)
@@ -50,24 +53,24 @@ Get more information about this tool in the [contributing][] document.
 
 ## Getting Started
 
-The [examples](./examples) directory can help get started in two ways:
+The [upstream examples](https://github.com/hyperium/h3/tree/master/examples) directory can help get started in two ways:
 
 - There are ready-to-use `client` and `server` binaries to interact with _other_ HTTP/3 peers. Check the README in that directory.
 - The source code of those examples can help teach how to use `h3` as either a client or a server.
 
 ### Server
 
-You can find a full server example in [`examples/server.rs`](./examples/server.rs)
+You can find a full server example in [`examples/server.rs`](https://github.com/hyperium/h3/blob/master/examples/server.rs)
 
 ### Client
 
-You can find a full client example in [`examples/client.rs`](./examples/client.rs)
+You can find a full client example in [`examples/client.rs`](https://github.com/hyperium/h3/blob/master/examples/client.rs)
 
 ## QUIC Generic
 
 As mentioned, the goal of this library is to be generic over a QUIC implementation. To that effect, integrations with QUIC libraries exist:
 
-- [`h3-quinn`](./h3-quinn/): in this same repository.
+- [`h3-quinn`](https://github.com/hyperium/h3/tree/master/h3-quinn/): in the upstream repository.
 - [`s2n-quic-h3`](https://github.com/aws/s2n-quic/tree/main/quic/s2n-quic-h3)
 - [`h3-msquic-async`](https://github.com/masa-koz/msquic-async-rs/tree/main/h3-msquic-async)
 

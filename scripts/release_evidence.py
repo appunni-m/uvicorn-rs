@@ -11,6 +11,7 @@ import ast
 import base64
 import configparser
 import csv
+from fnmatch import fnmatchcase
 import hashlib
 import io
 import json
@@ -42,8 +43,27 @@ LICENSE_EXPRESSION = "BSD-3-Clause OR MIT"
 CRATE_DIRS = {
     "native-app-contract": ROOT / "crates/native-app-contract",
     "uvicorn-rs": ROOT / "crates/uvicorn-rs",
+    "uvicorn-rs-h3": ROOT / "crates/uvicorn-rs-h3",
+    "uvicorn-rs-h3-quinn": ROOT / "crates/uvicorn-rs-h3-quinn",
 }
-CRATE_EXCLUDES = {"native-app-contract": set(), "uvicorn-rs": {"examples/native_core_contracts.rs"}}
+CRATE_EXCLUDES = {
+    "native-app-contract": set(),
+    "uvicorn-rs": {"examples/native_core_contracts.rs"},
+    "uvicorn-rs-h3": {"src/tests/**", "UPSTREAM-README.md"},
+    "uvicorn-rs-h3-quinn": {"UPSTREAM-README.md"},
+}
+CRATE_LICENSE_EXPRESSIONS = {
+    "native-app-contract": LICENSE_EXPRESSION,
+    "uvicorn-rs": LICENSE_EXPRESSION,
+    "uvicorn-rs-h3": "MIT",
+    "uvicorn-rs-h3-quinn": "MIT",
+}
+CRATE_LICENSE_FILES = {
+    "native-app-contract": LICENSES,
+    "uvicorn-rs": LICENSES,
+    "uvicorn-rs-h3": ("LICENSE",),
+    "uvicorn-rs-h3-quinn": ("LICENSE",),
+}
 LEGACY_FEATURE_ONLY_FAULT_POINTS = frozenset({
     "server.connection-io.eof-recheck.pause",
     "server.connection-task.join-await-error",
@@ -63,6 +83,10 @@ REQUIRED = (
     *(f"crates/native-app-contract/{name}" for name in LICENSES),
     "crates/uvicorn-rs/Cargo.toml", "crates/uvicorn-rs/README.md",
     *(f"crates/uvicorn-rs/{name}" for name in LICENSES),
+    "crates/uvicorn-rs-h3/Cargo.toml", "crates/uvicorn-rs-h3/README.md",
+    "crates/uvicorn-rs-h3/LICENSE",
+    "crates/uvicorn-rs-h3-quinn/Cargo.toml", "crates/uvicorn-rs-h3-quinn/README.md",
+    "crates/uvicorn-rs-h3-quinn/LICENSE",
 )
 FORBIDDEN_DIRS = {
     "benchmarks", "build", "target", "tools", "tests", "scripts", "examples", "coverage",
@@ -108,8 +132,8 @@ def load_json(path: Path) -> dict:
 def source_hashes() -> dict[str, str]:
     paths = {ROOT / name for name in REQUIRED}
     paths.update((ROOT / "src").rglob("*.rs"))
-    paths.update((ROOT / "crates" / "uvicorn-rs").rglob("*.rs"))
-    paths.update((ROOT / "crates" / "native-app-contract").rglob("*.rs"))
+    for directory in CRATE_DIRS.values():
+        paths.update(directory.rglob("*.rs"))
     paths.update((ROOT / "python" / "uvicorn_rs").glob("*.py"))
     for optional in ("build.rs", ".gitignore"):
         if (ROOT / optional).exists():
@@ -444,11 +468,14 @@ def inspect_rust_crate(
                 contents[relative] = reader.read()
                 check_content(raw_name, contents[relative])
 
-    source_files = {
-        file.relative_to(directory).as_posix(): file
-        for file in directory.rglob("*")
-        if file.is_file() and file.relative_to(directory).as_posix() not in CRATE_EXCLUDES[package_name]
-    }
+    source_files = {}
+    for file in directory.rglob("*"):
+        if not file.is_file():
+            continue
+        relative = file.relative_to(directory).as_posix()
+        if any(fnmatchcase(relative, pattern) for pattern in CRATE_EXCLUDES[package_name]):
+            continue
+        source_files[relative] = file
     expected = {"Cargo.toml", "Cargo.toml.orig", "Cargo.lock", ".cargo_vcs_info.json"}
     expected |= set(source_files) - {"Cargo.toml"}
     if set(contents) != expected:
@@ -464,7 +491,7 @@ def inspect_rust_crate(
     manifest = tomllib.loads(contents["Cargo.toml"].decode("utf-8"))
     package = manifest.get("package", {})
     if (package.get("name") != package_name or package.get("version") != version
-            or package.get("license") != LICENSE_EXPRESSION
+            or package.get("license") != CRATE_LICENSE_EXPRESSIONS[package_name]
             or package.get("readme") != "README.md"):
         raise ValueError(f"Cargo archive package identity/license/readme mismatch: {package_name}")
     lock = tomllib.loads(contents["Cargo.lock"].decode("utf-8"))
@@ -472,14 +499,27 @@ def inspect_rust_crate(
               if entry.get("name") == package_name and entry.get("version") == version]
     if len(locked) != 1:
         raise ValueError(f"Cargo archive lockfile does not identify {package_name} {version}")
-    if package_name == "uvicorn-rs":
-        dependency = manifest.get("dependencies", {}).get("native-app-contract", {})
-        if (dependency.get("version") != version or "path" in dependency
-                or not any(entry.get("name") == "native-app-contract"
+    expected_dependencies = {
+        "uvicorn-rs-h3-quinn": {"h3": "uvicorn-rs-h3"},
+        "uvicorn-rs": {
+            "native-app-contract": "native-app-contract",
+            "h3": "uvicorn-rs-h3",
+            "h3-quinn": "uvicorn-rs-h3-quinn",
+        },
+    }.get(package_name, {})
+    dependencies = manifest.get("dependencies", {})
+    for alias, dependency_name in expected_dependencies.items():
+        dependency = dependencies.get(alias, {})
+        if (dependency.get("package", alias) != dependency_name
+                or dependency.get("version") != version or "path" in dependency
+                or not any(entry.get("name") == dependency_name
                            and entry.get("version") == version for entry in lock.get("package", []))):
-            raise ValueError("published uvicorn-rs archive must use the versioned lifecycle crate dependency")
-    for name in LICENSES:
-        if contents.get(name) != (ROOT / name).read_bytes():
+            raise ValueError(
+                f"published {package_name} archive must use registry dependency "
+                f"{dependency_name} {version} through {alias}"
+            )
+    for name in CRATE_LICENSE_FILES[package_name]:
+        if contents.get(name) != (directory / name).read_bytes():
             raise ValueError(f"Cargo archive license differs from repository: {package_name}/{name}")
     vcs = json.loads(contents[".cargo_vcs_info.json"].decode("utf-8"))
     vcs_git = vcs.get("git") if isinstance(vcs, dict) else None
@@ -544,11 +584,17 @@ def candidate_publication_blockers(dirty: bool) -> list[str]:
     """Report known reasons a candidate artifact cannot be consumed safely."""
     blockers = ["dirty source checkout"] if dirty else []
     workspace = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
-    h3_patch = workspace.get("patch", {}).get("crates-io", {}).get("h3")
-    if h3_patch is not None:
+    patches = workspace.get("patch", {}).get("crates-io", {})
+    if "h3" in patches:
         blockers.append(
             "standalone uvicorn-rs crate archive cannot inherit the workspace-only h3 patch"
         )
+    dependencies = workspace.get("dependencies", {})
+    expected = {"h3": "uvicorn-rs-h3", "h3-quinn": "uvicorn-rs-h3-quinn"}
+    for alias, package in expected.items():
+        dependency = dependencies.get(alias, {})
+        if dependency.get("package") != package:
+            blockers.append(f"standalone uvicorn-rs-py must use the maintained {package} package")
     return blockers
 
 
@@ -558,8 +604,13 @@ def verify_rust_crate_archives(
     expected_commit: str,
     require_clean: bool,
 ) -> dict:
-    """Build both packaged Rust crates from extracted archives in isolation."""
-    packages = ("native-app-contract", "uvicorn-rs")
+    """Build all packaged Rust crates from extracted archives in isolation."""
+    packages = (
+        "native-app-contract",
+        "uvicorn-rs-h3",
+        "uvicorn-rs-h3-quinn",
+        "uvicorn-rs",
+    )
     inspected = {
         package: inspect_rust_crate(
             directory / f"{package}-{version}.crate",
@@ -592,9 +643,13 @@ def verify_rust_crate_archives(
                 environment[name] = ""
         commands = (
             ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["native-app-contract"] / "Cargo.toml")],
+            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs-h3"] / "Cargo.toml")],
+            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs-h3-quinn"] / "Cargo.toml"),
+             "--config", f'patch.crates-io.uvicorn-rs-h3.path="{extracted["uvicorn-rs-h3"].as_posix()}"'],
             ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"),
              "--config", f'patch.crates-io.native-app-contract.path="{extracted["native-app-contract"].as_posix()}"',
-             "--config", f'patch.crates-io.h3.path="{(ROOT / "vendor" / "h3").as_posix()}"'],
+             "--config", f'patch.crates-io.uvicorn-rs-h3.path="{extracted["uvicorn-rs-h3"].as_posix()}"',
+             "--config", f'patch.crates-io.uvicorn-rs-h3-quinn.path="{extracted["uvicorn-rs-h3-quinn"].as_posix()}"'],
         )
         for command in commands:
             result = subprocess.run(
@@ -621,7 +676,9 @@ def verify_rust_crate_archives(
         },
         "commands": [
             "cargo check --offline --locked --manifest-path <native-app-contract>/Cargo.toml",
-            "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patch.crates-io.native-app-contract.path=<native-app-contract>",
+            "cargo check --offline --locked --manifest-path <uvicorn-rs-h3>/Cargo.toml",
+            "cargo check --offline --locked --manifest-path <uvicorn-rs-h3-quinn>/Cargo.toml --config patch.crates-io.uvicorn-rs-h3.path=<uvicorn-rs-h3>",
+            "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patches for native-app-contract, uvicorn-rs-h3 and uvicorn-rs-h3-quinn",
         ],
     }
 
@@ -712,7 +769,7 @@ def record(args: argparse.Namespace) -> None:
     if args.platform == "linux-x86_64":
         expected |= {
             f"uvicorn_rs_py-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json",
-            f"native-app-contract-{version}.crate", f"uvicorn-rs-{version}.crate",
+            *(f"{package}-{version}.crate" for package in CRATE_DIRS),
         }
         sdist = inspect_sdist(directory / f"uvicorn_rs_py-{version}.tar.gz", version)
         packages[sdist["filename"]] = sdist
@@ -721,7 +778,7 @@ def record(args: argparse.Namespace) -> None:
         crate_consumer_check = verify_rust_crate_archives(
             directory, version, args.commit, require_clean=not dirty
         )
-        for crate_name in ("native-app-contract", "uvicorn-rs"):
+        for crate_name in CRATE_DIRS:
             crate = inspect_rust_crate(
                 directory / f"{crate_name}-{version}.crate",
                 crate_name,
@@ -747,7 +804,9 @@ def record(args: argparse.Namespace) -> None:
     if args.platform == "linux-x86_64":
         build["native_crate_commands"] = [
             "cargo package -p native-app-contract --no-verify --locked --offline",
-            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.native-app-contract.path=\"crates/native-app-contract\"' --config 'patch.crates-io.h3.path=\"vendor/h3\"'",
+            "cargo package -p uvicorn-rs-h3 --no-verify --locked --offline",
+            "cargo package -p uvicorn-rs-h3-quinn --no-verify --locked --offline --config 'patch.crates-io.uvicorn-rs-h3.path=\"crates/uvicorn-rs-h3\"'",
+            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.native-app-contract.path=\"crates/native-app-contract\"' --config 'patch.crates-io.uvicorn-rs-h3.path=\"crates/uvicorn-rs-h3\"' --config 'patch.crates-io.uvicorn-rs-h3-quinn.path=\"crates/uvicorn-rs-h3-quinn\"'",
             "copy target/native-package/package/*.crate to dist/",
         ]
         build["native_crate_consumer_check"] = crate_consumer_check

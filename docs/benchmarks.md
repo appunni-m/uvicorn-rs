@@ -109,7 +109,7 @@ sample both; loopback load clients can themselves become the bottleneck.
 
 ### Automated multi-system matrix
 
-The [ASGI performance matrix workflow](../.github/workflows/benchmark-categories.yml)
+The [ASGI performance matrix workflow](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/benchmark-categories.yml)
 runs on benchmark-harness changes pushed to `main`, weekly, or by manual
 dispatch. Each hosted job builds the same commit with CPython 3.12.13, Rust
 1.98.1, the locked Python dependencies, the normal release server wheel, and the
@@ -508,7 +508,7 @@ that integration is not part of the performance matrix.
 ## Evidence required for a comparison
 
 The HTTP, WebSocket and lifecycle runners share
-[`benchmark_evidence.py`](../scripts/benchmark_evidence.py). Their reports separate
+[`benchmark_evidence.py`](https://github.com/appunni-m/uvicorn-rs/blob/main/scripts/benchmark_evidence.py). Their reports separate
 correct public output from usable timing evidence. Lifecycle has a distinct
 phase measurement boundary, described below.
 
@@ -864,7 +864,7 @@ sample; HTTP/2 response and lifecycle checks remain strict.
 
 ## Run the complete comparison with one command interface
 
-[`run_benchmark_categories.py`](../scripts/run_benchmark_categories.py) runs the
+[`run_benchmark_categories.py`](https://github.com/appunni-m/uvicorn-rs/blob/main/scripts/run_benchmark_categories.py) runs the
 maintained HTTP/1.1, HTTP/2, HTTP/3, WebSocket and lifecycle categories sequentially.
 It derives workloads and public parity cases from the maintained matrix, rejects
 coverage/fault/diagnostic binaries, and requires a passing complete public matrix
@@ -992,7 +992,7 @@ coverage of the complete H3 benchmark category or remove the earlier failure.
 
 ### Hosted benchmark CI
 
-[ASGI performance matrix](../.github/workflows/benchmark-categories.yml)
+[ASGI performance matrix](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/benchmark-categories.yml)
 runs manually, weekly, and when benchmark-related files change on `main`. It
 uses Linux x86_64, Linux arm64, and macOS arm64 with Python 3.12.13 and Rust
 1.98.1. Each system installs the locked references, builds a normal release
@@ -1071,7 +1071,7 @@ if the feature did not emit counters. Its throughput and latency values come
 from the instrumented build and must not be compared with the ordinary run.
 
 For HTTP/2 and WebSockets, use
-[`profile_fastapi_protocols.py`](../scripts/profile_fastapi_protocols.py).
+[`profile_fastapi_protocols.py`](https://github.com/appunni-m/uvicorn-rs/blob/main/scripts/profile_fastapi_protocols.py).
 It reuses the maintained protocol clients and lifecycle checks, wraps the same
 upstream FastAPI app on both servers, and records the ASGI stage timings plus
 Rust runtime counters. H2 and H3 are compared with Hypercorn; WebSockets are
@@ -1145,7 +1145,7 @@ decomposition.
 
 ## Capture a diagnostic profile on macOS
 
-[`profile_http_workload.py`](../scripts/profile_http_workload.py) runs the
+[`profile_http_workload.py`](https://github.com/appunni-m/uvicorn-rs/blob/main/scripts/profile_http_workload.py) runs the
 maintained body-checking H1 client with fixed, transfer, streaming, or the same
 FastAPI validation and Python-CPU workloads used by the benchmark matrix, then
 captures Apple `sample` stacks. Run this separately from normal benchmarks,
@@ -1229,7 +1229,7 @@ checks warmup and response bodies, verifies source/runtime identity, and records
 graceful shutdown. Its receipt marks all client timing as diagnostic-only.
 
 Analyze the resulting profiles and receipts with
-[analyze_samply_profiles.py](../scripts/analyze_samply_profiles.py):
+[analyze_samply_profiles.py](https://github.com/appunni-m/uvicorn-rs/blob/main/scripts/analyze_samply_profiles.py):
 
     uv run --no-sync python scripts/analyze_samply_profiles.py \
       --profile rust-upload=benchmarks/results/profile-rust/server.profile.json.gz \
@@ -1297,7 +1297,7 @@ profiler is diagnostic-only and does not modify the server extension. For
 function-level attribution, use a native profiler such as `perf` or `samply`,
 subject to host permissions.
 The `fastapi-python-cpu` workload also uses
-[`examples/profile_fastapi_cpu.py`](../examples/profile_fastapi_cpu.py) to
+[`examples/profile_fastapi_cpu.py`](https://github.com/appunni-m/uvicorn-rs/blob/main/examples/profile_fastapi_cpu.py) to
 measure the unchanged synchronous FastAPI endpoint on its AnyIO worker thread.
 
 ```sh

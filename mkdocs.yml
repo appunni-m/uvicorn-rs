@@ -1,0 +1,83 @@
+site_name: uvicorn-rs
+site_description: Rust-native ASGI server and Python compatibility adapter
+site_url: https://appunni-m.github.io/uvicorn-rs/
+repo_url: https://github.com/appunni-m/uvicorn-rs
+repo_name: appunni-m/uvicorn-rs
+docs_dir: docs
+site_dir: target/site
+use_directory_urls: true
+strict: true
+
+theme:
+  name: material
+  font: false
+  language: en
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue grey
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn
+
+nav:
+  - Overview: index.md
+  - Use:
+      - Configuration: configuration.md
+      - Deployment and integration: deployment.md
+      - ASGI support matrix: support-matrix.md
+  - Architecture:
+      - Runtime and buffer ownership: architecture.md
+      - Native FastAPI composition: native-fastapi-composition.md
+      - Architecture diagram: rust-native-integration-architecture.html
+      - Runtime and asyncio bridge: adr/0001-runtime-and-asyncio-bridge.md
+      - Worker and thread model: adr/0002-worker-process-and-runtime-thread-model.md
+      - Native service contract: adr/0003-rust-native-service-contract.md
+      - WebSocket lifecycle contract: adr/0004-native-websocket-lifecycle-contract.md
+  - Compatibility:
+      - Input-only parity matrix: parity.md
+      - Case inventory: asgi-case-inventory.md
+  - Performance:
+      - Benchmark method: benchmarks.md
+      - Results: benchmark-results.md
+      - Current run status: benchmark-status.md
+      - Feasibility: feasibility.md
+      - Performance investigation: performance-investigation-2026-10-05.md
+  - Maintainers:
+      - Release process: releases.md
+      - Implementation review: implementation-review.md
+      - Coverage: coverage.md
+      - Coverage plan: coverage-plan.md
+      - Current coverage gaps: coverage-current-gaps-2026-10-15.md

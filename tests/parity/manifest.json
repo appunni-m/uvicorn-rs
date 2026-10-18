@@ -1418,10 +1418,22 @@
       "id": "websocket.upgrade-client-drop",
       "kind": "protocol_operation",
       "observe": [
-        "status"
+        "status",
+        "application_events",
+        "shutdown_clean"
+      ],
+      "compare": [
+        "status",
+        "application_events"
       ],
       "required_observations": {
         "status": 200
+      },
+      "target_requirements": {
+        "shutdown_clean": true,
+        "application_events": [
+          "websocket.upgrade.waiting"
+        ]
       }
     },
     {

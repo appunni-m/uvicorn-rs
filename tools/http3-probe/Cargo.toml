@@ -8,8 +8,8 @@ publish = false
 [dependencies]
 bytes = "1"
 futures-util = "0.3"
-h3 = "0.0.8"
-h3-quinn = "0.0.10"
+h3 = { package = "uvicorn-rs-h3", version = "0.1.0", path = "../../crates/uvicorn-rs-h3" }
+h3-quinn = { package = "uvicorn-rs-h3-quinn", version = "0.1.0", path = "../../crates/uvicorn-rs-h3-quinn" }
 http = "1"
 h2 = "0.4"
 serde_json = "1"

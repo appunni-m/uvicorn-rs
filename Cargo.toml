@@ -13,16 +13,12 @@ readme = "README.md"
 members = [
     "crates/native-app-contract",
     "crates/uvicorn-rs",
+    "crates/uvicorn-rs-h3",
+    "crates/uvicorn-rs-h3-quinn",
     "tools/http3-probe",
 ]
 default-members = [".", "crates/uvicorn-rs"]
 resolver = "2"
-
-# h3 0.0.8 conflates a truncated DATA payload at clean FIN with end-of-body.
-# Keep the upstream source with a narrow framing correction until the fix is
-# available in a published h3 release.
-[patch.crates-io]
-h3 = { path = "vendor/h3" }
 
 [lib]
 name = "uvicorn_rs"
@@ -39,8 +35,8 @@ futures-util = "0.3"
 http = "1"
 http-body = "1"
 http-body-util = "0.1"
-h3 = "0.0.8"
-h3-quinn = "0.0.10"
+h3 = { package = "uvicorn-rs-h3", version = "0.1.0", path = "crates/uvicorn-rs-h3" }
+h3-quinn = { package = "uvicorn-rs-h3-quinn", version = "0.1.0", path = "crates/uvicorn-rs-h3-quinn" }
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["http1", "http2", "server", "server-auto", "tokio"] }
 percent-encoding = "2"

@@ -14,7 +14,7 @@ dependencies = []
 
 [project.urls]
 Repository = "https://github.com/appunni-m/uvicorn-rs"
-Documentation = "https://github.com/appunni-m/uvicorn-rs#readme"
+Documentation = "https://appunni-m.github.io/uvicorn-rs/"
 Issues = "https://github.com/appunni-m/uvicorn-rs/issues"
 
 [project.scripts]
@@ -38,6 +38,6 @@ features = ["pyo3/extension-module"]
 exclude = [
     ".kata.toml", "benchmarks/**", ".coverage-mcp/**", "build/**", "target/**",
     "tests/**", "scripts/**", "examples/**", ".github/**", ".venv/**",
-    "vendor/h3/src/tests/**",
+    "crates/uvicorn-rs-h3/src/tests/**",
     "**/__pycache__/**", "**/*.profraw", "**/*.profdata", "**/*.pem", "**/*.key",
 ]

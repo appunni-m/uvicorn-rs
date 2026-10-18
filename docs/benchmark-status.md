@@ -2,6 +2,102 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Focused FastAPI fixed-route comparison attempt (Linux x86-64, 2026-10-18)
+
+A normal release wheel built from the dirty worktree at commit
+`0b12d28ce8e3e4a64339fe556c8b01705dd90032` was compared with Uvicorn on the
+stock FastAPI `/fixed` route. The frozen environment used CPython 3.12.13,
+FastAPI 0.142.4, Starlette 1.7.0, Uvicorn 0.54.0, uvloop 0.23.0, httptools
+0.8.0, Rust 1.98.1, and an AMD Ryzen 5 2600X host with 12 logical CPUs. The
+load was concurrency 64, 5-second samples, 1-second warmup, five repetitions,
+seed `20261018`; both asyncio and uvloop server pairs were included.
+
+This host lacked `curl-config`, so the maintained client selected its Node.js
+fallback. Node.js 24.22.0 came from the official archive and its SHA-256 was
+checked against the published checksum file. The same Node client was used
+for all four servers; its CPU was close to one logical CPU during samples, so
+client saturation is an additional interpretation limit compared with the
+native libcurl benchmark path.
+
+All 20 rows returned the exact expected status and complete body, passed the
+server lifecycle gate, and recorded zero request failures, unexpected native
+errors, or panics. The official focused analyzer nevertheless classified the
+attempt as `incomplete_or_unqualified`: unrelated host CPU activity invalidated
+18/20 timing rows, leaving no same-repetition valid pair for either loop.
+
+| Loop | Uvicorn valid rows | uvicorn-rs valid rows | Matched valid repetitions |
+| --- | ---: | ---: | ---: |
+| asyncio | 1/5 | 1/5 | 0 |
+| uvloop | 0/5 | 0/5 | 0 |
+
+The raw rows contain throughput, p50/p95/p99, server CPU per request, and RSS,
+but the analyzer intentionally emits no comparison medians when there are no
+qualified matched samples. Do not use the raw rates as a performance result.
+The host passed the read-only preflight before timing; the later in-run CPU
+activity shows that this short preflight did not predict stability across the
+full sample window. This dirty-branch diagnostic does not satisfy release
+performance acceptance. Retry only this workload after the host is quiet or
+on an isolated runner, preferably with the native libcurl client.
+
+Ignored local evidence is retained at
+`target/benchmark-diagnostics/2026-10-18/current-fastapi-fixed-linux-x86_64/`.
+The raw report SHA-256 is
+`f43d3d2181dae62dc12f55072c1a9438717cde3081c0c6696dd7a0367ba37a7a`; the
+focused summary SHA-256 is
+`34e3b3271851203914d19f2363e5140dedd75bc258ab491dbb7c785094e9402a`; and the
+accepted host-preflight receipt SHA-256 is
+`db455fa02604cfa1432d85b97c581d1390a8557d66e7e87ca7838c7478a7360b`.
+
+## Current-source FastAPI fixed-route profile and Mac timing rejection (2026-10-18)
+
+On the dirty worktree at commit `0b12d28ce8e3e4a64339fe556c8b01705dd90032`,
+matched Samply profiles captured the stock FastAPI `/fixed` route under
+uvloop on macOS ARM64. Both profiles used CPython 3.12.13, FastAPI 0.142.4,
+Starlette 1.7.0, Uvicorn 0.54.0, uvloop 0.23.0, concurrency 32, a 1-second
+warmup, and a 10-second load. Every response body passed. The profile
+instrumentation is diagnostic and perturbs execution; it does not produce
+timing or CPU-per-request evidence.
+
+| Profile | Requests | Sampled process CPU weight | Python thread | Tokio worker |
+| --- | ---: | ---: | ---: | ---: |
+| `uvicorn-rs` | 125,274 | 10,631 ms | 6,890 ms | 3,741 ms |
+| Uvicorn | 217,192 | 9,485 ms | 9,485 ms | 0 ms |
+
+The Rust profile places about 35% of its sampled process CPU weight on one
+Tokio worker; Uvicorn's sampled work is on its Python thread. The dominant
+inclusive paths include Tokio request tracking and `handle_request_parts`,
+while the largest exclusive rows include unresolved `libsystem_kernel.dylib`
+addresses. Inclusive rows overlap and the system frames are not symbolicated,
+so this does not identify one function to optimize. The per-server raw
+profiles are retained locally under
+`target/benchmark-diagnostics/2026-10-18/current-fastapi-fixed-uvloop-samply-uvicorn-rs/`
+and `...-samply-uvicorn/`; their profile SHA-256 values are
+`c2658a595318f5a489de6c60d10b504cc3d71d478c6879e05f7b33b4bc29677e` and
+`39de510ef56a44f0600453d767db8a675545d5e28aba12efb93fca1b4a0c5e5b`. Both
+used native extension SHA-256
+`5db6a995af9eac0932f88bb4fb515bac34ec9df54f63e7debcebf12dd2d5cc30`.
+
+Demangling the retained Rust frames shows `PyGILState_Ensure` at 2,369 ms
+inclusive (22.29% of Rust's sampled process CPU weight),
+`handle_request_parts` at 2,903 ms inclusive, and Tokio `Context::run_task` at
+3,699 ms inclusive. These values overlap; they are not additive and do not
+measure exclusive GIL-acquisition cost. `AsgiIo::send` is 142 ms inclusive.
+The profile therefore points toward the per-request Python/GIL and Tokio
+dispatch boundary as the next investigation, not SIMD or body-copy work; it
+does not prove the cost of either or qualify a speed result. The normal
+benchmark was host-rejected, so any code change still needs a clean matched
+re-measurement.
+
+A separate unprofiled five-repetition attempt on this host passed response
+and shutdown checks for six rows, then stopped with all timings rejected for
+unrelated CPU activity (roughly 330–380% aggregate). It has no final category
+report and is not rankable. Its ignored JSONL checkpoint is
+`target/benchmark-diagnostics/2026-10-18/current-fastapi-fixed-macos-arm64-uvloop.jsonl`.
+The currently available Linux x86 host was also busy with an unrelated Rust
+compile during the follow-up check. Retry the same single workload only after
+the host preflight accepts; neither diagnostic changes the server's
+performance status.
+
 ## Rejected HTTP/1 inline-application-task candidate (Ubuntu x86-64; 2026-10-18)
 
 The candidate removed the per-request Tokio task spawn on the HTTP/1 path by
@@ -46,9 +142,9 @@ is release performance evidence. Source and native extension identities were
 stable within each run and differed only for the candidate build. The source
 and original extension were restored after measurement. The retained reports
 and source patch are ignored local artifacts:
-[baseline JSON](../target/benchmark-diagnostics/inline-http1/baseline.json)
+baseline JSON (local-only maintainer artifact)
 (SHA-256 `29d43821b1e6515b0acfe66742c1a7512d94886c22279271ac6287dcefe65bac`),
-[candidate JSON](../target/benchmark-diagnostics/inline-http1/candidate.json)
+candidate JSON (local-only maintainer artifact)
 (SHA-256 `15b34e5e0a1730fd1432a2af84b11d8d57ba5d53cfe532d67d4ab6c4bc47088b`).
 
 ## Focused exact-source FastAPI upload attempts (Ubuntu x86-64; 2026-10-18)
@@ -79,7 +175,7 @@ Uvicorn/uvloop repetition 4. They are not a matched repetition, and no asyncio
 row qualified, so the report contains zero matched pairs. The client identity
 gap is fixed in this run, but host contention still prevents performance
 interpretation. Its ignored raw report is
-[`exact 7cbc run`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-7cbc1dd-node22.json)
+`exact 7cbc run` (local-only maintainer artifact)
 (SHA-256 `abde05482fb9bb65cf8cbdeae49298558c823d75bcea5b3d868f4410fccc40be`).
 
 A later retry on the same local source commit completed its 20 rows without
@@ -92,7 +188,7 @@ hashes. Although the runner recorded the measured worktree's clean commit, it
 did not verify the actual Python package root. The benchmark evidence now
 records that root and rejects package imports resolved under another Git
 checkout. The retry remains ignored and excluded from every performance
-comparison: [`misbound retry`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-7cbc1dd-node22-retry3.json)
+comparison: `misbound retry` (local-only maintainer artifact)
 (SHA-256 `6c871750678bc65a11cc1480a7c24b2ffaacad16952b895a329467c69b50967a`).
 
 The summary validator also rejected the 5df retry's two pairs because the
@@ -106,10 +202,10 @@ from resolving Rust function costs.
 
 These focused diagnostics are not the multi-system release matrix. The ignored
 raw reports are
-[`first attempt`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-5df-node22.json)
+`first attempt` (local-only maintainer artifact)
 (SHA-256 `3d615a1d4f7e89786c116466be13a58fcf0ed6081803907406671388d14e1ad0`)
 and
-[`timing retry`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-5df-node22-retry2.json)
+`timing retry` (local-only maintainer artifact)
 (SHA-256 `1befc73b9aa636660f850ea51517d4fca3da6d8e21c50536e2f65ad22699956f`).
 Both record source fingerprint
 `befff8ef619b18b70582d8714cd61a660496133c975111e7f0b88993da46f092` and
@@ -161,9 +257,9 @@ latency percentiles, at 27% more server CPU and about 5 MiB more peak server
 RSS. With asyncio, uvicorn-rs had 14.6% lower throughput, higher latency, and
 about 2.1× server CPU. This is a qualified result for one upload workload on
 one x86-64 host, not evidence of a general speedup or the complete release
-performance gate. The ignored [raw report](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-5e2ed84-node22-retry5.json)
+performance gate. The ignored raw report (local-only maintainer artifact)
 has SHA-256 `53f135e7ba23380e24972767071a38b14c47952d01ce67f5df076de9c6448e59`;
-the [matched summary](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-5e2ed84-node22-retry5-summary/summary.json)
+the matched summary (local-only maintainer artifact)
 has SHA-256 `1f73ea32c8b210ac406c3108084575185c2d9c2b8edfc97391d3869ee44672f8`.
 
 A focused attempt to reproduce the historical x86-64
@@ -260,7 +356,7 @@ acceptance. This points to extra server-side work on this upload path, but it
 does not identify a function-level cause or resolve the earlier timeout.
 
 The ignored raw report is
-[`fastapi-upload-1m-write-1k-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-dd6ed.json)
+`fastapi-upload-1m-write-1k-dd6ed.json` (local-only maintainer artifact)
 (SHA-256 `66fd4ccbae08201382fc2e067adc3c1cbb598a832d6864f539dc13831fbeadd3`).
 Its measured source digest is
 `0992f744ceb9cae8f9d0735b09141c9d3c5808d1afe3d934d0054a2945bf53b2`, and
@@ -306,10 +402,10 @@ from bounded request-channel sends; it still cannot distinguish network pacing
 from Hyper wakeups or queue backpressure.
 
 The ignored raw reports are
-[`fastapi-upload-stage-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-stage-dd6ed.json)
+`fastapi-upload-stage-dd6ed.json` (local-only maintainer artifact)
 (SHA-256 `a8d06fa1531b9e2f0c440820942c93595955b661a39ffb06df6e2ab4005aeeeb`)
 and
-[`fastapi-upload-256k-stage-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-256k-stage-dd6ed.json)
+`fastapi-upload-256k-stage-dd6ed.json` (local-only maintainer artifact)
 (SHA-256 `e103d2ae15fe82a9343aa0f81050d12b3f9d3896d2a1ef92ee4c432722d205c1`).
 Both record commit `dd6ed00f551c02196544ae9452c7b0747452a422`, Python 3.12.3,
 FastAPI 0.142.4, Uvicorn 0.54.0, and diagnostic extension SHA-256
@@ -350,10 +446,10 @@ or queue capacity from this evidence alone because that could change streaming
 latency and memory bounds.
 
 The ignored reports are
-[`fastapi-upload-pump-stage-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-pump-stage-dd6ed.json)
+`fastapi-upload-pump-stage-dd6ed.json` (local-only maintainer artifact)
 (SHA-256 `544210b37410097828a9d2534197a9568f6a50d9c042894e0c795552da2b7ae7`)
 and
-[`fastapi-upload-256k-pump-stage-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-256k-pump-stage-dd6ed.json)
+`fastapi-upload-256k-pump-stage-dd6ed.json` (local-only maintainer artifact)
 (SHA-256 `db94c3926011f5799a7b23f7ef0cdfbbc814f193641dab7044cfd8bb44c546f9`).
 
 #### Normal-build timing recheck (same 1 KiB upload)
@@ -371,10 +467,10 @@ not meet the evidence threshold for a published performance claim. The earlier
 15-second upload timeout did not reproduce.
 
 The normal-build report is
-[`fastapi-upload-1k-normal-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1k-normal-dd6ed.json)
+`fastapi-upload-1k-normal-dd6ed.json` (local-only maintainer artifact)
 (SHA-256 `7369a818d9cd316a7a013ceb5da07f04e3e3942103012ec39e8a58cac41d7950`);
 its ignored runner log is
-[`fastapi-upload-1k-normal-dd6ed.log`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1k-normal-dd6ed.log).
+`fastapi-upload-1k-normal-dd6ed.log` (local-only maintainer artifact).
 
 #### Per-thread CPU attribution (signal-gated; diagnostic only)
 
@@ -404,10 +500,10 @@ blocks the available on-CPU call-stack profiler on this host, so the precise
 Rust call sites remain unproven.
 
 The ignored receipts are
-[`fastapi-upload-thread-cpu-dd6ed-http1-benchmark.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-thread-cpu-dd6ed-http1-benchmark.json)
+`fastapi-upload-thread-cpu-dd6ed-http1-benchmark.json` (local-only maintainer artifact)
 (SHA-256 `8dabec5ebf77b2e7c824a8e4c43850578bca755cbf1b8ee77199fd345345c2e8`)
 and
-[`fastapi-upload-thread-cpu-dd6ed-profile-summary.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-thread-cpu-dd6ed-profile-summary.json)
+`fastapi-upload-thread-cpu-dd6ed-profile-summary.json` (local-only maintainer artifact)
 (SHA-256 `2ce69090d258c94a0f72b4fd9241d99c8c308ce7839ee1968b2110eb0c89a6b6`).
 The installed normal extension SHA-256 was
 `31d3046b8ecaa953a5953ca2eafd0c05af9503517fe566bd46553cd82e9e3bf7`; the
@@ -1016,12 +1112,12 @@ count cannot be read as eight async workers.
 
 The source provides a strong lead for the extra runtime CPU: each ASGI
 WebSocket receive enters `future_into_py` in
-[`WebSocketIo::receive`](../src/lib.rs#L2950). The pinned
+[`WebSocketIo::receive`](https://github.com/appunni-m/uvicorn-rs/blob/main/src/lib.rs#L2950). The pinned
 `pyo3-async-runtimes` 0.29 completion path dispatches Python future resolution
 through `spawn_blocking`, attaches to Python, and schedules the result on its
 owning event loop. This work recurs for awaited receives; the ordinary
 WebSocket send path uses `try_send` and creates a future only when the bounded
-queue is full ([send path](../src/lib.rs#L3268)). That points to the receive
+queue is full ([send path](https://github.com/appunni-m/uvicorn-rs/blob/main/src/lib.rs#L3268)). That points to the receive
 completion handoff as a high-value optimization target, but the thread snapshot
 does not measure its individual cost or separate it from other Rust work.
 Python event-loop CPU also includes native calls made on that thread. The
@@ -1126,14 +1222,14 @@ reproduction of the FastAPI failure or proof of what reached the server socket.
 The macOS HTTP/2 failure was different. `request-upload` on `hypercorn-asyncio`
 failed in warm-up after 193 response-checked requests because the H2 probe's
 connection driver did not stop within its five-second cleanup deadline. The
-[`run_h2_category_bench.py`](../scripts/run_h2_category_bench.py) config leaves
+[`run_h2_category_bench.py`](https://github.com/appunni-m/uvicorn-rs/blob/main/scripts/run_h2_category_bench.py) config leaves
 Hypercorn's default five-second keep-alive timeout in place. The retained
 environment identifies Hypercorn 0.18.0; its local
 `Config` default is `keep_alive_timeout=5.0`, matching the probe's old
 peer-close allowance.
 The H2 probe now allows ten seconds for this post-measurement cleanup; request
 timing is captured before that wait in
-[`http2.rs`](../tools/http3-probe/src/bin/http2.rs). A focused local macOS
+[`http2.rs`](https://github.com/appunni-m/uvicorn-rs/blob/main/tools/http3-probe/src/bin/http2.rs). A focused local macOS
 replay of only this workload and server passed both repetitions with zero
 request failures and clean server shutdown. The replay's timing was rejected
 because of unrelated host CPU activity; it validates cleanup handling, not
@@ -1267,11 +1363,11 @@ measurements, not a profiled causal breakdown.
 
 The source confirms several candidate costs: each Python app request is
 scheduled onto its owning event loop with `call_soon_threadsafe`, then wrapped
-in an asyncio task and completion callback ([`python_task_future`](../src/lib.rs#L2508));
+in an asyncio task and completion callback ([`python_task_future`](https://github.com/appunni-m/uvicorn-rs/blob/main/src/lib.rs#L2508));
 the Python bridge creates per-request async `receive` and `send` wrappers
-([`_bridge.py`](../python/uvicorn_rs/_bridge.py#L4)); and `build_scope` creates
+([`_bridge.py`](https://github.com/appunni-m/uvicorn-rs/blob/main/python/uvicorn_rs/_bridge.py#L4)); and `build_scope` creates
 Python scope dictionaries, header tuples, bytes, and address values for every
-request ([`build_scope`](../src/lib.rs#L7013)). The Rust server also uses
+request ([`build_scope`](https://github.com/appunni-m/uvicorn-rs/blob/main/src/lib.rs#L7013)). The Rust server also uses
 Hyper's HTTP/1 path while the reference uses Uvicorn's `httptools` backend.
 The benchmark does not isolate any one of these costs.
 
@@ -1282,11 +1378,11 @@ request-body materialization is not a likely explanation for that particular
 route gap. HTTP upload workloads still materialize Python `bytes` ASGI request
 messages from Rust body storage.
 
-The locked [PyO3 dependency](../Cargo.lock#L528) is 0.29.3. Its `Bytes`
+The locked [PyO3 dependency](https://github.com/appunni-m/uvicorn-rs/blob/main/Cargo.lock#L528) is 0.29.3. Its `Bytes`
 extractor retains immutable Python `bytes` with `PyBackedBytes` and
 `Bytes::from_owner`; for a Python `bytearray`, it copies into Rust-owned
 immutable storage so later mutation cannot change a response while it is being
-streamed. In the other direction, [`RequestBody::into_py_bytes`](../src/lib.rs#L1962)
+streamed. In the other direction, [`RequestBody::into_py_bytes`](https://github.com/appunni-m/uvicorn-rs/blob/main/src/lib.rs#L1962)
 allocates and fills one Python `bytes` object per ASGI request message. A
 segmented Rust batch is coalesced in that single materialization, so transport
 segment count does not create one Python-body copy per segment. These are

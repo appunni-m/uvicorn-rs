@@ -220,6 +220,17 @@ jobs:
         run: |
           python scripts/check_ci_evidence.py coverage target/release-candidate/evidence/coverage/coverage-report.json --offline --require-clean
           python scripts/check_ci_evidence.py parity target/release-candidate/evidence/public/asgi-parity/result.json --offline --require-clean
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed Rust toolchain action
+        with:
+          toolchain: "1.85.0"
+      - name: Build the extracted Cargo archives as a standalone HTTP/3 consumer
+        env:
+          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
+          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
+        run: >-
+          python scripts/run_standalone_h3_consumer.py
+          target/release-candidate/packages "$RELEASE_VERSION" "$RELEASE_COMMIT"
+          target/release-candidate/evidence/standalone-h3-consumer.json
       - name: Confirm CI was not rerun during candidate assembly
         env:
           GH_TOKEN: ${{ github.token }}
