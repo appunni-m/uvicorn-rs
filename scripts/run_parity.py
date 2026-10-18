@@ -9206,6 +9206,9 @@ def execute_profile(
         # Closing an HTTP/1.1 WebSocket upgrade also terminates the server, so
         # it belongs at the end of the shared-process profile for the same
         # reason as the held-session shutdown workflow.
+        # Hypercorn's H3 oracle can time out the next request after this
+        # queued-upload early-response input, so restart the shared profile
+        # before running any later H3 cases.
         def stops_server(case: dict[str, Any]) -> bool:
             return bool(
                 "lifecycle" in case
@@ -9219,6 +9222,7 @@ def execute_profile(
                 # but their TLS transports can still be draining when the
                 # next case starts on the shared profile listener.
                 or case["case_id"] == "websocket-tls.scope-headers-path-query-and-subprotocols"
+                or case["case_id"] == "http3.post-first-upload-response-with-queued-chunks"
             )
 
         def needs_fresh_server(case: dict[str, Any]) -> bool:
