@@ -2,6 +2,69 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Latest hosted multi-system matrix (run 39100156717; source 025caf5)
+
+The [ASGI performance matrix run 39100156717](https://github.com/appunni-m/uvicorn-rs/actions/runs/39100156717)
+measured commit `025caf5b2f855c6a04a29692fba731e944d06559` on Linux x86-64,
+Linux ARM64, and macOS ARM64. Its aggregate artifact is
+[12127209607](https://github.com/appunni-m/uvicorn-rs/actions/runs/39100156717/artifacts/12127209607)
+(SHA-256 `258f85b948ccb0d2dcf672f490fe7fc4f777d6749f42146a0327359cb42cbdb4`).
+All systems used CPython 3.12.13, Rust 1.98.1, FastAPI 0.142.4, Starlette
+1.7.0, Pydantic 2.13.5, Uvicorn 0.54.0, and uvloop 0.23.0, with five
+repetitions, a 1-second warmup, and 5-second samples. Ordinary HTTP and
+WebSocket workloads used concurrency 64; HTTP/3 used concurrency 1. Results
+are system-specific and must not be pooled.
+
+| System | HTTP/1 | HTTP/2 | HTTP/3 | WebSocket | Lifecycle | Matrix result |
+| --- | --- | --- | --- | --- | --- | --- |
+| Linux x86-64, AMD EPYC 9V45 (4 logical/2 physical CPUs) | 300 rows; 288 timing-eligible, 12 Rust upload failures | 140/140 valid rows | Incomplete; 64 rows retained | 60/60 | 20/20 | Partial; no qualified HTTP/1 pairs |
+| Linux ARM64, Neoverse-N2 (4 cores) | 300/300 valid rows | 140/140 | Incomplete; 38 rows retained | 60/60 | 20/20 | Partial |
+| macOS ARM64, M1 virtual host (3 vCPUs) | 300 rows; 281 timing-eligible, 19 host rejects | 139/140 timing-eligible | 122/130 timing-eligible | 60/60 | 20/20 | All categories completed; host-rejected timings excluded |
+
+The x86 HTTP/1 failure is a correctness/availability result, not a timing
+rejection: 12 Rust FastAPI upload rows were invalid, including seven native
+libcurl transfers that timed out at the unchanged 15-second client limit.
+Uvicorn reference rows had no failures. The client reported 1 MiB uploaded,
+zero downloaded bytes, and status 0 in the retained timeout samples. A focused
+Linux x86-64 replay with the same workload family but a Node.js client passed
+five repetitions; that does not explain the libcurl timeout or the separate
+ARM64 failures. The upload issue remains open and the timeout must not be
+increased to hide the long tail.
+
+The HTTP/3 category did not complete on either Linux system because its
+Hypercorn oracle timed out waiting for response headers: x86-64 on
+`large-response` repetition 2, and ARM64 during warmup of
+`protocol-scope` repetition 5. Those are reference-side infrastructure
+failures, not evidence of a Rust HTTP/3 regression. The retained target rows
+are insufficient for a category comparison. macOS completed all HTTP/3
+workloads, with eight timing samples rejected by its CPU guard.
+
+The stock FastAPI-only validated-route comparison produced four matched pairs
+per Linux system and shows a regression on this commit:
+
+| System / loop | Rust/Uvicorn throughput ratio | p95 latency, Uvicorn → Rust | Server CPU, Uvicorn → Rust |
+| --- | ---: | ---: | ---: |
+| Linux x86-64 / asyncio | 0.634× | 5.230 → 14.199 ms | 98.5% → 121.1% |
+| Linux x86-64 / uvloop | 0.695× | 4.908 → 11.944 ms | 98.7% → 120.2% |
+| Linux ARM64 / asyncio | 0.755× | 12.852 → 18.364 ms | 95.0% → 122.2% |
+| Linux ARM64 / uvloop | 0.864× | 12.840 → 16.459 ms | 95.0% → 121.8% |
+
+The FastAPI Python-CPU workload was closer to parity (0.919× and 0.926× on
+x86-64; near Uvicorn on ARM64), while Rust still showed higher p95 latency.
+HTTP/2 comparisons use Hypercorn rather than Uvicorn: several fixed and large
+response workloads favor Rust, while chunk-streaming gains are smaller and
+vary by system. WebSocket results are mixed: handshake throughput favors Rust
+(1.745×/1.580× on x86-64), while text echo (0.390×/0.661×) and 64 KiB binary
+echo (0.532×/0.636×) trail Uvicorn. These category-specific results do not
+support a general Python-ASGI speed claim. The checked-in decision remains
+`scope_revised`: Python ASGI mode is a compatibility path; performance claims
+must target the Python-free Rust-native composition.
+
+This report predates current branch commit `dd6ed00f551c02196544ae9452c7b0747452a422`;
+it is not exact-current-source performance evidence. Current-head CI is run
+[39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
+and is tracked separately from this benchmark.
+
 ## Focused FastAPI WebSocket connect-event fast path (Ubuntu x86-64; 2026-10-18)
 
 The first ASGI WebSocket `receive()` returns `websocket.connect` immediately.

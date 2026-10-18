@@ -3,32 +3,54 @@
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
 <a id="current-unified-coverage-status-2026-10-17"></a>
+<a id="current-unified-coverage-status-2026-10-18"></a>
 
 ## Current unified coverage status (2026-10-18)
 
 Hosted exact-source CI run
-[39057925580](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580)
-passed on clean code commit
-[8d1f16950971a56e35ce566d38b5d700d0d039e7](https://github.com/appunni-m/uvicorn-rs/commit/8d1f16950971a56e35ce566d38b5d700d0d039e7).
-Its [coverage job](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580/job/117469646482)
-completed all 753 cases: 539 Python ASGI and 214 Python-free Rust cases.
-Attribution and all three repeats of each matrix passed with zero failures,
-infrastructure failures, retries, or unrun cases. The hosted report measured
-**9,131/9,131 source-span regions** and **6,741/6,741 normalized physical
-executable lines**. Its report records the matching source hash, zero missing
-regions or lines, and `mcp_status=awaiting_query`. The retained
-[hosted coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580/artifacts/12110619626)
+[39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
+passed its unified coverage job on clean commit
+[`dd6ed00f551c02196544ae9452c7b0747452a422`](https://github.com/appunni-m/uvicorn-rs/commit/dd6ed00f551c02196544ae9452c7b0747452a422).
+The [coverage job](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728/job/117617220689)
+completed attribution for all **757/757 cases** (543 Python ASGI and 214
+Python-free Rust). All three full ASGI repeats and all three native repeats
+passed with zero failures, infrastructure failures, retries, or unrun cases.
+The hosted report measured **9,166/9,166 source-span regions** and
+**6,768/6,768 normalized physical executable lines**. Attribution matched the
+coverage union. The report records source SHA-256
+`7124365a1a219b40196cf2b358b593b6eddb70fade3ea67607a7d5cbd07265e6`, native
+extension SHA-256 `651eafee745e399001178bc20f980268917c64c503ad8430f4e25727785a7d03`,
+and `mcp_status=awaiting_query`. The retained
+[hosted coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728/artifacts/12129763726)
+has SHA-256
+`482eae3da1709e6cfb38c6c4a7b25cf02afa06f3e6df411526ac4ac38cdc1734` and
 contains the report and per-case evidence.
 
-A separate full local run on the same clean code commit was independently
-checked by the strict offline evidence checker and Coverage-MCP. Coverage-MCP
-fully paginated that report: 26 region pages covered all 513 diagnostic groups,
-and one line page returned zero gap groups. Both metrics reported
-`source=matches_receipt`, `tests=passed`, and zero missing regions or lines.
-This receipt is bound to the local instrumented build and same source hash; it
-is not an MCP receipt attached to the hosted artifact. Thus hosted CI confirms
-100% source coverage on the exact commit, while the complete MCP pagination
-receipt is from the matching-source local report.
+The same exact-head run also passed the complete installed-wheel public input
+matrix **251/251** and the Python-free native FastAPI-RS → Starlette-RS →
+Uvicorn-RS composition inputs. These are separate gates from source coverage.
+All three platform package jobs passed, including Linux source-archive rebuild,
+Rust archive packaging, and exact-wheel public parity.
+
+**Coverage-MCP review of this hosted report remains outstanding.** The CI
+report explicitly says `awaiting_query`; do not treat the hosted artifact's
+100% totals as a completed Coverage-MCP receipt. The fully paginated local
+Coverage-MCP evidence below is for an earlier matching source commit, not
+`dd6ed00`, and does not substitute for querying this report. I extracted the
+exact raw report and context from the hosted artifact, but both region and line
+queries timed out after 60 seconds; a file-filtered region query also timed
+out. No MCP receipt was produced.
+
+### Previous matching-source local Coverage-MCP receipt (2026-10-18; 8d1f169)
+
+A separate full local run on clean code commit
+`8d1f16950971a56e35ce566d38b5d700d0d039e7` was independently checked by the
+strict offline evidence checker and Coverage-MCP. Coverage-MCP fully paginated
+that report: 26 region pages covered all 513 diagnostic groups, and one line
+page returned zero gap groups. Both metrics reported `source=matches_receipt`,
+`tests=passed`, and zero missing regions or lines. This receipt is bound to
+the local instrumented build and the 8d1f169 source hash; it is not an MCP
+receipt attached to the current hosted artifact.
 
 | Local evidence identity | Value |
 | --- | --- |

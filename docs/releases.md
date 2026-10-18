@@ -8,63 +8,90 @@ Rust crate archives (`native-app-contract` and `uvicorn-rs`). The native
 crates are library packages; this repository does not currently provide a
 standalone native executable.
 
-## Release status snapshot (2026-10-18; exact-source run 39082487352)
+## Release status snapshot (2026-10-18; exact-head run 39107767728)
 
-No release candidate bundle or tag is established. Hosted CI run
-[39081302848](https://github.com/appunni-m/uvicorn-rs/actions/runs/39081302848)
-completed successfully on feature-branch commit
-[`0c68cecfb89433703639006065ef51935b1c8018`](https://github.com/appunni-m/uvicorn-rs/commit/0c68cecfb89433703639006065ef51935b1c8018)
-All nine jobs passed: installed-wheel public parity, the three-repeat unified
-parity/fault-coverage job, Rust formatting/lints/features/docs, Rust 1.85
-MSRV, pinned native FastAPI-RS composition, platform packaging, and Python
-floor. Its coverage artifact is available; Coverage-MCP review remains
-outstanding. Linux x86-64 passed source archive rebuild, Python-free Rust
-archive packaging, and complete public parity on the candidate wheel. Windows
-and macOS built and installed ABI3 wheels but skipped source and Rust archive
-consumer checks. This successful run is not exact-current-source evidence.
+No release candidate bundle or tag is established. Current `main` is
+[`025caf5b2f855c6a04a29692fba731e944d06559`](https://github.com/appunni-m/uvicorn-rs/commit/025caf5b2f855c6a04a29692fba731e944d06559);
+main CI [39100156707](https://github.com/appunni-m/uvicorn-rs/actions/runs/39100156707)
+passed on that commit. The feature branch is at
+[`dd6ed00f551c02196544ae9452c7b0747452a422`](https://github.com/appunni-m/uvicorn-rs/commit/dd6ed00f551c02196544ae9452c7b0747452a422).
+Its exact-head CI
+[39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
+passed. Rust quality/MSRV, native live HTTP contracts, pinned Python-free
+FastAPI-RS composition, installed-wheel public parity, the three-repeat
+unified coverage gate, the Python floor, and package jobs for Linux x86-64,
+macOS ARM64, and Windows x86-64 all passed on this exact commit. The unified
+matrix completed 757 cases (543 Python ASGI and 214 native), three repeats of
+each matrix, 9,166/9,166 source regions, and 6,768/6,768 executable lines.
+Installed-wheel public parity passed 251/251. The current run's coverage
+artifact still records `mcp_status=awaiting_query`; the matching report-level
+Coverage-MCP review has not been completed. CI artifacts are candidate build
+evidence, not a release bundle or publication.
 
-Exact-head run
-[39082487352](https://github.com/appunni-m/uvicorn-rs/actions/runs/39082487352)
-for `8161db582` completed with the unified matrix failing
-`http2.concurrent-stream-load-slow-reader-resource-bound` on repeat 3; the
-other reported jobs passed, and conditional package jobs were skipped. The
-matrix attributed all 754 cases and measured 9,163/9,163 regions and
-6,766/6,766 lines, but remains incomplete because of that failed repeat.
-Uvicorn's idle-task snapshots fell from 24 to 18 while Rust stayed at 4. The
-runner now checks for net growth between the first and final snapshots, with
-one task of final-sample jitter. The exact case passed once on the supplied
-Ubuntu x86-64 host with the updated runner; the complete hosted matrix has not
-yet rerun. The follow-up documentation run
-[39084568469](https://github.com/appunni-m/uvicorn-rs/actions/runs/39084568469)
-was cancelled. Current-source hosted validation will be triggered by the next
-push to this feature branch.
-
-Packaging evidence on run 39081302848 is not yet a release bundle. The run is
-also on a feature branch, not `main`; the release workflow selects successful
-CI for the exact commit on `main`. Current `main` is
-[`36c1c92bfd2cf8ce960fc468314879b2c3c7590b`](https://github.com/appunni-m/uvicorn-rs/commit/36c1c92bfd2cf8ce960fc468314879b2c3c7590b).
-This checkout contains changes newer than run 39081302848, so that successful
-run is not exact-source evidence for the current source. Exact-commit hosted
-checks are still required.
-
-The full performance gate remains open. The latest full three-system matrix,
-[run 39036702600](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600),
-failed correctness gates on all three systems. The checked-in decision is
-`scope_revised`: `uvicorn-rs-py` remains a compatibility and regression path
-without a general speed claim, while performance claims target Python-free
-Rust-native composition. Focused local FastAPI measurements, including the
-HTTP/2 chunk-streaming result, the HTTP/1 upload probes, the WebSocket echo
-diagnostic, and per-thread CPU profiles for HTTP and WebSocket in the
-[benchmark record](benchmark-status.md), are diagnostic and do not replace a
-qualified exact-commit multi-system matrix.
+The latest multi-system performance run
+[39100156717](https://github.com/appunni-m/uvicorn-rs/actions/runs/39100156717)
+measured the older `025caf5` source and is partial. Linux x86-64 had twelve
+invalid Rust HTTP/1 upload rows, including seven 15-second libcurl timeouts.
+Linux x86-64 and ARM64 HTTP/3 categories stopped on Hypercorn oracle
+response-header timeouts. macOS ARM64 completed its categories with timing
+rejects recorded. On ordinary stock FastAPI's validated route, Rust achieved
+0.634×/0.695× Uvicorn throughput on x86-64 (asyncio/uvloop) and
+0.755×/0.864× on ARM64; p95 latency and server CPU were higher. HTTP/2
+workloads that beat Hypercorn are workload-specific, and WebSocket echo
+throughput trails Uvicorn. The full system/category breakdown, exact
+distinction between correctness failures and timing rejections, and artifact
+digest are in the [benchmark record](benchmark-status.md). The checked-in
+decision remains `scope_revised`: `uvicorn-rs-py` is a compatibility and
+regression path without a general speed claim; performance claims target the
+Python-free Rust-native composition.
 
 The standalone Rust crate remains blocked by the external package dependency
-path for the vendored H3 framing correction; see the package-consumer
-investigation below. A release candidate still needs complete platform
-artifacts, extracted Rust archive consumers, exact-source hosted checks,
-Coverage-MCP review, performance acceptance, and final support, deployment,
-and release documentation. No package publication or GitHub release is
-performed by these workflows.
+path for the vendored H3 framing correction; see the
+[package-consumer investigation](#standalone-rust-archive-h3-patch). CI
+successfully produced the Rust crate archives using a workspace-local Cargo
+patch, but did not build a downstream consumer from the published `uvicorn-rs`
+archive with the registry `h3` dependency and without the workspace patch. The
+archive therefore still needs that consumer check.
+Release work remains: query the exact hosted coverage report with
+Coverage-MCP, resolve the standalone archive dependency path, obtain an
+accepted performance scope/result, and finish support, deployment, and release
+documentation. The workflows do not publish packages or create GitHub
+releases.
+
+<a id="standalone-rust-archive-h3-patch"></a>
+
+### Standalone Rust archive: H3 patch is workspace-only
+
+The root workspace applies `[patch.crates-io] h3 = { path = "vendor/h3" }`,
+while [`crates/uvicorn-rs/Cargo.toml`](../crates/uvicorn-rs/Cargo.toml)
+declares the registry dependency `h3 = "0.0.8"`. That workspace override is
+used when this repository builds and tests its members. It is not a dependency
+that a consumer of the packaged `uvicorn-rs` archive inherits. Cargo's
+[dependency documentation](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html)
+explains that published crates need registry versions for dependencies; a
+local path-only or Git-only dependency is not a crates.io distribution path.
+
+This distinction affects protocol behavior. RFC 9114 [Section 7.1](https://www.rfc-editor.org/rfc/rfc9114.html#section-7.1)
+requires a cleanly terminated stream with a truncated final frame to cause an
+`H3_FRAME_ERROR` connection error. The vendored H3 source reports an incomplete
+DATA payload at clean stream finish as `UnexpectedEnd`, which the server maps
+to that error. In the published
+[`h3` 0.0.8 frame reader](https://docs.rs/crate/h3/0.0.8/source/src/frame.rs),
+`poll_data` returns `Ok(None)` for `(None, true)` even while the frame still has
+payload remaining. A subsequent `poll_next` can then hit the outstanding-data
+assertion. A previously retained standalone-consumer diagnostic observed the
+required peer close missing and the dependency panic with registry `h3`; the
+same malformed-frame input passed with the workspace patch. This prior
+diagnostic is not an exact-current-archive consumer receipt; the current
+candidate still needs that focused consumer check.
+
+The release paths are to use a published upstream `h3` release containing the
+correction, or to maintain and publish a compatible fork crate to a registry,
+then rebuild the `uvicorn-rs` archive and pass the focused malformed-frame
+consumer case without a workspace patch. A Git or local patch in this
+repository alone does not make the fix available to downstream crate users.
+Until one of those paths is verified, the standalone Rust archive is not
+release-ready.
 
 ### Superseded release status snapshot (2026-10-17; main 951c67b)
 
@@ -125,7 +152,8 @@ The repository workflows do not publish packages or create releases.
 The standalone Rust crate remains blocked by the documented vendored `h3`
 framing fix not being carried by its external package dependency path. The
 workspace parity result does not establish that the published Rust crate
-contains the fix; see the package-consumer investigation below.
+contains the fix; see the
+[package-consumer investigation](#standalone-rust-archive-h3-patch).
 
 ## Prior release status snapshot (2026-10-17; superseded by run 39011984443)
 
@@ -152,7 +180,8 @@ not publish packages or create releases.
 The standalone Rust crate also remains blocked by the documented vendored
 `h3` framing fix not being carried by its external package dependency path. The
 workspace parity result does not establish that the published Rust crate
-contains the fix; see the package-consumer investigation below.
+contains the fix; see the
+[package-consumer investigation](#standalone-rust-archive-h3-patch).
 
 ## Previous release status snapshot (2026-10-17; superseded by e2a39c5)
 
@@ -368,12 +397,16 @@ while CPU and RSS provide required resource context. A scope revision must cite
 a checked-in document and retained qualified measurements. A complete matrix
 on its own is not a gain claim. The current record is `scope_revised`: Python
 ASGI remains the compatibility and regression path; performance claims target
-Python-free Rust-native application composition. The exact-commit focused result
-supports that revision, but candidate verification still requires a complete
-exact-commit multi-system artifact. The prior run 39020268578 is incomplete
-because Linux ARM64 failed an HTTP/3 correctness gate. No tag can currently
-produce a verified candidate. The gate does not publish packages, create a
-public release, or create or move tags.
+Python-free Rust-native application composition. The normal-build FastAPI
+validated-route measurements support withholding a Python-ASGI speed claim.
+The latest three-system matrix,
+[39100156717](https://github.com/appunni-m/uvicorn-rs/actions/runs/39100156717),
+measured `025caf5` and is incomplete: twelve x86-64 Rust HTTP/1 upload rows
+were invalid, Linux x86-64 and ARM64 HTTP/3 stopped on Hypercorn response-header
+timeouts, and macOS timing samples were rejected by its host guard. It cannot
+satisfy candidate verification's complete exact-commit matrix requirement.
+No tag can currently produce a verified candidate. The gate does not publish
+packages, create a public release, or create or move tags.
 
 ### Historical focused migration and coverage evidence
 

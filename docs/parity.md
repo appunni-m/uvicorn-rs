@@ -2,16 +2,19 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-The latest local source matrix is dated 2026-10-12. It passed all 511 indexed
-cases in attribution and in each of three complete repeats: 243 live oracle
-comparisons plus 268 target-only contracts, with zero failures or transient
-infrastructure failures. The unified report records 5,561/5,561 regions and
-3,997/3,997 lines. Coverage-MCP independently found zero missing groups on a
-compact projection and matched its source/build receipt. See the
-[current coverage evidence](coverage.md#current-unified-coverage-status-2026-10-17).
-This is dirty macOS ARM64 evidence for the PyO3 adapter's `src/lib.rs`; it does
-not establish hosted release readiness, full ASGI conformance, coverage of the
-Python-free crate, or performance improvement.
+The latest exact-source hosted gate is CI run
+[39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
+on commit `dd6ed00f551c02196544ae9452c7b0747452a422`. Its unified matrix
+passed 757 cases (543 Python ASGI and 214 Python-free Rust), attribution, and
+three complete repeats of each matrix with zero failures, infrastructure
+failures, retries, or unrun cases. It measured 9,166/9,166 executable source
+regions and 6,768/6,768 normalized physical executable lines. The same run
+passed 251/251 installed-wheel public inputs and the native FastAPI-RS →
+Starlette-RS → Uvicorn-RS composition inputs. The hosted Coverage-MCP status is
+still `awaiting_query`; see the
+[current coverage evidence](coverage.md#current-unified-coverage-status-2026-10-18).
+This establishes the listed hosted inputs and source coverage, not full Uvicorn
+compatibility or a performance improvement.
 
 ## Correctness gate
 

@@ -37,17 +37,18 @@ parity oracles are not automatically supported API versions.
 ### Current verified coverage and open review (2026-10-18)
 
 Hosted exact-source CI run
-[39057925580](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580)
-passed on clean code commit **8d1f16950971a56e35ce566d38b5d700d0d039e7**.
-The coverage job passed 753 cases (539 Python ASGI and 214 Python-free Rust),
-attribution, and three full repeats of each matrix with zero failures, retries,
-or unrun cases. It measured 9,131/9,131 executable source-span regions and
-6,741/6,741 normalized physical executable lines. A separate local report from
-the same source commit fully paginated Coverage-MCP and passed the strict
-offline evidence checker. The hosted report itself still says
-`mcp_status=awaiting_query`; see the
-[coverage record](coverage.md#current-unified-coverage-status-2026-10-17) for
-both report identities and their distinct receipts.
+[39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
+passed on clean commit **dd6ed00f551c02196544ae9452c7b0747452a422**. Its
+unified matrix passed attribution for all 757 cases (543 Python ASGI and 214
+Python-free Rust), plus three complete repeats of each matrix, with zero
+failures, infrastructure failures, retries, or unrun cases. It measured
+9,166/9,166 executable source-span regions and 6,768/6,768 normalized physical
+executable lines. The installed-wheel public matrix passed 251/251, and the
+Python-free FastAPI-RS → Starlette-RS → Uvicorn-RS composition inputs passed.
+The hosted coverage artifact still says `mcp_status=awaiting_query`, so its
+Coverage-MCP review remains open. See the
+[coverage record](coverage.md#current-unified-coverage-status-2026-10-18) for
+the report identity and distinction from the earlier local MCP receipt.
 
 These results cover the recorded source revision and the listed inputs. They
 do not establish a release-candidate package or complete Uvicorn CLI/API
