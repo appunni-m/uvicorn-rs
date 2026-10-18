@@ -188,8 +188,11 @@ x86-64, Linux ARM64, and macOS ARM64. The sequential category measurements and
 analysis are still running on all three systems. These partial results do not
 establish a benchmark win.
 
-The current checkout contains uncommitted changes to the fallback fault
-contract and this status page; it is not a release candidate.
+Commit
+[`4c7327d12`](https://github.com/appunni-m/uvicorn-rs/commit/4c7327d12)
+adds the fallback fault contract and records this updated status. Its focused
+case passes, but complete current-source CI/coverage and independent
+Coverage-MCP review remain pending, so it is not a release candidate.
 
 The `v0.1.0` tag and matching GitHub Release do not exist. A read-only registry
 preflight on 2026-10-18 found none of the four Cargo crate names or the PyPI
