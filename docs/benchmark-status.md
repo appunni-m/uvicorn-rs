@@ -447,6 +447,175 @@ Python ASGI client. The local-only raw report, JSONL, preflight, and logs are in
 `benchmarks/results/2026-10-18-ubuntu-x86-websocket-text-echo/`; the raw JSON
 SHA-256 is `c7a526684558001d17f9fc241253b460b3a9681c8dc714f3ba986d4c36b560c2`.
 
+## Focused per-thread CPU profile for FastAPI HTTP/1.1 (Ubuntu x86-64; 2026-10-18)
+
+This diagnostic profiled the ordinary FastAPI `fastapi-validated-route` with
+concurrency 32, a 1-second warmup, and three 5-second repetitions per server.
+Both sides used CPython 3.12.13, FastAPI 0.142.4, Starlette 1.7.0, and
+Pydantic 2.13.5. Uvicorn 0.54.0 used asyncio and httptools 0.8.0; the Rust ASGI
+client used asyncio. The same Node 25.1 HTTP/1.1 client checked complete
+response bodies. The host was the same Ubuntu 24.04.5 / Ryzen 5 2600X system.
+
+All six rows completed with zero request failures, stable source and extension
+identities, and clean server shutdown. The diagnostic bootstrap took Linux
+per-thread CPU snapshots from `/proc/self/task/*/schedstat` around the measured
+load. The report is explicitly `diagnostic_only` with `timing_valid: false`;
+its timing rows are not rankable or release performance evidence.
+
+| Server | Requests/s | p95 ms | Server CPU µs/request | Python event-loop CPU µs/request | Tokio-named thread CPU µs/request | Peak RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn / asyncio / httptools | 6,022 | 6.852 | 165.8 | 165.3 | 0 | 47.4 |
+| `uvicorn-rs` / asyncio | 4,157 | 9.405 | 309.5 | 183.9 | 123.8 | 49.0 |
+
+The matched diagnostic shows 0.69× Uvicorn throughput, 1.37× p95 latency, and
+1.87× server CPU per request for this route. Within `uvicorn-rs`, about 60% of
+measured server thread CPU was on the Python event-loop thread and 40% on
+Tokio-named runtime threads. The Python event-loop cost was about 11% higher
+per request than Uvicorn's; the Tokio-named group used another 124 µs/request.
+The Rust source configures one Tokio async worker. The snapshot contains one
+active Tokio-named thread and one with zero CPU and zero timeslices, but thread
+names alone do not identify which runtime pool a thread belongs to: Tokio also
+uses the configured name for blocking-pool threads. This profile measures the
+named-thread group, not the async worker in isolation.
+
+This locates CPU at the Python event-loop and Rust runtime-thread levels, but
+does not attribute it to functions or individual ASGI handoffs. `perf_event_paranoid`
+is 4 on the host, and no `py-spy` or `samply` executable was available for
+call-stack sampling. The results support the measured CPU gap but do not prove
+which protocol, scheduling, or bridge operation causes it. The client is
+closed-loop and latency includes client work; client CPU also includes setup,
+drain, and reporting.
+
+Reproduction command in the provided work folder (Node 25.1 is installed under
+NVM and must be on `PATH`):
+
+```sh
+PATH=/home/appunni/.nvm/versions/node/v25.1.0/bin:$PATH \
+  .venv/bin/python scripts/profile_fastapi_loop_cpu.py \
+  --workloads fastapi-validated-route \
+  --servers uvicorn-asyncio-httptools uvicorn-rs-asyncio \
+  --duration 5 --warmup 1 --concurrency 32 --repetitions 3 \
+  --output-dir benchmarks/results/2026-10-18-ubuntu-x86-fastapi-validated-thread-profile-node25
+```
+
+The clean measured source is commit
+`ddd44af6e2d2e4fb00f4eb716ae6e16a0549261b`, source digest
+`4a282d79b3707254473849983aa57d8c6716c53b74570d9535205ab77a40d253`, and
+normal extension SHA-256
+`0459657ad788852619313e9c136be5901e346c141dab5af5d684cc5db19d8658`. The
+profile script digest is
+`6899b7a3fcb3ea0a83be8165181146adea3611d02d506e91cf37d34d8b63c9f2`. The
+measured Rust server, Python bridge, FastAPI route, HTTP runner, and profile
+script are byte-identical between this source commit and the current branch
+head. The
+local-only `http1-benchmark.json` SHA-256 is
+`366b7bee16a43a894a8c93e6490a20968c836469604e71c6036eb16d83a40bf3`; the
+`profile-summary.json` SHA-256 is
+`3f22d98341dacee517d19d1d3024125c3deb4c1d394fb137c4ebbf33f5284f94`. The
+entire receipt and per-row server logs remain in the ignored
+`benchmarks/results/2026-10-18-ubuntu-x86-fastapi-validated-thread-profile-node25/`.
+
+## Focused per-thread CPU profile for FastAPI WebSocket text echo (Ubuntu x86-64; 2026-10-18)
+
+This diagnostic repeated the FastAPI `/echo` case with a 32-byte text payload,
+persistent WebSocket connections, concurrency 32, a 1-second warmup, and three
+5-second repetitions per server. It compared Uvicorn 0.54.0 using the
+`websockets` 17.1 backend with `uvicorn-rs-py`, both under asyncio and using
+the same Rust WebSocket client. The application and Python environment match
+the five-repetition text-echo result above: CPython 3.12.13, FastAPI 0.142.4,
+Starlette 1.7.0, and Pydantic 2.13.5. The host was Ubuntu 24.04.5 on an AMD
+Ryzen 5 2600X (6 cores/12 logical CPUs).
+
+All six samples completed with zero message failures, stable source and native
+extension identities, and clean shutdown. The profile sampled Python event-loop
+thread CPU with `time.thread_time_ns` and Linux per-thread scheduler CPU from
+`/proc/self/task/*/schedstat`. The wrapper deliberately set every row to
+`timing_valid: false` and `performance_evidence_status: diagnostic_only`; the
+throughput and latency medians below are context for the CPU profile and must
+not be used as rankable benchmark results.
+
+| Server | Observed messages/s | Observed p95 ms | Server CPU µs/message | Python event-loop CPU µs/message | Tokio-named thread CPU µs/message |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn / asyncio / websockets | 21,138 | 1.752 | 47.1 | 46.7 | 0 |
+| `uvicorn-rs` / asyncio | 7,967 | 5.800 | 210.5 | 64.3 | 144.4 |
+
+In this unrankable profile, `uvicorn-rs` used 0.377× Uvicorn's observed
+throughput, had 3.31× the p95 latency, and consumed 4.47× the server CPU per
+message. The Python event-loop thread used about 38% more CPU per message than
+Uvicorn. Tokio-named threads accounted for about 69% of the Rust server's
+measured CPU in this run. Eight Tokio-named threads had CPU during each Rust
+sample, even though the server configures one async Tokio worker. Tokio 1.53.1
+uses the runtime's thread-name function for blocking-pool threads too, so this
+count cannot be read as eight async workers.
+
+The source provides a strong lead for the extra runtime CPU: each ASGI
+WebSocket receive enters `future_into_py` in
+[`WebSocketIo::receive`](../src/lib.rs#L2950). The pinned
+`pyo3-async-runtimes` 0.29 completion path dispatches Python future resolution
+through `spawn_blocking`, attaches to Python, and schedules the result on its
+owning event loop. This work recurs for awaited receives; the ordinary
+WebSocket send path uses `try_send` and creates a future only when the bounded
+queue is full ([send path](../src/lib.rs#L3268)). That points to the receive
+completion handoff as a high-value optimization target, but the thread snapshot
+does not measure its individual cost or separate it from other Rust work.
+Python event-loop CPU also includes native calls made on that thread. The
+client is closed-loop, so its latency includes client work. These measurements
+do not identify individual functions or prove a cause for the full CPU gap.
+
+The next performance experiment is one host-clean, matched comparison of this
+same echo input with the default pool and cap one. Both cap-one attempts so far
+were rejected by the per-sample host guard, so no pool-cap performance claim is
+qualified. If a clean run confirms the signal, check the cap against the
+focused HTTP and lifecycle contracts before considering it as a default. A
+code-level bridge change should target the per-receive completion handoff while
+preserving asyncio loop ownership, `contextvars`, cancellation, and disconnect
+semantics. Do not infer a Python-free native-path result from this Python ASGI
+profile.
+
+The measured source is clean commit
+`ddd44af6e2d2e4fb00f4eb716ae6e16a0549261b`, source digest
+`aa0db14d4790535150a271705206596370b694389e2e958407f3c4b5002796a4`, and
+normal extension SHA-256
+`0459657ad788852619313e9c136be5901e346c141dab5af5d684cc5db19d8658`. The
+measured server, bridge, WebSocket benchmark, and profiling bootstrap sources
+are byte-identical between that commit and the current branch head. The
+out-of-tree wrapper is archived with the local-only report; its SHA-256 is
+`74b6164ade1452876dd05a90e2703c2df1eedd012676ec165f67e0d67589b10f`, and the
+bootstrap SHA-256 is
+`8817a9c39cb9ccf70597780534c899a5561e0853c503623cbf8cc83711ac0f8f`. The
+raw `websocket.json` SHA-256 is
+`3f025beae48e90b009e71d33d3d0a3df287a9f22bf4222da52435b544aa5e8a2`; the
+profile summary SHA-256 is
+`7e32227c56900a6f00974bf1556df032956eb48e72e3ec1e897f162ecd1f6e95`. The
+full local-only receipt, per-thread snapshots, wrapper, and server logs are in
+`benchmarks/results/2026-10-18-ubuntu-x86-websocket-text-echo-thread-profile/`.
+
+### Blocking-pool cap-one probes (host-contended; not a performance result)
+
+I ran this same profile twice with `UVICORN_RS_MAX_BLOCKING_THREADS=1`. Both
+runs passed all echo and shutdown checks, but the benchmark's per-sample host
+guard rejected every row for unrelated CPU activity. A post-run preflight
+rejected once because a process exceeded 25% CPU for two consecutive
+intervals. A later preflight accepted, but the per-sample guard rejected all
+six rows in the follow-up too. The two unqualified Rust runs observed medians
+of 11,254 and 11,331 messages/s, 4.057 and 4.241 ms p95, and 145.8 and 143.2
+server CPU µs/message, respectively, with two active Tokio-named threads in
+both profiles. These readings repeat the same signal, but they are not
+qualified pairs and do not establish a cap-one improvement or causal
+relationship. The default-pool profile above is also from a different run.
+Do not bypass the guard; stop timing on this host until it can keep a clean
+per-sample window. The two ignored receipts, runner logs, and host-preflight
+records are in
+`benchmarks/results/2026-10-18-ubuntu-x86-websocket-text-echo-thread-profile-cap1/`
+and
+`benchmarks/results/2026-10-18-ubuntu-x86-websocket-text-echo-thread-profile-cap1-retest-after-preflight-accept/`.
+The two raw report SHA-256 values are
+`e3b4b5d361c81a121c6c63052d9f445166960e31faee39cb64bd3fadb46a1d9f` and
+`eeb7ec5ec22201f05ae615f64505b69c12f9780e456e79263f99586161fe5d8c`; the
+profile summary SHA-256 values are
+`b46eeaf3317a9644cc4ba48cc9dea229e47373092330d9eb39e95e599dcb2c15` and
+`3ed3b4bb073754bf77471f3636024e4ee4a7ed751d4fa7b8a5a28b76bdf13cbc`.
+
 ## Latest full multi-system matrix (run 39036702600; 2026-10-17)
 
 The [matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)

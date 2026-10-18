@@ -45,8 +45,8 @@ failed correctness gates on all three systems. The checked-in decision is
 `scope_revised`: `uvicorn-rs-py` remains a compatibility and regression path
 without a general speed claim, while performance claims target Python-free
 Rust-native composition. Focused local FastAPI measurements, including the
-HTTP/2 chunk-streaming result, the HTTP/1 upload probes, and the WebSocket echo
-diagnostic in the
+HTTP/2 chunk-streaming result, the HTTP/1 upload probes, the WebSocket echo
+diagnostic, and per-thread CPU profiles for HTTP and WebSocket in the
 [benchmark record](benchmark-status.md), are diagnostic and do not replace a
 qualified exact-commit multi-system matrix.
 
