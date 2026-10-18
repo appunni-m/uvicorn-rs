@@ -2,6 +2,55 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Rejected HTTP/1 inline-application-task candidate (Ubuntu x86-64; 2026-10-18)
+
+The candidate removed the per-request Tokio task spawn on the HTTP/1 path by
+polling the Python application future inline; HTTP/2 and HTTP/3 task tracking
+were unchanged. Five focused parity inputs passed before timing:
+`http1.response-first-chunk-before-app-completion`,
+`http1.response-reset-cancels-held-application`,
+`http1.final-response-completes-before-app-return`,
+`http2.response-stream-reset-cancels-app`, and
+`http3.client-cancels-large-response-after-headers`. The benchmark then ran
+only the stock FastAPI `/fixed` workload, with full status/body checks and
+server shutdown checks on every row.
+
+Baseline and candidate used the same Ubuntu x86-64 AMD Ryzen 5 2600X host,
+CPython 3.12.3, FastAPI 0.142.4, Starlette 1.7.0, Uvicorn 0.54.0, uvloop
+0.23.0, Node.js 25.1.0, concurrency 64, a 1-second warmup, 5-second samples,
+five repetitions, and seed `20261018`. Both read-only host preflights passed.
+The same Uvicorn + uvloop + httptools reference was included in each run.
+All five Rust baseline and candidate rows passed response and lifecycle gates;
+the baseline reference had four valid rows and the candidate reference had
+five. Rust comparisons use all five matching repetition IDs.
+
+| Rust + uvloop metric | Baseline | Inline candidate |
+| --- | ---: | ---: |
+| Throughput, requests/s | 7,105.6 | 6,789.3 |
+| p50 latency, ms | 7.70 | 9.31 |
+| p95 latency, ms | 16.86 | 12.35 |
+| p99 latency, ms | 19.66 | 14.41 |
+| Server CPU, µs/request | 186.4 | 197.1 |
+| Peak server RSS, MiB | 54.52 | 53.91 |
+
+The median same-repetition throughput ratio was `0.957×` candidate/baseline
+(4.3% lower); server CPU per request increased 5.6% and p50 latency increased
+20.3%. p95 and p99 were lower, but this is not an overall throughput gain.
+On the four reference repetition IDs valid in both runs, Uvicorn throughput
+changed by less than 1%, providing a check against large run-to-run drift.
+Reject and discard this optimization.
+
+The experiment was performed on base commit `5e2ed84b` with an uncommitted
+candidate; the candidate report records `dirty_target=true`, so neither run
+is release performance evidence. Source and native extension identities were
+stable within each run and differed only for the candidate build. The source
+and original extension were restored after measurement. The retained reports
+and source patch are ignored local artifacts:
+[baseline JSON](../target/benchmark-diagnostics/inline-http1/baseline.json)
+(SHA-256 `29d43821b1e6515b0acfe66742c1a7512d94886c22279271ac6287dcefe65bac`),
+[candidate JSON](../target/benchmark-diagnostics/inline-http1/candidate.json)
+(SHA-256 `15b34e5e0a1730fd1432a2af84b11d8d57ba5d53cfe532d67d4ab6c4bc47088b`).
+
 ## Focused exact-source FastAPI upload attempts (Ubuntu x86-64; 2026-10-18)
 
 The authorized Ubuntu host ran the `fastapi-upload-1m-write-1k` workload on
