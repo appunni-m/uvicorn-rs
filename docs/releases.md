@@ -162,7 +162,7 @@ publish packages, create a tag, or deploy a public documentation site.
 Candidate assembly and each public distribution remain distinct stages. The
 current branch and evidence do not yet satisfy the exact-commit release gates.
 
-## Current preparation status snapshot (2026-10-18; branch CI run 39133909994)
+## Hosted status snapshot at branch CI run 39133909994 (2026-10-18)
 
 The latest connected GitHub check found remote `main` at
 [`025caf5b2f855c6a04a29692fba731e944d06559`](https://github.com/appunni-m/uvicorn-rs/commit/025caf5b2f855c6a04a29692fba731e944d06559),
@@ -175,11 +175,10 @@ gate, Rust 1.85, installed-wheel parity, Python-floor install, and Linux,
 macOS, and Windows package builds. Its retained artifacts include the
 candidate packages, public-parity result, and unified-coverage report.
 
-That CI run validates the clean commit, not the current local worktree. The
-checkout now contains uncommitted source, package, workflow, and documentation
-changes; the release audit rejects packaging from this state. The publisher and
-Pages workflows have not passed hosted CI. The release-candidate workflow also
-cannot use this feature-branch run:
+At the time of that run, the checkout contained uncommitted source, package,
+workflow, and documentation changes; the release audit rejected packaging from
+that state. The publisher and Pages workflows had not passed hosted CI. The
+release-candidate workflow also could not use this feature-branch run:
 candidate assembly requires successful CI and performance evidence for the
 exact tagged commit on `main`. There is no tag-triggered candidate bundle yet.
 
@@ -192,14 +191,15 @@ The local strict MkDocs build passes, but there has been no hosted docs build or
 deployment. No package, tag, GitHub Release, or documentation site has been
 published.
 
-### Local release-preparation update (2026-10-18; after run 39133909994)
+### Local release-preparation update (2026-10-18; before main validation)
 
-The checkout remains on `codex/h3-native-open-upload-peer-stop` at
-`0b12d28ce8e3e4a64339fe556c8b01705dd90032`, nine commits ahead of the locally
-recorded `origin/main` ref (`025caf5b2f855c6a04a29692fba731e944d06559`). It has
-154 modified, deleted, or untracked file entries (counted with
-`--untracked-files=all`) and is not a release source. The local
-changes split the H3 framing fix into registry-named `uvicorn-rs-h3` and
+The release-preparation implementation is committed on
+`codex/h3-native-open-upload-peer-stop` as
+[`bbd740158`](https://github.com/appunni-m/uvicorn-rs/commit/bbd740158). The
+worktree was clean at this snapshot. The branch was ahead of the fetched
+`origin/main` ref (`025caf5b2f855c6a04a29692fba731e944d06559`) and had not yet
+been validated by CI on `main`. The changes split the H3 framing fix into
+registry-named `uvicorn-rs-h3` and
 `uvicorn-rs-h3-quinn` packages, replacing the server crate's reliance on a
 workspace-only Cargo patch. Those packages have not been published.
 
@@ -217,21 +217,23 @@ after that correction.
 
 The standalone consumer is outside the workspace, has its own lockfile, and
 declares only the versioned `uvicorn-rs` registry dependency. A focused local
-run built it from the four extracted `.crate` files, observed
+run built it from the four extracted `.crate` files before the implementation
+was committed, observed
 `H3_FRAME_ERROR` (`262`), then received status 200 and the expected body over a
 new connection. Its diagnostic receipt is marked `source_dirty: true`; it is
 not valid release evidence. The consumer also passed `cargo +1.85.0 check`
 against the local crate sources, and the focused H3 parity case passed earlier
-on this worktree. The strict local MkDocs build passed earlier as well. These
-checks do not validate the workflow edits in hosted CI or a clean candidate.
+on this worktree. A fresh strict local MkDocs build also passed after this
+status-page update. These checks do not validate the workflow edits in hosted
+CI or a clean candidate.
 
-The strict Rust release audit reports one error because this worktree is dirty.
-Its six review findings are the manual `main`-only publisher trigger, the
-version check delegated to `scripts/check_release_version.py`, and the four
-`cargo publish --no-verify` jobs. The first two are intentional workflow
-choices documented above; each publish job first rebuilds and byte-compares
-the exact candidate archive. The audit does not replace the required clean
-candidate or hosted verification.
+The earlier strict Rust release audit reported one error because that
+worktree was dirty. Its six review findings were the manual `main`-only
+publisher trigger, the version check delegated to
+`scripts/check_release_version.py`, and the four `cargo publish --no-verify`
+jobs. The first two are intentional workflow choices documented above; each
+publish job first rebuilds and byte-compares the exact candidate archive. The
+audit does not replace the required clean candidate or hosted verification.
 
 Still open: the standalone consumer must pass from a clean exact candidate and
 emit a `source_dirty: false` receipt; exact-source main CI, independent
