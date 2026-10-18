@@ -1,6 +1,6 @@
 # Benchmark and release-gate status
 
-> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
+> **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
 ## Latest hosted multi-system matrix (run 39100156717; source 025caf5)
 
@@ -64,6 +64,30 @@ This report predates current branch commit `dd6ed00f551c02196544ae9452c7b0747452
 it is not exact-current-source performance evidence. Current-head CI is run
 [39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
 and is tracked separately from this benchmark.
+
+### Focused exact-source upload recheck (Ubuntu x86-64; 2026-10-18)
+
+On clean source commit `dd6ed00f551c02196544ae9452c7b0747452a422`, the
+`fastapi-upload-1m-write-1k` workload sent 1 MiB bodies with a 1 KiB client
+read cap at concurrency 8. CPython 3.12.3, FastAPI 0.142.4, Uvicorn 0.54.0,
+and libcurl 8.5.0 were used on an AMD Ryzen 5 2600X host with 12 logical
+CPUs. Five repetitions per server completed with zero client failures; the
+historical 15-second upload timeout did not reproduce. The shared host CPU
+guard accepted only two matched Rust/Uvicorn repetitions: the median
+Rust/Uvicorn throughput ratio was 0.822, p95 latency ratio 1.190, and server
+CPU per request ratio 1.84. Client CPU per request was nearly equal (1.01×).
+Three Rust rows and one Uvicorn row were rejected for unrelated host CPU
+activity, leaving fewer than the three valid pairs required for performance
+acceptance. This points to extra server-side work on this upload path, but it
+does not identify a function-level cause or resolve the earlier timeout.
+
+The ignored raw report is
+[`fastapi-upload-1m-write-1k-dd6ed.json`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-dd6ed.json)
+(SHA-256 `66fd4ccbae08201382fc2e067adc3c1cbb598a832d6864f539dc13831fbeadd3`).
+Its measured source digest is
+`0992f744ceb9cae8f9d0735b09141c9d3c5808d1afe3d934d0054a2945bf53b2`, and
+the normal native extension digest is
+`53922738aa0e2ed4bd5b38c5d26df2d77cd9cc74c1c85117bd01d7dfb42f67a0`.
 
 ## Focused FastAPI WebSocket connect-event fast path (Ubuntu x86-64; 2026-10-18)
 
