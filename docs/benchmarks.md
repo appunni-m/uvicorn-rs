@@ -612,9 +612,13 @@ use two. Report slow-reader results as backpressure behavior at that imposed
 rate, not unrestricted transport capacity.
 
 `performance_evidence_status: completed` means the frozen comparison passed
-these evidence gates; it does not mean Rust was faster. Dirty local experiments,
-modified dependencies or missing valid pairs remain `not_proven`. Preserve raw
-invalid rows and improve the run conditions before making a speed claim.
+the identity and per-pair gates; it does not mean every raw sample was valid or
+that Rust was faster. Invalid samples remain in the report and are excluded
+from pair medians. Their presence alone does not make the report
+`not_proven` when every comparison still has at least three matching valid
+repetitions. Dirty local experiments, modified dependencies or underqualified
+pairs remain `not_proven`. Preserve raw invalid rows and improve run conditions
+before making a speed claim.
 
 ### Lifecycle measurement boundary
 

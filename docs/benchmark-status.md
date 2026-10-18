@@ -141,6 +141,59 @@ Python `bytes` construction cannot by itself explain or remove the observed
 latency gap; request chunk delivery and bridge scheduling are higher-priority
 targets for this case. This attribution is specific to `fastapi-request-upload`.
 
+#### Clean five-repetition rerun (2026-10-18)
+
+I reran this same single input from clean commit
+`ddd44af6e2d2e4fb00f4eb716ae6e16a0549261b`: POST 1 MiB in 64 KiB writes,
+concurrency 64, 1-second warmup, five 5-second repetitions, seed `20261018`.
+The environment was CPython 3.12.13, FastAPI 0.142.4, Uvicorn 0.54.0,
+uvloop 0.23.0, httptools 0.8.0, Rust 1.91.1, and Node.js 25.1.0. The host was
+Linux 7.0.0-38-generic on an AMD Ryzen 5 2600X with 12 logical CPUs. The native
+libcurl client was unavailable, so both servers used the same Node.js client
+with full response-body checks. Its median CPU use was 61% of one core for
+Uvicorn and 46% for `uvicorn-rs`.
+
+The corrected report retained a host-rejected Rust repetition and still passed
+the three-matched-repetition gate with repetitions 1, 3, 4, and 5. All ten
+samples passed complete response checks with zero request failures; the
+single invalid sample was excluded from the paired medians. Source identity
+remained stable. The report source digest was
+`165a1ce2c6dc2f1e364e4422a0b0af1089064a54f3ded9389af6917a72dc2c78`; the
+measured source identity digest was
+`416d54721b007b6243b109af7656bcea9535bbb0ffe56bd0a3df5303c36bce62`. The Rust
+extension hash was
+`0459657ad788852619313e9c136be5901e346c141dab5af5d684cc5db19d8658`, and the
+report records `performance_evidence_status: completed` for this local pair.
+The venv extension was not rebuilt for the two benchmark-script-only
+commits `46a452afd` and `ddd44af6e`; its normal, uninstrumented binary hash
+remained stable. The only Rust-source difference from the extension's prior
+build is the coverage-only fault-point name, which is excluded from normal
+builds. The receipt is a frozen-checkout measurement, not a build attestation.
+
+| Server | Requests/s | p50 ms | p95 ms | p99 ms | Server CPU µs/request | Client CPU µs/request | Peak RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn + uvloop + httptools | 1,057.8 | 58.2 | 71.9 | 87.2 | 942 | 610 | 104.8 |
+| `uvicorn-rs` + uvloop | 675.3 | 94.1 | 123.5 | 146.5 | 2,146 | 723 | 157.6 |
+
+`uvicorn-rs` reached 63.8% of Uvicorn's throughput, with 1.72× p95 latency,
+2.28× server CPU per request, and 1.50× peak RSS. The x86 timeout did not
+recur. This result confirms the local slowdown on the 64 KiB upload workload;
+it does not explain the earlier libcurl timeout or the separate ARM64 1 KiB
+write failures, and the Node client makes it a single-host comparison rather
+than a multi-system release result.
+
+The request-body path already retains HTTP `Bytes` segments and copies them
+directly once into the Python `bytes` object with `PyBytes::new_with`; it does
+not first coalesce a second Rust buffer. A pending ASGI `receive()` uses
+`pyo3-async-runtimes` `future_into_py`, whose completion path schedules Python
+future resolution through Tokio `spawn_blocking`. That is a concrete runtime
+handoff on the receive path and matches the observed Tokio-named thread CPU,
+but it is not an exclusive CPU attribution or proof that this handoff accounts
+for the full latency gap. The raw JSON receipt is
+`benchmarks/results/2026-10-18-ubuntu-x86-upload-validated/fastapi-request-upload.json`
+(471,625 bytes; SHA-256
+`3b165c7f4c83bc380e4058262ed3dd4b8d96fbcb665948c7e562bcee2f9fefd5`).
+
 The remaining server CPU difference is not yet attributed to individual CPU
 frames. The host sets `perf_event_paranoid=4`, and `perf stat` rejected even a
 user-space task-clock sample. A separate 99 Hz `py-spy --native` sample for
@@ -188,6 +241,46 @@ candidate source files before and after the run. This separate workload does
 not measure the effect of the 5 ms setting against a 1 ms baseline; it only
 compares both servers on the same 1 KiB-write input. Its local-only receipt is
 `benchmarks/results/2026-10-18-ubuntu-x86-focused-upload/upload-1k-exact.json`.
+
+#### Clean current-source replay with Node.js client (2026-10-18)
+
+I repeated only this workload from clean commit
+`ddd44af6e2d2e4fb00f4eb716ae6e16a0549261b` in the existing Ubuntu x86-64 work
+folder. Both servers received the same FastAPI 1 MiB upload split into 1 KiB
+writes, at concurrency 8, with a 1-second warmup and five 5-second
+repetitions. The native libcurl client was unavailable, so both sides used
+Node.js 25.1.0 and checked complete response bodies. The environment was
+CPython 3.12.13, FastAPI 0.142.4, Uvicorn 0.54.0, uvloop 0.23.0, and httptools
+0.8.0. The Tokio blocking-thread limit was unset. Source identity matched
+before and after the run, and the uninstrumented native extension hash was
+stable at
+`0459657ad788852619313e9c136be5901e346c141dab5af5d684cc5db19d8658`.
+
+All ten rows were timing-valid, had zero request failures, passed full-body
+checks, and shut down cleanly. The table reports medians across the five
+repetitions for each server:
+
+| Server | Requests/s | p50 ms | p95 ms | p99 ms | Server CPU µs/request | Mean server CPU (% of one core) | Client CPU µs/request | Mean client CPU (% of one core) | Peak server RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn + uvloop + httptools | 785.2 | 9.88 | 13.84 | 15.51 | 1,266 | 91.0% | 998 | 71.7% | 57.1 |
+| `uvicorn-rs` + uvloop | 963.5 | 8.20 | 11.45 | 13.28 | 1,566 | 137.9% | 876 | 75.4% | 62.4 |
+
+On this run `uvicorn-rs` completed 1.23× as many requests per second and had
+0.83× the p95 latency, while using 1.24× the server CPU per request and 1.09×
+the peak server RSS. It handled this input faster in wall time, not with less
+server CPU. The server process averaged 137.9% of one logical core for Rust
+versus 91.0% for Uvicorn. This run used the server's one Tokio async worker
+and left `UVICORN_RS_MAX_BLOCKING_THREADS` unset. That async-worker limit does
+not cap process CPU at 100%, because Tokio's separate blocking pool can also
+run work. The report has no per-thread CPU, so it cannot attribute the extra
+CPU to a specific thread or bridge operation. The earlier timeout did not
+recur, but this Node-client x86 run does not explain the ARM64 failures or the
+earlier libcurl timeout. Its result must not be combined with the preceding
+libcurl C-client table: the client implementation and source snapshot differ.
+The raw ignored report is
+`benchmarks/results/2026-10-18-ubuntu-x86-upload-validated/fastapi-upload-1m-write-1k.json`
+(467,886 bytes; SHA-256
+`9a9f6ab95de9eba970676c528648006fd440120d8b04f79d3471bdfd3f5002f4`).
 
 ### Ordinary FastAPI validated route
 
