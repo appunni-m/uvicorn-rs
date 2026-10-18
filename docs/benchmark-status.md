@@ -20,14 +20,38 @@ timing guard accepted 7/20 rows and rejected 13 for unrelated activity. That
 retry contains one raw same-repetition valid pair per loop (asyncio repetition
 5 and uvloop repetition 3), below the required three pairs per loop.
 
-The summary validator also rejected those two pairs because the Node.js client
-binary was not fingerprinted (`client_sha256_before` and `client_sha256_after`
-are empty). The Node client script is included in the source fingerprint and
-Node 22.15.0 is recorded, but the executable identity was missing. The local
-benchmark runner has now been changed to hash the Node executable on future
-runs; these reports predate that change and remain unqualified. Therefore this
-work does not provide a throughput or latency comparison and does not identify
-the cause of the previously observed Rust CPU excess. Host
+An exact-source follow-up on local commit
+`7cbc1ddcd2cbee162a5e1c3e8c440910ed12cca7` used the same workload, host,
+software versions, and 20-row design. It passed
+all 20 response and shutdown checks, and recorded the Node executable SHA-256
+(`c43f3f73f6917481d2364daf7b7bf8c4fc4a7643580b4626f13f003131ec8716`). The
+timing guard accepted only two rows: Rust/uvloop repetition 2 and
+Uvicorn/uvloop repetition 4. They are not a matched repetition, and no asyncio
+row qualified, so the report contains zero matched pairs. The client identity
+gap is fixed in this run, but host contention still prevents performance
+interpretation. Its ignored raw report is
+[`exact 7cbc run`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-7cbc1dd-node22.json)
+(SHA-256 `abde05482fb9bb65cf8cbdeae49298558c823d75bcea5b3d868f4410fccc40be`).
+
+A later retry on the same local source commit completed its 20 rows without
+request, shutdown, or lifecycle failures, but must be discarded entirely: its
+shared virtual environment imported `uvicorn_rs` and the native extension from
+`/home/appunni/work/uvicorn-rs`, whose checkout was
+`599a9b5be5cdeb579c2a0059ab9e924f7bfb3828`, not the measured `7cbc1dd`
+worktree. The imported checkout had different Rust and CLI source
+hashes. Although the runner recorded the measured worktree's clean commit, it
+did not verify the actual Python package root. The benchmark evidence now
+records that root and rejects package imports resolved under another Git
+checkout. The retry remains ignored and excluded from every performance
+comparison: [`misbound retry`](../target/benchmark-diagnostics/2026-10-18/fastapi-upload-1m-write-1k-exact-7cbc1dd-node22-retry3.json)
+(SHA-256 `6c871750678bc65a11cc1480a7c24b2ffaacad16952b895a329467c69b50967a`).
+
+The summary validator also rejected the 5df retry's two pairs because the
+Node.js client binary was not fingerprinted (`client_sha256_before` and
+`client_sha256_after` were empty). The 7cbc follow-up records that executable
+identity, but still has no matched timing pairs. These attempts do not provide
+a throughput or latency comparison and do not identify the cause of the
+previously observed Rust CPU excess. Host
 `perf_event_paranoid=4` also prevents the available on-CPU call-stack profiler
 from resolving Rust function costs.
 

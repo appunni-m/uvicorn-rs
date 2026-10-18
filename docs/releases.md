@@ -45,14 +45,19 @@ This branch run is not eligible for candidate assembly: the release workflow
 requires successful complete CI on `main` at the exact tagged commit. The
 latest complete multi-system performance evidence is from an earlier source
 revision and is not a passing exact-head artifact. A focused exact-source
-FastAPI upload run passed its response and shutdown checks but was invalid for
-timing: the retry accepted 7/20 samples but contained only one raw matched
-repetition per loop, below the required three. The summary also rejected those
-pairs because the Node.js executable was not fingerprinted. The benchmark
-runner now hashes that executable for future runs; the current reports remain
-unqualified. The checked-in performance decision scopes `uvicorn-rs-py` as a
-compatibility path without a general speed claim; exact-source multi-system
-evidence is still required by the candidate verifier. The exact-source unified
+FastAPI upload run on local commit `7cbc1ddcd2cbee162a5e1c3e8c440910ed12cca7`
+passed all 20 response and shutdown checks and now fingerprints the Node.js
+client, but only two timing rows qualified and they were different
+repetitions; there are zero matched pairs. Exact-source multi-system evidence
+is still required by the candidate verifier. This local commit is one commit
+ahead of the branch's remote and has no hosted CI result; run #195 covers its
+parent, not this commit. The checked-in performance
+decision scopes `uvicorn-rs-py` as a compatibility path without a general
+speed claim. A later local retry exposed a benchmark setup bug: its shared
+Python environment imported the server package from a different Git checkout
+than the reported source commit. That entire retry is excluded. The evidence
+collector now rejects package imports resolved under another Git checkout, and
+the next run must load the package from the exact worktree. The exact-source unified
 coverage report also needs a Coverage-MCP review.
 
 The standalone Rust archive remains blocked by the external package dependency

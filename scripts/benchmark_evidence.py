@@ -52,6 +52,13 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _git_checkout(path: Path) -> Path | None:
+    for parent in (path, *path.parents):
+        if (parent / ".git").exists():
+            return parent.resolve()
+    return None
+
+
 def median_valid(rows: list[dict], metric: str):
     values = [
         row[metric]
@@ -433,11 +440,31 @@ class BenchmarkEvidence:
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.rustc_version = rustc_version()
         code = (
-            "import json,sys,uvicorn_rs._native as n; "
-            "print(json.dumps({'native':n.__file__,'python':sys.executable,'version':sys.version}))"
+            "import importlib.metadata as metadata,json,sys,uvicorn_rs,uvicorn_rs._native as n; "
+            "from pathlib import Path; "
+            "dist=metadata.distribution('uvicorn-rs-py'); "
+            "direct=dist.read_text('direct_url.json'); "
+            "print(json.dumps({'native':n.__file__,'python':sys.executable,'version':sys.version,"
+            "'python_package':uvicorn_rs.__file__,"
+            "'python_package_root':str(Path(uvicorn_rs.__file__).resolve().parent),"
+            "'direct_url':json.loads(direct) if direct else None}))"
         )
         runtime = json.loads(subprocess.check_output([str(python), "-c", code], cwd=root, text=True))
         self.native = Path(runtime["native"]).resolve()
+        self.python_package_root = Path(runtime["python_package_root"]).resolve()
+        if self.native.parent != self.python_package_root:
+            raise RuntimeError(
+                "uvicorn-rs benchmark loaded its native extension from a different package root: "
+                f"Python package {self.python_package_root}, extension {self.native}"
+            )
+        checkout = _git_checkout(self.python_package_root)
+        expected_root = root.resolve()
+        if checkout is not None and checkout != expected_root:
+            raise RuntimeError(
+                "uvicorn-rs benchmark loaded its Python package from a different Git checkout: "
+                f"measured source {expected_root}, imported package checkout {checkout}"
+            )
+        runtime["python_package_checkout"] = str(checkout) if checkout is not None else None
         self.runtime = runtime
         self.clients = [path.resolve() for path in clients]
         rust_sources = workspace_rust_source_paths(root)
