@@ -376,6 +376,77 @@ passed 753/753 cases with three ASGI and three native repeats, 9,131/9,131
 regions, and 6,741/6,741 lines. Its exact-source coverage report still awaits
 Coverage-MCP review, and the run predates this dirty local checkout.
 
+## Focused FastAPI WebSocket text-echo result (Ubuntu x86-64; 2026-10-18)
+
+This normal-build diagnostic used the stock FastAPI `/echo` route with a
+32-byte text payload, persistent WebSocket connections, concurrency 32, a
+1-second warmup, five 5-second repetitions, and seed `20261018`. The same
+CPython 3.12.13 environment served FastAPI 0.142.4, Starlette 1.7.0, and
+Pydantic 2.13.5 through either Uvicorn 0.54.0 or `uvicorn-rs-py`; both servers
+were tested with asyncio and uvloop 0.23.0. Uvicorn used the `websockets`
+backend 17.1. The Rust client used persistent `tokio-tungstenite` connections
+and validated the complete echoed message on every sample.
+
+The host was Ubuntu 24.04.5 on an AMD Ryzen 5 2600X (6 cores/12 logical CPUs).
+It passed the host preflight. All 20 rows completed with zero message failures
+and clean shutdown; two rows were excluded for unrelated host CPU activity
+(Rust/asyncio repetition 2 and Uvicorn/uvloop repetition 5). Each same-loop
+pair has four matching timing-valid repetitions: asyncio repetitions 1, 3, 4,
+and 5; uvloop repetitions 1 through 4. Table values are medians over those
+same-repetition matches.
+
+The raw report sets its overall `timing_valid` field to `false` because two
+rows were excluded. The matched valid rows below are a focused diagnostic
+subset; they are not a rankable benchmark result or release performance
+evidence.
+
+| Loop | Server | Matched reps | Messages/s | p50 ms | p95 ms | p99 ms | Server CPU µs/message | Server CPU % elapsed | Peak RSS MiB | Client CPU µs/message |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| asyncio | Uvicorn | 4 | 21,129 | 1.451 | 1.767 | 1.862 | 47.1 | 96.1 | 48.6 | 35.5 |
+| asyncio | `uvicorn-rs` | 4 | 8,718 | 3.747 | 5.257 | 5.865 | 191.5 | 156.3 | 52.4 | 41.0 |
+| uvloop | Uvicorn | 4 | 24,300 | 1.238 | 1.558 | 1.632 | 40.9 | 96.2 | 51.2 | 32.3 |
+| uvloop | `uvicorn-rs` | 4 | 15,899 | 2.188 | 2.717 | 3.040 | 104.2 | 154.5 | 55.0 | 33.5 |
+
+The median of same-repetition throughput ratios was 0.412× Uvicorn with
+asyncio and 0.658× with uvloop. Rust p95 latency was 2.98× and 1.74× the
+respective Uvicorn medians. Server CPU per echoed message was 4.07× and 2.55×
+higher; sampled RSS was about 3.8 MiB higher in both comparisons. Client CPU
+was similar. The client is closed-loop and latency includes client work; client
+CPU includes setup, drain, and reporting. The run does not provide per-thread
+or call-path attribution, so the higher server cost is measured but not
+assigned to a specific Python/Rust stage. This diagnostic reinforces the
+existing `scope_revised` decision for the Python ASGI path; it does not claim
+that the Rust server is faster for this workload.
+
+Before timing, `websocket.text-and-binary-round-trip` passed 1/1 on the same
+normal build. The benchmark then checked each measured echoed text payload and
+graceful shutdown. Reproduction command from the work folder:
+
+```sh
+.venv/bin/python scripts/run_websocket_category_bench.py \
+  --workloads text-echo \
+  --servers uvicorn-asyncio-websockets uvicorn-uvloop-websockets \
+    uvicorn-rs-asyncio uvicorn-rs-uvloop \
+  --duration 5 --warmup 1 --concurrency 32 --repetitions 5 \
+  --seed 20261018 \
+  --output benchmarks/results/2026-10-18-ubuntu-x86-websocket-text-echo/websocket.json
+```
+
+The report is bound to clean commit `ddd44af6e2d2e4fb00f4eb716ae6e16a0549261b`,
+source digest
+`aa0db14d4790535150a271705206596370b694389e2e958407f3c4b5002796a4`, native
+extension SHA-256
+`0459657ad788852619313e9c136be5901e346c141dab5af5d684cc5db19d8658`, and
+benchmark-client SHA-256
+`d0b7e86d0d3a529764611794c372fb82e12464c823d9cc1672e970227ae12457`. The
+measured server, app, Python bridge, and WebSocket harness sources are unchanged
+between that commit and the current branch head; this is one clean x86-64
+workload, not a multi-system or release performance result. The current
+performance decision remains `scope_revised`: no broad speed claim for the
+Python ASGI client. The local-only raw report, JSONL, preflight, and logs are in
+`benchmarks/results/2026-10-18-ubuntu-x86-websocket-text-echo/`; the raw JSON
+SHA-256 is `c7a526684558001d17f9fc241253b460b3a9681c8dc714f3ba986d4c36b560c2`.
+
 ## Latest full multi-system matrix (run 39036702600; 2026-10-17)
 
 The [matrix run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)

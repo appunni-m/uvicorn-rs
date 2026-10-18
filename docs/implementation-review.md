@@ -2,12 +2,13 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-The latest complete unified report covers the current 696-case manifest:
-511 Python ASGI and 185 Python-free native cases. All 696 passed attribution
-with zero case, infrastructure, or retry failures. Three ASGI repeats passed
-511/511 each and three native repeats passed 185/185 each, with zero transient
-infrastructure failures. The source-span union matches the per-case
-attribution.
+The last complete local three-repeat report recorded here predates the
+expanded hosted matrix. It covers 696 cases: 511 Python ASGI and 185
+Python-free native cases. All 696 passed attribution with zero case,
+infrastructure, or retry failures. Three ASGI repeats passed 511/511 each and
+three native repeats passed 185/185 each, with zero transient infrastructure
+failures. The source-span union matches the per-case attribution. This is a
+historical dirty local snapshot, not the latest release gate.
 
 Coverage is still incomplete at 8,123/8,288 regions and 6,094/6,215 lines
 (165 regions and 121 lines missing). Coverage-MCP fully paginated the exact
@@ -29,6 +30,34 @@ Coverage-MCP receipt SHA-256:
 `8f193eaeeca041fe3446a79132ce049c0be53ee5cac26b0d826f5fde178e3a8d`.
 The report is a dirty local snapshot; clean committed-source and hosted
 verification remain separate release requirements.
+
+## Latest hosted unified-matrix result (2026-10-18)
+
+Hosted CI run
+[39079649274](https://github.com/appunni-m/uvicorn-rs/actions/runs/39079649274)
+attributed all 754 indexed cases and measured 9,163/9,163 regions and
+6,766/6,766 executable lines. Repeats 1 and 2 passed. Repeat 3 stopped at
+`http3.concurrent-stream-load-slow-reader-resource-bound`: Hypercorn's idle
+Python task snapshots were `[6, 6, 7]`, while the Rust target remained `[4, 4,
+4]`; response fingerprints, resource stability, task cleanup, and follow-up
+health passed. The failure came from a one-task reference snapshot increase
+against the previous zero-growth assertion, not a Rust response or cleanup
+failure.
+
+Commit `8161db582` allows at most one idle-task count of sampling variation in
+that existing probe. The exact case passed four focused repetitions on the
+provided Ubuntu x86-64 host. Hosted CI run
+[39081302848](https://github.com/appunni-m/uvicorn-rs/actions/runs/39081302848)
+passed the three-repeat unified parity/fault-coverage job and produced its
+coverage artifact on parent commit `0c68cecfb89433703639006065ef51935b1c8018`.
+Its public parity, Rust quality/MSRV, and native FastAPI composition jobs also
+passed. Linux x86-64 completed source archive rebuild, Python-free Rust
+archive packaging, and full public parity on the candidate wheel. Windows and
+macOS built and installed their ABI3 wheels but skipped source and Rust archive
+consumers. The Python-floor job is queued. Exact-head run
+[39082487352](https://github.com/appunni-m/uvicorn-rs/actions/runs/39082487352)
+on `8161db582` remains queued behind run 39081302848. Exact-head hosted
+verification and release acceptance are not yet green.
 
 ## Latest completed historical evidence
 

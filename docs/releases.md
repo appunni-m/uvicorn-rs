@@ -8,28 +8,29 @@ Rust crate archives (`native-app-contract` and `uvicorn-rs`). The native
 crates are library packages; this repository does not currently provide a
 standalone native executable.
 
-## Release status snapshot (2026-10-18; latest hosted CI run 39066848395)
+## Release status snapshot (2026-10-18; latest hosted CI run 39081302848)
 
-No release candidate bundle or tag is established. The latest successful hosted
-CI is [run 39066848395](https://github.com/appunni-m/uvicorn-rs/actions/runs/39066848395)
+No release candidate bundle or tag is established. Hosted CI run
+[39081302848](https://github.com/appunni-m/uvicorn-rs/actions/runs/39081302848)
 on feature-branch commit
-[`33a705dc93e0803043994f9c4b57831f2aafc38c`](https://github.com/appunni-m/uvicorn-rs/commit/33a705dc93e0803043994f9c4b57831f2aafc38c).
-It passed all nine jobs, including the repeated unified parity/fault matrix
-(753 cases, three ASGI repeats and three native repeats, 9,131/9,131 regions
-and 6,741/6,741 lines), Rust formatting/lints/features/docs, Rust 1.85 MSRV,
-native FastAPI-RS composition, installed-wheel public parity, and the Python
-3.9 floor. The hosted coverage artifact records `mcp_status=awaiting_query`;
-the exact report was retrieved, but the Coverage-MCP query timed out, so that
-review is not recorded as passed.
+[`0c68cecfb89433703639006065ef51935b1c8018`](https://github.com/appunni-m/uvicorn-rs/commit/0c68cecfb89433703639006065ef51935b1c8018)
+is still in progress. Installed-wheel public parity, the three-repeat unified
+parity/fault-coverage job, Rust formatting/lints/features/docs, Rust 1.85
+MSRV, and pinned native FastAPI-RS composition have passed. Its coverage
+artifact is available; Coverage-MCP review remains outstanding. Linux and
+Windows package jobs completed. Linux x86-64 passed source archive rebuild,
+Python-free Rust archive packaging, and complete public parity on the
+candidate wheel. Windows x86-64 built and installed its ABI3 wheel but skipped
+the source and Rust archive consumers. macOS ARM64 also produced its ABI3
+wheel only. The Python-floor job is queued. Exact-head run
+[39082487352](https://github.com/appunni-m/uvicorn-rs/actions/runs/39082487352)
+for `8161db582` is queued behind run 39081302848.
 
-Packaging evidence on that run is incomplete for a release bundle. Linux
-x86-64 completed source archive, Rust archive, and candidate-wheel consumer
-checks. macOS ARM64 and Windows x86-64 built and installed their ABI3 wheels,
-but skipped source/Rust archive and full candidate parity checks. The run is
+Packaging evidence on run 39081302848 is not yet a release bundle. The run is
 also on a feature branch, not `main`; the release workflow selects successful
 CI for the exact commit on `main`. Current `main` is
 [`36c1c92bfd2cf8ce960fc468314879b2c3c7590b`](https://github.com/appunni-m/uvicorn-rs/commit/36c1c92bfd2cf8ce960fc468314879b2c3c7590b).
-This checkout contains changes newer than that hosted run, so run 39066848395
+This checkout contains changes newer than that hosted run, so run 39081302848
 is not exact-source evidence for the current source. Exact-commit hosted checks
 are still required.
 
@@ -39,7 +40,8 @@ failed correctness gates on all three systems. The checked-in decision is
 `scope_revised`: `uvicorn-rs-py` remains a compatibility and regression path
 without a general speed claim, while performance claims target Python-free
 Rust-native composition. Focused local FastAPI measurements, including the
-HTTP/2 chunk-streaming result and the three-pair HTTP/1 upload probe in the
+HTTP/2 chunk-streaming result, the HTTP/1 upload probes, and the WebSocket echo
+diagnostic in the
 [benchmark record](benchmark-status.md), are diagnostic and do not replace a
 qualified exact-commit multi-system matrix.
 
