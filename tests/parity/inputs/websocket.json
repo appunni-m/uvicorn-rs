@@ -1649,6 +1649,45 @@
       }
     },
     {
+      "case_id": "fault.websocket.peer-read-failed-wait-complete",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.peer-read-failed.wait-complete",
+        "contract": "websocket-handshake-error-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [],
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.peer-read-failed-unavailable-preserves-handshake",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.peer-read-failed.unavailable",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-close-default-after-accept",
+        "subprotocols": [],
+        "messages": [],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
       "case_id": "fault.websocket.io-allocation-failure",
       "profile": "websocket",
       "operation": "websocket.fault-contract",

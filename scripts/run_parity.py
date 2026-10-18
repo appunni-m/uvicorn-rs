@@ -77,6 +77,7 @@ FAULT_POINTS = {
     "python.task-cancel.schedule-call",
     "http.receive.disconnected-before-future-poll",
     "http.connection-lifetime.wait-complete",
+    "http.connection.peer-read-failed.wait-complete",
     "http.body-pump.batch-limit.one-byte",
     "http.body-pump.batch-threshold.send-connection-closed",
     "http.body-pump.oversized.send-connection-closed",
@@ -308,6 +309,8 @@ FAULT_POINTS = {
     "websocket.receive.channel-closed",
     "websocket.receive.connection-closed",
     "websocket.driver.connection-closed",
+    "websocket.peer-read-failed.wait-complete",
+    "websocket.peer-read-failed.unavailable",
     "websocket.driver.peer-eof",
     "websocket.driver.app-task-aborted",
     "websocket.driver.incoming-text-receiver-closed",
@@ -498,6 +501,7 @@ WEBSOCKET_FAULT_POINTS = {
     "websocket.receive.channel-closed",
     "websocket.receive.connection-closed",
     "websocket.driver.connection-closed",
+    "websocket.peer-read-failed.unavailable",
     "websocket.driver.peer-eof",
     "websocket.driver.app-task-aborted",
     "websocket.driver.incoming-text-receiver-closed",
@@ -536,6 +540,7 @@ WEBSOCKET_HANDSHAKE_FAULT_POINTS = {
     "websocket.native-upgrade.missing",
     "websocket.native-upgrade.register-closed",
     "websocket.accept-key.header-value-error",
+    "websocket.peer-read-failed.wait-complete",
 }
 LIFESPAN_STARTUP_AUTO_FALLBACK_FAULT_POINTS = {
     "lifespan.receive.channel-closed",
@@ -1969,7 +1974,10 @@ def load_contract(
                 if (
                     case.get("profile") != "http1"
                     or case.get("operation") != "http.client-disconnect"
-                    or fault["point"] != "http.connection-lifetime.wait-complete"
+                    or fault["point"] not in {
+                        "http.connection-lifetime.wait-complete",
+                        "http.connection.peer-read-failed.wait-complete",
+                    }
                     or disconnect.get("path") != "/disconnect-after-complete-request"
                     or disconnect.get("followup_path") != "/disconnect-status"
                     or disconnect.get("empty_request") is not True
@@ -6604,6 +6612,9 @@ def websocket_observation(
         ):
             raise ParityError("WebSocket accept-header conversion fault was not consumed by the target")
         if fault_control_path is not None:
+            observation["fault_consumed"] = (
+                fault_control_path.read_text(encoding="utf-8").strip() != fault_point
+            )
             fault_control_path.write_text("", encoding="utf-8")
         application_events = read_events(events_path)[events_before:]
         wait_for_app_event = specification.get("wait_for_app_event")
@@ -7631,18 +7642,29 @@ def execute_case(
             and fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]
         ):
             raise ParityError("malformed-body pump stop fault was not consumed")
+        fault_consumed = None
+        if (
+            fault is not None
+            and fault["point"] == "http.connection.peer-read-failed.wait-complete"
+        ):
+            fault_consumed = (
+                fault_control_path.read_text(encoding="utf-8").strip() != fault["point"]
+            )
         if fault_control_path is not None:
             fault_control_path.write_text("", encoding="utf-8")
         followup = http1_request(server["port"], {
             "method": "GET", "path": disconnect["followup_path"], "headers": [], "body_base64": ""
         })
-        return {
+        result = {
             "disconnect_event": seen,
             "followup": followup,
             "application_events": application_events(),
             "reset_elapsed_seconds": reset_elapsed_seconds,
             "disconnect_workflow_seconds": time.monotonic() - disconnect_started,
         }
+        if fault_consumed is not None:
+            result["fault_consumed"] = fault_consumed
+        return result
     if "lifecycle" in case:
         lifecycle = case["lifecycle"]
         if case["operation"] == "lifespan.concurrent-stream-zero-timeout-shutdown":
@@ -8840,7 +8862,14 @@ def fault_contract_matches(
         # The disconnect runner independently requires the exact
         # wait_event_after_disconnect checkpoint before returning this
         # observation; the public observation schema exposes recovery only.
-        return isinstance(followup, dict) and followup.get("status") == 200
+        return (
+            isinstance(followup, dict)
+            and followup.get("status") == 200
+            and (
+                fault["point"] != "http.connection.peer-read-failed.wait-complete"
+                or observation.get("fault_consumed") is True
+            )
+        )
     if fault["contract"] == "http-immediate-disconnect-message-error-followup-200":
         followup = observation.get("followup_response")
         events = observation.get("application_events")
@@ -8935,6 +8964,7 @@ def fault_contract_matches(
             observation.get("handshake_status") == 101
             and isinstance(followup, dict)
             and followup.get("status") == 200
+            and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "websocket-driver-send-error-cancels-app":
         events = observation.get("application_events", [])
@@ -8969,6 +8999,10 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
             and (
+                fault["point"] != "websocket.peer-read-failed.wait-complete"
+                or observation.get("fault_consumed") is True
+            )
+            and (
                 fault["point"] != "websocket.accept-key.header-value-error"
                 or "uvicorn-rs: WebSocket request failed: failed to parse header value"
                 in observation.get("server_log", "")
@@ -8990,7 +9024,13 @@ def fault_contract_matches(
             "websocket.outgoing.queue-receiver-closed": "websocket.outgoing.queue-closed",
         }.get(fault["point"])
         if expected_disconnect is None:
-            return healthy_followup
+            return (
+                healthy_followup
+                and (
+                    fault["point"] != "websocket.peer-read-failed.unavailable"
+                    or observation.get("fault_consumed") is True
+                )
+            )
         return (
             healthy_followup
             and isinstance(events, list)
@@ -9356,7 +9396,30 @@ def execute_profile(
                         elif case["fault"]["contract"] == "server-startup-failure":
                             fault_observation = {**target_result, "server_log": read_server_log(target)}
                         elif case["fault"]["contract"] == "websocket-handshake-error-followup-200":
-                            fault_observation = {**target_result, "server_log": target_raw["server_log"]}
+                            fault_observation = {
+                                **target_result,
+                                "server_log": target_raw["server_log"],
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif (
+                            case["fault"]["contract"]
+                            == "http-connection-lifetime-closed-disconnect-followup-200"
+                            and case["fault"]["point"]
+                            == "http.connection.peer-read-failed.wait-complete"
+                        ):
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif (
+                            case["fault"]["contract"] == "websocket-teardown-and-followup-200"
+                            and case["fault"]["point"]
+                            == "websocket.peer-read-failed.unavailable"
+                        ):
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
                         elif case["fault"]["contract"] in EAGER_REGISTRATION_CLEANUP_CONTRACTS:
                             fault_observation = {**target_result, "server_log": target_raw["server_log"],
                                                  "failure_response": target_raw["failure_response"],
@@ -9427,6 +9490,14 @@ def execute_profile(
                                 "fault_consumed": target_raw.get("fault_consumed"),
                             }
                         elif case["fault"]["contract"] == "websocket-server-shutdown-force-abort":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] in {
+                            "websocket-driver-send-error-followup-200",
+                            "websocket-driver-send-error-cancels-app",
+                        }:
                             fault_observation = {
                                 **target_result,
                                 "fault_consumed": target_raw.get("fault_consumed"),

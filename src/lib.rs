@@ -226,6 +226,7 @@ enum CoverageFaultPoint {
     HttpRequestDisconnectTypeSetItem,
     HttpReceiveImmediateDisconnectMessageError,
     HttpReceiveLockContention,
+    HttpConnectionPeerReadFailedWaitComplete,
     ServerConnectionTaskServiceError,
     ServerConnectionInfoMissing,
     ServerConnectionLifetimeMissing,
@@ -352,6 +353,8 @@ enum CoverageFaultPoint {
     WebSocketDriverIncomingTextReceiverClosed,
     WebSocketDriverIncomingBinaryReceiverClosed,
     WebSocketDriverOutgoingChannelClosed,
+    WebSocketPeerReadFailureWaitComplete,
+    WebSocketPeerReadFailureUnavailable,
     WebSocketDriverSendError,
     WebSocketDriverDrainSendError,
 }
@@ -368,6 +371,9 @@ impl CoverageFaultPoint {
                 "http.receive.disconnected-before-future-poll"
             }
             Self::HttpConnectionLifetimeWaitComplete => "http.connection-lifetime.wait-complete",
+            Self::HttpConnectionPeerReadFailedWaitComplete => {
+                "http.connection.peer-read-failed.wait-complete"
+            }
             Self::HttpBodyPumpFirstPollPause => "http.body-pump.first-poll-pause",
             Self::HttpBodyPumpBatchLimitOneByte => "http.body-pump.batch-limit.one-byte",
             Self::HttpBodyPumpBatchThresholdSendConnectionClosed => {
@@ -719,6 +725,10 @@ impl CoverageFaultPoint {
             Self::WebSocketDriverOutgoingChannelClosed => {
                 "websocket.driver.outgoing-channel-closed"
             }
+            Self::WebSocketPeerReadFailureWaitComplete => {
+                "websocket.peer-read-failed.wait-complete"
+            }
+            Self::WebSocketPeerReadFailureUnavailable => "websocket.peer-read-failed.unavailable",
             Self::WebSocketDriverSendError => "websocket.driver.send-error",
             Self::WebSocketDriverDrainSendError => "websocket.driver.drain-send-error",
         }
@@ -1688,7 +1698,15 @@ impl ConnectionClosed {
                         lifetime.wait_until_closed().await;
                     } => {},
                     _ = peer_read_half_closed.wait_until_read_half_closed() => {},
-                    _ = peer_read_failed.wait_until_failed() => {},
+                    _ = async {
+                        #[cfg(coverage)]
+                        if coverage_fault_take(
+                            CoverageFaultPoint::HttpConnectionPeerReadFailedWaitComplete,
+                        ) {
+                            return;
+                        }
+                        let _ = peer_read_failed.wait_until_failed().await;
+                    } => {},
                 }
             }
         }
@@ -1700,8 +1718,19 @@ impl ConnectionClosed {
             peer_read_failed, ..
         } = self
         {
+            #[cfg(coverage)]
+            let inject_failure =
+                coverage_fault_take(CoverageFaultPoint::WebSocketPeerReadFailureWaitComplete);
+            #[cfg(not(coverage))]
+            let inject_failure = false;
+            #[cfg(coverage)]
+            let inject_unavailable =
+                coverage_fault_take(CoverageFaultPoint::WebSocketPeerReadFailureUnavailable);
+            #[cfg(not(coverage))]
+            let inject_unavailable = false;
             if peer_read_failed.error_kind().is_some()
-                || peer_read_failed.wait_until_failed().await.is_ok()
+                || inject_failure
+                || (!inject_unavailable && peer_read_failed.wait_until_failed().await.is_ok())
             {
                 return;
             }
@@ -6972,9 +7001,15 @@ trait WebSocketTransport {
 
 impl WebSocketTransport for WebSocketSession {
     async fn send_message(&mut self, message: Message) -> Result<(), BoxError> {
-        self.send(message)
-            .await
-            .map_err(|error| Box::new(error) as BoxError)
+        #[cfg(coverage)]
+        let result = if coverage_fault_take(CoverageFaultPoint::WebSocketDriverSendError) {
+            Err(uvicorn_rs::WebSocketError::coverage_send_failure())
+        } else {
+            self.send(message).await
+        };
+        #[cfg(not(coverage))]
+        let result = self.send(message).await;
+        result.map_err(|error| Box::new(error) as BoxError)
     }
 
     async fn receive_message(&mut self) -> Result<Option<Message>, BoxError> {
@@ -7008,9 +7043,7 @@ where
     S: WebSocketTransport,
 {
     #[cfg(coverage)]
-    if coverage_fault_take(CoverageFaultPoint::WebSocketDriverSendError)
-        || coverage_fault_take(CoverageFaultPoint::WebSocketDriverDrainSendError)
-    {
+    if coverage_fault_take(CoverageFaultPoint::WebSocketDriverDrainSendError) {
         return Err(Box::new(std::io::Error::other(
             "coverage-injected WebSocket send failure",
         )));

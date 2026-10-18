@@ -3254,6 +3254,26 @@
       }
     },
     {
+      "case_id": "fault.http1.peer-read-failed-wait-complete-disconnect",
+      "profile": "http1",
+      "operation": "http.client-disconnect",
+      "covers": [
+        "http.client-disconnect"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.connection.peer-read-failed.wait-complete",
+        "contract": "http-connection-lifetime-closed-disconnect-followup-200"
+      },
+      "disconnect": {
+        "path": "/disconnect-after-complete-request",
+        "followup_path": "/disconnect-status",
+        "empty_request": true,
+        "wait_event": "http.disconnect.waiting-after-complete-request",
+        "wait_event_after_disconnect": "http.disconnect.after-complete-request:http.disconnect"
+      }
+    },
+    {
       "case_id": "fault.http1.immediate-disconnect-message-error",
       "profile": "http1",
       "operation": "http.client-disconnect",

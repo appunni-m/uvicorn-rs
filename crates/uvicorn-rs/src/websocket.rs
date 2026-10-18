@@ -532,6 +532,19 @@ impl Error for WebSocketUpgradeError {}
 #[derive(Debug)]
 pub struct WebSocketError(TungsteniteError);
 
+impl WebSocketError {
+    /// Creates a deterministic transport error for coverage contracts.
+    ///
+    /// This helper is compiled only in coverage builds.
+    #[cfg(coverage)]
+    #[doc(hidden)]
+    pub fn coverage_send_failure() -> Self {
+        Self(TungsteniteError::Io(std::io::Error::other(
+            "coverage-injected WebSocket session send failure",
+        )))
+    }
+}
+
 impl fmt::Display for WebSocketError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "WebSocket session failed: {}", self.0)
