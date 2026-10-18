@@ -386,34 +386,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "h3"
-version = "0.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10872b55cfb02a821b69dc7cf8dc6a71d6af25eb9a79662bec4a9d016056b3be"
-dependencies = [
- "bytes",
- "fastrand",
- "futures-util",
- "http",
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
-name = "h3-quinn"
-version = "0.0.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b2e732c8d91a74731663ac8479ab505042fbf547b9a207213ab7fbcbfc4f8b4"
-dependencies = [
- "bytes",
- "futures",
- "h3",
- "quinn",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1214,8 +1186,6 @@ dependencies = [
  "bytes",
  "data-encoding",
  "futures-util",
- "h3",
- "h3-quinn",
  "http",
  "http-body",
  "http-body-util",
@@ -1229,6 +1199,8 @@ dependencies = [
  "tokio-tungstenite",
  "tower-service",
  "tracing",
+ "uvicorn-rs-h3",
+ "uvicorn-rs-h3-quinn",
 ]
 
 [[package]]
@@ -1248,6 +1220,30 @@ dependencies = [
  "serde_json",
  "tokio",
  "uvicorn-rs",
+]
+
+[[package]]
+name = "uvicorn-rs-h3"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "fastrand",
+ "futures-util",
+ "http",
+ "pin-project-lite",
+ "tokio",
+]
+
+[[package]]
+name = "uvicorn-rs-h3-quinn"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures",
+ "quinn",
+ "tokio",
+ "tokio-util",
+ "uvicorn-rs-h3",
 ]
 
 [[package]]
