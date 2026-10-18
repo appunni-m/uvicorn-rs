@@ -198,8 +198,10 @@ side `STOP_SENDING` after request-body completion reaches a pending ASGI
 healthy. Hypercorn 0.18.0 did not complete this same input with a disconnect
 event, so the ASGI specification governs this case and the input is not counted
 as oracle parity. A separate H3 held-app case verifies cancellation when no
-receive is pending. Tracked HTTP/1 upgrade sessions remain an open
-transport-consolidation gate. The opt-in error
+receive is pending. Native HTTP/1.1 upgrade-session ownership is implemented
+through `ConnectionUpgrade` and covered by the Python-free live manifest. This
+generic transport lifecycle is separate from the still-open ASGI WebSocket
+mapping. The opt-in error
 observer preserves typed readiness, service, and committed response-body
 causes with peer metadata; TLS cases verify
 negotiated ALPN bytes in request extensions. This is separate from and not

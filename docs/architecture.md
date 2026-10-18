@@ -339,7 +339,9 @@ cancellation dropped the service future, and it is not ASGI `http.disconnect`.
 The H3 adapter forwards response-side peer stop to a pending ASGI `receive()`
 as `http.disconnect`; a target-only public input contract checks same-connection
 recovery because the pinned Hypercorn oracle did not complete this case.
-HTTP/1 Upgrade session tracking remains an open gate.
+The native core now tracks HTTP/1.1 upgrade sessions through
+`ConnectionUpgrade`; the Python ASGI adapter has not mapped this lifecycle to
+ASGI WebSocket events.
 H3 stream errors and closed receivers end the request pump in the PyO3 path.
 The server joins all remaining pumps within the unused transport grace period.
 If that deadline expires, it logs the timeout, aborts the pumps, and drains

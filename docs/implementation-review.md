@@ -303,11 +303,14 @@ hook checks remain enabled.
   same-connection recovery; the generic reason does not identify the reset
   cause or deliver ASGI `http.disconnect`. H3 body errors and a closed request
   receiver terminate that stream's pump in the PyO3 path; native H3
-  idle-reset delivery and HTTP/1 Upgrade session tracking remain unverified.
+  idle-reset delivery remains unverified. Native HTTP/1.1 upgrade-session
+  tracking is implemented by `ConnectionUpgrade` and covered by seven
+  Python-free live inputs; mapping that lifecycle to ASGI WebSocket events
+  remains open.
   Shutdown joins pumps within the remaining transport grace
   period; if the period expires, it logs, aborts and drains the join set before
-  `Server.serve()` returns. The 490-case unified matrix passes three repeats,
-  and the normal non-instrumented local build passes all 238 public
+  `Server.serve()` returns. An earlier 490-case unified matrix passed three
+  repeats, and its normal non-instrumented local build passed all 238 public
   comparisons. The 128-request
   one-connection HTTP/3 case returns 128 matching responses in each full repeat;
   its instrumented attribution records 128 body pumps joined. These cases do not

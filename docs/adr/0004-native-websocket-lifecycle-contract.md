@@ -15,8 +15,9 @@ session or application startup and shutdown.
 
 The current `uvicorn-rs` crate serves HTTP/1.1, HTTP/2, and HTTP/3 Tower
 services and provides a provisional HTTP/1.1 WebSocket handshake/session API.
-The current native manifest declares 101 cases, including 13 focused cleartext
-HTTP/1.1 WebSocket cases. All 13 selected cases passed with complete per-case
+The selected WebSocket report below predates the current 214-case native
+manifest: it selected 13 focused cleartext HTTP/1.1 WebSocket cases from the
+then 101-case manifest. All 13 selected cases passed with complete per-case
 attribution and zero case failures, infrastructure failures, transient
 infrastructure failures, or retries.
 The selected report,
@@ -25,10 +26,11 @@ records 868/7,384 regions and 699/5,420 lines across its executable source set.
 Those selected-scope totals are not aggregate coverage or an RFC 6455
 conformance result. Coverage-MCP follow-up matched the source receipt and
 reported `tests: passed`, with 32 missing region groups and 17 missing line
-groups in `crates/uvicorn-rs/src/websocket.rs`. Aggregate acceptance remains
-incomplete: it requires three complete repeats of the full 612-case manifest,
-100% region and line coverage, and fully paginated zero-gap Coverage-MCP
-results. The cases exercise text/binary echo, Ping/Pong, close exchange,
+groups in `crates/uvicorn-rs/src/websocket.rs`. This selected report does not
+establish the current full-matrix coverage gate; see the
+[unified coverage status](../coverage.md#current-unified-coverage-status-2026-10-17)
+for the latest source-bound evidence. The cases exercise text/binary echo,
+Ping/Pong, close exchange,
 shutdown close, selected handshake rejection, and subprotocol/header rules.
 They do not complete the full handshake inventory. TLS, HTTP/2, and HTTP/3
 WebSockets, ASGI mapping, and framework-native integration remain open. The API depends on the server's
@@ -49,9 +51,12 @@ belong to `uvicorn-rs`, Starlette-RS, and FastAPI-RS. The optional
 `uvicorn-rs-py`, `starlette-rs-py`, and `fastapi-rs-py` clients own Python
 object conversion and upstream Python-package compatibility. The intended
 Python mode will map the native transport/session contract to ASGI WebSocket
-and lifespan events on the application's Python event loop. That integration
-is not implemented: `uvicorn-rs-py` still uses its own transport. Those Python
-calls remain a language boundary; they are not present in the native Rust path.
+and lifespan events on the application's Python event loop. `uvicorn-rs-py`
+now delegates HTTP protocol handling to the native Rust transport, while Python
+still builds ASGI scopes and events and invokes the application. The generic
+native `ConnectionUpgrade` lifecycle has not been mapped to ASGI WebSocket
+events. Those Python calls remain a language boundary; they are not present in
+the native Rust path.
 
 WebSocket transport depends on the HTTP version. HTTP/1.1 uses the RFC 6455
 Upgrade handshake. HTTP/2 uses Extended CONNECT under RFC 8441; HTTP/3 uses
