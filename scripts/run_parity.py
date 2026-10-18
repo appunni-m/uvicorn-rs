@@ -7338,6 +7338,13 @@ def execute_case(
                 events_path=server["events"],
                 events_before=events_before,
             )
+            if fault is not None and fault["contract"] == "http3-body-pump-early-exit-500":
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]
+                ):
+                    raise ParityError("HTTP/3 body-pump early-exit fault was not consumed")
+                observation["fault_consumed"] = True
             if (
                 fault is not None
                 and fault["contract"]
@@ -8492,6 +8499,7 @@ def fault_contract_matches(
         return (
             observation.get("status") == 500
             and observation.get("body_bytes") == ""
+            and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "http3-upload-body-pump-preserves-data":
         return (
@@ -9370,7 +9378,12 @@ def execute_profile(
                     if case.get("verification", "oracle-parity") == "fault-contract":
                         oracle_result = None
                         fault_observation = target_result
-                        if case["fault"]["contract"] in {
+                        if case["fault"]["contract"] == "http3-body-pump-early-exit-500":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] in {
                             "http3-legacy-peer-close-no-error",
                             "http3-legacy-peer-close-unknown-code-ignored",
                             "http3-legacy-peer-close-classification-error",
