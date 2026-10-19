@@ -73,6 +73,14 @@ on:
           - fastapi-slow-reader-backpressure
           - fastapi-scope-32-headers
           - fastapi-contextvars
+      fastapi_peer_read_mode:
+        description: Peer-read mode for the focused FastAPI stage diagnostic
+        default: default
+        required: true
+        type: choice
+        options:
+          - default
+          - on-read
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -537,7 +545,7 @@ jobs:
         shell: bash
         env:
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
-          UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read' || '' }}
+          UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ (inputs.fastapi_peer_read_mode == 'on-read' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]'))) && 'on-read' || '' }}
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_http_category_bench.py \
