@@ -10,10 +10,13 @@ Python app loading, the caller-owned event loop, ASGI scope/messages, context,
 and app exceptions remain on the Python side. Builds without `native-tcp`
 retain the older protocol implementation; coverage builds also compile a
 limited legacy HTTP/3 path for fault contracts.
-This transport migration has a passing dirty-worktree full-source coverage
-report, but still needs clean exact-source hosted coverage and qualified
-benchmark evidence. The previous root Python distribution and CLI names are
-not compatibility requirements.
+Hosted CI on clean commit
+[`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5)
+passed the unified 761-case coverage matrix. Independent Coverage-MCP review
+and a complete three-system performance result remain pending. See the
+[current coverage record](coverage.md#current-unified-coverage-status-2026-10-19)
+and [benchmark status](benchmark-status.md). The previous root Python
+distribution and CLI names are not compatibility requirements.
 
 The native crate exposes an opt-in proactive TCP EOF observer through
 [`PeerReadHalfCloseMode`](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs/src/lib.rs). The Python ASGI
@@ -24,15 +27,15 @@ lifetime observations into ASGI behavior at its boundary.
 For the proposed Rust-native integration with Starlette-RS and FastAPI-RS, see
 the [detailed architecture diagram](rust-native-integration-architecture.html).
 
-The current native TCP/TLS integration has a local unified report for 747
-cases: 533 ASGI and 214 native. All three repeats of each matrix passed, with
+An earlier local report for the native TCP/TLS integration covered 747 cases:
+533 ASGI and 214 native. All three repeats of each matrix passed, with
 8,997/8,997 executable regions and 6,628/6,628 normalized physical executable
-lines. The fully paginated Coverage-MCP receipt matches its source and build.
-The report is tied to a dirty worktree and does not establish clean hosted
-release evidence. No normal-build parity run was included in that instrumented
-report. See the
-[coverage evidence](coverage.md#current-unified-coverage-status-2026-10-17) and
-the current candidate-wheel smoke
+lines. Its fully paginated Coverage-MCP receipt matched that report's source
+and build, but the report was tied to a dirty worktree and did not establish
+clean hosted release evidence. No normal-build parity run was included in that
+instrumented report. The latest clean hosted coverage status is the 761-case
+report recorded in [coverage evidence](coverage.md#current-unified-coverage-status-2026-10-19).
+See the [coverage history](coverage.md) and the candidate-wheel smoke
 (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 Older 506-, 494-, 485-, 451-, and 448-case results below are historical and do not
 attest the current checkout.
@@ -66,13 +69,17 @@ shape; each ASGI event and callback still crosses the Python boundary. The
 current HTTP/3 adapter discards request trailer frames instead of exposing them
 as ASGI request trailers.
 
-The native module builds its Tokio runtime at import with one worker thread
-and registers the completed runtime with PyO3's async integration. A
-process-wide `OnceLock<Result<Runtime, io::Error>>` retains either the runtime
-or its construction failure. Construction failures become Python `OSError`
-before the native exports are added; repeated initialization returns the
-cached failure. If the async integration already has a valid registered
-runtime, that runtime remains registered. Runtime construction is fallible,
+The native module builds its Tokio multithread runtime at import with one async
+worker and registers it with PyO3's async integration. This count applies to
+Tokio's asynchronous scheduler. The Python asyncio or uvloop event loop runs on
+its own thread, and Tokio can create blocking-pool threads when needed; the
+process can therefore use more than one CPU with one Tokio async worker. Set
+`UVICORN_RS_MAX_BLOCKING_THREADS` to bound the blocking pool. A process-wide
+`OnceLock<Result<Runtime, io::Error>>` retains either the runtime or its
+construction failure. Construction failures become Python `OSError` before
+the native exports are added; repeated initialization returns the cached
+failure. If the async integration already has a valid registered runtime, that
+runtime remains registered. Runtime construction is fallible,
 and its effect on import/startup cost needs a fresh benchmark.
 
 The maintained HTTP/1.1 matrix includes upstream FastAPI route workloads to
@@ -339,9 +346,10 @@ cancellation dropped the service future, and it is not ASGI `http.disconnect`.
 The H3 adapter forwards response-side peer stop to a pending ASGI `receive()`
 as `http.disconnect`; a target-only public input contract checks same-connection
 recovery because the pinned Hypercorn oracle did not complete this case.
-The native core now tracks HTTP/1.1 upgrade sessions through
-`ConnectionUpgrade`; the Python ASGI adapter has not mapped this lifecycle to
-ASGI WebSocket events.
+The native core tracks HTTP/1.1 upgrade sessions through `ConnectionUpgrade`.
+The Python ASGI adapter maps the supported HTTP/1.1 WebSocket path to ASGI
+connect, receive, send, and disconnect events. Protocol coverage limits are
+listed in the [support matrix](support-matrix.md#supported-behaviors).
 H3 stream errors and closed receivers end the request pump in the PyO3 path.
 The server joins all remaining pumps within the unused transport grace period.
 If that deadline expires, it logs the timeout, aborts the pumps, and drains

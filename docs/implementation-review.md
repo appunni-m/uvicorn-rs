@@ -2,6 +2,31 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Current exact-source status (2026-10-19)
+
+Hosted CI run
+[39185987997](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997)
+passed on `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`: 761/761 indexed cases
+across three complete ASGI/native repeats, 9,300/9,300 regions, 6,880/6,880
+lines, installed-wheel parity 251/251, and all listed package/MSRV/native
+composition jobs. Independent Coverage-MCP review remains outstanding.
+
+The exact-source performance run
+[39185987961](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987961)
+is not release evidence: both Linux category jobs failed on the FastAPI 1 MiB
+upload workload, and the macOS results are mixed. See the
+[benchmark status](benchmark-status.md) for the failure telemetry and focused
+replay limit. Documentation run
+[39185988011](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185988011)
+passed strict build and artifact upload, but deployment stopped because Pages
+is not configured for GitHub Actions. The exact status and remaining gates are
+also summarized in [release readiness](releases.md).
+
+The sections below preserve dated investigation results; they are not the
+current aggregate status.
+
+## Historical local report (2026-10-15)
+
 The last complete local three-repeat report recorded here predates the
 expanded hosted matrix. It covers 696 cases: 511 Python ASGI and 185
 Python-free native cases. All 696 passed attribution with zero case,
@@ -31,7 +56,7 @@ Coverage-MCP receipt SHA-256:
 The report is a dirty local snapshot; clean committed-source and hosted
 verification remain separate release requirements.
 
-## Latest hosted unified-matrix result (2026-10-18)
+## Historical hosted unified-matrix result (2026-10-18)
 
 Hosted CI run
 [39079649274](https://github.com/appunni-m/uvicorn-rs/actions/runs/39079649274)

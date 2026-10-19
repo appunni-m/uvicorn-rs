@@ -43,6 +43,7 @@ DEFAULT_PYTHON = ROOT / ".venv" / "bin" / "python"
 CLIENT = ROOT / "scripts" / "bench_http_matrix.mjs"
 NATIVE_CLIENT_SOURCE = ROOT / "scripts" / "bench_http_client.c"
 NATIVE_CLIENT: Path | None = None
+NATIVE_CLIENT_LIBCURL: str | None = None
 _CLIENT_TEMP: tempfile.TemporaryDirectory | None = None
 
 
@@ -52,10 +53,12 @@ class _BenchmarkCaseFailure(RuntimeError):
         message: str,
         identity_result: dict | None = None,
         partial_client_metrics: dict | None = None,
+        asgi_timings_path: Path | None = None,
     ) -> None:
         super().__init__(message)
         self.identity_result = identity_result
         self.partial_client_metrics = partial_client_metrics
+        self.asgi_timings_path = asgi_timings_path
 
 
 class _HttpClientFailure(RuntimeError):
@@ -349,12 +352,37 @@ def _command(server: dict, app: str, port: int, python: Path) -> list[str]:
 
 
 def _build_native_client() -> Path | None:
-    global NATIVE_CLIENT, _CLIENT_TEMP
+    global NATIVE_CLIENT, NATIVE_CLIENT_LIBCURL, _CLIENT_TEMP
     if NATIVE_CLIENT is not None:
         return NATIVE_CLIENT
-    if shutil.which("curl-config") is None or shutil.which("cc") is None:
+    if shutil.which("cc") is None:
         return None
-    flags = shlex.split(subprocess.check_output(["curl-config", "--cflags", "--libs"], text=True))
+    if shutil.which("curl-config") is not None:
+        flags = shlex.split(
+            subprocess.check_output(["curl-config", "--cflags", "--libs"], text=True)
+        )
+        NATIVE_CLIENT_LIBCURL = subprocess.check_output(
+            ["curl-config", "--version"], text=True
+        ).strip()
+    elif shutil.which("pkg-config") is not None:
+        flags_result = subprocess.run(
+            ["pkg-config", "--cflags", "--libs", "libcurl"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        version_result = subprocess.run(
+            ["pkg-config", "--modversion", "libcurl"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if flags_result.returncode != 0 or version_result.returncode != 0:
+            return None
+        flags = shlex.split(flags_result.stdout)
+        NATIVE_CLIENT_LIBCURL = f"libcurl {version_result.stdout.strip()}"
+    else:
+        return None
     _CLIENT_TEMP = tempfile.TemporaryDirectory(prefix="uvicorn-rs-httpbench-")
     binary = Path(_CLIENT_TEMP.name) / "httpbench"
     subprocess.run(
@@ -571,6 +599,7 @@ def _sample(
             f"server output (last 4000 characters):\n{server_output[-4000:]}",
             identity_result,
             getattr(error, "partial_client_metrics", None),
+            asgi_timings_path,
         ) from error
     finally:
         stop_client(client)
@@ -674,7 +703,7 @@ def main() -> None:
         action="store_true",
         help=(
             "wrap FastAPI with per-request ASGI send/receive timing; diagnostic-only, "
-            "requires --require-runtime-diagnostics and both Rust and Uvicorn servers"
+            "independent of Rust runtime counters, and requires both Rust and Uvicorn servers"
         ),
     )
     parser.add_argument(
@@ -706,8 +735,6 @@ def main() -> None:
     )
     selected_servers = {name: SERVERS[name] for name in args.servers}
     if args.asgi_stage_diagnostics:
-        if not args.require_runtime_diagnostics:
-            parser.error("--asgi-stage-diagnostics requires --require-runtime-diagnostics")
         if not any(name.startswith("uvicorn-rs-") for name in selected_servers) or not any(
             name.startswith("uvicorn-") for name in selected_servers
         ):
@@ -778,6 +805,23 @@ def main() -> None:
                     )
                     if not isinstance(partial_client_metrics, dict):
                         partial_client_metrics = None
+                    asgi_stage_diagnostics = None
+                    asgi_stage_diagnostics_error = None
+                    asgi_timings_path = getattr(error, "asgi_timings_path", None)
+                    if isinstance(asgi_timings_path, Path):
+                        if asgi_timings_path.is_file():
+                            try:
+                                asgi_stage_diagnostics = json.loads(
+                                    asgi_timings_path.read_text(encoding="utf-8")
+                                )
+                            except (OSError, json.JSONDecodeError) as diagnostic_error:
+                                asgi_stage_diagnostics_error = (
+                                    f"could not read ASGI stage diagnostics: {diagnostic_error}"
+                                )
+                        else:
+                            asgi_stage_diagnostics_error = (
+                                "ASGI stage diagnostics file was not written during shutdown"
+                            )
                     reported_failures = (
                         partial_client_metrics.get("failures")
                         if partial_client_metrics is not None
@@ -820,6 +864,10 @@ def main() -> None:
                         "benchmark_error": str(error),
                         "partial_client_metrics": partial_client_metrics,
                     }
+                    if asgi_stage_diagnostics is not None:
+                        row["asgi_stage_diagnostics"] = asgi_stage_diagnostics
+                    if asgi_stage_diagnostics_error is not None:
+                        row["asgi_stage_diagnostics_error"] = asgi_stage_diagnostics_error
                     if identity_result is not None:
                         row["measurement_identity"] = identity_result.get(
                             "measurement_identity"
@@ -966,7 +1014,7 @@ def main() -> None:
                 "Node.js HTTP/1.1 with complete response-body checks; selected for "
                 "slow-reader workloads or when the libcurl C client is unavailable"
             ),
-            "libcurl": subprocess.check_output(["curl-config", "--version"], text=True).strip() if native_client is not None else None,
+            "libcurl": NATIVE_CLIENT_LIBCURL if native_client is not None else None,
             "planned_rows": planned_rows,
             "recorded_rows": len(rows),
             "not_run_rows": planned_rows - len(rows),

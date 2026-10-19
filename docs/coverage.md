@@ -2,10 +2,44 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+<a id="current-unified-coverage-status-2026-10-19"></a>
+
+## Current unified coverage status (2026-10-19)
+
+Hosted exact-source CI run
+[39185987997](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997)
+passed on clean commit
+[`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5).
+The [unified coverage job](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/job/117848421124)
+completed attribution for **761/761 cases** (547 Python ASGI and 214
+Python-free Rust). All three ASGI repeats and all three native repeats passed.
+The report measured **9,300/9,300 source-span regions** and **6,880/6,880
+normalized physical executable lines**, with no missing regions or lines.
+Its source SHA-256 is
+`ee4d4896bf13778543844802110bee7e5ebe3a51392c626e4f449853a5148d8f` and its
+native extension SHA-256 is
+`11a96da6a12c91f931c8c4cfc8b2e678661f1ca667c887d3f81ccf2972f14206`.
+The retained [hosted coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/artifacts/12158184542)
+has SHA-256
+`165214e40acac9f28d89c8d557faa43a58f52f92f2d66959169ff5c827614e8e`.
+
+The same exact-source CI run passed installed-wheel public parity **251/251**,
+all three platform package jobs, and the pinned Python-free FastAPI-RS →
+Starlette-RS → Uvicorn-RS composition inputs. These are separate gates from
+coverage.
+
+**Independent Coverage-MCP review remains outstanding.** The hosted report
+records `mcp_status=awaiting_query`. The service timed out when queried with the
+complete report, a reduced LLVM-only projection, and a single-file filter; no
+receipt was produced. The CI coverage gate passing does not replace this
+independent review. Release gates and current blockers are tracked in the
+[release guide](releases.md) and
+[benchmark status](benchmark-status.md).
+
 <a id="current-unified-coverage-status-2026-10-17"></a>
 <a id="current-unified-coverage-status-2026-10-18"></a>
 
-## Current unified coverage status (2026-10-18)
+### Previous hosted coverage report (2026-10-18)
 
 Hosted exact-source CI run
 [39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)

@@ -301,16 +301,38 @@ jobs:
                   raise SystemExit("PyPI already contains this version with a partial or different distribution set")
               return False
 
-          publish_contract = publish_h3 = publish_h3_quinn = publish_server = publish_pypi = False
-          if action in {"cargo", "cargo-and-pypi"}:
-              publish_contract = check_crate(crate_names[0])
-              publish_h3 = check_crate(crate_names[1])
-              publish_h3_quinn = check_crate(crate_names[2])
-              publish_server = check_crate(crate_names[3])
-          if action in {"pypi", "cargo-and-pypi"}:
-              publish_pypi = check_pypi()
-          if action == "prepare-only":
-              print("prepare-only: registry checks were not requested; no publisher jobs will run")
+          cargo_selected = action in {"cargo", "cargo-and-pypi"}
+          pypi_selected = action in {"pypi", "cargo-and-pypi"}
+          inspect_all = action == "prepare-only"
+          crate_absent = {}
+          pypi_absent = None
+          if cargo_selected or inspect_all:
+              crate_absent = {name: check_crate(name) for name in crate_names}
+          if pypi_selected or inspect_all:
+              pypi_absent = check_pypi()
+
+          publish_contract = cargo_selected and crate_absent[crate_names[0]]
+          publish_h3 = cargo_selected and crate_absent[crate_names[1]]
+          publish_h3_quinn = cargo_selected and crate_absent[crate_names[2]]
+          publish_server = cargo_selected and crate_absent[crate_names[3]]
+          publish_pypi = pypi_selected and pypi_absent
+          registry_state = {
+              "version": version,
+              "crates_io": {
+                  name: ("version_absent" if absent else "published_identical")
+                  for name, absent in crate_absent.items()
+              } if crate_absent else "not_checked",
+              "pypi": ("version_absent" if pypi_absent else "published_identical")
+              if pypi_absent is not None else "not_checked",
+          }
+          print("Registry preflight: " + json.dumps(registry_state, sort_keys=True))
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              summary.write("### Candidate registry state\n\n")
+              summary.write("```json\n")
+              summary.write(json.dumps(registry_state, indent=2, sort_keys=True))
+              summary.write("\n```\n")
+              if action == "prepare-only":
+                  summary.write("\nPrepare-only checks registry identity and hashes; publisher jobs remain disabled.\n")
           values = {
               "publish-contract": str(publish_contract).lower(),
               "publish-h3": str(publish_h3).lower(),

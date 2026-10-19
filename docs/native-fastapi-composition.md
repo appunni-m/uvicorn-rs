@@ -1,13 +1,43 @@
 # Native FastAPI-RS composition evidence
 
-**Result:** 17 of 17 real-socket H1/H2 inputs passed once from clean, detached
-source checkouts locally and in each of two dedicated hosted CI jobs. The
-latest hosted job is part of workflow run 38862681888; that overall workflow
-failed its separate 100% coverage gate. This is limited composition evidence, not a full FastAPI
+**Current result (2026-10-19):** 17/17 real-socket H1/H2 inputs passed in the
+dedicated composition job in exact-source CI run
+[39185987997](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/job/117848420888).
+The job used Uvicorn-RS `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`, FastAPI-RS
+`f438a7cbb2308e6c1f795aef98e333de23388533`, and Starlette-RS
+`b4c8a65c85e1b0d251ca05874412811eaa3ac7b8`. The job's PyO3 check did not
+execute: its `rg` command was unavailable on the hosted runner and the shell
+condition treated that command error like a no-match. A local `cargo tree
+--locked --edges normal,build` check over clean archives of these exact three
+revisions found no PyO3 package. The CI guard now uses `grep` and treats a
+checker error as a failure; hosted confirmation of that corrected guard is
+pending. The composition result is limited evidence, not a full FastAPI
 contract, Python parity result, release candidate, repeated result, or
 performance measurement.
 
-## Local prototype source identities
+## Current source and input identity
+
+| Repository | Revision | State |
+|---|---|---|
+| Uvicorn-RS | `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5` | exact `main` CI commit |
+| FastAPI-RS | `f438a7cbb2308e6c1f795aef98e333de23388533` | pinned native feature branch |
+| Starlette-RS | `b4c8a65c85e1b0d251ca05874412811eaa3ac7b8` | pinned by FastAPI-RS |
+
+The manifest SHA-256 is
+`5224e4c3e5a88e3699eb71490651ffc7f2ea6a41edf302b4884d3133be392bcd`; the
+locked example dependency graph SHA-256 is
+`05e867b1265386bfc21263f88de9dbaf481eda699c8b85c788b0a8799630b258`. The
+Uvicorn native crate manifest SHA-256 is
+`64b6be240b020c6b20bafdbce0fbc854797fe80c7b81424b90349b249ada46e9`.
+
+The local dependency-graph check used clean `git archive` exports of all three
+revisions and Cargo's locked normal/build graph. Its output was checked for
+every package beginning with `pyo3`; none was present. The hosted composition
+job passed all 17 inputs on Ubuntu 24.04 with Rust/Cargo 1.98.1. Its build log
+records the exact source revisions but does not retain a separate dependency
+graph receipt.
+
+## Historical local prototype source identities
 
 | Repository | Revision | State |
 |---|---|---|
@@ -29,11 +59,11 @@ FastAPI-RS's build script verified the Starlette-RS Git revision. Cargo used
 an external target directory, so generated build output stayed outside these
 source checkouts.
 
-## Input and build identity
+## Historical prototype build identity
 
 The input manifest SHA-256 is
 `5224e4c3e5a88e3699eb71490651ffc7f2ea6a41edf302b4884d3133be392bcd`.
-The Uvicorn example lockfile SHA-256 is
+The earlier Uvicorn example lockfile SHA-256 was
 `b91c0f385bd07d12ce1bca54ffe38a63d59cc766872ae51f2583fcb4894f62bc`;
 the FastAPI workspace lockfile SHA-256 is
 `1fa63ad5cdf0d5af406ba6b615be4067c1fda2ba5f95f3bae2782473d747fa96`.
@@ -53,8 +83,8 @@ Toolchain: `rustc 1.98.1`, `cargo 1.98.1`; platform: Darwin 24.6.0,
 
 ## Reproduction
 
-Check out the three revisions above as sibling directories, then run from the
-Uvicorn-RS root:
+For the current revisions in the first table, check out sibling directories,
+then run from the Uvicorn-RS root:
 
 ```sh
 CARGO_TARGET_DIR=/tmp/native-composition-target \
@@ -62,8 +92,9 @@ CARGO_TARGET_DIR=/tmp/native-composition-target \
   --locked -- examples/native-fastapi-contracts/manifest.json
 ```
 
-The integrated normal/build dependency graph contained no PyO3 package. The
-native process made no Python calls. The run passed these manifest inputs:
+The normal/build dependency graph for the exact current revisions contained no
+PyO3 package in the local locked check described above. The hosted Rust process
+passed these manifest inputs:
 
 ```text
 http1.path-query-routing
@@ -87,21 +118,21 @@ http2.graceful-shutdown-drains-active-response
 
 ## Hosted composition verification
 
-The latest dedicated [pinned native FastAPI-RS composition job](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888/job/116848350492)
-passed on Uvicorn-RS commit `27de9f3ac7d259a3a9b612c3247ab2c60eb27306`.
-It fetched FastAPI-RS `f438a7cbb2308e6c1f795aef98e333de23388533` and
-Starlette-RS `b4c8a65c85e1b0d251ca05874412811eaa3ac7b8`, verified the
-integrated normal/build dependency graph had no PyO3 package, and passed all
-17 manifest inputs over H1/H2 once. The earlier dedicated job in run
-38828501018 passed the same 17-input slice on Uvicorn-RS commit `c2de34a`.
+The [current hosted composition job](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/job/117848420888)
+passed all 17 manifest inputs on Uvicorn-RS commit
+`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5` with FastAPI-RS
+`f438a7cbb2308e6c1f795aef98e333de23388533` and Starlette-RS
+`b4c8a65c85e1b0d251ca05874412811eaa3ac7b8`. The overall exact-source CI run
+also passed its unified coverage and package gates. The hosted job's attempted
+PyO3 graph assertion was ineffective because `rg` was missing; the exact-source
+local graph check above passed, and the workflow guard has since been corrected
+but not yet rerun on a hosted commit.
 
-The overall [latest workflow run](https://github.com/appunni-m/uvicorn-rs/actions/runs/38862681888)
-was not green: its separate unified coverage job failed the 100% gate at
-8,496/8,650 regions and 6,486/6,592 lines. Package-artifact and Python-floor jobs were
-skipped. This hosted job proves the recorded composition slice only; it does
-not verify the current dirty checkout, repeated runs, or release readiness.
+The earlier dedicated composition job in run 38862681888 used Uvicorn-RS
+`27de9f3ac7d259a3a9b612c3247ab2c60eb27306`; its parent coverage gate failed.
+That result and run 38828501018 are historical evidence only.
 
-The build emitted one non-fatal `dead_code` warning for
+The earlier build emitted one non-fatal `dead_code` warning for
 `FastApiOperationRouter::find_slash_redirect_path` in this no-Python native
 build.
 

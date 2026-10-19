@@ -2,6 +2,165 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Exact-source release-candidate checkpoint (2026-10-19)
+
+The clean main source was
+[`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5).
+Exact-source CI
+[39185987997](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997)
+passed: installed-wheel parity was 251/251, the unified matrix passed 761/761
+cases across three repeats with 9,300/9,300 regions and 6,880/6,880 lines, and
+the native composition, MSRV, and three platform package jobs passed. The
+independent Coverage-MCP review of its hosted report remains pending.
+
+The exact-source three-system performance run
+[39185987961](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987961)
+is **incomplete and fails the release performance gate**. Public parity passed
+on Linux x86-64, Linux ARM64, and macOS ARM64, but the maintained category
+phase failed on both Linux systems:
+
+| System | Category failure | Detail |
+| --- | --- | --- |
+| Linux x86-64 | `fastapi-upload-1m-write-1k` | Candidate timed out in repetition 2 under asyncio and repetition 5 under uvloop. |
+| Linux ARM64 | `fastapi-upload-1m-write-1k` | Candidate timed out in repetitions 2 and 3 under uvloop. |
+| Linux ARM64 | H3 `slow-reader-backpressure` | Hypercorn reference timed out waiting for response headers in repetition 4; this is a reference-side failure, not a Rust result. |
+| macOS ARM64 | Category analysis completed | One system is not sufficient for the required matching three-system result. The category summary is mixed: H1 and WebSocket regressions coexist with H2 and H3 gains. |
+
+For the Linux HTTP/1 upload timeouts, libcurl reports that it submitted the full
+1 MiB request body but received no response headers before its 15-second
+timeout: `curl_uploaded_bytes=1048576`, `curl_downloaded_bytes=0`, response
+code `0`, and zero start-transfer time. This brackets the stall after client
+upload and before response start; it does not yet identify the first stalled
+server operation. All four failed transfers also report `new_connections=0`:
+libcurl reused the worker's persistent HTTP/1.1 connection for the failing
+request. That makes a single-case persistent-versus-`Connection: close`
+comparison a useful discriminator, but it does not prove keep-alive handling is
+the cause. The detailed category logs and raw reports are preserved in
+the run artifacts: [Linux x86-64](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987961/artifacts/12161035715),
+[Linux ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987961/artifacts/12160483016),
+[macOS ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987961/artifacts/12160154308),
+and [matrix aggregate](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987961/artifacts/12160508366).
+
+The separate documentation workflow
+[39185988011](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185988011)
+passed strict site build and artifact upload. Deployment stopped at
+`configure-pages` because repository Pages is not configured for GitHub
+Actions. No performance claim, release-candidate bundle, tag, package
+publication, GitHub Release, or public documentation deployment is supported
+by these results. See [release status](releases.md) for the full first-release
+gates and owner setup.
+
+### Later focused upload replay (Ubuntu x86-64, 2026-10-19)
+
+The maintained `fastapi-upload-1m-write-1k` workload was also run from a clean
+diagnostic checkout at `32eb14cc711d5cc3c1da2f2e7889dba35fd86ebc`, using the
+same stock FastAPI app, 1 MiB body, 1 KiB client writes, concurrency 8, and five
+repetitions. All 20 rows passed complete response checks with zero request
+failures. The run used Node.js 22.15.0 because libcurl was unavailable. It
+provided five matched repetitions for asyncio and four for uvloop; the
+remaining Uvicorn uvloop row was excluded for unrelated host CPU activity.
+
+| Loop | Matched repetitions | Median paired throughput ratio, Rust/Uvicorn | p95 latency, Uvicorn → Rust | Server CPU/request, Uvicorn → Rust |
+| --- | ---: | ---: | ---: | ---: |
+| asyncio | 5 | 0.856× | 12.56 → 14.01 ms | 1,097 → 2,034 µs |
+| uvloop | 4 | 1.081× | 13.96 → 12.65 ms | 1,168 → 1,654 µs |
+
+The host was an AMD Ryzen 5 2600X with 12 logical CPUs. This diagnostic uses a
+different source revision from the exact release-gate commit and a Node.js
+client instead of the libcurl client that timed out in the hosted matrix. It
+does not reproduce or explain that failure, and it is not multi-system release
+evidence. The report is retained in the user's Ubuntu work folder at
+`/home/appunni/work/uvicorn-rs-bench-32eb14c/target/fastapi-match/`;
+`fastapi-upload-1m-write-1k.json` has SHA-256
+`1453b5ea4635338e273ff31b6c1f6fc9bde1c83352fdd68183b1e6f97d980d85`.
+
+### Focused upload ASGI-stage diagnostic (Ubuntu x86-64, 2026-10-19)
+
+The exact-source `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5` server extension
+was replayed against the maintained stock FastAPI `POST /upload/1048576`
+workload. The client uploaded 1 MiB in 1 KiB writes at concurrency 8. Each
+server/loop pair ran five 5-second repetitions after a 1-second warmup, using
+the same native libcurl C client (libcurl 8.5.0). The ASGI profiling wrapper
+was enabled to time each application's `receive` and `send` awaits. It leaves
+ASGI messages unchanged but adds measurement overhead. The extension SHA-256
+was `44dd8bf5b2267da7e11a1209c5e01a88a91ad24c7ac7e5a54338cdace9a7ee98`.
+
+All 20 rows passed complete request/response checks and graceful server
+shutdown; no upload timeout reproduced. The host monitor observed unrelated
+CPU activity, and the ASGI instrumentation marked all rows timing-invalid.
+The observed throughput and latency below are diagnostic output only and must
+not be compared as performance results. Across repetitions, the instrumented
+ASGI `receive` p50 was consistently higher in uvicorn-rs; its p50 was close to
+the full FastAPI app-call wall time. This points to the request-body receive
+path as the next area to inspect, but does not identify the Rust operation
+responsible or explain the hosted 15-second stalls.
+
+| Server | Completed rows | Observed requests/s median* | Observed response p50 median* | ASGI receive-await p50 median (range) |
+|---|---:|---:|---:|---:|
+| Uvicorn, asyncio | 5/5 | 683.1 | 11.07 ms | 8.99 ms (8.70–10.02) |
+| uvicorn-rs, asyncio | 5/5 | 523.6 | 15.04 ms | 12.74 ms (12.50–13.08) |
+| Uvicorn, uvloop | 5/5 | 652.7 | 11.55 ms | 9.47 ms (8.90–9.67) |
+| uvicorn-rs, uvloop | 5/5 | 555.8 | 14.11 ms | 12.10 ms (11.33–12.23) |
+
+\* Instrumented and host-contended; invalid for ranking or release acceptance.
+
+The raw JSON and per-sample logs remain ignored on the Ubuntu host at
+`/home/appunni/work/uvicorn-rs-upload-exact-94c/target/fastapi-stage/`.
+This single-host diagnostic is not a release benchmark and does not replace a
+clean, uninstrumented, correctness-gated multi-system rerun.
+
+### Uninstrumented upload comparison on the same host (2026-10-19)
+
+The same workload was then measured without the profiling wrapper, from a
+clean checkout at commit `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`, using the
+same extension hash and libcurl 8.5.0 client. The host was Linux
+`7.0.0-38-generic` on an AMD Ryzen 5 2600X. All 20 server samples passed the
+body and lifecycle gates with zero failures. All five asyncio pairs qualified
+for timing; four of five uvloop pairs qualified, with the fifth Rust uvloop
+sample excluded for unrelated host CPU activity.
+
+| Loop | Matched pairs | Throughput, req/s | p50 latency, ms | p95 latency, ms | p99 latency, ms | Server CPU, µs/request | Peak RSS, MiB |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| asyncio | 5 | 723 → 525 (0.722×) | 10.44 → 15.20 | 15.64 → 18.92 | 20.15 → 22.56 | 1,367 → 2,843 (2.08×) | 54.71 → 56.88 |
+| uvloop | 4 | 692 → 574 (0.824×) | 11.18 → 13.60 | 15.62 → 18.08 | 19.49 → 23.02 | 1,436 → 2,312 (1.63×) | 58.11 → 60.28 |
+
+Values are Uvicorn → uvicorn-rs medians over the same valid repetition IDs;
+throughput ratios are median same-repetition ratios. This focused result shows
+uvicorn-rs slower on this FastAPI upload workload on this host. It does not
+identify the underlying receive-path operation and cannot satisfy the required
+three-system performance gate. The report's source SHA-256 is
+`e6e9791a2c6f4f3dfaaf579d260a76ee57d8b4dc743f2d8a19bcab3998b30f72`, its
+native extension SHA-256 is
+`44dd8bf5b2267da7e11a1209c5e01a88a91ad24c7ac7e5a54338cdace9a7ee98`, and its
+JSON SHA-256 is
+`522fe444802e56076db4c7affc69b3acdaf548abd57063b1ff588c546a2ac910`. The
+ignored report is
+`/home/appunni/work/uvicorn-rs-upload-exact-94c/target/fastapi-stage/fastapi-upload-1m-write-1k-uninstrumented.json`.
+
+Source inspection identifies a candidate to isolate, not a proven cause:
+`pump_http_request_body` currently coalesces up to 256 KiB and uses a 5 ms
+maximum batch wait. The 5 ms setting was selected from a separate 64 KiB-write
+comparison; it does not establish an effect on this 1 KiB-write workload. An
+older instrumented probe on commit
+`dd6ed00f551c02196544ae9452c7b0747452a422` observed about 65 Hyper body frames,
+11.3–11.8 ms per request waiting for a frame or batch flush, 1.1–1.3 ms waiting
+to send to the bounded request channel, about four byte-threshold flushes, and
+only 0.007–0.009 5 ms timer flushes per request. The probe used a different
+source revision and diagnostic build; it points toward body delivery and
+handoff scheduling but cannot attribute the current slowdown. It also makes a
+wait-only 1 ms versus 5 ms comparison a weak discriminator for this workload.
+
+The higher-value next experiment is a normal-build, same-host comparison of the
+current 256 KiB body-batch limit with a 1 MiB limit, holding the 5 ms maximum
+wait constant. Run only `fastapi-upload-1m-write-1k` first, check source and
+extension hashes around each sample, and require at least three matching valid
+pairs per loop. A prior 256 KiB versus 1 MiB trial on older source had only two
+valid candidate pairs and suggested slightly lower CPU alongside higher RSS
+and worse tail latency; it did not justify changing the default. Any new
+candidate must also retain the existing request-streaming-progress and
+resource-bound correctness results, and show a repeatable gain without
+unacceptable tail-latency or RSS cost before the default changes.
+
 ## Focused FastAPI fixed-route comparison attempt (Linux x86-64, 2026-10-18)
 
 A normal release wheel built from the dirty worktree at commit

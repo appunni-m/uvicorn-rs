@@ -141,10 +141,16 @@ jobs:
           workspace="$RUNNER_TEMP/native-composition"
           cargo tree --manifest-path "$workspace/uvicorn-rs/examples/native-fastapi-contracts/Cargo.toml" \
             --locked --edges normal,build --format '{p}' > "$RUNNER_TEMP/native-composition-dependencies.txt"
-          if rg -q '^pyo3' "$RUNNER_TEMP/native-composition-dependencies.txt"; then
+          if grep -q '^pyo3' "$RUNNER_TEMP/native-composition-dependencies.txt"; then
             cat "$RUNNER_TEMP/native-composition-dependencies.txt"
             echo "native FastAPI composition must not depend on PyO3"
             exit 1
+          else
+            grep_status=$?
+            if [[ "$grep_status" -ne 1 ]]; then
+              echo "could not verify the native FastAPI dependency graph (grep exited $grep_status)" >&2
+              exit "$grep_status"
+            fi
           fi
       - name: Run native FastAPI-RS → Starlette-RS → Uvicorn-RS live inputs
         # The pinned Starlette-RS revision has a Linux-only `unused_mut` lint
