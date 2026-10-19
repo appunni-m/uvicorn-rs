@@ -61,6 +61,9 @@ async def app(scope, receive, send):
         return
 
     path = str(scope.get("path", ""))
+    scope_client = scope.get("client")
+    if isinstance(scope_client, (tuple, list)):
+        scope_client = list(scope_client)
     request_id = _REQUEST_IDS[path] + 1
     _REQUEST_IDS[path] = request_id
     totals, samples = _path_stats(path)
@@ -162,6 +165,7 @@ async def app(scope, receive, send):
             slow_requests.append(
                 {
                     "request_id": request_id,
+                    "scope_client": scope_client,
                     "receive_await_ns": receive_ns,
                     "app_wall_ns": app_wall_ns,
                     "send_await_ns": send_ns,
