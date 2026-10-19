@@ -26,7 +26,7 @@ crate-type = ["cdylib"]
 
 [features]
 default = ["native-tcp"]
-runtime-diagnostics = []
+runtime-diagnostics = ["uvicorn-rs/runtime-diagnostics"]
 native-tcp = []
 
 [dependencies]

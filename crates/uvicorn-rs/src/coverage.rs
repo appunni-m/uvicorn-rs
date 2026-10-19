@@ -45,7 +45,7 @@ fn verify_io_error_source(
 pub fn http1_on_read_peer_read(
     stream: tokio::net::TcpStream,
 ) -> super::CoveragePeerReadAdapter<impl AsyncRead + AsyncWrite + Unpin + Send> {
-    let (io, observer, failed_observer, pump, _) =
+    let (io, observer, failed_observer, pump, _, _) =
         super::peer_read::observe_peer_read(stream, super::PeerReadHalfCloseMode::OnRead);
     let pump = pump.map(|pump| {
         Box::pin(async move {

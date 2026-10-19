@@ -303,7 +303,7 @@ pub struct CoveragePeerReadAdapter<I> {
 pub fn coverage_proactive_peer_read(
     stream: tokio::net::TcpStream,
 ) -> CoveragePeerReadAdapter<impl AsyncRead + AsyncWrite + Unpin + Send> {
-    let (io, observer, failed_observer, pump, _) =
+    let (io, observer, failed_observer, pump, _, _) =
         peer_read::observe_peer_read(stream, PeerReadHalfCloseMode::Proactive);
     let pump = pump.map(|pump| {
         Box::pin(async move {
@@ -2123,6 +2123,7 @@ where
             peer_read_failed,
             read_pump,
             prioritize_receiver_close_fault,
+            _peer_read_diagnostics,
         ) = peer_read::observe_peer_read(stream, config.peer_read_half_close);
         let (response_body_activity, mut response_body_activity_receiver) = watch::channel(0usize);
 

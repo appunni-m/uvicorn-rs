@@ -470,6 +470,24 @@ def _runtime_diagnostics(log) -> dict[str, int] | None:
     return None
 
 
+def _peer_read_diagnostics(log) -> list[dict[str, int | str]]:
+    log.flush()
+    position = log.tell()
+    log.seek(0)
+    prefix = "uvicorn-rs-peer-read-diagnostics "
+    rows = []
+    for line in log:
+        if not line.startswith(prefix):
+            continue
+        row: dict[str, int | str] = {}
+        for part in line[len(prefix) :].split():
+            key, value = part.split("=", 1)
+            row[key] = value if key in {"mode", "peer"} else int(value)
+        rows.append(row)
+    log.seek(position)
+    return rows
+
+
 def _client(port: int, seconds: float, concurrency: int, case: dict, server) -> dict:
     result = run_bounded_client(
         _client_command(port, seconds, concurrency, case),
@@ -570,6 +588,15 @@ def _sample(
                     "Rust server did not emit runtime diagnostics; rebuild with "
                     "the `runtime-diagnostics` Cargo feature"
                 )
+            peer_read_diagnostics = _peer_read_diagnostics(log)
+            if peer_read_diagnostics:
+                metrics["peer_read_diagnostics"] = peer_read_diagnostics
+            elif require_runtime_diagnostics:
+                raise RuntimeError(
+                    "Rust server did not emit peer-read diagnostics; set "
+                    "UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE and rebuild with the "
+                    "`runtime-diagnostics` Cargo feature"
+                )
         if asgi_stage_diagnostics:
             if asgi_timings_path is None or not asgi_timings_path.is_file():
                 raise RuntimeError("FastAPI ASGI-stage timing output was not written on graceful shutdown")
@@ -642,6 +669,8 @@ def _source_digest(workloads: list[str], asgi_stage_diagnostics: bool = False) -
         "uv.lock",
         "Cargo.toml",
         "Cargo.lock",
+        "crates/uvicorn-rs/Cargo.toml",
+        "crates/uvicorn-rs/src/peer_read.rs",
         "src/lib.rs",
         "python/uvicorn_rs/_bridge.py",
         "python/uvicorn_rs/cli.py",

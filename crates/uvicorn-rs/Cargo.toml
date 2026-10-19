@@ -13,6 +13,9 @@ exclude = ["examples/native_core_contracts.rs"]
 [lib]
 name = "uvicorn_rs"
 
+[features]
+runtime-diagnostics = []
+
 [dependencies]
 bytes = "1"
 data-encoding = "2.11.1"
