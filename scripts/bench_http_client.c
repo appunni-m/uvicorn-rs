@@ -3,6 +3,7 @@
 
 #include <curl/curl.h>
 #include <pthread.h>
+#include <stddef.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -22,6 +23,7 @@ typedef struct {
     uint64_t bytes_acked;
     uint32_t notsent_bytes;
     uint32_t unacked_segments;
+    double sampled_at_seconds;
 } SocketSnapshot;
 
 typedef struct {
@@ -52,6 +54,8 @@ typedef struct {
     size_t latency_count;
     size_t latency_capacity;
     curl_socket_t diagnostic_socket;
+    SocketSnapshot latest_tcp_snapshot;
+    unsigned int tcp_snapshot_count;
 } Worker;
 
 typedef struct FirstFailure {
@@ -70,10 +74,14 @@ typedef struct FirstFailure {
     double total_time_seconds;
     long local_port;
     int tcp_info_available;
+    int tcp_info_before_available;
+    unsigned int tcp_snapshot_count;
     unsigned long long tcp_bytes_acked;
+    unsigned long long tcp_bytes_acked_before;
     long long tcp_bytes_acked_delta;
     unsigned int tcp_notsent_bytes;
     unsigned int tcp_unacked_segments;
+    double tcp_snapshot_age_ms;
 } FirstFailure;
 
 typedef struct {
@@ -97,12 +105,19 @@ static double now_seconds(void) {
 }
 
 static SocketSnapshot read_socket_snapshot(curl_socket_t socket) {
-    SocketSnapshot snapshot = {.socket = socket};
+    SocketSnapshot snapshot = {
+        .socket = socket,
+        .sampled_at_seconds = now_seconds(),
+    };
 #ifdef __linux__
     if (socket != CURL_SOCKET_BAD) {
         struct tcp_info info = {0};
         socklen_t info_length = sizeof(info);
-        if (getsockopt(socket, IPPROTO_TCP, TCP_INFO, &info, &info_length) == 0) {
+        const socklen_t required_length =
+            (socklen_t)(offsetof(struct tcp_info, tcpi_notsent_bytes)
+                + sizeof(info.tcpi_notsent_bytes));
+        if (getsockopt(socket, IPPROTO_TCP, TCP_INFO, &info, &info_length) == 0
+            && info_length >= required_length) {
             snapshot.available = 1;
             snapshot.bytes_acked = info.tcpi_bytes_acked;
             snapshot.notsent_bytes = info.tcpi_notsent_bytes;
@@ -122,6 +137,28 @@ static int record_client_socket(void *client_data, curl_socket_t socket, curlsoc
         worker->diagnostic_socket = socket;
     }
     return CURL_SOCKOPT_OK;
+}
+
+static int sample_transfer_progress(
+    void *client_data,
+    curl_off_t download_total,
+    curl_off_t download_now,
+    curl_off_t upload_total,
+    curl_off_t upload_now
+) {
+    Worker *worker = (Worker *)client_data;
+    (void)download_total;
+    (void)download_now;
+    (void)upload_total;
+    (void)upload_now;
+    if (worker != NULL && worker->shared->tcp_diagnostics) {
+        SocketSnapshot snapshot = read_socket_snapshot(worker->diagnostic_socket);
+        if (snapshot.available) {
+            worker->latest_tcp_snapshot = snapshot;
+            worker->tcp_snapshot_count++;
+        }
+    }
+    return 0;
 }
 
 static size_t check_response(char *data, size_t size, size_t count, void *user_data) {
@@ -192,10 +229,14 @@ static void set_transfer_failure(
         failure->total_time_seconds = -1.0;
         failure->local_port = -1;
         failure->tcp_info_available = 0;
+        failure->tcp_info_before_available = 0;
+        failure->tcp_snapshot_count = worker->tcp_snapshot_count;
         failure->tcp_bytes_acked = 0;
+        failure->tcp_bytes_acked_before = 0;
         failure->tcp_bytes_acked_delta = -1;
         failure->tcp_notsent_bytes = 0;
         failure->tcp_unacked_segments = 0;
+        failure->tcp_snapshot_age_ms = -1.0;
 #if LIBCURL_VERSION_NUM >= 0x073700
         (void)curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD_T, &failure->curl_uploaded_bytes);
         (void)curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &failure->curl_downloaded_bytes);
@@ -204,15 +245,22 @@ static void set_transfer_failure(
         (void)curl_easy_getinfo(curl, CURLINFO_NUM_CONNECTS, &failure->new_connections);
         if (shared->tcp_diagnostics) {
             (void)curl_easy_getinfo(curl, CURLINFO_LOCAL_PORT, &failure->local_port);
-            SocketSnapshot tcp_after = read_socket_snapshot(worker->diagnostic_socket);
-            if (tcp_after.available) {
+            if (tcp_before->available) {
+                failure->tcp_info_before_available = 1;
+                failure->tcp_bytes_acked_before =
+                    (unsigned long long)tcp_before->bytes_acked;
+            }
+            const SocketSnapshot *tcp_after = &worker->latest_tcp_snapshot;
+            if (tcp_after->available) {
                 failure->tcp_info_available = 1;
-                failure->tcp_bytes_acked = (unsigned long long)tcp_after.bytes_acked;
-                failure->tcp_notsent_bytes = tcp_after.notsent_bytes;
-                failure->tcp_unacked_segments = tcp_after.unacked_segments;
-                if (tcp_before->available && tcp_before->socket == tcp_after.socket) {
+                failure->tcp_bytes_acked = (unsigned long long)tcp_after->bytes_acked;
+                failure->tcp_notsent_bytes = tcp_after->notsent_bytes;
+                failure->tcp_unacked_segments = tcp_after->unacked_segments;
+                failure->tcp_snapshot_age_ms =
+                    (now_seconds() - tcp_after->sampled_at_seconds) * 1000.0;
+                if (tcp_before->available && tcp_before->socket == tcp_after->socket) {
                     failure->tcp_bytes_acked_delta =
-                        (long long)(tcp_after.bytes_acked - tcp_before->bytes_acked);
+                        (long long)(tcp_after->bytes_acked - tcp_before->bytes_acked);
                 }
             }
         }
@@ -258,6 +306,9 @@ static void *run_worker(void *argument) {
     if (shared->tcp_diagnostics) {
         curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, record_client_socket);
         curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, worker);
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, sample_transfer_progress);
+        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, worker);
     }
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, check_response);
     UploadCursor upload = {
@@ -285,6 +336,8 @@ static void *run_worker(void *argument) {
             .valid = 1,
         };
         upload.offset = 0;
+        worker->latest_tcp_snapshot = (SocketSnapshot){.socket = CURL_SOCKET_BAD};
+        worker->tcp_snapshot_count = 0;
         SocketSnapshot tcp_before = {.socket = CURL_SOCKET_BAD};
         if (shared->tcp_diagnostics) {
             tcp_before = read_socket_snapshot(worker->diagnostic_socket);
@@ -504,14 +557,20 @@ int main(int argc, char **argv) {
             if (shared.tcp_diagnostics) {
                 printf(
                     ",\"client_tcp\":{\"local_port\":%ld,\"tcp_info_available\":%s,"
+                    "\"tcp_info_before_available\":%s,\"tcp_snapshot_count\":%u,"
                     "\"bytes_acked_total\":%llu,\"bytes_acked_delta\":%lld,"
-                    "\"notsent_bytes\":%u,\"unacked_segments\":%u}",
+                    "\"bytes_acked_before\":%llu,\"notsent_bytes\":%u,"
+                    "\"unacked_segments\":%u,\"snapshot_age_ms\":%.3f}",
                     first_failure.local_port,
                     first_failure.tcp_info_available ? "true" : "false",
+                    first_failure.tcp_info_before_available ? "true" : "false",
+                    first_failure.tcp_snapshot_count,
                     first_failure.tcp_bytes_acked,
                     first_failure.tcp_bytes_acked_delta,
+                    first_failure.tcp_bytes_acked_before,
                     first_failure.tcp_notsent_bytes,
-                    first_failure.tcp_unacked_segments);
+                    first_failure.tcp_unacked_segments,
+                    first_failure.tcp_snapshot_age_ms);
             }
         }
         printf("}");
