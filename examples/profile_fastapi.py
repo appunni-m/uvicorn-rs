@@ -20,6 +20,8 @@ from time import perf_counter_ns
 from examples.bench_fastapi import app as fastapi_app
 
 _MAX_RETAINED_PER_PATH = 250_000
+_SLOW_RECEIVE_THRESHOLD_NS = 100_000_000
+_MAX_SLOW_RECEIVES_PER_PATH = 32
 _DURATION_FIELDS = (
     "asgi_app_wall_ns",
     "asgi_receive_await_ns",
@@ -33,8 +35,10 @@ _VALUE_FIELDS = (
     "response_body_bytes",
 )
 _REQUESTS: dict[str, int] = Counter()
+_REQUEST_IDS: dict[str, int] = Counter()
 _TOTALS: dict[str, Counter] = {}
 _SAMPLES: dict[str, dict[str, array]] = {}
+_SLOW_RECEIVES: dict[str, list[dict[str, int | str | bool | None]]] = {}
 
 
 def _path_stats(path: str) -> tuple[Counter, dict[str, array]]:
@@ -54,6 +58,8 @@ async def app(scope, receive, send):
         return
 
     path = str(scope.get("path", ""))
+    request_id = _REQUEST_IDS[path] + 1
+    _REQUEST_IDS[path] = request_id
     totals, samples = _path_stats(path)
     request = {
         "receive_calls": 0,
@@ -70,7 +76,8 @@ async def app(scope, receive, send):
         try:
             message = await receive()
         finally:
-            request["receive_await_ns"] += perf_counter_ns() - started
+            elapsed_ns = perf_counter_ns() - started
+            request["receive_await_ns"] += elapsed_ns
             request["receive_calls"] += 1
         if isinstance(message, dict):
             message_type = message.get("type")
@@ -84,6 +91,32 @@ async def app(scope, receive, send):
                     request["request_body_bytes"] += len(body)
                 else:
                     request["request_body_bytes"] += len(message.get("text", "").encode("utf-8"))
+        else:
+            message_type = None
+
+        if elapsed_ns >= _SLOW_RECEIVE_THRESHOLD_NS:
+            slow_receives = _SLOW_RECEIVES.setdefault(path, [])
+            slow_receives.append(
+                {
+                    "request_id": request_id,
+                    "receive_call": request["receive_calls"],
+                    "wait_ns": elapsed_ns,
+                    "event_type": message_type,
+                    "body_bytes_in_event": (
+                        len(message.get("body", b""))
+                        if isinstance(message, dict) and message_type == "http.request"
+                        else 0
+                    ),
+                    "more_body": (
+                        message.get("more_body")
+                        if isinstance(message, dict) and message_type == "http.request"
+                        else None
+                    ),
+                    "request_body_bytes_seen": request["request_body_bytes"],
+                }
+            )
+            slow_receives.sort(key=lambda item: int(item["wait_ns"]), reverse=True)
+            del slow_receives[_MAX_SLOW_RECEIVES_PER_PATH:]
         return message
 
     async def timed_send(message):
@@ -147,6 +180,8 @@ def _distribution(values: array) -> dict[str, int | None]:
         "p50": _percentile(ordered, 0.50),
         "p95": _percentile(ordered, 0.95),
         "p99": _percentile(ordered, 0.99),
+        "p99_9": _percentile(ordered, 0.999),
+        "max": ordered[-1] if ordered else None,
         "mean": round(sum(ordered) / len(ordered)) if ordered else None,
     }
 
@@ -170,6 +205,11 @@ def _write_timings() -> None:
                 name: _distribution(samples[name])
                 for name in (*_DURATION_FIELDS, *_VALUE_FIELDS)
             },
+            "slow_receives_over_100ms": sorted(
+                _SLOW_RECEIVES.get(path, []),
+                key=lambda item: int(item["wait_ns"]),
+                reverse=True,
+            ),
             "p50_ns": app_wall["p50"],
             "p95_ns": app_wall["p95"],
             "p99_ns": app_wall["p99"],
@@ -183,7 +223,7 @@ def _write_timings() -> None:
     temporary.write_text(
         json.dumps(
             {
-                "schema_version": 2,
+                "schema_version": 3,
                 "profiling_only": True,
                 "measurement": (
                     "per-request FastAPI ASGI-call wall time and awaited send/receive time; "
