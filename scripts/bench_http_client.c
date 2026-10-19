@@ -12,7 +12,7 @@
 
 #ifdef __linux__
 #include <netinet/in.h>
-#include <netinet/tcp.h>
+#include <linux/tcp.h>
 #include <sys/socket.h>
 #endif
 
