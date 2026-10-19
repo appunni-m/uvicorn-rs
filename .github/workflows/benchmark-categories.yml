@@ -516,10 +516,17 @@ jobs:
           uname -a > target/benchmark-preparation/uname.txt
       - name: Build Rust runtime diagnostics extension
         shell: bash
+        env:
+          FASTAPI_STAGE_NO_NATIVE_TCP: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-no-native-tcp]') }}
         run: |
           set -euo pipefail
-          uv run --with maturin==1.14.1 --no-sync maturin develop --release --features runtime-diagnostics \
-            2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
+          if [[ "$FASTAPI_STAGE_NO_NATIVE_TCP" == "true" ]]; then
+            uv run --with maturin==1.14.1 --no-sync maturin develop --release \
+              --no-default-features --features runtime-diagnostics
+          else
+            uv run --with maturin==1.14.1 --no-sync maturin develop --release \
+              --features runtime-diagnostics
+          fi 2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
       - name: Capture read-only host preflight
         shell: bash
         run: |

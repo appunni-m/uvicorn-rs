@@ -50,33 +50,20 @@ First-time Cargo crate creation still requires a maintainer bootstrap because
 Trusted Publishing is configured on an existing crate. No release workflow
 creates or moves a tag.
 
-## Current release state
+## Check release readiness
 
-Snapshot: 2026-10-19. The checkout is clean at main commit
-b6126244e4441247efccd48f64540260116a9e4c.
+This guide describes the release gates; it is not a live status report. Check
+the GitHub Actions runs and retained artifacts for the exact clean `main`
+commit under review. Do not rely on a run for an older commit, a partial matrix,
+or a status snapshot copied into documentation. Missing or expired artifacts
+do not count as evidence.
 
-| Gate | Evidence | State |
-|---|---|---|
-| Main CI at 4c7327d | [Run 39167432471](https://github.com/appunni-m/uvicorn-rs/actions/runs/39167432471). Installed-wheel parity, Rust 1.85, Rust quality/docs, native HTTP contracts, and native FastAPI-RS composition passed. | The three-repeat parity/coverage matrix is still running. |
-| Main CI at current docs commit | [Run 39167508745](https://github.com/appunni-m/uvicorn-rs/actions/runs/39167508745). | Queued behind run 39167432471. |
-| Performance at 4c7327d | [Run 39167432509](https://github.com/appunni-m/uvicorn-rs/actions/runs/39167432509). Exact-binary parity passed on Linux x86-64, Linux ARM64, and macOS ARM64. | Category measurements and analysis are still running on all three systems. This is not a performance result yet. |
-| Older performance run | [Run 39163196763](https://github.com/appunni-m/uvicorn-rs/actions/runs/39163196763), for commit 16d1455. | Still active, but it is not evidence for the current commit. |
-| Documentation build and deployment | [Run 39167508727](https://github.com/appunni-m/uvicorn-rs/actions/runs/39167508727). | Build and link validation passed. Deployment failed because GitHub Pages is not configured for Actions. |
-| Branch protection | GitHub reports main as unprotected and the repository has no rulesets. | Configure required release checks before tagging. |
-| Package registries | Read-only preflight on 2026-10-18 found all four Cargo names and uvicorn-rs-py absent. | First publication has not started. Recheck before release. |
-| Candidate and publication | No candidate bundle, version tag, registry upload, GitHub Release, or public docs deployment exists. | Not released. |
-
-The current CI and performance runs are active. Their job-log download endpoints
-currently return BlobNotFound; the live job state remains the progress source.
-Do not treat missing log downloads as failed jobs or as completed evidence.
-
-The previous FastAPI-only measurements did not meet the faster-than-Uvicorn goal
-for the Python compatibility path. The reviewed decision in
-[performance-acceptance.json](performance-acceptance.json) removes a general
-performance-superiority claim for uvicorn-rs-py and targets performance claims
-at Python-free Rust-native application composition. The full current three-
-system category artifact is still required for the candidate gate and to
-complete the evidence record. Do not claim a performance win from partial runs.
+The current performance policy in
+[performance-acceptance.json](performance-acceptance.json) makes no general
+performance-superiority claim for the Python compatibility package. Claims are
+limited to the workloads and Python-free Rust-native composition defined by
+that policy. A release candidate still requires the complete, correctness-gated
+three-system artifact; partial FastAPI results cannot satisfy that gate.
 
 ## Gates before candidate assembly
 
