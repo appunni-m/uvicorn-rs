@@ -4940,7 +4940,14 @@ async fn serve_forever(
             // which closes the connection as Uvicorn does. Ordinary ASGI app
             // exceptions are converted to 500 responses in `handle_request`.
             service_error_policy: uvicorn_rs::ServiceErrorPolicy::Propagate,
-            peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::Proactive,
+            peer_read_half_close: if cfg!(feature = "runtime-diagnostics")
+                && std::env::var("UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE")
+                    .is_ok_and(|mode| mode == "on-read")
+            {
+                uvicorn_rs::PeerReadHalfCloseMode::OnRead
+            } else {
+                uvicorn_rs::PeerReadHalfCloseMode::Proactive
+            },
             error_observer: Some(Arc::new(|event| {
                 if event.phase() == uvicorn_rs::ServerErrorPhase::Connection {
                     log_error(format_args!(
