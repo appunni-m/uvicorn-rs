@@ -2123,7 +2123,7 @@ where
             peer_read_failed,
             read_pump,
             prioritize_receiver_close_fault,
-            _peer_read_diagnostics,
+            peer_read_diagnostics,
         ) = peer_read::observe_peer_read(stream, config.peer_read_half_close);
         let (response_body_activity, mut response_body_activity_receiver) = watch::channel(0usize);
 
@@ -2224,6 +2224,7 @@ where
                 );
                 tracing::debug!(%peer, %error, "HTTP connection finished with an error");
             }
+            drop(peer_read_diagnostics);
             result
         });
     }

@@ -300,12 +300,14 @@ def wait_tls_ready(server, port: int, log, certfile: Path, *, seconds: float) ->
     raise TimeoutError(f"server did not complete TLS readiness within {seconds:g}s; log={log.name}")
 
 
-def run_bounded_client(argv, seconds: float, server, *, cwd: Path):
+def run_bounded_client(argv, seconds: float, server, *, cwd: Path, text: bool = True):
     """Run a warmup with a wall deadline independent of the client's protocol."""
     if not math.isfinite(seconds) or seconds <= 0:
         raise ValueError("client duration must be finite and positive")
     check_server_alive(server)
-    process = owned_process(argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    process = owned_process(
+        argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=text
+    )
     deadline = process.benchmark_started + seconds + 30
     try:
         while True:

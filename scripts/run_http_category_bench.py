@@ -54,17 +54,35 @@ class _BenchmarkCaseFailure(RuntimeError):
         identity_result: dict | None = None,
         partial_client_metrics: dict | None = None,
         asgi_timings_path: Path | None = None,
+        runtime_diagnostics: dict[str, int] | None = None,
+        peer_read_diagnostics: list[dict[str, int | str]] | None = None,
     ) -> None:
         super().__init__(message)
         self.identity_result = identity_result
         self.partial_client_metrics = partial_client_metrics
         self.asgi_timings_path = asgi_timings_path
+        self.runtime_diagnostics = runtime_diagnostics
+        self.peer_read_diagnostics = peer_read_diagnostics
 
 
 class _HttpClientFailure(RuntimeError):
     def __init__(self, message: str, partial_client_metrics: dict | None) -> None:
         super().__init__(message)
         self.partial_client_metrics = partial_client_metrics
+
+
+def _client_output_text(output: bytes | str) -> str:
+    if isinstance(output, bytes):
+        return output.decode("utf-8", errors="replace")
+    return output
+
+
+def _partial_client_metrics(output: bytes | str) -> dict | None:
+    try:
+        metrics = json.loads(output)
+    except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+        return None
+    return metrics if isinstance(metrics, dict) else None
 
 
 def _scope_headers() -> list[list[str]]:
@@ -457,11 +475,14 @@ def _stop_server(process: subprocess.Popen) -> None:
     stop_owned(process, graceful=True)
 
 
-def _runtime_diagnostics(log) -> dict[str, int] | None:
+def _server_log_text(log) -> str:
     log.flush()
-    log.seek(0)
+    return Path(log.name).read_bytes().decode("utf-8", errors="replace")
+
+
+def _runtime_diagnostics(log) -> dict[str, int] | None:
     prefix = "uvicorn-rs-runtime-diagnostics "
-    for line in log:
+    for line in _server_log_text(log).splitlines():
         if line.startswith(prefix):
             return {
                 key: int(value)
@@ -471,12 +492,9 @@ def _runtime_diagnostics(log) -> dict[str, int] | None:
 
 
 def _peer_read_diagnostics(log) -> list[dict[str, int | str]]:
-    log.flush()
-    position = log.tell()
-    log.seek(0)
     prefix = "uvicorn-rs-peer-read-diagnostics "
     rows = []
-    for line in log:
+    for line in _server_log_text(log).splitlines():
         if not line.startswith(prefix):
             continue
         row: dict[str, int | str] = {}
@@ -484,7 +502,6 @@ def _peer_read_diagnostics(log) -> list[dict[str, int | str]]:
             key, value = part.split("=", 1)
             row[key] = value if key in {"mode", "peer"} else int(value)
         rows.append(row)
-    log.seek(position)
     return rows
 
 
@@ -492,16 +509,13 @@ def _client(port: int, seconds: float, concurrency: int, case: dict, server) -> 
     result = run_bounded_client(
         _client_command(port, seconds, concurrency, case),
         seconds, server, cwd=ROOT,
+        text=False,
     )
     if result.returncode != 0:
-        try:
-            partial_client_metrics = json.loads(result.stdout)
-        except (json.JSONDecodeError, TypeError):
-            partial_client_metrics = None
-        if not isinstance(partial_client_metrics, dict):
-            partial_client_metrics = None
+        partial_client_metrics = _partial_client_metrics(result.stdout)
         raise _HttpClientFailure(
-            f"HTTP client failed ({result.returncode}):\n{result.stdout}\n{result.stderr}",
+            f"HTTP client failed ({result.returncode}):\n"
+            f"{_client_output_text(result.stdout)}\n{_client_output_text(result.stderr)}",
             partial_client_metrics,
         )
     return json.loads(result.stdout)
@@ -543,28 +557,36 @@ def _sample(
         text=True,
     )
     client = None
+    server_stopped = False
     try:
         _wait_ready(process, port, log)
         case = definition["client"]
         if warmup > 0:
             result = _client(port, warmup, concurrency, case, process)
             if result["failures"]:
-                raise RuntimeError(f"warm-up correctness gate failed: {result}")
+                raise _HttpClientFailure(
+                    f"warm-up correctness gate failed: {result}", result
+                )
 
         server_process = psutil.Process(process.pid)
         client = owned_process(
             _client_command(port, seconds, concurrency, case),
-            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=False,
         )
         monitor = SampleMonitor(server_process, psutil.Process(client.pid))
         stdout, stderr = collect_bounded_client(client, seconds, process, monitor)
         if client.returncode != 0:
-            raise RuntimeError(f"HTTP client failed ({client.returncode}):\n{stdout}\n{stderr}")
+            raise _HttpClientFailure(
+                f"HTTP client failed ({client.returncode}):\n"
+                f"{_client_output_text(stdout)}\n{_client_output_text(stderr)}",
+                _partial_client_metrics(stdout),
+            )
         metrics = json.loads(stdout)
         if metrics["failures"]:
-            raise RuntimeError(f"correctness gate failed: {metrics}")
+            raise _HttpClientFailure(f"correctness gate failed: {metrics}", metrics)
         metrics.update(monitor.finish(metrics))
         metrics.update(finalize_server(process, log, permit_app_error=workload == "exception-to-500"))
+        server_stopped = True
         if not definition.get("timing_rankable", True):
             metrics["timing_valid"] = False
             metrics["timing_invalid_reasons"].append(definition["timing_exclusion_reason"])
@@ -610,8 +632,19 @@ def _sample(
             metrics["performance_evidence_status"] = "diagnostic_only"
         return metrics
     except Exception as error:
-        log.seek(0)
-        server_output = log.read()
+        stop_client(client)
+        client = None
+        try:
+            _stop_server(process)
+            server_stopped = True
+        except Exception:
+            pass
+        server_output = _server_log_text(log)
+        runtime_diagnostics = None
+        peer_read_diagnostics = None
+        if server_name.startswith("uvicorn-rs-"):
+            runtime_diagnostics = _runtime_diagnostics(log)
+            peer_read_diagnostics = _peer_read_diagnostics(log)
         if evidence is not None and identity_before is not None and identity_result is None:
             try:
                 identity_result = evidence.after_sample(identity_before)
@@ -627,10 +660,13 @@ def _sample(
             identity_result,
             getattr(error, "partial_client_metrics", None),
             asgi_timings_path,
+            runtime_diagnostics,
+            peer_read_diagnostics,
         ) from error
     finally:
         stop_client(client)
-        _stop_server(process)
+        if not server_stopped:
+            _stop_server(process)
         log.close()
 
 
@@ -832,6 +868,8 @@ def main() -> None:
                     partial_client_metrics = getattr(
                         error, "partial_client_metrics", None
                     )
+                    runtime_diagnostics = getattr(error, "runtime_diagnostics", None)
+                    peer_read_diagnostics = getattr(error, "peer_read_diagnostics", None)
                     if not isinstance(partial_client_metrics, dict):
                         partial_client_metrics = None
                     asgi_stage_diagnostics = None
@@ -897,6 +935,10 @@ def main() -> None:
                         row["asgi_stage_diagnostics"] = asgi_stage_diagnostics
                     if asgi_stage_diagnostics_error is not None:
                         row["asgi_stage_diagnostics_error"] = asgi_stage_diagnostics_error
+                    if isinstance(runtime_diagnostics, dict):
+                        row["runtime_diagnostics"] = runtime_diagnostics
+                    if isinstance(peer_read_diagnostics, list):
+                        row["peer_read_diagnostics"] = peer_read_diagnostics
                     if identity_result is not None:
                         row["measurement_identity"] = identity_result.get(
                             "measurement_identity"
