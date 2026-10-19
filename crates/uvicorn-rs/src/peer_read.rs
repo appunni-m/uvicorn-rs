@@ -28,7 +28,7 @@ const READ_CHUNK_SIZE: usize = 16 * 1024;
 const READ_QUEUE_CAPACITY: usize = 2;
 
 #[cfg(feature = "runtime-diagnostics")]
-const DIRECT_READ_TRACE_THRESHOLD: Duration = Duration::from_millis(100);
+const DIRECT_READ_TRACE_THRESHOLD: Duration = Duration::from_millis(10);
 
 #[cfg(feature = "runtime-diagnostics")]
 const DIRECT_READ_TRACE_LIMIT: u64 = 128;
@@ -652,7 +652,8 @@ impl AsyncRead for PeerReadIo {
                                 .fetch_add(1, Ordering::Relaxed);
                             if this.direct_read_pending_since.is_none() {
                                 this.direct_read_pending_since = Some(Instant::now());
-                                this.direct_read_pending_unix_ns = Some(unix_timestamp_ns());
+                                this.direct_read_pending_unix_ns =
+                                    diagnostics.trace_read_events.then(unix_timestamp_ns);
                             }
                         }
                         Poll::Ready(Ok(())) => {

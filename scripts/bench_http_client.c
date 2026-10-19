@@ -27,6 +27,7 @@ typedef struct {
 } SocketSnapshot;
 
 #define MAX_UPLOAD_TRACE_EVENTS 2048
+#define UPLOAD_TRACE_MIN_SECONDS 0.010
 
 typedef struct {
     uint64_t unix_time_ns;
@@ -223,7 +224,8 @@ static void select_slow_upload_trace(
     double elapsed
 ) {
     Shared *shared = worker->shared;
-    if (!shared->upload_trace || shared->upload_bytes == 0 || elapsed < 0.100) return;
+    if (!shared->upload_trace || shared->upload_bytes == 0
+        || elapsed < UPLOAD_TRACE_MIN_SECONDS) return;
 
     /* Keep at most one slow request trace per client process. */
     unsigned int unclaimed = 0;
