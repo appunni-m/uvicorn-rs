@@ -699,7 +699,7 @@ jobs:
           retention-days: 90
 
   focused-h2-diagnostic:
-    name: ${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }} · ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}
+    name: ${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || 'uvicorn-rs-asyncio' }} · ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=request-upload-small-chunks]') && 'request-upload-small-chunks') || 'protocol-scope' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h2') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]')) }}
     runs-on: ${{ (inputs.h2_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || (inputs.h2_system == 'macos-arm64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]'))) && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 30
@@ -733,12 +733,12 @@ jobs:
           rustc --version --verbose
           openssl version
           uname -a
-      - name: Build and install the normal release server wheel
+      - name: Build and install the runtime-diagnostics server wheel
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p target/benchmark-preparation/server-wheels
-          uvx --from maturin==1.14.1 maturin build --release --locked \
+          uvx --from maturin==1.14.1 maturin build --release --locked --features runtime-diagnostics \
             --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
             --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
             2>&1 | tee target/benchmark-preparation/server-build.log
@@ -757,10 +757,10 @@ jobs:
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
-          BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
+          BENCHMARK_REPETITIONS: ${{ inputs.repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]') && '1') || '5' }}
           BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
-          BENCHMARK_H2_SERVER: ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }}
-          BENCHMARK_H2_WORKLOAD: ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}
+          BENCHMARK_H2_SERVER: ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || 'uvicorn-rs-asyncio' }}
+          BENCHMARK_H2_WORKLOAD: ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=request-upload-small-chunks]') && 'request-upload-small-chunks') || 'protocol-scope' }}
           RUST_BACKTRACE: "1"
           PYTHONFAULTHANDLER: "1"
         run: |
@@ -777,7 +777,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: h2-focused-${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }}-${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}-${{ github.sha }}
+          name: h2-focused-${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || 'uvicorn-rs-asyncio' }}-${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=request-upload-small-chunks]') && 'request-upload-small-chunks') || 'protocol-scope' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/benchmark-categories/

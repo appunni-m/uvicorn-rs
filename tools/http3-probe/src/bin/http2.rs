@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::future::poll_fn;
-use std::io::{BufReader, Write};
+use std::io::{BufReader, ErrorKind, Write};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -11,7 +11,7 @@ use http::{Request, Uri};
 use serde_json::{json, Value};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, timeout};
+use tokio::time::{sleep, timeout, timeout_at, Instant as TokioInstant};
 use tokio_rustls::rustls::{self, pki_types::ServerName};
 use tokio_rustls::TlsConnector;
 
@@ -59,9 +59,30 @@ async fn request_once(
     config: &Value,
     expected: &[u8],
     upload_body: &[u8],
+    diagnostic_progress: bool,
+    deadline: TokioInstant,
 ) -> Result<(u16, usize, usize), BenchError> {
-    *sender = sender.clone().ready().await?;
+    macro_rules! await_phase {
+        ($future:expr, $phase:literal, $sent:expr, $total:expr, $received:expr, $frames:expr) => {{
+            if diagnostic_progress {
+                timeout_at(deadline, $future)
+                    .await
+                    .map_err(|_| request_phase_timeout($phase, $sent, $total, $received, $frames))?
+            } else {
+                $future.await
+            }
+        }};
+    }
+
     let upload_bytes = upload_body.len();
+    *sender = await_phase!(
+        sender.clone().ready(),
+        "stream readiness",
+        0,
+        upload_bytes,
+        0,
+        0
+    )?;
     let method = if upload_bytes == 0 { "GET" } else { "POST" };
     let mut builder = Request::builder().method(method).uri(uri.clone());
     if upload_bytes > 0 {
@@ -94,9 +115,15 @@ async fn request_once(
         while offset < upload_bytes {
             let wanted = chunk_size.min(upload_bytes - offset);
             request_stream.reserve_capacity(wanted);
-            let capacity = poll_fn(|cx| request_stream.poll_capacity(cx))
-                .await
-                .ok_or("HTTP/2 upload stream closed before the request body finished")??;
+            let capacity = await_phase!(
+                poll_fn(|cx| request_stream.poll_capacity(cx)),
+                "request-body upload",
+                offset,
+                upload_bytes,
+                0,
+                0
+            )
+            .ok_or("HTTP/2 upload stream closed before the request body finished")??;
             let length = capacity.min(wanted);
             let end_stream = offset + length == upload_bytes;
             request_stream.send_data(
@@ -107,7 +134,14 @@ async fn request_once(
         }
     }
 
-    let response = response_future.await?;
+    let response = await_phase!(
+        response_future,
+        "response headers",
+        upload_bytes,
+        upload_bytes,
+        0,
+        0
+    )?;
     let status = response.status().as_u16();
     let mut response_body = response.into_body();
     let mut offset = 0;
@@ -118,7 +152,14 @@ async fn request_once(
         .and_then(Value::as_u64)
         .unwrap_or(0);
     let pacing_started = Instant::now();
-    while let Some(chunk) = response_body.data().await {
+    while let Some(chunk) = await_phase!(
+        response_body.data(),
+        "response body",
+        upload_bytes,
+        upload_bytes,
+        response_bytes,
+        response_data_frames
+    ) {
         let chunk = chunk?;
         response_data_frames += 1;
         let end = offset + chunk.len();
@@ -131,7 +172,14 @@ async fn request_once(
             let target_elapsed = Duration::from_secs_f64(offset as f64 / read_rate as f64);
             let elapsed = pacing_started.elapsed();
             if target_elapsed > elapsed {
-                sleep(target_elapsed - elapsed).await;
+                await_phase!(
+                    sleep(target_elapsed - elapsed),
+                    "response pacing",
+                    upload_bytes,
+                    upload_bytes,
+                    response_bytes,
+                    response_data_frames
+                );
             }
         }
         response_body.flow_control().release_capacity(chunk.len())?;
@@ -144,6 +192,21 @@ async fn request_once(
         .into());
     }
     Ok((status, response_bytes, response_data_frames))
+}
+
+fn request_phase_timeout(
+    phase: &str,
+    request_body_accepted: usize,
+    request_body_bytes: usize,
+    response_body_received: usize,
+    response_data_frames: usize,
+) -> std::io::Error {
+    std::io::Error::new(
+        ErrorKind::TimedOut,
+        format!(
+            "HTTP/2 request timed out during {phase}; request body accepted by H2 send stream {request_body_accepted}/{request_body_bytes} bytes; response body received {response_body_received} bytes in {response_data_frames} DATA frames"
+        ),
+    )
 }
 
 async fn connect_h2(
@@ -231,6 +294,10 @@ async fn run(config: Value) -> Result<Value, BenchError> {
     // Keep the timeout as a deadlock guard without rejecting slow, large
     // uploads on shared CI hosts. The full request duration remains measured.
     let request_timeout = Duration::from_secs(20);
+    let diagnostic_progress = config
+        .get("diagnostic_progress")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let workers = (0..concurrency).map(|worker_index| {
         let mut sender = senders[worker_index % senders.len()].clone();
         let uri = uri.clone();
@@ -245,9 +312,23 @@ async fn run(config: Value) -> Result<Value, BenchError> {
             let mut failures = Vec::new();
             while Instant::now() < deadline {
                 let request_started = Instant::now();
+                let request_deadline = TokioInstant::now() + request_timeout;
+                let outer_timeout = if diagnostic_progress {
+                    request_timeout + Duration::from_secs(1)
+                } else {
+                    request_timeout
+                };
                 let outcome = timeout(
-                    request_timeout,
-                    request_once(&mut sender, &uri, &config, &expected, &upload_body),
+                    outer_timeout,
+                    request_once(
+                        &mut sender,
+                        &uri,
+                        &config,
+                        &expected,
+                        &upload_body,
+                        diagnostic_progress,
+                        request_deadline,
+                    ),
                 )
                 .await;
                 let (status, received, data_frames) = match outcome {
@@ -257,9 +338,11 @@ async fn run(config: Value) -> Result<Value, BenchError> {
                         break;
                     }
                     Err(_) => {
-                        failures.push(
-                            "HTTP/2 request timed out waiting for a complete response".into(),
-                        );
+                        failures.push(if diagnostic_progress {
+                            "HTTP/2 request timed out outside a classified protocol wait".into()
+                        } else {
+                            "HTTP/2 request timed out waiting for a complete response".into()
+                        });
                         break;
                     }
                 };
