@@ -8,6 +8,55 @@ The available matched measurements for the Python ASGI compatibility path do not
 
 This scope revision follows the benchmark objective: stop after the prototype when matched measurements show no meaningful overall gain. The 2026-10-10 measured H1 body-pump source coalesced already-arrived request data with a 256 KiB cap and a 1 ms maximum wait. A 1 MiB cap modestly increased throughput but worsened p95/p99 latency and sampled RSS; the 512 KiB run lacked enough clean repetitions. That 256 KiB source setting is a historical benchmark identity, not a fresh qualification of the current source. Future performance work should target a specific measured bottleneck, preserve ASGI behavior, and show a repeatable end-to-end improvement.
 
+## Focused exact-main FastAPI upload measurement (Linux x86-64, 2026-10-19)
+
+The clean `32eb14cc711d5cc3c1da2f2e7889dba35fd86ebc` source built a normal
+`uvicorn-rs-py` release wheel on an AMD Ryzen 5 2600X host with 12 logical
+CPUs. The comparison used CPython 3.12.13, FastAPI 0.142.4, Starlette 1.7.0,
+Pydantic 2.13.5, Uvicorn 0.54.0, uvloop 0.23.0, and httptools 0.8.0. It ran
+the maintained `fastapi-upload-1m-write-1k` input: 1 MiB request bodies sent
+in 1 KiB client chunks, concurrency 8, five-second samples, one-second warmup,
+five repetitions, seed `20261019`. Uvicorn and uvicorn-rs used the same
+stock FastAPI app and Node.js 22.15.0 client.
+
+All 20 rows returned the expected complete response and passed server shutdown;
+there were zero request failures, panics, or unexpected native errors. The
+host guard accepted 19 timing rows and excluded one Uvicorn/uvloop row for
+unrelated host CPU activity. The maintained focused analyzer qualified five
+matched asyncio repetitions and four matched uvloop repetitions:
+
+| Loop | Matched | Throughput, requests/s (Uvicorn / Rust) | Rust / Uvicorn | p50 ms (Uvicorn / Rust) | p95 ms (Uvicorn / Rust) | p99 ms (Uvicorn / Rust) |
+|---|---:|---:|---:|---:|---:|---:|
+| asyncio | 5 | 879.4 / 810.4 | 0.856× | 8.84 / 9.45 | 12.56 / 14.01 | 15.20 / 16.18 |
+| uvloop | 4 | 812.6 / 917.5 | 1.081× | 9.49 / 8.48 | 13.96 / 12.65 | 16.32 / 16.08 |
+
+| Loop | Server CPU, µs/request (Uvicorn / Rust) | Server peak RSS, MiB (Uvicorn / Rust) | Client CPU, µs/request (Uvicorn / Rust) | Client peak RSS, MiB (Uvicorn / Rust) |
+|---|---:|---:|---:|---:|
+| asyncio | 1,097.2 / 2,033.5 | 55.59 / 58.94 | 1,063.9 / 1,020.6 | 99.27 / 95.47 |
+| uvloop | 1,168.0 / 1,654.5 | 56.56 / 61.08 | 1,119.8 / 1,009.4 | 99.82 / 98.10 |
+
+The uvloop throughput gain is specific to this input and runner; Rust used
+more server CPU per request in both loop comparisons. The Node client consumed
+about one CPU core during samples, which limits how strongly to interpret
+throughput and latency. This host used Rust 1.91.1 rather than the benchmark
+workflow's pinned Rust 1.98.1. The run is a useful exact-source focused result,
+not the required three-system, multi-category release matrix and not evidence
+for a general performance claim.
+
+The ignored local evidence bundle is
+`target/benchmark-diagnostics/2026-10-19/current-main-linux-x86_64-fastapi-upload/`.
+Its raw report SHA-256 is
+`1453b5ea4635338e273ff31b6c1f6fc9bde1c83352fdd68183b1e6f97d980d85`, the
+qualified summary SHA-256 is
+`19435bfc3210c0741fb8a3ce41e5be7b6e8e55393821009ffdc2be6930296ac0`, and the
+release wheel SHA-256 is
+`7e40f58444ce73040043fd496320bbe111da79bac2d53084a84a278c84a5151a`. Raw
+reports and build logs remain ignored local evidence; they are not committed.
+The caller's `tee` directory was missing, so its shell returned 1 and no
+console log was captured. The benchmark itself wrote the complete JSON and
+JSONL reports, and the maintained analyzer qualified the result; no rerun was
+used.
+
 ## Historical adapter-only correctness evidence (2026-10-12)
 
 The dirty macOS ARM64 working tree at revision
