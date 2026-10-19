@@ -4934,20 +4934,23 @@ async fn serve_forever(
         if coverage_fault_take(CoverageFaultPoint::ServerListenerAcceptError) {
             let _ = uvicorn_rs::arm_listener_accept_fault();
         }
+        #[cfg(feature = "runtime-diagnostics")]
+        let peer_read_half_close = if std::env::var("UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE")
+            .is_ok_and(|mode| mode == "on-read")
+        {
+            uvicorn_rs::PeerReadHalfCloseMode::OnRead
+        } else {
+            uvicorn_rs::PeerReadHalfCloseMode::Proactive
+        };
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let peer_read_half_close = uvicorn_rs::PeerReadHalfCloseMode::Proactive;
         let config = uvicorn_rs::ServerConfig {
             graceful_shutdown_timeout: options.graceful_timeout,
             // Let an invalid HTTP/1 ASGI response start reach the transport,
             // which closes the connection as Uvicorn does. Ordinary ASGI app
             // exceptions are converted to 500 responses in `handle_request`.
             service_error_policy: uvicorn_rs::ServiceErrorPolicy::Propagate,
-            peer_read_half_close: if cfg!(feature = "runtime-diagnostics")
-                && std::env::var("UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE")
-                    .is_ok_and(|mode| mode == "on-read")
-            {
-                uvicorn_rs::PeerReadHalfCloseMode::OnRead
-            } else {
-                uvicorn_rs::PeerReadHalfCloseMode::Proactive
-            },
+            peer_read_half_close,
             error_observer: Some(Arc::new(|event| {
                 if event.phase() == uvicorn_rs::ServerErrorPhase::Connection {
                     log_error(format_args!(
