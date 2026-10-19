@@ -768,6 +768,7 @@ jobs:
           .venv/bin/python scripts/run_h2_category_bench.py \
             --servers "$BENCHMARK_H2_SERVER" \
             --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
+            --diagnostics \
             --output target/benchmark-categories/h2-focused.json \
             --workloads "$BENCHMARK_H2_WORKLOAD" \
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
