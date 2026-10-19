@@ -257,6 +257,76 @@ def stop_client(process) -> None:
     stop_owned(process)
 
 
+def _bounded_client_timeout_snapshot(process) -> dict:
+    """Capture small, read-only process state before a bounded client is stopped."""
+    started = getattr(process, "benchmark_started", None)
+    snapshot: dict = {
+        "pid": process.pid,
+        "elapsed_wall_seconds": (
+            round(time.monotonic() - started, 3)
+            if isinstance(started, (int, float))
+            else None
+        ),
+    }
+    argv = getattr(process, "args", None)
+    if isinstance(argv, (list, tuple)) and len(argv) >= 7:
+        snapshot["client_parameters"] = {
+            "seconds": argv[3],
+            "concurrency": argv[4],
+            "mode": argv[5],
+            "path": argv[6],
+        }
+
+    try:
+        client = psutil.Process(process.pid)
+        snapshot["status"] = client.status()
+        cpu = client.cpu_times()
+        snapshot["cpu_seconds"] = round(cpu.user + cpu.system, 3)
+        snapshot["rss_bytes"] = client.memory_info().rss
+
+        threads = []
+        try:
+            thread_infos = client.threads()
+        except (psutil.Error, OSError) as error:
+            thread_infos = []
+            snapshot["thread_snapshot_error"] = type(error).__name__
+        for thread in thread_infos:
+            entry = {
+                "tid": thread.id,
+                "cpu_seconds": round(thread.user_time + thread.system_time, 3),
+            }
+            wait_channel = Path(f"/proc/{process.pid}/task/{thread.id}/wchan")
+            try:
+                value = wait_channel.read_text(encoding="utf-8").strip()
+            except OSError:
+                value = ""
+            if value:
+                entry["wait_channel"] = value[:120]
+            threads.append(entry)
+        snapshot["threads"] = threads[:32]
+
+        connections = []
+        try:
+            for connection in client.net_connections(kind="tcp"):
+                if connection.laddr and connection.raddr:
+                    connections.append(
+                        {
+                            "local_port": connection.laddr.port,
+                            "remote_port": connection.raddr.port,
+                            "status": connection.status,
+                        }
+                    )
+        except (psutil.Error, OSError):
+            pass
+        snapshot["tcp_connections"] = connections[:32]
+    except (psutil.Error, OSError) as error:
+        snapshot["snapshot_error"] = {
+            "type": type(error).__name__,
+            "message": str(error),
+        }
+    return snapshot
+
+
 def check_server_alive(server) -> None:
     _refresh_owned(server)
     if server.poll() is not None:
@@ -314,7 +384,11 @@ def run_bounded_client(argv, seconds: float, server, *, cwd: Path, text: bool = 
             check_server_alive(server)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise TimeoutError(f"warmup client exceeded its {seconds + 30:g}s absolute wall limit")
+                snapshot = _bounded_client_timeout_snapshot(process)
+                raise TimeoutError(
+                    f"warmup client exceeded its {seconds + 30:g}s absolute wall limit; "
+                    f"client_snapshot={json.dumps(snapshot, sort_keys=True, separators=(',', ':'))}"
+                )
             try:
                 stdout, stderr = process.communicate(timeout=min(0.25, remaining))
                 check_server_alive(server)
@@ -334,7 +408,11 @@ def collect_bounded_client(process, seconds: float, server, monitor, *, interval
         check_server_alive(server)
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            raise TimeoutError(f"load client exceeded its {seconds + 30:g}s absolute wall limit")
+            snapshot = _bounded_client_timeout_snapshot(process)
+            raise TimeoutError(
+                f"load client exceeded its {seconds + 30:g}s absolute wall limit; "
+                f"client_snapshot={json.dumps(snapshot, sort_keys=True, separators=(',', ':'))}"
+            )
         _refresh_owned(process)
         time.sleep(min(interval, remaining))
         monitor.sample()
