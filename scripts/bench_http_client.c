@@ -23,11 +23,18 @@ typedef struct {
     uint64_t bytes_acked;
     uint32_t notsent_bytes;
     uint32_t unacked_segments;
+    int send_window_available;
+    uint32_t send_window_bytes;
+    int rwnd_limited_available;
+    uint64_t rwnd_limited_us;
+    int sndbuf_limited_available;
+    uint64_t sndbuf_limited_us;
     double sampled_at_seconds;
 } SocketSnapshot;
 
 #define MAX_UPLOAD_TRACE_EVENTS 2048
-#define UPLOAD_TRACE_MIN_SECONDS 0.010
+/* Avoid selecting ordinary chunked-upload overhead instead of a timeout tail. */
+#define UPLOAD_TRACE_MIN_SECONDS 5.0
 
 typedef struct {
     uint64_t unix_time_ns;
@@ -101,6 +108,12 @@ typedef struct FirstFailure {
     unsigned int tcp_notsent_bytes;
     unsigned int tcp_unacked_segments;
     double tcp_snapshot_age_ms;
+    int tcp_send_window_available;
+    unsigned int tcp_send_window_bytes;
+    int tcp_rwnd_limited_delta_available;
+    unsigned long long tcp_rwnd_limited_delta_us;
+    int tcp_sndbuf_limited_delta_available;
+    unsigned long long tcp_sndbuf_limited_delta_us;
 } FirstFailure;
 
 typedef struct {
@@ -147,6 +160,21 @@ static SocketSnapshot read_socket_snapshot(curl_socket_t socket) {
             snapshot.bytes_acked = info.tcpi_bytes_acked;
             snapshot.notsent_bytes = info.tcpi_notsent_bytes;
             snapshot.unacked_segments = info.tcpi_unacked;
+            if (info_length >= offsetof(struct tcp_info, tcpi_snd_wnd)
+                    + sizeof(info.tcpi_snd_wnd)) {
+                snapshot.send_window_available = 1;
+                snapshot.send_window_bytes = info.tcpi_snd_wnd;
+            }
+            if (info_length >= offsetof(struct tcp_info, tcpi_rwnd_limited)
+                    + sizeof(info.tcpi_rwnd_limited)) {
+                snapshot.rwnd_limited_available = 1;
+                snapshot.rwnd_limited_us = info.tcpi_rwnd_limited;
+            }
+            if (info_length >= offsetof(struct tcp_info, tcpi_sndbuf_limited)
+                    + sizeof(info.tcpi_sndbuf_limited)) {
+                snapshot.sndbuf_limited_available = 1;
+                snapshot.sndbuf_limited_us = info.tcpi_sndbuf_limited;
+            }
         }
     }
 #else
@@ -355,6 +383,12 @@ static void set_transfer_failure(
         failure->tcp_notsent_bytes = 0;
         failure->tcp_unacked_segments = 0;
         failure->tcp_snapshot_age_ms = -1.0;
+        failure->tcp_send_window_available = 0;
+        failure->tcp_send_window_bytes = 0;
+        failure->tcp_rwnd_limited_delta_available = 0;
+        failure->tcp_rwnd_limited_delta_us = 0;
+        failure->tcp_sndbuf_limited_delta_available = 0;
+        failure->tcp_sndbuf_limited_delta_us = 0;
 #if LIBCURL_VERSION_NUM >= 0x073700
         (void)curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD_T, &failure->curl_uploaded_bytes);
         (void)curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &failure->curl_downloaded_bytes);
@@ -374,11 +408,29 @@ static void set_transfer_failure(
                 failure->tcp_bytes_acked = (unsigned long long)tcp_after->bytes_acked;
                 failure->tcp_notsent_bytes = tcp_after->notsent_bytes;
                 failure->tcp_unacked_segments = tcp_after->unacked_segments;
+                if (tcp_after->send_window_available) {
+                    failure->tcp_send_window_available = 1;
+                    failure->tcp_send_window_bytes = tcp_after->send_window_bytes;
+                }
                 failure->tcp_snapshot_age_ms =
                     (now_seconds() - tcp_after->sampled_at_seconds) * 1000.0;
                 if (tcp_before->available && tcp_before->socket == tcp_after->socket) {
                     failure->tcp_bytes_acked_delta =
                         (long long)(tcp_after->bytes_acked - tcp_before->bytes_acked);
+                    if (tcp_before->rwnd_limited_available
+                        && tcp_after->rwnd_limited_available
+                        && tcp_after->rwnd_limited_us >= tcp_before->rwnd_limited_us) {
+                        failure->tcp_rwnd_limited_delta_available = 1;
+                        failure->tcp_rwnd_limited_delta_us = (unsigned long long)(
+                            tcp_after->rwnd_limited_us - tcp_before->rwnd_limited_us);
+                    }
+                    if (tcp_before->sndbuf_limited_available
+                        && tcp_after->sndbuf_limited_available
+                        && tcp_after->sndbuf_limited_us >= tcp_before->sndbuf_limited_us) {
+                        failure->tcp_sndbuf_limited_delta_available = 1;
+                        failure->tcp_sndbuf_limited_delta_us = (unsigned long long)(
+                            tcp_after->sndbuf_limited_us - tcp_before->sndbuf_limited_us);
+                    }
                 }
             }
         }
@@ -698,7 +750,12 @@ int main(int argc, char **argv) {
                     "\"tcp_info_before_available\":%s,\"tcp_snapshot_count\":%u,"
                     "\"bytes_acked_total\":%llu,\"bytes_acked_delta\":%lld,"
                     "\"bytes_acked_before\":%llu,\"notsent_bytes\":%u,"
-                    "\"unacked_segments\":%u,\"snapshot_age_ms\":%.3f}",
+                    "\"unacked_segments\":%u,\"snapshot_age_ms\":%.3f,"
+                    "\"send_window_available\":%s,\"send_window_bytes\":%u,"
+                    "\"rwnd_limited_delta_available\":%s,"
+                    "\"rwnd_limited_delta_us\":%llu,"
+                    "\"sndbuf_limited_delta_available\":%s,"
+                    "\"sndbuf_limited_delta_us\":%llu}",
                     first_failure.local_port,
                     first_failure.tcp_info_available ? "true" : "false",
                     first_failure.tcp_info_before_available ? "true" : "false",
@@ -708,7 +765,13 @@ int main(int argc, char **argv) {
                     first_failure.tcp_bytes_acked_before,
                     first_failure.tcp_notsent_bytes,
                     first_failure.tcp_unacked_segments,
-                    first_failure.tcp_snapshot_age_ms);
+                    first_failure.tcp_snapshot_age_ms,
+                    first_failure.tcp_send_window_available ? "true" : "false",
+                    first_failure.tcp_send_window_bytes,
+                    first_failure.tcp_rwnd_limited_delta_available ? "true" : "false",
+                    first_failure.tcp_rwnd_limited_delta_us,
+                    first_failure.tcp_sndbuf_limited_delta_available ? "true" : "false",
+                    first_failure.tcp_sndbuf_limited_delta_us);
             }
         }
         printf("}");
