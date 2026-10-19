@@ -613,7 +613,12 @@ def _sample(
             peer_read_diagnostics = _peer_read_diagnostics(log)
             if peer_read_diagnostics:
                 metrics["peer_read_diagnostics"] = peer_read_diagnostics
-            elif require_runtime_diagnostics:
+            elif require_runtime_diagnostics and not (
+                diagnostics is not None
+                and diagnostics.get("tcp_read_poll_calls", 0) > 0
+            ):
+                # The fallback Hyper/Tokio transport records TCP read-poll
+                # diagnostics instead of native peer-reader diagnostics.
                 raise RuntimeError(
                     "Rust server did not emit peer-read diagnostics; set "
                     "UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE and rebuild with the "
