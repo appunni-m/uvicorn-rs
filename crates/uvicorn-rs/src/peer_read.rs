@@ -12,7 +12,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -27,6 +27,12 @@ use super::{PeerReadHalfCloseMode, PeerReadHalfClosed};
 const READ_CHUNK_SIZE: usize = 16 * 1024;
 const READ_QUEUE_CAPACITY: usize = 2;
 
+#[cfg(feature = "runtime-diagnostics")]
+const DIRECT_READ_TRACE_THRESHOLD: Duration = Duration::from_millis(100);
+
+#[cfg(feature = "runtime-diagnostics")]
+const DIRECT_READ_TRACE_LIMIT: u64 = 128;
+
 pub(super) enum PeerReadPumpOutcome {
     ReceiverClosed,
     ReadHalfClosed,
@@ -39,6 +45,8 @@ pub(super) struct PeerReadIo {
     diagnostics: Option<Arc<PeerReadDiagnosticCounters>>,
     #[cfg(feature = "runtime-diagnostics")]
     direct_read_pending_since: Option<Instant>,
+    #[cfg(feature = "runtime-diagnostics")]
+    direct_read_pending_unix_ns: Option<u64>,
 }
 
 enum ReadMode {
@@ -86,6 +94,7 @@ struct PeerReadDiagnosticCounters {
     id: u64,
     mode: PeerReadHalfCloseMode,
     peer: Option<SocketAddr>,
+    trace_read_events: bool,
     direct_read_polls: AtomicU64,
     direct_read_pending_polls: AtomicU64,
     direct_read_wait_ns: AtomicU64,
@@ -117,6 +126,9 @@ struct PeerReadDiagnosticCounters {
 #[cfg(feature = "runtime-diagnostics")]
 static NEXT_PEER_READ_DIAGNOSTIC_ID: AtomicU64 = AtomicU64::new(1);
 
+#[cfg(feature = "runtime-diagnostics")]
+static DIRECT_READ_TRACE_EVENTS: AtomicU64 = AtomicU64::new(0);
+
 impl PeerReadDiagnosticsHandle {
     fn new(stream: &TcpStream, mode: PeerReadHalfCloseMode) -> Self {
         #[cfg(feature = "runtime-diagnostics")]
@@ -125,6 +137,8 @@ impl PeerReadDiagnosticsHandle {
                 Arc::new(PeerReadDiagnosticCounters::new(
                     mode,
                     stream.peer_addr().ok(),
+                    std::env::var_os("UVICORN_RS_DIAGNOSTIC_PEER_READ_TRACE")
+                        .is_some_and(|value| value != "0"),
                 ))
             });
             Self { inner }
@@ -154,11 +168,12 @@ impl Drop for PeerReadDiagnosticsHandle {
 
 #[cfg(feature = "runtime-diagnostics")]
 impl PeerReadDiagnosticCounters {
-    fn new(mode: PeerReadHalfCloseMode, peer: Option<SocketAddr>) -> Self {
+    fn new(mode: PeerReadHalfCloseMode, peer: Option<SocketAddr>, trace_read_events: bool) -> Self {
         Self {
             id: NEXT_PEER_READ_DIAGNOSTIC_ID.fetch_add(1, Ordering::Relaxed),
             mode,
             peer,
+            trace_read_events,
             direct_read_polls: AtomicU64::new(0),
             direct_read_pending_polls: AtomicU64::new(0),
             direct_read_wait_ns: AtomicU64::new(0),
@@ -289,11 +304,60 @@ impl PeerReadDiagnosticCounters {
             ),
         );
     }
+
+    /// Emits a bounded, cross-process timestamp record for long direct-read waits.
+    fn trace_direct_read_wait(
+        &self,
+        pending_unix_ns: u64,
+        ready_unix_ns: u64,
+        wait_ns: u64,
+        bytes: usize,
+        outcome: &str,
+    ) {
+        if !self.trace_read_events
+            || wait_ns < duration_ns(DIRECT_READ_TRACE_THRESHOLD)
+            || DIRECT_READ_TRACE_EVENTS.fetch_add(1, Ordering::Relaxed) >= DIRECT_READ_TRACE_LIMIT
+        {
+            return;
+        }
+
+        let peer_port = self.peer.map_or(0, |peer| peer.port());
+        let _ = io::Write::write_fmt(
+            &mut io::stderr().lock(),
+            format_args!(
+                concat!(
+                    "uvicorn-rs-read-wait-event ",
+                    "connection_id={} mode={} peer_port={} pending_unix_ns={} ",
+                    "ready_unix_ns={} wait_ns={} bytes={} outcome={}\n"
+                ),
+                self.id,
+                match self.mode {
+                    PeerReadHalfCloseMode::OnRead => "on-read",
+                    PeerReadHalfCloseMode::Proactive => "proactive",
+                },
+                peer_port,
+                pending_unix_ns,
+                ready_unix_ns,
+                wait_ns,
+                bytes,
+                outcome,
+            ),
+        );
+    }
 }
 
 #[cfg(feature = "runtime-diagnostics")]
 fn duration_ns(duration: Duration) -> u64 {
     duration.as_nanos().min(u64::MAX as u128) as u64
+}
+
+#[cfg(feature = "runtime-diagnostics")]
+fn unix_timestamp_ns() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos()
+        .min(u64::MAX as u128) as u64
 }
 
 /// Creates one socket reader. The optional pump must be driven alongside the
@@ -376,6 +440,8 @@ pub(super) fn observe_peer_read(
             diagnostics: diagnostic_counters,
             #[cfg(feature = "runtime-diagnostics")]
             direct_read_pending_since: None,
+            #[cfg(feature = "runtime-diagnostics")]
+            direct_read_pending_unix_ns: None,
         },
         observer,
         failed_observer,
@@ -586,6 +652,7 @@ impl AsyncRead for PeerReadIo {
                                 .fetch_add(1, Ordering::Relaxed);
                             if this.direct_read_pending_since.is_none() {
                                 this.direct_read_pending_since = Some(Instant::now());
+                                this.direct_read_pending_unix_ns = Some(unix_timestamp_ns());
                             }
                         }
                         Poll::Ready(Ok(())) => {
@@ -601,6 +668,17 @@ impl AsyncRead for PeerReadIo {
                                 diagnostics
                                     .direct_read_wait_max_ns
                                     .fetch_max(wait_ns, Ordering::Relaxed);
+                                if let Some(pending_unix_ns) =
+                                    this.direct_read_pending_unix_ns.take()
+                                {
+                                    diagnostics.trace_direct_read_wait(
+                                        pending_unix_ns,
+                                        unix_timestamp_ns(),
+                                        wait_ns,
+                                        buffer.filled().len().saturating_sub(filled_before),
+                                        "ready",
+                                    );
+                                }
                             }
                         }
                         Poll::Ready(Err(_)) => {
@@ -612,6 +690,17 @@ impl AsyncRead for PeerReadIo {
                                 diagnostics
                                     .direct_read_wait_max_ns
                                     .fetch_max(wait_ns, Ordering::Relaxed);
+                                if let Some(pending_unix_ns) =
+                                    this.direct_read_pending_unix_ns.take()
+                                {
+                                    diagnostics.trace_direct_read_wait(
+                                        pending_unix_ns,
+                                        unix_timestamp_ns(),
+                                        wait_ns,
+                                        0,
+                                        "error",
+                                    );
+                                }
                             }
                         }
                     }
