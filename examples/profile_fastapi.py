@@ -12,6 +12,7 @@ import atexit
 import json
 import math
 import os
+import sys
 from array import array
 from collections import Counter
 from pathlib import Path
@@ -22,6 +23,7 @@ from examples.bench_fastapi import app as fastapi_app
 _MAX_RETAINED_PER_PATH = 250_000
 _SLOW_RECEIVE_THRESHOLD_NS = 100_000_000
 _MAX_SLOW_RECEIVES_PER_PATH = 32
+_MAX_SLOW_REQUESTS_PER_PATH = 32
 _DURATION_FIELDS = (
     "asgi_app_wall_ns",
     "asgi_receive_await_ns",
@@ -39,6 +41,7 @@ _REQUEST_IDS: dict[str, int] = Counter()
 _TOTALS: dict[str, Counter] = {}
 _SAMPLES: dict[str, dict[str, array]] = {}
 _SLOW_RECEIVES: dict[str, list[dict[str, int | str | bool | None]]] = {}
+_SLOW_REQUESTS: dict[str, list[dict[str, object]]] = {}
 
 
 def _path_stats(path: str) -> tuple[Counter, dict[str, array]]:
@@ -65,9 +68,11 @@ async def app(scope, receive, send):
         "receive_calls": 0,
         "send_calls": 0,
         "request_body_bytes": 0,
+        "request_body_complete": False,
         "response_body_bytes": 0,
         "receive_await_ns": 0,
         "send_await_ns": 0,
+        "response_status": None,
         "message_types": Counter(),
     }
 
@@ -85,6 +90,8 @@ async def app(scope, receive, send):
                 request["message_types"][f"receive:{message_type}"] += 1
             if message_type == "http.request":
                 request["request_body_bytes"] += len(message.get("body", b""))
+                if not message.get("more_body", False):
+                    request["request_body_complete"] = True
             elif message_type == "websocket.receive":
                 body = message.get("bytes")
                 if body is not None:
@@ -127,6 +134,8 @@ async def app(scope, receive, send):
                 request["message_types"][f"send:{message_type}"] += 1
             if message_type == "http.response.body":
                 request["response_body_bytes"] += len(message.get("body", b""))
+            elif message_type == "http.response.start":
+                request["response_status"] = message.get("status")
             elif message_type == "websocket.send":
                 body = message.get("bytes")
                 if body is not None:
@@ -147,12 +156,34 @@ async def app(scope, receive, send):
         receive_ns = request["receive_await_ns"]
         send_ns = request["send_await_ns"]
         outside_ns = max(0, app_wall_ns - receive_ns - send_ns)
+        active_exception = sys.exc_info()[0]
+        if receive_ns >= _SLOW_RECEIVE_THRESHOLD_NS:
+            slow_requests = _SLOW_REQUESTS.setdefault(path, [])
+            slow_requests.append(
+                {
+                    "request_id": request_id,
+                    "receive_await_ns": receive_ns,
+                    "app_wall_ns": app_wall_ns,
+                    "send_await_ns": send_ns,
+                    "receive_calls": request["receive_calls"],
+                    "request_body_bytes": request["request_body_bytes"],
+                    "request_body_complete": request["request_body_complete"],
+                    "response_body_bytes": request["response_body_bytes"],
+                    "response_status": request["response_status"],
+                    "message_types": dict(request["message_types"]),
+                    "error_type": active_exception.__name__ if active_exception else None,
+                }
+            )
+            slow_requests.sort(
+                key=lambda item: int(item["receive_await_ns"]), reverse=True
+            )
+            del slow_requests[_MAX_SLOW_REQUESTS_PER_PATH:]
         _REQUESTS[path] += 1
         totals["requests_seen"] += 1
         for key, value in request["message_types"].items():
             totals[key] += value
         for key, value in request.items():
-            if key != "message_types":
+            if key not in {"message_types", "response_status"}:
                 totals[key] += value
         values = {
             "asgi_app_wall_ns": app_wall_ns,
@@ -210,6 +241,11 @@ def _write_timings() -> None:
                 key=lambda item: int(item["wait_ns"]),
                 reverse=True,
             ),
+            "slow_requests_by_receive_wait": sorted(
+                _SLOW_REQUESTS.get(path, []),
+                key=lambda item: int(item["receive_await_ns"]),
+                reverse=True,
+            ),
             "p50_ns": app_wall["p50"],
             "p95_ns": app_wall["p95"],
             "p99_ns": app_wall["p99"],
@@ -223,7 +259,7 @@ def _write_timings() -> None:
     temporary.write_text(
         json.dumps(
             {
-                "schema_version": 3,
+                "schema_version": 4,
                 "profiling_only": True,
                 "measurement": (
                     "per-request FastAPI ASGI-call wall time and awaited send/receive time; "
