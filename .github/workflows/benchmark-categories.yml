@@ -81,6 +81,11 @@ on:
         options:
           - default
           - on-read
+      fastapi_stage_no_native_tcp:
+        description: Use the fallback Hyper/Tokio transport for the focused FastAPI stage diagnostic
+        default: false
+        required: true
+        type: boolean
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -525,7 +530,7 @@ jobs:
       - name: Build Rust runtime diagnostics extension
         shell: bash
         env:
-          FASTAPI_STAGE_NO_NATIVE_TCP: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-no-native-tcp]') }}
+          FASTAPI_STAGE_NO_NATIVE_TCP: ${{ inputs.fastapi_stage_no_native_tcp || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-no-native-tcp]')) }}
         run: |
           set -euo pipefail
           if [[ "$FASTAPI_STAGE_NO_NATIVE_TCP" == "true" ]]; then
