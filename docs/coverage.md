@@ -7,34 +7,25 @@
 ## Current unified coverage status (2026-10-19)
 
 Hosted exact-source CI run
-[39185987997](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997)
+[39205955886](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955886)
 passed on clean commit
-[`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5).
-The [unified coverage job](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/job/117848421124)
-completed attribution for **761/761 cases** (547 Python ASGI and 214
-Python-free Rust). All three ASGI repeats and all three native repeats passed.
-The report measured **9,300/9,300 source-span regions** and **6,880/6,880
-normalized physical executable lines**, with no missing regions or lines.
-Its source SHA-256 is
-`ee4d4896bf13778543844802110bee7e5ebe3a51392c626e4f449853a5148d8f` and its
-native extension SHA-256 is
-`11a96da6a12c91f931c8c4cfc8b2e678661f1ca667c887d3f81ccf2972f14206`.
-The retained [hosted coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/artifacts/12158184542)
-has SHA-256
-`165214e40acac9f28d89c8d557faa43a58f52f92f2d66959169ff5c827614e8e`.
+[5b279d48ddf60bb26380914eaf32b13717a647fb](https://github.com/appunni-m/uvicorn-rs/commit/5b279d48ddf60bb26380914eaf32b13717a647fb).
+The [unified coverage job](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955886/job/117908726187)
+passed attribution for 761/761 cases (547 Python ASGI and 214 Python-free
+Rust), with three complete repeats of each lane. It measured 9,300/9,300
+source-span regions and 6,880/6,880 normalized physical executable lines.
 
-The same exact-source CI run passed installed-wheel public parity **251/251**,
-all three platform package jobs, and the pinned Python-free FastAPI-RS →
-Starlette-RS → Uvicorn-RS composition inputs. These are separate gates from
-coverage.
+The same CI run passed installed-wheel public parity 251/251, native
+FastAPI-RS → Starlette-RS → Uvicorn-RS composition, Rust MSRV, and package
+jobs. These are separate gates from coverage. The retained
+[hosted coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955886/artifacts/12166704523)
+contains the run-bound report.
 
-**Independent Coverage-MCP review remains outstanding.** The hosted report
-records `mcp_status=awaiting_query`. The service timed out when queried with the
-complete report, a reduced LLVM-only projection, and a single-file filter; no
-receipt was produced. The CI coverage gate passing does not replace this
-independent review. Release gates and current blockers are tracked in the
-[release guide](releases.md) and
-[benchmark status](benchmark-status.md).
+**Independent Coverage-MCP review remains outstanding.** The artifact records
+mcp_status=awaiting_query; earlier full-report and reduced-query attempts
+timed out without a receipt. Passing the CI coverage gate does not replace
+independent Coverage-MCP review. See the [release guide](releases.md) and
+[benchmark status](benchmark-status.md) for remaining gates.
 
 <a id="current-unified-coverage-status-2026-10-17"></a>
 <a id="current-unified-coverage-status-2026-10-18"></a>

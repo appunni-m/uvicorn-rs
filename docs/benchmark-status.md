@@ -2,7 +2,60 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Exact-source release-candidate checkpoint (2026-10-19)
+## Latest exact-source validation and performance attempt (2026-10-19)
+
+CI run [39205955886](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955886)
+passed on clean main commit
+[5b279d48ddf60bb26380914eaf32b13717a647fb](https://github.com/appunni-m/uvicorn-rs/commit/5b279d48ddf60bb26380914eaf32b13717a647fb).
+The run passed its 761-case unified matrix with three complete repeats,
+9,300/9,300 source-span regions, 6,880/6,880 normalized executable lines,
+installed-wheel parity 251/251, native composition, MSRV, and package gates.
+Independent Coverage-MCP review remains pending.
+
+The matching three-system benchmark run
+[39205955881](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955881)
+completed public parity and the FastAPI-only comparison on all three systems.
+The category matrix is incomplete: Linux x86-64 and macOS ARM64 completed their
+category sequences, while Linux ARM64's HTTP/2 category exited early without a
+complete category report. The aggregate validator produced a
+`validated_partial_matrix`; its qualified samples are useful for diagnosis but
+do not form a complete three-system performance result. No new complete
+performance report is accepted.
+
+The run retains the [partial aggregate report](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955881/artifacts/12168986006)
+and the [Linux ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955881/artifacts/12169045771),
+[Linux x86-64](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955881/artifacts/12169131079),
+and [macOS ARM64](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955881/artifacts/12168264712)
+system bundles for 90 days. The failed HTTP/2 row-level evidence remains in
+the Linux ARM64 bundle; the hosted job summary does not name the row. No new
+full benchmark matrix was started; the focused local replay is recorded below.
+
+The retained Linux ARM64 log and JSONL identify the stop: HTTP/2
+`request-upload-small-chunks`, `uvicorn-rs-uvloop`, repetition 2, with four
+connections, concurrency 64, and 16 target streams per connection. The client
+sent 65,536-byte POST bodies in 1,024-byte chunks. It completed 1,516 requests
+and then recorded 15 timeouts waiting for complete responses over 20.443 s;
+the first failure was `HTTP/2 request timed out waiting for a complete
+response`. The server log contains a client TCP reset after that timeout. This
+does not locate the original stall or prove the reset caused it. Neighboring
+candidate cases passed, including the same workload's first uvloop repetition
+and the asyncio repetition, so the evidence is intermittent and does not yet
+identify a cause.
+
+A single-case replay on macOS ARM64 (Apple M3 Pro, 2026-10-19) completed one
+five-second repetition without a request failure: 15,470 requests at 3,084.7
+requests/s, with p50/p95/p99 of 19.89/31.56/38.69 ms. This is not a valid
+comparison or performance sample: it has no matched Uvicorn row, used a
+different OS/host, and unrelated processes consumed roughly five CPU cores
+during the measurement. Its receipt marks performance evidence `not_proven`.
+It therefore fails to reproduce the client timeout under this local attempt,
+but does not clear the hosted Linux ARM64 failure. No full matrix was rerun.
+
+The documentation build and GitHub Pages deployment for this source are
+complete. These CI and docs results do not imply Uvicorn CLI/API compatibility
+or a published Cargo/PyPI release.
+
+## Previous exact-source release-candidate checkpoint (2026-10-19)
 
 The clean main source was
 [`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5).

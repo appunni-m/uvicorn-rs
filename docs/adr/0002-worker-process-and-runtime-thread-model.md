@@ -1,46 +1,28 @@
-# ADR 0002: Single-process runtime and worker scope
+# ADR 0002: Single-process prototype and worker migration
 
-- **Status:** Accepted. Process workers and their supervisor are outside the current project scope.
+- **Status:** The current prototype is single-process. Excluding workers from the release target is superseded by [ADR 0005](0005-uvicorn-public-compatibility-contract.md).
 - **Date:** 2026-10-09
-- **Related:** [ADR 0001](0001-runtime-and-asyncio-bridge.md), KATA issue `sjc2`.
+- **Related:** [ADR 0001](0001-runtime-and-asyncio-bridge.md), Kata issue sjc2.
 
 ## Context
 
-The current server runs in one process. That process owns one Python event loop
-for ASGI callbacks and one Tokio core worker thread for Rust networking. Python
-application code stays on the loop that loaded and serves the app; Tokio does
-not execute FastAPI handlers. PyO3 bridge work may also use Tokio's blocking
-pool, so “one Tokio worker” does not mean the process has only one thread.
+The current server runs in one process. It owns one Python event loop for ASGI callbacks and one Tokio core worker thread for Rust networking. Python application code stays on the loop that loaded and serves the app; Tokio does not execute FastAPI handlers. PyO3 bridge work may also use Tokio's blocking pool, so one Tokio core worker does not mean the process has only one thread.
 
-Processes cannot share Tokio threads. A Uvicorn-style worker feature would
-therefore require separate processes, each with its own interpreter, GIL,
-Python loop, app instance, lifespan, and Tokio runtime, plus listener sharing,
-supervision, failure propagation, cancellation, and child reaping. HTTP/3 would
-add a QUIC connection-affinity requirement. The original MVP scope excludes
-worker/process supervision, and the current one-process benchmark does not
-prove a benefit from adding it.
+Processes cannot share a Tokio runtime. A Uvicorn-style worker feature requires separate processes, each with its own interpreter, GIL, Python loop, app instance, lifespan, and Tokio runtime, plus listener sharing, supervision, failure propagation, cancellation, and child reaping. HTTP/3 also requires a QUIC connection-affinity design.
 
-## Decision
+## Current prototype
 
-Keep one server process and one Tokio core worker per process for the current
-CLI. Keep ASGI callable execution, task creation, `contextvars`, and exception
-behavior on the Python-owned event loop. Do not add a `--workers` option or
-claim multi-core Python execution in this scope.
+The current Python command starts one server process and one Tokio core worker. It does not implement worker supervision. Python callable execution, task creation, context variables, and exception behavior stay on the Python-owned event loop. Python callbacks remain subject to the interpreter's GIL.
 
-Any future worker proposal requires a separate scope decision. It must first
-compare matched Uvicorn and `uvicorn-rs` runs at 1, 2, and 4 processes for both
-I/O-bound and deterministic Python CPU-bound FastAPI workloads, then specify
-listener sharing and prove startup, lifespan isolation, worker failure,
-cancellation, signal shutdown, and child cleanup. Tokio thread-count changes
-must be measured separately from process-count changes.
+## Compatibility target
+
+[ADR 0005](0005-uvicorn-public-compatibility-contract.md) makes the Uvicorn worker and process-control contract part of the planned drop-in surface. The implementation must map worker count, process supervision, health checks, signals, restart behavior, listener sharing, shutdown, and cleanup to explicit parity cases. Each Python worker process owns its interpreter, event loop, application lifespan, and Tokio runtime; Tokio threads are not shared across processes.
+
+Compare matching Uvicorn and uvicorn-rs runs at 1, 2, and 4 processes for I/O-bound and deterministic Python CPU-bound FastAPI workloads. Measure Tokio thread-count changes separately from process-count changes. Performance measurements do not replace lifecycle, isolation, failure, and cleanup parity.
 
 ## Consequences
 
-- The supported CLI remains single-process; worker supervision is not part of
-  the support matrix.
-- Python CPU-bound callbacks remain subject to the interpreter's GIL. Tokio
-  worker count does not change that behavior.
-- The current single-process FastAPI results cannot be used to predict
-  multi-worker scaling.
-- Worker design and benchmarks are deferred; the current implementation keeps
-  the simpler ASGI and lifecycle model required by the MVP.
+- Documentation distinguishes the single-process prototype from the future worker-compatible release.
+- One Python process does not gain parallel Python callback execution merely because Tokio has additional threads.
+- Worker support, reload, and process supervision remain open release work until their versioned compatibility inputs pass.
+- The current single-process benchmark cannot predict multi-worker scaling.

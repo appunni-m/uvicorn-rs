@@ -55,9 +55,10 @@ servers against the same input.
   implemented or advertised. An unknown `http.response.trailers` event is
   exercised by `http1.invalid-asgi-unknown-event-type`; this is not trailer
   support.
-- WebSockets over HTTP/2 or HTTP/3, WSGI callables, reload/watch, worker
-  supervision, and full Uvicorn CLI compatibility are outside the support
-  claim.
+- WebSockets over HTTP/2 or HTTP/3, WSGI callables, reload/watch, and worker
+  supervision are not covered by this ASGI input inventory. Full Uvicorn CLI,
+  API, and process compatibility is a separate versioned goal; see the
+  [Uvicorn replacement status](uvicorn-compatibility.md).
 - The official ASGI conformance suite and a complete HTTP security/framing
   corpus have not been run. Passing the indexed inputs is not full ASGI
   conformance.

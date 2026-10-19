@@ -4,8 +4,12 @@
 
 Each dated result is bound to the source and normal extension recorded in its
 receipt. “Current source” in an older benchmark entry means current for that
-measurement, not necessarily the present worktree. The latest 511-case coverage
-run is instrumented correctness evidence and does not add performance samples.
+measurement, not necessarily the present worktree. The latest exact-source
+three-system attempt ended with a partial matrix after the Linux ARM64 HTTP/2
+category exited early. It did not produce a complete performance report; see
+[current benchmark status](benchmark-status.md) for the run and retained
+artifacts. Coverage results are correctness evidence and do not add performance
+samples.
 
 ## Samply CPU profiles of fixed H1 and uploads (2026-10-12)
 

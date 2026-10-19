@@ -1,84 +1,38 @@
-# CLI and Python API
+# Configure the current prototype
 
-> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
-
-The latest local ASGI-adapter matrix is dated 2026-10-12. All 511 indexed cases
-passed attribution and each of three full repeats: 243 oracle-parity cases and
-268 target-only contracts. The report records 5,561/5,561 native regions and
-3,997/3,997 lines. This is dirty macOS ARM64 source evidence, not hosted release
-evidence or full ASGI conformance; see the
-[coverage report](coverage.md#current-unified-coverage-status-2026-10-17) and the
-current candidate-wheel smoke (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
+This page documents the checkout's current uvicorn-rs-py command and Python API. It is not the future Uvicorn-compatible reference. The current command does not provide all Uvicorn options; see [Uvicorn replacement status](uvicorn-compatibility.md).
 
 ## CLI
 
-The Python executable is `uvicorn-rs-py`. It imports an object by
-`module:attribute` and serves that ASGI application:
-
-```sh
+~~~sh
 uv run uvicorn-rs-py examples.hello_asgi:app --host 127.0.0.1 --port 8000
-```
+~~~
 
-| Argument | Default | Meaning |
-|---|---|---|
-| `module:app` | required | Import `module` and retrieve the named attribute. The object must be an ASGI callable; application factories are not invoked automatically. |
-| `--host HOST` | `127.0.0.1` | TCP bind host and the address used for the QUIC endpoint when TLS is enabled. |
-| `--port PORT` | `8000` | TCP and QUIC port in the range `0`–`65535`. |
-| `--loop {asyncio,uvloop}` | `asyncio` | Python event-loop implementation used for the application. `uvloop` must be installed separately. Tokio remains the Rust network runtime. |
-| `--certfile PATH` | unset | PEM certificate chain. Must be supplied together with `--keyfile`; enables TLS for TCP and QUIC. |
-| `--keyfile PATH` | unset | PEM private key for `--certfile`. |
-| `--graceful-timeout SECONDS` | `10` | Non-negative integer grace period, in seconds, used for bounded transport and request cleanup stages. ASGI lifespan shutdown and cancellation cleanup each retain a 100 ms minimum window, including when this is `0`. |
+The current options are:
 
-TLS TCP advertises HTTP/2 and HTTP/1.1 using ALPN. QUIC serves experimental
-HTTP/3 on the same port. Without certificate/key files, the server accepts
-cleartext HTTP/1.1 and HTTP/2 prior-knowledge (h2c). It does not support h2c
-upgrade.
+| Option | Default | Description |
+| --- | --- | --- |
+| module:attribute | Required | Import the module and retrieve the named object. The object must be an ASGI 3 callable. Factories are not invoked. |
+| --host HOST | 127.0.0.1 | TCP bind host and, when TLS is enabled, QUIC bind host. |
+| --port PORT | 8000 | TCP/QUIC port; zero asks the OS to select a port. |
+| --loop {asyncio,uvloop} | asyncio | Python event loop for the ASGI application. Install uvloop separately to use it. Tokio remains the Rust network runtime. |
+| --certfile PATH | Unset | PEM certificate chain. Supply it together with --keyfile to enable TLS and experimental HTTP/3. |
+| --keyfile PATH | Unset | PEM private key paired with --certfile. |
+| --graceful-timeout SECONDS | 10 | Non-negative integer grace period for transport and request cleanup. |
+
+Without certificate and key files, the prototype accepts cleartext HTTP/1.1 and HTTP/2 prior knowledge. With both files, TLS uses ALPN for HTTP/1.1 and HTTP/2; experimental HTTP/3 uses QUIC. Protocol and lifecycle cases are listed in the [support matrix](support-matrix.md).
+
+Ctrl-C and SIGTERM request shutdown. The prototype runs ASGI lifespan startup before serving and lifespan shutdown after draining or cancelling active work.
 
 ## Tokio blocking-pool limit
 
-The PyO3 extension reads the optional `UVICORN_RS_MAX_BLOCKING_THREADS`
-environment variable when the native module initializes. When unset, Tokio's
-default blocking-pool limit is used. When set, the value must be a positive
-integer representable as `usize`; a non-Unicode value, malformed integer, or
-zero fails extension initialization before ASGI lifespan startup. This
-target-specific environment variable sets the maximum size of Tokio's blocking
-pool; the Tokio core runtime still uses one worker thread, and Python ASGI code
-continues to run on its owning asyncio loop. The live inputs verify accepted
-and rejected configuration paths, not the effective concurrency limit. This
-is not a Uvicorn CLI option.
-
-The CLI runs the Python ASGI implementation in `uvicorn-rs-py`. With the
-default `native-tcp` feature, its HTTP/1.1, HTTP/2 over TCP/TLS, and HTTP/3
-over Quinn paths use the separately packaged native `uvicorn-rs` transport.
-Builds without `native-tcp` retain the legacy Rust protocol implementation.
-ASGI callables still run on their Python-owned event loop through the PyO3
-bridge.
-
-Native Rust services can choose how a TCP peer's read-half closure is observed
-through `ServerConfig.peer_read_half_close`. The default `OnRead` mode adds no
-read-ahead queue; `Proactive` uses one owned read future and a bounded queue to
-observe EOF while an HTTP/1 service is waiting. Proactive mode holds at most two
-queued 16 KiB chunks plus the chunk currently being consumed and adds an input
-copy. Both modes preserve response writes and incomplete-body errors. This
-The Python CLI currently selects `Proactive` for its native HTTP/1.1 and HTTP/2
-TCP/TLS path. Peer EOF and reset are mapped to ASGI `http.disconnect` by the
-Python bridge for the cases listed in the [support matrix](support-matrix.md).
-See [transport ownership and buffering](architecture.md#native-tcp-peer-read-half-closure)
-for the queue and copy costs of `Proactive` mode.
-
-Ctrl-C and SIGTERM initiate shutdown. The server runs ASGI lifespan startup
-before serving and lifespan shutdown after draining/cancelling active work.
-Exact protocol and shutdown coverage is tracked in the
-[support matrix](support-matrix.md).
-See [deployment and framework integration](deployment.md) for installed-wheel
-TLS and signal checks, service-manager guidance, and Starlette integration
-setup.
+The optional UVICORN_RS_MAX_BLOCKING_THREADS environment variable sets the maximum size of Tokio's blocking pool. If unset, Tokio uses its default. The value must be a positive integer; malformed values and zero fail server initialization. This setting does not change the Tokio core worker count, and it is not a Uvicorn option.
 
 ## Python API
 
-The `uvicorn_rs.Server` class can be embedded into a Python program:
+The current checkout exposes uvicorn_rs.Server:
 
-```python
+~~~python
 import asyncio
 
 from uvicorn_rs import Server
@@ -92,49 +46,10 @@ async def app(scope, receive, send):
 
 
 asyncio.run(Server(app, host="127.0.0.1", port=8000).serve())
-```
+~~~
 
-`Server(app, host="127.0.0.1", port=8000, certfile=None, keyfile=None,
-graceful_timeout=10)` exposes the same server options. Call `serve()` from the
-event loop that should own the ASGI application. Cancelling its task requests
-graceful shutdown and then propagates cancellation after the native shutdown
-stages finish. Transport drain, request cleanup, lifespan shutdown, and lifespan
-cleanup use separate windows, so total shutdown time can exceed
-`graceful_timeout`. A value of `0` skips waiting for active request/transport
-drain, but still allows a bounded 100 ms window for ASGI lifespan shutdown and
-Python cancellation cleanup. Python code that suppresses cancellation or
-exceeds a cleanup window can remain unfinished; the server reports that
-condition.
-See [shutdown ownership and stages](architecture.md#shutdown-ownership-and-stages).
+Call serve from the event loop that should own the application. Cancelling its task requests shutdown, waits for cleanup, then propagates asyncio.CancelledError. Startup, bind, application, and lifespan failures propagate to the caller.
 
-The native runtime rejects a timeout beyond its supported monotonic deadline
-range with `ValueError` before listeners or application tasks start. The exact
-maximum depends on the platform's monotonic clock representation.
+## Not available in the current prototype
 
-HTTP response and WebSocket acceptance headers have finite compiled storage
-capacity inherited from the pinned `http::HeaderMap` implementation. It is not
-a configurable option or a fixed public maximum number of accepted headers:
-distinct names, duplicate values, and reserved handshake fields consume
-capacity differently. Valid sufficiently large ASGI header collections can
-exceed it. Fallible header assembly rejects excess capacity through the error
-channel. Both target-only support cases passed the historical shared-write 448-case attribution
-and all three full repeats, plus the same source's selected normal-build audit.
-These declared capacity contracts are separate from the 213 public oracle
-comparisons. See the [source/build receipt](coverage.md#historical-full-verification-448-cases-shared-write-source) and
-[support matrix](support-matrix.md).
-
-The class currently has no documented hot-reload, worker, or reconfiguration
-API. It is a local source API; the project has not published a wheel or source
-distribution.
-
-The parity input's `close_error_code` controls its HTTP/3 test client. It adds
-no server configuration option. Typed `H3_NO_ERROR` (`0x100`) and unknown
-remote HTTP/3 application close codes are treated as clean peer closure;
-registered HTTP/3-family application codes keep their error path. This does
-not describe or guarantee QUIC transport `CONNECTION_CLOSE` behavior.
-The sequence input's optional `h3_grease` boolean also controls only the test
-client and defaults to `true`. The maintained 128-response workflow explicitly
-uses `false`, supported by its selected instrumented public A/B; it adds no
-server setting. The held-response accept-error workflow is a target-only
-instrumented contract, not an application or deployment option. See
-[the current workflow contracts](parity.md#current-http3-workflows).
+The current checkout does not provide the uvicorn command, uvicorn imports, the upstream run/Config/Server API, application factories, Uvicorn environment settings, reload, worker processes, or the full Uvicorn socket and protocol option set. These are compatibility goals, not current features. Use upstream Uvicorn if you need them today.

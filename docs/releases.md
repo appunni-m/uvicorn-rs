@@ -23,6 +23,8 @@ Use these state labels precisely:
 | PyPI | uvicorn-rs-py | Optional Python compatibility client for standard Python ASGI applications. It is not required by the Python-free Rust library. |
 | Documentation | README, MkDocs site, and docs.rs | Repository docs deploy through GitHub Pages; crate API docs are generated from published Cargo archives. |
 
+The confirmed Python target keeps the distribution named uvicorn-rs-py while providing the uvicorn command and import namespace after versioned compatibility gates pass. The current candidate does not yet expose those surfaces. Release verification must inspect the installed wheel and keep the Cargo server independent of Python.
+
 The Cargo workspace packages and Python package currently declare version 0.1.0.
 The PyPI package requires Python 3.9 or newer and uses the cp39-abi3 wheel ABI.
 The wheel matrix builds Linux x86-64, macOS ARM64, and Windows x86-64 artifacts.
