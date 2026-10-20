@@ -303,7 +303,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "env_file",
         "headers", "server_header", "date_header", "interface",
         "ws_max_size", "proxy_headers", "forwarded_allow_ips",
-        "limit_concurrency",
+        "limit_concurrency", "log_level",
     }
     # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
     # process. Neither value requires process supervision from the adapter.
@@ -382,6 +382,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.extend(("--graceful-timeout", str(graceful_timeout)))
     if options["limit_concurrency"] is not None:
         argv.extend(("--limit-concurrency", str(options["limit_concurrency"])))
+    if options["log_level"] is not None:
+        argv.extend(("--log-level", options["log_level"]))
     prototype_main(argv, prog="uvicorn")
 
 

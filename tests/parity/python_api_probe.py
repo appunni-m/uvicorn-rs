@@ -58,6 +58,7 @@ import sys
 import base64
 import asyncio
 import json
+import logging
 import uvicorn
 
 lifespan_state = {"started": False}
@@ -75,6 +76,13 @@ async def asgi3_app(scope, receive, send):
         return
     if scope["type"] != "http":
         return
+    if emit_level_logs:
+        logger = logging.getLogger("uvicorn.error")
+        logger.debug("python-api log-level debug sentinel")
+        logger.info("python-api log-level info sentinel")
+        logger.warning("python-api log-level warning sentinel")
+        logger.error("python-api log-level error sentinel")
+        logger.critical("python-api log-level critical sentinel")
     await receive()
     lifespan_status = b"lifespan-started" if lifespan_state["started"] else b"lifespan-off"
     if "state" not in scope:
@@ -130,6 +138,8 @@ forwarded_allow_ips = json.loads(sys.argv[10])
 limit_concurrency = json.loads(sys.argv[11])
 loop = json.loads(sys.argv[12])
 invocation = sys.argv[13]
+log_level = json.loads(sys.argv[14])
+emit_level_logs = sys.argv[15] == "1"
 app = asgi2_app if application_interface == "asgi2" else asgi3_app
 
 options = {
@@ -143,6 +153,7 @@ options = {
     "forwarded_allow_ips": forwarded_allow_ips,
     "limit_concurrency": limit_concurrency,
     "loop": loop,
+    "log_level": log_level,
 }
 if invocation == "config-server":
     config = uvicorn.Config(app, **options)
@@ -186,6 +197,8 @@ else:
             command.extend(("--limit-concurrency", str(request["limit_concurrency"])))
         if request.get("loop", "auto") != "auto":
             command.extend(("--loop", request["loop"]))
+        if request.get("log_level") is not None:
+            command.extend(("--log-level", str(request["log_level"])))
     else:
         command = [
             sys.executable,
@@ -204,6 +217,8 @@ else:
             json.dumps(request.get("limit_concurrency")),
             json.dumps(request.get("loop", "auto")),
             request["invocation"],
+            json.dumps(request.get("log_level")),
+            "1" if request.get("emit_level_logs", False) else "0",
         ]
 
     environment = os.environ.copy()

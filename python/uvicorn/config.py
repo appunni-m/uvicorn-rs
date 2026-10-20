@@ -323,7 +323,15 @@ class Config:
                 self.log_config is not None and self.log_config != LOGGING_CONFIG,
                 "log_config",
             ),
-            (self.log_level not in (None, "error", 40), "log_level"),
+            (
+                self.log_level is not None
+                and not (
+                    isinstance(self.log_level, str)
+                    and self.log_level.lower() in LOG_LEVELS
+                    or isinstance(self.log_level, int)
+                ),
+                "log_level",
+            ),
             (self.use_colors is not None, "use_colors"),
             (self.limit_max_requests is not None, "limit_max_requests"),
             (self.limit_max_requests_jitter != 0, "limit_max_requests_jitter"),

@@ -41,6 +41,10 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--loop", choices=("asyncio", "uvloop"), default="asyncio")
+    parser.add_argument(
+        "--log-level",
+        choices=("critical", "error", "warning", "info", "debug", "trace"),
+    )
     parser.add_argument("--lifespan", choices=("auto", "on", "off"), default="auto")
     parser.add_argument("--interface", choices=("auto", "asgi2", "asgi3"), default="auto")
     parser.add_argument("--app-dir", default="")
@@ -80,6 +84,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
         host=args.host,
         port=args.port,
         loop=args.loop,
+        log_level=args.log_level,
         lifespan=args.lifespan,
         interface=args.interface,
         env_file=args.env_file,

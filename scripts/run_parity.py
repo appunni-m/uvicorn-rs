@@ -2216,6 +2216,8 @@ def load_contract(
                     "limit_concurrency",
                     "loop",
                     "observe_loop",
+                    "log_level",
+                    "emit_level_logs",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2255,6 +2257,20 @@ def load_contract(
                     raise ParityError(f"{case_id}: run_http currently supports the SIGINT stimulus")
                 if run_http["lifespan"] not in {"auto", "on", "off"}:
                     raise ParityError(f"{case_id}.api.run_http.lifespan must be auto, on, or off")
+                log_level = run_http.get("log_level")
+                if log_level is not None and not (
+                    isinstance(log_level, str)
+                    and log_level.lower()
+                    in {"critical", "error", "warning", "info", "debug", "trace"}
+                    or type(log_level) is int
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.log_level must be a Uvicorn level name or integer"
+                    )
+                if "emit_level_logs" in run_http and type(run_http["emit_level_logs"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.emit_level_logs must be a boolean"
+                    )
                 if not isinstance(run_http["root_path"], str):
                     raise ParityError(f"{case_id}.api.run_http.root_path must be a string")
                 for field in ("headers", "request_headers", "observe_headers"):
