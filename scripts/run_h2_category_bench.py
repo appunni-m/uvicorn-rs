@@ -140,6 +140,19 @@ def wait_ready(process: subprocess.Popen, port: int, log, cert: Path) -> None:
     wait_tls_ready(process, port, log, cert, seconds=15)
 
 
+def runtime_diagnostics(log) -> dict[str, int] | None:
+    log.flush()
+    log.seek(0)
+    prefix = "uvicorn-rs-runtime-diagnostics "
+    for line in log:
+        if line.startswith(prefix):
+            return {
+                key: int(value)
+                for key, value in (part.split("=", 1) for part in line[len(prefix) :].split())
+            }
+    return None
+
+
 def process_tree_sample(
     root: psutil.Process, cpu_baselines: dict[int, psutil.Process]
 ) -> tuple[float, int]:
@@ -167,7 +180,16 @@ def process_tree_sample(
     return cpu, rss
 
 
-def client(port: int, ca_certificate: Path, seconds: float, concurrency: int, case: dict, server) -> dict:
+def client(
+    port: int,
+    ca_certificate: Path,
+    seconds: float,
+    concurrency: int,
+    case: dict,
+    server,
+    *,
+    diagnostic_progress: bool = False,
+) -> dict:
     config = {
         "host": "127.0.0.1",
         "port": port,
@@ -177,6 +199,8 @@ def client(port: int, ca_certificate: Path, seconds: float, concurrency: int, ca
         "connections": min(4, max(1, concurrency)),
         **case,
     }
+    if diagnostic_progress:
+        config["diagnostic_progress"] = True
     result = run_bounded_client(
         [str(CLIENT), json.dumps(config)],
         seconds, server, cwd=ROOT,
@@ -220,6 +244,8 @@ def sample(
     ca_certificate: Path,
     hypercorn_config: Path,
     evidence: BenchmarkEvidence,
+    *,
+    diagnostics: bool = False,
 ) -> dict:
     identity_before = evidence.before_sample()
     definition = WORKLOADS[workload]
@@ -238,7 +264,15 @@ def sample(
         case = definition["client"]
         workload_concurrency = definition.get("concurrency", concurrency)
         if warmup > 0:
-            result = client(port, ca_certificate, warmup, workload_concurrency, case, process)
+            result = client(
+                port,
+                ca_certificate,
+                warmup,
+                workload_concurrency,
+                case,
+                process,
+                diagnostic_progress=diagnostics,
+            )
             if result["failures"]:
                 raise RuntimeError(f"HTTP/2 warm-up correctness gate failed: {result}")
 
@@ -249,6 +283,8 @@ def sample(
             "connections": min(4, max(1, workload_concurrency)),
             **case,
         }
+        if diagnostics:
+            load_config["diagnostic_progress"] = True
         load = owned_process(
             [str(CLIENT), json.dumps(load_config)],
             cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -283,6 +319,11 @@ def sample(
                 max_h2_peer_close_diagnostics=h2_peer_close_limit,
             )
         )
+        if diagnostics and server["kind"] == "rust":
+            server_diagnostics = runtime_diagnostics(log)
+            if server_diagnostics is None:
+                raise RuntimeError("Rust server did not emit runtime diagnostics")
+            metrics["runtime_diagnostics"] = server_diagnostics
         identity = evidence.after_sample(identity_before)
         metrics["timing_valid"] = metrics["timing_valid"] and identity["timing_valid"]
         metrics["timing_invalid_reasons"].extend(identity["timing_invalid_reasons"])
@@ -302,6 +343,11 @@ def main() -> None:
     parser.add_argument("--warmup", type=float, default=0.5)
     parser.add_argument("--concurrency", type=int, default=64)
     parser.add_argument("--repetitions", type=int, default=3)
+    parser.add_argument(
+        "--diagnostics",
+        action="store_true",
+        help="allow a runtime-diagnostics server and report phase-specific client timeouts",
+    )
     parser.add_argument("--seed", type=int, default=20261002)
     parser.add_argument("--output", type=Path, default=ROOT / "benchmarks" / "results" / "http2-categories-2026-10-02.json")
     args = parser.parse_args()
@@ -314,6 +360,7 @@ def main() -> None:
         ["scripts/run_h2_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/http2.rs",
          "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
+        allow_runtime_diagnostics=args.diagnostics,
         artifacts_dir=args.output.with_suffix(".artifacts"),
         extra_dependencies=FASTAPI_BENCHMARK_DISTRIBUTIONS,
     )
@@ -337,6 +384,7 @@ def main() -> None:
                         metrics = sample(
                             selected_servers[name], workload, args.duration, args.warmup,
                             args.concurrency, cert, key, ca_certificate, hypercorn_config, evidence,
+                            diagnostics=args.diagnostics,
                         )
                     except Exception as error:
                         raise RuntimeError(

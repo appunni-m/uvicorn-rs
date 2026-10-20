@@ -20,6 +20,10 @@ class Server:
         certfile=None,
         keyfile=None,
         graceful_timeout=10,
+        lifespan=True,
+        root_path="",
+        default_headers=None,
+        date_header=True,
     ):
         """Store the application and listener options for a server run.
 
@@ -31,6 +35,13 @@ class Server:
                 enable HTTPS and HTTP/3.
             keyfile: Optional PEM private key paired with ``certfile``.
             graceful_timeout: Non-negative shutdown grace period in seconds.
+            lifespan: Whether to run the application's ASGI lifespan protocol.
+            root_path: Prefix used for the ASGI ``root_path``, ``path``, and
+                ``raw_path`` scope values.
+            default_headers: Encoded response headers inserted before the
+                application's response headers. ``None`` uses Uvicorn's
+                default ``server: uvicorn`` header.
+            date_header: Whether to add the standard HTTP ``Date`` header.
 
         Configuration errors are reported when :meth:`serve` starts the native
         runtime.
@@ -41,6 +52,12 @@ class Server:
         self.certfile = certfile
         self.keyfile = keyfile
         self.graceful_timeout = graceful_timeout
+        self.lifespan = lifespan
+        self.root_path = root_path
+        self.default_headers = (
+            [(b"server", b"uvicorn")] if default_headers is None else default_headers
+        )
+        self.date_header = date_header
         self._control = None
 
     def shutdown(self):
@@ -51,6 +68,13 @@ class Server:
         control = self._control
         if control is not None:
             control.shutdown()
+
+    async def wait_started(self):
+        """Wait until bind and lifespan startup finish, or startup terminates."""
+        control = self._control
+        if control is None:
+            return False
+        return await control.wait_started()
 
     async def serve(self):
         """Run the server until shutdown or task cancellation.
@@ -70,6 +94,10 @@ class Server:
                 self.certfile,
                 self.keyfile,
                 self.graceful_timeout,
+                self.lifespan,
+                self.root_path,
+                self.default_headers,
+                self.date_header,
                 control,
             )
         )

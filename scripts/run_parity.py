@@ -48,8 +48,9 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@8"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@9"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
+ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
 # coverage fault case. They never authorize ordinary target/reference panics
 # or a failing process exit. The hook event, not a repeated JoinError log,
@@ -847,6 +848,7 @@ def load_contract(
     observation_fields = {
         "status", "content_type", "body_bytes", "ordered_body_bytes", "early_body_bytes",
         "ordered_response_headers", "response_header_values_by_name",
+        "server_header_values", "date_header_present",
         "streamed_before_completion", "disconnect_event", "followup_response",
         "handshake_status", "handshake_established", "handshake_accept_valid", "frame_sent",
         "disconnect_code", "followup_status", "subprotocol", "ordered_messages", "state_response",
@@ -871,6 +873,7 @@ def load_contract(
         "request_task_cancellation_observed", "connection_error_observed", "diagnostics_ordered",
         "application_cleanup_before_followup", "server_log",
         "body_stream_error", "trigger_error", "shutdown_clean",
+        "exit_code", "stdout_base64", "stderr_base64",
     }
     for operation in manifest["operations"]:
         expected_operation_keys = {"id", "kind", "observe"}
@@ -2246,8 +2249,126 @@ def load_contract(
         supports_http_request = bool(
             profile_protocols.intersection({"http/1.1", "http/2", "http/3"})
         )
-        http_profile_ids = {"http1", "http1-tls", "http2", "http3"}
-        if kind in http_profile_ids and "response_stream" in case:
+        http_profile_ids = {
+            "http1", "http1-header-policy", "http1-tls", "http2", "http3"
+        }
+        if kind == "cli" and "process" in case:
+            exact_case_keys(case, {"case_id", "profile", "operation", "covers", "process"}, case_id)
+            if case["operation"] != "cli.process":
+                raise ParityError(f"{case_id}: CLI process input requires cli.process")
+            process = case["process"]
+            exact_keys(
+                process,
+                {"invocation", "arguments", "environment", "working_directory", "timeout_seconds"},
+                f"{case_id}.process",
+            )
+            if process["invocation"] not in {"module", "console"}:
+                raise ParityError(f"{case_id}: unsupported CLI invocation mode")
+            arguments = process["arguments"]
+            if (
+                not isinstance(arguments, list)
+                or not arguments
+                or any(not isinstance(argument, str) or "\x00" in argument for argument in arguments)
+            ):
+                raise ParityError(f"{case_id}: process arguments must be non-empty NUL-free strings")
+            environment = process["environment"]
+            if not isinstance(environment, dict):
+                raise ParityError(f"{case_id}: process environment must be an object")
+            for name, value in environment.items():
+                if (
+                    not isinstance(name, str)
+                    or not name
+                    or "=" in name
+                    or "\x00" in name
+                    or (value is not None and (not isinstance(value, str) or "\x00" in value))
+                ):
+                    raise ParityError(f"{case_id}: process environment entries must be valid strings or null")
+            if process["working_directory"] not in {"project", "temporary"}:
+                raise ParityError(f"{case_id}: unsupported process working directory")
+            timeout_seconds = process["timeout_seconds"]
+            if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 60:
+                raise ParityError(f"{case_id}: process timeout must be between 1 and 60 seconds")
+        elif kind == "python-api" and "api" in case:
+            exact_case_keys(case, {"case_id", "profile", "operation", "covers", "api"}, case_id)
+            readiness_operations = {
+                "python.api.server-readiness": "server_readiness",
+                "python.api.server-startup-failure-state": "server_startup_failure",
+            }
+            if case["operation"] == "python.api.run-http":
+                exact_keys(case["api"], {"run_http"}, f"{case_id}.api")
+                run_http = case["api"]["run_http"]
+                exact_keys(
+                    run_http,
+                    {
+                        "method",
+                        "path",
+                        "shutdown_signal",
+                        "timeout_seconds",
+                        "lifespan",
+                        "invocation",
+                        "root_path",
+                    },
+                    f"{case_id}.api.run_http",
+                )
+                if run_http["invocation"] not in {"api", "module-cli"}:
+                    raise ParityError(f"{case_id}.api.run_http.invocation must be api or module-cli")
+                if run_http["method"] != "GET":
+                    raise ParityError(f"{case_id}: run_http currently supports the GET method")
+                if (
+                    not isinstance(run_http["path"], str)
+                    or not run_http["path"].startswith("/")
+                    or "\r" in run_http["path"]
+                    or "\n" in run_http["path"]
+                ):
+                    raise ParityError(f"{case_id}.api.run_http.path must be an origin-form path")
+                if run_http["shutdown_signal"] != "SIGINT":
+                    raise ParityError(f"{case_id}: run_http currently supports the SIGINT stimulus")
+                if run_http["lifespan"] not in {"auto", "on", "off"}:
+                    raise ParityError(f"{case_id}.api.run_http.lifespan must be auto, on, or off")
+                if not isinstance(run_http["root_path"], str):
+                    raise ParityError(f"{case_id}.api.run_http.root_path must be a string")
+                timeout_seconds = run_http["timeout_seconds"]
+                if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
+                    raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 8")
+            elif case["operation"] in readiness_operations:
+                input_name = readiness_operations[case["operation"]]
+                exact_keys(case["api"], {input_name}, f"{case_id}.api")
+                if case["api"][input_name] is not True:
+                    raise ParityError(f"{case_id}.api.{input_name} must be true")
+            elif case["operation"] == "python.api.imports-signatures":
+                api_keys = {"imports", "signatures"}
+                if "calls" in case["api"]:
+                    api_keys.add("calls")
+                exact_keys(case["api"], api_keys, f"{case_id}.api")
+                for field in ("imports", "signatures"):
+                    paths = case["api"][field]
+                    if (
+                        not isinstance(paths, list)
+                        or not paths
+                        or len(paths) != len(set(paths))
+                        or any(not isinstance(path, str) or not path or "\x00" in path for path in paths)
+                    ):
+                        raise ParityError(f"{case_id}.api.{field} must be a unique non-empty path list")
+                if "calls" in case["api"]:
+                    calls = case["api"]["calls"]
+                    if not isinstance(calls, list) or not calls:
+                        raise ParityError(f"{case_id}.api.calls must be a non-empty array")
+                    for index, call in enumerate(calls):
+                        exact_keys(
+                            call,
+                            {"target", "arguments", "keyword_arguments"},
+                            f"{case_id}.api.calls[{index}]",
+                        )
+                        if (
+                            not isinstance(call["target"], str)
+                            or not call["target"]
+                            or not isinstance(call["arguments"], list)
+                            or not isinstance(call["keyword_arguments"], dict)
+                        ):
+                            raise ParityError(f"{case_id}.api.calls[{index}] has invalid call inputs")
+            else:
+                raise ParityError(f"{case_id}: unsupported Python API operation {case['operation']!r}")
+        elif kind in http_profile_ids and "response_stream" in case:
             exact_case_keys(case, {"case_id", "profile", "operation", "covers", "response_stream"}, case_id)
             if kind == "http3":
                 raise ParityError(f"{case_id}: no H3 observation client is declared for progressive reads")
@@ -3329,14 +3450,52 @@ def load_contract(
 
 def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     actual = {}
+    oracle_uvicorn = None
+    if any(oracle["id"] == "uvicorn" for oracle in manifest["oracles"]):
+        probe = subprocess.run(
+            [
+                str(ORACLE_PYTHON),
+                "-c",
+                "import importlib.metadata, json, uvicorn; "
+                "print(json.dumps({'distribution': importlib.metadata.version('uvicorn'), "
+                "'module': uvicorn.__version__, 'path': uvicorn.__file__}))",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        if probe.returncode != 0:
+            raise ParityError(
+                "could not import the Uvicorn oracle from "
+                f"{ORACLE_PYTHON}: {probe.stderr[-1000:]}"
+            )
+        try:
+            oracle_uvicorn = json.loads(probe.stdout)
+        except json.JSONDecodeError as error:
+            raise ParityError("Uvicorn oracle identity probe returned invalid JSON") from error
+        if (
+            not isinstance(oracle_uvicorn, dict)
+            or oracle_uvicorn.get("distribution") != "0.54.0"
+            or oracle_uvicorn.get("module") != "0.54.0"
+        ):
+            details = json.dumps(oracle_uvicorn, sort_keys=True)
+            raise ParityError(
+                "the oracle interpreter does not import genuine Uvicorn 0.54.0; "
+                "pass --oracle-python for an environment without uvicorn-rs-py: "
+                f"{details}"
+            )
     for oracle in manifest["oracles"]:
         requirements = [(oracle["id"], oracle["version"])]
         requirements.extend((component["id"], component["version"]) for component in oracle["components"])
         for distribution, required in requirements:
-            try:
-                observed = importlib.metadata.version(distribution)
-            except importlib.metadata.PackageNotFoundError as error:
-                raise ParityError(f"required reference dependency is missing: {distribution}") from error
+            if distribution == "uvicorn" and oracle_uvicorn is not None:
+                observed = oracle_uvicorn["distribution"]
+            else:
+                try:
+                    observed = importlib.metadata.version(distribution)
+                except importlib.metadata.PackageNotFoundError as error:
+                    raise ParityError(f"required reference dependency is missing: {distribution}") from error
             if observed != required:
                 raise ParityError(f"{distribution} version mismatch: expected {required}, found {observed}")
             actual[distribution] = observed
@@ -3554,6 +3713,15 @@ def start_server(
         lifespan_mode = "shutdown-complete-pending"
     env["ASGI_PARITY_LIFESPAN_MODE"] = lifespan_mode_override or lifespan_mode
     common = ["--host", "127.0.0.1", "--port", str(port)]
+    header_policy_args = (
+        [
+            "--header", "x-asgi-cli: alpha:beta",
+            "--no-server-header", "--no-date-header",
+            "--interface", "asgi3",
+        ]
+        if profile_id == "http1-header-policy"
+        else []
+    )
     startup_api_profiles = {
         "startup-partial-tls-api",
         "startup-missing-certificate",
@@ -3566,8 +3734,9 @@ def start_server(
         "startup-mismatched-private-key",
     }
     if profile_id in startup_api_profiles:
+        server_python = str(ORACLE_PYTHON) if server_id == "uvicorn" else sys.executable
         command = [
-            sys.executable,
+            server_python,
             str(ROOT / "tests/parity/startup_probe.py"),
             server_id,
             profile_id,
@@ -3577,15 +3746,18 @@ def start_server(
     elif profile_id in {"lifecycle-owned-loop", "lifecycle-owned-loop-eager"} or (
         server_id == "uvicorn-rs" and profile_id == "lifecycle-server-api"
     ):
+        server_python = str(ORACLE_PYTHON) if server_id == "uvicorn" else sys.executable
         api_control_path = events_path.with_suffix(".shutdown")
         api_control_path.unlink(missing_ok=True)
         command = [
-            sys.executable,
+            server_python,
             str(ROOT / "tests/parity/server_api_probe.py"),
             str(port),
             str(graceful_timeout_seconds),
             str(api_control_path),
         ]
+        if profile_id == "lifecycle-server-api" and server_id == "uvicorn-rs":
+            command.append("--uvicorn-compat-api")
         if profile_id in {"lifecycle-owned-loop", "lifecycle-owned-loop-eager"}:
             api_snapshot_path = events_path.with_suffix(".server-api-snapshot.json")
             api_snapshot_path.unlink(missing_ok=True)
@@ -3593,11 +3765,16 @@ def start_server(
             if profile_id == "lifecycle-owned-loop-eager":
                 command.extend(["--task-factory", "eager", "--cleanup-delay", str(async_cleanup_delay_seconds)])
     elif server_id == "uvicorn-rs":
-        command = [sys.executable, "-m", "uvicorn_rs", APP, *common, "--loop", "uvloop"]
+        # Exercise the public replacement command in parity runs. Using
+        # ``uvicorn_rs`` here would bypass the uvicorn namespace and could let
+        # its CLI/import compatibility drift independently of server parity.
+        command = [sys.executable, "-m", "uvicorn", APP, *common, "--loop", "uvloop"]
         if certificate and key:
-            command.extend(["--certfile", str(certificate), "--keyfile", str(key)])
-        command.extend(["--graceful-timeout", str(graceful_timeout_seconds)])
+            command.extend(["--ssl-certfile", str(certificate), "--ssl-keyfile", str(key)])
+        command.extend(["--timeout-graceful-shutdown", str(graceful_timeout_seconds)])
+        command.extend(header_policy_args)
     elif server_id == "uvicorn":
+        server_python = str(ORACLE_PYTHON)
         # Keep TLS WebSocket handshake progress in hosted diagnostics when the
         # reference adapter stalls before ASGI dispatch.
         websocket_tls_debug = (
@@ -3605,7 +3782,7 @@ def start_server(
             and env.get("ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG") == "1"
         )
         command = [
-            sys.executable, "-m", "uvicorn", APP, *common, "--loop", "uvloop",
+            server_python, "-m", "uvicorn", APP, *common, "--loop", "uvloop",
             # Follow Uvicorn's stock selector for the pinned reference version.
             # Since Uvicorn 0.50, `auto` selects its maintained SansIO adapter
             # when websockets is installed; forcing `websockets` uses the
@@ -3613,11 +3790,12 @@ def start_server(
             "--http", "httptools", "--interface", "asgi3", "--ws", "auto",
             "--lifespan", "auto",
             "--log-level", "debug" if websocket_tls_debug else "error",
-            "--no-server-header", "--timeout-graceful-shutdown",
+            "--timeout-graceful-shutdown",
             str(graceful_timeout_seconds),
         ]
         if certificate and key:
             command.extend(["--ssl-certfile", str(certificate), "--ssl-keyfile", str(key)])
+        command.extend(header_policy_args)
     elif server_id == "hypercorn":
         command = [
             sys.executable, "-m", "hypercorn", f"asgi:{APP}", "--bind", f"127.0.0.1:{port}",
@@ -3980,6 +4158,8 @@ def read_server_api_snapshot(server: dict[str, Any]) -> dict[str, Any]:
 
 def response_observation(status: int, headers: list[tuple[str, str]], body: bytes) -> dict[str, Any]:
     content_type = next((value for name, value in headers if name.lower() == "content-type"), None)
+    server_header_values = [value for name, value in headers if name.lower() == "server"]
+    date_header_present = any(name.lower() == "date" for name, _value in headers)
     ordered_response_headers = [
         [name.lower(), value]
         for name, value in headers
@@ -3991,6 +4171,8 @@ def response_observation(status: int, headers: list[tuple[str, str]], body: byte
     return {
         "status": status,
         "content_type": content_type,
+        "server_header_values": server_header_values,
+        "date_header_present": date_header_present,
         "body_base64": base64.b64encode(body).decode("ascii"),
         "ordered_response_headers": ordered_response_headers,
         "response_header_values_by_name": [
@@ -6887,6 +7069,8 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "ordered_body_bytes": "body_base64",
         "ordered_response_headers": "ordered_response_headers",
         "response_header_values_by_name": "response_header_values_by_name",
+        "server_header_values": "server_header_values",
+        "date_header_present": "date_header_present",
         "early_body_bytes": "early_body_base64",
         "streamed_before_completion": "streamed_before_completion",
         "disconnect_event": "disconnect_event",
@@ -9063,6 +9247,202 @@ def add_verification_metadata(
         outcome["fault"] = case.get("fault")
 
 
+def run_cli_process(
+    case: dict[str, Any], server_id: str, temporary_directory: Path
+) -> dict[str, Any]:
+    """Run one argv input through the genuine CLI process for each side."""
+
+    process = case["process"]
+    python = ORACLE_PYTHON if server_id == "uvicorn" else Path(sys.executable)
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONHOME", None)
+    environment.pop("PYTHONSTARTUP", None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    for name, value in process["environment"].items():
+        if value is None:
+            environment.pop(name, None)
+        else:
+            environment[name] = value
+    working_directory = (
+        ROOT
+        if process["working_directory"] == "project"
+        else temporary_directory
+    )
+    working_directory.mkdir(parents=True, exist_ok=True)
+    if process["invocation"] == "module":
+        command = [str(python), "-m", "uvicorn", *process["arguments"]]
+    else:
+        script_directory = subprocess.run(
+            [str(python), "-c", "import sysconfig; print(sysconfig.get_path('scripts'))"],
+            cwd=working_directory,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout.strip()
+        script_name = "uvicorn.exe" if os.name == "nt" else "uvicorn"
+        script = Path(script_directory) / script_name
+        if not script.is_file():
+            raise ParityError(f"{case['case_id']}: installed uvicorn console script is missing: {script}")
+        command = [str(script), *process["arguments"]]
+    completed = subprocess.run(
+        command,
+        cwd=working_directory,
+        env=environment,
+        capture_output=True,
+        timeout=process["timeout_seconds"],
+        check=False,
+    )
+    if len(completed.stdout) > 4 * 1024 * 1024 or len(completed.stderr) > 4 * 1024 * 1024:
+        raise ParityError(f"{case['case_id']}: CLI output exceeded the 4 MiB evidence bound")
+    return {
+        "exit_code": completed.returncode,
+        "stdout_base64": base64.b64encode(completed.stdout).decode("ascii"),
+        "stderr_base64": base64.b64encode(completed.stderr).decode("ascii"),
+    }
+
+
+def execute_cli_profile(
+    profile: dict[str, Any],
+    cases: list[dict[str, Any]],
+    operations: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    outcomes = []
+    with tempfile.TemporaryDirectory(prefix="uvicorn-rs-parity-cli-") as temporary:
+        temporary_directory = Path(temporary)
+        for case in cases:
+            operation = operations[case["operation"]]
+            try:
+                oracle = run_cli_process(case, "uvicorn", temporary_directory / "cwd")
+                target = run_cli_process(case, "uvicorn-rs", temporary_directory / "cwd")
+                fields = operation.get("compare", operation["observe"])
+                oracle_comparison = {field: oracle[field] for field in fields}
+                target_comparison = {field: target[field] for field in fields}
+                matches = oracle_comparison == target_comparison
+                difference = None
+                if not matches:
+                    differing_fields = [
+                        field
+                        for field in fields
+                        if oracle[field] != target[field]
+                    ]
+                    difference = "CLI process observations differ: " + ", ".join(differing_fields)
+                outcomes.append({
+                    "case_id": case["case_id"],
+                    "profile": profile["id"],
+                    "operation": case["operation"],
+                    "requirements": case["covers"],
+                    "status": "passed" if matches else "failed",
+                    "oracle_observation": oracle,
+                    "target_observation": target,
+                    "server_exit_codes": {
+                        "oracle": oracle["exit_code"],
+                        "target": target["exit_code"],
+                    },
+                    "difference": difference,
+                })
+                print(
+                    f"{'PASS' if matches else 'FAIL'} {profile['id']}: {case['case_id']}",
+                    flush=True,
+                )
+            except Exception as error:
+                outcomes.append({
+                    "case_id": case["case_id"],
+                    "profile": profile["id"],
+                    "operation": case["operation"],
+                    "requirements": case["covers"],
+                    "status": "infrastructure_failed",
+                    "error": {"class": type(error).__name__, "message": str(error)[:5000]},
+                })
+                print(f"ERROR {profile['id']}: {case['case_id']}: {error}", flush=True)
+        add_verification_metadata(outcomes, cases)
+    return outcomes, []
+
+
+def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]:
+    """Run one input-selected Python public-surface probe on each interpreter."""
+
+    python = ORACLE_PYTHON if server_id == "uvicorn" else Path(sys.executable)
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONHOME", None)
+    environment.pop("PYTHONSTARTUP", None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    command = [
+        str(python),
+        str(ROOT / "tests/parity/python_api_probe.py"),
+        json.dumps(case["api"], sort_keys=True, separators=(",", ":")),
+    ]
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if len(completed.stdout) > 4 * 1024 * 1024 or len(completed.stderr) > 4 * 1024 * 1024:
+        raise ParityError(f"{case['case_id']}: Python API probe output exceeded the 4 MiB evidence bound")
+    return {
+        "exit_code": completed.returncode,
+        "stdout_base64": base64.b64encode(completed.stdout).decode("ascii"),
+        "stderr_base64": base64.b64encode(completed.stderr).decode("ascii"),
+    }
+
+
+def execute_python_api_profile(
+    profile: dict[str, Any],
+    cases: list[dict[str, Any]],
+    operations: dict[str, dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    outcomes = []
+    for case in cases:
+        operation = operations[case["operation"]]
+        try:
+            oracle = run_python_api_probe(case, "uvicorn")
+            target = run_python_api_probe(case, "uvicorn-rs")
+            fields = operation.get("compare", operation["observe"])
+            matches = {field: oracle[field] for field in fields} == {
+                field: target[field] for field in fields
+            }
+            difference = None
+            if not matches:
+                differing_fields = [field for field in fields if oracle[field] != target[field]]
+                difference = "Python API observations differ: " + ", ".join(differing_fields)
+            outcomes.append({
+                "case_id": case["case_id"],
+                "profile": profile["id"],
+                "operation": case["operation"],
+                "requirements": case["covers"],
+                "status": "passed" if matches else "failed",
+                "oracle_observation": oracle,
+                "target_observation": target,
+                "server_exit_codes": {
+                    "oracle": oracle["exit_code"],
+                    "target": target["exit_code"],
+                },
+                "difference": difference,
+            })
+            print(
+                f"{'PASS' if matches else 'FAIL'} {profile['id']}: {case['case_id']}",
+                flush=True,
+            )
+        except Exception as error:
+            outcomes.append({
+                "case_id": case["case_id"],
+                "profile": profile["id"],
+                "operation": case["operation"],
+                "requirements": case["covers"],
+                "status": "infrastructure_failed",
+                "error": {"class": type(error).__name__, "message": str(error)[:5000]},
+            })
+            print(f"ERROR {profile['id']}: {case['case_id']}: {error}", flush=True)
+    add_verification_metadata(outcomes, cases)
+    return outcomes, []
+
+
 def start_profile_servers(
     profile: dict[str, Any],
     tempdir: Path,
@@ -9219,6 +9599,10 @@ def execute_profile(
     operations: dict[str, dict[str, Any]],
     coverage_profile_dir: Path | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if profile["id"] == "cli":
+        return execute_cli_profile(profile, cases, operations)
+    if profile["id"] == "python-api":
+        return execute_python_api_profile(profile, cases, operations)
     startup_cases = [
         case for case in cases
         if "startup_failure" in case or "startup_fallback" in case
@@ -9868,6 +10252,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "asgi-parity" / "result.json")
     parser.add_argument(
+        "--oracle-python",
+        type=Path,
+        default=Path(sys.executable),
+        help="Python environment containing genuine upstream Uvicorn, isolated from uvicorn-rs-py",
+    )
+    parser.add_argument(
         "--case-id",
         action="append",
         help="run only the named input case; repeat to select a batch",
@@ -9888,6 +10278,12 @@ def main() -> int:
         help="use the prebuilt HTTP/3 client without invoking Cargo; required for frozen benchmark identity",
     )
     args = parser.parse_args()
+    global ORACLE_PYTHON
+    # Keep the venv's python symlink intact; resolving it points at the base
+    # interpreter, whose site-packages do not contain the isolated oracle.
+    ORACLE_PYTHON = Path(os.path.abspath(args.oracle_python))
+    if not ORACLE_PYTHON.is_file() or not os.access(ORACLE_PYTHON, os.X_OK):
+        parser.error(f"--oracle-python must be an executable interpreter: {ORACLE_PYTHON}")
 
     manifest, inputs, input_paths = load_contract()
     if args.case_id:

@@ -245,6 +245,12 @@ jobs:
           printf 'BENCHMARK_CPU_MODEL=%s\n' "$cpu_model" >> "$GITHUB_ENV"
           uv sync --python "$PYTHON_VERSION" --group benchmark \
             --group fastapi-benchmark --frozen --no-install-project
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-benchmark-oracle"
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
+            --only-group benchmark --only-group uvicorn-oracle --only-group fastapi-benchmark \
+            --no-install-project --frozen
+          export UVICORN_ORACLE_PYTHON="$oracle_environment/bin/python"
+          printf 'UVICORN_ORACLE_PYTHON=%s\n' "$UVICORN_ORACLE_PYTHON" >> "$GITHUB_ENV"
           uv --version
           .venv/bin/python --version
           rustc --version --verbose
@@ -260,9 +266,12 @@ jobs:
           import os
           import platform
           import psutil
+          import sys
           from pathlib import Path
-          names = ("uvicorn", "hypercorn", "aioquic", "uvloop", "httptools", "psutil",
-                   "h2", "h11", "websockets", "anyio", "typing-extensions", "fastapi", "pydantic")
+          sys.path.insert(0, str(Path.cwd() / "scripts"))
+          from uvicorn_oracle import inspect_uvicorn_oracle
+          names = ("hypercorn", "aioquic", "uvloop", "httptools", "psutil",
+                   "h2", "h11", "anyio", "typing-extensions", "fastapi", "pydantic")
           report = {"system_id": os.environ["BENCHMARK_SYSTEM_ID"],
                     "runner_label": os.environ["BENCHMARK_RUNNER"],
                     "os": platform.system(), "architecture": platform.machine(),
@@ -272,18 +281,23 @@ jobs:
                     "memory_total_bytes": psutil.virtual_memory().total,
                     "python": platform.python_version(), "platform": platform.platform(),
                     "packages": {name: metadata.version(name) for name in names},
+                    "uvicorn_oracle": inspect_uvicorn_oracle(
+                        Path(os.environ["UVICORN_ORACLE_PYTHON"]),
+                        expected_python_version=platform.python_version(),
+                        required_packages=("httptools", "uvloop", "websockets")),
                     "hosted_runner": {name: os.environ.get(name) for name in ("ImageOS", "ImageVersion", "RUNNER_ARCH", "RUNNER_NAME")},
                     "limits": ["Fresh hosted VM, not dedicated hardware or an assurance of no noisy neighbors.",
                                "Closed-loop client and server share the VM; client CPU and observer overhead are reported.",
                                "System package and hosted image versions are recorded, not frozen by this workflow."]}
           Path("target/benchmark-preparation/environment.json").write_text(json.dumps(report, indent=2) + "\n")
           PY
-      - name: Build and install the normal release server wheel
+      - name: Build and install the runtime-diagnostics server wheel
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p target/benchmark-preparation/server-wheels
           uvx --from maturin==1.14.1 maturin build --release --locked \
+            --features runtime-diagnostics \
             --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
             --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
             2>&1 | tee target/benchmark-preparation/server-build.log
@@ -297,6 +311,7 @@ jobs:
           cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bins \
             2>&1 | tee target/benchmark-preparation/client-build.log
           .venv/bin/python scripts/run_benchmark_categories.py \
+            --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --capture-identity target/benchmark-preparation/parity-before.json \
             2>&1 | tee target/benchmark-preparation/freeze.log
           .venv/bin/python - <<'PY'
@@ -311,6 +326,7 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_parity.py \
+            --oracle-python "$UVICORN_ORACLE_PYTHON" \
             --prebuilt-http3-client \
             --output target/benchmark-preparation/parity.json \
             2>&1 | tee target/benchmark-preparation/parity.log
@@ -412,6 +428,7 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_benchmark_categories.py \
+            --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --parity-before-identity target/benchmark-preparation/parity-before.json \
             --parity-report target/benchmark-preparation/parity.json \
             --output-dir target/fastapi-only \
@@ -433,6 +450,7 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_benchmark_categories.py \
+            --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --parity-before-identity target/benchmark-preparation/parity-before.json \
             --parity-report target/benchmark-preparation/parity.json \
             --output-dir target/benchmark-categories \
@@ -509,6 +527,11 @@ jobs:
             system_profiler SPHardwareDataType > target/benchmark-preparation/hardware.txt
           fi
           uv sync --python "$PYTHON_VERSION" --group benchmark --group fastapi-benchmark --frozen
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-benchmark-oracle"
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
+            --only-group benchmark --only-group uvicorn-oracle --only-group fastapi-benchmark \
+            --no-install-project --frozen
+          printf 'UVICORN_ORACLE_PYTHON=%s\n' "$oracle_environment/bin/python" >> "$GITHUB_ENV"
           .venv/bin/python --version | tee target/benchmark-preparation/python-version.txt
           rustc --version --verbose > target/benchmark-preparation/rust-version.txt
           node --version > target/benchmark-preparation/node-version.txt
@@ -541,6 +564,7 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_http_category_bench.py \
+            --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
             --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
               uvicorn-rs-uvloop uvicorn-uvloop-httptools \
@@ -602,6 +626,11 @@ jobs:
           fi
           export BENCHMARK_CPU_MODEL="$cpu_model"
           uv sync --python "$PYTHON_VERSION" --group benchmark --group fastapi-benchmark --frozen --no-install-project
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-benchmark-oracle"
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
+            --only-group benchmark --only-group uvicorn-oracle --only-group fastapi-benchmark \
+            --no-install-project --frozen
+          printf 'UVICORN_ORACLE_PYTHON=%s\n' "$oracle_environment/bin/python" >> "$GITHUB_ENV"
           .venv/bin/python --version | tee target/benchmark-preparation/python-version.txt
           rustc --version --verbose > target/benchmark-preparation/rust-version.txt
           node --version > target/benchmark-preparation/node-version.txt
@@ -616,7 +645,7 @@ jobs:
           import platform
           import psutil
           from pathlib import Path
-          names = ("uvicorn", "uvloop", "httptools", "psutil", "h11", "fastapi", "starlette", "pydantic")
+          names = ("uvloop", "httptools", "psutil", "h11", "fastapi", "starlette", "pydantic")
           report = {
               "system_id": os.environ["BENCHMARK_SYSTEM_ID"],
               "runner_label": os.environ["BENCHMARK_RUNNER"],
@@ -663,6 +692,7 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_http_category_bench.py \
+            --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
             --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
               uvicorn-rs-uvloop uvicorn-uvloop-httptools \
@@ -699,7 +729,7 @@ jobs:
           retention-days: 90
 
   focused-h2-diagnostic:
-    name: ${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }} · ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}
+    name: ${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || 'uvicorn-rs-asyncio' }} · ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=request-upload-small-chunks]') && 'request-upload-small-chunks') || 'protocol-scope' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-h2') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]')) }}
     runs-on: ${{ (inputs.h2_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || (inputs.h2_system == 'macos-arm64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]'))) && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 30
@@ -733,12 +763,12 @@ jobs:
           rustc --version --verbose
           openssl version
           uname -a
-      - name: Build and install the normal release server wheel
+      - name: Build and install the runtime-diagnostics server wheel
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p target/benchmark-preparation/server-wheels
-          uvx --from maturin==1.14.1 maturin build --release --locked \
+          uvx --from maturin==1.14.1 maturin build --release --locked --features runtime-diagnostics \
             --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
             --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
             2>&1 | tee target/benchmark-preparation/server-build.log
@@ -757,10 +787,10 @@ jobs:
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
-          BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
+          BENCHMARK_REPETITIONS: ${{ inputs.repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-h2]') && '1') || '5' }}
           BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
-          BENCHMARK_H2_SERVER: ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }}
-          BENCHMARK_H2_WORKLOAD: ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}
+          BENCHMARK_H2_SERVER: ${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || 'uvicorn-rs-asyncio' }}
+          BENCHMARK_H2_WORKLOAD: ${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=request-upload-small-chunks]') && 'request-upload-small-chunks') || 'protocol-scope' }}
           RUST_BACKTRACE: "1"
           PYTHONFAULTHANDLER: "1"
         run: |
@@ -768,6 +798,7 @@ jobs:
           .venv/bin/python scripts/run_h2_category_bench.py \
             --servers "$BENCHMARK_H2_SERVER" \
             --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
+            --diagnostics \
             --output target/benchmark-categories/h2-focused.json \
             --workloads "$BENCHMARK_H2_WORKLOAD" \
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
@@ -777,7 +808,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: h2-focused-${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || 'uvicorn-rs-asyncio' }}-${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || 'protocol-scope' }}-${{ github.sha }}
+          name: h2-focused-${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || 'uvicorn-rs-asyncio' }}-${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=request-upload-small-chunks]') && 'request-upload-small-chunks') || 'protocol-scope' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/benchmark-categories/

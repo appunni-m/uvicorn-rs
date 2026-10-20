@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import http.client
-from importlib.util import find_spec
 import io
 import json
 import os
@@ -27,6 +26,7 @@ from benchmark_evidence import (
     assert_clean_coverage_environment, check_server_alive, median_valid,
     owned_process, resource, stop_owned,
 )
+from uvicorn_oracle import inspect_uvicorn_oracle, python_version
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / ".venv" / "bin" / "python"
@@ -53,14 +53,15 @@ def free_port() -> int:
         return sock.getsockname()[1]
 
 
-def command(server: dict, app: str, port: int) -> list[str]:
+def command(server: dict, app: str, port: int, python: Path, uvicorn_python: Path) -> list[str]:
+    server_python = python if server["kind"] == "rust" else uvicorn_python
     if server["kind"] == "rust":
         return [
-            str(PYTHON), "-m", "uvicorn_rs", app, "--host", "127.0.0.1", "--port", str(port),
+            str(server_python), "-m", "uvicorn_rs", app, "--host", "127.0.0.1", "--port", str(port),
             "--loop", server["loop"], "--graceful-timeout", "2",
         ]
     return [
-        str(PYTHON), "-m", "uvicorn", app, "--host", "127.0.0.1", "--port", str(port),
+        str(server_python), "-m", "uvicorn", app, "--host", "127.0.0.1", "--port", str(port),
         "--loop", server["loop"], "--http", server["http"], "--interface", "asgi3",
         "--lifespan", "on", "--timeout-graceful-shutdown", "2", "--no-access-log",
         "--no-server-header", "--log-level", "error", "--no-use-colors",
@@ -165,12 +166,12 @@ def wait_hold_started(process, log, monitor) -> float:
     raise TimeoutError("held ASGI app did not emit APP_HOLD_STARTED within fifteen seconds")
 
 
-def start(server: dict, app: str, log):
+def start(server: dict, app: str, log, python: Path, uvicorn_python: Path):
     port = free_port()
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     process = owned_process(
-        command(server, app, port), cwd=ROOT, env=env, stdout=log, stderr=log, text=True,
+        command(server, app, port, python, uvicorn_python), cwd=ROOT, env=env, stdout=log, stderr=log, text=True,
     )
     return port, process
 
@@ -213,7 +214,8 @@ def lifecycle_sampling_policy() -> dict:
     }
 
 
-def uvicorn_cancellation_block(lines: list[str], server: dict, evidence) -> tuple[set[int], dict]:
+def uvicorn_cancellation_block(lines: list[str], server: dict, evidence,
+                              uvicorn_identity: dict) -> tuple[set[int], dict]:
     """Recognize the expected Uvicorn timeout through the FastAPI call stack."""
     timeout_line = "ERROR:    Cancel 1 running task(s), timeout graceful shutdown exceeded"
     header = "ERROR:    Exception in ASGI application"
@@ -229,7 +231,7 @@ def uvicorn_cancellation_block(lines: list[str], server: dict, evidence) -> tupl
     if lines[cursor] != "Traceback (most recent call last):":
         raise RuntimeError("Uvicorn cancellation diagnostic has no exact traceback header")
     cursor += 1
-    package = Path(evidence.dependencies_before["uvicorn"]["modules"]["uvicorn"]["package_roots"][0])
+    package = Path(uvicorn_identity["uvicorn_module_path"]).parent
     version = ".".join(evidence.runtime["version"].split()[0].split(".")[:2])
     standard_library = Path(evidence.runtime["python"]).resolve().parent.parent / "lib" / f"python{version}"
     expected_prefix = (
@@ -240,10 +242,12 @@ def uvicorn_cancellation_block(lines: list[str], server: dict, evidence) -> tupl
     )
     allowed_roots = [standard_library / "asyncio"]
     for module in ("fastapi", "starlette"):
-        spec = find_spec(module)
-        if spec is None or spec.submodule_search_locations is None:
-            raise RuntimeError(f"the FastAPI lifecycle measurement cannot locate the {module} package")
-        allowed_roots.extend(Path(root).resolve() for root in spec.submodule_search_locations)
+        package_path = uvicorn_identity.get("package_paths", {}).get(module)
+        if package_path is None:
+            raise RuntimeError(
+                f"the Uvicorn oracle cannot locate the {module} package"
+            )
+        allowed_roots.append(Path(package_path).resolve())
     app_path = (ROOT / "examples/bench_fastapi_lifecycle.py").resolve()
     parsed_frames = []
     while cursor < end_index:
@@ -293,7 +297,8 @@ def uvicorn_cancellation_block(lines: list[str], server: dict, evidence) -> tupl
     }
 
 
-def diagnostic_gate(output: str, server: dict, phase: str, returncode: int, evidence) -> dict:
+def diagnostic_gate(output: str, server: dict, phase: str, returncode: int, evidence,
+                    uvicorn_identity: dict | None) -> dict:
     lines = output.splitlines()
     lifespan_complete = lines.count("LIFESPAN_SHUTDOWN_COMPLETE")
     cancelled = lines.count("APP_CANCELLED_BY_SHUTDOWN")
@@ -312,7 +317,11 @@ def diagnostic_gate(output: str, server: dict, phase: str, returncode: int, evid
     normalized_indices = set()
     normalization_receipt = []
     if phase == "active" and server["kind"] == "uvicorn":
-        normalized_indices, receipt = uvicorn_cancellation_block(lines, server, evidence)
+        if uvicorn_identity is None:
+            raise RuntimeError("Uvicorn cancellation validation has no isolated oracle identity")
+        normalized_indices, receipt = uvicorn_cancellation_block(
+            lines, server, evidence, uvicorn_identity
+        )
         normalization_receipt.append(receipt)
     # The native TCP layer reports its configured grace deadline when it
     # aborts the one deliberately held connection. This is the Rust-side
@@ -376,7 +385,8 @@ def diagnostic_gate(output: str, server: dict, phase: str, returncode: int, evid
     }
 
 
-def measure_phase(server_name: str, server: dict, phase: str, repetition: int, evidence) -> dict:
+def measure_phase(server_name: str, server: dict, phase: str, repetition: int, evidence,
+                  python: Path, uvicorn_python: Path, uvicorn_identity: dict | None) -> dict:
     identity_before = evidence.before_sample()
     evidence.label_sample(f"lifecycle-{phase}", server_name, repetition)
     log = evidence.open_server_log()
@@ -387,7 +397,7 @@ def measure_phase(server_name: str, server: dict, phase: str, repetition: int, e
     started = time.monotonic()
     exited_at = None
     try:
-        port, process = start(server, FASTAPI_LIFECYCLE_APP, log)
+        port, process = start(server, FASTAPI_LIFECYCLE_APP, log, python, uvicorn_python)
         # Lifecycle requests run in this observer process. Shared monitor client
         # CPU fields are intentionally discarded; RUSAGE below belongs to the
         # server, the only child created/reaped during this phase.
@@ -439,7 +449,9 @@ def measure_phase(server_name: str, server: dict, phase: str, repetition: int, e
         result["server_log"] = {"path": str(log.name), "sha256": hashlib.sha256(Path(log.name).read_bytes()).hexdigest()}
         if error is None:
             try:
-                result.update(diagnostic_gate(output, server, phase, process.returncode, evidence))
+                result.update(diagnostic_gate(
+                    output, server, phase, process.returncode, evidence, uvicorn_identity
+                ))
                 if result["server_shutdown"]["forced"]:
                     raise RuntimeError("lifecycle server required cleanup escalation")
             except Exception as caught:
@@ -467,17 +479,37 @@ def main() -> None:
     parser.add_argument("--servers", nargs="+", choices=sorted(SERVERS), default=list(SERVERS))
     parser.add_argument("--repetitions", type=int, default=5)
     parser.add_argument("--seed", type=int, default=20261002)
+    parser.add_argument("--python", type=Path, default=PYTHON,
+                        help="candidate Python interpreter used by uvicorn-rs")
+    parser.add_argument("--uvicorn-python", type=Path,
+                        default=ROOT / "target" / "uvicorn-oracle" / "bin" / "python",
+                        help="isolated Python interpreter containing stock Uvicorn 0.54.0")
     parser.add_argument("--output", type=Path, default=ROOT / "benchmarks" / "results" / "lifecycle-categories-2026-10-02.json")
     args = parser.parse_args()
     if args.repetitions < 1:
         raise SystemExit("repetitions must be positive")
-    if not PYTHON.exists():
-        raise SystemExit("install this project and benchmark dependencies in .venv before measuring lifecycle")
+    python = args.python.absolute()
+    if not python.is_file():
+        raise SystemExit(f"candidate Python interpreter does not exist: {python}")
+    uvicorn_python = args.uvicorn_python.absolute()
     assert_clean_coverage_environment()
     selected_servers = {name: SERVERS[name] for name in args.servers}
+    uvicorn_identity = None
+    if any(server["kind"] == "uvicorn" for server in selected_servers.values()):
+        required_packages = {"fastapi", "httptools", "starlette"}
+        if any(
+            server["kind"] == "uvicorn" and server["loop"] == "uvloop"
+            for server in selected_servers.values()
+        ):
+            required_packages.add("uvloop")
+        uvicorn_identity = inspect_uvicorn_oracle(
+            uvicorn_python,
+            expected_python_version=python_version(python),
+            required_packages=tuple(sorted(required_packages)),
+        )
     evidence = BenchmarkEvidence(
-        ROOT, PYTHON,
-        ["scripts/run_lifecycle_bench.py", "examples/bench_fastapi_lifecycle.py"], [],
+        ROOT, python,
+        ["scripts/run_lifecycle_bench.py", "scripts/uvicorn_oracle.py", "examples/bench_fastapi_lifecycle.py"], [],
         artifacts_dir=args.output.with_suffix(".artifacts"),
     )
     checkpoint_path = args.output.with_suffix(".jsonl")
@@ -503,7 +535,10 @@ def main() -> None:
                 try:
                     for phase in ("idle", "active"):
                         try:
-                            measurement = measure_phase(name, selected_servers[name], phase, repetition, evidence)
+                            measurement = measure_phase(
+                                name, selected_servers[name], phase, repetition, evidence,
+                                python, uvicorn_python, uvicorn_identity,
+                            )
                         except LifecyclePhaseError as caught:
                             measurement = caught.measurement
                             phases[phase] = measurement
@@ -547,6 +582,7 @@ def main() -> None:
                     failure_report["metadata"]["completion_state"] = "failed lifecycle category; raw phase and row checkpoints retained"
                     failure_report["metadata"]["performance_evidence_status"] = "not_proven"
                     failure_report["metadata"]["host_contention_policy"] = lifecycle_sampling_policy()
+                    failure_report["metadata"]["uvicorn_oracle"] = uvicorn_identity
                     args.output.with_suffix(".failure.json").write_text(json.dumps(failure_report, indent=2) + "\n")
                     raise RuntimeError(f"lifecycle case failed: server={name}, repetition={repetition}; logs={evidence.artifacts_dir}") from caught
                 rows.append(row)
@@ -581,8 +617,8 @@ def main() -> None:
             "date": date.today().isoformat(), "platform": platform.platform(),
             "machine": platform.machine(), "logical_cpus": psutil.cpu_count(logical=True),
             "cpu_model": cpu_model, "python": platform.python_version(),
-            "uvicorn": subprocess.check_output([str(PYTHON), "-c", "import importlib.metadata as m; print(m.version('uvicorn'))"], text=True).strip(),
-            "uvloop": subprocess.check_output([str(PYTHON), "-c", "import importlib.metadata as m; print(m.version('uvloop'))"], text=True).strip(),
+            "uvicorn_oracle": uvicorn_identity,
+            "uvloop": subprocess.check_output([str(python), "-c", "import importlib.metadata as m; print(m.version('uvloop'))"], text=True).strip(),
             "source_sha256": evidence.before["source_sha256"],
             "servers": selected_servers, "repetitions": args.repetitions, "seed": args.seed,
             "correctness_gate": "exact lifespan-state response, held request entry before SIGTERM, held cancellation before lifespan shutdown completion, expected exit and strict diagnostics validated",

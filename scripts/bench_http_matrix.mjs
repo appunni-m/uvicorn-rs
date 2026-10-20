@@ -40,12 +40,14 @@ if (mode === "upload") headers["content-length"] = String(uploadBytes);
 const uploadBody = mode === "upload" ? Buffer.alloc(uploadBytes, 0x61) : Buffer.alloc(0);
 const startedAt = performance.now();
 const deadline = startedAt + seconds * 1000;
+let lastTransferCompletedAt = startedAt;
 const latencies = [];
 let failures = 0;
 let firstFailure = null;
 let bytesSent = 0;
 let bytesReceived = 0;
 let allocatedRequests = 0;
+let requestsCompletedInWindow = 0;
 
 function requestOne(agent) {
   const requestStarted = performance.now();
@@ -56,6 +58,7 @@ function requestOne(agent) {
     function fail(error) {
       if (settled) return;
       settled = true;
+      lastTransferCompletedAt = Math.max(lastTransferCompletedAt, performance.now());
       clearTimeout(resumeTimer);
       clearTimeout(completionTimer);
       reject(error);
@@ -90,11 +93,14 @@ function requestOne(agent) {
           }
           settled = true;
           clearTimeout(resumeTimer);
+          const completedAt = performance.now();
+          lastTransferCompletedAt = Math.max(lastTransferCompletedAt, completedAt);
           resolve({
             status: response.statusCode,
             bodyLength,
             bodyValid,
-            latencyMs: performance.now() - requestStarted,
+            completedAt,
+            latencyMs: completedAt - requestStarted,
           });
         }
         response.on("data", (chunk) => {
@@ -163,6 +169,7 @@ async function worker() {
       try {
         const response = await requestOne(agent);
         latencies.push(response.latencyMs);
+        if (response.completedAt <= deadline) requestsCompletedInWindow += 1;
         if (response.status !== expectedStatus || !response.bodyValid) {
           failures += 1;
           firstFailure ??= {
@@ -187,16 +194,27 @@ await Promise.all(Array.from({ length: concurrency }, worker));
 const elapsedSeconds = (performance.now() - startedAt) / 1000;
 latencies.sort((a, b) => a - b);
 const percentile = (p) => latencies[Math.max(0, Math.ceil(p * latencies.length) - 1)] ?? 0;
+const meanMs = latencies.length
+  ? latencies.reduce((sum, latency) => sum + latency, 0) / latencies.length
+  : 0;
 const result = {
   requests: latencies.length,
   duration_seconds: elapsedSeconds,
+  load_window_seconds: seconds,
+  completion_drain_seconds: Math.max(0, (lastTransferCompletedAt - deadline) / 1000),
   requests_per_second: latencies.length / elapsedSeconds,
+  requests_completed_in_window: requestsCompletedInWindow,
+  requests_completed_after_window: latencies.length - requestsCompletedInWindow,
+  requests_per_second_in_window: requestsCompletedInWindow / seconds,
   request_body_bytes: bytesSent,
   response_body_bytes: bytesReceived,
   application_bytes_per_second: (bytesSent + bytesReceived) / elapsedSeconds,
+  mean_ms: meanMs,
   p50_ms: percentile(0.5),
   p95_ms: percentile(0.95),
   p99_ms: percentile(0.99),
+  p99_9_ms: percentile(0.999),
+  max_ms: latencies.at(-1) ?? 0,
   failures,
   first_failure: firstFailure,
 };

@@ -4,7 +4,7 @@
     "id": "asgi-server-protocol-slice",
     "mode": "slice",
     "authority": "docs/support-matrix.md",
-    "description": "Consumer-visible ASGI HTTP, WebSocket, lifespan, disconnect, and shutdown behavior represented by indexed input workflows. This is not the full ASGI or Uvicorn contract."
+    "description": "Consumer-visible Python imports, CLI processes, and ASGI HTTP, WebSocket, lifespan, disconnect, and shutdown behavior represented by indexed input workflows. This is not the full ASGI or Uvicorn contract."
   },
   "oracles": [
     {
@@ -15,7 +15,9 @@
       "protocols": [
         "http/1.1",
         "websocket",
-        "lifespan"
+        "lifespan",
+        "cli",
+        "python-api"
       ],
       "components": [
         {
@@ -75,10 +77,27 @@
       "http/2",
       "http/3",
       "websocket",
-      "lifespan"
+      "lifespan",
+      "cli"
     ]
   },
   "profiles": [
+    {
+      "id": "python-api",
+      "oracle": "uvicorn",
+      "protocol": "python-api",
+      "oracle_config": [
+        "CPython 3.12 public imports and signatures, Server readiness, and programmatic HTTP serving from Uvicorn 0.54.0"
+      ]
+    },
+    {
+      "id": "cli",
+      "oracle": "uvicorn",
+      "protocol": "cli",
+      "oracle_config": [
+        "python -m uvicorn and installed uvicorn console process invocations"
+      ]
+    },
     {
       "id": "http1",
       "oracle": "uvicorn",
@@ -87,6 +106,20 @@
         "uvloop",
         "httptools",
         "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "http1-header-policy",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "interface asgi3 for the synchronous callable returning an awaitable",
+        "--header x-asgi-cli: alpha:beta",
+        "--no-server-header",
+        "--no-date-header",
+        "--interface asgi3"
       ]
     },
     {
@@ -827,12 +860,16 @@
         "content_type",
         "ordered_response_headers",
         "response_header_values_by_name",
+        "server_header_values",
+        "date_header_present",
         "body_bytes"
       ],
       "compare": [
         "status",
         "content_type",
         "response_header_values_by_name",
+        "server_header_values",
+        "date_header_present",
         "body_bytes"
       ]
     },
@@ -1895,10 +1932,82 @@
         "followup_healthy": true,
         "task_count_stable": true
       }
+    },
+    {
+      "id": "cli.process",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ]
+    },
+    {
+      "id": "python.api.imports-signatures",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ]
+    },
+    {
+      "id": "python.api.run-http",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ]
+    },
+    {
+      "id": "python.api.server-readiness",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ]
+    },
+    {
+      "id": "python.api.server-startup-failure-state",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64"
+      ]
     }
   ],
     "inputs": [
+    "inputs/python-api.json",
+    "inputs/cli.json",
     "inputs/http1.json",
+    "inputs/http1-header-policy.json",
     "inputs/http1-tls.json",
     "inputs/http2.json",
     "inputs/http3.json",

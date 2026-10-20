@@ -16,10 +16,15 @@ PAIRS = (
     ("uvloop", "uvicorn-uvloop-httptools", "uvicorn-rs-uvloop"),
 )
 METRICS = {
-    "requests_per_second": ("requests/s", True),
+    "requests_per_second_in_window": ("in-window requests/s", True),
+    "requests_per_second": ("drain-inclusive requests/s", True),
+    "completion_drain_seconds": ("completion drain s", True),
+    "mean_ms": ("mean ms", False),
     "p50_ms": ("p50 ms", True),
     "p95_ms": ("p95 ms", True),
     "p99_ms": ("p99 ms", True),
+    "p99_9_ms": ("p99.9 ms", True),
+    "max_ms": ("max ms", True),
     "server_cpu_microseconds_per_request": ("server CPU µs/request", True),
     "server_rss_peak_mib": ("server RSS MiB", True),
     "client_cpu_microseconds_per_request": ("client CPU µs/request", False),
@@ -58,6 +63,49 @@ def stable_identity(row: dict[str, Any]) -> bool:
     return True
 
 
+def valid_window_accounting(row: dict[str, Any]) -> bool:
+    request_count = row.get("requests")
+    in_window = row.get("requests_completed_in_window")
+    after_window = row.get("requests_completed_after_window")
+    concurrency = row.get("concurrency")
+    window_seconds = row.get("load_window_seconds")
+    duration_seconds = row.get("duration_seconds")
+
+    if any(
+        not isinstance(value, int) or isinstance(value, bool) or value < 0
+        for value in (request_count, in_window, after_window, concurrency)
+    ):
+        return False
+    if concurrency == 0 or in_window + after_window != request_count:
+        return False
+    if after_window > concurrency:
+        return False
+    if not finite_number(window_seconds) or window_seconds <= 0:
+        return False
+    if not finite_number(duration_seconds) or duration_seconds < window_seconds:
+        return False
+    window_rate = row.get("requests_per_second_in_window")
+    drain_rate = row.get("requests_per_second")
+    if not finite_number(window_rate) or not finite_number(drain_rate):
+        return False
+    expected_window_rate = in_window / window_seconds
+    expected_drain_rate = request_count / duration_seconds
+    return (
+        math.isclose(
+            window_rate,
+            expected_window_rate,
+            rel_tol=1e-9,
+            abs_tol=5.1e-4,
+        )
+        and math.isclose(
+            drain_rate,
+            expected_drain_rate,
+            rel_tol=1e-9,
+            abs_tol=5.1e-4,
+        )
+    )
+
+
 def valid_row(row: dict[str, Any]) -> bool:
     return (
         row.get("timing_valid") is True
@@ -66,7 +114,10 @@ def valid_row(row: dict[str, Any]) -> bool:
         and row.get("unexpected_panic_events") == 0
         and row.get("unexpected_native_errors") == 0
         and stable_identity(row)
+        and valid_window_accounting(row)
         and all(finite_number(row.get(name)) for name, (_, required) in METRICS.items() if required)
+        and row["p50_ms"] <= row["p95_ms"] <= row["p99_ms"] <= row["p99_9_ms"] <= row["max_ms"]
+        and row["completion_drain_seconds"] <= row["duration_seconds"]
     )
 
 
@@ -149,7 +200,9 @@ def summarize(report: dict[str, Any], workload: str) -> tuple[dict[str, Any], st
                 "reference": statistics.median(ref_values),
                 "rust": statistics.median(rust_values),
             }
-            if name == "requests_per_second" and all(value > 0 for value in ref_values):
+            if name in ("requests_per_second", "requests_per_second_in_window") and all(
+                value > 0 for value in ref_values
+            ):
                 metrics[name]["rust_over_reference_median_of_matched_ratios"] = statistics.median(
                     rust / ref for ref, rust in pairs
                 )
@@ -163,7 +216,7 @@ def summarize(report: dict[str, Any], workload: str) -> tuple[dict[str, Any], st
 
     status = "qualified_matched_pairs" if not errors else "incomplete_or_unqualified"
     result = {
-        "schema": "uvicorn-rs-focused-fastapi-match@1",
+        "schema": "uvicorn-rs-focused-fastapi-match@2",
         "status": status,
         "workload": workload,
         "source_sha256": next(iter(source_hashes)) if len(source_hashes) == 1 else None,
@@ -181,6 +234,7 @@ def summarize(report: dict[str, Any], workload: str) -> tuple[dict[str, Any], st
             "Three matching valid repetitions are descriptive, not a statistical-significance claim.",
             "The client and server share one hosted runner; client and observer CPU are reported.",
             "This is one workload on one runner, not a cross-system or whole-server claim.",
+            "In-window requests/s is the primary throughput measure; drain-inclusive requests/s includes completions after the load deadline.",
         ],
     }
     lines = [

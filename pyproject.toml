@@ -10,7 +10,37 @@ license-files = ["LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT"]
 description = "Python ASGI client for the Rust-native Uvicorn-RS server"
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+    "click>=8.0",
+    "h11>=0.8",
+    "typing_extensions>=4.0; python_version < '3.11'",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Internet :: WWW/HTTP",
+]
+
+[project.optional-dependencies]
+standard = [
+    "httptools>=0.8.0",
+    "python-dotenv>=0.13",
+    "PyYAML>=5.1",
+    "uvloop>=0.15.1; sys_platform != 'win32' and (sys_platform != 'cygwin' and platform_python_implementation != 'PyPy')",
+    "watchfiles>=0.20",
+    "websockets>=13.0",
+]
 
 [project.urls]
 Repository = "https://github.com/appunni-m/uvicorn-rs"
@@ -19,21 +49,24 @@ Issues = "https://github.com/appunni-m/uvicorn-rs/issues"
 
 [project.scripts]
 uvicorn-rs-py = "uvicorn_rs.cli:main"
+uvicorn = "uvicorn.main:main"
 
 [dependency-groups]
 benchmark = [
     "httptools==0.8.0; python_version >= '3.10'",
     "hypercorn[h3]==0.18.0 ; python_full_version >= '3.10'",
     "psutil==7.2.2; python_version >= '3.10'",
-    "uvicorn[standard]==0.54.0; python_version >= '3.10'",
     "uvloop==0.23.0; python_version >= '3.10'",
+    "websockets>=13.0; python_full_version >= '3.10'",
 ]
+uvicorn-oracle = ["uvicorn[standard]==0.54.0; python_version >= '3.10'"]
 fastapi-benchmark = ["fastapi==0.142.4; python_version >= '3.10'"]
 
 [tool.maturin]
 sdist-generator = "git"
 module-name = "uvicorn_rs._native"
 python-source = "python"
+python-packages = ["uvicorn_rs", "uvicorn"]
 features = ["pyo3/extension-module"]
 exclude = [
     ".kata.toml", "benchmarks/**", ".coverage-mcp/**", "build/**", "target/**",

@@ -1,50 +1,65 @@
-# Uvicorn replacement status
+# Can I replace Uvicorn?
 
-This page describes the intended replacement contract and the current gap. It does not claim that the prototype already behaves like Uvicorn.
+**Not yet.** `uvicorn-rs-py` is not published, and the current prototype does
+not match Uvicorn's full command, Python API, or deployment behavior. If an
+application relies on those features, keep using upstream Uvicorn. You can
+[try the current prototype from a checkout](quickstart.md) without changing
+your application environment.
 
-## Confirmed target
+## Current status
 
-The Python distribution remains named uvicorn-rs-py. Once the compatibility work and release checks pass, installing that distribution is intended to provide the uvicorn command and uvicorn import namespace. The Rust server remains the network engine; Python compatibility code should stay thin.
-
-The initial compatibility baseline is upstream Uvicorn 0.54.0, pinned in this repository's benchmark dependencies. Compatibility claims will name the exact tested upstream version and supported Python/OS combinations. A future Uvicorn release is not covered automatically; the project must review and adopt each new baseline explicitly.
-
-See the [Uvicorn 0.54.0 release notes](https://github.com/Kludex/uvicorn/blob/0.54.0/docs/release-notes.md) and [settings reference](https://github.com/Kludex/uvicorn/blob/0.54.0/docs/settings.md) for the upstream contract.
-
-## What is available today
-
-| User-visible surface | Current state |
+| What you need | Current state |
 | --- | --- |
-| PyPI distribution | uvicorn-rs-py is the intended distribution name; no package has been published. |
-| Command | The checkout exposes uvicorn-rs-py with a small custom option set. It does not install the uvicorn command. |
-| Python imports | The checkout exposes uvicorn_rs.Server. It does not provide the uvicorn import namespace or uvicorn.run, Config, or Server API. |
-| ASGI app | The prototype serves an ASGI 3 callable through the Python-owned event loop and Rust networking. See the [live support matrix](support-matrix.md) for tested behavior. |
-| Uvicorn compatibility | Full CLI, import/API, worker, reload, and process parity has not been implemented or qualified. |
+| Install from PyPI | Not available. `uvicorn-rs-py` has not been published. |
+| Run `uvicorn` from this checkout | Basic help, version, and a small set of input checks match the pinned Uvicorn release. Most runtime options and environment behavior remain incomplete. |
+| Import `uvicorn` from this checkout | `run`, `Config`, and `Server` expose Uvicorn 0.54.0 signatures. The basic single-process ASGI 3 path, one cancellation/shutdown workflow, and focused `root_path` and `lifespan="off"` behavior pass parity; most settings and lifecycle behavior remain unqualified. |
+| Serve a Python ASGI app | An ASGI 3 prototype is available. See the [support matrix](support-matrix.md) for tested behavior and limits. |
+| Use Uvicorn workers, reload, or process controls | Not implemented or qualified as compatible. |
+| Claim a general speed advantage | Not supported by current measurements. See [benchmark results](benchmark-results.md). |
 
-Generic ASGI request parity does not prove Uvicorn CLI or Python API compatibility. Until the installed artifact passes the declared compatibility matrix, keep using upstream Uvicorn when an application depends on its public imports or options.
+The target distribution is `uvicorn-rs-py`. After release, it is intended to
+provide the `uvicorn` import namespace, `uvicorn` command, and
+`python -m uvicorn`, while remaining a separately named PyPI distribution. It
+must not be installed alongside upstream `uvicorn`: both distributions own
+files under the same import name. The project currently targets Uvicorn
+0.54.0; compatibility with another Uvicorn release will require a separate
+review. See the [versioned upstream settings reference](https://github.com/Kludex/uvicorn/blob/0.54.0/docs/settings.md)
+for the starting contract. Maintainers keep exact case results and package
+receipts in the [compatibility contract](maintainers/uvicorn-0.54.0-contract.md).
 
-## Planned replacement workflow
+## Replacing Uvicorn after a compatible release
 
-These are the intended steps after a compatible release is available. They are not install instructions for the current prototype.
+These are future migration steps. Use them only after a compatible release is
+published and this page and the support matrix mark the features your app needs
+as supported. The two distributions install files under the same `uvicorn`
+import name, so do not install them together in one environment.
 
-~~~sh
+To replace upstream Uvicorn:
+
+```sh
 python -m pip uninstall uvicorn
-python -m pip install uvicorn-rs-py
+python -m pip install "uvicorn-rs-py[standard]"
 uvicorn --help
-~~~
+python -m uvicorn --help
+```
 
-The distributions would install overlapping uvicorn files. Remove upstream Uvicorn before installing uvicorn-rs-py, and do not keep both installed in the same environment.
+To roll back, install the upstream version your application requires:
 
-To return to the pinned upstream baseline:
-
-~~~sh
+```sh
 python -m pip uninstall uvicorn-rs-py
-python -m pip install "uvicorn==0.54.0"
-~~~
+python -m pip install "uvicorn==<version-required-by-your-app>"
+```
 
-A rollback should use the upstream version required by the application; 0.54.0 is the project's initial compatibility reference, not a promise that it is the latest upstream version forever.
+The project's pinned reference is `0.54.0`; choose the version required by
+your application when rolling back.
 
-## What compatibility means
+## Compatibility scope
 
-The target inventory includes command help, options, defaults, environment-variable precedence, exit codes and diagnostics; documented imports and signatures; application strings, objects and factories; ASGI3, ASGI2 and WSGI interfaces; HTTP and WebSocket behavior; TLS, proxy and socket configuration; lifespan, cancellation and graceful shutdown; workers, reload and signals; and package extras.
-
-A surface is supported only when its exact versioned input case passes against live upstream Uvicorn and the installed uvicorn-rs-py artifact. Missing cases, unsupported options, or observable differences remain visible in the [support matrix](support-matrix.md) and block a drop-in claim.
+The compatibility work covers the command and settings, Python imports and
+programmatic API, application loading, ASGI behavior, HTTP and WebSocket
+protocols, lifespan, TLS and proxy settings, sockets, workers, reload,
+signals, shutdown, and package extras. Matching a command name or passing a
+few HTTP requests is not enough to claim a drop-in replacement. The
+[maintainer contract](maintainers/uvicorn-0.54.0-contract.md) tracks the full
+inventory and evidence; the [support matrix](support-matrix.md) is the shorter
+user-facing summary.

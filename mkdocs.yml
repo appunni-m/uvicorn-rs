@@ -74,6 +74,9 @@ nav:
       - Compatibility evidence:
           - Input-only parity matrix: parity.md
           - Case inventory: asgi-case-inventory.md
+          - ASGI implementation evidence: maintainers/asgi-support-evidence.md
+          - Uvicorn 0.54.0 contract: maintainers/uvicorn-0.54.0-contract.md
+          - Deployment validation: maintainers/deployment-validation.md
       - Performance:
           - Benchmark method: benchmarks.md
           - Results: benchmark-results.md

@@ -10,7 +10,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app import _record, app
-from uvicorn_rs import Server
 
 
 async def main() -> None:
@@ -19,6 +18,7 @@ async def main() -> None:
     parser.add_argument("graceful_timeout", type=int)
     parser.add_argument("shutdown_path", type=Path)
     parser.add_argument("--server", choices=("uvicorn", "uvicorn-rs"), default="uvicorn-rs")
+    parser.add_argument("--uvicorn-compat-api", action="store_true")
     parser.add_argument("--snapshot", type=Path)
     parser.add_argument("--task-factory", choices=("asyncio", "eager"), default="asyncio")
     parser.add_argument("--cleanup-delay", type=float, default=0.5)
@@ -56,7 +56,7 @@ async def main() -> None:
     application = observed_app if args.snapshot is not None else app
     if args.task_factory == "eager":
         asyncio.get_running_loop().set_task_factory(asyncio.eager_task_factory)
-    if args.server == "uvicorn":
+    if args.server == "uvicorn" or args.uvicorn_compat_api:
         import uvicorn
 
         server = uvicorn.Server(uvicorn.Config(
@@ -72,6 +72,8 @@ async def main() -> None:
             timeout_graceful_shutdown=args.graceful_timeout,
         ))
     else:
+        from uvicorn_rs import Server
+
         server = Server(
             application,
             host="127.0.0.1",
@@ -89,7 +91,7 @@ async def main() -> None:
 
     loop = asyncio.get_running_loop()
     shutdown_started = loop.time()
-    if args.server == "uvicorn":
+    if args.server == "uvicorn" and not args.uvicorn_compat_api:
         server.should_exit = True
     else:
         server_task.cancel()

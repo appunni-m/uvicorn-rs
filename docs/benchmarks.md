@@ -158,10 +158,22 @@ category matrix, aggregate, and generated benchmark documentation jobs.
 The runner captures a host preflight before timing. The HTTP category client
 checks every complete response against the workload oracle, verifies server
 lifecycle and source/binary identity, and records host activity, throughput,
-latency percentiles, server/client CPU, and RSS. The summary gate requires at
-least three timing-valid matching repetitions for each event-loop pair. If a
-runner is noisy, its invalid rows remain in the artifact and do not count
-toward the gate.
+mean/p50/p95/p99/p99.9 and maximum request latency, server/client CPU, and RSS.
+The report distinguishes completions inside the configured load window from
+the completion drain after that window. `requests_per_second_in_window` is
+successful responses completed by the load-window deadline divided by the
+configured duration. `completion_drain_seconds` records how long in-flight
+requests kept the client alive after the deadline. The legacy
+`requests_per_second` remains total successful responses divided by full
+client wall time, including that drain; use the in-window metric when comparing
+sustained throughput. Latency covers each complete request and response body,
+including upload time, and includes requests that finish during the drain.
+The p99.9 and maximum values expose rare stalls that can lower throughput while
+leaving p99 almost unchanged; interpret them per repetition because a short
+sample contains few observations at those percentiles. The summary gate
+requires at least three timing-valid matching repetitions for each event-loop
+pair. If a runner is noisy, its invalid rows remain in the artifact and do not
+count toward the gate.
 
 To trigger the default case through Git, push a commit to `main` whose subject
 contains `[focused-fastapi-match]`. This path runs only the focused timing job;
@@ -308,15 +320,21 @@ extension before collecting samples:
 ```sh
 uv lock --check
 uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs-py
+UV_PROJECT_ENVIRONMENT=target/uvicorn-oracle uv sync --python 3.12 --locked \
+  --only-group benchmark --only-group uvicorn-oracle --only-group fastapi-benchmark --no-install-project
 uv run --no-sync python -c 'import uvicorn_rs; print(uvicorn_rs.__file__)'
 ```
 
-The `benchmark` dependency group contains comparison servers and measurement
-tools. The `fastapi-benchmark` group pins upstream FastAPI 0.142.4 and is
-required by the maintained cross-category comparison. FastAPI, its upstream
-Starlette dependency, and Pydantic come from the same locked Python environment
-for Uvicorn and `uvicorn-rs`. The report identity records these versions. The
-full FastAPI comparison has no mode that silently omits FastAPI workloads.
+The project `.venv` is the candidate environment: it contains `uvicorn-rs-py`
+and must not contain upstream Uvicorn. Both distributions own the `uvicorn`
+import namespace, so installing them together can make results depend on file
+installation order. `target/uvicorn-oracle` is a separate environment built
+from the locked `uvicorn-oracle` group; it must contain stock Uvicorn 0.54.0,
+not `uvicorn-rs-py`. The runners check the version, Python version, package
+location, and installed Uvicorn `RECORD` hashes before using it. The
+`fastapi-benchmark` group pins upstream FastAPI 0.142.4; the candidate and
+oracle use the same locked FastAPI, Starlette, and Pydantic versions. The full
+FastAPI comparison has no mode that silently omits FastAPI workloads.
 
 ### Focused FastAPI comparison
 
@@ -334,11 +352,14 @@ uv lock --check
 uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs-py
 cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bins
 .venv/bin/python scripts/run_benchmark_categories.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --capture-identity target/fastapi-one-tokio/parity-before.json
 .venv/bin/python scripts/run_parity.py \
+  --oracle-python target/uvicorn-oracle/bin/python \
   --prebuilt-http3-client \
   --output target/fastapi-one-tokio/parity.json
 .venv/bin/python scripts/run_benchmark_categories.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --parity-before-identity target/fastapi-one-tokio/parity-before.json \
   --parity-report target/fastapi-one-tokio/parity.json \
   --category http1 \
@@ -376,11 +397,14 @@ the normal extension as described above:
 
 ```sh
 .venv/bin/python scripts/run_benchmark_categories.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --capture-identity target/fastapi-all/parity-before.json
 .venv/bin/python scripts/run_parity.py \
+  --oracle-python target/uvicorn-oracle/bin/python \
   --prebuilt-http3-client \
   --output target/fastapi-all/parity.json
 .venv/bin/python scripts/run_benchmark_categories.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --parity-before-identity target/fastapi-all/parity-before.json \
   --parity-report target/fastapi-all/parity.json \
   --category http1 \
@@ -429,6 +453,7 @@ application.
 
 ```sh
 .venv/bin/python scripts/run_http_category_bench.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --workloads fastapi-upload-1m-write-1k fastapi-upload-1m-write-16k \
     fastapi-request-upload fastapi-upload-1m-write-256k fastapi-upload-1m-write-1m \
   --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
@@ -461,12 +486,15 @@ the five-second category duration for performance claims.
 
 ```sh
 .venv/bin/python scripts/run_benchmark_categories.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --capture-identity target/fastapi-concurrency/parity-before.json
 .venv/bin/python scripts/run_parity.py \
+  --oracle-python target/uvicorn-oracle/bin/python \
   --prebuilt-http3-client \
   --output target/fastapi-concurrency/parity.json
 for concurrency in 1 8 32 64; do
   .venv/bin/python scripts/run_benchmark_categories.py \
+    --uvicorn-python target/uvicorn-oracle/bin/python \
     --python .venv/bin/python \
     --parity-before-identity target/fastapi-concurrency/parity-before.json \
     --parity-report target/fastapi-concurrency/parity.json \
@@ -502,7 +530,7 @@ directory. The support matrix lists the exact behaviors covered and known gaps.
 
 The timed FastAPI rows use only upstream FastAPI and its locked dependencies.
 Separate framework interoperability evidence is documented in
-[deployment and framework integration](deployment.md#test-starlette-integrations);
+[framework integration validation](maintainers/deployment-validation.md#test-starlette-integrations);
 that integration is not part of the performance matrix.
 
 ## Evidence required for a comparison
@@ -710,7 +738,8 @@ set -o pipefail
   rustc --version
   cargo --version
   uv --version
-  uv run --no-sync python -c 'import importlib.metadata as m; print("uvicorn", m.version("uvicorn")); print("uvloop", m.version("uvloop")); print("httptools", m.version("httptools")); print("hypercorn", m.version("hypercorn"))'
+  uv run --no-sync python -c 'import importlib.metadata as m; print("uvloop", m.version("uvloop")); print("httptools", m.version("httptools")); print("hypercorn", m.version("hypercorn"))'
+  target/uvicorn-oracle/bin/python -c 'import importlib.metadata as m; print("uvicorn oracle", m.version("uvicorn"))'
   uv run --no-sync python -c 'from pathlib import Path; import hashlib, uvicorn_rs._native as n; p=Path(n.__file__); print("native_extension", p); print("native_extension_sha256", hashlib.sha256(p.read_bytes()).hexdigest())'
   uname -a
   sysctl -n machdep.cpu.brand_string 2>/dev/null || true
@@ -718,6 +747,7 @@ set -o pipefail
 } > "$RESULTS/environment.txt" 2>&1
 
 uv run --no-sync python scripts/run_http_category_bench.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --workloads fixed large-response many-response-chunks small-response-chunks \
     request-upload request-upload-small-chunks slow-reader-backpressure \
     scope-32-headers contextvars sync-callable-awaitable exception-to-500 \
@@ -733,10 +763,12 @@ uv run --no-sync python scripts/run_h3_category_bench.py \
   --output "$RESULTS/http3.json" 2>&1 | tee "$RESULTS/http3.log"
 
 uv run --no-sync python scripts/run_websocket_category_bench.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --duration 5 --warmup 1 --concurrency 32 --repetitions 3 --seed 20261005 \
   --output "$RESULTS/websocket.json" 2>&1 | tee "$RESULTS/websocket.log"
 
 uv run --no-sync python scripts/run_lifecycle_bench.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --repetitions 5 --seed 20261005 --output "$RESULTS/lifecycle.json" \
   2>&1 | tee "$RESULTS/lifecycle.log"
 ```
@@ -877,11 +909,14 @@ does not install or benchmark FastAPI-RS or Starlette-RS.
 export RUSTC_WRAPPER= RUSTC_WORKSPACE_WRAPPER=
 cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bins
 .venv/bin/python scripts/run_benchmark_categories.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --capture-identity target/benchmark-preparation/parity-before.json
 .venv/bin/python scripts/run_parity.py \
+  --oracle-python target/uvicorn-oracle/bin/python \
   --prebuilt-http3-client \
   --output target/benchmark-preparation/parity.json
 .venv/bin/python scripts/run_benchmark_categories.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --parity-before-identity target/benchmark-preparation/parity-before.json \
   --parity-report target/benchmark-preparation/parity.json \
   --duration 5 --warmup 1 --concurrency 64 --repetitions 3 --seed 20261005
@@ -1085,6 +1120,7 @@ RUN_ID="$(date -u +%Y-%m-%dT%H%M%SZ)-$(uuidgen)"
   --output "benchmarks/results/fastapi-stage-${RUN_ID}-http2.json"
 .venv/bin/python scripts/profile_fastapi_protocols.py \
   --protocol websocket --duration 2 --warmup 0 --concurrency 32 --repetitions 3 \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --output "benchmarks/results/fastapi-stage-${RUN_ID}-websocket.json"
 .venv/bin/python scripts/profile_fastapi_protocols.py \
   --protocol http3 --duration 2 --warmup 0 --concurrency 1 --repetitions 3 \
@@ -1125,6 +1161,7 @@ Run all 11 FastAPI workloads under both loops and all four server settings:
 uv run --with 'maturin>=1.14,<2' maturin develop --release --features runtime-diagnostics
 RUN_ID="$(date -u +%Y-%m-%dT%H%M%SZ)-$(uuidgen)"
 uv run --no-sync python scripts/run_http_category_bench.py \
+  --uvicorn-python target/uvicorn-oracle/bin/python \
   --workloads fastapi-fixed fastapi-validated-route fastapi-python-cpu \
     fastapi-large-response fastapi-many-response-chunks fastapi-small-response-chunks \
     fastapi-request-upload fastapi-request-upload-small-chunks \

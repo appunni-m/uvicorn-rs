@@ -345,11 +345,34 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
     if _sha256(saved_client) != _sha256(native_client):
         raise RuntimeError("HTTP client changed while preserving its executable")
     http_bench.NATIVE_CLIENT = saved_client
-    python = http_bench.DEFAULT_PYTHON
-    evidence = BenchmarkEvidence(ROOT, python, SOURCE_FILES, [saved_client])
+    python = args.python.absolute()
+    uvicorn_python = args.uvicorn_python.absolute()
+    extra_dependencies = (
+        http_bench.FASTAPI_BENCHMARK_DISTRIBUTIONS
+        if args.workload.startswith("fastapi-")
+        else None
+    )
+    evidence = BenchmarkEvidence(
+        ROOT,
+        python,
+        SOURCE_FILES,
+        [saved_client],
+        extra_dependencies=extra_dependencies,
+    )
     receipt["identity_before"] = evidence.before
     receipt["preserved"] = _preserve_identity(evidence, output)
     receipt["runtime_before"] = _runtime_identity(python)
+    server_python = python if args.server == "uvicorn-rs" else uvicorn_python
+    receipt["server_runtime_before"] = _runtime_identity(server_python)
+    if args.server == "uvicorn":
+        required_packages = {"httptools"}
+        if args.loop == "uvloop":
+            required_packages.add("uvloop")
+        receipt["uvicorn_oracle"] = http_bench.inspect_uvicorn_oracle(
+            uvicorn_python,
+            expected_python_version=http_bench.python_version(python),
+            required_packages=tuple(sorted(required_packages)),
+        )
     server_definition = {"kind": "rust" if args.server == "uvicorn-rs" else "uvicorn", "loop": args.loop}
     if args.server == "uvicorn":
         server_definition["http"] = args.http
@@ -361,7 +384,9 @@ def _profile(args: argparse.Namespace, output: Path, receipt: dict) -> None:
         app = "examples.profile_fastapi:app"
         asgi_timing_path = output / "asgi-app-timings.json"
     port = http_bench._port()
-    server_command = http_bench._command(server_definition, app, port, python)
+    server_command = http_bench._command(
+        server_definition, app, port, python, uvicorn_python
+    )
     client_command = http_bench._client_command(port, args.duration, args.concurrency, definition["client"])
     server_profile_path = output / "server.profile.json.gz"
     sampler_version = (
@@ -582,6 +607,18 @@ def main() -> int:
     parser.add_argument("--loop", choices=("asyncio", "uvloop"), default="uvloop")
     parser.add_argument("--http", choices=("h11", "httptools"), default="httptools", help="Uvicorn HTTP implementation")
     parser.add_argument("--workload", choices=PROFILE_WORKLOADS, default="fixed")
+    parser.add_argument(
+        "--python",
+        type=Path,
+        default=http_bench.DEFAULT_PYTHON,
+        help="Python interpreter with the candidate extension and workload dependencies",
+    )
+    parser.add_argument(
+        "--uvicorn-python",
+        type=Path,
+        default=ROOT / "target" / "uvicorn-oracle" / "bin" / "python",
+        help="isolated Python interpreter containing stock Uvicorn 0.54.0",
+    )
     parser.add_argument("--duration", type=float, default=10.0, help="load duration in seconds")
     parser.add_argument("--sample-duration", type=int, default=6, help="profile capture duration in seconds")
     parser.add_argument(
@@ -608,8 +645,10 @@ def main() -> int:
         parser.error("the Apple sampler requires macOS /usr/bin/sample")
     if args.sampler == "samply" and SAMPLY is None:
         parser.error("--sampler samply requires the Samply profiler on PATH")
-    if not http_bench.DEFAULT_PYTHON.is_file():
-        parser.error("create .venv and install the benchmark dependency group first")
+    if not args.python.absolute().is_file():
+        parser.error(f"candidate Python interpreter does not exist: {args.python.absolute()}")
+    if args.server == "uvicorn" and not args.uvicorn_python.absolute().is_file():
+        parser.error(f"Uvicorn oracle Python interpreter does not exist: {args.uvicorn_python.absolute()}")
     if (
         not all(math.isfinite(value) for value in (args.duration, args.sample_delay, args.warmup))
         or args.sample_duration < 1 or args.interval_ms < 1 or args.concurrency < 1

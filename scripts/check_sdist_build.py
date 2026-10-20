@@ -44,6 +44,8 @@ def main() -> None:
     required = ["Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "README.md", "src/lib.rs",
                 "python/uvicorn_rs/__init__.py", "python/uvicorn_rs/server.py",
                 "python/uvicorn_rs/cli.py", "python/uvicorn_rs/_bridge.py", "python/uvicorn_rs/__main__.py",
+                "python/uvicorn/__init__.py", "python/uvicorn/main.py",
+                "python/uvicorn/__main__.py", "python/uvicorn/py.typed",
                 "LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT"]
     for name in required:
         if not (source / name).is_file():

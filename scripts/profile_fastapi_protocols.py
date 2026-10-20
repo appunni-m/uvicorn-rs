@@ -92,10 +92,37 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--seed", type=int, default=20261009)
+    parser.add_argument("--python", type=Path, default=ROOT / ".venv" / "bin" / "python",
+                        help="candidate Python interpreter used by uvicorn-rs")
+    parser.add_argument("--uvicorn-python", type=Path,
+                        default=ROOT / "target" / "uvicorn-oracle" / "bin" / "python",
+                        help="isolated Python interpreter containing stock Uvicorn 0.54.0")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
     runner, defaults, default_servers, source_inputs = configure_protocol(args.protocol)
+    python = args.python.absolute()
+    uvicorn_python = args.uvicorn_python.absolute()
+    if not python.is_file():
+        parser.error(f"candidate Python interpreter does not exist: {python}")
+    if hasattr(runner, "PYTHON"):
+        runner.PYTHON = python
+    uvicorn_identity = None
+    if args.protocol == "websocket" and any(
+        runner.SERVERS[name]["kind"] == "uvicorn" for name in (args.servers or default_servers)
+    ):
+        required_packages = {"websockets"}
+        if any(
+            runner.SERVERS[name]["kind"] == "uvicorn"
+            and runner.SERVERS[name]["loop"] == "uvloop"
+            for name in (args.servers or default_servers)
+        ):
+            required_packages.add("uvloop")
+        uvicorn_identity = websocket_bench.inspect_uvicorn_oracle(
+            uvicorn_python,
+            expected_python_version=websocket_bench.python_version(python),
+            required_packages=tuple(sorted(required_packages)),
+        )
     workloads = args.workloads or defaults
     servers = args.servers or default_servers
     for workload in workloads:
@@ -118,10 +145,11 @@ def main() -> None:
 
     evidence = runner.BenchmarkEvidence(
         ROOT,
-        runner.PYTHON,
+        python,
         [
             *source_inputs,
             "scripts/profile_fastapi_protocols.py",
+            "scripts/uvicorn_oracle.py",
             "examples/bench_fastapi.py",
             "examples/profile_fastapi.py",
         ],
@@ -138,10 +166,11 @@ def main() -> None:
     else:
         original_server_command = runner.server_command
 
-        def profiled_server_command(server: dict, port: int) -> list[str]:
+        def profiled_server_command(server: dict, port: int, candidate_python: Path,
+                                    reference_python: Path) -> list[str]:
             return [
                 PROFILE_APP if part == "examples.bench_fastapi:app" else part
-                for part in original_server_command(server, port)
+                for part in original_server_command(server, port, candidate_python, reference_python)
             ]
 
         runner.server_command = profiled_server_command
@@ -171,6 +200,8 @@ def main() -> None:
             args.duration,
             args.warmup,
             runner.WORKLOADS[workload].get("concurrency", concurrency),
+            python,
+            uvicorn_python,
             evidence,
         )
         return attach_diagnostics(workload, server_name, repetition, metrics, stage_path)
@@ -273,6 +304,7 @@ def main() -> None:
         "warmup_seconds": args.warmup,
         "repetitions": args.repetitions,
         "seed": args.seed,
+        "uvicorn_oracle": uvicorn_identity,
         **evidence_metadata,
         "rows": rows,
     }
