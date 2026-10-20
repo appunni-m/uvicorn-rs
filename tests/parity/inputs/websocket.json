@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@15",
+  "schema": "uvicorn-rs-parity/input@16",
   "cases": [
     {
       "case_id": "websocket.client-drop-during-pending-upgrade",
@@ -101,6 +101,30 @@
           [
             "x-duplicate",
             "first"
+          ]
+        ],
+        "expect_close": true
+      }
+    },
+    {
+      "case_id": "websocket.proxy-https-forwarded-scheme-becomes-wss",
+      "profile": "websocket",
+      "operation": "websocket.scope-and-messages",
+      "covers": [
+        "websocket.scope-and-messages"
+      ],
+      "server_options": {
+        "proxy_headers": true,
+        "forwarded_allow_ips": "127.0.0.1,::1"
+      },
+      "websocket": {
+        "path": "/ws-scope-echo/proxy-headers-scheme",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "x-forwarded-proto",
+            "https"
           ]
         ],
         "expect_close": true

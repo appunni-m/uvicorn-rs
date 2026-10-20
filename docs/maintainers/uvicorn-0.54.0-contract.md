@@ -65,7 +65,8 @@ The six focused HTTP/1.1 cases `http1.proxy-headers-trusted-client-and-scheme`,
 `http1.proxy-headers-wildcard-trust-uses-first-forwarded-client`,
 `http1.proxy-headers-cidr-trust-selects-first-untrusted-forwarded-client`, and
 `http1.proxy-headers-malformed-forwarded-host-remains-opaque` each pass 1/1
-against Uvicorn 0.54.0. The three Python API cases
+against Uvicorn 0.54.0, as does
+`websocket.proxy-https-forwarded-scheme-becomes-wss`. The three Python API cases
 `python-api.run-applies-trusted-proxy-headers`,
 `python-api.run-uses-forwarded-allow-ips-environment`, and
 `python-api.run-argument-overrides-forwarded-allow-ips-environment` also pass
@@ -88,7 +89,7 @@ override case uses the same environment value but passes
 `forwarded_allow_ips="127.0.0.1,::1"`; both expose the forwarded client and
 `https` scheme. Other address/network combinations, other malformed
 `X-Forwarded-For` forms, broader environment precedence, and WebSocket scheme
-conversion remain unverified.
+conversion beyond this forwarded-`https` case remain unverified.
 
 ## Python import and callable surface
 

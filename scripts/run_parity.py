@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@15"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@16"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -3167,17 +3167,34 @@ def load_contract(
                 server_options = case["server_options"]
                 if type(server_options) is not dict:
                     raise ParityError(f"{case_id}: server_options must be an object")
-                exact_keys(
-                    server_options,
-                    {"ws_max_size"},
-                    f"{case_id}.server_options",
-                )
-                if (
+                unknown_options = set(server_options) - {
+                    "ws_max_size",
+                    "proxy_headers",
+                    "forwarded_allow_ips",
+                }
+                if unknown_options:
+                    raise ParityError(
+                        f"{case_id}: unsupported WebSocket server options: "
+                        f"{sorted(unknown_options)!r}"
+                    )
+                if "ws_max_size" in server_options and (
                     type(server_options["ws_max_size"]) is not int
                     or server_options["ws_max_size"] < 0
                 ):
                     raise ParityError(
                         f"{case_id}: server_options.ws_max_size must be a non-negative integer"
+                    )
+                if "proxy_headers" in server_options and type(
+                    server_options["proxy_headers"]
+                ) is not bool:
+                    raise ParityError(
+                        f"{case_id}: server_options.proxy_headers must be a boolean"
+                    )
+                if "forwarded_allow_ips" in server_options and not isinstance(
+                    server_options["forwarded_allow_ips"], str
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.forwarded_allow_ips must be a string"
                     )
             if "load" in case:
                 case_keys.add("load")
