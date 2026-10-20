@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@20",
+  "schema": "uvicorn-rs-parity/input@21",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -77,6 +77,47 @@
             "target": "uvicorn.run",
             "arguments": ["uvicorn_rs_missing_run_module_20261019:app"],
             "keyword_arguments": {}
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "python-api.config-load-rejects-http2-with-auto-backend",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Config"],
+        "signatures": ["uvicorn.Config"],
+        "calls": [
+          {
+            "target": "uvicorn.Config",
+            "arguments": ["uvicorn_rs_missing_http2_config_20261021:app"],
+            "keyword_arguments": {"http2": true},
+            "method_calls": [
+              {
+                "method": "load",
+                "arguments": [],
+                "keyword_arguments": {}
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "python-api.run-missing-app-precedes-http2-validation",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.run"],
+        "signatures": ["uvicorn.run"],
+        "calls": [
+          {
+            "target": "uvicorn.run",
+            "arguments": ["uvicorn_rs_missing_http2_run_20261021:app"],
+            "keyword_arguments": {"http2": true}
           }
         ]
       }

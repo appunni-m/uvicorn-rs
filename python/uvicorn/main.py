@@ -500,6 +500,10 @@ def run(
         h11_max_incomplete_event_size=h11_max_incomplete_event_size,
         reset_contextvars=reset_contextvars,
     )
+    # Uvicorn resolves the app before Server startup validates the protocol
+    # when reload and worker supervision are disabled.
+    if not config.reload and config.workers == 1:
+        config.load_app()
     try:
         Server(config).run()
     except KeyboardInterrupt:

@@ -758,7 +758,14 @@ def main() -> None:
         observations["calls"] = []
         for call in request["calls"]:
             try:
-                resolve(call["target"])(*call["arguments"], **call["keyword_arguments"])
+                value = resolve(call["target"])(
+                    *call["arguments"], **call["keyword_arguments"]
+                )
+                for method_call in call.get("method_calls", []):
+                    value = getattr(value, method_call["method"])(
+                        *method_call["arguments"],
+                        **method_call["keyword_arguments"],
+                    )
                 result = {"returned": True}
             except SystemExit as error:
                 result = {"returned": False, "exit_code": error.code}

@@ -50,6 +50,16 @@ LOGGING_CONFIG: dict[str, Any] = {
 }
 
 
+def _validate_http2_backend(http: object, enabled: bool) -> None:
+    """Match Uvicorn's HTTP/2 backend requirement before loading the app."""
+    if enabled and http != "zttp":
+        raise ValueError(
+            "HTTP/2 requires the `zttp` HTTP protocol. Install it with `pip install zttp`, "
+            "then select it with `http='zttp'`. See "
+            "https://uvicorn.dev/concepts/http2/ for more information."
+        )
+
+
 class _ASGI2Adapter:
     """Adapt the two-call ASGI interface to the ASGI3 app shape Rust serves."""
 
@@ -202,6 +212,7 @@ class Config:
         """Resolve the import target and optional no-argument app factory."""
         if self.loaded:
             raise AssertionError("Config is already loaded")
+        _validate_http2_backend(self.http, self.http2)
         self.loaded_app = self.load_app()
         try:
             self.loaded_app = self.loaded_app()

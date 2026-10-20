@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@20"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@21"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2439,9 +2439,12 @@ def load_contract(
                     if not isinstance(calls, list) or not calls:
                         raise ParityError(f"{case_id}.api.calls must be a non-empty array")
                     for index, call in enumerate(calls):
+                        call_keys = {"target", "arguments", "keyword_arguments"}
+                        if "method_calls" in call:
+                            call_keys.add("method_calls")
                         exact_keys(
                             call,
-                            {"target", "arguments", "keyword_arguments"},
+                            call_keys,
                             f"{case_id}.api.calls[{index}]",
                         )
                         if (
@@ -2451,6 +2454,29 @@ def load_contract(
                             or not isinstance(call["keyword_arguments"], dict)
                         ):
                             raise ParityError(f"{case_id}.api.calls[{index}] has invalid call inputs")
+                        if "method_calls" in call:
+                            method_calls = call["method_calls"]
+                            if not isinstance(method_calls, list) or not method_calls:
+                                raise ParityError(
+                                    f"{case_id}.api.calls[{index}].method_calls must be a non-empty array"
+                                )
+                            for method_index, method_call in enumerate(method_calls):
+                                exact_keys(
+                                    method_call,
+                                    {"method", "arguments", "keyword_arguments"},
+                                    f"{case_id}.api.calls[{index}].method_calls[{method_index}]",
+                                )
+                                method = method_call["method"]
+                                if (
+                                    not isinstance(method, str)
+                                    or not method.isidentifier()
+                                    or method.startswith("_")
+                                    or not isinstance(method_call["arguments"], list)
+                                    or not isinstance(method_call["keyword_arguments"], dict)
+                                ):
+                                    raise ParityError(
+                                        f"{case_id}.api.calls[{index}].method_calls[{method_index}] has invalid method inputs"
+                                    )
             else:
                 raise ParityError(f"{case_id}: unsupported Python API operation {case['operation']!r}")
         elif kind in http_profile_ids and "response_stream" in case:
