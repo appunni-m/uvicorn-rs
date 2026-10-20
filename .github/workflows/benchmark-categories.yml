@@ -564,6 +564,7 @@ jobs:
           FASTAPI_STAGE_REPETITIONS: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.fastapi_stage_repetitions) || '1' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ (inputs.fastapi_peer_read_mode == 'on-read' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]'))) && 'on-read' || '' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_TRACE: "1"
+          UVICORN_RS_DIAGNOSTIC_HTTP_BODY_FLOW: "1"
           UVICORN_RS_HTTP_CLIENT_TCP_DIAGNOSTICS: "1"
           UVICORN_RS_HTTP_CLIENT_UPLOAD_TRACE: "1"
         run: |

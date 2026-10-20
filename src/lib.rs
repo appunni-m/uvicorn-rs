@@ -854,6 +854,180 @@ const RESPONSE_BODY_QUEUE_CAPACITY: usize = 16;
 const HTTP_REQUEST_BODY_BATCH_BYTES: usize = 256 * 1024;
 const HTTP_REQUEST_BODY_BATCH_MAX_WAIT: std::time::Duration = std::time::Duration::from_millis(5);
 
+#[cfg(feature = "runtime-diagnostics")]
+static NEXT_HTTP_BODY_FLOW_TRACE_ID: AtomicU64 = AtomicU64::new(1);
+#[cfg(feature = "runtime-diagnostics")]
+static HTTP_BODY_FLOW_TRACE_ENABLED: OnceLock<bool> = OnceLock::new();
+
+/// Request-local counters used only by focused runtime diagnostic runs.
+///
+/// These counters distinguish Hyper body frames from messages accepted by the
+/// ASGI receive channel. The Python stage profile already records what the app
+/// receives, so the peer port joins both records without changing ASGI data.
+#[cfg(feature = "runtime-diagnostics")]
+#[derive(Default)]
+struct HttpBodyFlowTrace {
+    inner: Option<HttpBodyFlowTraceInner>,
+}
+
+#[cfg(feature = "runtime-diagnostics")]
+struct HttpBodyFlowTraceInner {
+    request_id: u64,
+    peer_addr: SocketAddr,
+    method: String,
+    path: String,
+    expected_bytes: Option<u64>,
+    started: std::time::Instant,
+    hyper_frames: u64,
+    hyper_bytes: u64,
+    asgi_messages_enqueued: u64,
+    asgi_bytes_enqueued: u64,
+    frame_wait_ns: u64,
+    frame_wait_max_ns: u64,
+    channel_send_wait_ns: u64,
+    channel_send_wait_max_ns: u64,
+    channel_send_stopped: u64,
+    body_complete: bool,
+    body_error: bool,
+}
+
+#[cfg(feature = "runtime-diagnostics")]
+impl HttpBodyFlowTrace {
+    fn new(
+        peer_addr: SocketAddr,
+        method: &http::Method,
+        path: &str,
+        expected_bytes: Option<u64>,
+    ) -> Self {
+        #[cfg(feature = "runtime-diagnostics")]
+        if *HTTP_BODY_FLOW_TRACE_ENABLED.get_or_init(|| {
+            std::env::var_os("UVICORN_RS_DIAGNOSTIC_HTTP_BODY_FLOW")
+                .is_some_and(|value| value == "1")
+        }) {
+            return Self {
+                inner: Some(HttpBodyFlowTraceInner {
+                    request_id: NEXT_HTTP_BODY_FLOW_TRACE_ID.fetch_add(1, Ordering::Relaxed),
+                    peer_addr,
+                    method: method.as_str().to_owned(),
+                    path: path.to_owned(),
+                    expected_bytes,
+                    started: std::time::Instant::now(),
+                    hyper_frames: 0,
+                    hyper_bytes: 0,
+                    asgi_messages_enqueued: 0,
+                    asgi_bytes_enqueued: 0,
+                    frame_wait_ns: 0,
+                    frame_wait_max_ns: 0,
+                    channel_send_wait_ns: 0,
+                    channel_send_wait_max_ns: 0,
+                    channel_send_stopped: 0,
+                    body_complete: false,
+                    body_error: false,
+                }),
+            };
+        }
+        Self::default()
+    }
+
+    #[inline]
+    fn record_frame(&mut self, bytes: usize) {
+        if let Some(trace) = self.inner.as_mut() {
+            trace.hyper_frames = trace.hyper_frames.saturating_add(1);
+            trace.hyper_bytes = trace.hyper_bytes.saturating_add(bytes as u64);
+        }
+    }
+
+    #[inline]
+    fn record_frame_wait(&mut self, started: std::time::Instant) {
+        if let Some(trace) = self.inner.as_mut() {
+            let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+            trace.frame_wait_ns = trace.frame_wait_ns.saturating_add(elapsed);
+            trace.frame_wait_max_ns = trace.frame_wait_max_ns.max(elapsed);
+        }
+    }
+
+    #[inline]
+    fn record_channel_send(&mut self, started: std::time::Instant, bytes: usize, accepted: bool) {
+        if let Some(trace) = self.inner.as_mut() {
+            let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+            trace.channel_send_wait_ns = trace.channel_send_wait_ns.saturating_add(elapsed);
+            trace.channel_send_wait_max_ns = trace.channel_send_wait_max_ns.max(elapsed);
+            if accepted {
+                trace.asgi_messages_enqueued = trace.asgi_messages_enqueued.saturating_add(1);
+                trace.asgi_bytes_enqueued = trace.asgi_bytes_enqueued.saturating_add(bytes as u64);
+            } else {
+                trace.channel_send_stopped = trace.channel_send_stopped.saturating_add(1);
+            }
+        }
+    }
+
+    #[inline]
+    fn mark_complete(&mut self) {
+        if let Some(trace) = self.inner.as_mut() {
+            trace.body_complete = true;
+        }
+    }
+
+    #[inline]
+    fn mark_error(&mut self) {
+        if let Some(trace) = self.inner.as_mut() {
+            trace.body_error = true;
+        }
+    }
+}
+
+#[cfg(feature = "runtime-diagnostics")]
+impl Drop for HttpBodyFlowTrace {
+    fn drop(&mut self) {
+        let Some(trace) = self.inner.take() else {
+            return;
+        };
+        let content_length_incomplete = trace
+            .expected_bytes
+            .is_some_and(|expected| trace.hyper_bytes < expected);
+        let asgi_content_length_incomplete = trace
+            .expected_bytes
+            .is_some_and(|expected| trace.asgi_bytes_enqueued < expected);
+        let should_report = !trace.body_complete
+            || trace.body_error
+            || content_length_incomplete
+            || asgi_content_length_incomplete
+            || trace.frame_wait_max_ns >= 1_000_000_000
+            || trace.channel_send_wait_max_ns >= 1_000_000_000;
+        if !should_report {
+            return;
+        }
+        let elapsed_ns = trace.started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        log_error(format_args!(
+            concat!(
+                "uvicorn-rs-http-body-flow ",
+                "id={} peer={} method={} path={} expected_bytes={:?} ",
+                "hyper_frames={} hyper_bytes={} asgi_messages_enqueued={} ",
+                "asgi_bytes_enqueued={} frame_wait_ns={} frame_wait_max_ns={} ",
+                "channel_send_wait_ns={} channel_send_wait_max_ns={} ",
+                "channel_send_stopped={} body_complete={} body_error={} elapsed_ns={}"
+            ),
+            trace.request_id,
+            trace.peer_addr,
+            trace.method,
+            trace.path,
+            trace.expected_bytes,
+            trace.hyper_frames,
+            trace.hyper_bytes,
+            trace.asgi_messages_enqueued,
+            trace.asgi_bytes_enqueued,
+            trace.frame_wait_ns,
+            trace.frame_wait_max_ns,
+            trace.channel_send_wait_ns,
+            trace.channel_send_wait_max_ns,
+            trace.channel_send_stopped,
+            trace.body_complete,
+            trace.body_error,
+            elapsed_ns,
+        ));
+    }
+}
+
 /// Optional counters for attributing Python/Rust bridge work in diagnostic builds.
 ///
 /// The default build keeps this type zero-sized, and its inline methods compile
@@ -2135,6 +2309,8 @@ enum RequestBodySendMode {
 
 struct RequestBodySendContext<'a> {
     diagnostics: &'a RuntimeDiagnostics,
+    #[cfg(feature = "runtime-diagnostics")]
+    flow_trace: &'a mut HttpBodyFlowTrace,
     _mode: RequestBodySendMode,
 }
 
@@ -3904,6 +4080,7 @@ async fn pump_http_request_body(
     cancellation: CancellationToken,
     request_cancellation: CancellationToken,
     diagnostics: RuntimeDiagnostics,
+    #[cfg(feature = "runtime-diagnostics")] mut flow_trace: HttpBodyFlowTrace,
 ) {
     #[cfg(coverage)]
     if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFirstPollPause) {
@@ -3945,9 +4122,15 @@ async fn pump_http_request_body(
         }
         let flush_deadline = body_started.map(|started| started + body_batch_max_wait);
         let frame_wait_started = diagnostics.http_body_frame_wait_started();
+        #[cfg(feature = "runtime-diagnostics")]
+        let flow_frame_wait_started = std::time::Instant::now();
         let frame = tokio::select! {
             biased;
-            _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
+            _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => {
+                #[cfg(feature = "runtime-diagnostics")]
+                flow_trace.record_frame_wait(flow_frame_wait_started);
+                return;
+            },
             _ = sender.closed() => {
                 #[cfg(coverage)]
                 if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpDrainStopWait) {
@@ -3980,11 +4163,15 @@ async fn pump_http_request_body(
                 }
             } => {
                 diagnostics.http_body_frame_wait_finished(frame_wait_started);
+                #[cfg(feature = "runtime-diagnostics")]
+                flow_trace.record_frame_wait(flow_frame_wait_started);
                 diagnostics.http_body_batch_timeout_flush();
                 None
             },
             frame = body.frame() => {
                 diagnostics.http_body_frame_wait_finished(frame_wait_started);
+                #[cfg(feature = "runtime-diagnostics")]
+                flow_trace.record_frame_wait(flow_frame_wait_started);
                 Some(frame)
             },
         };
@@ -4004,6 +4191,8 @@ async fn pump_http_request_body(
                 message,
                 RequestBodySendContext {
                     diagnostics: &diagnostics,
+                    #[cfg(feature = "runtime-diagnostics")]
+                    flow_trace: &mut flow_trace,
                     _mode: RequestBodySendMode::Regular,
                 },
             )
@@ -4019,6 +4208,8 @@ async fn pump_http_request_body(
                 if let Ok(data) = frame.into_data() {
                     if !data.is_empty() {
                         diagnostics.http_body_data_frame(data.len());
+                        #[cfg(feature = "runtime-diagnostics")]
+                        flow_trace.record_frame(data.len());
                         if !body_segments.is_empty()
                             && body_len.saturating_add(data.len()) > body_batch_limit
                         {
@@ -4038,6 +4229,8 @@ async fn pump_http_request_body(
                                 message,
                                 RequestBodySendContext {
                                     diagnostics: &diagnostics,
+                                    #[cfg(feature = "runtime-diagnostics")]
+                                    flow_trace: &mut flow_trace,
                                     _mode: RequestBodySendMode::Regular,
                                 },
                             )
@@ -4061,6 +4254,8 @@ async fn pump_http_request_body(
                                 message,
                                 RequestBodySendContext {
                                     diagnostics: &diagnostics,
+                                    #[cfg(feature = "runtime-diagnostics")]
+                                    flow_trace: &mut flow_trace,
                                     _mode: RequestBodySendMode::Regular,
                                 },
                             )
@@ -4116,6 +4311,8 @@ async fn pump_http_request_body(
                         message,
                         RequestBodySendContext {
                             diagnostics: &diagnostics,
+                            #[cfg(feature = "runtime-diagnostics")]
+                            flow_trace: &mut flow_trace,
                             _mode: send_mode,
                         },
                     )
@@ -4133,9 +4330,13 @@ async fn pump_http_request_body(
                         disconnected: true,
                     }) => {}
                 }
+                #[cfg(feature = "runtime-diagnostics")]
+                flow_trace.mark_error();
                 return;
             }
             None => {
+                #[cfg(feature = "runtime-diagnostics")]
+                flow_trace.mark_complete();
                 if !body_segments.is_empty() {
                     let message = RequestMessage {
                         body: RequestBody::take_batch(&mut body_segments, &mut body_len),
@@ -4151,6 +4352,8 @@ async fn pump_http_request_body(
                         message,
                         RequestBodySendContext {
                             diagnostics: &diagnostics,
+                            #[cfg(feature = "runtime-diagnostics")]
+                            flow_trace: &mut flow_trace,
                             _mode: RequestBodySendMode::Regular,
                         },
                     )
@@ -4173,6 +4376,8 @@ async fn pump_http_request_body(
                     final_message,
                     RequestBodySendContext {
                         diagnostics: &diagnostics,
+                        #[cfg(feature = "runtime-diagnostics")]
+                        flow_trace: &mut flow_trace,
                         _mode: RequestBodySendMode::Final,
                     },
                 )
@@ -4205,8 +4410,14 @@ async fn send_http_request_message(
     send_context: RequestBodySendContext<'_>,
 ) -> bool {
     let diagnostics = send_context.diagnostics;
+    #[cfg(feature = "runtime-diagnostics")]
+    let flow_trace = send_context.flow_trace;
     let _send_mode = send_context._mode;
     let send_wait_started = diagnostics.http_body_channel_send_started();
+    #[cfg(feature = "runtime-diagnostics")]
+    let flow_send_started = std::time::Instant::now();
+    #[cfg(feature = "runtime-diagnostics")]
+    let message_bytes = message.body.len();
     let result = tokio::select! {
         biased;
         _ = async {
@@ -4237,6 +4448,8 @@ async fn send_http_request_message(
             wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
         } => {
             diagnostics.http_body_channel_send_finished(send_wait_started);
+            #[cfg(feature = "runtime-diagnostics")]
+            flow_trace.record_channel_send(flow_send_started, message_bytes, false);
             return false;
         },
         result = sender.send(message) => {
@@ -4244,6 +4457,8 @@ async fn send_http_request_message(
             result
         },
     };
+    #[cfg(feature = "runtime-diagnostics")]
+    flow_trace.record_channel_send(flow_send_started, message_bytes, result.is_ok());
     if result.is_err() {
         drain_http_request_body(body, connection_closed, cancellation, request_cancellation).await;
         return false;
@@ -6382,6 +6597,20 @@ async fn handle_request_inner(
         let connection_closed = context.connection_closed.clone();
         let pump_request_cancellation = request_cancellation.clone();
         let pump_diagnostics = context.server.diagnostics.clone();
+        #[cfg(feature = "runtime-diagnostics")]
+        let flow_trace = {
+            let expected_body_bytes = parts
+                .headers
+                .get(http::header::CONTENT_LENGTH)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.parse::<u64>().ok());
+            HttpBodyFlowTrace::new(
+                context.peer_addr,
+                &parts.method,
+                parts.uri.path(),
+                expected_body_bytes,
+            )
+        };
         #[cfg(coverage)]
         let completed_pumps = Arc::clone(&context.server.completed_request_body_pumps);
         spawn_request_body_task(&request_body_tasks, async move {
@@ -6392,6 +6621,8 @@ async fn handle_request_inner(
                 cancellation,
                 pump_request_cancellation,
                 pump_diagnostics,
+                #[cfg(feature = "runtime-diagnostics")]
+                flow_trace,
             )
             .await;
             #[cfg(coverage)]
