@@ -212,7 +212,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
@@ -502,7 +502,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
@@ -596,7 +596,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
@@ -739,7 +739,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
@@ -826,7 +826,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
