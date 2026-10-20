@@ -3763,3 +3763,53 @@ Freeze the source, native extension, FastAPI app, clients, Python and
 dependencies; pass the complete parity gate before timing; retain rejected
 attempts; and report each protocol/reference separately. A failed reference
 workload is incomplete evidence, not a performance result.
+
+## Current-main FastAPI upload and body-batch trial (2026-10-20)
+
+On `a22286c3c8120d811ac5e9d2cf8b86ce4f9559e3`, the maintained
+`fastapi-upload-1m-write-1k` input completed five matched repetitions against
+Uvicorn with zero client failures and clean shutdown. The input is a 1 MiB
+FastAPI `Request.body()` upload sent in 1 KiB writes at concurrency 8. The
+normal Rust build was slower on this workload: median throughput was 574.7
+requests/s for uvicorn-rs and 701.8 for Uvicorn; the median same-repetition
+Rust/Uvicorn throughput ratio was 0.837. Rust median p50/p95/p99 latency was
+13.88/17.37/18.93 ms, server CPU was 2,307 µs/request, and peak RSS was 63.57
+MiB. This does not reproduce the hosted 15-second timeout and does not explain
+its cause.
+
+The next isolated trial changed only
+`HTTP_REQUEST_BODY_BATCH_BYTES` from 256 KiB to 1 MiB; the 5 ms maximum batch
+wait stayed fixed. The selected black-box case
+`http1.request-streaming-progress-before-upload-complete` passed with that
+candidate. Both upload reports had ten timing-valid rows, zero request
+failures, and clean lifecycle gates. The baseline's unrelated host CPU peak
+was 33.7% of one core; the candidate report peaked at 97.9%. The runner
+accepted the rows, but that host activity means the separate reports are
+diagnostic rather than a clean optimization acceptance measurement.
+
+| Batch cap | Median Uvicorn req/s | Median uvicorn-rs req/s | Median paired Rust/Uvicorn ratio | Rust p50/p95/p99 (ms) | Rust server CPU (µs/request) | Rust peak RSS (MiB) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 256 KiB (current) | 701.8 | 574.7 | 0.837× | 13.88 / 17.37 / 18.93 | 2,307 | 63.57 |
+| 1 MiB (trial) | 723.0 | 553.6 | 0.766× | 14.42 / 16.78 / 18.20 | 2,294 | 64.41 |
+
+The 1 MiB trial did not improve throughput or median latency. Its small p95/p99
+reductions came with lower throughput, slightly higher RSS, and no material
+CPU reduction. No default change was retained; the source and installed wheel
+were restored to the 256 KiB build. The timeout diagnosis remains open. The
+next useful measurement is CPU attribution by thread and call path before
+trying more batch-size variants.
+
+Both reports used CPython 3.12.13, FastAPI 0.142.4, Starlette 1.7.0, Uvicorn
+0.54.0, uvloop 0.23.0, httptools 0.8.0, a C/libcurl 8.5.0 client, and an AMD
+Ryzen 5 2600X Linux x86-64 host with 12 logical CPUs. The host compiler was
+rustc/cargo 1.91.1. The baseline and candidate source hashes were
+`6f0122e7c11a42ccde20b14899132c69ae8aa111c7d5a8856278927b6a763640` and
+`bb5f17aed4edb773cebc3df4f26c2f6da44898aa65b7d2fe22b5b2b9c694abd5`; their
+native-extension hashes were `5e3e817db8a4947b3e2b53b9bc9cc863fc6a551169e5aa870b4efd92b935f1e4`
+and `d834528a6fa558c837052c8063a28dd6b307aabd3a610b619feae69239ff6a46`.
+Raw JSON and logs are retained locally, ignored by Git, under
+`target/benchmark-evidence/fastapi-h1-upload-a22286c3/`; the JSON hashes are
+`a0911d7956051368af9febff5b0bbe633843e4076beb45a71ce6e2f917aeda86` for the
+baseline and `54406b8a789a3fc7e707037481c8ff6b08e1d6cd9fe0a6a135a3f13b1cd1f42a`
+for the trial. These are single-host diagnostics, not a multi-system release
+performance claim.
