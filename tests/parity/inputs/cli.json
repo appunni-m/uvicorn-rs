@@ -262,6 +262,23 @@
       }
     },
     {
+      "case_id": "cli.worker-healthcheck-timeout-is-inert-with-single-process",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_missing_cli_module_20261019:app",
+          "--timeout-worker-healthcheck",
+          "7"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.unknown-option-is-rejected",
       "profile": "cli",
       "operation": "cli.process",

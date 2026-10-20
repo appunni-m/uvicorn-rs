@@ -306,6 +306,10 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
     # process. Neither value requires process supervision from the adapter.
     if options["workers"] in (0, 1):
         supported.add("workers")
+    # Uvicorn consults this timeout only in its multi-process supervisor. It
+    # has no effect when the CLI runs the single-process server.
+    if options["workers"] in (None, 0, 1):
+        supported.add("timeout_worker_healthcheck")
     # Explicit auto selection is equivalent to the Rust server's default
     # HTTP/1.1 and WebSocket implementations.
     if options["http"] == "auto":
