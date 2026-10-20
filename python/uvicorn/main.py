@@ -477,7 +477,7 @@ def run(
         ssl_ca_certs=ssl_ca_certs,
         ssl_ciphers=ssl_ciphers,
         ssl_context_factory=ssl_context_factory,
-        headers=[header.split(":", 1) for header in (headers or [])],
+        headers=headers or [],
         use_colors=use_colors,
         factory=factory,
         h11_max_incomplete_event_size=h11_max_incomplete_event_size,

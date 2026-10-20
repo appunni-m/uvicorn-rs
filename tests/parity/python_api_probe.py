@@ -54,6 +54,7 @@ def run_http_observation(request: dict) -> dict:
     child_code = r'''
 import sys
 import base64
+import json
 import uvicorn
 
 lifespan_state = {"started": False}
@@ -108,6 +109,7 @@ uvicorn.run(
     port=int(sys.argv[1]),
     lifespan=sys.argv[2],
     root_path=sys.argv[3],
+    headers=json.loads(sys.argv[4]),
 )
 '''
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
@@ -129,6 +131,8 @@ uvicorn.run(
             "--lifespan",
             request["lifespan"],
         ]
+        for name, value in request.get("headers", []):
+            command.extend(("--header", f"{name}:{value}"))
     else:
         command = [
             sys.executable,
@@ -137,6 +141,7 @@ uvicorn.run(
             str(port),
             request["lifespan"],
             request["root_path"],
+            json.dumps(request.get("headers", []), separators=(",", ":")),
         ]
 
     environment = os.environ.copy()
@@ -179,6 +184,10 @@ uvicorn.run(
                     "status": http_response.status,
                     "content_type": http_response.getheader("content-type"),
                     "body_base64": base64.b64encode(response_body).decode("ascii"),
+                    "observed_headers": {
+                        name.lower(): http_response.headers.get_all(name, [])
+                        for name in request.get("observe_headers", [])
+                    },
                 }
                 break
             except (OSError, http.client.HTTPException, TimeoutError):

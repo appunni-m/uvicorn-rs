@@ -2297,6 +2297,7 @@ def load_contract(
             if case["operation"] == "python.api.run-http":
                 exact_keys(case["api"], {"run_http"}, f"{case_id}.api")
                 run_http = case["api"]["run_http"]
+                optional_run_http_keys = {"headers", "observe_headers"} & set(run_http)
                 exact_keys(
                     run_http,
                     {
@@ -2307,7 +2308,7 @@ def load_contract(
                         "lifespan",
                         "invocation",
                         "root_path",
-                    },
+                    } | optional_run_http_keys,
                     f"{case_id}.api.run_http",
                 )
                 if run_http["invocation"] not in {"api", "module-cli"}:
@@ -2327,6 +2328,43 @@ def load_contract(
                     raise ParityError(f"{case_id}.api.run_http.lifespan must be auto, on, or off")
                 if not isinstance(run_http["root_path"], str):
                     raise ParityError(f"{case_id}.api.run_http.root_path must be a string")
+                for field in ("headers", "observe_headers"):
+                    if field not in run_http:
+                        continue
+                    values = run_http[field]
+                    if not isinstance(values, list):
+                        raise ParityError(f"{case_id}.api.run_http.{field} must be an array")
+                    if field == "headers":
+                        if any(
+                            not isinstance(header, list)
+                            or len(header) != 2
+                            or any(
+                                not isinstance(part, str)
+                                or "\r" in part
+                                or "\n" in part
+                                for part in header
+                            )
+                            or not header[0]
+                            or ":" in header[0]
+                            for header in values
+                        ):
+                            raise ParityError(
+                                f"{case_id}.api.run_http.headers must contain name/value string pairs"
+                            )
+                    elif (
+                        any(
+                            not isinstance(name, str)
+                            or not name
+                            or ":" in name
+                            or "\r" in name
+                            or "\n" in name
+                            for name in values
+                        )
+                        or len({name.lower() for name in values}) != len(values)
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.observe_headers must contain unique header names"
+                        )
                 timeout_seconds = run_http["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
                     raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 8")
