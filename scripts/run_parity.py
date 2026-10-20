@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@22"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@23"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2218,6 +2218,7 @@ def load_contract(
                     "observe_loop",
                     "log_level",
                     "emit_level_logs",
+                    "access_log",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2270,6 +2271,10 @@ def load_contract(
                 if "emit_level_logs" in run_http and type(run_http["emit_level_logs"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.emit_level_logs must be a boolean"
+                    )
+                if "access_log" in run_http and type(run_http["access_log"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.access_log must be a boolean"
                     )
                 if not isinstance(run_http["root_path"], str):
                     raise ParityError(f"{case_id}.api.run_http.root_path must be a string")

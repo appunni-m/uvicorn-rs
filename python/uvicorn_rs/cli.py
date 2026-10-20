@@ -45,6 +45,9 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
         "--log-level",
         choices=("critical", "error", "warning", "info", "debug", "trace"),
     )
+    parser.add_argument(
+        "--access-log", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--lifespan", choices=("auto", "on", "off"), default="auto")
     parser.add_argument("--interface", choices=("auto", "asgi2", "asgi3"), default="auto")
     parser.add_argument("--app-dir", default="")
@@ -85,6 +88,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
         port=args.port,
         loop=args.loop,
         log_level=args.log_level,
+        access_log=args.access_log,
         lifespan=args.lifespan,
         interface=args.interface,
         env_file=args.env_file,

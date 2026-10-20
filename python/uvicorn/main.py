@@ -303,7 +303,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "env_file",
         "headers", "server_header", "date_header", "interface",
         "ws_max_size", "proxy_headers", "forwarded_allow_ips",
-        "limit_concurrency", "log_level",
+        "limit_concurrency", "log_level", "access_log",
     }
     # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
     # process. Neither value requires process supervision from the adapter.
@@ -384,6 +384,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.extend(("--limit-concurrency", str(options["limit_concurrency"])))
     if options["log_level"] is not None:
         argv.extend(("--log-level", options["log_level"]))
+    if not options["access_log"]:
+        argv.append("--no-access-log")
     prototype_main(argv, prog="uvicorn")
 
 

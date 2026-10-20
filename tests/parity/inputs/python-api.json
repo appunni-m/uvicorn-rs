@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@22",
+  "schema": "uvicorn-rs-parity/input@23",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -226,6 +226,42 @@
           "invocation": "module-cli",
           "root_path": "",
           "log_level": "warning"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-disables-access-log",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-no-access-log",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "access_log": false
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-disables-access-log",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-no-access-log",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "access_log": false
         }
       }
     },

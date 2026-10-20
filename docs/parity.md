@@ -422,10 +422,10 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 | CLI and environment | 25 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
-| Python API | 29 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, a configured WebSocket message limit, concurrency-limit responses, and warning-level filtering through `uvicorn.run()` and the module CLI. HTTP-run cases compare normalized server log events alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other levels, custom logging configuration, and exact traceback frame formatting remain unverified. |
+| Python API | 31 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, a configured WebSocket message limit, concurrency-limit responses, warning-level filtering, and access-log suppression through `uvicorn.run()` and the module CLI. HTTP-run cases compare normalized server log events alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other levels, custom logging configuration, and exact traceback frame formatting remain unverified. |
 
-These eight groups account for all 322 declared oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 613 total cases. Five
+These eight groups account for all 324 declared oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 615 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -470,11 +470,15 @@ The `python-api.run-applies-numeric-warning-log-level` case emits DEBUG through
 CRITICAL application log events and verifies that numeric level 30 keeps
 WARNING, ERROR, and CRITICAL while suppressing DEBUG and INFO. The module CLI
 case verifies that `--log-level warning` suppresses startup and access INFO
-events. Other levels, custom logging configurations, colors, and exact
-traceback frame formatting remain unverified.
+events. `python-api.run-disables-access-log` and
+`python-api.module-cli-disables-access-log` compare `uvicorn.run(access_log=False)`
+and `python -m uvicorn --no-access-log`; both suppress the request access event
+while preserving the other selected startup and shutdown observations. Other
+levels, custom logging configurations, colors, and exact traceback frame
+formatting remain unverified.
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@22`; live artifacts use
+`uvicorn-rs-parity/input@23`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.

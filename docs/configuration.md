@@ -29,6 +29,7 @@ that limit is stated in the option description.
 | --interface {auto,asgi3} | auto | ASGI 3 applications are supported. Explicit `asgi2` and `wsgi` selections are rejected. |
 | --loop {auto,asyncio,uvloop,zuvloop} | auto | Select the Python event loop. `auto` uses uvloop when installed, otherwise asyncio. Tokio remains the Rust network runtime. |
 | --log-level {critical,error,warning,info,debug,trace} | info | Set the server and application log threshold. Warning-level filtering has focused parity through the module CLI and `uvicorn.run()`; other levels and custom logging configuration remain unverified. |
+| --access-log/--no-access-log | Enabled | Enable or suppress request access events. `--no-access-log` and `uvicorn.run(access_log=False)` have focused parity cases; custom logging configuration remains unverified. |
 | --lifespan {auto,on,off} | auto | `off` prevents the app from receiving ASGI lifespan events. This behavior has focused live parity on macOS ARM64 / CPython 3.12.13. Focused API and module CLI cases verify that an app exception before startup under `on` leaves the server unstarted and exits with code 3. Other strict-mode failure classes remain unverified. |
 | --app-dir PATH | Current directory | Add a directory to the application import path. |
 | --env-file PATH | Unset | Load application environment variables before importing the app. One focused CLI parity case confirms a pre-existing process value wins over the same key in the file. Requires `python-dotenv`, included in the `[standard]` extra. CLI and programmatic factory behavior have focused parity cases. |
@@ -79,6 +80,10 @@ uvicorn.run("examples.hello_asgi:app", host="127.0.0.1", port=8000)
 `uvicorn.Config` and `uvicorn.run`. Focused comparisons verify the warning
 threshold through `python -m uvicorn` and `uvicorn.run(..., log_level=30)`;
 they do not establish every level, color mode, or custom logging configuration.
+Access logging is enabled by default. Use `--no-access-log` or
+`uvicorn.run(app, access_log=False)` to suppress request access events. Focused
+comparisons cover both entry points; custom logging configuration remains
+unverified.
 
 For an application-owned event loop, construct the server explicitly:
 

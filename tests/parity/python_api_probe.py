@@ -140,6 +140,7 @@ loop = json.loads(sys.argv[12])
 invocation = sys.argv[13]
 log_level = json.loads(sys.argv[14])
 emit_level_logs = sys.argv[15] == "1"
+access_log = sys.argv[16] == "1"
 app = asgi2_app if application_interface == "asgi2" else asgi3_app
 
 options = {
@@ -154,6 +155,7 @@ options = {
     "limit_concurrency": limit_concurrency,
     "loop": loop,
     "log_level": log_level,
+    "access_log": access_log,
 }
 if invocation == "config-server":
     config = uvicorn.Config(app, **options)
@@ -199,6 +201,8 @@ else:
             command.extend(("--loop", request["loop"]))
         if request.get("log_level") is not None:
             command.extend(("--log-level", str(request["log_level"])))
+        if request.get("access_log") is False:
+            command.append("--no-access-log")
     else:
         command = [
             sys.executable,
@@ -219,6 +223,7 @@ else:
             request["invocation"],
             json.dumps(request.get("log_level")),
             "1" if request.get("emit_level_logs", False) else "0",
+            "0" if request.get("access_log") is False else "1",
         ]
 
     environment = os.environ.copy()
