@@ -23,10 +23,44 @@ matched workload/loop cells; the Rust/Uvicorn throughput ratios ranged from
 removed. See the [complete measurements](benchmark-results.md#final-tokio-blocking-pool-cap-experiment-2026-10-17)
 and the [benchmark runbook](benchmarks.md#historical-tokio-blocking-pool-cap-experiment).
 
-## Latest current-main FastAPI upload attempt (Linux x86-64; 2026-10-20; unqualified)
+## Focused current-main upload-timeout reproduction (Linux x86-64; 2026-10-20; unqualified)
 
-This source-tree attempt used a clean detached worktree at current `origin/main`
-commit `0bd5877529e8f8b7434b7f7ab1852c0753f5e642` on an AMD Ryzen 5 2600X
+This one-repetition reproduction used a clean detached worktree at exact main
+commit `161af844cddefacd52504eb2edc4aeb931427105` on the AMD Ryzen 5 2600X
+Linux x86-64 host (12 logical CPUs, kernel `7.0.0-38-generic`). Both Python
+environments used CPython 3.12.3, FastAPI 0.142.4, Starlette 1.7.0, Pydantic
+2.13.5, uvloop 0.23.0, and httptools 0.8.0; the reference was stock Uvicorn
+0.54.0. Rust was 1.91.1. The native C client used libcurl 8.5.0 and retained
+the 15-second request timeout.
+
+The input was FastAPI `POST /upload/1048576`: a 1 MiB request body sent in 1
+KiB writes at concurrency 8, with a 1-second warmup and 5-second sample. One
+sample ran for each server under asyncio. Uvicorn completed 3,059 requests and
+uvicorn-rs 2,312; both had zero request failures, matched every response body,
+and shut down cleanly. Neither run reproduced the timeout.
+
+Unrelated host CPU activity peaked at 209.2% of one core, so the timing guard
+rejected both rows. Their observed values are diagnostic only, not a
+performance comparison:
+
+| Server | Requests/s | p50 / p95 / p99 ms | Server CPU µs/request | Peak server RSS MiB | Timing status |
+|---|---:|---:|---:|---:|---|
+| Uvicorn + asyncio + httptools | 610.8 | 13.16 / 16.04 / 17.71 | 1,625 | 56.61 | Invalid: unrelated host CPU |
+| uvicorn-rs + asyncio | 461.5 | 17.28 / 20.64 / 22.09 | 3,179 | 62.31 | Invalid: unrelated host CPU |
+
+The benchmark source digest was
+`4972c0199c597e6adc0270e17e682e4271457fb7aaf7903b0c60b233f8e611e4`; the
+native extension SHA-256 was
+`bcd02ee53b7aa97c2a30d565b22142666b46b305e1c95568efa60fe8295663dd` before
+and after both samples. Raw JSON and logs remain outside Git in
+`/home/appunni/work/uvicorn-rs-main-161af/target/`. This non-reproduction does
+not establish a root cause or justify a server change. The timing cannot be
+used to rank the servers.
+
+## Earlier current-main FastAPI upload attempts (Linux x86-64; 2026-10-20; unqualified)
+
+These source-tree attempts used a clean detached worktree at then-current
+`origin/main` commit `0bd5877529e8f8b7434b7f7ab1852c0753f5e642` on an AMD Ryzen 5 2600X
 host (12 logical CPUs, Linux x86-64, kernel `7.0.0-38-generic`). It built the
 Rust release cdylib with `cargo build --release --locked` and loaded it from the
 worktree through `PYTHONPATH`; it did not measure an installed wheel or a fresh
