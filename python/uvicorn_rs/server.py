@@ -123,6 +123,7 @@ class Server:
                 self.ws_max_size,
                 limit_concurrency,
                 control,
+                _bridge.log_concurrency_limit_rejection,
             )
         )
         try:

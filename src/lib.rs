@@ -1519,6 +1519,7 @@ struct ServeOptions {
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
     ws_max_size: usize,
+    concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
     #[cfg(feature = "native-tcp")]
     limit_concurrency: Option<usize>,
 }
@@ -1533,6 +1534,7 @@ struct ServerContext {
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
     ws_max_size: usize,
+    concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
     #[cfg(feature = "native-tcp")]
     limit_concurrency: Option<usize>,
     state: Option<Arc<Py<PyDict>>>,
@@ -4829,7 +4831,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, limit_concurrency, control))]
+#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, limit_concurrency, control, concurrency_limit_callback))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -4850,6 +4852,7 @@ fn serve<'py>(
     ws_max_size: usize,
     limit_concurrency: Option<usize>,
     control: Py<ServerControl>,
+    concurrency_limit_callback: Py<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let lifespan_mode = LifespanMode::from_python(&lifespan)?;
     #[cfg(not(feature = "native-tcp"))]
@@ -4922,6 +4925,38 @@ fn serve<'py>(
     #[cfg(coverage)]
     drop(serve_control_borrow);
     let cancel_on_drop = CancelOnDrop(cancellation.clone());
+    let concurrency_limit_callback = Arc::new(concurrency_limit_callback);
+    let concurrency_limit_observer: uvicorn_rs::ConcurrencyLimitObserver = Arc::new(move |event| {
+        Python::attach(|py| {
+            let version = match event.version() {
+                http::Version::HTTP_09 => "0.9",
+                http::Version::HTTP_10 => "1.0",
+                http::Version::HTTP_11 => "1.1",
+                http::Version::HTTP_2 => "2",
+                http::Version::HTTP_3 => "3",
+                _ => "",
+            };
+            let path = if event.uri().path().is_empty() {
+                "/"
+            } else {
+                event.uri().path()
+            };
+            let query = event.uri().query().unwrap_or_default();
+            if let Err(error) = concurrency_limit_callback.call1(
+                py,
+                (
+                    event.peer_addr().ip().to_string(),
+                    event.peer_addr().port(),
+                    event.method().as_str(),
+                    path,
+                    query,
+                    version,
+                ),
+            ) {
+                error.print(py);
+            }
+        });
+    });
     let diagnostics = RuntimeDiagnostics::default();
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let _cancel_on_drop = cancel_on_drop;
@@ -4936,6 +4971,7 @@ fn serve<'py>(
             default_headers,
             date_header,
             ws_max_size,
+            concurrency_limit_observer: Some(concurrency_limit_observer),
             #[cfg(feature = "native-tcp")]
             limit_concurrency,
         };
@@ -5102,6 +5138,7 @@ async fn serve_forever(
         default_headers: options.default_headers,
         date_header: options.date_header,
         ws_max_size: options.ws_max_size,
+        concurrency_limit_observer: options.concurrency_limit_observer,
         #[cfg(feature = "native-tcp")]
         limit_concurrency: options.limit_concurrency,
         state,
@@ -5172,6 +5209,7 @@ async fn serve_forever(
                     ));
                 }
             })),
+            concurrency_limit_observer: server.concurrency_limit_observer.clone(),
             ..uvicorn_rs::ServerConfig::default()
         };
         let service = NativeAsgiService {
@@ -5681,6 +5719,7 @@ fn spawn_native_http3(
         let config = uvicorn_rs::ServerConfig {
             graceful_shutdown_timeout: server.graceful_timeout,
             service_error_policy: uvicorn_rs::ServiceErrorPolicy::Propagate,
+            concurrency_limit_observer: server.concurrency_limit_observer.clone(),
             ..uvicorn_rs::ServerConfig::default()
         };
         let service = NativeHttp3AsgiService {

@@ -1987,7 +1987,8 @@
         "response_body_base64",
         "shutdown_signal_sent",
         "process_exit_code",
-        "process_timed_out"
+        "process_timed_out",
+        "server_log_events"
       ],
       "compare": [
         "exit_code",
@@ -1997,7 +1998,8 @@
         "response_body_base64",
         "shutdown_signal_sent",
         "process_exit_code",
-        "process_timed_out"
+        "process_timed_out",
+        "server_log_events"
       ]
     },
     {
@@ -2013,7 +2015,8 @@
         "response_body_base64",
         "shutdown_signal_sent",
         "process_exit_code",
-        "process_timed_out"
+        "process_timed_out",
+        "server_log_events"
       ],
       "compare": [
         "exit_code",
@@ -2023,7 +2026,8 @@
         "response_body_base64",
         "shutdown_signal_sent",
         "process_exit_code",
-        "process_timed_out"
+        "process_timed_out",
+        "server_log_events"
       ]
     },
     {

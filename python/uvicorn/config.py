@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
+import logging
+import logging.config
 import os
 import ssl
 import sys
@@ -47,6 +50,15 @@ LOGGING_CONFIG: dict[str, Any] = {
         "uvicorn.error": {"level": "INFO"},
         "uvicorn.access": {"handlers": ["access"], "level": "INFO", "propagate": False},
     },
+}
+
+LOG_LEVELS = {
+    "critical": logging.CRITICAL,
+    "error": logging.ERROR,
+    "warning": logging.WARNING,
+    "info": logging.INFO,
+    "debug": logging.DEBUG,
+    "trace": 5,
 }
 
 
@@ -181,6 +193,50 @@ class Config:
         self.loaded = False
         self.loaded_app: Any = None
         self.loop_factory: Callable[[], asyncio.AbstractEventLoop] | None = None
+        self.configure_logging()
+
+    def configure_logging(self) -> None:
+        """Apply Uvicorn's logging configuration and access-log settings."""
+        logging.addLevelName(5, "TRACE")
+
+        if self.log_config is not None:
+            if isinstance(self.log_config, os.PathLike):
+                self.log_config = os.fspath(self.log_config)
+
+            if isinstance(self.log_config, dict):
+                if self.use_colors in (True, False):
+                    self.log_config["formatters"]["default"]["use_colors"] = self.use_colors
+                    self.log_config["formatters"]["access"]["use_colors"] = self.use_colors
+                logging.config.dictConfig(self.log_config)
+            elif isinstance(self.log_config, str) and self.log_config.endswith(".json"):
+                with open(self.log_config, encoding="utf-8") as file:
+                    logging.config.dictConfig(json.load(file))
+            elif isinstance(self.log_config, str) and self.log_config.endswith((".yaml", ".yml")):
+                try:
+                    import yaml
+                except ImportError as error:
+                    raise ImportError(
+                        "Install the PyYAML package or uvicorn[standard] to use "
+                        "`--log-config` with YAML files."
+                    ) from error
+                with open(self.log_config, encoding="utf-8") as file:
+                    logging.config.dictConfig(yaml.safe_load(file))
+            else:
+                logging.config.fileConfig(self.log_config, disable_existing_loggers=False)
+
+        if self.log_level is not None:
+            log_level = (
+                LOG_LEVELS[self.log_level.lower()]
+                if isinstance(self.log_level, str)
+                else self.log_level
+            )
+            logging.getLogger("uvicorn.error").setLevel(log_level)
+            logging.getLogger("uvicorn.access").setLevel(log_level)
+            logging.getLogger("uvicorn.asgi").setLevel(log_level)
+        if self.access_log is False:
+            access_logger = logging.getLogger("uvicorn.access")
+            access_logger.handlers = []
+            access_logger.propagate = False
 
     def get_loop_factory(self):
         """Return the event-loop factory selected by ``loop``."""

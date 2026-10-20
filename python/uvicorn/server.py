@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
+import os
 import signal
 import socket
 import sys
@@ -22,6 +24,8 @@ from .config import Config
 HANDLED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 if sys.platform == "win32":  # pragma: no cover - Windows-specific signal
     HANDLED_SIGNALS += (signal.SIGBREAK,)
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class Server:
@@ -41,7 +45,10 @@ class Server:
 
     @should_exit.setter
     def should_exit(self, value: bool) -> None:
+        was_exiting = self._should_exit
         self._should_exit = bool(value)
+        if self._should_exit and not was_exiting:
+            logger.info("Shutting down")
         if self._should_exit and self._native_server is not None:
             self._native_server.shutdown()
 
@@ -56,6 +63,9 @@ class Server:
         self.config.validate_native_runtime()
         if not self.config.loaded:
             self.config.load()
+
+        process_id = os.getpid()
+        logger.info("Started server process [%d]", process_id)
 
         from uvicorn_rs import Server as NativeServer
 
@@ -88,11 +98,28 @@ class Server:
             # the scheduling yield.
             await asyncio.sleep(0)
             self.started = await native_server.wait_started()
+            if self.started:
+                self._log_started_message()
             await native_task
+            if self.started:
+                logger.info("Finished server process [%d]", process_id)
             if native_server.startup_failed:
                 raise SystemExit(3)
         finally:
             self._native_server = None
+
+    def _log_started_message(self) -> None:
+        """Log the selected listener URL after native startup completes."""
+        host = self.config.host or "0.0.0.0"
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        scheme = "https" if self.config.ssl_certfile is not None else "http"
+        logger.info(
+            "Uvicorn running on %s://%s:%d (Press CTRL+C to quit)",
+            scheme,
+            host,
+            self.config.port,
+        )
 
     @contextlib.contextmanager
     def capture_signals(self) -> Generator[None, None, None]:

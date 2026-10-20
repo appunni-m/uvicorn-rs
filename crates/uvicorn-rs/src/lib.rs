@@ -55,7 +55,7 @@ use futures_util::{
 };
 use http::{
     header::{HeaderName, HeaderValue, CONNECTION, CONTENT_LENGTH, CONTENT_TYPE},
-    Request, Response, StatusCode, Version,
+    Method, Request, Response, StatusCode, Uri, Version,
 };
 use http_body::Body;
 use http_body_util::{Either as BodyEither, Full};
@@ -1011,6 +1011,47 @@ pub use websocket::{
 /// observing the error; leave it unset when no error telemetry is needed.
 pub type ServerErrorObserver = Arc<dyn for<'a> Fn(ServerErrorEvent<'a>) + Send + Sync + 'static>;
 
+/// An observer for requests rejected by the configured concurrency limit.
+///
+/// The callback runs synchronously on the request task before the server sends
+/// its `503 Service Unavailable` response. Keep it fast and non-blocking.
+pub type ConcurrencyLimitObserver =
+    Arc<dyn for<'a> Fn(ConcurrencyLimitEvent<'a>) + Send + Sync + 'static>;
+
+/// Request metadata for a concurrency-limit rejection.
+pub struct ConcurrencyLimitEvent<'a> {
+    peer_addr: SocketAddr,
+    method: &'a Method,
+    uri: &'a Uri,
+    version: Version,
+}
+
+impl ConcurrencyLimitEvent<'_> {
+    /// Returns the remote peer address.
+    #[must_use]
+    pub const fn peer_addr(&self) -> SocketAddr {
+        self.peer_addr
+    }
+
+    /// Returns the rejected request method.
+    #[must_use]
+    pub const fn method(&self) -> &Method {
+        self.method
+    }
+
+    /// Returns the rejected request URI.
+    #[must_use]
+    pub const fn uri(&self) -> &Uri {
+        self.uri
+    }
+
+    /// Returns the rejected request's HTTP version.
+    #[must_use]
+    pub const fn version(&self) -> Version {
+        self.version
+    }
+}
+
 /// The stage at which the server observed an application or transport error.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ServerErrorPhase {
@@ -1130,6 +1171,11 @@ pub struct ServerConfig {
     /// The observer runs synchronously on an error path. Its panic is caught
     /// and logged so it cannot unwind a connection task.
     pub error_observer: Option<ServerErrorObserver>,
+    /// Receives request metadata when the concurrency limit rejects a request.
+    ///
+    /// The observer runs synchronously on the request task. Its panic is caught
+    /// and logged so it cannot unwind a connection task.
+    pub concurrency_limit_observer: Option<ConcurrencyLimitObserver>,
     /// Controls whether pre-response service errors become empty HTTP 500
     /// responses or propagate to the transport. Defaults to
     /// [`ServiceErrorPolicy::RespondInternalServerError`].
@@ -1163,6 +1209,10 @@ impl fmt::Debug for ServerConfig {
                 &self.application_lifecycle.is_some(),
             )
             .field("error_observer_configured", &self.error_observer.is_some())
+            .field(
+                "concurrency_limit_observer_configured",
+                &self.concurrency_limit_observer.is_some(),
+            )
             .field("service_error_policy", &self.service_error_policy)
             .field("peer_read_half_close", &self.peer_read_half_close)
             .finish()
@@ -1705,6 +1755,7 @@ impl Default for ServerConfig {
             application_shutdown_timeout: Duration::from_secs(30),
             application_lifecycle: None,
             error_observer: None,
+            concurrency_limit_observer: None,
             service_error_policy: ServiceErrorPolicy::default(),
             peer_read_half_close: PeerReadHalfCloseMode::default(),
         }
@@ -2216,6 +2267,7 @@ where
         let service = service.clone();
         let shutdown = shutdown_receiver.clone();
         let error_observer = config.error_observer.clone();
+        let concurrency_limit_observer = config.concurrency_limit_observer.clone();
         let service_error_policy = config.service_error_policy;
         let tls_acceptor = tls_acceptor.clone();
         let request_concurrency = request_concurrency.clone();
@@ -2247,6 +2299,7 @@ where
                                 shutdown,
                                 ConnectionOptions {
                                     error_observer: error_observer.as_ref(),
+                                    concurrency_limit_observer: concurrency_limit_observer.as_ref(),
                                     service_error_policy,
                                     date_header,
                                     request_concurrency: request_concurrency.clone(),
@@ -2277,6 +2330,7 @@ where
                             shutdown,
                             ConnectionOptions {
                                 error_observer: error_observer.as_ref(),
+                                concurrency_limit_observer: concurrency_limit_observer.as_ref(),
                                 service_error_policy,
                                 date_header,
                                 request_concurrency,
@@ -2444,6 +2498,7 @@ struct ConnectionSignals {
 
 struct ConnectionOptions<'a> {
     error_observer: Option<&'a ServerErrorObserver>,
+    concurrency_limit_observer: Option<&'a ConcurrencyLimitObserver>,
     service_error_policy: ServiceErrorPolicy,
     date_header: bool,
     request_concurrency: Option<Arc<RequestConcurrency>>,
@@ -2469,6 +2524,7 @@ where
     let peer_addr = connection_info.peer_addr;
     let ConnectionOptions {
         error_observer,
+        concurrency_limit_observer,
         service_error_policy,
         date_header,
         request_concurrency,
@@ -2506,6 +2562,7 @@ where
             Some(response_body_activity),
         ),
         error_observer.cloned(),
+        concurrency_limit_observer.cloned(),
         peer_addr,
         service_error_policy,
         request_concurrency,
@@ -2868,6 +2925,7 @@ where
     inner: S,
     readiness_error: Option<S::Error>,
     error_observer: Option<ServerErrorObserver>,
+    concurrency_limit_observer: Option<ConcurrencyLimitObserver>,
     peer_addr: SocketAddr,
     service_error_policy: ServiceErrorPolicy,
     request_concurrency: Option<Arc<RequestConcurrency>>,
@@ -2885,6 +2943,7 @@ where
             inner: self.inner.clone(),
             readiness_error: None,
             error_observer: self.error_observer.clone(),
+            concurrency_limit_observer: self.concurrency_limit_observer.clone(),
             peer_addr: self.peer_addr,
             service_error_policy: self.service_error_policy,
             request_concurrency: self.request_concurrency.clone(),
@@ -2902,6 +2961,7 @@ where
     fn new(
         inner: S,
         error_observer: Option<ServerErrorObserver>,
+        concurrency_limit_observer: Option<ConcurrencyLimitObserver>,
         peer_addr: SocketAddr,
         service_error_policy: ServiceErrorPolicy,
         request_concurrency: Option<Arc<RequestConcurrency>>,
@@ -2911,6 +2971,7 @@ where
             inner,
             readiness_error: None,
             error_observer,
+            concurrency_limit_observer,
             peer_addr,
             service_error_policy,
             request_concurrency,
@@ -2977,6 +3038,11 @@ where
         let permit = if let Some(request_concurrency) = &self.request_concurrency {
             let Some(permit) = request_concurrency.try_start_request() else {
                 tracing::warn!("Exceeded concurrency limit.");
+                observe_concurrency_limit(
+                    self.concurrency_limit_observer.as_ref(),
+                    self.peer_addr,
+                    &request,
+                );
                 let close_connection =
                     matches!(request.version(), Version::HTTP_10 | Version::HTTP_11);
                 return FutureEither::Right(ready(Ok(service_unavailable(
@@ -2995,6 +3061,24 @@ where
             self.service_error_policy,
             permit,
         ))
+    }
+}
+
+fn observe_concurrency_limit<RequestBody>(
+    observer: Option<&ConcurrencyLimitObserver>,
+    peer_addr: SocketAddr,
+    request: &Request<RequestBody>,
+) {
+    if let Some(observer) = observer {
+        let event = ConcurrencyLimitEvent {
+            peer_addr,
+            method: request.method(),
+            uri: request.uri(),
+            version: request.version(),
+        };
+        if catch_unwind(AssertUnwindSafe(|| observer(event))).is_err() {
+            tracing::error!(%peer_addr, "HTTP concurrency-limit observer panicked");
+        }
     }
 }
 

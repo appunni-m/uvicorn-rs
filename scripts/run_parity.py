@@ -829,6 +829,7 @@ def load_contract(
         "exit_code", "stdout_base64", "stderr_base64",
         "response_received", "response_status", "response_content_type",
         "response_body_base64", "shutdown_signal_sent", "process_timed_out",
+        "server_log_events",
         "server_started_before_shutdown", "serve_task_finished_before_shutdown",
         "serve_raised", "serve_timed_out", "server_exit_code",
         "process_stderr_has_unhandled_task_warning",
@@ -9594,6 +9595,100 @@ def execute_cli_profile(
     return outcomes, []
 
 
+def _python_api_server_log_events(
+    run_http_observation: dict[str, Any],
+) -> dict[str, list[dict[str, str]]]:
+    """Normalize server logs to stable events while retaining raw bytes in evidence."""
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+    level_prefix = re.compile(r"^(TRACE|DEBUG|INFO|WARNING|ERROR|CRITICAL):\s*(.*)$")
+    access_line = re.compile(
+        r'^(?P<client>.+):(?P<client_port>\d+) - "(?P<request>.*)" '
+        r'(?P<status>\d{3})(?: (?P<phrase>.*))?$'
+    )
+    running_line = re.compile(
+        r"^(?P<prefix>Uvicorn running on https?://.+):(?P<port>\d+)"
+        r"(?P<suffix> \(Press CTRL\+C to quit\))$"
+    )
+    process_pid = re.compile(r"((?:Started|Finished) server process \[)\d+(\])")
+    exception_line = re.compile(r"^(?P<class>[A-Za-z_][\w.]*)\b(?:: ?(?P<message>.*))?$")
+
+    normalized: dict[str, list[dict[str, str]]] = {"stdout": [], "stderr": []}
+    for channel in normalized:
+        encoded = run_http_observation.get(f"server_{channel}_base64", "")
+        try:
+            content = base64.b64decode(encoded).decode("utf-8", errors="replace")
+        except (ValueError, TypeError) as error:
+            raise ParityError(f"Python API server {channel} log is not valid base64") from error
+        lines = content.splitlines()
+        index = 0
+        while index < len(lines):
+            line = ansi_escape.sub("", lines[index])
+            if not line:
+                index += 1
+                continue
+            if line == "During handling of the above exception, another exception occurred:":
+                normalized[channel].append({"kind": "traceback-chain"})
+                index += 1
+                continue
+            if line == "Traceback (most recent call last):":
+                index += 1
+                while index < len(lines):
+                    candidate = ansi_escape.sub("", lines[index])
+                    if not candidate or candidate.startswith(" "):
+                        index += 1
+                        continue
+                    match = exception_line.match(candidate)
+                    if match:
+                        normalized[channel].append(
+                            {
+                                "kind": "exception",
+                                "class": match.group("class"),
+                                "message": match.group("message") or "",
+                            }
+                        )
+                        index += 1
+                    break
+                continue
+
+            level_match = level_prefix.match(line)
+            if level_match is None:
+                normalized[channel].append({"kind": "raw", "message": line})
+                index += 1
+                continue
+
+            level, message = level_match.groups()
+            access_match = access_line.match(message)
+            if access_match:
+                normalized[channel].append(
+                    {
+                        "kind": "access",
+                        "level": level,
+                        "client": f"{access_match.group('client')}:<port>",
+                        "request": access_match.group("request"),
+                        "status": " ".join(
+                            part
+                            for part in (access_match.group("status"), access_match.group("phrase"))
+                            if part
+                        ),
+                    }
+                )
+                index += 1
+                continue
+
+            running_match = running_line.match(message)
+            if running_match:
+                message = (
+                    f"{running_match.group('prefix')}:<port>"
+                    f"{running_match.group('suffix')}"
+                )
+            message = process_pid.sub(r"\1<pid>\2", message)
+            normalized[channel].append(
+                {"kind": "message", "level": level, "message": message}
+            )
+            index += 1
+    return normalized
+
+
 def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]:
     """Run one input-selected Python public-surface probe on each interpreter."""
 
@@ -9657,6 +9752,9 @@ def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]
                     "process_timed_out",
                 )
             }
+        )
+        observation["server_log_events"] = _python_api_server_log_events(
+            run_http_observation
         )
     if "server_lifespan_startup" in case["api"]:
         try:

@@ -286,15 +286,9 @@ else:
             "shutdown_signal_sent": shutdown_signal_sent,
             "process_exit_code": process.returncode,
             "process_timed_out": process_timed_out,
+            "server_stdout_base64": base64.b64encode(server_stdout).decode("ascii"),
+            "server_stderr_base64": base64.b64encode(server_stderr).decode("ascii"),
         }
-        if (
-            response is None
-            or response["status"] >= 500
-            or process.returncode != 0
-            or process_timed_out
-        ):
-            observation["server_stdout_base64"] = base64.b64encode(server_stdout).decode("ascii")
-            observation["server_stderr_base64"] = base64.b64encode(server_stderr).decode("ascii")
         return observation
     finally:
         if process.poll() is None:

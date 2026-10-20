@@ -38,9 +38,9 @@ use tokio::{
 use tower_service::Service;
 
 use crate::{
-    observe_error, ConnectionInfo, ConnectionInfoService, ServeError, ServerConfig,
-    ServerErrorObserver, ServerErrorPhase, ServiceErrorPolicy, ServiceErrorResponse, TlsInfo,
-    TransportKind,
+    observe_error, ConcurrencyLimitObserver, ConnectionInfo, ConnectionInfoService, ServeError,
+    ServerConfig, ServerErrorObserver, ServerErrorPhase, ServiceErrorPolicy, ServiceErrorResponse,
+    TlsInfo, TransportKind,
 };
 
 /// Error returned when reading an HTTP/3 request body.
@@ -234,6 +234,8 @@ where
                         let service = service.clone();
                         let shutdown = shutdown_receiver.clone();
                         let error_observer = config.error_observer.clone();
+                        let concurrency_limit_observer =
+                            config.concurrency_limit_observer.clone();
                         let service_error_policy = config.service_error_policy;
                         let request_concurrency = request_concurrency.clone();
                         let default_headers = Arc::clone(&default_headers);
@@ -244,6 +246,7 @@ where
                                 service,
                                 shutdown,
                                 error_observer.as_ref(),
+                                concurrency_limit_observer.as_ref(),
                                 service_error_policy,
                                 request_concurrency,
                                 default_headers,
@@ -312,6 +315,7 @@ async fn serve_incoming_connection<S, B>(
     service: S,
     mut shutdown: watch::Receiver<bool>,
     error_observer: Option<&ServerErrorObserver>,
+    concurrency_limit_observer: Option<&ConcurrencyLimitObserver>,
     service_error_policy: ServiceErrorPolicy,
     request_concurrency: Option<Arc<crate::RequestConcurrency>>,
     default_headers: Arc<Vec<(http::HeaderName, http::HeaderValue)>>,
@@ -391,6 +395,7 @@ where
         connection_info,
         &mut shutdown,
         error_observer,
+        concurrency_limit_observer,
         service_error_policy,
         request_concurrency,
         default_headers,
@@ -413,6 +418,7 @@ async fn serve_http3_connection<S, B>(
     connection_info: ConnectionInfo,
     shutdown: &mut watch::Receiver<bool>,
     error_observer: Option<&ServerErrorObserver>,
+    concurrency_limit_observer: Option<&ConcurrencyLimitObserver>,
     service_error_policy: ServiceErrorPolicy,
     request_concurrency: Option<Arc<crate::RequestConcurrency>>,
     default_headers: Arc<Vec<(http::HeaderName, http::HeaderValue)>>,
@@ -443,6 +449,7 @@ where
         ServiceErrorResponse::<_, crate::RequestLifetimeBody<B>, Http3RequestBody>::new(
             info_service,
             error_observer.cloned(),
+            concurrency_limit_observer.cloned(),
             peer_addr,
             service_error_policy,
             request_concurrency,

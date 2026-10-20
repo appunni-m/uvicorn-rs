@@ -3162,11 +3162,14 @@ fn lifecycle_server_config(
     };
     Ok(uvicorn_rs::ServerConfig {
         max_connections: 8,
+        limit_concurrency: None,
+        default_headers: Vec::new(),
         graceful_shutdown_timeout: graceful_timeout,
         application_startup_timeout: hook_timeout,
         application_shutdown_timeout: hook_timeout,
         application_lifecycle: Some(hooks),
         error_observer,
+        concurrency_limit_observer: None,
         service_error_policy: uvicorn_rs::ServiceErrorPolicy::RespondInternalServerError,
         peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::OnRead,
     })
@@ -8247,11 +8250,14 @@ async fn run_public_error_contract_case(case: &Value) -> ProbeResult<()> {
     let fixture = lifecycle_fixture();
     let configured_config = uvicorn_rs::ServerConfig {
         max_connections: 8,
+        limit_concurrency: None,
+        default_headers: Vec::new(),
         graceful_shutdown_timeout: Duration::from_millis(250),
         application_startup_timeout: Duration::from_millis(125),
         application_shutdown_timeout: Duration::from_millis(175),
         application_lifecycle: Some(fixture.hooks.clone()),
         error_observer: Some(Arc::new(|_| {})),
+        concurrency_limit_observer: None,
         service_error_policy: uvicorn_rs::ServiceErrorPolicy::Propagate,
         peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::OnRead,
     };
