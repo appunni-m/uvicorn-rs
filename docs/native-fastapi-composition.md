@@ -15,7 +15,42 @@ pending. The composition result is limited evidence, not a full FastAPI
 contract, Python parity result, release candidate, repeated result, or
 performance measurement.
 
-**Focused current-main inputs (2026-10-20):** on Uvicorn-RS commit
+## Current main status (2026-10-20)
+
+Uvicorn-RS `main` is `3c5cbb70e3bc27c07733700c1340776d8413ff23`. On that
+commit, the focused real-socket input
+`http2.request-stream-progress-before-upload-complete` passed with FastAPI-RS
+`f438a7cbb2308e6c1f795aef98e333de23388533` and Starlette-RS
+`b4c8a65c85e1b0d251ca05874412811eaa3ac7b8`. The locked normal/build dependency
+graph for this candidate composition contains no PyO3 packages. This is one
+selected input, not a refreshed 17-case hosted result.
+
+The current FastAPI-RS default branch is `7efbf9b668a7757530580981d421390cffaaaa62`,
+with its pinned Starlette-RS revision `4139a72449bf5751e8902fb1c7175ee7f191d338`.
+The composition example does not build against that pair: the `fastapi_rs::native`
+module is not exported, and its normal/build dependency graph still contains
+PyO3. The passing `f438a7c` source is a feature branch and is 350 FastAPI-RS
+main commits behind; current-default-branch integration therefore remains
+unfinished. Do not describe the feature-branch receipt as current FastAPI-RS
+mainline support.
+
+The focused selector is committed on Uvicorn-RS `main` in
+`examples/native-fastapi-contracts/src/main.rs` (SHA-256
+`286ff0ba257b72ead29b8c837b779d5e8c55932446bd2ab6eb1a2c02c42636a6`). It keeps
+the full manifest for shared application configuration while executing only
+the requested case. The manifest SHA-256 is
+`5224e4c3e5a88e3699eb71490651ffc7f2ea6a41edf302b4884d3133be392bcd`.
+Reproduce the selected H2 input from the Uvicorn-RS root, with clean sibling
+checkouts at the FastAPI-RS and Starlette-RS revisions above:
+
+```sh
+CARGO_TARGET_DIR=/tmp/native-composition-target \
+  cargo run --manifest-path examples/native-fastapi-contracts/Cargo.toml \
+  --locked -- examples/native-fastapi-contracts/manifest.json \
+  --case-id http2.request-stream-progress-before-upload-complete
+```
+
+**Previous focused HTTP/1.1 inputs (2026-10-20):** on Uvicorn-RS commit
 `0bd5877529e8f8b7434b7f7ab1852c0753f5e642`, with FastAPI-RS
 `f438a7cbb2308e6c1f795aef98e333de23388533` and Starlette-RS
 `b4c8a65c85e1b0d251ca05874412811eaa3ac7b8`, two individual real-socket
@@ -24,12 +59,8 @@ HTTP/1.1 inputs passed:
 - `http1.slow-reader-bounds-polling-and-cancels-producer`
 - `http1.request-stream-progress-before-upload-complete`
 
-The runner's focused selector is a local, uncommitted change to
-`examples/native-fastapi-contracts/src/main.rs` (SHA-256
-`77923fb6cbac2c8d9def562414da9687e8c2e3031775e4d4dd17bae9031bb68a`). It
-retains the complete manifest for shared application configuration while
-executing only the requested case. The source manifest SHA-256 is
-`5224e4c3e5a88e3699eb71490651ffc7f2ea6a41edf302b4884d3133be392bcd`. Clean
+The current committed selector retains the complete manifest for shared
+application configuration while executing only the requested case. Clean
 detached checkouts were used for all three commits, and
 `cargo tree --locked --edges normal,build` found no PyO3 package in the example
 dependency graph. The build used Rust/Cargo 1.98.1 on macOS ARM64. These two
@@ -45,7 +76,7 @@ CARGO_TARGET_DIR=/tmp/native-composition-target \
   --case-id http1.request-stream-progress-before-upload-complete
 ```
 
-## Current source and input identity
+## Hosted receipt source and input identity
 
 | Repository | Revision | State |
 |---|---|---|
@@ -113,7 +144,7 @@ Toolchain: `rustc 1.98.1`, `cargo 1.98.1`; platform: Darwin 24.6.0,
 
 ## Reproduction
 
-For the current revisions in the first table, check out sibling directories,
+For the exact-source revisions in the first table, check out sibling directories,
 then run from the Uvicorn-RS root:
 
 ```sh
@@ -122,8 +153,8 @@ CARGO_TARGET_DIR=/tmp/native-composition-target \
   --locked -- examples/native-fastapi-contracts/manifest.json
 ```
 
-The normal/build dependency graph for the exact current revisions contained no
-PyO3 package in the local locked check described above. The hosted Rust process
+The normal/build dependency graph for the recorded feature-branch revisions
+contained no PyO3 package in the local locked check described above. The hosted Rust process
 passed these manifest inputs:
 
 ```text
@@ -148,7 +179,7 @@ http2.graceful-shutdown-drains-active-response
 
 ## Hosted composition verification
 
-The [current hosted composition job](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/job/117848420888)
+The [hosted composition job](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/job/117848420888)
 passed all 17 manifest inputs on Uvicorn-RS commit
 `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5` with FastAPI-RS
 `f438a7cbb2308e6c1f795aef98e333de23388533` and Starlette-RS
