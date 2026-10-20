@@ -216,6 +216,37 @@
         ],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "http1.proxy-headers-duplicate-forwarded-for-fields-join-in-order",
+      "profile": "http1-proxy-headers",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "server_options": {
+        "proxy_headers": true,
+        "forwarded_allow_ips": "127.0.0.1,::1"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/proxy-headers-duplicate-forwarded-for",
+        "headers": [
+          [
+            "x-forwarded-for",
+            "198.51.100.25"
+          ],
+          [
+            "x-forwarded-for",
+            "127.0.0.1"
+          ],
+          [
+            "x-forwarded-proto",
+            "https"
+          ]
+        ],
+        "body_base64": ""
+      }
     }
   ]
 }
