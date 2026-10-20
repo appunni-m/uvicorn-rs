@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@21"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@22"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2213,6 +2213,8 @@ def load_contract(
                     "proxy_headers",
                     "forwarded_allow_ips",
                     "limit_concurrency",
+                    "loop",
+                    "observe_loop",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2298,6 +2300,21 @@ def load_contract(
                 if run_http.get("observe_scope") and run_http["invocation"] != "api":
                     raise ParityError(
                         f"{case_id}.api.run_http.observe_scope is supported only for direct API invocation"
+                    )
+                if "observe_loop" in run_http and type(run_http["observe_loop"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_loop must be a boolean"
+                    )
+                if run_http.get("observe_loop") and run_http["invocation"] == "module-cli":
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_loop requires a programmatic invocation"
+                    )
+                if "loop" in run_http and (
+                    type(run_http["loop"]) is not str
+                    or run_http["loop"] not in {"auto", "asyncio", "uvloop"}
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.loop must be auto, asyncio, or uvloop"
                     )
                 if "proxy_headers" in run_http and type(run_http["proxy_headers"]) is not bool:
                     raise ParityError(
@@ -9612,7 +9629,10 @@ def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]
         "stdout_base64": base64.b64encode(completed.stdout).decode("ascii"),
         "stderr_base64": base64.b64encode(completed.stderr).decode("ascii"),
     }
-    if case["operation"] == "python.api.run-http-concurrency":
+    if case["operation"] in {
+        "python.api.run-http",
+        "python.api.run-http-concurrency",
+    }:
         try:
             run_http_observation = json.loads(completed.stdout)["run_http"]
         except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:

@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@21",
+  "schema": "uvicorn-rs-parity/input@22",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -120,6 +120,25 @@
             "keyword_arguments": {"http2": true}
           }
         ]
+      }
+    },
+    {
+      "case_id": "python-api.config-server-runs-app-on-requested-asyncio-loop",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-config-server-asyncio-loop",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "loop": "asyncio",
+          "observe_loop": true
+        }
       }
     },
     {

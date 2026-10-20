@@ -12,7 +12,7 @@ your application environment.
 | --- | --- |
 | Install from PyPI | Not available. `uvicorn-rs-py` has not been published. |
 | Run `uvicorn` from this checkout | Help, version, and selected input checks match the pinned Uvicorn release; the CLI accepts `--http httptools` and `--ws websockets-sansio`. Most runtime options and environment behavior remain incomplete. |
-| Import `uvicorn` from this checkout | `run`, `Config`, and `Server` expose Uvicorn 0.54.0 signatures. Focused parity covers single-process HTTP serving, selected lifecycle behavior, `root_path`, `lifespan="off"`, `uvicorn.run(ws_max_size=...)`, and concurrency-limit responses through both `uvicorn.run()` and `Config`/`Server.run()`; most settings and lifecycle behavior remain unqualified. |
+| Import `uvicorn` from this checkout | `run`, `Config`, and `Server` expose Uvicorn 0.54.0 signatures. Focused parity covers single-process HTTP serving, selected lifecycle behavior, `root_path`, `lifespan="off"`, `uvicorn.run(ws_max_size=...)`, concurrency-limit responses, and the selected asyncio loop observed by an ASGI app through `Config`/`Server.run()`; HTTP probes retain raw server logs but compare structured response and shutdown outcomes, so logging parity and most settings/lifecycle behavior remain unqualified. |
 | Serve a Python ASGI app | An ASGI 3 prototype is available. See the [support matrix](support-matrix.md) for tested behavior and limits. |
 | Use Uvicorn workers, reload, or process controls | Not implemented or qualified as compatible. |
 | Claim a general speed advantage | Not supported by current measurements. See [benchmark results](benchmark-results.md). |

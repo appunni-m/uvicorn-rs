@@ -56,6 +56,7 @@ def run_http_observation(request: dict) -> dict:
     child_code = r'''
 import sys
 import base64
+import asyncio
 import json
 import uvicorn
 
@@ -100,6 +101,10 @@ async def asgi3_app(scope, receive, send):
                 b"proxy-client=" + str(scope["client"][0]).encode("latin1"),
             )
         )
+    if observe_loop:
+        loop = asyncio.get_running_loop()
+        loop_name = f"{type(loop).__module__}.{type(loop).__qualname__}"
+        body_parts.append(b"python-loop=" + loop_name.encode("ascii"))
     body = b"|".join(body_parts)
     await send({
         "type": "http.response.start",
@@ -119,10 +124,12 @@ def asgi2_app(scope):
 application_interface = sys.argv[5]
 requested_interface = sys.argv[6]
 observe_scope = sys.argv[7] == "1"
-proxy_headers = sys.argv[8] == "1"
-forwarded_allow_ips = json.loads(sys.argv[9])
-limit_concurrency = json.loads(sys.argv[10])
-invocation = sys.argv[11]
+observe_loop = sys.argv[8] == "1"
+proxy_headers = sys.argv[9] == "1"
+forwarded_allow_ips = json.loads(sys.argv[10])
+limit_concurrency = json.loads(sys.argv[11])
+loop = json.loads(sys.argv[12])
+invocation = sys.argv[13]
 app = asgi2_app if application_interface == "asgi2" else asgi3_app
 
 options = {
@@ -135,6 +142,7 @@ options = {
     "proxy_headers": proxy_headers,
     "forwarded_allow_ips": forwarded_allow_ips,
     "limit_concurrency": limit_concurrency,
+    "loop": loop,
 }
 if invocation == "config-server":
     config = uvicorn.Config(app, **options)
@@ -176,6 +184,8 @@ else:
             command.extend(("--forwarded-allow-ips", request["forwarded_allow_ips"]))
         if request.get("limit_concurrency") is not None:
             command.extend(("--limit-concurrency", str(request["limit_concurrency"])))
+        if request.get("loop", "auto") != "auto":
+            command.extend(("--loop", request["loop"]))
     else:
         command = [
             sys.executable,
@@ -188,9 +198,11 @@ else:
             request.get("application_interface", "asgi3"),
             request.get("interface", "auto"),
             "1" if request.get("observe_scope", False) else "0",
+            "1" if request.get("observe_loop", False) else "0",
             "0" if request.get("proxy_headers") is False else "1",
             json.dumps(request.get("forwarded_allow_ips")),
             json.dumps(request.get("limit_concurrency")),
+            json.dumps(request.get("loop", "auto")),
             request["invocation"],
         ]
 

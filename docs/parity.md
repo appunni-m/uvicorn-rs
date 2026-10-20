@@ -422,10 +422,10 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 | CLI and environment | 25 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
-| Python API | 26 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, a configured WebSocket message limit, and concurrency-limit responses through both `uvicorn.run()` and `Config`/`Server.run()`. |
+| Python API | 27 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, a configured WebSocket message limit, and concurrency-limit responses through both `uvicorn.run()` and `Config`/`Server.run()`. HTTP-run probes retain server stdout/stderr in the evidence but compare structured HTTP and shutdown outcomes; server logging parity is not established by these cases. |
 
-These eight groups account for all 319 declared oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 610 total cases. Five
+These eight groups account for all 320 declared oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 611 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -458,8 +458,15 @@ digests for the target.
 
 ## Scope and comparison rules
 
+For Python API HTTP-run cases, the result artifact retains raw child stdout and
+stderr, while parity compares the probe exit status, HTTP response, shutdown
+signal, and server process outcome. This keeps implementation-specific log
+formatting visible in evidence without treating it as HTTP behavior. The cases
+do not establish parity for startup, access, shutdown, or exception log text;
+that requires explicit logging cases.
+
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@21`; live artifacts use
+`uvicorn-rs-parity/input@22`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -625,7 +632,11 @@ the schema marker and preserves existing case data. Schema `@21` adds optional
 public `method_calls` after a Python API call, allowing cases to compare methods
 such as `Config.load()` on constructed objects; migrate maintained `@20` inputs
 with `python scripts/migrate_parity_input_v20_to_v21.py`. This migrator changes
-only the schema marker and preserves existing case data.
+only the schema marker and preserves existing case data. Schema `@22` adds
+optional event-loop selection and observation to Python API HTTP-run inputs;
+migrate maintained `@21` inputs with
+`python scripts/migrate_parity_input_v21_to_v22.py`. This migrator changes only
+the schema marker and preserves existing case data.
 The runner rejects older or mixed input schemas.
 
 ## CI evidence
