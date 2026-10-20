@@ -1191,16 +1191,24 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
-    fn http_body_channel_send_started(&self) -> Option<std::time::Instant> {
+    fn http_body_channel_send_started(&self, channel_was_full: bool) -> Option<std::time::Instant> {
         #[cfg(feature = "runtime-diagnostics")]
         {
             self.counters
                 .http_body_channel_send_calls
                 .fetch_add(1, Ordering::Relaxed);
+            if channel_was_full {
+                self.counters
+                    .http_request_body_channel_full_sends
+                    .fetch_add(1, Ordering::Relaxed);
+            }
             Some(std::time::Instant::now())
         }
         #[cfg(not(feature = "runtime-diagnostics"))]
-        None
+        {
+            let _ = channel_was_full;
+            None
+        }
     }
 
     #[inline]
@@ -1216,9 +1224,6 @@ impl RuntimeDiagnostics {
                 .http_body_channel_send_wait_ns
                 .fetch_add(elapsed, Ordering::Relaxed);
             if channel_was_full {
-                self.counters
-                    .http_request_body_channel_full_sends
-                    .fetch_add(1, Ordering::Relaxed);
                 self.counters
                     .http_request_body_channel_full_send_wait_ns
                     .fetch_add(elapsed, Ordering::Relaxed);
@@ -4470,11 +4475,11 @@ async fn send_http_request_message(
 ) -> bool {
     let diagnostics = send_context.diagnostics;
     let _send_mode = send_context._mode;
-    let send_wait_started = diagnostics.http_body_channel_send_started();
     #[cfg(feature = "runtime-diagnostics")]
     let channel_was_full = sender.capacity() == 0;
     #[cfg(not(feature = "runtime-diagnostics"))]
     let channel_was_full = false;
+    let send_wait_started = diagnostics.http_body_channel_send_started(channel_was_full);
     let result = tokio::select! {
         biased;
         _ = async {

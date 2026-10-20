@@ -1201,13 +1201,15 @@ a frame that would exceed the configured batch limit, while
 `http_request_body_eof_flushes` counts buffered batches flushed after EOF.
 
 `http_request_body_channel_full_sends` counts send attempts whose bounded
-channel had no free slot when the attempt began;
-`http_request_body_channel_full_send_wait_ns` is the elapsed-time subset for
-those attempts. The general `http_body_channel_send_wait_ns` includes time until
-the send completes or a connection/server stop preempts it, including runtime
-scheduling as well as any channel wait. These are process-wide aggregate
-counters, not per-request histograms or CPU measurements. They are available
-only in builds with `runtime-diagnostics` enabled.
+channel had no free slot when the attempt began, even if the send task is later
+dropped. `http_request_body_channel_full_send_wait_ns` accumulates elapsed time
+only when the send resolves or the explicit stop branch preempts it; an abrupt
+task cancellation can count an attempt without adding elapsed time. The
+general `http_body_channel_send_wait_ns` has the same completion boundary and
+includes runtime scheduling as well as any channel wait. These are
+process-wide aggregate counters, not per-request histograms or CPU
+measurements. They are available only in builds with `runtime-diagnostics`
+enabled.
 
 ## Capture a diagnostic profile on macOS
 
