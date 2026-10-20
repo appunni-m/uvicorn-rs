@@ -495,6 +495,10 @@ jobs:
       - name: Build source distribution
         if: runner.os == 'Linux'
         run: maturin sdist --out dist
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        if: runner.os == 'Linux'
+        with:
+          version: ${{ env.UV_VERSION }}
       - name: Rebuild extracted source archive and consume its wheel
         if: runner.os == 'Linux'
         shell: bash
@@ -521,10 +525,6 @@ jobs:
           packages=(target/native-package/package/*.crate)
           test "${#packages[@]}" -eq 4
           cp "${packages[@]}" dist/
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        if: runner.os == 'Linux'
-        with:
-          version: ${{ env.UV_VERSION }}
       - name: Run complete public parity on the exact Linux candidate wheel
         if: runner.os == 'Linux'
         shell: bash

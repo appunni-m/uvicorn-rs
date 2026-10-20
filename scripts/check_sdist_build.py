@@ -75,11 +75,18 @@ def main() -> None:
     consumer_interpreter = args.consumer_python.resolve() if args.consumer_python else Path(sys.executable)
     if not consumer_interpreter.is_file() or not os.access(consumer_interpreter, os.X_OK):
         raise ValueError(f"consumer Python is not an executable file: {consumer_interpreter}")
-    subprocess.run([str(consumer_interpreter), "-m", "venv", str(consumer)],
-                   env=environment, check=True, timeout=120)
+    environment["UV_PROJECT_ENVIRONMENT"] = str(consumer)
+    subprocess.run(
+        ["uv", "sync", "--project", str(source), "--python", str(consumer_interpreter),
+         "--locked", "--no-dev", "--no-install-project"],
+        cwd=source, env=environment, check=True, timeout=300,
+    )
     python = consumer / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    subprocess.run([str(python), "-m", "pip", "install", "--no-deps", "--no-index",
-                    str(artifacts[0])], env=environment, check=True, timeout=120)
+    subprocess.run(
+        ["uv", "pip", "install", "--python", str(python), "--no-deps", "--offline",
+         str(artifacts[0])],
+        env=environment, check=True, timeout=120,
+    )
     receipt = output / "consumer.json"
     subprocess.run([str(python), str(ROOT / "scripts/check_installed_wheel.py"),
                     "--wheel", str(artifacts[0]), "--output", str(receipt)],
