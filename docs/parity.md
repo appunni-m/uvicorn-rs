@@ -459,7 +459,7 @@ digests for the target.
 ## Scope and comparison rules
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@19`; live artifacts use
+`uvicorn-rs-parity/input@20`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -616,6 +616,10 @@ the schema marker and preserve existing case data. Schema `@18` allows
 Schema `@19` allows the Python API HTTP-run stimulus to invoke `Config` and
 `Server.run()` directly; migrate maintained `@18` inputs with
 `python scripts/migrate_parity_input_v18_to_v19.py`. This migrator changes only
+the schema marker and preserves existing case data.
+Schema `@20` adds fixed Python API and module CLI startup-failure stimuli for
+`lifespan="on"`; migrate maintained `@19` inputs with
+`python scripts/migrate_parity_input_v19_to_v20.py`. This migrator changes only
 the schema marker and preserves existing case data.
 The runner rejects older or mixed input schemas.
 

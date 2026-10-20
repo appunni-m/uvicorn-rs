@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@19"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@20"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -829,6 +829,9 @@ def load_contract(
         "exit_code", "stdout_base64", "stderr_base64",
         "response_received", "response_status", "response_content_type",
         "response_body_base64", "shutdown_signal_sent", "process_timed_out",
+        "server_started_before_shutdown", "serve_task_finished_before_shutdown",
+        "serve_raised", "serve_timed_out", "server_exit_code",
+        "process_stderr_has_unhandled_task_warning",
     }
     for operation in manifest["operations"]:
         expected_operation_keys = {"id", "kind", "observe"}
@@ -2375,6 +2378,48 @@ def load_contract(
                 exact_keys(case["api"], {input_name}, f"{case_id}.api")
                 if case["api"][input_name] is not True:
                     raise ParityError(f"{case_id}.api.{input_name} must be true")
+            elif case["operation"] == "python.api.server-lifespan-startup":
+                exact_keys(case["api"], {"server_lifespan_startup"}, f"{case_id}.api")
+                startup = case["api"]["server_lifespan_startup"]
+                exact_keys(
+                    startup,
+                    {"lifespan", "app_lifespan", "timeout_seconds"},
+                    f"{case_id}.api.server_lifespan_startup",
+                )
+                if startup["lifespan"] != "on":
+                    raise ParityError(
+                        f"{case_id}.api.server_lifespan_startup.lifespan must be on"
+                    )
+                if startup["app_lifespan"] != "raises-before-startup":
+                    raise ParityError(
+                        f"{case_id}.api.server_lifespan_startup.app_lifespan must be raises-before-startup"
+                    )
+                timeout_seconds = startup["timeout_seconds"]
+                if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
+                    raise ParityError(
+                        f"{case_id}.api.server_lifespan_startup.timeout_seconds must be from 2 through 8"
+                    )
+            elif case["operation"] == "python.api.module-cli-lifespan-startup":
+                exact_keys(case["api"], {"module_cli_lifespan_startup"}, f"{case_id}.api")
+                startup = case["api"]["module_cli_lifespan_startup"]
+                exact_keys(
+                    startup,
+                    {"lifespan", "app_lifespan", "timeout_seconds"},
+                    f"{case_id}.api.module_cli_lifespan_startup",
+                )
+                if startup["lifespan"] != "on":
+                    raise ParityError(
+                        f"{case_id}.api.module_cli_lifespan_startup.lifespan must be on"
+                    )
+                if startup["app_lifespan"] != "raises-before-startup":
+                    raise ParityError(
+                        f"{case_id}.api.module_cli_lifespan_startup.app_lifespan must be raises-before-startup"
+                    )
+                timeout_seconds = startup["timeout_seconds"]
+                if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
+                    raise ParityError(
+                        f"{case_id}.api.module_cli_lifespan_startup.timeout_seconds must be from 2 through 8"
+                    )
             elif case["operation"] == "python.api.imports-signatures":
                 api_keys = {"imports", "signatures"}
                 if "calls" in case["api"]:
@@ -9564,6 +9609,52 @@ def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]
                     "shutdown_signal_sent",
                     "process_exit_code",
                     "process_timed_out",
+                )
+            }
+        )
+    if "server_lifespan_startup" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)["server_lifespan_startup"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: server lifespan API probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(f"{case['case_id']}: server lifespan API observation must be an object")
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "server_started_before_shutdown",
+                    "serve_task_finished_before_shutdown",
+                    "serve_raised",
+                    "serve_timed_out",
+                    "server_exit_code",
+                )
+            }
+        )
+    if "module_cli_lifespan_startup" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)["module_cli_lifespan_startup"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: module CLI lifespan probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(f"{case['case_id']}: module CLI lifespan observation must be an object")
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "process_exit_code",
+                    "process_timed_out",
+                    "process_stderr_has_unhandled_task_warning",
                 )
             }
         )

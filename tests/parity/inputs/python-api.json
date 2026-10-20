@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@19",
+  "schema": "uvicorn-rs-parity/input@20",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -426,6 +426,32 @@
       "covers": ["python.api.server-startup-failure-state"],
       "api": {
         "server_startup_failure": true
+      }
+    },
+    {
+      "case_id": "python-api.server-on-propagates-lifespan-startup-failure",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-startup",
+      "covers": ["python.api.server-lifespan-startup"],
+      "api": {
+        "server_lifespan_startup": {
+          "lifespan": "on",
+          "app_lifespan": "raises-before-startup",
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-on-exits-on-lifespan-startup-error",
+      "profile": "python-api",
+      "operation": "python.api.module-cli-lifespan-startup",
+      "covers": ["python.api.module-cli-lifespan-startup"],
+      "api": {
+        "module_cli_lifespan_startup": {
+          "lifespan": "on",
+          "app_lifespan": "raises-before-startup",
+          "timeout_seconds": 5
+        }
       }
     }
   ]

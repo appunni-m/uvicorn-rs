@@ -140,12 +140,13 @@ def main(argv=None, prog="uvicorn-rs-py"):
             args.certfile,
             args.keyfile,
             args.graceful_timeout,
-            lifespan=args.lifespan != "off",
+            lifespan=args.lifespan,
             root_path=args.root_path,
             default_headers=encoded_headers,
             date_header=args.date_header,
             ws_max_size=args.ws_max_size,
             limit_concurrency=args.limit_concurrency,
+            _defer_startup_failure=True,
         )
         server_task = asyncio.create_task(
             server.serve()
@@ -175,6 +176,8 @@ def main(argv=None, prog="uvicorn-rs-py"):
             )
             if server_task in completed:
                 await server_task
+                if server.startup_failed:
+                    raise SystemExit(3)
                 return
 
             # Stop the Rust runtime through its control token and leave the

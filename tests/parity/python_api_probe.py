@@ -15,6 +15,8 @@ import time
 
 _startup_failure_server = None
 _startup_failure_task = None
+_lifespan_startup_server = None
+_lifespan_startup_task = None
 
 
 def resolve(path: str):
@@ -550,6 +552,113 @@ async def server_startup_failure_observation() -> dict[str, bool]:
     }
 
 
+async def server_lifespan_startup_observation(request: dict) -> dict[str, object]:
+    """Observe strict lifespan startup through the public Config and Server APIs."""
+
+    import uvicorn
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            if request["app_lifespan"] == "raises-before-startup":
+                raise RuntimeError("parity lifespan startup exception")
+        elif scope["type"] == "http":
+            await send({"type": "http.response.start", "status": 204, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+    global _lifespan_startup_server, _lifespan_startup_task
+
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=0,
+            loop="asyncio",
+            http="httptools",
+            interface="asgi3",
+            lifespan=request["lifespan"],
+            log_config=None,
+            access_log=False,
+        )
+    )
+    task = asyncio.create_task(server.serve())
+    _lifespan_startup_server = server
+    _lifespan_startup_task = task
+    raised = False
+    timed_out = False
+    try:
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=request["timeout_seconds"])
+        except TimeoutError:
+            timed_out = True
+        except BaseException:
+            raised = True
+        return {
+            "server_started_before_shutdown": bool(server.started),
+            "serve_task_finished_before_shutdown": task.done(),
+            "serve_raised": raised,
+            "serve_timed_out": timed_out,
+            "server_exit_code": None,
+        }
+    finally:
+        if not task.done():
+            server.should_exit = True
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(task, return_exceptions=True),
+                    timeout=request["timeout_seconds"],
+                )
+            except TimeoutError:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+
+def module_cli_lifespan_startup_observation(request: dict) -> dict[str, object]:
+    """Observe strict lifespan startup through ``python -m uvicorn``."""
+
+    command = [
+        sys.executable,
+        "-m",
+        "uvicorn",
+        "tests.parity.app:lifespan_startup_error_probe_app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "0",
+        "--loop",
+        "asyncio",
+        "--lifespan",
+        request["lifespan"],
+    ]
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONHOME", None)
+    environment.pop("PYTHONSTARTUP", None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=os.getcwd(),
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=request["timeout_seconds"],
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "process_exit_code": None,
+            "process_timed_out": True,
+            "process_stderr_has_unhandled_task_warning": False,
+        }
+    return {
+        "process_exit_code": completed.returncode,
+        "process_timed_out": False,
+        "process_stderr_has_unhandled_task_warning": (
+            b"Task exception was never retrieved" in completed.stderr
+        ),
+    }
+
+
 def main() -> None:
     request = json.loads(sys.argv[1])
     if "run_http" in request:
@@ -590,6 +699,36 @@ def main() -> None:
                 "serve_timed_out": False,
             }
         observations = {"server_startup_failure": observation}
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_lifespan_startup" in request:
+        try:
+            observation = asyncio.run(
+                server_lifespan_startup_observation(request["server_lifespan_startup"])
+            )
+        except SystemExit as error:
+            observation = {
+                "server_started_before_shutdown": bool(
+                    _lifespan_startup_server is not None
+                    and _lifespan_startup_server.started
+                ),
+                "serve_task_finished_before_shutdown": bool(
+                    _lifespan_startup_task is not None
+                    and _lifespan_startup_task.done()
+                ),
+                "serve_raised": True,
+                "serve_timed_out": False,
+                "server_exit_code": error.code,
+            }
+        observations = {"server_lifespan_startup": observation}
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "module_cli_lifespan_startup" in request:
+        observations = {
+            "module_cli_lifespan_startup": module_cli_lifespan_startup_observation(
+                request["module_cli_lifespan_startup"]
+            ),
+        }
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
         return
     observations = {"imports": {}, "signatures": {}}

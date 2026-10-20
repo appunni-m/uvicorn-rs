@@ -27,6 +27,7 @@ class Server:
         date_header=True,
         ws_max_size=16 * 1024 * 1024,
         limit_concurrency=None,
+        _defer_startup_failure=False,
     ):
         """Store the application and listener options for a server run.
 
@@ -38,7 +39,9 @@ class Server:
                 enable HTTPS and HTTP/3.
             keyfile: Optional PEM private key paired with ``certfile``.
             graceful_timeout: Non-negative shutdown grace period in seconds.
-            lifespan: Whether to run the application's ASGI lifespan protocol.
+            lifespan: A boolean enabling automatic lifespan detection, or one
+                of ``"auto"``, ``"on"``, or ``"off"``. Strict ``"on"`` mode
+                propagates startup failure with Uvicorn's exit status 3.
             root_path: Prefix used for the ASGI ``root_path``, ``path``, and
                 ``raw_path`` scope values.
             default_headers: Encoded response headers inserted before the
@@ -65,6 +68,8 @@ class Server:
         self.date_header = date_header
         self.ws_max_size = ws_max_size
         self.limit_concurrency = limit_concurrency
+        self._defer_startup_failure = _defer_startup_failure
+        self.startup_failed = False
         self._control = None
 
     def shutdown(self):
@@ -82,6 +87,13 @@ class Server:
         if control is None:
             return False
         return await control.wait_started()
+
+    async def wait_startup_failed(self):
+        """Wait for startup to finish and report a fatal lifespan failure."""
+        control = self._control
+        if control is None:
+            return self.startup_failed
+        return await control.wait_startup_failed()
 
     async def serve(self):
         """Run the server until shutdown or task cancellation.
@@ -120,5 +132,8 @@ class Server:
             await asyncio.shield(native_task)
             raise
         finally:
+            self.startup_failed = await control.wait_startup_failed()
             if self._control is control:
                 self._control = None
+        if self.startup_failed and not self._defer_startup_failure:
+            raise SystemExit(3)

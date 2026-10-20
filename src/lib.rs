@@ -1515,7 +1515,7 @@ struct ServeOptions {
     tcp_tls: Option<TlsAcceptor>,
     quic_config: Option<quinn::ServerConfig>,
     graceful_timeout: std::time::Duration,
-    lifespan_enabled: bool,
+    lifespan_mode: LifespanMode,
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
     ws_max_size: usize,
@@ -2835,6 +2835,38 @@ enum LifespanMessage {
     Shutdown,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LifespanMode {
+    Auto,
+    On,
+    Off,
+}
+
+impl LifespanMode {
+    fn from_python(value: &Bound<'_, PyAny>) -> PyResult<Self> {
+        if let Ok(mode) = value.extract::<String>() {
+            return match mode.as_str() {
+                "auto" => Ok(Self::Auto),
+                "on" => Ok(Self::On),
+                "off" => Ok(Self::Off),
+                _ => Err(PyValueError::new_err(
+                    "lifespan must be 'auto', 'on', 'off', or a boolean",
+                )),
+            };
+        }
+        if let Ok(enabled) = value.extract::<bool>() {
+            return Ok(if enabled { Self::Auto } else { Self::Off });
+        }
+        Err(PyValueError::new_err(
+            "lifespan must be 'auto', 'on', 'off', or a boolean",
+        ))
+    }
+
+    fn enabled(self) -> bool {
+        self != Self::Off
+    }
+}
+
 enum LifespanEvent {
     StartupComplete,
     StartupFailed(String),
@@ -3627,7 +3659,8 @@ impl LifespanRuntime {
         locals: TaskLocals,
         diagnostics: RuntimeDiagnostics,
         cancellation_tracker: TaskTracker,
-    ) -> PyResult<Self> {
+        mode: LifespanMode,
+    ) -> PyResult<Option<Self>> {
         let (request_tx, request_rx) = mpsc::channel(1);
         let (event_tx, mut event_rx) = mpsc::channel(1);
         let state = Python::attach(|py| PyDict::new(py).unbind());
@@ -3702,43 +3735,47 @@ impl LifespanRuntime {
                 }
                 event_rx.recv().await
             } => match event {
-                Some(LifespanEvent::StartupComplete) => Ok(Self {
+                Some(LifespanEvent::StartupComplete) => Ok(Some(Self {
                     state: Some(Arc::new(state)),
                     requests: Some(request_tx),
                     events: Some(event_rx),
                     app_task: Some(app_task),
-                }),
+                })),
                 Some(LifespanEvent::StartupFailed(message)) => {
                     app_task.as_mut().abort();
                     let _ = app_task.into_handle().await;
-                    Err(PyRuntimeError::new_err(if message.is_empty() {
-                        "ASGI lifespan startup failed".to_string()
-                    } else {
-                        message
-                    }))
+                    if !message.is_empty() {
+                        log_error(format_args!("{message}"));
+                    }
+                    log_error(format_args!("Application startup failed. Exiting."));
+                    Ok(None)
                 }
                 Some(_) => {
                     app_task.as_mut().abort();
                     let _ = app_task.into_handle().await;
+                    if mode == LifespanMode::On {
+                        log_error(format_args!("Application startup failed. Exiting."));
+                        return Ok(None);
+                    }
                     log_error(format_args!("uvicorn-rs: ASGI app does not support lifespan"));
-                    Ok(Self {
+                    Ok(Some(Self {
                         state: Some(Arc::new(state)),
                         requests: None,
                         events: None,
                         app_task: None,
-                    })
+                    }))
                 }
                 None => {
                     // Retain cancellation ownership until the result has been
                     // observed, including if startup is cancelled mid-await.
                     let result = app_task.as_mut().await;
                     app_task.into_handle();
-                    Self::without_lifespan(result, state)
+                    Self::without_lifespan(result, state, mode)
                 },
             },
             result = app_task.as_mut() => {
                 app_task.into_handle();
-                Self::without_lifespan(result, state)
+                Self::without_lifespan(result, state, mode)
             }
         }
     }
@@ -3746,25 +3783,34 @@ impl LifespanRuntime {
     fn without_lifespan(
         result: Result<PyResult<Py<PyAny>>, tokio::task::JoinError>,
         state: Py<PyDict>,
-    ) -> PyResult<Self> {
+        mode: LifespanMode,
+    ) -> PyResult<Option<Self>> {
         match result {
             Ok(Ok(_)) => {}
-            Ok(Err(error)) => Python::attach(|py| error.print(py)),
+            Ok(Err(error)) => {
+                Python::attach(|py| error.print(py));
+                if mode == LifespanMode::On {
+                    log_error(format_args!("Application startup failed. Exiting."));
+                    return Ok(None);
+                }
+            }
             Err(error) => {
                 return Err(PyRuntimeError::new_err(format!(
                     "ASGI lifespan task failed: {error}"
                 )));
             }
         }
-        log_error(format_args!(
-            "uvicorn-rs: ASGI app does not support lifespan"
-        ));
-        Ok(Self {
+        if mode == LifespanMode::Auto {
+            log_error(format_args!(
+                "uvicorn-rs: ASGI app does not support lifespan"
+            ));
+        }
+        Ok(Some(Self {
             state: Some(Arc::new(state)),
             requests: None,
             events: None,
             app_task: None,
-        })
+        }))
     }
 
     async fn cancel_and_wait(&mut self) {
@@ -3852,12 +3898,14 @@ impl Drop for CancelOnDrop {
 enum ServerStartupState {
     Starting,
     Started,
+    Failed,
     Stopped,
 }
 
 struct ServerStartupSignal {
     sender: watch::Sender<ServerStartupState>,
     started: bool,
+    failed: bool,
 }
 
 impl ServerStartupSignal {
@@ -3865,6 +3913,7 @@ impl ServerStartupSignal {
         Self {
             sender,
             started: false,
+            failed: false,
         }
     }
 
@@ -3872,11 +3921,16 @@ impl ServerStartupSignal {
         self.started = true;
         self.sender.send_replace(ServerStartupState::Started);
     }
+
+    fn mark_failed(&mut self) {
+        self.failed = true;
+        self.sender.send_replace(ServerStartupState::Failed);
+    }
 }
 
 impl Drop for ServerStartupSignal {
     fn drop(&mut self) {
-        if !self.started {
+        if !self.started && !self.failed {
             self.sender.send_replace(ServerStartupState::Stopped);
         }
     }
@@ -3909,7 +3963,23 @@ impl ServerControl {
             loop {
                 match *startup.borrow_and_update() {
                     ServerStartupState::Started => return Ok(true),
-                    ServerStartupState::Stopped => return Ok(false),
+                    ServerStartupState::Failed | ServerStartupState::Stopped => return Ok(false),
+                    ServerStartupState::Starting => {}
+                }
+                if startup.changed().await.is_err() {
+                    return Ok(false);
+                }
+            }
+        })
+    }
+
+    fn wait_startup_failed<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let mut startup = self.startup.subscribe();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            loop {
+                match *startup.borrow_and_update() {
+                    ServerStartupState::Failed => return Ok(true),
+                    ServerStartupState::Started | ServerStartupState::Stopped => return Ok(false),
                     ServerStartupState::Starting => {}
                 }
                 if startup.changed().await.is_err() {
@@ -4759,7 +4829,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan_enabled, root_path, default_headers, date_header, ws_max_size, limit_concurrency, control))]
+#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, limit_concurrency, control))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -4773,7 +4843,7 @@ fn serve<'py>(
     certfile: Option<String>,
     keyfile: Option<String>,
     graceful_timeout: u64,
-    lifespan_enabled: bool,
+    lifespan: Bound<'py, PyAny>,
     root_path: String,
     default_headers: Vec<(Bytes, Bytes)>,
     date_header: bool,
@@ -4781,6 +4851,7 @@ fn serve<'py>(
     limit_concurrency: Option<usize>,
     control: Py<ServerControl>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let lifespan_mode = LifespanMode::from_python(&lifespan)?;
     #[cfg(not(feature = "native-tcp"))]
     if limit_concurrency.is_some() {
         return Err(PyValueError::new_err(
@@ -4861,7 +4932,7 @@ fn serve<'py>(
             tcp_tls,
             quic_config,
             graceful_timeout,
-            lifespan_enabled,
+            lifespan_mode,
             default_headers,
             date_header,
             ws_max_size,
@@ -4984,26 +5055,32 @@ async fn serve_forever(
     // Lifespan cancellation cleanup has its own tracker: the main lifespan
     // application remains active while request cleanup is drained.
     let lifespan_cleanup_tasks = TaskTracker::new();
-    let mut lifespan = if options.lifespan_enabled {
+    let mut lifespan = if options.lifespan_mode.enabled() {
         let lifespan_start = LifespanRuntime::start(
             Arc::clone(&app),
             Arc::clone(&invoke),
             locals.clone(),
             diagnostics.clone(),
             lifespan_cleanup_tasks.clone(),
+            options.lifespan_mode,
         )
         .await;
-        Some(match lifespan_start {
-            Ok(lifespan) => lifespan,
+        match lifespan_start {
+            Ok(Some(lifespan)) => Some(lifespan),
+            Ok(None) => {
+                startup_signal.mark_failed();
+                wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
+                return Ok(());
+            }
             Err(error) => {
                 wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
                 return Err(error);
             }
-        })
+        }
     } else {
         None
     };
-    let state = if options.lifespan_enabled {
+    let state = if options.lifespan_mode.enabled() {
         lifespan.as_ref().and_then(|runtime| runtime.state.clone())
     } else {
         Some(Arc::new(Python::attach(|py| PyDict::new(py).unbind())))

@@ -2068,6 +2068,60 @@
         "exit_code",
         "stdout_base64"
       ]
+    },
+    {
+      "id": "python.api.server-lifespan-startup",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "server_started_before_shutdown",
+        "serve_task_finished_before_shutdown",
+        "serve_raised",
+        "serve_timed_out",
+        "server_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "server_started_before_shutdown",
+        "serve_task_finished_before_shutdown",
+        "serve_raised",
+        "serve_timed_out",
+        "server_exit_code"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "server_started_before_shutdown": false,
+        "serve_task_finished_before_shutdown": true,
+        "serve_raised": true,
+        "serve_timed_out": false,
+        "server_exit_code": 3
+      }
+    },
+    {
+      "id": "python.api.module-cli-lifespan-startup",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "process_exit_code",
+        "process_timed_out",
+        "process_stderr_has_unhandled_task_warning"
+      ],
+      "compare": [
+        "exit_code",
+        "process_exit_code",
+        "process_timed_out",
+        "process_stderr_has_unhandled_task_warning"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "process_exit_code": 3,
+        "process_timed_out": false,
+        "process_stderr_has_unhandled_task_warning": false
+      }
     }
   ],
     "inputs": [

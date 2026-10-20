@@ -1555,6 +1555,14 @@ async def lifespan_probe_app(scope, receive, send):
         await _respond(send, body, content_type=b"text/plain")
 
 
+async def lifespan_startup_error_probe_app(scope, receive, send):
+    """Raise during lifespan startup for strict-mode public CLI parity."""
+    if scope["type"] == "lifespan":
+        raise RuntimeError("parity lifespan startup exception")
+    if scope["type"] == "http":
+        await _respond(send, b"unexpected request", status=500)
+
+
 def asgi2_probe_app(scope):
     """Expose the same probe through ASGI2's two-stage call interface."""
 

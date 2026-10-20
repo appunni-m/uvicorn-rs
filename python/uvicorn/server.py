@@ -70,12 +70,13 @@ class Server:
                 if self.config.timeout_graceful_shutdown is None
                 else self.config.timeout_graceful_shutdown
             ),
-            lifespan=self.config.lifespan != "off",
+            lifespan=self.config.lifespan,
             root_path=self.config.root_path,
             default_headers=self.config.encoded_headers,
             date_header=self.config.date_header,
             ws_max_size=self.config.ws_max_size,
             limit_concurrency=self.config.limit_concurrency,
+            _defer_startup_failure=True,
         )
         self._native_server = native_server
         if self._should_exit:
@@ -83,14 +84,13 @@ class Server:
 
         native_task = asyncio.create_task(native_server.serve())
         try:
-            # Let the native serve coroutine install its startup control. The
-            # value of ``started`` comes from Rust after bind and lifespan,
-            # never from this scheduling yield.
+            # Readiness comes from Rust after bind and lifespan, never from
+            # the scheduling yield.
             await asyncio.sleep(0)
-            if native_task.done():
-                await native_task
             self.started = await native_server.wait_started()
             await native_task
+            if native_server.startup_failed:
+                raise SystemExit(3)
         finally:
             self._native_server = None
 
