@@ -419,9 +419,9 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 | CLI and environment | 20 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
-| Python API | 16 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, headers, environment files, and ASGI2 selection. |
+| Python API | 17 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, headers, environment files, ASGI2 selection, and a configured WebSocket message limit. |
 
-These eight groups account for all 289 current oracle-parity cases. The other
+These eight groups account for all 290 current oracle-parity cases. The other
 296 cases are target-only fault/support contracts. Five of those exercise
 `UVICORN_RS_MAX_BLOCKING_THREADS`; they are described in the
 [ASGI behavior inventory](asgi-case-inventory.md#declared-behavior-map), not
@@ -437,7 +437,7 @@ digests for the target.
 ## Scope and comparison rules
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@12`; live artifacts use
+`uvicorn-rs-parity/input@13`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -570,9 +570,11 @@ Python API HTTP-run stimulus. Schema `@11` adds optional `interface` and
 `application_interface` fields so cases can select Uvicorn's ASGI interface
 and the shape of the application callable. Schema `@12` adds an optional,
 strict `server_options` object for WebSocket profiles, so the oracle and target
-receive the same declared setting. Migrate maintained `@10` inputs with
+receive the same declared setting. Schema `@13` adds a programmatic WebSocket
+run stimulus to the Python API profile. Migrate maintained `@10` inputs with
 `python scripts/migrate_parity_input_v10_to_v11.py`, then `@11` inputs with
-`python scripts/migrate_parity_input_v11_to_v12.py`; each migrator changes only
+`python scripts/migrate_parity_input_v11_to_v12.py`, then `@12` inputs with
+`python scripts/migrate_parity_input_v12_to_v13.py`; each migrator changes only
 the schema marker and preserves existing case data. The runner rejects older
 or mixed input schemas.
 

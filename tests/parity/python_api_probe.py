@@ -256,6 +256,159 @@ uvicorn.run(
             process.communicate()
 
 
+def run_websocket_observation(request: dict) -> dict:
+    """Exercise WebSocket options through the public ``uvicorn.run`` API."""
+
+    from websockets.exceptions import ConnectionClosed, InvalidStatus
+    from websockets.sync.client import connect as websocket_connect
+
+    child_code = r'''
+import sys
+import uvicorn
+
+async def app(scope, receive, send):
+    if scope["type"] != "websocket":
+        return
+    message = await receive()
+    if message["type"] != "websocket.connect":
+        return
+    await send({"type": "websocket.accept"})
+    while True:
+        message = await receive()
+        if message["type"] == "websocket.disconnect":
+            return
+        if message["type"] == "websocket.receive":
+            response = {"type": "websocket.send"}
+            if "text" in message:
+                response["text"] = message["text"]
+            else:
+                response["bytes"] = message.get("bytes", b"")
+            await send(response)
+
+uvicorn.run(
+    app,
+    host="127.0.0.1",
+    port=int(sys.argv[1]),
+    lifespan="off",
+    ws_max_size=int(sys.argv[2]),
+)
+'''
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    environment.pop("PYTHONHOME", None)
+    environment.pop("PYTHONSTARTUP", None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    process_options = {}
+    if os.name == "nt":
+        process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        stop_signal = signal.CTRL_BREAK_EVENT
+    else:
+        stop_signal = signal.SIGINT
+
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            child_code,
+            str(port),
+            str(request["ws_max_size"]),
+        ],
+        cwd=os.getcwd(),
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        **process_options,
+    )
+    deadline = time.monotonic() + request["timeout_seconds"]
+    connection = None
+    handshake_status = None
+    close_code = None
+    message_received = False
+    try:
+        uri = f"ws://127.0.0.1:{port}{request['path']}"
+        while time.monotonic() < deadline and process.poll() is None:
+            try:
+                connection = websocket_connect(
+                    uri,
+                    open_timeout=min(0.5, max(deadline - time.monotonic(), 0.01)),
+                    close_timeout=0.5,
+                    max_size=None,
+                    legacy=True,
+                )
+                handshake_status = 101
+                break
+            except InvalidStatus as error:
+                handshake_status = error.response.status_code
+                break
+            except (OSError, TimeoutError):
+                time.sleep(0.025)
+
+        if connection is not None:
+            try:
+                connection.send(request["message"])
+                try:
+                    connection.recv(timeout=max(deadline - time.monotonic(), 0.01))
+                    message_received = True
+                except ConnectionClosed as error:
+                    if error.rcvd is not None:
+                        close_code = error.rcvd.code
+            except (OSError, TimeoutError):
+                pass
+            if close_code is None:
+                close_code = connection.close_code
+            connection.close()
+            if close_code is None:
+                close_code = connection.close_code
+
+        shutdown_signal_sent = False
+        if process.poll() is None:
+            try:
+                process.send_signal(stop_signal)
+                shutdown_signal_sent = True
+            except OSError:
+                pass
+        server_stdout = b""
+        server_stderr = b""
+        try:
+            server_stdout, server_stderr = process.communicate(
+                timeout=max(request["timeout_seconds"], 1)
+            )
+            process_timed_out = False
+        except subprocess.TimeoutExpired:
+            process_timed_out = True
+            process.kill()
+            server_stdout, server_stderr = process.communicate()
+
+        observation = {
+            "handshake_status": handshake_status,
+            "close_code": close_code,
+            "message_received": message_received,
+            "shutdown_signal_sent": shutdown_signal_sent,
+            "process_exit_code": process.returncode,
+            "process_timed_out": process_timed_out,
+        }
+        if (
+            handshake_status != 101
+            or close_code != 1009
+            or process.returncode != 0
+            or process_timed_out
+        ):
+            observation["server_stdout_base64"] = base64.b64encode(server_stdout).decode("ascii")
+            observation["server_stderr_base64"] = base64.b64encode(server_stderr).decode("ascii")
+        return observation
+    finally:
+        if connection is not None:
+            connection.close()
+        if process.poll() is None:
+            process.kill()
+            process.communicate()
+
+
 async def server_readiness_observation() -> dict[str, bool]:
     import uvicorn
 
@@ -369,6 +522,12 @@ def main() -> None:
     request = json.loads(sys.argv[1])
     if "run_http" in request:
         observations = {"run_http": run_http_observation(request["run_http"])}
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "run_websocket" in request:
+        observations = {
+            "run_websocket": run_websocket_observation(request["run_websocket"]),
+        }
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
         return
     if "server_readiness" in request:

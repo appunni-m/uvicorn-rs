@@ -87,7 +87,7 @@
       "oracle": "uvicorn",
       "protocol": "python-api",
       "oracle_config": [
-        "CPython 3.12 public imports and signatures, Server readiness, programmatic and module-CLI HTTP serving, and ASGI2/ASGI3 selection from Uvicorn 0.54.0"
+        "CPython 3.12 public imports and signatures, Server readiness, programmatic and module-CLI HTTP serving, ASGI2/ASGI3 selection, and programmatic WebSocket message limits from Uvicorn 0.54.0"
       ]
     },
     {
@@ -1986,6 +1986,34 @@
         "stdout_base64",
         "stderr_base64"
       ]
+    },
+    {
+      "id": "python.api.run-websocket",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "process_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1009,
+        "message_received": false,
+        "process_exit_code": 0
+      }
     },
     {
       "id": "python.api.server-readiness",

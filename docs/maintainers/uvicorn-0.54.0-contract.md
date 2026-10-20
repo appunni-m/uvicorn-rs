@@ -330,8 +330,22 @@ code 1009. It passes 1/1 on macOS 15.7.7 ARM64 / CPython 3.12.13 with
 `websockets` 17.1. Receipt: ignored `target/ws-max-size-parity.json`.
 
 This verifies the explicit CLI setting and the protocol close code for this
-input. It does not establish the Python `uvicorn.run()` path, other WebSocket
-settings, compression, or WebSockets over HTTP/2 or HTTP/3.
+input. Other WebSocket settings, compression, and WebSockets over HTTP/2 or
+HTTP/3 remain unverified.
+
+## Programmatic WebSocket message-size parity (2026-10-20)
+
+The Python API input `python-api.run-applies-websocket-message-size-limit`
+starts Uvicorn through public `uvicorn.run(ws_max_size=4)`, sends a five-byte
+text message, and requires handshake status 101, close code 1009, and no
+delivery of the oversized message to the ASGI app. It passes 1/1 against the
+Uvicorn 0.54.0 oracle on macOS 15.7.7 ARM64 / CPython 3.12.13. Both child
+servers exit cleanly after SIGINT. Receipt: ignored
+`target/parity-python-api-ws-size-focused.json`.
+
+This verifies one programmatic Config option path. It does not establish the
+other WebSocket settings, compression, WebSockets over HTTP/2 or HTTP/3, or
+the broader Python API contract.
 
 ## Keep benchmark oracle files separate
 

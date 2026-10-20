@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@12"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@13"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -847,6 +847,7 @@ def load_contract(
         raise ParityError("duplicate profile ID")
     observation_fields = {
         "status", "content_type", "body_bytes", "ordered_body_bytes", "early_body_bytes",
+        "message_received",
         "ordered_response_headers", "response_header_values_by_name",
         "server_header_values", "date_header_present",
         "streamed_before_completion", "disconnect_event", "followup_response",
@@ -2381,6 +2382,34 @@ def load_contract(
                 timeout_seconds = run_http["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
                     raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 8")
+            elif case["operation"] == "python.api.run-websocket":
+                exact_keys(case["api"], {"run_websocket"}, f"{case_id}.api")
+                run_websocket = case["api"]["run_websocket"]
+                exact_keys(
+                    run_websocket,
+                    {"path", "message", "ws_max_size", "timeout_seconds"},
+                    f"{case_id}.api.run_websocket",
+                )
+                if (
+                    not isinstance(run_websocket["path"], str)
+                    or not run_websocket["path"].startswith("/")
+                    or "\r" in run_websocket["path"]
+                    or "\n" in run_websocket["path"]
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.path must be an origin-form path"
+                    )
+                if not isinstance(run_websocket["message"], str):
+                    raise ParityError(f"{case_id}.api.run_websocket.message must be a string")
+                if type(run_websocket["ws_max_size"]) is not int or run_websocket["ws_max_size"] < 0:
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.ws_max_size must be a non-negative integer"
+                    )
+                timeout_seconds = run_websocket["timeout_seconds"]
+                if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.timeout_seconds must be from 2 through 8"
+                    )
             elif case["operation"] in readiness_operations:
                 input_name = readiness_operations[case["operation"]]
                 exact_keys(case["api"], {input_name}, f"{case_id}.api")
@@ -9498,11 +9527,33 @@ def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]
     )
     if len(completed.stdout) > 4 * 1024 * 1024 or len(completed.stderr) > 4 * 1024 * 1024:
         raise ParityError(f"{case['case_id']}: Python API probe output exceeded the 4 MiB evidence bound")
-    return {
+    observation = {
         "exit_code": completed.returncode,
         "stdout_base64": base64.b64encode(completed.stdout).decode("ascii"),
         "stderr_base64": base64.b64encode(completed.stderr).decode("ascii"),
     }
+    if "run_websocket" in case["api"]:
+        try:
+            response = json.loads(completed.stdout)
+            websocket = response["run_websocket"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: WebSocket API probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(websocket) is not dict:
+            raise ParityError(f"{case['case_id']}: WebSocket API observation must be an object")
+        observation.update(
+            {
+                "handshake_status": websocket.get("handshake_status"),
+                "close_code": websocket.get("close_code"),
+                "message_received": websocket.get("message_received"),
+                "process_exit_code": websocket.get("process_exit_code"),
+            }
+        )
+    return observation
 
 
 def execute_python_api_profile(
@@ -9524,6 +9575,14 @@ def execute_python_api_profile(
             if not matches:
                 differing_fields = [field for field in fields if oracle[field] != target[field]]
                 difference = "Python API observations differ: " + ", ".join(differing_fields)
+            required = operation.get("required_observations", {})
+            if any(
+                oracle.get(field) != value or target.get(field) != value
+                for field, value in required.items()
+            ):
+                matches = False
+                if difference is None:
+                    difference = f"required observations did not match {required!r}"
             outcomes.append({
                 "case_id": case["case_id"],
                 "profile": profile["id"],

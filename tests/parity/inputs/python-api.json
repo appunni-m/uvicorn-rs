@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@12",
+  "schema": "uvicorn-rs-parity/input@13",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -280,6 +280,20 @@
           "root_path": "",
           "interface": "asgi2",
           "application_interface": "asgi2"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-applies-websocket-message-size-limit",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "12345",
+          "ws_max_size": 4,
+          "timeout_seconds": 5
         }
       }
     },
