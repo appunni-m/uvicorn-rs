@@ -48,6 +48,7 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--loop", choices=("asyncio", "uvloop"), default="asyncio")
     parser.add_argument("--lifespan", choices=("auto", "on", "off"), default="auto")
+    parser.add_argument("--interface", choices=("auto", "asgi2", "asgi3"), default="auto")
     parser.add_argument("--app-dir", default="")
     parser.add_argument("--root-path", default="")
     parser.add_argument("--factory", action="store_true")
@@ -95,6 +96,9 @@ def main(argv=None, prog="uvicorn-rs-py"):
                 "WARNING:  ASGI app factory detected. Using it, but please consider setting the --factory flag explicitly.",
                 file=sys.stderr,
             )
+    from uvicorn.config import _configure_asgi_interface
+
+    app, _ = _configure_asgi_interface(app, args.interface)
 
     loop_factory = None
     if args.loop == "uvloop":

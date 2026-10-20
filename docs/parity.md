@@ -412,15 +412,17 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 
 | Profile group | Cases | Reference | Why |
 |---|---:|---|---|
-| HTTP/1.1, including TLS | 97 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, and WebSocket-upgrade validation. |
+| HTTP/1.1, including TLS | 98 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, and WebSocket-upgrade validation. |
 | WebSocket, including TLS | 47 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, and shutdown cases. |
 | Startup configuration | 9 | Uvicorn 0.54.0 and the public `uvicorn_rs.Server` API | Same invalid-host and TLS startup configurations on both implementations. |
-| Lifespan and shutdown | 35 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
+| Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
-| HTTP/3 | 33 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
+| HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
+| CLI and environment | 20 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
+| Python API | 16 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, headers, environment files, and ASGI2 selection. |
 
-These six groups account for all 248 current oracle-parity cases. The other
-289 cases are target-only fault/support contracts. Five of those exercise
+These eight groups account for all 288 current oracle-parity cases. The other
+296 cases are target-only fault/support contracts. Five of those exercise
 `UVICORN_RS_MAX_BLOCKING_THREADS`; they are described in the
 [ASGI behavior inventory](asgi-case-inventory.md#declared-behavior-map), not
 counted as oracle parity.
@@ -435,7 +437,7 @@ digests for the target.
 ## Scope and comparison rules
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@10`; live artifacts use
+`uvicorn-rs-parity/input@11`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -563,11 +565,13 @@ active cases. The runner validates these fail-closed properties before starting
 servers and verifies that result accounting cannot omit a selected case. It
 selects adapters by declared profile and workflow shape, never by case ID.
 
-Input schema `@10` adds optional `headers` and `observe_headers` fields to the
-Python API HTTP-run stimulus. Migrate maintained `@9` inputs with
-`python scripts/migrate_parity_input_v9_to_v10.py`; the migrator changes only
-the schema marker and preserves existing case data. The runner rejects older
-or mixed input schemas.
+Input schema `@10` added optional `headers` and `observe_headers` fields to the
+Python API HTTP-run stimulus. Schema `@11` adds optional `interface` and
+`application_interface` fields so cases can select Uvicorn's ASGI interface
+and the shape of the application callable. Migrate maintained `@10` inputs
+with `python scripts/migrate_parity_input_v10_to_v11.py`; the migrator changes
+only the schema marker and preserves existing case data. The runner rejects
+older or mixed input schemas.
 
 ## CI evidence
 

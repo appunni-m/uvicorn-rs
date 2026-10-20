@@ -1553,3 +1553,12 @@ async def lifespan_probe_app(scope, receive, send):
             (lifespan_status, state_status, root_path_status, path_status, raw_path_status)
         )
         await _respond(send, body, content_type=b"text/plain")
+
+
+def asgi2_probe_app(scope):
+    """Expose the same probe through ASGI2's two-stage call interface."""
+
+    async def app(receive, send):
+        await lifespan_probe_app(scope, receive, send)
+
+    return app

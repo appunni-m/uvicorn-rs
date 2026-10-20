@@ -59,7 +59,7 @@ import uvicorn
 
 lifespan_state = {"started": False}
 
-async def app(scope, receive, send):
+async def asgi3_app(scope, receive, send):
     if scope["type"] == "lifespan":
         while True:
             message = await receive()
@@ -103,6 +103,15 @@ async def app(scope, receive, send):
     })
     await send({"type": "http.response.body", "body": body})
 
+def asgi2_app(scope):
+    async def respond(receive, send):
+        await asgi3_app(scope, receive, send)
+    return respond
+
+application_interface = sys.argv[5]
+requested_interface = sys.argv[6]
+app = asgi2_app if application_interface == "asgi2" else asgi3_app
+
 uvicorn.run(
     app,
     host="127.0.0.1",
@@ -110,6 +119,7 @@ uvicorn.run(
     lifespan=sys.argv[2],
     root_path=sys.argv[3],
     headers=json.loads(sys.argv[4]),
+    interface=requested_interface,
 )
 '''
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
@@ -117,11 +127,16 @@ uvicorn.run(
         port = reservation.getsockname()[1]
 
     if request["invocation"] == "module-cli":
+        app_target = (
+            "tests.parity.app:asgi2_probe_app"
+            if request.get("application_interface") == "asgi2"
+            else "tests.parity.app:lifespan_probe_app"
+        )
         command = [
             sys.executable,
             "-m",
             "uvicorn",
-            "tests.parity.app:lifespan_probe_app",
+            app_target,
             "--host",
             "127.0.0.1",
             "--port",
@@ -131,6 +146,8 @@ uvicorn.run(
             "--lifespan",
             request["lifespan"],
         ]
+        if request.get("interface", "auto") != "auto":
+            command.extend(("--interface", request["interface"]))
         for name, value in request.get("headers", []):
             command.extend(("--header", f"{name}:{value}"))
     else:
@@ -142,6 +159,8 @@ uvicorn.run(
             request["lifespan"],
             request["root_path"],
             json.dumps(request.get("headers", []), separators=(",", ":")),
+            request.get("application_interface", "asgi3"),
+            request.get("interface", "auto"),
         ]
 
     environment = os.environ.copy()

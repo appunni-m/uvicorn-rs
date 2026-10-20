@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import ssl
 import sys
@@ -47,6 +48,41 @@ LOGGING_CONFIG: dict[str, Any] = {
         "uvicorn.access": {"handlers": ["access"], "level": "INFO", "propagate": False},
     },
 }
+
+
+class _ASGI2Adapter:
+    """Adapt the two-call ASGI interface to the ASGI3 app shape Rust serves."""
+
+    def __init__(self, app: Callable[..., Any]) -> None:
+        self.app = app
+
+    async def __call__(
+        self,
+        scope: dict[str, Any],
+        receive: Callable[..., Any],
+        send: Callable[..., Any],
+    ) -> None:
+        await self.app(scope)(receive, send)
+
+
+def _configure_asgi_interface(app: Any, interface: str) -> tuple[Any, str]:
+    """Select Uvicorn's ASGI2/ASGI3 call shape and adapt ASGI2 for Rust."""
+    if interface == "auto":
+        if inspect.isclass(app):
+            use_asgi3 = hasattr(app, "__await__")
+        elif inspect.isfunction(app):
+            use_asgi3 = inspect.iscoroutinefunction(app)
+        else:
+            call = getattr(app, "__call__", None)
+            use_asgi3 = inspect.iscoroutinefunction(call)
+        interface = "asgi3" if use_asgi3 else "asgi2"
+    if interface == "asgi2":
+        return _ASGI2Adapter(app), interface
+    if interface == "asgi3":
+        return app, interface
+    raise NotImplementedError(
+        f"uvicorn-rs does not support interface={interface!r}"
+    )
 
 
 class Config:
@@ -174,6 +210,9 @@ class Config:
                     "WARNING:  ASGI app factory detected. Using it, but please consider setting the --factory flag explicitly.",
                     file=sys.stderr,
                 )
+        self.loaded_app, self.interface = _configure_asgi_interface(
+            self.loaded_app, self.interface
+        )
         encoded_headers = [
             (name.lower().encode("latin1"), value.encode("latin1"))
             for name, value in (self.headers or [])
@@ -202,7 +241,7 @@ class Config:
             (self.ws_ping_timeout != 20.0, "ws_ping_timeout"),
             (self.ws_per_message_deflate is not True, "ws_per_message_deflate"),
             (self.lifespan not in {"auto", "on", "off"}, "lifespan"),
-            (self.interface not in {"auto", "asgi3"}, "interface"),
+            (self.interface not in {"auto", "asgi2", "asgi3"}, "interface"),
             (
                 self.log_config is not None and self.log_config != LOGGING_CONFIG,
                 "log_config",

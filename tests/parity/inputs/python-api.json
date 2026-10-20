@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@10",
+  "schema": "uvicorn-rs-parity/input@11",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -204,6 +204,82 @@
             ["X-Python-API-Sequence", "second"]
           ],
           "observe_headers": ["x-python-api-sequence"]
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-auto-detects-asgi2-callable",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-asgi2",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "interface": "auto",
+          "application_interface": "asgi2"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-explicit-asgi2-interface",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-asgi2-explicit",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "interface": "asgi2",
+          "application_interface": "asgi2"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-auto-detects-asgi2-callable",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-module-cli-asgi2",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "interface": "auto",
+          "application_interface": "asgi2"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-explicit-asgi2-interface",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-module-cli-asgi2-explicit",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "interface": "asgi2",
+          "application_interface": "asgi2"
         }
       }
     },

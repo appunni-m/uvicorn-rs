@@ -139,7 +139,7 @@ the evidence map below.
 | --- | --- | --- | --- |
 | Distribution and `uvicorn` command/import namespace | The source package keeps distribution metadata `uvicorn-rs-py` version `0.1.0`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. `uvicorn.__version__` reports the pinned Uvicorn compatibility baseline `0.54.0`. The wheel includes both Python namespaces and the `uvicorn-rs-py` and `uvicorn` entry points. A local macOS ARM64 wheel passed the CPython 3.9.6 consumer smoke and CPython 3.12 install/replace/rollback check; this is one-host evidence. The distribution is unpublished, and full package and runtime parity remain incomplete. | `1s4z` | Input cases compare installed distribution metadata/imports, entry points, module and console commands, and executable behavior with upstream 0.54.0. |
 | CLI/settings/environment | The compatibility namespace uses Click option metadata adapted from Uvicorn 0.54.0. The indexed `@9` CLI set now has 20 cases: 14 existing cases have earlier focused receipts, two single-process worker-normalization cases pass on clean commit `81ba57c`, two explicit `--http auto` / `--ws auto` cases pass on a source snapshot now committed as `4c1546c`, and one explicit worker-healthcheck timeout case passes in single-process mode. The auto and healthcheck cases compare app-load diagnostics; they do not prove request-level backend behavior or worker supervision. A current `@9` module-CLI `--root-path` request case and an HTTP/1.1 header-policy case (`--header`, disabled default Server/Date headers, and explicit `--interface asgi3`) also pass. The focused `cli.env-file-loads-before-factory` case now proves that `--env-file` supplies an app-specific variable before the factory runs and matches Uvicorn's log, error, and exit status. `python-dotenv` is available through the `[standard]` extra; `Config(env_file=...)`, broader env-file syntax and precedence, and other runtime settings remain unverified. Unsupported selected settings fail instead of being silently ignored. | `9kbx` | Extend `tests/parity/inputs/cli.json`; invoke both module and console paths with matching argv/env/cwd/files and compare exit status, stdout, stderr, and listener/app behavior. |
-| `run`, `Config`, and `Server` API | `uvicorn.Config`, `uvicorn.Server(config)`, and `uvicorn.run` expose the pinned signatures. The basic ASGI 3 path delegates to the Rust server; the default request, `lifespan="off"`, ASCII `root_path`, `env_file` before factory invocation, custom default-header delivery, and duplicate value order pass focused comparisons. Advanced Config settings, readiness, socket injection, signal details, and remaining lifecycle cases are unverified. | `gjpr` | `tests/parity/inputs/python-api.json` compares public imports, signatures, selected run behavior, custom headers, environment-file loading, and lifecycle observations against upstream Uvicorn. |
+| `run`, `Config`, and `Server` API | `uvicorn.Config`, `uvicorn.Server(config)`, and `uvicorn.run` expose the pinned signatures. Focused comparisons cover default ASGI3 serving, ASGI2 auto-detection and explicit selection, `lifespan="off"`, ASCII `root_path`, `env_file` before factory invocation, custom default-header delivery, duplicate value order, readiness, and startup-failure state. Advanced Config settings, WSGI, socket injection, signal details, and broader lifecycle behavior remain unverified. | `gjpr` | `tests/parity/inputs/python-api.json` compares public imports, signatures, selected run behavior, custom headers, environment-file loading, ASGI interface handling, and lifecycle observations against upstream Uvicorn. |
 | HTTP, WebSocket, lifespan, ASGI and errors | The current Rust server has an input-driven ASGI protocol matrix. Uvicorn is the H1/WebSocket/lifespan oracle; Hypercorn is the current H2/H3 oracle. This is not Uvicorn CLI/API compatibility. | `dv25`, `4fvf` | Extend the existing protocol cases where applicable; preserve the declared reference per protocol and compare public observations. |
 | Unix/fd sockets, reload, workers, supervision | Not exposed by the current adapter contract; not covered by the existing ASGI protocol matrix. | `dhfq` | Process-level cases run the same socket/reload/worker stimuli against upstream and installed target, and record child/process/socket outcomes. |
 | Package extras and release gates | No published package; current distribution requirements/extras do not mirror the upstream installation contract. | `1s4z`, `v5fe` | Installed-artifact cases and package-content/dependency gates on the supported OS/Python matrix. |
@@ -163,13 +163,18 @@ compares `uvicorn.run(..., env_file=..., factory=True)` with the same app-dir
 and environment file as the module CLI case, and
 `python-api.run-applies-custom-default-response-header` plus
 `python-api.run-preserves-custom-default-header-value-order`, which check
-delivery and duplicate value order for `uvicorn.run(headers=[(name, value)])`.
+delivery and duplicate value order for `uvicorn.run(headers=[(name, value)])`,
+and `python-api.run-auto-detects-asgi2-callable` plus
+`python-api.run-explicit-asgi2-interface`, which compare API startup through
+Uvicorn's auto-detection and explicit interface selection. The two
+`python-api.module-cli-*asgi2*` cases exercise the same modes through
+`python -m uvicorn`.
 The matrix does not yet cover successful factory serving,
 most settings, general environment precedence, reload, multi-worker
 supervision, or package replacement behavior.
-The Python API inputs now use `uvicorn-rs-parity/input@10` to include `root_path`
-and optional default-header stimuli and observations in the declared run
-request. They compare public imports/signatures, the
+The Python API inputs now use `uvicorn-rs-parity/input@11` to include
+`root_path`, optional default-header stimuli and observations, and selected
+Uvicorn/application interfaces in the declared run request. They compare public imports/signatures, the
 `uvicorn.run()` missing-module diagnostic, a successful default request, an
 API request with lifespan disabled, a module CLI request with lifespan
 disabled, startup readiness, startup-failure state, and API/module-CLI requests
@@ -180,9 +185,10 @@ Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Receipts are under ignored
 focused cases do not close the remaining settings or lifecycle inventory.
 
 Input schema `@9` was introduced on 2026-10-20 to declare `root_path` in the
-`run_http` stimulus. Input schema `@10` adds optional default response headers
-and selected response-header observations to the same stimulus; the
-`@9`-to-`@10` migrator updates markers while preserving each case. All indexed
+`run_http` stimulus. Input schema `@10` added optional default response headers
+and selected response-header observations. Schema `@11` adds the Uvicorn
+`interface` and application callable shape. The `@9`-to-`@10` and
+`@10`-to-`@11` migrators update markers while preserving each case. All indexed
 input files carry the same schema identity. Previous full-matrix and
 per-case receipts are historical under schema `@8`; regenerate the full
 parity matrix against the exact release candidate before using it as a
@@ -197,7 +203,7 @@ gate for those surfaces. Until the remaining cases are represented and pass,
 the support status remains incomplete and the package must not claim a
 Uvicorn drop-in replacement.
 
-## Current focused @9 receipts (2026-10-20)
+## Historical focused @9 receipts (2026-10-20)
 
 On macOS 15.7.7 ARM64 / CPython 3.12.13, the previously declared process
 inputs passed when run individually against isolated genuine Uvicorn 0.54.0:
@@ -291,6 +297,27 @@ replacement mechanics only. They do not cover most runtime settings, every
 documented import, process supervision, protocols, or the full ASGI matrix.
 Because the source was dirty, none of these artifacts is a clean release
 candidate or evidence for a drop-in compatibility claim.
+
+## Focused ASGI2 parity (2026-10-20)
+
+The initial comparison reproduced an ASGI2 compatibility gap: upstream Uvicorn
+auto-detected the one-argument application as ASGI2 and wrapped it, while the
+adapter left `interface="auto"` unchanged and Rust invoked the callable with
+three ASGI3 arguments. The adapter now follows Uvicorn's auto-detection and
+uses a small Python ASGI2-to-ASGI3 wrapper before calling the Rust server.
+
+All four new input cases pass individually against isolated Uvicorn 0.54.0 on
+macOS 15.7.7 ARM64 / CPython 3.12.13:
+
+- `python-api.run-auto-detects-asgi2-callable`
+- `python-api.run-explicit-asgi2-interface`
+- `python-api.module-cli-auto-detects-asgi2-callable`
+- `python-api.module-cli-explicit-asgi2-interface`
+
+Each compares the HTTP response and process shutdown. Receipts are retained
+locally under ignored `target/parity-python-api-asgi2*.json`. This proves these
+function-based paths only; WSGI, other callable forms, and the complete API
+lifecycle remain open.
 
 ## Keep benchmark oracle files separate
 

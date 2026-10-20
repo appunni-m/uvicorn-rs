@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@10"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@11"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2297,7 +2297,12 @@ def load_contract(
             if case["operation"] == "python.api.run-http":
                 exact_keys(case["api"], {"run_http"}, f"{case_id}.api")
                 run_http = case["api"]["run_http"]
-                optional_run_http_keys = {"headers", "observe_headers"} & set(run_http)
+                optional_run_http_keys = {
+                    "headers",
+                    "observe_headers",
+                    "interface",
+                    "application_interface",
+                } & set(run_http)
                 exact_keys(
                     run_http,
                     {
@@ -2313,6 +2318,14 @@ def load_contract(
                 )
                 if run_http["invocation"] not in {"api", "module-cli"}:
                     raise ParityError(f"{case_id}.api.run_http.invocation must be api or module-cli")
+                if run_http.get("interface", "auto") not in {"auto", "asgi2", "asgi3"}:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.interface must be auto, asgi2, or asgi3"
+                    )
+                if run_http.get("application_interface", "asgi3") not in {"asgi2", "asgi3"}:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.application_interface must be asgi2 or asgi3"
+                    )
                 if run_http["method"] != "GET":
                     raise ParityError(f"{case_id}: run_http currently supports the GET method")
                 if (

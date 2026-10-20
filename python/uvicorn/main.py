@@ -328,9 +328,9 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
             "these Uvicorn settings are not implemented by uvicorn-rs yet: "
             + ", ".join(unsupported)
         )
-    if options["interface"] not in {"auto", "asgi3"}:
+    if options["interface"] not in {"auto", "asgi2", "asgi3"}:
         raise click.ClickException(
-            "uvicorn-rs currently supports only the ASGI 3 application interface"
+            "uvicorn-rs currently supports only the ASGI 2 and ASGI 3 application interfaces"
         )
 
     loop = options["loop"]
@@ -362,6 +362,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.append("--no-server-header")
     if not options["date_header"]:
         argv.append("--no-date-header")
+    if options["interface"] != "auto":
+        argv.extend(("--interface", options["interface"]))
     graceful_timeout = options["timeout_graceful_shutdown"]
     if graceful_timeout is not None:
         argv.extend(("--graceful-timeout", str(graceful_timeout)))
