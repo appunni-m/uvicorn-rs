@@ -14,6 +14,63 @@ This attempt did not produce a validated three-system aggregate. No performance 
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## FastAPI WebSocket text echo and text-buffer candidate (Linux x86-64; 2026-10-21)
+
+This focused benchmark used the stock FastAPI app's 32-byte WebSocket text
+echo route, 32 concurrent connections, a 1-second warmup, 5-second samples,
+five repetitions, and seed `20261021`. It ran on an AMD Ryzen 5 2600X host
+(12 logical CPUs, Linux `7.0.0-38-generic`) with CPython 3.12.13 and Rust
+1.91.1. Both environments used FastAPI 0.142.4, Starlette 1.7.0, Pydantic
+2.13.5. The verified reference was stock Uvicorn 0.54.0; `httptools` was
+0.8.0, `websockets` was 17.1, and `uvloop` was 0.23.0. The same Rust
+`tokio-tungstenite` client binary was used in both reports. All requests
+matched their expected echo and every server shut down cleanly.
+
+The table reports medians over each server's timing-valid rows. Baseline
+Uvicorn/asyncio repetition 3 was excluded for unrelated host CPU activity,
+leaving four matched asyncio pairs; the other baseline pair and all candidate
+pairs had five valid repetitions.
+
+| Build / server | Loop | Valid rows | Messages/s | p50 / p95 / p99 ms | Server CPU µs/message | Server RSS MiB | Client CPU µs/message | Client RSS MiB |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Main Uvicorn | asyncio | 4/5 | 20,732 | 1.520 / 1.768 / 1.838 | 48.0 | 48.88 | 35.5 | 8.79 |
+| Main uvicorn-rs | asyncio | 5/5 | 8,504 | 3.930 / 5.322 / 5.680 | 196.2 | 55.72 | 42.7 | 8.32 |
+| Main Uvicorn | uvloop | 5/5 | 24,788 | 1.241 / 1.554 / 1.602 | 40.2 | 51.13 | 32.2 | 8.90 |
+| Main uvicorn-rs | uvloop | 5/5 | 16,166 | 2.169 / 2.642 / 2.854 | 102.8 | 58.22 | 33.4 | 8.80 |
+| Candidate Uvicorn | asyncio | 5/5 | 21,288 | 1.422 / 1.767 / 1.804 | 46.9 | 48.31 | 34.9 | 8.81 |
+| Candidate uvicorn-rs | asyncio | 5/5 | 8,381 | 3.961 / 5.446 / 5.888 | 198.4 | 55.77 | 41.4 | 8.34 |
+| Candidate Uvicorn | uvloop | 5/5 | 22,863 | 1.333 / 1.587 / 1.616 | 43.5 | 50.93 | 33.8 | 8.86 |
+| Candidate uvicorn-rs | uvloop | 5/5 | 15,917 | 2.154 / 2.711 / 2.928 | 104.1 | 58.50 | 33.9 | 8.84 |
+
+The baseline's Rust server CPU was 4.1 times Uvicorn under asyncio and 2.6
+times Uvicorn under uvloop for this workload. These totals identify a server
+cost gap, not the responsible function or thread. The Rust candidate carried
+Tungstenite's existing UTF-8 buffer through the incoming queue instead of
+allocating an intermediate Rust `String`; PyO3 still creates the Python `str`
+required by ASGI. Its median throughput was 1.4% lower under asyncio and 1.5%
+lower under uvloop than main, with slightly higher server CPU and p95 latency.
+Because the reports ran sequentially, those small shifts do not establish
+causality, and this change showed no repeatable performance gain. It remains
+on the preserved experimental branch `codex/ws-text-ownership` and was not
+merged to main.
+
+The main report is bound to commit `58ed76536b21a687fb37c38f3b275fc756fcf537`
+and source SHA-256
+`c6b26abf783c4221270b77da3a087ae174c2f8acbec77f94ed5644d7ccdf5ac8`; its
+extension hash was stable at
+`fe8862b21378fe3ea263919827fb364e375dc09c8b462256cafa0c3823f44efb`. The
+candidate is commit `956a03ee453208d5f1b701579d5d9a6f5c0a849e`, source SHA-256
+`1a3db6f22c3c866300533c7e977159c5e03a596c925021d0a3110c01ee9ef026`, with
+stable extension hash
+`00eba443136bb086e30efdc6e7f43ae047b933b88e0eb5d3286eb1011abbe863`. Both
+used the same benchmark-client SHA-256
+`3264cf234af4dcead659dd4e5b16005b62096ad698649f36450d6649b8`. The
+focused `websocket.text-and-binary-round-trip` parity case passed on current
+main and the candidate on Linux x86-64; the candidate also passed locally on
+macOS arm64. Raw reports and server logs remain in
+ignored `target/wh9k-websocket-2026-10-21/` and
+`target/wh9k-websocket-candidate-2026-10-21/`; no report or log is committed.
+
 ## Tokio blocking-pool cap decision (2026-10-17)
 
 The completed Linux x86-64 FastAPI upload comparison found no repeatable
