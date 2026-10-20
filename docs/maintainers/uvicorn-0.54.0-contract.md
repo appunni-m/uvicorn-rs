@@ -64,6 +64,7 @@ The focused cases `http1.proxy-headers-trusted-client-and-scheme`,
 `http1.proxy-headers-untrusted-peer-ignores-forwarded-values`,
 `http1.proxy-headers-wildcard-trust-uses-first-forwarded-client`, and
 `http1.proxy-headers-cidr-trust-selects-first-untrusted-forwarded-client`,
+`http1.proxy-headers-malformed-forwarded-host-remains-opaque`,
 along with `python-api.run-applies-trusted-proxy-headers`, each pass 1/1 against
 Uvicorn 0.54.0. The exact-trust and Python API cases send
 `X-Forwarded-For: 198.51.100.25, 127.0.0.1` and `X-Forwarded-Proto: https`
@@ -76,8 +77,10 @@ peer, producing the same direct-peer observation. The wildcard case selects
 the first forwarded client, and the `127.0.0.0/8` case trusts the final proxy
 and selects the first untrusted forwarded client; both expose
 `198.51.100.25` and scheme `https`. Other address/network combinations,
-malformed forwarding chains, `FORWARDED_ALLOW_IPS` precedence, and WebSocket
-scheme conversion remain unverified.
+other malformed `X-Forwarded-For` forms, `FORWARDED_ALLOW_IPS` precedence, and
+WebSocket scheme conversion remain unverified. The malformed-host case places
+`not-an-ip` between the untrusted client and trusted loopback proxy; both
+servers retain it as the reported client host with the `https` scheme.
 
 ## Python import and callable surface
 
