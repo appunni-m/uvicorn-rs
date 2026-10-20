@@ -86,6 +86,11 @@ on:
         default: false
         required: true
         type: boolean
+      fastapi_match_no_native_tcp:
+        description: Use the fallback Hyper/Tokio transport for the focused normal-build FastAPI comparison
+        default: false
+        required: true
+        type: boolean
       fastapi_stage_repetitions:
         description: Repetitions per server for the focused FastAPI stage diagnostic (1–50)
         default: 1
@@ -589,7 +594,7 @@ jobs:
   focused-fastapi-match:
     # Push commits can select one Linux ARM64 upload case when the GitHub
     # workflow-dispatch UI is unavailable to the maintainer.
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · normal-build matched timing
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_match_no_native_tcp && 'fallback Hyper/Tokio' || 'native TCP' }} matched timing
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-match') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-match]')) }}
     runs-on: ${{ (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
@@ -660,15 +665,26 @@ jobs:
           }
           Path("target/benchmark-preparation/environment.json").write_text(json.dumps(report, indent=2) + "\n")
           PY
-      - name: Build and install the normal release server wheel
+      - name: Build and install the selected normal release server wheel
         shell: bash
+        env:
+          FASTAPI_MATCH_NO_NATIVE_TCP: ${{ inputs.fastapi_match_no_native_tcp }}
         run: |
           set -euo pipefail
           mkdir -p target/benchmark-preparation/server-wheels
-          uvx --from maturin==1.14.1 maturin build --release --locked \
-            --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
-            --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
-            2>&1 | tee target/benchmark-preparation/server-build.log
+          if [[ "$FASTAPI_MATCH_NO_NATIVE_TCP" == "true" ]]; then
+            printf '%s\n' 'transport=fallback-hyper-tokio' > target/benchmark-preparation/server-build-mode.txt
+            uvx --from maturin==1.14.1 maturin build --release --locked --no-default-features \
+              --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
+              --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
+              2>&1 | tee target/benchmark-preparation/server-build.log
+          else
+            printf '%s\n' 'transport=native-tcp' > target/benchmark-preparation/server-build-mode.txt
+            uvx --from maturin==1.14.1 maturin build --release --locked \
+              --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
+              --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
+              2>&1 | tee target/benchmark-preparation/server-build.log
+          fi
           server_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path("target/benchmark-preparation/server-wheels").glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one server wheel")')"
           uv pip install --python .venv/bin/python --no-deps "$server_wheel" \
             2>&1 | tee target/benchmark-preparation/server-install.log
@@ -718,7 +734,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: fastapi-match-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ github.sha }}
+          name: fastapi-match-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_match_no_native_tcp && 'fallback' || 'native' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/fastapi-match/
