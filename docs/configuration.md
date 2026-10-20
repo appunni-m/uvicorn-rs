@@ -12,15 +12,19 @@ before relying on an option or API behavior.
 uv run uvicorn examples.hello_asgi:app --host 127.0.0.1 --port 8000
 ~~~
 
-The current runtime forwards the options shown here. The Click command also
-recognizes the pinned Uvicorn option names, but explicitly selected settings
-outside this set are rejected as not yet implemented.
+The CLI recognizes the pinned Uvicorn option names. The options below are the
+current accepted subset; other explicitly selected settings are rejected as
+not yet implemented. Where a parity receipt checks only startup diagnostics,
+that limit is stated in the option description.
 
 | Option | Default | Description |
 | --- | --- | --- |
 | module:attribute | Required | Import a module attribute, including nested attributes. The application can also come from `UVICORN_APP`. |
 | --host HOST | 127.0.0.1 | TCP bind host and, when TLS is enabled, QUIC bind host. |
 | --port PORT | 8000 | TCP/QUIC port; zero asks the OS to select a port. |
+| --http auto | auto | Accepted and uses the native HTTP default. The focused parity case checks missing-app startup diagnostics only; request-level backend parity is not established. Explicit backend selections are rejected. |
+| --ws auto | auto | Accepted and uses the native WebSocket default. The focused parity case checks missing-app startup diagnostics only; handshake and backend selection parity are not established by this CLI case. Explicit backend selections are rejected. |
+| --workers {0,1} | Unset | Explicit `0` and `1` are accepted and use the existing single process. Other worker counts are rejected; process supervision is not implemented. Current CLI parity cases check startup diagnostics, not worker lifecycle behavior. |
 | --interface {auto,asgi3} | auto | ASGI 3 applications are supported. Explicit `asgi2` and `wsgi` selections are rejected. |
 | --loop {auto,asyncio,uvloop,zuvloop} | auto | Select the Python event loop. `auto` uses uvloop when installed, otherwise asyncio. Tokio remains the Rust network runtime. |
 | --lifespan {auto,on,off} | auto | `off` prevents the app from receiving ASGI lifespan events. This behavior has focused live parity on macOS ARM64 / CPython 3.12.13. Strict `on` failure behavior for apps without lifespan support is not yet verified. |
