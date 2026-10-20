@@ -2,16 +2,14 @@ use std::{
     future::Future,
     io,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
 #[cfg(feature = "runtime-diagnostics")]
 use std::{
     net::SocketAddr,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -19,7 +17,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf},
     net::{tcp::OwnedReadHalf, tcp::OwnedWriteHalf, TcpStream},
-    sync::{mpsc, watch},
+    sync::{mpsc, watch, Notify},
 };
 
 use super::{PeerReadHalfCloseMode, PeerReadHalfClosed};
@@ -50,12 +48,48 @@ pub(super) struct PeerReadIo {
 }
 
 enum ReadMode {
-    OnRead {
+    Direct {
         stream: TcpStream,
         closed: watch::Sender<bool>,
         failed: watch::Sender<Option<io::ErrorKind>>,
+        read_progress: Option<Arc<Notify>>,
     },
     Proactive(BufferedReadIo),
+}
+
+enum PeerReadStrategy {
+    OnRead,
+    Proactive,
+    ConcurrentPeek { monitor_stream: TcpStream },
+}
+
+impl PeerReadStrategy {
+    const fn mode(&self) -> PeerReadHalfCloseMode {
+        match self {
+            Self::OnRead => PeerReadHalfCloseMode::OnRead,
+            Self::Proactive => PeerReadHalfCloseMode::Proactive,
+            Self::ConcurrentPeek { .. } => PeerReadHalfCloseMode::ConcurrentPeek,
+        }
+    }
+}
+
+enum PeerReadObserver {
+    Proactive {
+        reader: OwnedReadHalf,
+        sender: mpsc::Sender<ReadEvent>,
+        closed: watch::Sender<bool>,
+        failed: watch::Sender<Option<io::ErrorKind>>,
+        #[cfg(feature = "runtime-diagnostics")]
+        diagnostics: Option<Arc<PeerReadDiagnosticCounters>>,
+    },
+    ConcurrentPeek {
+        stream: TcpStream,
+        read_progress: Arc<Notify>,
+        closed: watch::Sender<bool>,
+        failed: watch::Sender<Option<io::ErrorKind>>,
+        #[cfg(feature = "runtime-diagnostics")]
+        diagnostics: Option<Arc<PeerReadDiagnosticCounters>>,
+    },
 }
 
 struct BufferedReadIo {
@@ -269,6 +303,7 @@ impl PeerReadDiagnosticCounters {
         let mode = match self.mode {
             PeerReadHalfCloseMode::OnRead => "on-read",
             PeerReadHalfCloseMode::Proactive => "proactive",
+            PeerReadHalfCloseMode::ConcurrentPeek => "concurrent-peek",
         };
         let _ = io::Write::write_fmt(
             &mut io::stderr().lock(),
@@ -347,6 +382,7 @@ impl PeerReadDiagnosticCounters {
                 match self.mode {
                     PeerReadHalfCloseMode::OnRead => "on-read",
                     PeerReadHalfCloseMode::Proactive => "proactive",
+                    PeerReadHalfCloseMode::ConcurrentPeek => "concurrent-peek",
                 },
                 peer_port,
                 pending_unix_ns,
@@ -390,29 +426,45 @@ pub(super) fn observe_peer_read(
     bool,
     PeerReadDiagnosticsHandle,
 ) {
+    let strategy = match mode {
+        PeerReadHalfCloseMode::OnRead => PeerReadStrategy::OnRead,
+        PeerReadHalfCloseMode::Proactive => PeerReadStrategy::Proactive,
+        PeerReadHalfCloseMode::ConcurrentPeek => match clone_tcp_stream(&stream) {
+            Ok(monitor_stream) => PeerReadStrategy::ConcurrentPeek { monitor_stream },
+            Err(error) => {
+                tracing::debug!(
+                    %error,
+                    "could not create concurrent peer-close observer; using the buffered read path"
+                );
+                PeerReadStrategy::Proactive
+            }
+        },
+    };
+    let mode = strategy.mode();
     let diagnostics = PeerReadDiagnosticsHandle::new(&stream, mode);
     #[cfg(feature = "runtime-diagnostics")]
     let diagnostic_counters = diagnostics.inner.clone();
     let (closed, receiver) = watch::channel(false);
     let (failed, failed_receiver) = watch::channel(None);
-    let observer = PeerReadHalfClosed {
+    let peer_read_half_closed = PeerReadHalfClosed {
         closed: receiver,
         mode,
     };
     let failed_observer = super::PeerReadFailed {
         failed: failed_receiver,
     };
-    let (inner, pump, prioritize_receiver_close_fault) = match mode {
-        PeerReadHalfCloseMode::OnRead => (
-            ReadMode::OnRead {
+    let (inner, observer, prioritize_receiver_close_fault) = match strategy {
+        PeerReadStrategy::OnRead => (
+            ReadMode::Direct {
                 stream,
                 closed,
                 failed,
+                read_progress: None,
             },
             None,
             false,
         ),
-        PeerReadHalfCloseMode::Proactive => {
+        PeerReadStrategy::Proactive => {
             let (reader, writer) = stream.into_split();
             let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
             #[cfg(coverage)]
@@ -427,6 +479,14 @@ pub(super) fn observe_peer_read(
             };
             #[cfg(not(coverage))]
             let (receiver, prioritize_receiver_close_fault) = (receiver, false);
+            let observer = PeerReadObserver::Proactive {
+                reader,
+                sender,
+                closed,
+                failed,
+                #[cfg(feature = "runtime-diagnostics")]
+                diagnostics: diagnostic_counters.clone(),
+            };
             (
                 ReadMode::Proactive(BufferedReadIo {
                     writer,
@@ -438,18 +498,33 @@ pub(super) fn observe_peer_read(
                     #[cfg(feature = "runtime-diagnostics")]
                     receiver_pending_since: None,
                 }),
-                Some(pump_peer_read(
-                    reader,
-                    sender,
-                    closed,
-                    failed,
-                    #[cfg(feature = "runtime-diagnostics")]
-                    diagnostic_counters.clone(),
-                )),
+                Some(observer),
                 prioritize_receiver_close_fault,
             )
         }
+        PeerReadStrategy::ConcurrentPeek { monitor_stream } => {
+            let read_progress = Arc::new(Notify::new());
+            let observer = PeerReadObserver::ConcurrentPeek {
+                stream: monitor_stream,
+                read_progress: Arc::clone(&read_progress),
+                closed: closed.clone(),
+                failed: failed.clone(),
+                #[cfg(feature = "runtime-diagnostics")]
+                diagnostics: diagnostic_counters.clone(),
+            };
+            (
+                ReadMode::Direct {
+                    stream,
+                    closed,
+                    failed,
+                    read_progress: Some(read_progress),
+                },
+                Some(observer),
+                false,
+            )
+        }
     };
+    let pump = observer.map(run_peer_read_observer);
     (
         PeerReadIo {
             inner,
@@ -460,12 +535,19 @@ pub(super) fn observe_peer_read(
             #[cfg(feature = "runtime-diagnostics")]
             direct_read_pending_unix_ns: None,
         },
-        observer,
+        peer_read_half_closed,
         failed_observer,
         pump,
         prioritize_receiver_close_fault,
         diagnostics,
     )
+}
+
+fn clone_tcp_stream(stream: &TcpStream) -> io::Result<TcpStream> {
+    let socket = socket2::SockRef::from(stream).try_clone()?;
+    let standard_stream: std::net::TcpStream = socket.into();
+    standard_stream.set_nonblocking(true)?;
+    TcpStream::from_std(standard_stream)
 }
 
 async fn pump_peer_read(
@@ -576,6 +658,85 @@ async fn pump_peer_read(
     }
 }
 
+async fn run_peer_read_observer(observer: PeerReadObserver) -> PeerReadPumpOutcome {
+    match observer {
+        PeerReadObserver::Proactive {
+            reader,
+            sender,
+            closed,
+            failed,
+            #[cfg(feature = "runtime-diagnostics")]
+            diagnostics,
+        } => {
+            pump_peer_read(
+                reader,
+                sender,
+                closed,
+                failed,
+                #[cfg(feature = "runtime-diagnostics")]
+                diagnostics,
+            )
+            .await
+        }
+        PeerReadObserver::ConcurrentPeek {
+            stream,
+            read_progress,
+            closed,
+            failed,
+            #[cfg(feature = "runtime-diagnostics")]
+            diagnostics,
+        } => {
+            observe_peer_close(
+                stream,
+                read_progress,
+                closed,
+                failed,
+                #[cfg(feature = "runtime-diagnostics")]
+                diagnostics,
+            )
+            .await
+        }
+    }
+}
+
+async fn observe_peer_close(
+    stream: TcpStream,
+    read_progress: Arc<Notify>,
+    closed: watch::Sender<bool>,
+    failed: watch::Sender<Option<io::ErrorKind>>,
+    #[cfg(feature = "runtime-diagnostics")] diagnostics: Option<Arc<PeerReadDiagnosticCounters>>,
+) -> PeerReadPumpOutcome {
+    let mut byte = [0_u8; 1];
+    loop {
+        let progress = read_progress.notified();
+        tokio::pin!(progress);
+        progress.as_mut().enable();
+        match stream.peek(&mut byte).await {
+            Ok(0) => {
+                // A non-consuming peek sees FIN only after earlier data has
+                // left the socket's receive queue. The HTTP/TLS reader keeps
+                // ownership of every request byte.
+                closed.send_replace(true);
+                #[cfg(feature = "runtime-diagnostics")]
+                if let Some(diagnostics) = diagnostics.as_ref() {
+                    diagnostics.eof_events.fetch_add(1, Ordering::Relaxed);
+                }
+                return PeerReadPumpOutcome::ReadHalfClosed;
+            }
+            Ok(_) => progress.await,
+            Err(error) => {
+                let kind = error.kind();
+                failed.send_replace(Some(kind));
+                #[cfg(feature = "runtime-diagnostics")]
+                if let Some(diagnostics) = diagnostics.as_ref() {
+                    diagnostics.read_errors.fetch_add(1, Ordering::Relaxed);
+                }
+                return PeerReadPumpOutcome::ReadFailed(kind);
+            }
+        }
+    }
+}
+
 impl BufferedReadIo {
     fn poll_read(
         &mut self,
@@ -669,10 +830,11 @@ impl AsyncRead for PeerReadIo {
         }
         let this = self.get_mut();
         match &mut this.inner {
-            ReadMode::OnRead {
+            ReadMode::Direct {
                 stream,
                 closed,
                 failed,
+                read_progress,
             } => {
                 let filled_before = buffer.filled().len();
                 let result = Pin::new(stream).poll_read(context, buffer);
@@ -747,6 +909,12 @@ impl AsyncRead for PeerReadIo {
                     && buffer.filled().len() == filled_before
                 {
                     closed.send_replace(true);
+                } else if matches!(&result, Poll::Ready(Ok(())))
+                    && buffer.filled().len() > filled_before
+                {
+                    if let Some(read_progress) = read_progress {
+                        read_progress.notify_one();
+                    }
                 }
                 if let Poll::Ready(Err(error)) = &result {
                     failed.send_replace(Some(error.kind()));
@@ -765,7 +933,7 @@ impl AsyncWrite for PeerReadIo {
         buffer: &[u8],
     ) -> Poll<io::Result<usize>> {
         match &mut self.get_mut().inner {
-            ReadMode::OnRead { stream, .. } => Pin::new(stream).poll_write(context, buffer),
+            ReadMode::Direct { stream, .. } => Pin::new(stream).poll_write(context, buffer),
             ReadMode::Proactive(stream) => Pin::new(&mut stream.writer).poll_write(context, buffer),
         }
     }
@@ -776,7 +944,7 @@ impl AsyncWrite for PeerReadIo {
         buffers: &[io::IoSlice<'_>],
     ) -> Poll<io::Result<usize>> {
         match &mut self.get_mut().inner {
-            ReadMode::OnRead { stream, .. } => {
+            ReadMode::Direct { stream, .. } => {
                 Pin::new(stream).poll_write_vectored(context, buffers)
             }
             ReadMode::Proactive(stream) => {
@@ -787,21 +955,21 @@ impl AsyncWrite for PeerReadIo {
 
     fn is_write_vectored(&self) -> bool {
         match &self.inner {
-            ReadMode::OnRead { stream, .. } => stream.is_write_vectored(),
+            ReadMode::Direct { stream, .. } => stream.is_write_vectored(),
             ReadMode::Proactive(stream) => stream.writer.is_write_vectored(),
         }
     }
 
     fn poll_flush(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
         match &mut self.get_mut().inner {
-            ReadMode::OnRead { stream, .. } => Pin::new(stream).poll_flush(context),
+            ReadMode::Direct { stream, .. } => Pin::new(stream).poll_flush(context),
             ReadMode::Proactive(stream) => Pin::new(&mut stream.writer).poll_flush(context),
         }
     }
 
     fn poll_shutdown(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
         match &mut self.get_mut().inner {
-            ReadMode::OnRead { stream, .. } => Pin::new(stream).poll_shutdown(context),
+            ReadMode::Direct { stream, .. } => Pin::new(stream).poll_shutdown(context),
             ReadMode::Proactive(stream) => Pin::new(&mut stream.writer).poll_shutdown(context),
         }
     }

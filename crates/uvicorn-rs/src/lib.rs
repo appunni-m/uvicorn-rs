@@ -1041,7 +1041,7 @@ pub enum ServiceErrorPolicy {
 
 /// How TCP connections observe the peer closing its write side.
 ///
-/// Both modes report only a real raw socket EOF. They preserve input bytes,
+/// All modes report only a real raw socket EOF. They preserve input bytes,
 /// request-body errors, and the server's ability to finish its response.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum PeerReadHalfCloseMode {
@@ -1051,6 +1051,15 @@ pub enum PeerReadHalfCloseMode {
     /// that is waiting can delay observation until the driver reads again.
     #[default]
     OnRead,
+    /// Keep direct HTTP/TLS reads while observing peer EOF with a non-consuming
+    /// peek on a duplicated socket handle.
+    ///
+    /// The monitor waits for the HTTP/TLS reader to consume any available
+    /// bytes before peeking again, so it does not copy or queue request data.
+    /// It can observe EOF while an HTTP/1 service or response is waiting once
+    /// no unread bytes remain in the socket. Duplicating the socket handle and
+    /// driving the monitor adds per-connection setup and scheduling cost.
+    ConcurrentPeek,
     /// Read ahead within the connection task to observe EOF while an HTTP/1
     /// service or response is waiting.
     ///
@@ -1194,16 +1203,18 @@ impl ConnectionInfo {
 /// A connection-scoped signal for peer TCP read-half closure.
 ///
 /// The signal is inserted into requests served over TCP, including TLS over
-/// TCP. It becomes true only after a nonempty raw socket read receives EOF.
-/// A TLS `close_notify` alone does not set it.
+/// TCP. It becomes true only when TCP reports that the peer's write side has
+/// reached EOF. A TLS `close_notify` alone does not set it.
 ///
 /// [`PeerReadHalfCloseMode::OnRead`], the default, observes EOF only when the
 /// HTTP or TLS driver reads, which can wait until an HTTP/1 service or response
-/// completes. [`PeerReadHalfCloseMode::Proactive`] uses a sole raw reader in
-/// the connection task and a bounded input queue, so it can observe EOF while
-/// that service or response is waiting. A full queue still delays observation
-/// until the driver consumes input. Neither mode discards unread bytes or
-/// turns an incomplete request body into a complete body.
+/// completes. [`PeerReadHalfCloseMode::ConcurrentPeek`] keeps that direct data
+/// path and peeks through a duplicated socket handle, waiting for the driver to
+/// consume unread bytes before checking again. [`PeerReadHalfCloseMode::Proactive`]
+/// uses a sole raw reader in the connection task and a bounded input queue, so
+/// it can observe EOF while that service or response is waiting. A full queue
+/// still delays observation until the driver consumes input. No mode discards
+/// unread bytes or turns an incomplete request body into a complete body.
 ///
 /// This connection fact does not cancel a request, close the response writer,
 /// or represent an ASGI disconnect event.

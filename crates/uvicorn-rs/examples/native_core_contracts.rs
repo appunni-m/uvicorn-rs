@@ -1073,6 +1073,7 @@ where
                     let mode = match observer.mode() {
                         uvicorn_rs::PeerReadHalfCloseMode::OnRead => "on-read",
                         uvicorn_rs::PeerReadHalfCloseMode::Proactive => "proactive",
+                        uvicorn_rs::PeerReadHalfCloseMode::ConcurrentPeek => "concurrent-peek",
                     };
                     response(StatusCode::OK, format!("mode={mode}\n").as_bytes())
                 }

@@ -5241,15 +5241,14 @@ async fn serve_forever(
             let _ = uvicorn_rs::arm_listener_accept_fault();
         }
         #[cfg(feature = "runtime-diagnostics")]
-        let peer_read_half_close = if std::env::var("UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE")
-            .is_ok_and(|mode| mode == "on-read")
-        {
-            uvicorn_rs::PeerReadHalfCloseMode::OnRead
-        } else {
-            uvicorn_rs::PeerReadHalfCloseMode::Proactive
-        };
+        let peer_read_half_close =
+            match std::env::var("UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE").as_deref() {
+                Ok("on-read") => uvicorn_rs::PeerReadHalfCloseMode::OnRead,
+                Ok("proactive") => uvicorn_rs::PeerReadHalfCloseMode::Proactive,
+                _ => uvicorn_rs::PeerReadHalfCloseMode::ConcurrentPeek,
+            };
         #[cfg(not(feature = "runtime-diagnostics"))]
-        let peer_read_half_close = uvicorn_rs::PeerReadHalfCloseMode::Proactive;
+        let peer_read_half_close = uvicorn_rs::PeerReadHalfCloseMode::ConcurrentPeek;
         let config = uvicorn_rs::ServerConfig {
             graceful_shutdown_timeout: options.graceful_timeout,
             // Let an invalid HTTP/1 ASGI response start reach the transport,
