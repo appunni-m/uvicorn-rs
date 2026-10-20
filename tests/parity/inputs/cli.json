@@ -186,6 +186,21 @@
       }
     },
     {
+      "case_id": "cli.invalid-ws-max-size-env-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": ["tests.parity.app:app"],
+        "environment": {
+          "UVICORN_WS_MAX_SIZE": "not-a-size"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.import-missing-module-diagnostic",
       "profile": "cli",
       "operation": "cli.process",
