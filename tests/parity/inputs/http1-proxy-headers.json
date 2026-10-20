@@ -54,6 +54,87 @@
         ],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "http1.proxy-headers-untrusted-peer-ignores-forwarded-values",
+      "profile": "http1-proxy-headers",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "server_options": {
+        "proxy_headers": true,
+        "forwarded_allow_ips": "192.0.2.1"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/proxy-headers-untrusted-peer",
+        "headers": [
+          [
+            "x-forwarded-for",
+            "198.51.100.25, 127.0.0.1"
+          ],
+          [
+            "x-forwarded-proto",
+            "https"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.proxy-headers-wildcard-trust-uses-first-forwarded-client",
+      "profile": "http1-proxy-headers",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "server_options": {
+        "proxy_headers": true,
+        "forwarded_allow_ips": "*"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/proxy-headers-wildcard-trust",
+        "headers": [
+          [
+            "x-forwarded-for",
+            "198.51.100.25, 127.0.0.1"
+          ],
+          [
+            "x-forwarded-proto",
+            "https"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.proxy-headers-cidr-trust-selects-first-untrusted-forwarded-client",
+      "profile": "http1-proxy-headers",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "server_options": {
+        "proxy_headers": true,
+        "forwarded_allow_ips": "127.0.0.0/8"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/proxy-headers-cidr-trust",
+        "headers": [
+          [
+            "x-forwarded-for",
+            "198.51.100.25, 127.0.0.1"
+          ],
+          [
+            "x-forwarded-proto",
+            "https"
+          ]
+        ],
+        "body_base64": ""
+      }
     }
   ]
 }
