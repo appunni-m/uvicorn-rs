@@ -3,13 +3,13 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [39401823226 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39401823226)
-- Commit: [`3fe4206bc96abd5fbd41fa96b406b39815459015`](https://github.com/appunni-m/uvicorn-rs/commit/3fe4206bc96abd5fbd41fa96b406b39815459015)
-- Recorded: 2026-10-20T09:38:55Z
-- Category matrix jobs: failed on all three systems before parity, because the installed extension contained `runtime-diagnostics` in a normal release benchmark.
-- Aggregate job: failed because a failed category job did not produce its expected `benchmark-categories/run.json`.
+- Run: [39418451496 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39418451496)
+- Commit: [`33e54b207c19cb067e408890bc272339b76819a0`](https://github.com/appunni-m/uvicorn-rs/commit/33e54b207c19cb067e408890bc272339b76819a0)
+- Recorded: 2026-10-20T14:08:52Z
+- Category matrix job: `failure`
+- Aggregate job: `success`
 
-No parity or benchmark workload ran, so this attempt produced no performance result. The previous measured report remains in effect. The workflow now builds the normal release extension for this matrix and updates only this marked summary section, preserving the detailed history below.
+The three system artifacts were validated and the partial report, hashed receipts, and raw system bundles are retained in this run's GitHub Actions artifacts for 90 days. Generated logs and per-run files are not committed. The [previous complete report](benchmark-results.md) remains unchanged.
 <!-- END GENERATED LATEST ATTEMPT -->
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
