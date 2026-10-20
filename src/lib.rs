@@ -858,6 +858,12 @@ const HTTP_REQUEST_BODY_BATCH_MAX_WAIT: std::time::Duration = std::time::Duratio
 static NEXT_HTTP_BODY_FLOW_TRACE_ID: AtomicU64 = AtomicU64::new(1);
 #[cfg(feature = "runtime-diagnostics")]
 static HTTP_BODY_FLOW_TRACE_ENABLED: OnceLock<bool> = OnceLock::new();
+#[cfg(feature = "runtime-diagnostics")]
+const HTTP_BODY_FLOW_TRACE_REPORT_THRESHOLD_NS: u64 = 100_000_000;
+#[cfg(feature = "runtime-diagnostics")]
+const HTTP_BODY_FLOW_TRACE_REPORT_LIMIT: u64 = 256;
+#[cfg(feature = "runtime-diagnostics")]
+static HTTP_BODY_FLOW_TRACE_REPORTS: AtomicU64 = AtomicU64::new(0);
 
 /// Request-local counters used only by focused runtime diagnostic runs.
 ///
@@ -992,9 +998,14 @@ impl Drop for HttpBodyFlowTrace {
             || trace.body_error
             || content_length_incomplete
             || asgi_content_length_incomplete
-            || trace.frame_wait_max_ns >= 1_000_000_000
-            || trace.channel_send_wait_max_ns >= 1_000_000_000;
+            || trace.frame_wait_max_ns >= HTTP_BODY_FLOW_TRACE_REPORT_THRESHOLD_NS
+            || trace.channel_send_wait_max_ns >= HTTP_BODY_FLOW_TRACE_REPORT_THRESHOLD_NS;
         if !should_report {
+            return;
+        }
+        if HTTP_BODY_FLOW_TRACE_REPORTS.fetch_add(1, Ordering::Relaxed)
+            >= HTTP_BODY_FLOW_TRACE_REPORT_LIMIT
+        {
             return;
         }
         let elapsed_ns = trace.started.elapsed().as_nanos().min(u64::MAX as u128) as u64;

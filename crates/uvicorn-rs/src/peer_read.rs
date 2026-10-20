@@ -28,10 +28,10 @@ const READ_CHUNK_SIZE: usize = 16 * 1024;
 const READ_QUEUE_CAPACITY: usize = 2;
 
 #[cfg(feature = "runtime-diagnostics")]
-const DIRECT_READ_TRACE_THRESHOLD: Duration = Duration::from_millis(10);
+const READ_WAIT_TRACE_THRESHOLD: Duration = Duration::from_millis(10);
 
 #[cfg(feature = "runtime-diagnostics")]
-const DIRECT_READ_TRACE_LIMIT: u64 = 128;
+const READ_WAIT_TRACE_LIMIT: u64 = 128;
 
 pub(super) enum PeerReadPumpOutcome {
     ReceiverClosed,
@@ -127,7 +127,7 @@ struct PeerReadDiagnosticCounters {
 static NEXT_PEER_READ_DIAGNOSTIC_ID: AtomicU64 = AtomicU64::new(1);
 
 #[cfg(feature = "runtime-diagnostics")]
-static DIRECT_READ_TRACE_EVENTS: AtomicU64 = AtomicU64::new(0);
+static READ_WAIT_TRACE_EVENTS: AtomicU64 = AtomicU64::new(0);
 
 impl PeerReadDiagnosticsHandle {
     fn new(stream: &TcpStream, mode: PeerReadHalfCloseMode) -> Self {
@@ -305,8 +305,8 @@ impl PeerReadDiagnosticCounters {
         );
     }
 
-    /// Emits a bounded, cross-process timestamp record for long direct-read waits.
-    fn trace_direct_read_wait(
+    /// Emits a bounded timestamp record for long waits in either TCP read path.
+    fn trace_read_wait(
         &self,
         pending_unix_ns: u64,
         ready_unix_ns: u64,
@@ -315,8 +315,8 @@ impl PeerReadDiagnosticCounters {
         outcome: &str,
     ) {
         if !self.trace_read_events
-            || wait_ns < duration_ns(DIRECT_READ_TRACE_THRESHOLD)
-            || DIRECT_READ_TRACE_EVENTS.fetch_add(1, Ordering::Relaxed) >= DIRECT_READ_TRACE_LIMIT
+            || wait_ns < duration_ns(READ_WAIT_TRACE_THRESHOLD)
+            || READ_WAIT_TRACE_EVENTS.fetch_add(1, Ordering::Relaxed) >= READ_WAIT_TRACE_LIMIT
         {
             return;
         }
@@ -343,6 +343,10 @@ impl PeerReadDiagnosticCounters {
                 outcome,
             ),
         );
+    }
+
+    fn read_wait_trace_started_at(&self) -> Option<u64> {
+        self.trace_read_events.then(unix_timestamp_ns)
     }
 }
 
@@ -492,13 +496,32 @@ async fn pump_peer_read(
         let mut chunk = BytesMut::with_capacity(READ_CHUNK_SIZE);
         #[cfg(feature = "runtime-diagnostics")]
         let read_started = diagnostics.as_ref().map(|_| Instant::now());
+        #[cfg(feature = "runtime-diagnostics")]
+        let read_pending_unix_ns = diagnostics
+            .as_ref()
+            .and_then(|counters| counters.read_wait_trace_started_at());
         let read_result = {
             let mut destination = (&mut chunk).limit(READ_CHUNK_SIZE);
             reader.read_buf(&mut destination).await
         };
         #[cfg(feature = "runtime-diagnostics")]
         if let (Some(diagnostics), Some(started)) = (diagnostics.as_ref(), read_started) {
-            diagnostics.record_raw_read(chunk.len(), started.elapsed());
+            let elapsed = started.elapsed();
+            diagnostics.record_raw_read(chunk.len(), elapsed);
+            if let Some(pending_unix_ns) = read_pending_unix_ns {
+                let outcome = match &read_result {
+                    Ok(0) => "eof",
+                    Ok(_) => "ready",
+                    Err(_) => "error",
+                };
+                diagnostics.trace_read_wait(
+                    pending_unix_ns,
+                    unix_timestamp_ns(),
+                    duration_ns(elapsed),
+                    chunk.len(),
+                    outcome,
+                );
+            }
         }
         match read_result {
             Ok(0) => {
@@ -672,7 +695,7 @@ impl AsyncRead for PeerReadIo {
                                 if let Some(pending_unix_ns) =
                                     this.direct_read_pending_unix_ns.take()
                                 {
-                                    diagnostics.trace_direct_read_wait(
+                                    diagnostics.trace_read_wait(
                                         pending_unix_ns,
                                         unix_timestamp_ns(),
                                         wait_ns,
@@ -694,7 +717,7 @@ impl AsyncRead for PeerReadIo {
                                 if let Some(pending_unix_ns) =
                                     this.direct_read_pending_unix_ns.take()
                                 {
-                                    diagnostics.trace_direct_read_wait(
+                                    diagnostics.trace_read_wait(
                                         pending_unix_ns,
                                         unix_timestamp_ns(),
                                         wait_ns,
