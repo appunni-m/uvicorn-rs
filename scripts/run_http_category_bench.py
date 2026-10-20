@@ -746,6 +746,14 @@ def main() -> None:
     parser.add_argument("--duration", type=float, default=5)
     parser.add_argument("--warmup", type=float, default=1)
     parser.add_argument("--concurrency", type=int, default=64)
+    parser.add_argument(
+        "--override-workload-concurrency",
+        action="store_true",
+        help=(
+            "in ASGI-stage diagnostic mode, use --concurrency even when a maintained "
+            "workload defines its own fixed concurrency"
+        ),
+    )
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument(
         "--max-consecutive-failures",
@@ -784,6 +792,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.max_consecutive_failures < 1:
         parser.error("--max-consecutive-failures must be positive")
+    if args.override_workload_concurrency and not args.asgi_stage_diagnostics:
+        parser.error("--override-workload-concurrency requires --asgi-stage-diagnostics")
     python = args.python.absolute()
     if not python.exists():
         raise SystemExit(f"Python interpreter does not exist: {python}")
@@ -842,7 +852,11 @@ def main() -> None:
     evidence.checkpoint_provenance(checkpoint_path)
     for workload in args.workloads:
         definition = WORKLOADS[workload]
-        concurrency = definition.get("concurrency", args.concurrency)
+        concurrency = (
+            args.concurrency
+            if args.override_workload_concurrency
+            else definition.get("concurrency", args.concurrency)
+        )
         duration = definition.get("duration_seconds", args.duration)
         warmup = definition.get("warmup_seconds", args.warmup)
         for repetition in range(1, args.repetitions + 1):
@@ -1072,6 +1086,7 @@ def main() -> None:
             "duration_seconds": args.duration,
             "warmup_seconds": args.warmup,
             "repetitions": args.repetitions,
+            "override_workload_concurrency": args.override_workload_concurrency,
             "seed": args.seed,
             "client": client_description,
             "client_by_workload": clients_by_workload,

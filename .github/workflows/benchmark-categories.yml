@@ -96,6 +96,11 @@ on:
         default: 1
         required: true
         type: number
+      fastapi_stage_override_workload_concurrency:
+        description: Apply the concurrency input to the focused stage workload even when it defines a fixed concurrency
+        default: false
+        required: true
+        type: boolean
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -562,6 +567,7 @@ jobs:
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
           FASTAPI_STAGE_CONCURRENCY: ${{ inputs.concurrency || 64 }}
           FASTAPI_STAGE_REPETITIONS: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.fastapi_stage_repetitions) || '1' }}
+          FASTAPI_STAGE_OVERRIDE_WORKLOAD_CONCURRENCY: ${{ inputs.fastapi_stage_override_workload_concurrency || false }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ (inputs.fastapi_peer_read_mode == 'on-read' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]'))) && 'on-read' || '' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_TRACE: "1"
           UVICORN_RS_DIAGNOSTIC_HTTP_BODY_FLOW: "1"
@@ -573,11 +579,16 @@ jobs:
             echo "FASTAPI_STAGE_REPETITIONS must be an integer between 1 and 50" >&2
             exit 2
           fi
+          stage_concurrency_override_args=()
+          if [[ "$FASTAPI_STAGE_OVERRIDE_WORKLOAD_CONCURRENCY" == "true" ]]; then
+            stage_concurrency_override_args+=(--override-workload-concurrency)
+          fi
           .venv/bin/python scripts/run_http_category_bench.py \
             --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
             --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
               uvicorn-rs-uvloop uvicorn-uvloop-httptools \
             --duration 5 --warmup 1 --concurrency "$FASTAPI_STAGE_CONCURRENCY" --repetitions "$FASTAPI_STAGE_REPETITIONS" --seed 20261019 \
+            "${stage_concurrency_override_args[@]}" \
             --require-runtime-diagnostics --asgi-stage-diagnostics \
             --output "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
             2>&1 | tee "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.log"
