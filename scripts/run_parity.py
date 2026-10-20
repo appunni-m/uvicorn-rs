@@ -339,7 +339,6 @@ HARNESS_FAULT_POINTS = (
     }
     | PUBLIC_INPUT_CONTRACT_POINTS
     | ASGI_SCOPE_SUPPORT_CONTRACT_POINTS
-    | {"public.server-runtime-configuration"}
 )
 # These fault contracts exercise the legacy HTTP/3 server implementation,
 # which is selected at process startup when its fault point is armed. Keep
@@ -377,7 +376,6 @@ LEGACY_HTTP3_FAULT_POINTS = {
     "server.http3-task.shutdown-hang",
     "http.app-task.panic-before-response-start",
 }
-MAX_BLOCKING_THREADS_ENV = "UVICORN_RS_MAX_BLOCKING_THREADS"
 PYTHON_TASK_START_ERRORS = {
     "python.task-starter.import-asyncio": "MemoryError: coverage-only injected MemoryError at PythonTaskStarterImportAsyncio",
     "python.task-starter.ensure-future": "MemoryError: coverage-only injected MemoryError at PythonTaskStarterEnsureFuture",
@@ -476,8 +474,6 @@ FAULT_CONTRACTS = {
     "http-connection-lifetime-closed-disconnect-followup-200",
     "http-immediate-disconnect-message-error-followup-200",
     "server-startup-failure",
-    "server-runtime-configuration-accepted",
-    "server-runtime-configuration-rejected",
     "server-lifespan-startup-auto-fallback",
     "server-shutdown-failure",
     "server-lifespan-task-cancel",
@@ -679,52 +675,8 @@ def exact_keys(value: dict[str, Any], required: set[str], label: str) -> None:
 
 def exact_case_keys(value: dict[str, Any], required: set[str], label: str) -> None:
     """Allow versioned case-verification metadata in addition to one stimulus."""
-    metadata = {"verification", "fault", "target_environment"} & set(value)
+    metadata = {"verification", "fault"} & set(value)
     exact_keys(value, required | metadata, label)
-
-
-def validate_target_environment(case: dict[str, Any]) -> None:
-    """Validate a narrowly scoped environment override for target startup cases."""
-    if "target_environment" not in case:
-        return
-    if (
-        case.get("verification") != "fault-contract"
-        or case.get("fault", {}).get("point") != "public.server-runtime-configuration"
-        or case.get("fault", {}).get("contract") not in {
-            "server-runtime-configuration-accepted",
-            "server-runtime-configuration-rejected",
-        }
-    ):
-        raise ParityError(
-            f"{case.get('case_id')}: target_environment requires the declared public runtime-configuration contract"
-        )
-    environment = case["target_environment"]
-    if not isinstance(environment, dict) or set(environment) - {MAX_BLOCKING_THREADS_ENV}:
-        raise ParityError(
-            f"{case.get('case_id')}: target_environment supports only {MAX_BLOCKING_THREADS_ENV}"
-        )
-    value = environment.get(MAX_BLOCKING_THREADS_ENV)
-    if value is None:
-        return
-    if isinstance(value, str):
-        if "\x00" in value:
-            raise ParityError(f"{case['case_id']}: target environment value must not contain NUL")
-        return
-    if isinstance(value, dict):
-        exact_keys(value, {"bytes_hex"}, f"{case['case_id']}.target_environment.{MAX_BLOCKING_THREADS_ENV}")
-        encoded = value["bytes_hex"]
-        if not isinstance(encoded, str):
-            raise ParityError(f"{case['case_id']}: target environment bytes_hex must be a string")
-        try:
-            raw = bytes.fromhex(encoded)
-        except ValueError as error:
-            raise ParityError(f"{case['case_id']}: target environment bytes_hex is invalid") from error
-        if not raw or b"\x00" in raw:
-            raise ParityError(f"{case['case_id']}: target environment bytes must be nonempty and contain no NUL")
-        return
-    raise ParityError(
-        f"{case['case_id']}: target environment value must be a string or bytes_hex descriptor"
-    )
 
 
 def validate_load_input(case: dict[str, Any], kind: str) -> None:
@@ -980,7 +932,6 @@ def load_contract(
                 raise ParityError(f"{case_id}: fault point is not allow-listed: {fault['point']!r}")
             if not isinstance(fault["contract"], str) or fault["contract"] not in FAULT_CONTRACTS:
                 raise ParityError(f"{case_id}: unsupported fault contract: {fault['contract']!r}")
-            validate_target_environment(case)
             if fault["contract"] == "http-response-header-capacity-recovery-followup-200":
                 requests = case.get("request_sequence", [])
                 if (
@@ -2039,60 +1990,6 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: lifespan startup faults require the startup-failure workflow"
                     )
-            elif fault["contract"] in {
-                "server-runtime-configuration-accepted",
-                "server-runtime-configuration-rejected",
-            }:
-                environment = case.get("target_environment")
-                value = (
-                    environment.get(MAX_BLOCKING_THREADS_ENV)
-                    if isinstance(environment, dict)
-                    else None
-                )
-                if (
-                    fault["point"] != "public.server-runtime-configuration"
-                    or case.get("profile") != "startup-runtime-configuration"
-                    or "target_environment" not in case
-                ):
-                    raise ParityError(
-                        f"{case_id}: runtime configuration contracts require the isolated public configuration profile"
-                    )
-                if fault["contract"] == "server-runtime-configuration-accepted":
-                    positive_limit = False
-                    if isinstance(value, str) and value.isascii() and value.isdigit():
-                        positive_limit = 0 < int(value) <= (1 << (8 * struct.calcsize("P"))) - 1
-                    if (
-                        case.get("operation") != "http.scope-and-body"
-                        or case.get("request", {}).get("path") != "/"
-                        or "startup_failure" in case
-                        or (value is not None and not positive_limit)
-                    ):
-                        raise ParityError(
-                            f"{case_id}: accepted runtime configuration requires the default or a positive thread limit and a live HTTP request"
-                        )
-                else:
-                    invalid_unicode = False
-                    invalid_value = False
-                    if isinstance(value, dict):
-                        try:
-                            bytes.fromhex(value["bytes_hex"]).decode("utf-8")
-                        except UnicodeDecodeError:
-                            invalid_unicode = True
-                    elif isinstance(value, str):
-                        try:
-                            parsed = int(value)
-                        except ValueError:
-                            invalid_value = True
-                        else:
-                            invalid_value = parsed <= 0 or parsed > (1 << (8 * struct.calcsize("P"))) - 1
-                    if (
-                        case.get("operation") != "lifespan.runtime-configuration-failure"
-                        or case.get("startup_failure", {}).get("expect_failed") is not True
-                        or not (invalid_unicode or invalid_value)
-                    ):
-                        raise ParityError(
-                            f"{case_id}: rejected runtime configuration requires malformed, non-Unicode, zero, or overflowing input and an expected startup failure"
-                        )
             elif fault["contract"] == "server-lifespan-startup-auto-fallback":
                 if (
                     not (
@@ -2239,7 +2136,6 @@ def load_contract(
                 )
         else:
             raise ParityError(f"{case_id}: unsupported verification mode {verification!r}")
-        validate_target_environment(case)
         for field in case:
             if field.startswith("expected") or field in {"oracle_output", "target_output"}:
                 raise ParityError(f"{case_id}: parity inputs may not contain observed results")
@@ -3784,7 +3680,6 @@ def start_server(
     lifespan_mode_override: str | None = None,
     async_cleanup_delay_seconds: float = 0.5,
     observe_connection_errors: bool = False,
-    target_environment: dict[str, Any] | None = None,
     server_options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     profile_id = profile["id"]
@@ -3796,16 +3691,6 @@ def start_server(
         for name in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP"):
             env.pop(name, None)
         env["PYTHONNOUSERSITE"] = "1"
-    if server_id == "uvicorn-rs":
-        # Keep this process-wide runtime setting deterministic across host
-        # environments and apply only values declared by the selected case.
-        env.pop(MAX_BLOCKING_THREADS_ENV, None)
-        if target_environment is not None:
-            value = target_environment.get(MAX_BLOCKING_THREADS_ENV)
-            if isinstance(value, dict):
-                env[MAX_BLOCKING_THREADS_ENV] = os.fsdecode(bytes.fromhex(value["bytes_hex"]))
-            elif isinstance(value, str):
-                env[MAX_BLOCKING_THREADS_ENV] = value
     # Shutdown workflows restart a profile in the same temporary directory.
     # Readiness and request checkpoints must belong to the new process.
     events_path.write_text("", encoding="utf-8")
@@ -9274,17 +9159,6 @@ def fault_contract_matches(
             and "http.disconnect" in events
             and "http.disconnect.repeat-error:MemoryError" in events
         )
-    if fault["contract"] == "server-runtime-configuration-accepted":
-        return (
-            observation.get("status") == 200
-            and observation.get("body_bytes") == base64.b64encode(b"ok").decode("ascii")
-        )
-    if fault["contract"] == "server-runtime-configuration-rejected":
-        return (
-            observation.get("startup_failed") is True
-            and "lifespan.startup" not in observation.get("application_events", [])
-            and "could not initialize Tokio runtime:" in observation.get("server_log", "")
-        )
     if fault["contract"] == "server-startup-failure":
         if fault["point"] in {
             "server.graceful-timeout.overflow", "server.serve.control.borrow-conflict",
@@ -9703,12 +9577,6 @@ def start_profile_servers(
         (case["lifecycle"]["graceful_timeout_seconds"] for case in cases if "lifecycle" in case),
         1,
     )
-    environment_cases = [case for case in cases if "target_environment" in case]
-    if environment_cases and len(cases) != 1:
-        raise ParityError("target environment cases must start in an isolated server process")
-    target_environment = (
-        environment_cases[0]["target_environment"] if environment_cases else None
-    )
     expect_startup_failure = any(
         "startup_failure" in case and case["startup_failure"]["expect_failed"]
         for case in cases
@@ -9815,7 +9683,6 @@ def start_profile_servers(
                     case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}
                     for case in cases
                 ),
-                target_environment=target_environment,
                 server_options=server_options,
             )
     except Exception:
@@ -9861,7 +9728,6 @@ def execute_profile(
     startup_cases = [
         case for case in cases
         if "startup_failure" in case or "startup_fallback" in case
-        or "target_environment" in case
         or case.get("fault", {}).get("contract") in {
             "server-eager-lifespan-registration-cleanup",
             "server-eager-lifespan-registration-cleanup-timeout",

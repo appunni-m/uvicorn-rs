@@ -422,11 +422,11 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | Python API | 18 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, headers, environment files, ASGI2 selection, trusted proxy headers, and a configured WebSocket message limit. |
 
 These eight groups account for all 294 current oracle-parity cases. The other
-296 cases are target-only fault/support contracts, for 590 total cases. Five
-of those exercise
-`UVICORN_RS_MAX_BLOCKING_THREADS`; they are described in the
-[ASGI behavior inventory](asgi-case-inventory.md#declared-behavior-map), not
-counted as oracle parity.
+291 cases are target-only fault/support contracts, for 585 total cases. Five
+historical startup contracts for an experimental Tokio blocking-pool cap were
+removed after matched FastAPI uploads showed no repeatable benefit; archived
+reports retain their historical counts. The cap is not part of the current
+runtime or support contract.
 
 The H2/H3 rows are same-protocol ASGI observations against Hypercorn. They are
 not described as Uvicorn parity. Server versions and protocol components are

@@ -1323,6 +1323,31 @@ attributed to each function. See the raw profiles linked in [the feasibility
 report](feasibility.md); their throughput and latency samples were collected
 under profiling and must not be used as normal performance results.
 
+### Historical Tokio blocking-pool cap experiment
+
+The Linux x86-64 FastAPI upload experiment compared Tokio's default blocking
+pool with explicit limits of one and four threads, using 1 MiB uploads with 64
+KiB and 256 KiB client writes. All six setting/workload combinations had at
+least four valid matched repetitions per Python loop, with response and
+lifecycle checks passing.
+
+| Upload write size | Tokio setting | asyncio Rust/Uvicorn throughput | uvloop Rust/Uvicorn throughput |
+|---|---|---:|---:|
+| 64 KiB | Default | 0.304x | 0.247x |
+| 64 KiB | 1 thread | 0.314x | 0.337x |
+| 64 KiB | 4 threads | 0.304x | 0.411x |
+| 256 KiB | Default | 0.311x | 0.394x |
+| 256 KiB | 1 thread | 0.275x | 0.445x |
+| 256 KiB | 4 threads | 0.319x | 0.420x |
+
+Uvicorn was faster in every measured pair. The cap effects varied by loop and
+write size, and separate runner instances do not isolate causality, so no cap
+showed a repeatable end-to-end gain. The experimental
+`UVICORN_RS_MAX_BLOCKING_THREADS` override and its startup contracts were
+removed; Tokio's default behavior remains. The [full results](benchmark-results.md#final-tokio-blocking-pool-cap-experiment-2026-10-17)
+include throughput, latency percentiles, CPU, memory, valid-pair counts, and
+host exclusions.
+
 ### Separate event-loop CPU from other server threads
 
 On Linux or macOS, `scripts/profile_fastapi_loop_cpu.py` captures CPU during

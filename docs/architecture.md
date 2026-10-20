@@ -73,9 +73,8 @@ The native module builds its Tokio multithread runtime at import with one async
 worker and registers it with PyO3's async integration. This count applies to
 Tokio's asynchronous scheduler. The Python asyncio or uvloop event loop runs on
 its own thread, and Tokio can create blocking-pool threads when needed; the
-process can therefore use more than one CPU with one Tokio async worker. Set
-`UVICORN_RS_MAX_BLOCKING_THREADS` to bound the blocking pool. A process-wide
-`OnceLock<Result<Runtime, io::Error>>` retains either the runtime or its
+process can therefore use more than one CPU with one Tokio async worker. A
+process-wide `OnceLock<Result<Runtime, io::Error>>` retains either the runtime or its
 construction failure. Construction failures become Python `OSError` before
 the native exports are added; repeated initialization returns the cached
 failure. If the async integration already has a valid registered runtime, that

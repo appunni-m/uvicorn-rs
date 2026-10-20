@@ -89,6 +89,61 @@ The experiment report and raw results (`benchmarks/results/2026-10-12/wh9k-focus
 preserve configuration, identities, exclusions, and receipts. No conclusion
 about the cap's effect is supported yet.
 
+## Final Tokio blocking-pool cap experiment (2026-10-17)
+
+The hosted comparison used stock FastAPI 0.142.4, CPython 3.12.13, Uvicorn
+0.54.0, Linux x86-64, concurrency 64, five 5-second samples, and a 1-second
+warmup. Each request uploaded 1 MiB using either 64 KiB or 256 KiB client
+writes. The default Tokio pool and explicit caps of one and four threads were
+compared under asyncio and uvloop. Every workload passed response correctness,
+lifecycle, and shutdown checks. Each setting/workload/loop cell retained four
+or five valid matched repetitions; excluded repetitions were rejected for
+unrelated host CPU activity.
+
+Throughput lists median Uvicorn / Rust requests per second and the median
+paired Rust/Uvicorn ratio. Latency lists median p50/p95/p99 milliseconds in
+Uvicorn / Rust order.
+
+| Upload writes | Tokio pool | Loop | Valid pairs | Throughput, Uvicorn / Rust (ratio) | p50 ms | p95 ms | p99 ms |
+|---|---|---|---:|---:|---:|---:|---:|
+| 64 KiB | Default | asyncio | 5/5 | 1,233.2 / 370.9 (0.304x) | 50.86 / 169.78 | 60.20 / 232.91 | 67.66 / 268.92 |
+| 64 KiB | Default | uvloop | 5/5 | 1,319.0 / 325.2 (0.247x) | 47.91 / 114.67 | 52.15 / 155.16 | 55.48 / 288.27 |
+| 64 KiB | 1 thread | asyncio | 4/5 | 1,572.9 / 515.2 (0.314x) | 40.07 / 94.68 | 46.98 / 134.10 | 54.35 / 266.41 |
+| 64 KiB | 1 thread | uvloop | 5/5 | 1,709.7 / 581.0 (0.337x) | 37.36 / 71.06 | 39.47 / 94.33 | 43.85 / 119.54 |
+| 64 KiB | 4 threads | asyncio | 4/5 | 1,223.7 / 379.3 (0.304x) | 51.04 / 166.01 | 58.96 / 232.49 | 67.87 / 270.60 |
+| 64 KiB | 4 threads | uvloop | 5/5 | 1,339.6 / 554.5 (0.411x) | 47.03 / 112.54 | 51.71 / 150.61 | 56.39 / 176.86 |
+| 256 KiB | Default | asyncio | 5/5 | 1,225.0 / 361.6 (0.311x) | 51.46 / 174.89 | 58.82 / 242.17 | 69.69 / 274.42 |
+| 256 KiB | Default | uvloop | 5/5 | 1,320.7 / 508.5 (0.394x) | 48.02 / 117.96 | 51.08 / 159.28 | 54.11 / 187.93 |
+| 256 KiB | 1 thread | asyncio | 4/5 | 1,214.3 / 347.8 (0.275x) | 51.39 / 144.19 | 61.07 / 202.85 | 67.90 / 241.87 |
+| 256 KiB | 1 thread | uvloop | 5/5 | 1,318.0 / 584.8 (0.445x) | 48.07 / 103.64 | 51.63 / 143.67 | 56.13 / 235.18 |
+| 256 KiB | 4 threads | asyncio | 5/5 | 1,108.7 / 352.3 (0.319x) | 56.45 / 178.42 | 67.19 / 252.22 | 84.07 / 296.82 |
+| 256 KiB | 4 threads | uvloop | 4/5 | 1,157.1 / 485.1 (0.420x) | 54.52 / 128.21 | 59.36 / 172.32 | 61.85 / 236.72 |
+
+| Upload writes | Tokio pool | Loop | Server CPU, Uvicorn / Rust (µs/request) | Peak server RSS, Uvicorn / Rust (MiB) |
+|---|---|---|---:|---:|
+| 64 KiB | Default | asyncio | 802 / 4,127 | 106.4 / 141.0 |
+| 64 KiB | Default | uvloop | 756 / 2,685 | 106.2 / 140.3 |
+| 64 KiB | 1 thread | asyncio | 632 / 2,247 | 111.1 / 130.8 |
+| 64 KiB | 1 thread | uvloop | 583 / 1,538 | 106.9 / 137.7 |
+| 64 KiB | 4 threads | asyncio | 802 / 4,010 | 108.9 / 144.6 |
+| 64 KiB | 4 threads | uvloop | 743 / 2,582 | 107.2 / 136.4 |
+| 256 KiB | Default | asyncio | 813 / 4,267 | 109.0 / 140.0 |
+| 256 KiB | Default | uvloop | 755 / 2,739 | 105.9 / 138.5 |
+| 256 KiB | 1 thread | asyncio | 815 / 3,516 | 109.7 / 142.5 |
+| 256 KiB | 1 thread | uvloop | 756 / 2,326 | 105.4 / 137.4 |
+| 256 KiB | 4 threads | asyncio | 892 / 4,368 | 109.7 / 142.8 |
+| 256 KiB | 4 threads | uvloop | 860 / 2,905 | 106.4 / 140.6 |
+
+Uvicorn completed more requests per second in all twelve cells. Ratios varied
+by loop and write size, and separate hosted runner instances do not isolate
+the causal effect of the cap. No setting showed a repeatable end-to-end gain;
+the runtime override and its startup contracts were removed. This result does
+not explain the broader Rust/Python performance gap. Artifacts are retained
+for the [initial comparison](https://github.com/appunni-m/uvicorn-rs/actions/runs/39044400046),
+[cap-4 retry](https://github.com/appunni-m/uvicorn-rs/actions/runs/39051369699),
+[cap-1 64-KiB follow-up](https://github.com/appunni-m/uvicorn-rs/actions/runs/39052022411),
+and [cap-4 64-KiB follow-up](https://github.com/appunni-m/uvicorn-rs/actions/runs/39052457474).
+
 ## H1 benchmark-source retries stopped by host activity (2026-10-12)
 
 The captured dirty benchmark source passed 243/243 public parity cases, and

@@ -60,10 +60,6 @@ calling its factory. Install `uvicorn-rs-py[standard]` to include
 `python-dotenv`. The focused cases cover CLI and `uvicorn.run` factory startup;
 other dotenv syntax and precedence combinations remain unverified.
 
-## Tokio blocking-pool limit
-
-The optional UVICORN_RS_MAX_BLOCKING_THREADS environment variable sets the maximum size of Tokio's blocking pool. If unset, Tokio uses its default. The value must be a positive integer; malformed values and zero fail server initialization. This setting does not change the Tokio core worker count, and it is not a Uvicorn option.
-
 ## Python API
 
 The `uvicorn` compatibility namespace provides the pinned `Config`, `Server`,

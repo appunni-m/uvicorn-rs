@@ -92,6 +92,12 @@ owned Rust `String`. HTTP methods retain the existing uppercasing path;
 percent-encoded paths retain the existing decoding semantics. Event-name
 interning and path borrowing do not establish a speedup independently.
 
+The experimental Tokio blocking-pool maximum was rejected. Matched FastAPI
+upload runs at the default, one-thread, and four-thread limits showed
+loop- and write-size-dependent results without a repeatable end-to-end gain.
+The runtime keeps Tokio's default blocking-pool behavior and exposes no
+project-specific cap. See the [recorded measurements](../benchmark-results.md#final-tokio-blocking-pool-cap-experiment-2026-10-17).
+
 ### 7. Preserve transport capabilities and typed H3 close handling
 
 The October 5 source forwards `is_write_vectored` and

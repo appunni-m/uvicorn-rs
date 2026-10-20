@@ -14,6 +14,15 @@ No parity or benchmark workload ran, so this attempt produced no performance res
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Tokio blocking-pool cap decision (2026-10-17)
+
+The completed Linux x86-64 FastAPI upload comparison found no repeatable
+benefit from limiting Tokio's blocking pool. Uvicorn was faster in all twelve
+matched workload/loop cells; the Rust/Uvicorn throughput ratios ranged from
+0.247x to 0.445x. The custom runtime cap and its five startup contracts were
+removed. See the [complete measurements](benchmark-results.md#final-tokio-blocking-pool-cap-experiment-2026-10-17)
+and the [benchmark runbook](benchmarks.md#historical-tokio-blocking-pool-cap-experiment).
+
 ## Latest current-main FastAPI upload attempt (Linux x86-64; 2026-10-20; unqualified)
 
 This source-tree attempt used a clean detached worktree at current `origin/main`
