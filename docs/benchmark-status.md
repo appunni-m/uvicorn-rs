@@ -4021,3 +4021,24 @@ category remains incomplete, so these results do not qualify an H3 speed claim.
 
 Evidence: [focused replay on GitHub Actions](https://github.com/appunni-m/uvicorn-rs/actions/runs/39515929518)
 and [earlier category run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39471910457).
+
+## Category benchmark logging/header parity audit (2026-10-21)
+
+An audit of the maintained H1, H2, H3, and WebSocket command builders found
+that reference servers ran with access logs disabled and the `Server` header
+disabled, while the Rust server kept both defaults enabled. This adds per-request
+logging work only to the candidate and makes the response-header workload
+different. The prior timing rows therefore do not meet the matched-configuration
+gate. Their case-level response checks and retained logs remain useful, but the
+cross-server timing comparisons are diagnostic until rerun.
+
+The category runners now explicitly disable access logs and `Server` headers
+on both sides, set ERROR logging, and match `Date` header behavior per protocol:
+enabled for H1, H2, and WebSockets; disabled for H3. Their report metadata now
+states candidate and reference policy together. The current source's proactive
+TCP read chunk is 64 KiB; the earlier 16/32 KiB performance comparison also
+needs a corrected-command replay before its cross-server ratio is used as
+performance evidence. No benchmark timing was collected as part of this audit.
+Only the four command builders and these benchmark instructions/evidence notes
+were changed; raw reports, logs, and coverage artifacts remain excluded from
+Git.

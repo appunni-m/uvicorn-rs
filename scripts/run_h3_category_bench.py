@@ -122,6 +122,8 @@ def server_command(
         return [
             str(PYTHON), "-m", "uvicorn_rs", app, "--host", "127.0.0.1", "--port", str(port),
             "--loop", server["loop"], "--certfile", str(cert), "--keyfile", str(key),
+            "--lifespan", "auto", "--interface", "asgi3", "--no-access-log",
+            "--no-server-header", "--no-date-header", "--log-level", "error",
         ]
     return [
         str(PYTHON), "-m", "hypercorn", app, "--bind", f"127.0.0.1:{port}",
@@ -356,7 +358,8 @@ def main() -> None:
             "hypercorn": subprocess.check_output([str(PYTHON), "-c", "import importlib.metadata as m; print(m.version('hypercorn'))"], text=True).strip(),
             "readiness": "trusted TLS HTTP/1.1 HEAD /fixed with Connection: close, outside measured H2/H3 workload",
             "hypercorn_config": {"keep_alive_max_requests": 100000000, "include_server_header": False, "include_date_header": False, "accesslog": None},
-            "reference_logging_policy": {"level": "ERROR", "access_log": "disabled", "unexpected_errors": "public app exception tracebacks remain visible to the post-shutdown diagnostic gate"},
+            "response_header_policy": {"date": "disabled on both servers", "server": "disabled on both servers"},
+            "reference_logging_policy": {"level": "ERROR on both servers", "access_log": "disabled on both servers", "unexpected_errors": "public app exception tracebacks remain visible to the post-shutdown diagnostic gate"},
             "lifespan_policy": {"reference": "auto via Hypercorn's default support detection", "rust": "automatic startup/support detection and shutdown", "timing_boundary": "startup precedes readiness/warmup/load; the lifespan task and state remain present during load and graceful shutdown"},
             **evidence_metadata,
             "slow_reader_rate_bytes_per_second": 4_194_304,

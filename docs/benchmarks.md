@@ -46,6 +46,17 @@ gain; see [benchmark status](benchmark-status.md) for artifacts, per-system
 details, and evidence boundaries. The earlier FastAPI report remains
 historical comparison data only.
 
+**Timing qualification:** the category runners now explicitly match access-log,
+server-header, and date-header settings between uvicorn-rs and its reference.
+Reports generated before this correction left Rust access logs and the `Server`
+header enabled while disabling them on the reference. Keep those reports for
+their recorded correctness outcomes and diagnostics, but do not use their
+cross-server timing rows as matched performance evidence until rerun with the
+corrected commands. In particular, the 16/32 KiB comparison in the status log
+is historical diagnostic evidence; current Rust source uses a 64 KiB proactive
+read chunk, and the 32 KiB result needs a corrected-command replay before its
+cross-server ratio can be cited.
+
 These are loopback application-server benchmarks, not end-to-end production
 capacity tests. They measure the combined server, Python ASGI app, event loops,
 protocol implementation, client, and host. The maintained cross-category
@@ -607,13 +618,18 @@ terminated to make a benchmark appear quiet.
 ### Workload and logging fairness
 
 Keep identical application code, request headers, payloads, concurrency,
-connection reuse and client drain policy for each compared server. The H1
-Uvicorn command disables access logs and its server header. Uvicorn reference
-profiles use public ERROR logging without colors; Hypercorn uses ERROR logging,
-so background/post-response errors remain visible to the strict log gate.
-Reports record `reference_logging_policy`. The scope workload sends the same 32 explicit request headers through the native and fallback
-clients. Payload gates do not compare every response header; use the live
-parity matrix for the supported header/protocol contract.
+connection reuse and client drain policy for each compared server. The H1 and
+WebSocket runner commands explicitly disable access logs and `Server` headers
+on both candidate and Uvicorn, set ERROR logging, and enable the `Date` header.
+H2 uses ERROR logging, no access logs or `Server` header, and the `Date` header
+on both candidate and Hypercorn; H3 uses the same policy with the `Date` header
+disabled on both. These settings avoid per-request log formatting on only one
+side and keep response-header work comparable. Uvicorn uses public ERROR
+logging without colors; Hypercorn uses ERROR logging, so unexpected errors
+remain visible to the strict log gate. Reports record the logging and header
+policies. The scope workload sends the same 32 explicit request headers through
+the native and fallback clients. Payload gates do not compare every response
+header; use the live parity matrix for the supported header/protocol contract.
 
 All comparison servers use automatic lifespan behavior: Uvicorn explicitly uses
 `--lifespan auto`, Hypercorn uses its default automatic support detection, and

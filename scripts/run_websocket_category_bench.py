@@ -69,13 +69,15 @@ def server_command(server: dict, port: int, python: Path, uvicorn_python: Path) 
     if server["kind"] == "rust":
         return [
             str(server_python), "-m", "uvicorn_rs", "examples.bench_fastapi:app", "--host", "127.0.0.1",
-            "--port", str(port), "--loop", server["loop"],
+            "--port", str(port), "--loop", server["loop"], "--interface", "asgi3",
+            "--lifespan", "auto", "--no-access-log", "--log-level", "error",
+            "--no-server-header", "--date-header",
         ]
     return [
         str(server_python), "-m", "uvicorn", "examples.bench_fastapi:app", "--host", "127.0.0.1",
         "--port", str(port), "--loop", server["loop"], "--http", "httptools",
         "--ws", "websockets", "--interface", "asgi3", "--lifespan", "auto", "--no-access-log",
-        "--log-level", "error", "--no-use-colors", "--no-server-header",
+        "--log-level", "error", "--no-use-colors", "--no-server-header", "--date-header",
     ]
 
 
@@ -290,8 +292,8 @@ def main() -> None:
             "rustc": evidence.rustc_version,
             "source_sha256": source_digest(),
             **evidence_metadata,
-            "response_header_policy": {"date": "enabled by protocol implementations", "server": "disabled on Uvicorn; absent in Rust"},
-            "reference_logging_policy": {"level": "ERROR", "colors": False, "access_log": "disabled", "unexpected_errors": "public app exception tracebacks remain visible to the post-shutdown diagnostic gate"},
+            "response_header_policy": {"date": "enabled on both servers", "server": "disabled on both servers"},
+            "reference_logging_policy": {"level": "ERROR on both servers", "colors": False, "access_log": "disabled on both servers", "unexpected_errors": "public app exception tracebacks remain visible to the post-shutdown diagnostic gate"},
             "lifespan_policy": {"reference": "auto via Uvicorn's public --lifespan auto", "rust": "automatic startup/support detection and shutdown", "timing_boundary": "startup precedes readiness/warmup/load; the lifespan task and state remain present during load and graceful shutdown"},
             "servers": selected_servers, "workloads": args.workloads, "concurrency": args.concurrency,
             "workload_concurrency": {
