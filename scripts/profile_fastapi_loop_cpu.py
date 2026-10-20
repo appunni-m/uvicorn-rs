@@ -300,6 +300,14 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=64)
     parser.add_argument("--repetitions", type=int, default=2)
     parser.add_argument(
+        "--require-runtime-diagnostics",
+        action="store_true",
+        help=(
+            "require runtime-diagnostics counters in the Rust extension; "
+            "the resulting profile remains diagnostic-only"
+        ),
+    )
+    parser.add_argument(
         "--native-stack-sampling",
         action="store_true",
         help="collect macOS sample(1) thread stacks during each measured server load",
@@ -509,6 +517,8 @@ def main() -> None:
         "--output",
         str(report_path),
     ]
+    if args.require_runtime_diagnostics:
+        sys.argv.append("--require-runtime-diagnostics")
     try:
         http_bench.main()
     finally:
@@ -608,6 +618,7 @@ def main() -> None:
         "application": "upstream FastAPI with its ordinary Starlette/Pydantic dependencies",
         "alternate_frameworks_used": False,
         "diagnostic_only": True,
+        "runtime_diagnostics_required": args.require_runtime_diagnostics,
         "diagnostic_method": (
             "time.thread_time_ns and RUSAGE_SELF are signal-gated around the measured client load. "
             "RUSAGE_SELF captures process CPU. Linux schedstat supplies per-thread CPU runtime, "
