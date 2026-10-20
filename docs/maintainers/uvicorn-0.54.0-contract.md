@@ -145,13 +145,14 @@ the evidence map below.
 | Package extras and release gates | No published package; current distribution requirements/extras do not mirror the upstream installation contract. | `1s4z`, `v5fe` | Installed-artifact cases and package-content/dependency gates on the supported OS/Python matrix. |
 
 `tests/parity/manifest.json` describes the ASGI protocol slice, a focused CLI
-process slice, and the public Python import/signature probe. Nineteen CLI inputs
+process slice, and the public Python import/signature probe. Twenty CLI inputs
 currently cover module/console help and
 version, module invalid-port parsing, explicit-port precedence over one
 invalid environment value, invalid `UVICORN_PORT` both with and without
 `--version`, explicit `APP` over `UVICORN_APP`, missing-module and
 missing-attribute diagnostics, `UVICORN_APP` with app-dir import lookup, an
-explicit factory `TypeError` startup failure, explicit `--http auto` and
+explicit factory `TypeError` startup failure, `--env-file` loading an
+app-specific value before factory invocation, explicit `--http auto` and
 `--ws auto` app-load diagnostics, and single-process normalization of
 `--workers 0` and `--workers 1`. An explicit `--timeout-worker-healthcheck`
 case confirms that the option does not change startup diagnostics in
