@@ -3775,7 +3775,6 @@ def start_server(
         [
             "--header", "x-asgi-cli: alpha:beta",
             "--no-server-header", "--no-date-header",
-            "--interface", "asgi3",
         ]
         if profile_id == "http1-header-policy"
         else []
@@ -3826,7 +3825,14 @@ def start_server(
         # Exercise the public replacement command in parity runs. Using
         # ``uvicorn_rs`` here would bypass the uvicorn namespace and could let
         # its CLI/import compatibility drift independently of server parity.
-        command = [sys.executable, "-m", "uvicorn", APP, *common, "--loop", "uvloop"]
+        # Match the stock oracle's explicit ASGI3 selection. The shared
+        # parity app is a synchronous callable that returns an awaitable, so
+        # `auto` would classify it as ASGI2 and test interface detection
+        # instead of the protocol/lifecycle behavior under comparison.
+        command = [
+            sys.executable, "-m", "uvicorn", APP, *common,
+            "--loop", "uvloop", "--interface", "asgi3",
+        ]
         if certificate and key:
             command.extend(["--ssl-certfile", str(certificate), "--ssl-keyfile", str(key)])
         command.extend(["--timeout-graceful-shutdown", str(graceful_timeout_seconds)])
