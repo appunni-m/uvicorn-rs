@@ -45,12 +45,17 @@ different field names insignificant while preserving the order of values for a
 repeated name. HTTP/1.1 and HTTP/3 observations keep their declared comparison
 fields.
 
-The indexed CLI process cases currently compare module and installed-console
-invocations for `--help` and `--version`, plus a module invocation with an
-invalid port value and an explicit `--port` overriding an invalid
-`UVICORN_PORT`. All six pass against Uvicorn 0.54.0 on the current source.
-They do not establish broad runtime-option, environment, application-loading,
-diagnostic, or Python API parity.
+The manifest currently defines 25 CLI process cases across `python -m uvicorn`
+and the installed `uvicorn` command. They cover help and version output,
+selected argument errors and environment precedence, app loading with
+`--app-dir` and `--factory`, environment-file loading, HTTP and WebSocket
+selector acceptance, unknown-option rejection, and limited single-process
+worker settings. On current `main`,
+`cli.zero-workers-normalizes-to-single-worker` and
+`cli.unknown-option-is-rejected` each pass individually against isolated
+Uvicorn 0.54.0. This evidence does not establish multi-worker supervision,
+reload/watch behavior, file-descriptor or UDS listener support, execution of
+every listed option, or full CLI and Python API parity.
 
 This follows the fixture-matrix approach used by `image-slash-star`/Pillow-RS,
 adapted to a network server. Pillow-RS compares Rust operations with pinned
@@ -492,19 +497,18 @@ contain CLI invocation mode, arguments, environment overrides, working
 directory and timeout; network inputs contain request methods, paths, headers,
 body bytes, WebSocket messages, disconnect workflows, and shutdown workflows.
 They do not contain expected responses or previously captured server output.
-The current CLI cases compare help and version through `python -m uvicorn` and
-the installed `uvicorn` console command, invalid-port parsing, explicit-port
-precedence over an invalid `UVICORN_PORT`, and acceptance of the explicit
-`--http httptools` and `--ws websockets-sansio` selections before app loading.
-Those selector cases check CLI argument handling; they do not establish broad
-option execution, environment handling, Python API, or full CLI compatibility. The
-fixture app is shared source code imported in fresh, independent oracle and
-target processes. Its exported ASGI callable is synchronous and returns an
-awaitable. The Uvicorn adapter forces `--interface asgi3`; the Hypercorn
-adapter uses its `asgi:` selector. Both then execute the same callable under
-the ASGI 3 contract. The profile split keeps protocol-specific stimulus easy
-to review; the runner also checks the indexed-file set against the files on
-disk.
+The 25 indexed CLI cases compare module and installed-console invocations,
+selected parsing and environment-precedence behavior, app loading and
+environment files, protocol-selector acceptance, unknown-option rejection,
+and single-process worker settings. Selector cases check argument handling;
+they do not prove that every option is executed or establish multi-worker,
+reload/watch, file-descriptor or UDS listener behavior. The fixture app is
+shared source code imported in fresh, independent oracle and target processes.
+Its exported ASGI callable is synchronous and returns an awaitable. The
+Uvicorn adapter forces `--interface asgi3`; the Hypercorn adapter uses its
+`asgi:` selector. Both then execute the same callable under the ASGI 3
+contract. The profile split keeps protocol-specific stimulus easy to review;
+the runner also checks the indexed-file set against the files on disk.
 
 The `http.response-headers` operation records ordered wire fields but compares
 duplicate values in order within each header name. The Rust `http::HeaderMap`
