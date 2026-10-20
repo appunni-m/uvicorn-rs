@@ -959,6 +959,10 @@ def main() -> int:
     oracle_python = Path(os.path.abspath(args.oracle_python))
     if not oracle_python.is_file() or not os.access(oracle_python, os.X_OK):
         parser.error(f"--oracle-python must be an executable interpreter: {oracle_python}")
+    # ``runtime_identity`` runs in this process before per-case subprocesses
+    # start, so keep its imported runner configuration aligned with the
+    # isolated oracle interpreter supplied on the command line.
+    run_parity.ORACLE_PYTHON = oracle_python
     if args.matrix_repeats not in {0, 3}:
         parser.error("--matrix-repeats must be 0 for a selected subset or exactly 3 for full matrices")
     if args.case_timeout < 30:

@@ -3644,6 +3644,13 @@ def start_server(
 ) -> dict[str, Any]:
     profile_id = profile["id"]
     env = os.environ.copy()
+    if server_id == "uvicorn":
+        # Coverage runs add the project Python source to PYTHONPATH so the
+        # instrumented target is importable. Keep that path out of the stock
+        # Uvicorn reference process so it cannot shadow the isolated oracle.
+        for name in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP"):
+            env.pop(name, None)
+        env["PYTHONNOUSERSITE"] = "1"
     if server_id == "uvicorn-rs":
         # Keep this process-wide runtime setting deterministic across host
         # environments and apply only values declared by the selected case.
