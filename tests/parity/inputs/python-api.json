@@ -1,0 +1,150 @@
+{
+  "schema": "uvicorn-rs-parity/input@9",
+  "cases": [
+    {
+      "case_id": "python-api.public-imports-and-signatures",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": [
+          "uvicorn.__version__",
+          "uvicorn.Config",
+          "uvicorn.Server",
+          "uvicorn.run",
+          "uvicorn.config.Config",
+          "uvicorn.server.Server",
+          "uvicorn.main.run"
+        ],
+        "signatures": [
+          "uvicorn.Config",
+          "uvicorn.Server",
+          "uvicorn.run",
+          "uvicorn.config.Config",
+          "uvicorn.server.Server",
+          "uvicorn.main.run"
+        ]
+      }
+    },
+    {
+      "case_id": "python-api.run-reports-missing-module",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.run"],
+        "signatures": ["uvicorn.run"],
+        "calls": [
+          {
+            "target": "uvicorn.run",
+            "arguments": ["uvicorn_rs_missing_run_module_20261019:app"],
+            "keyword_arguments": {}
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "python-api.run-serves-request-and-shuts-down-on-signal",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-run",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": ""
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-http-with-lifespan-disabled",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-lifespan-off",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "api",
+          "root_path": ""
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-http-with-lifespan-disabled",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-lifespan-off",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": ""
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-http-applies-root-path",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-root-path?mode=api",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "/mounted"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-applies-root-path",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-root-path?mode=cli",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "/mounted"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-started-follows-lifespan-readiness",
+      "profile": "python-api",
+      "operation": "python.api.server-readiness",
+      "covers": ["python.api.server-readiness"],
+      "api": {
+        "server_readiness": true
+      }
+    },
+    {
+      "case_id": "python-api.server-startup-failure-leaves-not-started",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-failure-state",
+      "covers": ["python.api.server-startup-failure-state"],
+      "api": {
+        "server_startup_failure": true
+      }
+    }
+  ]
+}
