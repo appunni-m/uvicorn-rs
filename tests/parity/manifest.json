@@ -1191,6 +1191,34 @@
       }
     },
     {
+      "id": "websocket.server-keepalive",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "handshake_accept_valid",
+        "first_server_ping_received",
+        "first_server_ping_payload_length",
+        "pong_sent",
+        "second_server_ping_received",
+        "second_server_ping_payload_length",
+        "timeout_close_received",
+        "timeout_close_code",
+        "timeout_close_reason"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "handshake_accept_valid": true,
+        "first_server_ping_received": true,
+        "first_server_ping_payload_length": 4,
+        "pong_sent": true,
+        "second_server_ping_received": true,
+        "second_server_ping_payload_length": 4,
+        "timeout_close_received": true,
+        "timeout_close_code": 1011,
+        "timeout_close_reason": "keepalive ping timeout"
+      }
+    },
+    {
       "id": "websocket.abrupt-disconnect",
       "kind": "protocol_operation",
       "observe": [

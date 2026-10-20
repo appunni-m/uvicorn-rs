@@ -27,6 +27,8 @@ class Server:
         date_header=True,
         ws_max_size=16 * 1024 * 1024,
         limit_concurrency=None,
+        ws_ping_interval=20.0,
+        ws_ping_timeout=20.0,
         _defer_startup_failure=False,
     ):
         """Store the application and listener options for a server run.
@@ -48,6 +50,10 @@ class Server:
                 application's response headers. ``None`` uses Uvicorn's
                 default ``server: uvicorn`` header.
             date_header: Whether to add the standard HTTP ``Date`` header.
+            ws_ping_interval: Seconds between server-initiated WebSocket pings;
+                ``None`` or a non-positive value disables keepalive pings.
+            ws_ping_timeout: Seconds to wait for the matching pong before
+                closing with code 1011; ``None`` disables the pong deadline.
             limit_concurrency: Maximum active connections or request tasks
                 before the Rust runtime returns HTTP 503.
 
@@ -68,6 +74,8 @@ class Server:
         self.date_header = date_header
         self.ws_max_size = ws_max_size
         self.limit_concurrency = limit_concurrency
+        self.ws_ping_interval = ws_ping_interval
+        self.ws_ping_timeout = ws_ping_timeout
         self._defer_startup_failure = _defer_startup_failure
         self.startup_failed = False
         self._control = None
@@ -121,6 +129,8 @@ class Server:
                 self.default_headers,
                 self.date_header,
                 self.ws_max_size,
+                self.ws_ping_interval,
+                self.ws_ping_timeout,
                 limit_concurrency,
                 control,
                 _bridge.log_concurrency_limit_rejection,

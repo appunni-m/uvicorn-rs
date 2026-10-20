@@ -316,8 +316,6 @@ class Config:
             (self.loop not in {"auto", "asyncio", "uvloop"}, "loop"),
             (self.http not in {"auto", "httptools"}, "http"),
             (self.ws != "auto", "ws"),
-            (self.ws_ping_interval != 20.0, "ws_ping_interval"),
-            (self.ws_ping_timeout != 20.0, "ws_ping_timeout"),
             (self.ws_per_message_deflate is not True, "ws_per_message_deflate"),
             (self.lifespan not in {"auto", "on", "off"}, "lifespan"),
             (self.interface not in {"auto", "asgi2", "asgi3"}, "interface"),

@@ -1630,6 +1630,7 @@ struct ServeOptions {
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
     ws_max_size: usize,
+    websocket_keepalive: WebSocketKeepaliveConfig,
     concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
     #[cfg(feature = "native-tcp")]
     limit_concurrency: Option<usize>,
@@ -1645,6 +1646,7 @@ struct ServerContext {
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
     ws_max_size: usize,
+    websocket_keepalive: WebSocketKeepaliveConfig,
     concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
     #[cfg(feature = "native-tcp")]
     limit_concurrency: Option<usize>,
@@ -1659,6 +1661,48 @@ struct ServerContext {
     graceful_timeout: std::time::Duration,
     pending_python_tasks: TaskTracker,
     force_application_shutdown: CancellationToken,
+}
+
+#[derive(Clone, Copy)]
+struct WebSocketKeepaliveConfig {
+    interval: Option<std::time::Duration>,
+    timeout: Option<std::time::Duration>,
+}
+
+struct WebSocketDriverContext {
+    state: Arc<AtomicU8>,
+    connection_closed: ConnectionClosed,
+    cancellation: CancellationToken,
+    keepalive: WebSocketKeepaliveConfig,
+}
+
+impl WebSocketKeepaliveConfig {
+    fn from_seconds(interval: Option<f64>, timeout: Option<f64>) -> PyResult<Self> {
+        let interval = match interval {
+            Some(seconds) if seconds <= 0.0 => None,
+            Some(seconds) => Some(Self::duration_from_seconds(seconds, "ws_ping_interval")?),
+            None => None,
+        };
+        let timeout = match timeout {
+            Some(seconds) if seconds < 0.0 => Some(std::time::Duration::ZERO),
+            Some(seconds) => Some(Self::duration_from_seconds(seconds, "ws_ping_timeout")?),
+            None => None,
+        };
+        Ok(Self { interval, timeout })
+    }
+
+    fn duration_from_seconds(seconds: f64, setting: &str) -> PyResult<std::time::Duration> {
+        if !seconds.is_finite() {
+            return Err(PyValueError::new_err(format!(
+                "{setting} must be a finite number of seconds"
+            )));
+        }
+        std::time::Duration::try_from_secs_f64(seconds).map_err(|_| {
+            PyValueError::new_err(format!(
+                "{setting} exceeds the supported monotonic deadline range"
+            ))
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -4954,7 +4998,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, limit_concurrency, control, concurrency_limit_callback))]
+#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -4973,11 +5017,15 @@ fn serve<'py>(
     default_headers: Vec<(Bytes, Bytes)>,
     date_header: bool,
     ws_max_size: usize,
+    ws_ping_interval: Option<f64>,
+    ws_ping_timeout: Option<f64>,
     limit_concurrency: Option<usize>,
     control: Py<ServerControl>,
     concurrency_limit_callback: Py<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let lifespan_mode = LifespanMode::from_python(&lifespan)?;
+    let websocket_keepalive =
+        WebSocketKeepaliveConfig::from_seconds(ws_ping_interval, ws_ping_timeout)?;
     #[cfg(not(feature = "native-tcp"))]
     if limit_concurrency.is_some() {
         return Err(PyValueError::new_err(
@@ -5094,6 +5142,7 @@ fn serve<'py>(
             default_headers,
             date_header,
             ws_max_size,
+            websocket_keepalive,
             concurrency_limit_observer: Some(concurrency_limit_observer),
             #[cfg(feature = "native-tcp")]
             limit_concurrency,
@@ -5261,6 +5310,7 @@ async fn serve_forever(
         default_headers: options.default_headers,
         date_header: options.date_header,
         ws_max_size: options.ws_max_size,
+        websocket_keepalive: options.websocket_keepalive,
         concurrency_limit_observer: options.concurrency_limit_observer,
         #[cfg(feature = "native-tcp")]
         limit_concurrency: options.limit_concurrency,
@@ -7294,9 +7344,12 @@ async fn handle_websocket_request_inner(
                 incoming_tx,
                 outgoing_rx,
                 app_task,
-                state,
-                connection_closed,
-                session_cancellation,
+                WebSocketDriverContext {
+                    state,
+                    connection_closed,
+                    cancellation: session_cancellation,
+                    keepalive: server.websocket_keepalive,
+                },
             )
             .await
             {
@@ -7357,9 +7410,12 @@ async fn handle_websocket_request_inner(
                         incoming_tx,
                         outgoing_rx,
                         app_task,
-                        state,
-                        connection_closed,
-                        session_cancellation,
+                        WebSocketDriverContext {
+                            state,
+                            connection_closed,
+                            cancellation: session_cancellation,
+                            keepalive: server.websocket_keepalive,
+                        },
                     ).await {
                         log_error(format_args!("uvicorn-rs: WebSocket session failed: {error}"));
                     }
@@ -7483,15 +7539,25 @@ async fn drive_websocket<S>(
     incoming: mpsc::Sender<WebSocketIncoming>,
     mut outgoing: mpsc::Receiver<WebSocketOutgoing>,
     mut app_task: tokio::task::JoinHandle<PyResult<Py<PyAny>>>,
-    state: Arc<AtomicU8>,
-    mut connection_closed: ConnectionClosed,
-    cancellation: CancellationToken,
+    context: WebSocketDriverContext,
 ) -> Result<(), BoxError>
 where
     S: WebSocketTransport,
 {
+    let WebSocketDriverContext {
+        state,
+        mut connection_closed,
+        cancellation,
+        keepalive,
+    } = context;
     let mut app_task_completed = false;
     let mut driver_error = None;
+    let mut ping_sequence = 0_u32;
+    let mut pending_ping: Option<(Vec<u8>, tokio::time::Instant)> = None;
+    let mut last_ping_rtt = std::time::Duration::ZERO;
+    let mut next_ping = keepalive
+        .interval
+        .and_then(|interval| tokio::time::Instant::now().checked_add(interval));
     #[cfg(coverage)]
     if coverage_fault_is_armed(CoverageFaultPoint::WebSocketDriverAppTaskAborted) {
         app_task.abort();
@@ -7502,6 +7568,14 @@ where
             coverage_fault_is_armed(CoverageFaultPoint::WebSocketDriverDrainSendError);
         #[cfg(not(coverage))]
         let hold_outgoing_for_drain = false;
+        let keepalive_deadline = pending_ping
+            .as_ref()
+            .and_then(|(_, sent_at)| {
+                keepalive
+                    .timeout
+                    .and_then(|timeout| sent_at.checked_add(timeout))
+            })
+            .or(next_ping);
         tokio::select! {
             biased;
             _ = async {
@@ -7546,6 +7620,73 @@ where
                     &mut app_task,
                 ).await.is_ok();
                 break;
+            }
+            _ = async {
+                if let Some(deadline) = keepalive_deadline {
+                    tokio::time::sleep_until(deadline).await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            } => {
+                let now = tokio::time::Instant::now();
+                let ping_timed_out = pending_ping
+                    .as_ref()
+                    .and_then(|(_, sent_at)| {
+                        keepalive
+                            .timeout
+                            .and_then(|timeout| sent_at.checked_add(timeout))
+                    })
+                    .is_some_and(|deadline| deadline <= now);
+                if ping_timed_out {
+                    state.store(2, Ordering::Release);
+                    match tokio::time::timeout(
+                        std::time::Duration::from_millis(100),
+                        socket.send_message(Message::Close(Some(CloseFrame {
+                            code: CloseCode::from(1011),
+                            reason: "keepalive ping timeout".into(),
+                        }))),
+                    )
+                    .await
+                    {
+                        Ok(Ok(())) | Err(_) => {}
+                        Ok(Err(error)) => driver_error = Some(error),
+                    }
+                    let _ = tokio::time::timeout(
+                        std::time::Duration::from_secs(1),
+                        incoming.send(WebSocketIncoming::Disconnect {
+                            code: 1005,
+                            reason: String::new(),
+                        }),
+                    )
+                    .await;
+                    state.store(3, Ordering::Release);
+                    app_task_completed = tokio::time::timeout(
+                        std::time::Duration::from_secs(1),
+                        &mut app_task,
+                    )
+                    .await
+                    .is_ok();
+                    break;
+                }
+
+                if next_ping.is_some_and(|deadline| deadline <= now) {
+                    next_ping = None;
+                    let payload = ping_sequence.to_be_bytes().to_vec();
+                    ping_sequence = ping_sequence.wrapping_add(1);
+                    if let Err(error) = socket
+                        .send_message(Message::Ping(payload.clone().into()))
+                        .await
+                    {
+                        driver_error = Some(error);
+                        break 'driver;
+                    }
+                    pending_ping = Some((payload, now));
+                    if keepalive.timeout.is_none() {
+                        next_ping = keepalive.interval.and_then(|interval| {
+                            now.checked_add(interval.saturating_sub(last_ping_rtt))
+                        });
+                    }
+                }
             }
             result = &mut app_task => {
                 app_task_completed = true;
@@ -7602,6 +7743,20 @@ where
                             break;
                         }
                     }
+                    Ok(Some(Message::Pong(payload))) => {
+                        if let Some((expected, sent_at)) = pending_ping.as_ref() {
+                            if payload.as_ref() == expected.as_slice() {
+                                last_ping_rtt = sent_at.elapsed();
+                                pending_ping = None;
+                                if keepalive.timeout.is_some() {
+                                    next_ping = keepalive.interval.and_then(|interval| {
+                                        tokio::time::Instant::now()
+                                            .checked_add(interval.saturating_sub(last_ping_rtt))
+                                    });
+                                }
+                            }
+                        }
+                    }
                     Ok(Some(Message::Close(frame))) => {
                         let (code, reason) = frame
                             .map(|frame| (u16::from(frame.code), frame.reason.to_string()))
@@ -7617,7 +7772,7 @@ where
                         .is_ok();
                         break;
                     }
-                    Ok(Some(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => {}
+                    Ok(Some(Message::Ping(_) | Message::Frame(_))) => {}
                     Err(error) => {
                         let _ = incoming.send(WebSocketIncoming::Disconnect {
                             code: 1002,

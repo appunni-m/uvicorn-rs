@@ -85,6 +85,8 @@ class Server:
             default_headers=self.config.encoded_headers,
             date_header=self.config.date_header,
             ws_max_size=self.config.ws_max_size,
+            ws_ping_interval=self.config.ws_ping_interval,
+            ws_ping_timeout=self.config.ws_ping_timeout,
             limit_concurrency=self.config.limit_concurrency,
             _defer_startup_failure=True,
         )

@@ -387,8 +387,8 @@ code 1009. It passes 1/1 on macOS 15.7.7 ARM64 / CPython 3.12.13 with
 `websockets` 17.1. Receipt: ignored `target/ws-max-size-parity.json`.
 
 This verifies the explicit CLI setting and the protocol close code for this
-input. Other WebSocket settings, compression, and WebSockets over HTTP/2 or
-HTTP/3 remain unverified.
+input. Server keepalive has a separate focused parity case below. Compression
+and WebSockets over HTTP/2 or HTTP/3 remain unverified.
 
 ## Programmatic WebSocket message-size parity (2026-10-20)
 
@@ -425,6 +425,23 @@ the oversized message, and clean process exit. Receipts are ignored under
 This confirms option acceptance and that the independent message-size limit
 still works. It does not establish a configurable queue bound or compatibility
 with Uvicorn's legacy `websockets` backend.
+
+## Focused server WebSocket keepalive parity (2026-10-21)
+
+The input case `websocket.server-keepalive-ping-pong-timeout` starts Uvicorn
+0.54.0 and uvicorn-rs through their CLI adapters with
+`--ws-ping-interval 0.1 --ws-ping-timeout 0.3`. A raw RFC 6455 client
+completes the handshake, reads a four-byte server Ping, returns its matching
+Pong, reads the next Ping, withholds its Pong, and observes close code 1011
+with reason `keepalive ping timeout`. The case passes 1/1 on macOS 15.7.7
+ARM64 / CPython 3.12.13 with `websockets` 17.1. Receipt:
+ignored `target/ws-keepalive-parity-focused.json`.
+
+This verifies that one non-default CLI configuration and the Rust-owned
+keepalive schedule match the pinned oracle for this exchange. Other timer
+values, disabled interval/timeout behavior, direct `uvicorn.run()` and
+`uvicorn_rs.Server` configuration, compression, and WebSockets over HTTP/2 or
+HTTP/3 are not established by this case.
 
 ## Keep benchmark oracle files separate
 

@@ -25,6 +25,8 @@ that limit is stated in the option description.
 | --http auto | auto | Accepted and uses the native HTTP default. The focused parity case checks missing-app startup diagnostics only; request-level backend parity is not established. Explicit backend selections are rejected. |
 | --ws auto | auto | Accepted and uses the native WebSocket default. `websockets-sansio` is also accepted by the CLI; legacy `websockets` and `wsproto` selections are rejected. The selector case checks app-load diagnostics, not complete backend parity. |
 | --ws-max-queue INTEGER | 32 | Accepted with `--ws auto` or `--ws websockets-sansio`. Uvicorn 0.54.0's auto-selected SansIO backend does not use this setting, so the native adapter leaves it unset as well. A live Python API case verifies a non-default value is accepted while the configured message-size limit still works. The legacy `websockets` backend's queue behavior is unsupported. |
+| --ws-ping-interval SECONDS | 20.0 | Send server-initiated WebSocket Ping frames at this interval. A non-positive value disables pings. The Rust driver sends a four-byte payload and schedules the next ping after a matching Pong. |
+| --ws-ping-timeout SECONDS | 20.0 | Close the WebSocket with code 1011 and reason `keepalive ping timeout` when the peer does not return the matching Pong before the deadline. `None` through `uvicorn.run()` or `uvicorn_rs.Server` disables the timeout. |
 | --workers {0,1} | Unset | Explicit `0` and `1` are accepted and use the existing single process. Other worker counts are rejected; process supervision is not implemented. Current CLI parity cases check startup diagnostics, not worker lifecycle behavior. |
 | --timeout-worker-healthcheck SECONDS | 5 | Accepted with the single-process CLI path. Uvicorn uses this timeout only in its multi-process supervisor, so it has no effect with one worker. Multi-worker mode is not implemented. |
 | --interface {auto,asgi3} | auto | ASGI 3 applications are supported. Explicit `asgi2` and `wsgi` selections are rejected. |
@@ -63,6 +65,12 @@ env_file=".env")` load the file before importing an application string or
 calling its factory. Install `uvicorn-rs-py[standard]` to include
 `python-dotenv`. The focused cases cover CLI and `uvicorn.run` factory startup;
 other dotenv syntax and precedence combinations remain unverified.
+
+WebSocket keepalive uses the same `ws_ping_interval` and `ws_ping_timeout`
+settings exposed by Uvicorn. A live CLI parity case verifies a server Ping, a
+matching Pong, a second Ping, and the timeout close against Uvicorn 0.54.0.
+It uses a 0.1-second interval and 0.3-second timeout; other timing values and
+the disabled-interval/disabled-timeout paths are not part of that parity case.
 
 ## Python API
 

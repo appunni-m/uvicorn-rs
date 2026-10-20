@@ -14,6 +14,7 @@ import importlib.metadata
 import io
 import json
 import logging
+import math
 import os
 from pathlib import Path
 import platform
@@ -809,6 +810,9 @@ def load_contract(
         "process_terminated", "process_exit_code", "application_events", "close_code", "close_reason",
         "connection_closed", "listener_closed_before_release", "idle_connection_closed",
         "startup_failed", "startup_error_observed", "responses", "pong_received",
+        "first_server_ping_received", "first_server_ping_payload_length", "pong_sent",
+        "second_server_ping_received", "second_server_ping_payload_length",
+        "timeout_close_received", "timeout_close_code", "timeout_close_reason",
         "resource_rounds", "resource_stable", "task_count_stable",
         "active_tasks_zero", "load_reached", "followup_healthy",
         "handshake_rejected", "client_aborted",
@@ -3321,6 +3325,8 @@ def load_contract(
                     raise ParityError(f"{case_id}: server_options must be an object")
                 unknown_options = set(server_options) - {
                     "ws_max_size",
+                    "ws_ping_interval",
+                    "ws_ping_timeout",
                     "proxy_headers",
                     "forwarded_allow_ips",
                 }
@@ -3336,6 +3342,15 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: server_options.ws_max_size must be a non-negative integer"
                     )
+                for option in ("ws_ping_interval", "ws_ping_timeout"):
+                    if option in server_options and (
+                        type(server_options[option]) not in {int, float}
+                        or not math.isfinite(server_options[option])
+                        or server_options[option] <= 0
+                    ):
+                        raise ParityError(
+                            f"{case_id}: server_options.{option} must be a finite positive number"
+                        )
                 if "proxy_headers" in server_options and type(
                     server_options["proxy_headers"]
                 ) is not bool:
@@ -3383,6 +3398,19 @@ def load_contract(
                 if websocket.get("path") != "/ws/load" or websocket.get("messages") != []:
                     raise ParityError(
                         f"{case_id}: concurrent WebSocket sessions require the load echo workflow"
+                    )
+            if case.get("operation") == "websocket.server-keepalive":
+                if (
+                    case.get("profile") != "websocket"
+                    or websocket.get("path") != "/ws"
+                    or websocket.get("messages") != []
+                    or not {"ws_ping_interval", "ws_ping_timeout"}.issubset(
+                        case.get("server_options", {})
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: server keepalive requires the /ws idle-session workflow "
+                        "and explicit ping interval and timeout settings"
                     )
             if "shutdown" in websocket:
                 websocket_keys.add("shutdown")
@@ -4048,6 +4076,14 @@ def start_server(
             )
         if "ws_max_size" in server_options:
             command.extend(["--ws-max-size", str(server_options["ws_max_size"])])
+        if "ws_ping_interval" in server_options:
+            command.extend(
+                ["--ws-ping-interval", str(server_options["ws_ping_interval"])]
+            )
+        if "ws_ping_timeout" in server_options:
+            command.extend(
+                ["--ws-ping-timeout", str(server_options["ws_ping_timeout"])]
+            )
         if "proxy_headers" in server_options:
             command.append(
                 "--proxy-headers"
@@ -6945,6 +6981,134 @@ def websocket_raw_frame_observation(
     }
 
 
+def websocket_server_keepalive_observation(
+    server: dict[str, Any], specification: dict[str, Any]
+) -> dict[str, Any]:
+    """Observe server Ping, matching Pong, and the keepalive timeout close."""
+
+    raw_key = "dGhlIHNhbXBsZSBub25jZQ=="
+    expected_accept = base64.b64encode(
+        hashlib.sha1(
+            (raw_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")
+        ).digest()
+    ).decode("ascii").encode("ascii")
+    observation: dict[str, Any] = {
+        "handshake_status": None,
+        "handshake_accept_valid": False,
+        "first_server_ping_received": False,
+        "first_server_ping_payload_length": None,
+        "pong_sent": False,
+        "second_server_ping_received": False,
+        "second_server_ping_payload_length": None,
+        "timeout_close_received": False,
+        "timeout_close_code": None,
+        "timeout_close_reason": None,
+    }
+
+    def read_exactly(reader: Any, size: int) -> bytes:
+        chunks = bytearray()
+        while len(chunks) < size:
+            chunk = reader.read(size - len(chunks))
+            if not chunk:
+                raise EOFError("WebSocket peer closed before the frame was complete")
+            chunks.extend(chunk)
+        return bytes(chunks)
+
+    def read_frame(reader: Any) -> tuple[int, bytes]:
+        first, second = read_exactly(reader, 2)
+        length = second & 0x7F
+        if length == 126:
+            length = int.from_bytes(read_exactly(reader, 2), "big")
+        elif length == 127:
+            length = int.from_bytes(read_exactly(reader, 8), "big")
+        if second & 0x80:
+            mask = read_exactly(reader, 4)
+            payload = read_exactly(reader, length)
+            payload = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
+        else:
+            payload = read_exactly(reader, length)
+        return first & 0x0F, payload
+
+    def send_pong(client: socket.socket, payload: bytes) -> None:
+        if len(payload) > 125:
+            raise ParityError("server keepalive Ping payload exceeded the control-frame limit")
+        mask = b"\x13\x57\x9b\xdf"
+        masked = bytes(byte ^ mask[index % len(mask)] for index, byte in enumerate(payload))
+        client.sendall(bytes((0x8A, 0x80 | len(payload))) + mask + masked)
+
+    client = socket.create_connection(("127.0.0.1", server["port"]), timeout=3)
+    client.settimeout(3)
+    reader = client.makefile("rb")
+    try:
+        request = (
+            f"GET {specification['path']} HTTP/1.1\r\n"
+            f"Host: 127.0.0.1:{server['port']}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {raw_key}\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n"
+        ).encode("ascii")
+        client.sendall(request)
+        status_line = reader.readline()
+        status_parts = status_line.split()
+        if len(status_parts) >= 2 and status_parts[1].isdigit():
+            observation["handshake_status"] = int(status_parts[1])
+        response_headers: dict[bytes, bytes] = {}
+        while status_line and (line := reader.readline()) not in {b"\r\n", b"\n", b""}:
+            name, separator, value = line.partition(b":")
+            if separator:
+                response_headers[name.strip().lower()] = value.strip()
+        observation["handshake_accept_valid"] = (
+            response_headers.get(b"sec-websocket-accept") == expected_accept
+        )
+        if observation["handshake_status"] != 101:
+            return observation
+
+        try:
+            first_opcode, first_payload = read_frame(reader)
+        except (EOFError, OSError, TimeoutError):
+            return observation
+        observation["first_server_ping_received"] = first_opcode == 0x9
+        if first_opcode != 0x9:
+            return observation
+        observation["first_server_ping_payload_length"] = len(first_payload)
+        send_pong(client, first_payload)
+        observation["pong_sent"] = True
+
+        try:
+            second_opcode, second_payload = read_frame(reader)
+        except (EOFError, OSError, TimeoutError):
+            return observation
+        observation["second_server_ping_received"] = second_opcode == 0x9
+        if second_opcode != 0x9:
+            if second_opcode == 0x8:
+                observation["timeout_close_received"] = True
+                if len(second_payload) >= 2:
+                    observation["timeout_close_code"] = int.from_bytes(
+                        second_payload[:2], "big"
+                    )
+                    observation["timeout_close_reason"] = second_payload[2:].decode(
+                        "utf-8", errors="replace"
+                    )
+            return observation
+        observation["second_server_ping_payload_length"] = len(second_payload)
+
+        try:
+            close_opcode, close_payload = read_frame(reader)
+        except (EOFError, OSError, TimeoutError):
+            return observation
+        observation["timeout_close_received"] = close_opcode == 0x8
+        if close_opcode == 0x8 and len(close_payload) >= 2:
+            observation["timeout_close_code"] = int.from_bytes(close_payload[:2], "big")
+            observation["timeout_close_reason"] = close_payload[2:].decode(
+                "utf-8", errors="replace"
+            )
+        return observation
+    finally:
+        reader.close()
+        client.close()
+
+
 def websocket_observation(
     server: dict[str, Any],
     specification: dict[str, Any],
@@ -7346,6 +7510,14 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "followup_status": "followup_status",
         "handshake_rejected": "handshake_rejected",
         "pong_received": "pong_received",
+        "first_server_ping_received": "first_server_ping_received",
+        "first_server_ping_payload_length": "first_server_ping_payload_length",
+        "pong_sent": "pong_sent",
+        "second_server_ping_received": "second_server_ping_received",
+        "second_server_ping_payload_length": "second_server_ping_payload_length",
+        "timeout_close_received": "timeout_close_received",
+        "timeout_close_code": "timeout_close_code",
+        "timeout_close_reason": "timeout_close_reason",
         "subprotocol": "subprotocol",
         "ordered_messages": "messages",
         "ordered_message_payload_bytes": "message_payload_bytes",
@@ -7919,6 +8091,13 @@ def execute_case(
         if case.get("operation") == "websocket.raw-frame-disconnect":
             log_offset = len(read_server_log(server))
             observation = websocket_raw_frame_observation(server, case["websocket"])
+            observation["server_log"] = read_server_log(server)[log_offset:]
+            return observation
+        if case.get("operation") == "websocket.server-keepalive":
+            log_offset = len(read_server_log(server))
+            observation = websocket_server_keepalive_observation(
+                server, case["websocket"]
+            )
             observation["server_log"] = read_server_log(server)[log_offset:]
             return observation
         fault = case.get("fault")

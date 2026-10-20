@@ -632,6 +632,23 @@
       }
     },
     {
+      "case_id": "websocket.server-keepalive-ping-pong-timeout",
+      "profile": "websocket",
+      "operation": "websocket.server-keepalive",
+      "covers": [
+        "websocket.server-keepalive"
+      ],
+      "server_options": {
+        "ws_ping_interval": 0.1,
+        "ws_ping_timeout": 0.3
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": []
+      }
+    },
+    {
       "case_id": "websocket.abrupt-client-disconnect",
       "profile": "websocket",
       "operation": "websocket.abrupt-disconnect",

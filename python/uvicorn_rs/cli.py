@@ -59,6 +59,8 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument("--graceful-timeout", type=int, default=10)
     parser.add_argument("--limit-concurrency", type=int)
     parser.add_argument("--ws-max-size", type=int, default=16 * 1024 * 1024)
+    parser.add_argument("--ws-ping-interval", type=float, default=20.0)
+    parser.add_argument("--ws-ping-timeout", type=float, default=20.0)
     parser.add_argument("--header", dest="headers", action="append", default=[])
     parser.add_argument("--server-header", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--date-header", action=argparse.BooleanOptionalAction, default=True)
@@ -97,6 +99,8 @@ def main(argv=None, prog="uvicorn-rs-py"):
         root_path=args.root_path,
         limit_concurrency=args.limit_concurrency,
         ws_max_size=args.ws_max_size,
+        ws_ping_interval=args.ws_ping_interval,
+        ws_ping_timeout=args.ws_ping_timeout,
         timeout_graceful_shutdown=args.graceful_timeout,
         ssl_certfile=args.certfile,
         ssl_keyfile=args.keyfile,
