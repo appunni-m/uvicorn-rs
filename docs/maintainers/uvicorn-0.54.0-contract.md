@@ -172,9 +172,11 @@ Uvicorn's auto-detection and explicit interface selection. The two
 The matrix does not yet cover successful factory serving,
 most settings, general environment precedence, reload, multi-worker
 supervision, or package replacement behavior.
-The Python API inputs now use `uvicorn-rs-parity/input@11` to include
+Python API inputs introduced `uvicorn-rs-parity/input@11` to include
 `root_path`, optional default-header stimuli and observations, and selected
-Uvicorn/application interfaces in the declared run request. They compare public imports/signatures, the
+Uvicorn/application interfaces in the declared run request. The active input
+schema is now `@12`, which allows a strict per-profile `server_options` object
+for matching the same WebSocket setting on the oracle and candidate. They compare public imports/signatures, the
 `uvicorn.run()` missing-module diagnostic, a successful default request, an
 API request with lifespan disabled, a module CLI request with lifespan
 disabled, startup readiness, startup-failure state, and API/module-CLI requests
@@ -318,6 +320,18 @@ Each compares the HTTP response and process shutdown. Receipts are retained
 locally under ignored `target/parity-python-api-asgi2*.json`. This proves these
 function-based paths only; WSGI, other callable forms, and the complete API
 lifecycle remain open.
+
+## Focused WebSocket message-size parity (2026-10-20)
+
+The input case `websocket.configured-max-message-size-closes-oversized-message`
+starts both Uvicorn 0.54.0 and uvicorn-rs with `--ws-max-size 4`, sends a
+five-byte text message, and requires handshake status 101 followed by close
+code 1009. It passes 1/1 on macOS 15.7.7 ARM64 / CPython 3.12.13 with
+`websockets` 17.1. Receipt: ignored `target/ws-max-size-parity.json`.
+
+This verifies the explicit CLI setting and the protocol close code for this
+input. It does not establish the Python `uvicorn.run()` path, other WebSocket
+settings, compression, or WebSockets over HTTP/2 or HTTP/3.
 
 ## Keep benchmark oracle files separate
 

@@ -26,7 +26,11 @@ use hyper_util::rt::TokioIo;
 #[cfg(coverage)]
 use tokio::sync::Notify;
 use tokio_tungstenite::{
-    tungstenite::{handshake::derive_accept_key, protocol::Role, Error as TungsteniteError},
+    tungstenite::{
+        handshake::derive_accept_key,
+        protocol::{Role, WebSocketConfig},
+        Error as TungsteniteError,
+    },
     WebSocketStream,
 };
 
@@ -298,6 +302,25 @@ impl WebSocketSession {
         }
     }
 
+    /// Creates a framed session with a configured limit for complete messages.
+    ///
+    /// The limit applies to complete text and binary messages. A message that
+    /// exceeds it is rejected with WebSocket close code 1009.
+    pub async fn from_accepted_upgrade_with_max_message_size(
+        stream: TokioIo<Upgraded>,
+        connection_upgrade: ConnectionUpgrade,
+        max_message_size: usize,
+    ) -> Self {
+        let mut config = WebSocketConfig::default();
+        config.max_message_size = Some(max_message_size);
+        config.max_frame_size = Some(max_message_size);
+        Self {
+            stream: WebSocketStream::from_raw_socket(stream, Role::Server, Some(config)).await,
+            connection_upgrade,
+            pending_close: None,
+        }
+    }
+
     /// Receives the next WebSocket message, including a peer close frame, or
     /// returns `None` when the underlying stream ends. On a peer close, it
     /// flushes the protocol close reply before returning the frame.
@@ -310,13 +333,19 @@ impl WebSocketSession {
     /// Returns [`WebSocketError`] for malformed frames or transport failure.
     pub async fn receive(&mut self) -> Result<Option<WebSocketMessage>, WebSocketError> {
         if self.pending_close.is_none() {
-            match self
-                .stream
-                .next()
-                .await
-                .transpose()
-                .map_err(WebSocketError)?
-            {
+            let message = match self.stream.next().await.transpose() {
+                Ok(message) => message,
+                Err(error @ TungsteniteError::Capacity(_)) => {
+                    let close = WebSocketCloseFrame {
+                        code: WebSocketCloseCode::Size,
+                        reason: "message too big".into(),
+                    };
+                    let _ = self.stream.close(Some(close)).await;
+                    return Err(WebSocketError(error));
+                }
+                Err(error) => return Err(WebSocketError(error)),
+            };
+            match message {
                 Some(WebSocketMessage::Close(frame)) => self.pending_close = Some(frame),
                 message => return Ok(message),
             }

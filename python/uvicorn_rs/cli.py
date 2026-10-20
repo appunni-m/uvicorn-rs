@@ -56,6 +56,7 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument("--certfile", help="PEM certificate chain; enables HTTPS and HTTP/3")
     parser.add_argument("--keyfile", help="PEM private key for --certfile")
     parser.add_argument("--graceful-timeout", type=int, default=10)
+    parser.add_argument("--ws-max-size", type=int, default=16 * 1024 * 1024)
     parser.add_argument("--header", dest="headers", action="append", default=[])
     parser.add_argument("--server-header", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--date-header", action=argparse.BooleanOptionalAction, default=True)
@@ -129,6 +130,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
             root_path=args.root_path,
             default_headers=encoded_headers,
             date_header=args.date_header,
+            ws_max_size=args.ws_max_size,
         )
         server_task = asyncio.create_task(
             server.serve()

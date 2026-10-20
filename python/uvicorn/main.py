@@ -302,6 +302,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "timeout_graceful_shutdown", "app_dir", "factory", "lifespan", "root_path",
         "env_file",
         "headers", "server_header", "date_header", "interface",
+        "ws_max_size",
     }
     # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
     # process. Neither value requires process supervision from the adapter.
@@ -364,6 +365,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.append("--no-date-header")
     if options["interface"] != "auto":
         argv.extend(("--interface", options["interface"]))
+    if options["ws_max_size"] != 16 * 1024 * 1024:
+        argv.extend(("--ws-max-size", str(options["ws_max_size"])))
     graceful_timeout = options["timeout_graceful_shutdown"]
     if graceful_timeout is not None:
         argv.extend(("--graceful-timeout", str(graceful_timeout)))

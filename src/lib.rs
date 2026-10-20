@@ -69,7 +69,13 @@ use tokio::sync::{oneshot, watch, Mutex};
 use tokio_rustls::{rustls, TlsAcceptor};
 use tokio_tungstenite::tungstenite::handshake::derive_accept_key;
 #[cfg(not(feature = "native-tcp"))]
-use tokio_tungstenite::{tungstenite::protocol::Role, WebSocketStream};
+use tokio_tungstenite::{
+    tungstenite::{
+        protocol::{Role, WebSocketConfig},
+        Error as TungsteniteError,
+    },
+    WebSocketStream,
+};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uvicorn_rs::{
@@ -1512,6 +1518,7 @@ struct ServeOptions {
     lifespan_enabled: bool,
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
+    ws_max_size: usize,
 }
 
 struct ServerContext {
@@ -1523,6 +1530,7 @@ struct ServerContext {
     tcp_tls: Option<TlsAcceptor>,
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
+    ws_max_size: usize,
     state: Option<Arc<Py<PyDict>>>,
     #[cfg(not(feature = "native-tcp"))]
     websocket_tasks: WebSocketTasks,
@@ -4747,7 +4755,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan_enabled, root_path, default_headers, date_header, control))]
+#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan_enabled, root_path, default_headers, date_header, ws_max_size, control))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -4765,6 +4773,7 @@ fn serve<'py>(
     root_path: String,
     default_headers: Vec<(Bytes, Bytes)>,
     date_header: bool,
+    ws_max_size: usize,
     control: Py<ServerControl>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let default_headers = default_headers
@@ -4843,6 +4852,7 @@ fn serve<'py>(
             lifespan_enabled,
             default_headers,
             date_header,
+            ws_max_size,
         };
         let result = serve_forever(
             app,
@@ -5000,6 +5010,7 @@ async fn serve_forever(
         tcp_tls: options.tcp_tls,
         default_headers: options.default_headers,
         date_header: options.date_header,
+        ws_max_size: options.ws_max_size,
         state,
         #[cfg(not(feature = "native-tcp"))]
         websocket_tasks,
@@ -7015,7 +7026,12 @@ async fn handle_websocket_request_inner(
                 let _ = app_task.await;
                 return std::future::pending::<Result<(), std::io::Error>>().await;
             }
-            let socket = WebSocketSession::from_accepted_upgrade(upgraded, upgrade_shutdown).await;
+            let socket = WebSocketSession::from_accepted_upgrade_with_max_message_size(
+                upgraded,
+                upgrade_shutdown,
+                server.ws_max_size,
+            )
+            .await;
             if let Err(error) = drive_websocket(
                 socket,
                 incoming_tx,
@@ -7071,10 +7087,13 @@ async fn handle_websocket_request_inner(
             }
             result = on_upgrade => match result {
                 Ok(upgraded) => {
+                    let mut websocket_config = WebSocketConfig::default();
+                    websocket_config.max_message_size = Some(server.ws_max_size);
+                    websocket_config.max_frame_size = Some(server.ws_max_size);
                     let socket = WebSocketStream::from_raw_socket(
                         TokioIo::new(upgraded),
                         Role::Server,
-                        None,
+                        Some(websocket_config),
                     ).await;
                     if let Err(error) = drive_websocket(
                         socket,
@@ -7174,10 +7193,18 @@ where
     }
 
     async fn receive_message(&mut self) -> Result<Option<Message>, BoxError> {
-        self.next()
-            .await
-            .transpose()
-            .map_err(|error| Box::new(error) as BoxError)
+        match self.next().await.transpose() {
+            Ok(message) => Ok(message),
+            Err(error @ TungsteniteError::Capacity(_)) => {
+                let close = Message::Close(Some(CloseFrame {
+                    code: CloseCode::Size,
+                    reason: "message too big".into(),
+                }));
+                let _ = self.send(close).await;
+                Err(Box::new(error))
+            }
+            Err(error) => Err(Box::new(error)),
+        }
     }
 }
 

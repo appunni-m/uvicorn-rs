@@ -235,7 +235,6 @@ class Config:
             (self.loop not in {"auto", "asyncio", "uvloop"}, "loop"),
             (self.http not in {"auto", "httptools"}, "http"),
             (self.ws != "auto", "ws"),
-            (self.ws_max_size != 16 * 1024 * 1024, "ws_max_size"),
             (self.ws_max_queue != 32, "ws_max_queue"),
             (self.ws_ping_interval != 20.0, "ws_ping_interval"),
             (self.ws_ping_timeout != 20.0, "ws_ping_timeout"),

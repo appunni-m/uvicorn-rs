@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@11",
+  "schema": "uvicorn-rs-parity/input@12",
   "cases": [
     {
       "case_id": "websocket.client-drop-during-pending-upgrade",
@@ -54,6 +54,29 @@
             "value": "AAEC/3BhcnR5"
           }
         ]
+      }
+    },
+    {
+      "case_id": "websocket.configured-max-message-size-closes-oversized-message",
+      "profile": "websocket",
+      "operation": "websocket.message-size-limit",
+      "covers": [
+        "websocket.message-size-limit"
+      ],
+      "server_options": {
+        "ws_max_size": 4
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "12345"
+          }
+        ],
+        "send_only": true,
+        "expect_close": true
       }
     },
     {

@@ -61,6 +61,7 @@ class Server:
             root_path=self.config.root_path,
             default_headers=self.config.encoded_headers,
             date_header=self.config.date_header,
+            ws_max_size=self.config.ws_max_size,
         )
         self._native_server = native_server
         if self._should_exit:

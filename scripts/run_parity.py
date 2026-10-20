@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@11"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@12"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -3169,6 +3169,23 @@ def load_contract(
                 raise ParityError(f"{case_id}: headers must be pairs of strings")
         elif kind in {"websocket", "websocket-tls"}:
             case_keys = {"case_id", "profile", "operation", "covers", "websocket"}
+            if "server_options" in case:
+                case_keys.add("server_options")
+                server_options = case["server_options"]
+                if type(server_options) is not dict:
+                    raise ParityError(f"{case_id}: server_options must be an object")
+                exact_keys(
+                    server_options,
+                    {"ws_max_size"},
+                    f"{case_id}.server_options",
+                )
+                if (
+                    type(server_options["ws_max_size"]) is not int
+                    or server_options["ws_max_size"] < 0
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.ws_max_size must be a non-negative integer"
+                    )
             if "load" in case:
                 case_keys.add("load")
                 validate_load_input(case, "websocket")
@@ -3692,6 +3709,7 @@ def start_server(
     async_cleanup_delay_seconds: float = 0.5,
     observe_connection_errors: bool = False,
     target_environment: dict[str, Any] | None = None,
+    server_options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     profile_id = profile["id"]
     env = os.environ.copy()
@@ -3871,6 +3889,14 @@ def start_server(
             command.extend(["--quic-bind", f"127.0.0.1:{port}"])
     else:
         raise ParityError(f"unknown server adapter: {server_id}")
+
+    if server_options:
+        if server_id not in {"uvicorn", "uvicorn-rs"}:
+            raise ParityError(
+                f"server options are not supported by the {server_id} parity adapter"
+            )
+        if "ws_max_size" in server_options:
+            command.extend(["--ws-max-size", str(server_options["ws_max_size"])])
 
     log = tempfile.TemporaryFile(mode="w+t")
     process = subprocess.Popen(
@@ -9537,6 +9563,9 @@ def start_profile_servers(
     coverage_profile_dir: Path | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any], Path | None]:
     profile_id = profile["id"]
+    server_options = cases[0].get("server_options", {}) if cases else {}
+    if any(case.get("server_options", {}) != server_options for case in cases):
+        raise ParityError("profile cases with different server options must use separate processes")
     tls = profile_id in {
         "http2",
         "http3",
@@ -9671,6 +9700,7 @@ def start_profile_servers(
                     for case in cases
                 ),
                 target_environment=target_environment,
+                server_options=server_options,
             )
     except Exception:
         for server in servers.values():
@@ -9690,6 +9720,28 @@ def execute_profile(
         return execute_cli_profile(profile, cases, operations)
     if profile["id"] == "python-api":
         return execute_python_api_profile(profile, cases, operations)
+    server_option_groups: dict[str, list[dict[str, Any]]] = {}
+    for case in cases:
+        option_key = json.dumps(
+            case.get("server_options", {}), sort_keys=True, separators=(",", ":")
+        )
+        server_option_groups.setdefault(option_key, []).append(case)
+    if len(server_option_groups) > 1:
+        grouped_outcomes: dict[str, dict[str, Any]] = {}
+        infrastructure_errors = []
+        for case_group in server_option_groups.values():
+            group_outcomes, group_errors = execute_profile(
+                profile,
+                case_group,
+                h3_client,
+                operations,
+                coverage_profile_dir,
+            )
+            grouped_outcomes.update(
+                (outcome["case_id"], outcome) for outcome in group_outcomes
+            )
+            infrastructure_errors.extend(group_errors)
+        return [grouped_outcomes[case["case_id"]] for case in cases], infrastructure_errors
     startup_cases = [
         case for case in cases
         if "startup_failure" in case or "startup_fallback" in case

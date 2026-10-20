@@ -24,6 +24,7 @@ class Server:
         root_path="",
         default_headers=None,
         date_header=True,
+        ws_max_size=16 * 1024 * 1024,
     ):
         """Store the application and listener options for a server run.
 
@@ -58,6 +59,7 @@ class Server:
             [(b"server", b"uvicorn")] if default_headers is None else default_headers
         )
         self.date_header = date_header
+        self.ws_max_size = ws_max_size
         self._control = None
 
     def shutdown(self):
@@ -98,6 +100,7 @@ class Server:
                 self.root_path,
                 self.default_headers,
                 self.date_header,
+                self.ws_max_size,
                 control,
             )
         )
