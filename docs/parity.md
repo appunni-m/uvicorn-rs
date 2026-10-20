@@ -155,12 +155,14 @@ This new workflow passed its selected instrumented case (1/1), with actual
 remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
 The maintained [coverage summary](coverage.md) records the historical
-511-case adapter result and the latest complete-scope 595-case baseline. The
-current manifest has 599 cases after adding four native HTTP/1 upgrade-session
-inputs; the selected 4/4 result is not a full-matrix result. Generated
-per-run reports remain local and Git-ignored. The case passes full attribution
-and all three 511-case repeats; the historical report's region map records
-which cases cover the final-drain spans.
+511-case adapter result and the latest complete-scope 595-case baseline. Those
+coverage and case totals are snapshots: the current manifest has 601 cases,
+including four native HTTP/1 upgrade-session inputs and later CLI environment
+precedence inputs. The selected results described here are focused results,
+not a full-matrix result. Generated per-run reports remain local and
+Git-ignored. The case passes full attribution and all three 511-case repeats;
+the historical report's region map records which cases cover the final-drain
+spans.
 The `stream_reset` field follows the existing `recv_data` error convention;
 actual remote application close `0x102`, `body_stream_error`,
 `connection_closed` and cleanup establish connection-error termination and
@@ -418,11 +420,11 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
-| CLI and environment | 22 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
+| CLI and environment | 23 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
 | Python API | 20 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, and a configured WebSocket message limit. |
 
-These eight groups account for all 309 current oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 600 total cases. Five
+These eight groups account for all 310 current oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 601 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current

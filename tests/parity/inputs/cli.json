@@ -135,6 +135,28 @@
       }
     },
     {
+      "case_id": "cli.env-file-preserves-process-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_cli_app_dir:factory_env_file_error",
+          "--app-dir",
+          "tests/parity/fixtures/app_dir_only",
+          "--factory",
+          "--env-file",
+          "tests/parity/fixtures/app_dir_only/factory.env"
+        ],
+        "environment": {
+          "UVICORN_RS_PARITY_FACTORY_SENTINEL": "from-process-environment"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.uvicorn-app-env-resolves-app-dir-target",
       "profile": "cli",
       "operation": "cli.process",

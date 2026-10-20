@@ -30,7 +30,7 @@ that limit is stated in the option description.
 | --loop {auto,asyncio,uvloop,zuvloop} | auto | Select the Python event loop. `auto` uses uvloop when installed, otherwise asyncio. Tokio remains the Rust network runtime. |
 | --lifespan {auto,on,off} | auto | `off` prevents the app from receiving ASGI lifespan events. This behavior has focused live parity on macOS ARM64 / CPython 3.12.13. Strict `on` failure behavior for apps without lifespan support is not yet verified. |
 | --app-dir PATH | Current directory | Add a directory to the application import path. |
-| --env-file PATH | Unset | Load application environment variables before importing the app. Requires `python-dotenv`, included in the `[standard]` extra. CLI and programmatic factory behavior have focused parity cases. |
+| --env-file PATH | Unset | Load application environment variables before importing the app. One focused CLI parity case confirms a pre-existing process value wins over the same key in the file. Requires `python-dotenv`, included in the `[standard]` extra. CLI and programmatic factory behavior have focused parity cases. |
 | --root-path PATH | Empty | Prefix `scope["path"]` and `scope["raw_path"]`, and set `scope["root_path"]`. Focused parity covers an ASCII prefix on HTTP/1.1. |
 | --header NAME:VALUE | None | Add a default response header. The CLI has an HTTP/1.1 parity case for a value containing a colon; `uvicorn.run` accepts the equivalent `headers=[("Name", "value")]` pairs, verified by a focused API case. |
 | --server-header/--no-server-header | Enabled | Include or omit the default `Server: uvicorn` response header. The disabled behavior is covered by the focused header-policy case. |
