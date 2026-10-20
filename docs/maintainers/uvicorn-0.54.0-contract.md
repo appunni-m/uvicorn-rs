@@ -59,14 +59,17 @@ environment variables are `WEB_CONCURRENCY`, `FORWARDED_ALLOW_IPS`, and, for
 watchfiles reload, `WATCHFILES_FORCE_POLLING`. These are separate from the
 `UVICORN_*` prefix rule.
 
-The focused cases `http1.proxy-headers-trusted-client-and-scheme` and
+The focused cases `http1.proxy-headers-trusted-client-and-scheme`,
+`http1.proxy-headers-disabled-ignores-forwarded-values`, and
 `python-api.run-applies-trusted-proxy-headers` each pass 1/1 against Uvicorn
-0.54.0. Both send `X-Forwarded-For: 198.51.100.25, 127.0.0.1` and
+0.54.0. The trusted cases send `X-Forwarded-For: 198.51.100.25, 127.0.0.1` and
 `X-Forwarded-Proto: https` from the loopback peer with an explicit
 `127.0.0.1,::1` trust list; both servers expose client `198.51.100.25` and
-scheme `https` to the ASGI app. This does not establish untrusted-peer
-handling, disabled proxy headers, wildcard/CIDR trust, malformed forwarding
-chains, `FORWARDED_ALLOW_IPS` precedence, or WebSocket scheme conversion.
+scheme `https` to the ASGI app. The disabled case supplies the same forwarded
+values with proxy handling disabled; the ASGI app observes the direct peer and
+the unmodified request scheme. These cases do not establish untrusted-peer
+handling, wildcard/CIDR trust, malformed forwarding chains,
+`FORWARDED_ALLOW_IPS` precedence, or WebSocket scheme conversion.
 
 ## Python import and callable surface
 

@@ -5,9 +5,10 @@ The [deployment guide](../deployment.md) is the operator-facing entry point. Thi
 
 `uvicorn-rs-py` is an experimental single-process Python ASGI adapter. It
 loads an importable module:attribute; it does not create application factories,
-supervise workers, reload code, or configure proxy headers. The project has not
-published a package. Build and install a wheel into the same environment as the
-application and its Python dependencies.
+supervise workers, or reload code. Proxy-header behavior has only the focused
+CLI and `uvicorn.run()` coverage listed in the [support matrix](../support-matrix.md).
+The project has not published a package. Build and install a wheel into the same
+environment as the application and its Python dependencies.
 
 ## Start an application
 
