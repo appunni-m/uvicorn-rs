@@ -435,7 +435,7 @@ digests for the target.
 ## Scope and comparison rules
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@9`; live artifacts use
+`uvicorn-rs-parity/input@10`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -562,6 +562,12 @@ unrepresented declared operations, and observed output fields embedded in
 active cases. The runner validates these fail-closed properties before starting
 servers and verifies that result accounting cannot omit a selected case. It
 selects adapters by declared profile and workflow shape, never by case ID.
+
+Input schema `@10` adds optional `headers` and `observe_headers` fields to the
+Python API HTTP-run stimulus. Migrate maintained `@9` inputs with
+`python scripts/migrate_parity_input_v9_to_v10.py`; the migrator changes only
+the schema marker and preserves existing case data. The runner rejects older
+or mixed input schemas.
 
 ## CI evidence
 

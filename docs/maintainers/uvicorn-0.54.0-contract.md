@@ -165,8 +165,9 @@ and environment file as the module CLI case, and
 configured through `uvicorn.run(headers=[(name, value)])`. The matrix does not yet cover successful factory serving,
 most settings, general environment precedence, reload, multi-worker
 supervision, or package replacement behavior.
-The Python API inputs now use `uvicorn-rs-parity/input@9` to include `root_path`
-in the declared run request. They compare public imports/signatures, the
+The Python API inputs now use `uvicorn-rs-parity/input@10` to include `root_path`
+and optional default-header stimuli and observations in the declared run
+request. They compare public imports/signatures, the
 `uvicorn.run()` missing-module diagnostic, a successful default request, an
 API request with lifespan disabled, a module CLI request with lifespan
 disabled, startup readiness, startup-failure state, and API/module-CLI requests
@@ -177,8 +178,10 @@ Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Receipts are under ignored
 focused cases do not close the remaining settings or lifecycle inventory.
 
 Input schema `@9` was introduced on 2026-10-20 to declare `root_path` in the
-`run_http` stimulus. All 74 indexed input files now carry the new schema
-identity, and the Python API input adds two cases. Previous full-matrix and
+`run_http` stimulus. Input schema `@10` adds optional default response headers
+and selected response-header observations to the same stimulus; the
+`@9`-to-`@10` migrator updates markers while preserving each case. All indexed
+input files carry the same schema identity. Previous full-matrix and
 per-case receipts are historical under schema `@8`; regenerate the full
 parity matrix against the exact release candidate before using it as a
 current release gate. Focused `@9` root-path receipts were generated on
