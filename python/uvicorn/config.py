@@ -305,6 +305,9 @@ class Config:
     def validate_native_runtime(self) -> None:
         """Reject settings whose semantics are not implemented by this runtime."""
         unsupported = []
+        # The supported `auto` WebSocket path matches Uvicorn 0.54.0's default
+        # SansIO backend, which does not consume ws_max_queue. Leave that value
+        # on Config without treating it as a native queue-size control.
         checks = (
             (self.uds is not None, "uds"),
             (self.fd is not None, "fd"),
@@ -313,7 +316,6 @@ class Config:
             (self.loop not in {"auto", "asyncio", "uvloop"}, "loop"),
             (self.http not in {"auto", "httptools"}, "http"),
             (self.ws != "auto", "ws"),
-            (self.ws_max_queue != 32, "ws_max_queue"),
             (self.ws_ping_interval != 20.0, "ws_ping_interval"),
             (self.ws_ping_timeout != 20.0, "ws_ping_timeout"),
             (self.ws_per_message_deflate is not True, "ws_per_message_deflate"),

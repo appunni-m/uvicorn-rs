@@ -351,6 +351,7 @@ uvicorn.run(
     port=int(sys.argv[1]),
     lifespan="off",
     ws_max_size=int(sys.argv[2]),
+    ws_max_queue=int(sys.argv[3]),
 )
 '''
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
@@ -376,6 +377,7 @@ uvicorn.run(
             child_code,
             str(port),
             str(request["ws_max_size"]),
+            str(request.get("ws_max_queue", 32)),
         ],
         cwd=os.getcwd(),
         env=environment,

@@ -319,7 +319,7 @@
       }
     },
     {
-      "case_id": "cli.ws-max-size-preserves-app-load-diagnostic",
+      "case_id": "cli.sansio-ws-size-and-queue-preserve-app-load-diagnostic",
       "profile": "cli",
       "operation": "cli.process",
       "covers": ["cli.process"],
@@ -327,8 +327,12 @@
         "invocation": "module",
         "arguments": [
           "uvicorn_rs_missing_cli_module_20261019:app",
+          "--ws",
+          "websockets-sansio",
           "--ws-max-size",
-          "4"
+          "4",
+          "--ws-max-queue",
+          "1"
         ],
         "environment": {},
         "working_directory": "project",

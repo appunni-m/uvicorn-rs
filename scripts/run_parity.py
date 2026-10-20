@@ -2387,9 +2387,17 @@ def load_contract(
             elif case["operation"] == "python.api.run-websocket":
                 exact_keys(case["api"], {"run_websocket"}, f"{case_id}.api")
                 run_websocket = case["api"]["run_websocket"]
+                run_websocket_keys = {
+                    "path",
+                    "message",
+                    "ws_max_size",
+                    "timeout_seconds",
+                }
+                if "ws_max_queue" in run_websocket:
+                    run_websocket_keys.add("ws_max_queue")
                 exact_keys(
                     run_websocket,
-                    {"path", "message", "ws_max_size", "timeout_seconds"},
+                    run_websocket_keys,
                     f"{case_id}.api.run_websocket",
                 )
                 if (
@@ -2406,6 +2414,10 @@ def load_contract(
                 if type(run_websocket["ws_max_size"]) is not int or run_websocket["ws_max_size"] < 0:
                     raise ParityError(
                         f"{case_id}.api.run_websocket.ws_max_size must be a non-negative integer"
+                    )
+                if "ws_max_queue" in run_websocket and type(run_websocket["ws_max_queue"]) is not int:
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.ws_max_queue must be an integer"
                     )
                 timeout_seconds = run_websocket["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:

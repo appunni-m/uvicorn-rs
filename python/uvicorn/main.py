@@ -321,9 +321,11 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
     if options["http"] in {"auto", "httptools"}:
         supported.add("http")
     # With the pinned Uvicorn dependency, auto selects this same SansIO
-    # protocol class. The Rust engine has one native WebSocket implementation.
+    # protocol class. That implementation does not read ws_max_queue; the
+    # legacy websockets backend does, but it is not selected by auto. The Rust
+    # engine has one native WebSocket implementation.
     if options["ws"] in {"auto", "websockets-sansio"}:
-        supported.add("ws")
+        supported.update({"ws", "ws_max_queue"})
     unsupported = [
         parameter.name
         for parameter in ctx.command.params

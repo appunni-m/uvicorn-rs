@@ -49,8 +49,8 @@ The manifest currently defines 25 CLI process cases across `python -m uvicorn`
 and the installed `uvicorn` command. They cover help and version output,
 selected argument errors and environment precedence, app loading with
 `--app-dir` and `--factory`, environment-file loading, HTTP and WebSocket
-selector acceptance, unknown-option rejection, and limited single-process
-worker settings. On current `main`,
+selector acceptance, `--ws-max-queue` with the SansIO selector,
+unknown-option rejection, and limited single-process worker settings. On current `main`,
 `cli.zero-workers-normalizes-to-single-worker` and
 `cli.unknown-option-is-rejected` each pass individually against isolated
 Uvicorn 0.54.0. This evidence does not establish multi-worker supervision,
@@ -427,7 +427,7 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 | CLI and environment | 25 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
-| Python API | 31 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, a configured WebSocket message limit, concurrency-limit responses, warning-level filtering, and access-log suppression through `uvicorn.run()` and the module CLI. HTTP-run cases compare normalized server log events alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other levels, custom logging configuration, and exact traceback frame formatting remain unverified. |
+| Python API | 31 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, and access-log suppression through `uvicorn.run()` and the module CLI. HTTP-run cases compare normalized server log events alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other levels, custom logging configuration, and exact traceback frame formatting remain unverified. |
 
 These eight groups account for all 324 declared oracle-parity cases. The other
 291 cases are target-only fault/support contracts, for 615 total cases. Five
@@ -499,8 +499,9 @@ body bytes, WebSocket messages, disconnect workflows, and shutdown workflows.
 They do not contain expected responses or previously captured server output.
 The 25 indexed CLI cases compare module and installed-console invocations,
 selected parsing and environment-precedence behavior, app loading and
-environment files, protocol-selector acceptance, unknown-option rejection,
-and single-process worker settings. Selector cases check argument handling;
+environment files, protocol-selector and SansIO WebSocket queue-option
+acceptance, unknown-option rejection, and single-process worker settings.
+Selector cases check argument handling;
 they do not prove that every option is executed or establish multi-worker,
 reload/watch, file-descriptor or UDS listener behavior. The fixture app is
 shared source code imported in fresh, independent oracle and target processes.

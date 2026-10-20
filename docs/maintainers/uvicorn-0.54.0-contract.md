@@ -404,6 +404,28 @@ This verifies one programmatic Config option path. It does not establish the
 other WebSocket settings, compression, WebSockets over HTTP/2 or HTTP/3, or
 the broader Python API contract.
 
+## Default SansIO WebSocket queue option (2026-10-21)
+
+Uvicorn 0.54.0's `ws="auto"` selects its SansIO protocol when the standard
+`websockets` dependency is installed. That protocol constructs an unbounded
+ASGI receive queue and does not read `ws_max_queue`; the legacy `websockets`
+protocol does read it. The native adapter therefore accepts the option only
+on its auto/SansIO path and does not forward it as a Rust queue limit.
+
+`cli.sansio-ws-size-and-queue-preserve-app-load-diagnostic` passes 1/1 on
+macOS ARM64 / CPython 3.12.13 with identical exit code and stderr when
+`--ws websockets-sansio`, `--ws-max-size 4`, and `--ws-max-queue 1` are set.
+The live Python API case
+`python-api.run-applies-websocket-message-size-limit` now also supplies
+`ws_max_queue=1`; it passes 1/1 with handshake 101, close 1009, no delivery of
+the oversized message, and clean process exit. Receipts are ignored under
+`target/ws-queue-cli-parity.json` and
+`target/ws-queue-python-api-parity.json`.
+
+This confirms option acceptance and that the independent message-size limit
+still works. It does not establish a configurable queue bound or compatibility
+with Uvicorn's legacy `websockets` backend.
+
 ## Keep benchmark oracle files separate
 
 The candidate distribution and upstream Uvicorn both provide files under the

@@ -23,7 +23,8 @@ that limit is stated in the option description.
 | --host HOST | 127.0.0.1 | TCP bind host and, when TLS is enabled, QUIC bind host. |
 | --port PORT | 8000 | TCP/QUIC port; zero asks the OS to select a port. |
 | --http auto | auto | Accepted and uses the native HTTP default. The focused parity case checks missing-app startup diagnostics only; request-level backend parity is not established. Explicit backend selections are rejected. |
-| --ws auto | auto | Accepted and uses the native WebSocket default. The focused parity case checks missing-app startup diagnostics only; handshake and backend selection parity are not established by this CLI case. Explicit backend selections are rejected. |
+| --ws auto | auto | Accepted and uses the native WebSocket default. `websockets-sansio` is also accepted by the CLI; legacy `websockets` and `wsproto` selections are rejected. The selector case checks app-load diagnostics, not complete backend parity. |
+| --ws-max-queue INTEGER | 32 | Accepted with `--ws auto` or `--ws websockets-sansio`. Uvicorn 0.54.0's auto-selected SansIO backend does not use this setting, so the native adapter leaves it unset as well. A live Python API case verifies a non-default value is accepted while the configured message-size limit still works. The legacy `websockets` backend's queue behavior is unsupported. |
 | --workers {0,1} | Unset | Explicit `0` and `1` are accepted and use the existing single process. Other worker counts are rejected; process supervision is not implemented. Current CLI parity cases check startup diagnostics, not worker lifecycle behavior. |
 | --timeout-worker-healthcheck SECONDS | 5 | Accepted with the single-process CLI path. Uvicorn uses this timeout only in its multi-process supervisor, so it has no effect with one worker. Multi-worker mode is not implemented. |
 | --interface {auto,asgi3} | auto | ASGI 3 applications are supported. Explicit `asgi2` and `wsgi` selections are rejected. |

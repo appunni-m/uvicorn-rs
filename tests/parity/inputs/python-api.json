@@ -539,6 +539,7 @@
           "path": "/ws",
           "message": "12345",
           "ws_max_size": 4,
+          "ws_max_queue": 1,
           "timeout_seconds": 5
         }
       }
