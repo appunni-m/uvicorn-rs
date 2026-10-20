@@ -118,7 +118,15 @@ class Config:
         for name, value in values.items():
             setattr(self, name, value)
 
+        if env_file is not None:
+            from dotenv import load_dotenv
+
+            print(f"INFO:     Loading environment from '{env_file}'", file=sys.stderr)
+            load_dotenv(dotenv_path=env_file)
+
         self.workers = workers or 1
+        if workers is None and "WEB_CONCURRENCY" in os.environ:
+            self.workers = int(os.environ["WEB_CONCURRENCY"])
         self.loaded = False
         self.loaded_app: Any = None
         self.loop_factory: Callable[[], asyncio.AbstractEventLoop] | None = None
@@ -195,7 +203,6 @@ class Config:
             (self.ws_per_message_deflate is not True, "ws_per_message_deflate"),
             (self.lifespan not in {"auto", "on", "off"}, "lifespan"),
             (self.interface not in {"auto", "asgi3"}, "interface"),
-            (self.env_file is not None, "env_file"),
             (
                 self.log_config is not None and self.log_config != LOGGING_CONFIG,
                 "log_config",

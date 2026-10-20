@@ -27,6 +27,44 @@
       }
     },
     {
+      "case_id": "python-api.run-loads-env-file-before-factory",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": [
+        "python.api.imports-signatures"
+      ],
+      "api": {
+        "imports": [
+          "uvicorn.run"
+        ],
+        "signatures": [
+          "uvicorn.run"
+        ],
+        "calls": [
+          {
+            "target": "os:environ.pop",
+            "arguments": [
+              "UVICORN_RS_PARITY_FACTORY_SENTINEL"
+            ],
+            "keyword_arguments": {
+              "default": null
+            }
+          },
+          {
+            "target": "uvicorn.run",
+            "arguments": [
+              "uvicorn_rs_cli_app_dir:factory_env_file_error"
+            ],
+            "keyword_arguments": {
+              "app_dir": "tests/parity/fixtures/app_dir_only",
+              "env_file": "tests/parity/fixtures/app_dir_only/factory.env",
+              "factory": true
+            }
+          }
+        ]
+      }
+    },
+    {
       "case_id": "python-api.run-reports-missing-module",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",

@@ -30,6 +30,7 @@ that limit is stated in the option description.
 | --loop {auto,asyncio,uvloop,zuvloop} | auto | Select the Python event loop. `auto` uses uvloop when installed, otherwise asyncio. Tokio remains the Rust network runtime. |
 | --lifespan {auto,on,off} | auto | `off` prevents the app from receiving ASGI lifespan events. This behavior has focused live parity on macOS ARM64 / CPython 3.12.13. Strict `on` failure behavior for apps without lifespan support is not yet verified. |
 | --app-dir PATH | Current directory | Add a directory to the application import path. |
+| --env-file PATH | Unset | Load application environment variables before importing the app. Requires `python-dotenv`, included in the `[standard]` extra. CLI and programmatic factory behavior have focused parity cases. |
 | --root-path PATH | Empty | Prefix `scope["path"]` and `scope["raw_path"]`, and set `scope["root_path"]`. Focused parity covers an ASCII prefix on HTTP/1.1. |
 | --header NAME:VALUE | None | Add a default response header. One HTTP/1.1 parity case checks a custom header whose value contains a colon. |
 | --server-header/--no-server-header | Enabled | Include or omit the default `Server: uvicorn` response header. The disabled behavior is covered by the focused header-policy case. |
@@ -47,6 +48,12 @@ The same root-path setting is available through `uvicorn.run(app,
 root_path="/mounted")` and `--root-path /mounted`. The parity cases verify the
 resulting `root_path`, prefixed `path`, and prefixed `raw_path` for HTTP/1.1.
 Other protocols and non-ASCII prefixes remain unverified.
+
+`uvicorn.Config(app, env_file=".env")` and `uvicorn.run(app,
+env_file=".env")` load the file before importing an application string or
+calling its factory. Install `uvicorn-rs-py[standard]` to include
+`python-dotenv`. The focused cases cover CLI and `uvicorn.run` factory startup;
+other dotenv syntax and precedence combinations remain unverified.
 
 ## Tokio blocking-pool limit
 
