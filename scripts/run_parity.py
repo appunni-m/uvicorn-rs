@@ -10536,7 +10536,7 @@ def execute_profile(
                 captured_log = server.get("captured_log", logs)
                 if captured_log.strip():
                     print(f"--- {server['id']} server log ---\n{captured_log}", file=sys.stderr)
-                normal_signal_exit = server["id"] == "uvicorn" and (
+                normal_signal_exit = server["id"] in {"uvicorn", "uvicorn-rs"} and (
                     exit_code == -signal.SIGTERM
                     or (
                         exit_code == -signal.SIGINT
