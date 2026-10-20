@@ -3852,3 +3852,44 @@ Linux host disallows unprivileged `perf` sampling, and the macOS profile is a
 different system with profiling instrumentation enabled. No production
 optimization was retained from this evidence. Raw profiles and receipts stay
 under ignored `target/profile-current-main/`.
+
+## 32 KiB proactive TCP read chunks (Linux x86-64; 2026-10-21)
+
+A focused normal-build A/B changed only the proactive TCP read chunk from 16 KiB
+to 32 KiB. The workload was stock FastAPI `fastapi-upload-1m-write-1k`: a
+1 MiB request body written in 1 KiB chunks, concurrency 8, 5 seconds of warmup
+and measurement, and three repetitions. Both reports used CPython 3.12.13,
+FastAPI 0.142.4, Starlette 1.7.0, Uvicorn 0.54.0, httptools 0.8.0, Node.js
+22.15.0, rustc 1.91.1, and the same AMD Ryzen 5 2600X host. The client binary
+hash was identical. The host preflight passed; all six rows in each report had
+valid timing, zero request failures, and successful lifecycle checks.
+
+| Proactive read chunk | Median Uvicorn req/s | Median uvicorn-rs req/s | Median paired Rust/Uvicorn ratio | Rust p50/p95/p99 (ms) | Rust server CPU (µs/request) | Rust peak RSS (MiB) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 16 KiB | 890.9 | 860.1 | 0.966× | 9.114 / 12.141 / 13.725 | 1,897 | 60.75 |
+| 32 KiB | 901.7 | 941.8 | 1.069× | 8.263 / 11.543 / 13.683 | 1,772 | 60.10 |
+
+The 32 KiB candidate improved Rust throughput in all three corresponding
+repetitions (4–16%), reduced server CPU in each repetition (5–12%), and lowered
+median p95 by 0.60 ms. Uvicorn also had one unusually fast repetition in the
+candidate report, so the paired ratio is sensitive to repetition alignment.
+Treat this as a promising single-host result, not a multi-system release claim.
+The change does not remove the proactive reader's input copy; larger chunks
+may reduce read and channel scheduling overhead, but this run does not isolate
+that mechanism.
+
+The read-ahead bound increases from at most 48 KiB to 96 KiB per active
+proactive TCP connection (two queued chunks plus one being consumed), adding up
+to 48 MiB at the default 1,024-connection limit. The focused workload did not
+show an RSS increase. Focused parity cases for request upload, streaming
+progress, early response with unread upload, and disconnect while receive waits
+passed on macOS arm64 and Linux x86-64. Broader category and high-concurrency
+memory evidence is still required before release performance acceptance.
+
+Baseline and candidate source hashes were
+`14f37509aaf7a7c38f40ac4922e137a5930ca501ee69f20e65f6ef39432ab4b0` and
+`120565c8f5747d3fd43c3a314c51c9ef4c6a9b0bb4f38ee07b43102ac8e9d1b9`; native
+extension hashes were
+`8b24e6c6c99239ba6a571ed511779b6769f426a116b9f2a505c0e694b0a6b557` and
+`67b042b774bb30229bcce846e1675e31a2f2599a9f7faea3696f20b177e671ca`. Raw
+reports and logs remain under ignored `target/` in the Linux work folder.

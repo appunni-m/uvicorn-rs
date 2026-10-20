@@ -1058,7 +1058,7 @@ pub enum PeerReadHalfCloseMode {
     /// service or response is waiting.
     ///
     /// A sole raw socket reader feeds HTTP or TLS through a bounded queue.
-    /// It adds one input copy and holds at most two queued 16 KiB chunks plus
+    /// It adds one input copy and holds at most two queued 32 KiB chunks plus
     /// one chunk being consumed. No separate task is spawned. A full queue
     /// pauses socket reads, so unread input can still delay EOF observation.
     /// This mode is opt-in because of its buffering and scheduling cost.

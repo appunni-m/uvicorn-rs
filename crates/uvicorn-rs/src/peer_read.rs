@@ -14,7 +14,7 @@ use tokio::{
 
 use super::{PeerReadHalfCloseMode, PeerReadHalfClosed};
 
-const READ_CHUNK_SIZE: usize = 16 * 1024;
+const READ_CHUNK_SIZE: usize = 32 * 1024;
 const READ_QUEUE_CAPACITY: usize = 2;
 
 pub(super) enum PeerReadPumpOutcome {
