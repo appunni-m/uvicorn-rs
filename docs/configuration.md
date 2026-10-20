@@ -50,8 +50,9 @@ resulting `root_path`, prefixed `path`, and prefixed `raw_path` for HTTP/1.1.
 Other protocols and non-ASCII prefixes remain unverified.
 
 Programmatic default response headers use `(name, value)` pairs, for example
-`uvicorn.run(app, headers=[("X-Application", "example")])`. A focused API
-parity case verifies that the configured header reaches the response.
+`uvicorn.run(app, headers=[("X-Application", "example")])`. Focused API
+parity cases verify delivery of a configured header and the order of duplicate
+values.
 
 `uvicorn.Config(app, env_file=".env")` and `uvicorn.run(app,
 env_file=".env")` load the file before importing an application string or
