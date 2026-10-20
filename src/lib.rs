@@ -5512,6 +5512,7 @@ where
 {
     let cancellation = context.server.cancellation.clone();
     let graceful_timeout = context.server.graceful_timeout;
+    let date_header = context.server.date_header;
     let service_active_http_requests = Arc::clone(&active_http_requests);
     let service_read_eof_waker = Arc::clone(&read_eof_waker);
     let response_header_server = Arc::clone(&context.server);
@@ -5533,9 +5534,9 @@ where
     let mut builder = auto::Builder::new(TokioExecutor::new());
     builder
         .http1()
-        .auto_date_header(server.date_header)
+        .auto_date_header(date_header)
         .max_buf_size(64 * 1024);
-    builder.http2().auto_date_header(server.date_header);
+    builder.http2().auto_date_header(date_header);
     let connection = builder.serve_connection_with_upgrades(TokioIo::new(io), service);
     tokio::pin!(connection);
     tokio::select! {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 
 
@@ -16,6 +17,11 @@ def load_receipt(path):
     ):
         raise ValueError(f"not a passed framework integration receipt: {path}")
     return value
+
+
+def _required_distribution(requirement: str) -> str:
+    name = re.split(r"[\s\[<>=!~;]", requirement, maxsplit=1)[0]
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def main():
@@ -54,11 +60,25 @@ def main():
         raise ValueError("first receipt is not the upstream Starlette distribution")
     if rust_identity["framework_distribution"] != "starlette-rs-py":
         raise ValueError("second receipt is not the starlette-rs-py distribution")
-    if (
-        upstream_identity["uvicorn_rs_runtime_requirements"]
-        or rust_identity["uvicorn_rs_runtime_requirements"]
-    ):
-        raise ValueError("uvicorn-rs has unexpected framework runtime requirements")
+    framework_dependencies = {
+        "starlette",
+        "starlette-rs-py",
+        "fastapi",
+        "fastapi-rs-py",
+        "uvicorn",
+    }
+    for identity in (upstream_identity, rust_identity):
+        requirements = identity["uvicorn_rs_runtime_requirements"]
+        unexpected_requirements = [
+            requirement
+            for requirement in requirements
+            if _required_distribution(requirement) in framework_dependencies
+        ]
+        if unexpected_requirements:
+            raise ValueError(
+                "uvicorn-rs-py declares framework runtime dependencies: "
+                + ", ".join(unexpected_requirements)
+            )
     if upstream_identity["uvicorn_rs_bundle_has_framework"] is not False:
         raise ValueError("upstream receipt reports a bundled framework")
     if rust_identity["uvicorn_rs_bundle_has_framework"] is not False:

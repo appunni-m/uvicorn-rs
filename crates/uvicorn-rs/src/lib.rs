@@ -2192,7 +2192,6 @@ where
         let shutdown = shutdown_receiver.clone();
         let error_observer = config.error_observer.clone();
         let service_error_policy = config.service_error_policy;
-        let date_header = date_header;
         let tls_acceptor = tls_acceptor.clone();
         connections.spawn(async move {
             let _slot = slot;
@@ -2216,9 +2215,11 @@ where
                                     response_body_activity: response_body_activity.clone(),
                                 },
                                 shutdown,
-                                error_observer.as_ref(),
-                                service_error_policy,
-                                date_header,
+                                ConnectionOptions {
+                                    error_observer: error_observer.as_ref(),
+                                    service_error_policy,
+                                    date_header,
+                                },
                             )
                             .await
                         }
@@ -2239,9 +2240,11 @@ where
                                 response_body_activity: response_body_activity.clone(),
                             },
                             shutdown,
-                            error_observer.as_ref(),
-                            service_error_policy,
-                            date_header,
+                            ConnectionOptions {
+                                error_observer: error_observer.as_ref(),
+                                service_error_policy,
+                                date_header,
+                            },
                         )
                         .await
                     }
@@ -2402,15 +2405,19 @@ struct ConnectionSignals {
     response_body_activity: watch::Sender<usize>,
 }
 
+struct ConnectionOptions<'a> {
+    error_observer: Option<&'a ServerErrorObserver>,
+    service_error_policy: ServiceErrorPolicy,
+    date_header: bool,
+}
+
 async fn serve_connection<I, S, B>(
     stream: I,
     service: S,
     connection_info: ConnectionInfo,
     signals: ConnectionSignals,
     mut shutdown: watch::Receiver<bool>,
-    error_observer: Option<&ServerErrorObserver>,
-    service_error_policy: ServiceErrorPolicy,
-    date_header: bool,
+    options: ConnectionOptions<'_>,
 ) -> Result<(), ConnectionError>
 where
     I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -2421,6 +2428,11 @@ where
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
     let peer_addr = connection_info.peer_addr;
+    let ConnectionOptions {
+        error_observer,
+        service_error_policy,
+        date_header,
+    } = options;
     let ConnectionSignals {
         peer_read_half_closed,
         peer_read_failed,

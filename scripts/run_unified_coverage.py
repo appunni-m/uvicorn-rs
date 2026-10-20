@@ -930,6 +930,12 @@ def main() -> int:
         default=ROOT / "build" / "asgi-coverage" / "unified" / "artifacts",
     )
     parser.add_argument(
+        "--oracle-python",
+        type=Path,
+        required=True,
+        help="isolated Python environment containing stock Uvicorn 0.54.0",
+    )
+    parser.add_argument(
         "--case-id",
         action="append",
         help="attribute a case ID; use native:<id> for native contracts, asgi:<id> for parity cases, or an unprefixed ASGI ID",
@@ -950,6 +956,9 @@ def main() -> int:
         help="bounded retries for per-case infrastructure failures only",
     )
     args = parser.parse_args()
+    oracle_python = Path(os.path.abspath(args.oracle_python))
+    if not oracle_python.is_file() or not os.access(oracle_python, os.X_OK):
+        parser.error(f"--oracle-python must be an executable interpreter: {oracle_python}")
     if args.matrix_repeats not in {0, 3}:
         parser.error("--matrix-repeats must be 0 for a selected subset or exactly 3 for full matrices")
     if args.case_timeout < 30:
@@ -1111,6 +1120,8 @@ def main() -> int:
             command = [
                 sys.executable,
                 str(RUNNER),
+                "--oracle-python",
+                str(oracle_python),
                 "--case-id",
                 case["case_id"],
                 "--coverage-profile-dir",
@@ -1462,7 +1473,15 @@ def main() -> int:
             result_path = attempt_dir / "parity-result.json"
             env = os.environ.copy()
             env["LLVM_PROFILE_FILE"] = str(attempt_dir / "%p-%m.profraw")
-            command = [sys.executable, str(RUNNER), "--fault-contracts", "--output", str(result_path)]
+            command = [
+                sys.executable,
+                str(RUNNER),
+                "--oracle-python",
+                str(oracle_python),
+                "--fault-contracts",
+                "--output",
+                str(result_path),
+            ]
             try:
                 process = subprocess.run(
                     command,

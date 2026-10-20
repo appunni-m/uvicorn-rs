@@ -31,10 +31,12 @@ for the current package status and migration guidance.
 
 ## Known behavior limits
 
-- The current Python adapter does not preserve response-header order across
-  different header names on HTTP/1.1 and HTTP/2. Repeated values for the same
-  name retain their order. This is a known ASGI response-start conformance
-  gap.
+- HTTP/2 response comparisons use Hypercorn because Uvicorn has no HTTP/2
+  server. They compare repeated values in order for each field name, while
+  ignoring global order across different names and the implementation-specific
+  `Server` value. RFC 9110 [Section 5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3)
+  says order across different field names is insignificant. Raw observations
+  remain available in each parity receipt.
 - The complete official ASGI conformance suite has not been run.
 - The latest matched Python FastAPI results do not establish a general speed
   advantage over Uvicorn. See [benchmark results](benchmark-results.md) and

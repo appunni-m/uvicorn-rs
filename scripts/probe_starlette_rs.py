@@ -16,6 +16,7 @@ import importlib
 import importlib.metadata
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -37,6 +38,11 @@ def _version(distribution: str) -> str | None:
         return importlib.metadata.version(distribution)
     except importlib.metadata.PackageNotFoundError:
         return None
+
+
+def _required_distribution(requirement: str) -> str:
+    name = re.split(r"[\s\[<>=!~;]", requirement, maxsplit=1)[0]
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def _free_port() -> int:
@@ -129,8 +135,23 @@ def _identity(
 
     server_distribution = importlib.metadata.distribution("uvicorn-rs-py")
     requirements = list(server_distribution.requires or [])
-    if any("starlette" in requirement.lower() for requirement in requirements):
-        raise RuntimeError("uvicorn-rs-py declares a Starlette runtime dependency")
+    framework_dependencies = {
+        "starlette",
+        "starlette-rs-py",
+        "fastapi",
+        "fastapi-rs-py",
+        "uvicorn",
+    }
+    unexpected_requirements = [
+        requirement
+        for requirement in requirements
+        if _required_distribution(requirement) in framework_dependencies
+    ]
+    if unexpected_requirements:
+        raise RuntimeError(
+            "uvicorn-rs-py declares framework runtime dependencies: "
+            + ", ".join(unexpected_requirements)
+        )
     installed_files = [str(path) for path in (server_distribution.files or [])]
     if any(
         path.startswith(("starlette/", "starlette_rs_py/")) for path in installed_files

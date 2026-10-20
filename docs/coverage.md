@@ -2398,7 +2398,10 @@ advantage over Uvicorn.
 Run the unified workflow:
 
 ```sh
+UV_PROJECT_ENVIRONMENT=target/coverage-oracle uv sync --python 3.12 --locked \
+  --only-group benchmark --only-group uvicorn-oracle --no-install-project
 uv run --python 3.12 --locked --group benchmark python scripts/run_unified_coverage.py \
+  --oracle-python target/coverage-oracle/bin/python \
   --output build/asgi-coverage/unified/coverage-report.json \
   --artifacts-dir build/asgi-coverage/unified/artifacts
 ```
@@ -2494,7 +2497,10 @@ contract loader, and run only that case against the existing instrumented
 source/build:
 
 ```sh
+UV_PROJECT_ENVIRONMENT=target/coverage-oracle uv sync --python 3.12 --locked \
+  --only-group benchmark --only-group uvicorn-oracle --no-install-project
 uv run --python 3.12 --locked --group benchmark python scripts/run_unified_coverage.py \
+  --oracle-python target/coverage-oracle/bin/python \
   --output build/asgi-coverage/incremental/coverage-report.json \
   --artifacts-dir build/asgi-coverage/incremental/artifacts \
   --case-id CASE_ID --matrix-repeats 0

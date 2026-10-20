@@ -7146,6 +7146,29 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
     return projected
 
 
+def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
+    """Compare only HTTP semantics shared by the HTTP/2 reference and target.
+
+    The HTTP/2 oracle is Hypercorn because Uvicorn does not implement HTTP/2.
+    HTTP field order across different names is not significant (RFC 9110,
+    Section 5.3), while the order of values for one field name is significant.
+    Keep ``response_header_values_by_name`` in the comparison and omit the
+    transport-specific global field order and server identification header.
+    """
+    if profile_id != "http2":
+        return value
+    if isinstance(value, dict):
+        ignored_fields = {"ordered_response_headers", "server_header_values"}
+        return {
+            key: normalize_comparison_observation(item, profile_id)
+            for key, item in value.items()
+            if key not in ignored_fields
+        }
+    if isinstance(value, list):
+        return [normalize_comparison_observation(item, profile_id) for item in value]
+    return value
+
+
 def run_zero_timeout_concurrent_stream_shutdown(
     server: dict[str, Any],
     profile: dict[str, Any],
@@ -9984,12 +10007,14 @@ def execute_profile(
                             ) from error
                         oracle_result = project_observation(oracle_raw, operation)
                         comparison_fields = operation.get("compare", operation["observe"])
-                        oracle_comparison = {
-                            field: oracle_result[field] for field in comparison_fields
-                        }
-                        target_comparison = {
-                            field: target_result[field] for field in comparison_fields
-                        }
+                        oracle_comparison = normalize_comparison_observation(
+                            {field: oracle_result[field] for field in comparison_fields},
+                            profile["id"],
+                        )
+                        target_comparison = normalize_comparison_observation(
+                            {field: target_result[field] for field in comparison_fields},
+                            profile["id"],
+                        )
                         matches = oracle_comparison == target_comparison
                         required = operation.get("required_observations", {})
                         if any(

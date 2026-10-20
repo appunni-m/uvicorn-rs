@@ -36,6 +36,15 @@ HTTP/1.1, HTTP/2, and HTTP/3 claims use the applicable
 [RFC 9113](https://www.rfc-editor.org/rfc/rfc9113.html), and
 [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html) requirements.
 
+The HTTP/2 profile uses Hypercorn as its live oracle because Uvicorn does not
+provide HTTP/2. For HTTP/2 response comparisons, the matrix retains raw header
+observations but compares repeated values grouped by field name. It does not
+require a particular order across different field names or compare the
+implementation-specific `Server` field. RFC 9110 Section 5.3 makes order across
+different field names insignificant while preserving the order of values for a
+repeated name. HTTP/1.1 and HTTP/3 observations keep their declared comparison
+fields.
+
 The indexed CLI process cases currently compare module and installed-console
 invocations for `--help` and `--version`, plus a module invocation with an
 invalid port value and an explicit `--port` overriding an invalid
@@ -233,6 +242,7 @@ uv run --group benchmark python scripts/run_parity.py \
   --oracle-python target/parity-oracle/bin/python \
   --output target/parity-normal.json
 uv run --group benchmark python scripts/run_unified_coverage.py \
+  --oracle-python target/parity-oracle/bin/python \
   --output build/asgi-coverage/current/coverage-report.json \
   --artifacts-dir build/asgi-coverage/current/artifacts \
   --matrix-repeats 3 --matrix-infra-retries 0 --case-infra-retries 0

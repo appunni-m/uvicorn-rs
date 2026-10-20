@@ -388,12 +388,18 @@ jobs:
         run: |
           uv sync --python "$PYTHON_VERSION" --group benchmark --frozen
           cargo install cargo-llvm-cov --version 0.8.7 --locked
+      - name: Prepare the isolated stock Uvicorn oracle
+        run: |
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-coverage-oracle"
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
+            --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
       - name: Attribute every indexed case and repeat the complete matrix three times
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p target/asgi-coverage
           .venv/bin/python scripts/run_unified_coverage.py \
+            --oracle-python "$RUNNER_TEMP/uvicorn-rs-coverage-oracle/bin/python" \
             --output target/asgi-coverage/coverage-report.json \
             --artifacts-dir target/asgi-coverage/artifacts \
             --matrix-repeats 3 --case-infra-retries 0 --matrix-infra-retries 0 \
