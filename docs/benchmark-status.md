@@ -3813,3 +3813,42 @@ Raw JSON and logs are retained locally, ignored by Git, under
 baseline and `54406b8a789a3fc7e707037481c8ff6b08e1d6cd9fe0a6a135a3f13b1cd1f42a`
 for the trial. These are single-host diagnostics, not a multi-system release
 performance claim.
+
+## Sampled CPU attribution for the FastAPI upload (macOS arm64; 2026-10-20; profiling only)
+
+Samply captured one eight-second `fastapi-upload-1m-write-1k` run per server at
+concurrency 8, using CPython 3.12.13, FastAPI 0.142.4, Starlette 1.7.0,
+uvloop 0.23.0, httptools 0.8.0, and Uvicorn 0.54.0. The maintained C/libcurl
+client verified every response. The profiling app adds ASGI timing hooks, so
+these samples locate work; they are not a clean performance comparison.
+
+The normal release Samply profiles attributed about 6.20 CPU seconds to
+uvicorn-rs's primary Tokio worker and 1.72 seconds to its Python thread during
+the load interval. Seven other Tokio-named threads used about 39–40 ms each.
+Uvicorn's Python server thread used about 6.75 seconds; its four libuv worker
+threads had negligible sampled CPU. These values sum the profiler's
+`threadCPUDelta` samples. They are diagnostic only and are not qualified
+CPU-per-request metrics.
+
+A separate optimized build with Rust debug symbols located the hottest Rust
+stacks in `serve_listener` → `peer_read::pump_peer_read` → Tokio's owned TCP
+read → `mio`/`std::net::TcpStream::read`. This points to socket ingress and
+request-body dispatch as the leading Rust-side cost in this workload. The
+profile does not isolate memory copies from kernel read work, so it does not
+establish a copy or SIMD bottleneck.
+
+The symbol-enabled profile also resolved the extra Tokio-named threads: they
+were Tokio blocking-pool workers, not additional Tokio async workers. Their
+stacks lead through `pyo3_async_runtimes::generic::future_into_py_with_locals`
+and `AsgiIo::receive`; most were parked and used about 12–14 ms of sampled CPU
+each. The bridge completes each Rust future by scheduling Python result
+delivery that must attach the GIL. The server still configures one Tokio async
+worker (`TOKIO_WORKER_THREADS = 1`). The extra threads did not account for the
+main CPU cost in this run.
+
+This narrows the follow-up to the H1 socket-read/pump path and the per-future
+Python completion bridge. It does not explain the slower Linux benchmark: the
+Linux host disallows unprivileged `perf` sampling, and the macOS profile is a
+different system with profiling instrumentation enabled. No production
+optimization was retained from this evidence. Raw profiles and receipts stay
+under ignored `target/profile-current-main/`.
