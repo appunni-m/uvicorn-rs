@@ -318,8 +318,8 @@ macOS 15.7.7 ARM64 / CPython 3.12.13:
 
 Each compares the HTTP response and process shutdown. Receipts are retained
 locally under ignored `target/parity-python-api-asgi2*.json`. This proves these
-function-based paths only; WSGI, other callable forms, and the complete API
-lifecycle remain open.
+function-based paths only; WSGI, other callable forms, and remaining public API
+lifecycle behaviors remain open.
 
 ## Focused WebSocket message-size parity (2026-10-20)
 

@@ -46,12 +46,11 @@ it to an empty 500 response. The `/body-error` route commits a 200 response,
 sends `partial-response`, and then terminates the body stream with an error.
 
 Stop the process with Ctrl-C to exercise the server's graceful connection
-drain. The current generic native contract manifest contains 36 cases and
-passed three complete local repeats (108/108) against the promoted
-`uvicorn-rs` package; see the
-[request-lifetime receipt](../../benchmarks/results/2026-10-12/native-request-lifetime-live/report.md).
-The earlier [package-promotion receipt](../../benchmarks/results/2026-10-12/native-package-promotion-live/report.md)
-records the prior 34-case package-move snapshot.
+drain. This prototype has no current-source Starlette composition or performance
+receipt. The reusable Rust server's maintained native contract inventory and
+latest evidence are summarized in the
+[ASGI and native-server evidence record](../../docs/maintainers/asgi-support-evidence.md);
+those contracts are separate from this example.
 It has separate input-driven socket contracts for
 disconnect during a partial HTTP/1.1 upload, a slow HTTP/1.1 response reader,
 a dropped HTTP/2 response body, and HTTP/2 graceful drain. The upload case sends 7 bytes against a
@@ -73,8 +72,8 @@ Run the core contract inputs separately with:
 cargo run -p uvicorn-rs --example native_core_contracts --locked -- tests/native-core/manifest.json
 ```
 
-The current native package passed all 36 declared inputs in three local
-repeats (108/108) on 2026-10-12.
+The maintained native contract inventory and its current validation status are
+recorded in the [ASGI and native-server evidence record](../../docs/maintainers/asgi-support-evidence.md).
 The core cases verify that `ConnectionInfo` in each request's extensions
 reports the TCP peer address over HTTP/1.1 and HTTP/2, reports no TLS metadata
 for cleartext, and exposes negotiated `http/1.1` or `h2` ALPN on TLS sessions.

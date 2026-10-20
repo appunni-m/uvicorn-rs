@@ -21,11 +21,12 @@ on:
       - '!scripts/run_unified_coverage.py'
       - '!scripts/summarize_unified_coverage.py'
       - examples/**
+      - '!examples/**/*.md'
       - tools/http3-probe/**
       - tests/parity/**
       - parity/**
-      - docs/benchmarks.md
-      - docs/releases.md
+      - '!docs/benchmarks.md'
+      - '!docs/releases.md'
       - docs/performance-acceptance.json
       - .github/workflows/benchmark-categories.yml
   schedule:
