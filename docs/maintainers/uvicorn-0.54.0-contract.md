@@ -59,15 +59,16 @@ environment variables are `WEB_CONCURRENCY`, `FORWARDED_ALLOW_IPS`, and, for
 watchfiles reload, `WATCHFILES_FORCE_POLLING`. These are separate from the
 `UVICORN_*` prefix rule.
 
-The six focused HTTP/1.1 cases `http1.proxy-headers-trusted-client-and-scheme`,
+The seven focused HTTP/1.1 cases `http1.proxy-headers-trusted-client-and-scheme`,
 `http1.proxy-headers-disabled-ignores-forwarded-values`,
 `http1.proxy-headers-untrusted-peer-ignores-forwarded-values`,
 `http1.proxy-headers-wildcard-trust-uses-first-forwarded-client`,
-`http1.proxy-headers-cidr-trust-selects-first-untrusted-forwarded-client`, and
-`http1.proxy-headers-malformed-forwarded-host-remains-opaque` each pass 1/1
-against Uvicorn 0.54.0. The WebSocket proxy cases
-`websocket.proxy-https-forwarded-scheme-becomes-wss` and
-`websocket.proxy-http-forwarded-scheme-becomes-ws` and
+`http1.proxy-headers-cidr-trust-selects-first-untrusted-forwarded-client`,
+`http1.proxy-headers-malformed-forwarded-host-remains-opaque`, and
+`http1.proxy-headers-empty-forwarded-for-preserves-peer` each pass 1/1 against
+Uvicorn 0.54.0. The WebSocket proxy cases
+`websocket.proxy-https-forwarded-scheme-becomes-wss`,
+`websocket.proxy-http-forwarded-scheme-becomes-ws`, and
 `websocket.proxy-wss-forwarded-scheme-remains-wss` also pass 1/1. The three
 Python API cases
 `python-api.run-applies-trusted-proxy-headers`,
@@ -86,6 +87,8 @@ observation. The wildcard case selects the first forwarded client, and the
 forwarded client; both expose `198.51.100.25` and scheme `https`. The
 malformed-host case places `not-an-ip` between the untrusted client and trusted
 loopback proxy; both retain it as the reported client host with scheme `https`.
+The empty forwarded-client case sends an empty `X-Forwarded-For` value from a
+trusted peer; both keep the direct peer as the client and set scheme `https`.
 The WebSocket proxy cases verify that forwarded `https` becomes `wss`,
 forwarded `http` becomes `ws`, and explicit forwarded `wss` remains `wss` in
 the ASGI scope.
