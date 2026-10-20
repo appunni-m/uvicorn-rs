@@ -33,6 +33,7 @@ typedef struct {
 } SocketSnapshot;
 
 #define MAX_UPLOAD_TRACE_EVENTS 2048
+#define MAX_TCP_TRACE_EVENTS 2048
 /* Avoid selecting ordinary chunked-upload overhead instead of a timeout tail. */
 #define UPLOAD_TRACE_MIN_SECONDS 5.0
 
@@ -41,6 +42,20 @@ typedef struct {
     uint64_t cumulative_bytes;
     size_t bytes;
 } UploadTraceEvent;
+
+typedef struct {
+    uint64_t elapsed_ns;
+    uint64_t bytes_acked;
+    uint64_t rwnd_limited_us;
+    uint64_t sndbuf_limited_us;
+    uint32_t notsent_bytes;
+    uint32_t unacked_segments;
+    uint32_t send_window_bytes;
+    int available;
+    int send_window_available;
+    int rwnd_limited_available;
+    int sndbuf_limited_available;
+} TcpTraceEvent;
 
 typedef struct {
     const char *url;
@@ -62,6 +77,8 @@ typedef struct {
     struct FirstFailure *first_failure;
     int tcp_diagnostics;
     int upload_trace;
+    int upload_trace_success_only;
+    double upload_trace_min_seconds;
     atomic_uint upload_trace_claimed;
 } Shared;
 
@@ -82,6 +99,11 @@ typedef struct {
     unsigned long long upload_trace_attempt;
     uint64_t upload_trace_elapsed_ns;
     long upload_trace_local_port;
+    double upload_trace_started_at_seconds;
+    SocketSnapshot upload_trace_tcp_before;
+    TcpTraceEvent upload_trace_tcp_events[MAX_TCP_TRACE_EVENTS];
+    unsigned int upload_trace_tcp_event_count;
+    unsigned int upload_trace_tcp_dropped_events;
 } Worker;
 
 typedef struct FirstFailure {
@@ -140,6 +162,17 @@ static uint64_t unix_time_ns(void) {
     struct timespec now;
     if (clock_gettime(CLOCK_REALTIME, &now) != 0 || now.tv_sec < 0) return 0;
     return (uint64_t)now.tv_sec * 1000000000ULL + (uint64_t)now.tv_nsec;
+}
+
+static double environment_seconds(const char *name, double fallback) {
+    const char *value = getenv(name);
+    if (value == NULL || value[0] == '\0') return fallback;
+    char *end = NULL;
+    double parsed = strtod(value, &end);
+    if (end == value || *end != '\0' || !(parsed >= 0.0 && parsed <= 3600.0)) {
+        return fallback;
+    }
+    return parsed;
 }
 
 static SocketSnapshot read_socket_snapshot(curl_socket_t socket) {
@@ -209,6 +242,31 @@ static int sample_transfer_progress(
         if (snapshot.available) {
             worker->latest_tcp_snapshot = snapshot;
             worker->tcp_snapshot_count++;
+            if (worker->shared->upload_trace
+                && atomic_load(&worker->shared->upload_trace_claimed) == 0) {
+                if (worker->upload_trace_tcp_event_count < MAX_TCP_TRACE_EVENTS) {
+                    TcpTraceEvent *event = &worker->upload_trace_tcp_events[
+                        worker->upload_trace_tcp_event_count++
+                    ];
+                    double elapsed = snapshot.sampled_at_seconds
+                        - worker->upload_trace_started_at_seconds;
+                    event->elapsed_ns = elapsed > 0.0
+                        ? (uint64_t)(elapsed * 1000000000.0)
+                        : 0;
+                    event->bytes_acked = snapshot.bytes_acked;
+                    event->rwnd_limited_us = snapshot.rwnd_limited_us;
+                    event->sndbuf_limited_us = snapshot.sndbuf_limited_us;
+                    event->notsent_bytes = snapshot.notsent_bytes;
+                    event->unacked_segments = snapshot.unacked_segments;
+                    event->send_window_bytes = snapshot.send_window_bytes;
+                    event->available = snapshot.available;
+                    event->send_window_available = snapshot.send_window_available;
+                    event->rwnd_limited_available = snapshot.rwnd_limited_available;
+                    event->sndbuf_limited_available = snapshot.sndbuf_limited_available;
+                } else {
+                    worker->upload_trace_tcp_dropped_events++;
+                }
+            }
         }
     }
     return 0;
@@ -249,11 +307,14 @@ static void select_slow_upload_trace(
     CURL *curl,
     Worker *worker,
     unsigned long long worker_attempt,
-    double elapsed
+    double elapsed,
+    int request_complete_successfully,
+    const SocketSnapshot *tcp_before
 ) {
     Shared *shared = worker->shared;
     if (!shared->upload_trace || shared->upload_bytes == 0
-        || elapsed < UPLOAD_TRACE_MIN_SECONDS) return;
+        || elapsed < shared->upload_trace_min_seconds
+        || (shared->upload_trace_success_only && !request_complete_successfully)) return;
 
     /* Keep at most one slow request trace per client process. */
     unsigned int unclaimed = 0;
@@ -269,7 +330,28 @@ static void select_slow_upload_trace(
     worker->upload_trace_attempt = worker_attempt;
     worker->upload_trace_elapsed_ns = (uint64_t)(elapsed * 1000000000.0);
     worker->upload_trace_local_port = -1;
+    worker->upload_trace_tcp_before = *tcp_before;
     (void)curl_easy_getinfo(curl, CURLINFO_LOCAL_PORT, &worker->upload_trace_local_port);
+}
+
+static void print_tcp_snapshot(const SocketSnapshot *snapshot) {
+    printf(
+        "{\"available\":%s,\"bytes_acked\":%llu,\"notsent_bytes\":%u,"
+        "\"unacked_segments\":%u,\"peer_send_window_available\":%s,"
+        "\"peer_send_window_bytes\":%u,\"rwnd_limited_available\":%s,"
+        "\"rwnd_limited_us\":%llu,\"sndbuf_limited_available\":%s,"
+        "\"sndbuf_limited_us\":%llu}",
+        snapshot->available ? "true" : "false",
+        (unsigned long long)snapshot->bytes_acked,
+        snapshot->notsent_bytes,
+        snapshot->unacked_segments,
+        snapshot->send_window_available ? "true" : "false",
+        snapshot->send_window_bytes,
+        snapshot->rwnd_limited_available ? "true" : "false",
+        (unsigned long long)snapshot->rwnd_limited_us,
+        snapshot->sndbuf_limited_available ? "true" : "false",
+        (unsigned long long)snapshot->sndbuf_limited_us
+    );
 }
 
 static void print_upload_traces(const Worker *workers, int worker_count) {
@@ -300,6 +382,34 @@ static void print_upload_traces(const Worker *workers, int worker_count) {
                 (unsigned long long)event->unix_time_ns,
                 event->bytes,
                 (unsigned long long)event->cumulative_bytes
+            );
+        }
+        printf("],\"tcp_info_before\":");
+        print_tcp_snapshot(&worker->upload_trace_tcp_before);
+        printf(",\"tcp_snapshots_dropped\":%u,\"tcp_snapshots\":[",
+            worker->upload_trace_tcp_dropped_events);
+        for (unsigned int event_index = 0;
+             event_index < worker->upload_trace_tcp_event_count;
+             event_index++) {
+            const TcpTraceEvent *event = &worker->upload_trace_tcp_events[event_index];
+            if (event_index != 0) putchar(',');
+            printf(
+                "{\"elapsed_ns\":%llu,\"available\":%s,\"bytes_acked\":%llu,"
+                "\"notsent_bytes\":%u,\"unacked_segments\":%u,"
+                "\"peer_send_window_available\":%s,\"peer_send_window_bytes\":%u,"
+                "\"rwnd_limited_available\":%s,\"rwnd_limited_us\":%llu,"
+                "\"sndbuf_limited_available\":%s,\"sndbuf_limited_us\":%llu}",
+                (unsigned long long)event->elapsed_ns,
+                event->available ? "true" : "false",
+                (unsigned long long)event->bytes_acked,
+                event->notsent_bytes,
+                event->unacked_segments,
+                event->send_window_available ? "true" : "false",
+                event->send_window_bytes,
+                event->rwnd_limited_available ? "true" : "false",
+                (unsigned long long)event->rwnd_limited_us,
+                event->sndbuf_limited_available ? "true" : "false",
+                (unsigned long long)event->sndbuf_limited_us
             );
         }
         printf("]}");
@@ -516,6 +626,8 @@ static void *run_worker(void *argument) {
             worker->upload_trace_event_count = 0;
             worker->upload_trace_dropped_events = 0;
             worker->upload_trace_bytes = 0;
+            worker->upload_trace_tcp_event_count = 0;
+            worker->upload_trace_tcp_dropped_events = 0;
         }
         worker->latest_tcp_snapshot = (SocketSnapshot){.socket = CURL_SOCKET_BAD};
         worker->tcp_snapshot_count = 0;
@@ -525,10 +637,14 @@ static void *run_worker(void *argument) {
         }
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &check);
         double started = now_seconds();
+        worker->upload_trace_started_at_seconds = started;
+        worker->upload_trace_tcp_before = tcp_before;
         CURLcode result = curl_easy_perform(curl);
         double elapsed = now_seconds() - started;
-        select_slow_upload_trace(curl, worker, worker_attempt, elapsed);
         if (result != CURLE_OK) {
+            select_slow_upload_trace(
+                curl, worker, worker_attempt, elapsed, 0, &tcp_before
+            );
             char reason[256];
             snprintf(reason, sizeof(reason), "libcurl: %s", curl_easy_strerror(result));
             set_transfer_failure(
@@ -553,6 +669,12 @@ static void *run_worker(void *argument) {
         if (!check.valid || check.offset != shared->expected_bytes) {
             set_failure(shared, "response body differs from the complete expected bytes");
         }
+        int response_valid = status == shared->expected_status
+            && check.valid
+            && check.offset == shared->expected_bytes;
+        select_slow_upload_trace(
+            curl, worker, worker_attempt, elapsed, response_valid, &tcp_before
+        );
 
         atomic_fetch_add(shared->request_count, 1);
         if (shared->upload_bytes != 0) atomic_fetch_add(shared->request_bytes, shared->upload_bytes);
@@ -665,6 +787,8 @@ int main(int argc, char **argv) {
         .first_failure = &first_failure,
         .tcp_diagnostics = 0,
         .upload_trace = 0,
+        .upload_trace_success_only = 0,
+        .upload_trace_min_seconds = UPLOAD_TRACE_MIN_SECONDS,
         .upload_trace_claimed = 0,
     };
 
@@ -678,6 +802,17 @@ int main(int argc, char **argv) {
     if (upload_trace != NULL && upload_trace[0] != '\0'
         && strcmp(upload_trace, "0") != 0) {
         shared.upload_trace = 1;
+    }
+
+    shared.upload_trace_min_seconds = environment_seconds(
+        "UVICORN_RS_HTTP_CLIENT_UPLOAD_TRACE_MIN_SECONDS",
+        shared.upload_trace_min_seconds
+    );
+    const char *upload_trace_success_only =
+        getenv("UVICORN_RS_HTTP_CLIENT_UPLOAD_TRACE_SUCCESS_ONLY");
+    if (upload_trace_success_only != NULL && upload_trace_success_only[0] != '\0'
+        && strcmp(upload_trace_success_only, "0") != 0) {
+        shared.upload_trace_success_only = 1;
     }
 
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return 2;
