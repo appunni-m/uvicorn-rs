@@ -309,6 +309,28 @@ def validate_case_metadata(row: dict[str, Any], case: dict[str, Any]) -> None:
     require(row.get("status") == "passed", f"case did not pass: {case['case_id']}")
 
 
+def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
+    """Apply the profile's protocol-semantic comparison exclusions.
+
+    Keep this evidence verifier aligned with the live runner: RFC 9110 does
+    not make HTTP/2 field order across different names significant, and the
+    server identification field differs by implementation. Repeated values
+    grouped under one field name remain part of the comparison.
+    """
+    if profile_id != "http2":
+        return value
+    if isinstance(value, dict):
+        ignored_fields = {"ordered_response_headers", "server_header_values"}
+        return {
+            key: normalize_comparison_observation(item, profile_id)
+            for key, item in value.items()
+            if key not in ignored_fields
+        }
+    if isinstance(value, list):
+        return [normalize_comparison_observation(item, profile_id) for item in value]
+    return value
+
+
 def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any]) -> None:
     exact_keys(row, {"case_id", "profile", "operation", "requirements", "verification", "fault", "status",
                      "oracle_observation", "target_observation", "server_exit_codes", "difference"},
@@ -327,7 +349,13 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
                 and len(compare) == len(set(compare))
                 and set(compare).issubset(operation["observe"]),
                 f"invalid comparison fields: {case['case_id']}")
-        require(all(target[field] == oracle[field] for field in compare),
+        target_comparison = normalize_comparison_observation(
+            {field: target[field] for field in compare}, case["profile"]
+        )
+        oracle_comparison = normalize_comparison_observation(
+            {field: oracle[field] for field in compare}, case["profile"]
+        )
+        require(target_comparison == oracle_comparison,
                 f"live observations differ on declared comparison fields: {case['case_id']}")
         for field, expected in operation.get("required_observations", {}).items():
             require(target.get(field) == expected, f"required observation differs: {case['case_id']} ({field})")
