@@ -39,6 +39,7 @@ that limit is stated in the option description.
 | --ssl-certfile PATH | Unset | PEM certificate chain. Supply it together with --ssl-keyfile to enable TLS and experimental HTTP/3. |
 | --ssl-keyfile PATH | Unset | PEM private key paired with --ssl-certfile. |
 | --timeout-graceful-shutdown SECONDS | None | Maximum graceful shutdown time. The current native adapter applies a 10-second timeout when omitted. |
+| --limit-concurrency INTEGER | Unset | Return HTTP 503 when active connections or request tasks reach this limit. One HTTP/1.1 parity case verifies the 503 body and response headers at a limit of 1; other limits and protocols remain unverified. |
 
 Without certificate and key files, the prototype accepts cleartext HTTP/1.1 and HTTP/2 prior knowledge. With both files, TLS uses ALPN for HTTP/1.1 and HTTP/2; experimental HTTP/3 uses QUIC. Protocol and lifecycle cases are listed in the [support matrix](support-matrix.md).
 

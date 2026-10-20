@@ -62,6 +62,7 @@ class Server:
             default_headers=self.config.encoded_headers,
             date_header=self.config.date_header,
             ws_max_size=self.config.ws_max_size,
+            limit_concurrency=self.config.limit_concurrency,
         )
         self._native_server = native_server
         if self._should_exit:

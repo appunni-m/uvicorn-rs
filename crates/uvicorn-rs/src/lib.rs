@@ -43,7 +43,7 @@ use std::{
     net::SocketAddr,
     panic::{catch_unwind, AssertUnwindSafe},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Mutex},
     task::{Context, Poll},
     time::Duration,
 };
@@ -53,9 +53,12 @@ use futures_util::{
     future::{ready, Either as FutureEither, Ready},
     FutureExt,
 };
-use http::{Request, Response, StatusCode};
+use http::{
+    header::{HeaderName, HeaderValue, CONNECTION, CONTENT_LENGTH, CONTENT_TYPE},
+    Request, Response, StatusCode, Version,
+};
 use http_body::Body;
-use http_body_util::{Either as BodyEither, Empty};
+use http_body_util::{Either as BodyEither, Full};
 use hyper::body::Incoming;
 use hyper::upgrade::{OnUpgrade, Upgraded};
 use hyper_util::{
@@ -1097,6 +1100,17 @@ pub struct ServerConfig {
     ///
     /// Must be in the inclusive range `1..=tokio::sync::Semaphore::MAX_PERMITS`.
     pub max_connections: usize,
+    /// Maximum active TCP connections or HTTP request tasks before new
+    /// requests receive a `503 Service Unavailable` response.
+    ///
+    /// The limit follows Uvicorn's admission check: a request is rejected
+    /// when either the number of active connections or active request tasks
+    /// is greater than or equal to this value. `Some(0)` therefore rejects
+    /// every request. `None` disables the check.
+    pub limit_concurrency: Option<usize>,
+    /// Default headers added to server-generated concurrency-limit responses.
+    /// Application responses remain the application's responsibility.
+    pub default_headers: Vec<(HeaderName, HeaderValue)>,
     /// Maximum time to drain active connections after shutdown begins.
     pub graceful_shutdown_timeout: Duration,
     /// Maximum time allowed for the application startup hook when lifecycle
@@ -1130,6 +1144,11 @@ impl fmt::Debug for ServerConfig {
         formatter
             .debug_struct("ServerConfig")
             .field("max_connections", &self.max_connections)
+            .field("limit_concurrency", &self.limit_concurrency)
+            .field(
+                "default_headers_configured",
+                &!self.default_headers.is_empty(),
+            )
             .field("graceful_shutdown_timeout", &self.graceful_shutdown_timeout)
             .field(
                 "application_startup_timeout",
@@ -1679,6 +1698,8 @@ impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             max_connections: 1_024,
+            limit_concurrency: None,
+            default_headers: Vec::new(),
             graceful_shutdown_timeout: Duration::from_secs(30),
             application_startup_timeout: Duration::from_secs(30),
             application_shutdown_timeout: Duration::from_secs(30),
@@ -2135,6 +2156,10 @@ where
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
     let connection_slots = Arc::new(Semaphore::new(config.max_connections));
+    let request_concurrency = config
+        .limit_concurrency
+        .map(|limit| Arc::new(RequestConcurrency::new(limit)));
+    let default_headers = Arc::new(config.default_headers.clone());
     #[cfg(coverage)]
     if take_listener_admission_closed_fault() {
         connection_slots.close();
@@ -2193,12 +2218,17 @@ where
         let error_observer = config.error_observer.clone();
         let service_error_policy = config.service_error_policy;
         let tls_acceptor = tls_acceptor.clone();
+        let request_concurrency = request_concurrency.clone();
+        let default_headers = Arc::clone(&default_headers);
         connections.spawn(async move {
             let _slot = slot;
             let connection = async {
                 match tls_acceptor {
                     Some(acceptor) => match acceptor.accept(stream).await {
                         Ok(stream) => {
+                            let _connection_guard = request_concurrency
+                                .as_ref()
+                                .map(RequestConcurrency::connection_started);
                             let alpn_protocol =
                                 stream.get_ref().1.alpn_protocol().map(Arc::<[u8]>::from);
                             serve_connection(
@@ -2219,6 +2249,8 @@ where
                                     error_observer: error_observer.as_ref(),
                                     service_error_policy,
                                     date_header,
+                                    request_concurrency: request_concurrency.clone(),
+                                    default_headers: Arc::clone(&default_headers),
                                 },
                             )
                             .await
@@ -2226,6 +2258,9 @@ where
                         Err(error) => Err(ConnectionError::Tls(error)),
                     },
                     None => {
+                        let _connection_guard = request_concurrency
+                            .as_ref()
+                            .map(RequestConcurrency::connection_started);
                         serve_connection(
                             stream,
                             service,
@@ -2244,6 +2279,8 @@ where
                                 error_observer: error_observer.as_ref(),
                                 service_error_policy,
                                 date_header,
+                                request_concurrency,
+                                default_headers,
                             },
                         )
                         .await
@@ -2409,6 +2446,8 @@ struct ConnectionOptions<'a> {
     error_observer: Option<&'a ServerErrorObserver>,
     service_error_policy: ServiceErrorPolicy,
     date_header: bool,
+    request_concurrency: Option<Arc<RequestConcurrency>>,
+    default_headers: Arc<Vec<(HeaderName, HeaderValue)>>,
 }
 
 async fn serve_connection<I, S, B>(
@@ -2432,6 +2471,8 @@ where
         error_observer,
         service_error_policy,
         date_header,
+        request_concurrency,
+        default_headers,
     } = options;
     let ConnectionSignals {
         peer_read_half_closed,
@@ -2467,6 +2508,8 @@ where
         error_observer.cloned(),
         peer_addr,
         service_error_policy,
+        request_concurrency,
+        default_headers,
     );
     let service = TowerToHyperService::new(application);
     #[cfg(coverage)]
@@ -2702,6 +2745,122 @@ async fn drain_aborted_connections(connections: &mut JoinSet<Result<(), Connecti
     }
 }
 
+struct RequestConcurrency {
+    limit: usize,
+    counts: Mutex<RequestConcurrencyCounts>,
+}
+
+#[derive(Default)]
+struct RequestConcurrencyCounts {
+    active_connections: usize,
+    active_requests: usize,
+}
+
+impl RequestConcurrency {
+    fn new(limit: usize) -> Self {
+        Self {
+            limit,
+            counts: Mutex::new(RequestConcurrencyCounts::default()),
+        }
+    }
+
+    fn connection_started(self: &Arc<Self>) -> ActiveConnectionGuard {
+        let mut counts = self
+            .counts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        counts.active_connections = counts.active_connections.saturating_add(1);
+        ActiveConnectionGuard(Arc::clone(self))
+    }
+
+    fn try_start_request(self: &Arc<Self>) -> Option<ActiveRequestGuard> {
+        let mut counts = self
+            .counts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if counts.active_connections >= self.limit || counts.active_requests >= self.limit {
+            return None;
+        }
+
+        counts.active_requests += 1;
+        Some(ActiveRequestGuard(Arc::clone(self)))
+    }
+}
+
+struct ActiveConnectionGuard(Arc<RequestConcurrency>);
+
+impl Drop for ActiveConnectionGuard {
+    fn drop(&mut self) {
+        let mut counts = self
+            .0
+            .counts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        counts.active_connections = counts.active_connections.saturating_sub(1);
+    }
+}
+
+struct ActiveRequestGuard(Arc<RequestConcurrency>);
+
+impl Drop for ActiveRequestGuard {
+    fn drop(&mut self) {
+        let mut counts = self
+            .0
+            .counts
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        counts.active_requests = counts.active_requests.saturating_sub(1);
+    }
+}
+
+pin_project! {
+    struct RequestConcurrencyBody<B> {
+        #[pin]
+        inner: B,
+        permit: Option<ActiveRequestGuard>,
+    }
+}
+
+impl<B> RequestConcurrencyBody<B> {
+    fn new(inner: B, permit: Option<ActiveRequestGuard>) -> Self {
+        Self { inner, permit }
+    }
+}
+
+impl<B> Body for RequestConcurrencyBody<B>
+where
+    B: Body<Data = Bytes>,
+{
+    type Data = Bytes;
+    type Error = B::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        let this = self.project();
+        match this.inner.poll_frame(context) {
+            Poll::Ready(None) => {
+                this.permit.take();
+                Poll::Ready(None)
+            }
+            Poll::Ready(Some(Err(error))) => {
+                this.permit.take();
+                Poll::Ready(Some(Err(error)))
+            }
+            result => result,
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.inner.size_hint()
+    }
+}
+
 struct ServiceErrorResponse<S, B, RequestBody>
 where
     S: Service<Request<RequestBody>>,
@@ -2711,6 +2870,8 @@ where
     error_observer: Option<ServerErrorObserver>,
     peer_addr: SocketAddr,
     service_error_policy: ServiceErrorPolicy,
+    request_concurrency: Option<Arc<RequestConcurrency>>,
+    default_headers: Arc<Vec<(HeaderName, HeaderValue)>>,
     _response_body: std::marker::PhantomData<fn() -> B>,
     _request_body: std::marker::PhantomData<fn() -> RequestBody>,
 }
@@ -2726,6 +2887,8 @@ where
             error_observer: self.error_observer.clone(),
             peer_addr: self.peer_addr,
             service_error_policy: self.service_error_policy,
+            request_concurrency: self.request_concurrency.clone(),
+            default_headers: self.default_headers.clone(),
             _response_body: std::marker::PhantomData,
             _request_body: std::marker::PhantomData,
         }
@@ -2741,6 +2904,8 @@ where
         error_observer: Option<ServerErrorObserver>,
         peer_addr: SocketAddr,
         service_error_policy: ServiceErrorPolicy,
+        request_concurrency: Option<Arc<RequestConcurrency>>,
+        default_headers: Arc<Vec<(HeaderName, HeaderValue)>>,
     ) -> Self {
         Self {
             inner,
@@ -2748,6 +2913,8 @@ where
             error_observer,
             peer_addr,
             service_error_policy,
+            request_concurrency,
+            default_headers,
             _response_body: std::marker::PhantomData,
             _request_body: std::marker::PhantomData,
         }
@@ -2755,8 +2922,11 @@ where
 }
 
 // Nested sum types keep these body paths statically dispatched without a
-// heap allocation for observed application bodies or internal empty replies.
-type ServerResponseBody<B> = BodyEither<BodyEither<B, ObservedBody<B>>, Empty<Bytes>>;
+// heap allocation for application bodies or server-generated replies.
+type ServerResponseBody<B> = BodyEither<
+    BodyEither<RequestConcurrencyBody<B>, ObservedBody<RequestConcurrencyBody<B>>>,
+    Full<Bytes>,
+>;
 type ResponseOnError<B> = Response<ServerResponseBody<B>>;
 type ServiceResponseFuture<S, B, RequestBody> = FutureEither<
     ObserveServiceResult<
@@ -2804,11 +2974,26 @@ where
             tracing::error!(%error, "HTTP application service became unavailable");
             return FutureEither::Right(ready(Ok(internal_server_error())));
         }
+        let permit = if let Some(request_concurrency) = &self.request_concurrency {
+            let Some(permit) = request_concurrency.try_start_request() else {
+                tracing::warn!("Exceeded concurrency limit.");
+                let close_connection =
+                    matches!(request.version(), Version::HTTP_10 | Version::HTTP_11);
+                return FutureEither::Right(ready(Ok(service_unavailable(
+                    self.default_headers.as_slice(),
+                    close_connection,
+                ))));
+            };
+            Some(permit)
+        } else {
+            None
+        };
         FutureEither::Left(ObserveServiceResult::new(
             self.inner.call(request),
             self.error_observer.clone(),
             self.peer_addr,
             self.service_error_policy,
+            permit,
         ))
     }
 }
@@ -2820,6 +3005,7 @@ pin_project! {
         error_observer: Option<ServerErrorObserver>,
         peer_addr: SocketAddr,
         service_error_policy: ServiceErrorPolicy,
+        permit: Option<ActiveRequestGuard>,
         _types: std::marker::PhantomData<fn() -> (E, B)>,
     }
 }
@@ -2830,12 +3016,14 @@ impl<F, E, B> ObserveServiceResult<F, E, B> {
         error_observer: Option<ServerErrorObserver>,
         peer_addr: SocketAddr,
         service_error_policy: ServiceErrorPolicy,
+        permit: Option<ActiveRequestGuard>,
     ) -> Self {
         Self {
             future,
             error_observer,
             peer_addr,
             service_error_policy,
+            permit,
             _types: std::marker::PhantomData,
         }
     }
@@ -2855,6 +3043,8 @@ where
         match this.future.poll(context) {
             Poll::Pending => Poll::Pending,
             Poll::Ready(Ok(response)) => {
+                let response =
+                    response.map(|body| RequestConcurrencyBody::new(body, this.permit.take()));
                 let response = response.map(|body| match this.error_observer.take() {
                     Some(observer) => BodyEither::Left(BodyEither::Right(ObservedBody::new(
                         body,
@@ -2866,6 +3056,7 @@ where
                 Poll::Ready(Ok(response))
             }
             Poll::Ready(Err(error)) => {
+                this.permit.take();
                 observe_error(
                     this.error_observer.as_ref(),
                     ServerErrorPhase::Service,
@@ -2951,7 +3142,34 @@ where
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
-    let mut response = Response::new(BodyEither::Right(Empty::new()));
+    let mut response = Response::new(BodyEither::Right(Full::new(Bytes::new())));
     *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+    response
+}
+
+fn service_unavailable<B>(
+    default_headers: &[(HeaderName, HeaderValue)],
+    close_connection: bool,
+) -> ResponseOnError<B>
+where
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+{
+    let mut response = Response::new(BodyEither::Right(Full::new(Bytes::from_static(
+        b"Service Unavailable",
+    ))));
+    *response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+    let headers = response.headers_mut();
+    headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("text/plain; charset=utf-8"),
+    );
+    headers.insert(CONTENT_LENGTH, HeaderValue::from_static("19"));
+    if close_connection {
+        headers.insert(CONNECTION, HeaderValue::from_static("close"));
+    }
+    for (name, value) in default_headers {
+        headers.append(name.clone(), value.clone());
+    }
     response
 }

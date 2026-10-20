@@ -1,6 +1,7 @@
 """Public server API backed by the Rust network runtime."""
 
 import asyncio
+import sys
 
 from . import _bridge, _native
 
@@ -25,6 +26,7 @@ class Server:
         default_headers=None,
         date_header=True,
         ws_max_size=16 * 1024 * 1024,
+        limit_concurrency=None,
     ):
         """Store the application and listener options for a server run.
 
@@ -43,6 +45,8 @@ class Server:
                 application's response headers. ``None`` uses Uvicorn's
                 default ``server: uvicorn`` header.
             date_header: Whether to add the standard HTTP ``Date`` header.
+            limit_concurrency: Maximum active connections or request tasks
+                before the Rust runtime returns HTTP 503.
 
         Configuration errors are reported when :meth:`serve` starts the native
         runtime.
@@ -60,6 +64,7 @@ class Server:
         )
         self.date_header = date_header
         self.ws_max_size = ws_max_size
+        self.limit_concurrency = limit_concurrency
         self._control = None
 
     def shutdown(self):
@@ -87,6 +92,9 @@ class Server:
         """
         control = _native.ServerControl()
         self._control = control
+        limit_concurrency = self.limit_concurrency
+        if limit_concurrency is not None:
+            limit_concurrency = min(max(limit_concurrency, 0), sys.maxsize)
         native_task = asyncio.ensure_future(
             _native.serve(
                 self.app,
@@ -101,6 +109,7 @@ class Server:
                 self.default_headers,
                 self.date_header,
                 self.ws_max_size,
+                limit_concurrency,
                 control,
             )
         )

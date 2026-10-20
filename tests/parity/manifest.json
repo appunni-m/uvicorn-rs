@@ -1065,6 +1065,17 @@
       ]
     },
     {
+      "id": "http.concurrency-limit",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "server_header_values",
+        "date_header_present",
+        "body_bytes"
+      ]
+    },
+    {
       "id": "http.response-empty-body",
       "kind": "protocol_operation",
       "observe": [

@@ -156,7 +156,7 @@ remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
 The maintained [coverage summary](coverage.md) records the historical
 511-case adapter result and the latest complete-scope 595-case baseline. Those
-coverage and case totals are snapshots: the current manifest has 601 cases,
+coverage and case totals are snapshots: the current manifest has 602 cases,
 including four native HTTP/1 upgrade-session inputs and later CLI environment
 precedence inputs. The selected results described here are focused results,
 not a full-matrix result. Generated per-run reports remain local and
@@ -414,7 +414,7 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 
 | Profile group | Cases | Reference | Why |
 |---|---:|---|---|
-| HTTP/1.1, including TLS | 109 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, trusted, disabled, excluded-peer, wildcard, IPv4-CIDR, malformed/empty forwarded-client, all-trusted-chain, duplicate forwarding-field, and unsupported-proto proxy cases, and WebSocket-upgrade validation. |
+| HTTP/1.1, including TLS | 110 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, concurrency-limit rejection, trusted, disabled, excluded-peer, wildcard, IPv4-CIDR, malformed/empty forwarded-client, all-trusted-chain, duplicate forwarding-field, and unsupported-proto proxy cases, and WebSocket-upgrade validation. |
 | WebSocket, including TLS | 51 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, shutdown, configured message limits, and proxy-derived `ws`/`wss` scope schemes. |
 | Startup configuration | 9 | Uvicorn 0.54.0 and the public `uvicorn_rs.Server` API | Same invalid-host and TLS startup configurations on both implementations. |
 | Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
@@ -423,12 +423,18 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | CLI and environment | 23 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
 | Python API | 20 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, and a configured WebSocket message limit. |
 
-These eight groups account for all 310 current oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 601 total cases. Five
+These eight groups account for all 311 current oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 602 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
 runtime or support contract.
+
+`http1.limit-concurrency-returns-503-at-connection-limit` starts both servers
+with `--limit-concurrency 1` and sends the same bodyless GET. The selected
+Uvicorn 0.54.0 comparison passes for status, body, content type, server header,
+and date header. This single case does not establish behavior for other limits,
+active HTTP/2 streams, or the Python API.
 
 The H2/H3 rows are same-protocol ASGI observations against Hypercorn. They are
 not described as Uvicorn parity. Server versions and protocol components are
@@ -440,7 +446,7 @@ digests for the target.
 ## Scope and comparison rules
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@16`; live artifacts use
+`uvicorn-rs-parity/input@17`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -587,9 +593,11 @@ arguments. Migrate maintained `@14` inputs with
 `python scripts/migrate_parity_input_v14_to_v15.py`; the migrator changes only
 the schema marker and preserves existing case data.
 Schema `@16` allows proxy-header settings in WebSocket server options for
-scheme/scope parity cases. Migrate maintained `@15` inputs with
-`python scripts/migrate_parity_input_v15_to_v16.py`; the migrator changes only
-the schema marker and preserves existing case data.
+scheme/scope parity cases. Schema `@17` allows `limit_concurrency` in HTTP
+server options. Migrate maintained `@15` inputs with
+`python scripts/migrate_parity_input_v15_to_v16.py`, then `@16` inputs with
+`python scripts/migrate_parity_input_v16_to_v17.py`; both migrators change only
+the schema marker and preserve existing case data.
 The runner rejects older or mixed input schemas.
 
 ## CI evidence

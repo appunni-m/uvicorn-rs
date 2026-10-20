@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@16"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@17"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2820,7 +2820,9 @@ def load_contract(
                 server_options = case["server_options"]
                 if not isinstance(server_options, dict):
                     raise ParityError(f"{case_id}: server_options must be an object")
-                allowed_options = {"proxy_headers", "forwarded_allow_ips"}
+                allowed_options = {
+                    "proxy_headers", "forwarded_allow_ips", "limit_concurrency"
+                }
                 unknown_options = set(server_options) - allowed_options
                 if unknown_options:
                     raise ParityError(
@@ -2838,6 +2840,13 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: server_options.forwarded_allow_ips must be a string"
+                    )
+                if "limit_concurrency" in server_options and (
+                    type(server_options["limit_concurrency"]) is not int
+                    or server_options["limit_concurrency"] < 0
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.limit_concurrency must be a non-negative integer"
                     )
             exact_case_keys(case, case_keys, case_id)
             request = case["request"]
@@ -3905,6 +3914,10 @@ def start_server(
         if "forwarded_allow_ips" in server_options:
             command.extend(
                 ["--forwarded-allow-ips", server_options["forwarded_allow_ips"]]
+            )
+        if "limit_concurrency" in server_options:
+            command.extend(
+                ["--limit-concurrency", str(server_options["limit_concurrency"])]
             )
 
     log = tempfile.TemporaryFile(mode="w+t")

@@ -1519,6 +1519,8 @@ struct ServeOptions {
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
     ws_max_size: usize,
+    #[cfg(feature = "native-tcp")]
+    limit_concurrency: Option<usize>,
 }
 
 struct ServerContext {
@@ -1531,6 +1533,8 @@ struct ServerContext {
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
     ws_max_size: usize,
+    #[cfg(feature = "native-tcp")]
+    limit_concurrency: Option<usize>,
     state: Option<Arc<Py<PyDict>>>,
     #[cfg(not(feature = "native-tcp"))]
     websocket_tasks: WebSocketTasks,
@@ -4755,7 +4759,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan_enabled, root_path, default_headers, date_header, ws_max_size, control))]
+#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan_enabled, root_path, default_headers, date_header, ws_max_size, limit_concurrency, control))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -4774,8 +4778,16 @@ fn serve<'py>(
     default_headers: Vec<(Bytes, Bytes)>,
     date_header: bool,
     ws_max_size: usize,
+    limit_concurrency: Option<usize>,
     control: Py<ServerControl>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    #[cfg(not(feature = "native-tcp"))]
+    if limit_concurrency.is_some() {
+        return Err(PyValueError::new_err(
+            "limit_concurrency requires the native-tcp feature",
+        ));
+    }
+
     let default_headers = default_headers
         .into_iter()
         .map(|(name, value)| {
@@ -4853,6 +4865,8 @@ fn serve<'py>(
             default_headers,
             date_header,
             ws_max_size,
+            #[cfg(feature = "native-tcp")]
+            limit_concurrency,
         };
         let result = serve_forever(
             app,
@@ -5011,6 +5025,8 @@ async fn serve_forever(
         default_headers: options.default_headers,
         date_header: options.date_header,
         ws_max_size: options.ws_max_size,
+        #[cfg(feature = "native-tcp")]
+        limit_concurrency: options.limit_concurrency,
         state,
         #[cfg(not(feature = "native-tcp"))]
         websocket_tasks,
@@ -5062,6 +5078,8 @@ async fn serve_forever(
         let peer_read_half_close = uvicorn_rs::PeerReadHalfCloseMode::Proactive;
         let config = uvicorn_rs::ServerConfig {
             graceful_shutdown_timeout: options.graceful_timeout,
+            limit_concurrency: server.limit_concurrency,
+            default_headers: server.default_headers.clone(),
             // Let an invalid HTTP/1 ASGI response start reach the transport,
             // which closes the connection as Uvicorn does. Ordinary ASGI app
             // exceptions are converted to 500 responses in `handle_request`.
