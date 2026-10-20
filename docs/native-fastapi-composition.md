@@ -1,7 +1,7 @@
 # Native FastAPI-RS composition evidence
 
-**Current result (2026-10-19):** 17/17 real-socket H1/H2 inputs passed in the
-dedicated composition job in exact-source CI run
+**Hosted exact-source result (2026-10-19):** 17/17 real-socket H1/H2 inputs
+passed in the dedicated composition job in exact-source CI run
 [39185987997](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/job/117848420888).
 The job used Uvicorn-RS `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`, FastAPI-RS
 `f438a7cbb2308e6c1f795aef98e333de23388533`, and Starlette-RS
@@ -14,6 +14,36 @@ checker error as a failure; hosted confirmation of that corrected guard is
 pending. The composition result is limited evidence, not a full FastAPI
 contract, Python parity result, release candidate, repeated result, or
 performance measurement.
+
+**Focused current-main inputs (2026-10-20):** on Uvicorn-RS commit
+`0bd5877529e8f8b7434b7f7ab1852c0753f5e642`, with FastAPI-RS
+`f438a7cbb2308e6c1f795aef98e333de23388533` and Starlette-RS
+`b4c8a65c85e1b0d251ca05874412811eaa3ac7b8`, two individual real-socket
+HTTP/1.1 inputs passed:
+
+- `http1.slow-reader-bounds-polling-and-cancels-producer`
+- `http1.request-stream-progress-before-upload-complete`
+
+The runner's focused selector is a local, uncommitted change to
+`examples/native-fastapi-contracts/src/main.rs` (SHA-256
+`77923fb6cbac2c8d9def562414da9687e8c2e3031775e4d4dd17bae9031bb68a`). It
+retains the complete manifest for shared application configuration while
+executing only the requested case. The source manifest SHA-256 is
+`5224e4c3e5a88e3699eb71490651ffc7f2ea6a41edf302b4884d3133be392bcd`. Clean
+detached checkouts were used for all three commits, and
+`cargo tree --locked --edges normal,build` found no PyO3 package in the example
+dependency graph. The build used Rust/Cargo 1.98.1 on macOS ARM64. These two
+local inputs do not refresh the hosted 17-case result or establish full native
+framework compatibility.
+
+Reproduce the upload-progress input with:
+
+```sh
+CARGO_TARGET_DIR=/tmp/native-composition-target \
+  cargo run --manifest-path examples/native-fastapi-contracts/Cargo.toml \
+  --locked -- examples/native-fastapi-contracts/manifest.json \
+  --case-id http1.request-stream-progress-before-upload-complete
+```
 
 ## Current source and input identity
 

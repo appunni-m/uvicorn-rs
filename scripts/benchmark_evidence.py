@@ -436,7 +436,10 @@ class BenchmarkEvidence:
         self.artifacts_dir = artifacts_dir or root / "benchmarks" / "results" / f"benchmark-artifacts-{uuid.uuid4().hex}"
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
         self.sample_name = "unlabeled"
-        self.extra_dependencies = extra_dependencies or {}
+        self.extra_dependencies = {
+            "uvicorn-rs-py": ["uvicorn_rs", "uvicorn"],
+            **(extra_dependencies or {}),
+        }
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.rustc_version = rustc_version()
         code = (

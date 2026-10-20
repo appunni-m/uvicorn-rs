@@ -7,6 +7,7 @@ use std::{
     error::Error,
     io::{self, Write as _},
     net::SocketAddr,
+    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -43,6 +44,11 @@ type ProbeResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 struct Manifest {
     schema_version: u32,
     cases: Vec<Value>,
+}
+
+struct RunnerArguments {
+    manifest_path: PathBuf,
+    case_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -123,23 +129,44 @@ impl Drop for UploadTaskGuard {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ProbeResult<()> {
-    let manifest_path = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "examples/native-fastapi-contracts/manifest.json".to_owned());
-    let manifest: Manifest = serde_json::from_slice(&std::fs::read(manifest_path)?)?;
+    let arguments = parse_runner_arguments(std::env::args().skip(1))?;
+    let manifest: Manifest = serde_json::from_slice(&std::fs::read(arguments.manifest_path)?)?;
     if manifest.schema_version != 1 {
         return Err(
             io::Error::new(io::ErrorKind::InvalidData, "unsupported manifest version").into(),
         );
     }
+    if let Some(case_id) = arguments.case_id.as_deref() {
+        let matching_cases = manifest
+            .cases
+            .iter()
+            .filter(|case| case.get("id").and_then(Value::as_str) == Some(case_id))
+            .count();
+        if matching_cases != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "expected exactly one manifest case with id {case_id:?}, found {matching_cases}"
+                ),
+            )
+            .into());
+        }
+    }
 
+    // Shared app state is derived from the complete input manifest even when
+    // execution is narrowed to one selected case.
     let (chunk_size, total_chunks) = backpressure_config(&manifest)?;
     let state = Arc::new(AppState::new(chunk_size, total_chunks));
     let application = build_application(Arc::clone(&state))?;
     let (address, shutdown_sender, server) = start_server(application.clone()).await?;
     let mut graceful_cases = Vec::new();
 
-    for case in &manifest.cases {
+    for case in manifest.cases.iter().filter(|case| {
+        arguments
+            .case_id
+            .as_deref()
+            .is_none_or(|case_id| case.get("id").and_then(Value::as_str) == Some(case_id))
+    }) {
         let id = required_str(case, "id")?;
         let operation = required_str(case, "operation")?;
         let protocol = required_str(case, "protocol")?;
@@ -207,6 +234,44 @@ async fn main() -> ProbeResult<()> {
     Ok(())
 }
 
+fn parse_runner_arguments(
+    arguments: impl Iterator<Item = String>,
+) -> Result<RunnerArguments, io::Error> {
+    const DEFAULT_MANIFEST_PATH: &str = "examples/native-fastapi-contracts/manifest.json";
+    const USAGE: &str = "usage: native-fastapi-contracts [MANIFEST] [--case-id ID]";
+
+    let mut arguments = arguments;
+    let mut manifest_path = PathBuf::from(DEFAULT_MANIFEST_PATH);
+    let mut manifest_path_set = false;
+    let mut case_id_set = false;
+    let mut case_id = None;
+
+    while let Some(argument) = arguments.next() {
+        if argument == "--case-id" {
+            if case_id_set {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, USAGE));
+            }
+            case_id_set = true;
+            case_id = Some(
+                arguments
+                    .next()
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, USAGE))?,
+            );
+        } else if argument.starts_with('-') || manifest_path_set {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, USAGE));
+        } else {
+            manifest_path = PathBuf::from(argument);
+            manifest_path_set = true;
+        }
+    }
+
+    Ok(RunnerArguments {
+        manifest_path,
+        case_id,
+    })
+}
+
 fn build_application(state: Arc<AppState>) -> Result<NativeApplication, NativeApplicationError> {
     let stats_state = Arc::clone(&state);
     let upload_state = Arc::clone(&state);
@@ -223,12 +288,12 @@ fn build_application(state: Arc<AppState>) -> Result<NativeApplication, NativeAp
             |request: NativeRequest| async move {
                 let item_id = path_parameter(&request, "item_id")?;
                 let tag = optional_query_parameter(&request, "tag")?;
-                json_response(&ItemOutput { item_id, tag }, StatusCode::OK).map_err(Into::into)
+                json_response(&ItemOutput { item_id, tag }, StatusCode::OK)
             },
         )
         .route("/echo", ["POST"], |mut request| async move {
             let input: EchoInput = json_body(&mut request, 1024 * 1024).await?;
-            json_response(&input, StatusCode::OK).map_err(Into::into)
+            json_response(&input, StatusCode::OK)
         })
         .route("/stream-upload", ["POST"], move |mut request| {
             let state = Arc::clone(&stream_upload_state);
@@ -266,7 +331,7 @@ fn build_application(state: Arc<AppState>) -> Result<NativeApplication, NativeAp
                         }
                     }
                 }
-                json_response(&received, StatusCode::OK).map_err(Into::into)
+                json_response(&received, StatusCode::OK)
             }
         })
         .route(
@@ -281,7 +346,6 @@ fn build_application(state: Arc<AppState>) -> Result<NativeApplication, NativeAp
                     },
                     StatusCode::OK,
                 )
-                .map_err(Into::into)
             },
         )
         .route("/failure", ["GET"], |_request| async move {
@@ -387,7 +451,7 @@ fn build_application(state: Arc<AppState>) -> Result<NativeApplication, NativeAp
                         }
                     }
                 }
-                json_response(&"upload-complete", StatusCode::OK).map_err(Into::into)
+                json_response(&"upload-complete", StatusCode::OK)
             }
         })
         .route("/stats", ["GET"], move |_request| {
@@ -412,7 +476,7 @@ fn build_application(state: Arc<AppState>) -> Result<NativeApplication, NativeAp
                         .stream_upload_handlers_completed
                         .load(Ordering::Acquire),
                 };
-                json_response(&snapshot, StatusCode::OK).map_err(Into::into)
+                json_response(&snapshot, StatusCode::OK)
             }
         })
         .build()

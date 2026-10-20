@@ -252,7 +252,7 @@
       </div>
       <div class="notice">
         <strong>Package names and language boundary</strong>
-        <p><code>uvicorn-rs</code> is the native Rust server; <code>uvicorn-rs-py</code> is its separate Python distribution. The confirmed target keeps that distribution name while providing the <code>uvicorn</code> command and import namespace with Uvicorn 0.54.0 compatibility. The current checkout does not yet provide those surfaces. Remove upstream Uvicorn before installing the replacement once it is released, because the packages share import paths. Standard Python ASGI applications still execute in Python and cross the ASGI bridge; the Rust-native FastAPI-RS/Starlette-RS path has no Python request boundary.</p>
+        <p><code>uvicorn-rs</code> is the native Rust server; <code>uvicorn-rs-py</code> is its separate Python distribution. The confirmed target keeps that distribution name and provides the <code>uvicorn</code> command and import namespace with Uvicorn 0.54.0 compatibility. The current checkout now exposes the command and namespace, but their behavior is incomplete and has not passed the compatibility matrix. No package is published. Remove upstream Uvicorn only after a compatible release is available, because both distributions install the same import paths. Standard Python ASGI applications still execute in Python and cross the ASGI bridge; the Rust-native FastAPI-RS/Starlette-RS path has no Python request boundary.</p>
       </div>
       <nav class="jump" aria-label="Architecture sections">
         <a href="#current">Current path</a>
@@ -466,7 +466,7 @@
           </tbody>
         </table>
       </div>
-        <div class="stack-note"><strong>Two explicit paths:</strong> a Rust application builds its own executable, links <code>uvicorn-rs</code>, <code>starlette-rs</code>, and optionally <code>fastapi-rs</code>, and runs without Python. With default <code>native-tcp</code>, the <code>uvicorn-rs-py</code> adapter uses the native HTTP/1.1, HTTP/2 TCP/TLS, and HTTP/3 Quinn server for Python ASGI apps. The current checkout exposes <code>uvicorn-rs-py module:app</code>; the target command is <code>uvicorn module:app</code> with the Uvicorn 0.54.0 public contract. Python callbacks continue through asyncio/PyO3. A standalone native launcher needs an explicit compiled-service registration model; it is not the Python module loader.</div>
+        <div class="stack-note"><strong>Two explicit paths:</strong> a Rust application builds its own executable, links <code>uvicorn-rs</code>, <code>starlette-rs</code>, and optionally <code>fastapi-rs</code>, and runs without Python. With default <code>native-tcp</code>, the <code>uvicorn-rs-py</code> adapter uses the native HTTP/1.1, HTTP/2 TCP/TLS, and HTTP/3 Quinn server for Python ASGI apps. The current checkout exposes both <code>uvicorn module:app</code> and <code>uvicorn-rs-py module:app</code> with the prototype option set; the Uvicorn 0.54.0 command contract remains incomplete. Python callbacks continue through asyncio/PyO3. A standalone native launcher needs an explicit compiled-service registration model; it is not the Python module loader.</div>
     </section>
 
     <section id="dependencies">
@@ -620,7 +620,7 @@
                 <span class="mode-step">asyncio / uvloop</span><span class="mode-arrow" aria-hidden="true">→</span>
                 <span class="mode-step">Python ASGI callable</span>
               </div>
-              <p>The current <code>uvicorn-rs-py module:app</code> command hosts ASGI 3 callables. Scope creation, callable invocation, every awaited <code>receive()</code>/<code>send()</code> operation, messages, cancellation, and exceptions use the Python bridge. The Python loop owns app tasks and context. The replacement goal goes further: the installed package must provide the Uvicorn 0.54.0 command and documented imports/API as well as its server behavior. The current package has not passed that compatibility matrix.</p>
+              <p>The current <code>uvicorn</code> and <code>uvicorn-rs-py</code> commands host ASGI 3 callables with the same prototype options. Scope creation, callable invocation, every awaited <code>receive()</code>/<code>send()</code> operation, messages, cancellation, and exceptions use the Python bridge. The Python loop owns app tasks and context. The installed candidate exposes the <code>uvicorn</code> namespace, but its documented Uvicorn imports/API and behavior remain incomplete and have not passed the compatibility matrix.</p>
               <p><strong>Boundary:</strong> Python and the GIL remain required for Python application code. The replacement compatibility contract concerns the <code>uvicorn-rs-py</code> distribution exposing the public <code>uvicorn</code> namespace; it does not make Python ASGI applications Rust-native.</p>
             </div>
           </article>

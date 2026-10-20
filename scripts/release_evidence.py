@@ -87,6 +87,8 @@ REQUIRED = (
     "crates/uvicorn-rs-h3/LICENSE",
     "crates/uvicorn-rs-h3-quinn/Cargo.toml", "crates/uvicorn-rs-h3-quinn/README.md",
     "crates/uvicorn-rs-h3-quinn/LICENSE",
+    "python/uvicorn/__init__.py", "python/uvicorn/__main__.py", "python/uvicorn/main.py",
+    "python/uvicorn/py.typed",
 )
 FORBIDDEN_DIRS = {
     "benchmarks", "build", "target", "tools", "tests", "scripts", "examples", "coverage",
@@ -135,6 +137,7 @@ def source_hashes() -> dict[str, str]:
     for directory in CRATE_DIRS.values():
         paths.update(directory.rglob("*.rs"))
     paths.update((ROOT / "python" / "uvicorn_rs").glob("*.py"))
+    paths.update(path for path in (ROOT / "python" / "uvicorn").iterdir() if path.is_file())
     for optional in ("build.rs", ".gitignore"):
         if (ROOT / optional).exists():
             paths.add(ROOT / optional)
@@ -333,6 +336,21 @@ def package_metadata(data: bytes, version: str) -> object:
     checkout_readme = (ROOT / "README.md").read_text(encoding="utf-8")
     if normalize_line_endings(packaged_readme) != normalize_line_endings(checkout_readme):
         raise ValueError("packaged README differs from the reviewed checkout")
+    if metadata.get_all("Provides-Extra", []) != ["standard"]:
+        raise ValueError("package metadata must declare the Uvicorn-compatible standard extra")
+    requirement_names = set()
+    for requirement in metadata.get_all("Requires-Dist", []):
+        name = requirement.split(";", 1)[0].strip().split("[", 1)[0]
+        name = re.split(r"[<>=!~]", name, maxsplit=1)[0].strip().lower().replace("_", "-")
+        requirement_names.add(name)
+    required_names = {
+        "click", "h11", "typing-extensions", "httptools", "python-dotenv",
+        "pyyaml", "uvloop", "watchfiles", "websockets",
+    }
+    if requirement_names != required_names:
+        raise ValueError(
+            "package runtime/standard-extra dependencies differ from the Uvicorn 0.54.0 install contract"
+        )
     return metadata
 
 
@@ -353,7 +371,7 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
         for entry, name in zip(entries, names):
             if stat.S_ISLNK(entry.external_attr >> 16) or entry.flag_bits & 1:
                 raise ValueError(f"symlink or encrypted wheel member: {name}")
-            if not name.startswith(("uvicorn_rs/", prefix + "/")):
+            if not name.startswith(("uvicorn/", "uvicorn_rs/", prefix + "/")):
                 raise ValueError(f"unexpected wheel member: {name}")
             if not entry.is_dir():
                 contents[name] = archive.read(entry)
@@ -394,6 +412,12 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
         name = f"uvicorn_rs/{source.name}"
         if contents[name] != source.read_bytes():
             raise ValueError(f"packaged Python source differs: {name}")
+    for source in sorted((ROOT / "python/uvicorn").iterdir()):
+        if not source.is_file():
+            continue
+        name = f"uvicorn/{source.name}"
+        if name not in contents or contents[name] != source.read_bytes():
+            raise ValueError(f"packaged Python source differs: {name}")
     native_names = [name for name in contents if name.startswith("uvicorn_rs/_native.") and name.endswith((".so", ".pyd"))]
     if len(native_names) != 1:
         raise ValueError("wheel must contain exactly one native module")
@@ -402,6 +426,7 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
     allowed = {metadata_name, wheel_name, record_name, f"{prefix}/entry_points.txt", *native_names}
     allowed.update(f"{prefix}/licenses/{name}" for name in LICENSES)
     allowed.update(f"uvicorn_rs/{source.name}" for source in (ROOT / "python/uvicorn_rs").glob("*.py"))
+    allowed.update(f"uvicorn/{source.name}" for source in (ROOT / "python/uvicorn").iterdir() if source.is_file())
     extras = set(contents) - allowed
     if any(not re.fullmatch(re.escape(prefix) + r"/sboms/[^/]+\.json", name) for name in extras):
         raise ValueError(f"unexpected files in wheel: {sorted(extras)}")
@@ -435,7 +460,10 @@ def inspect_sdist(path: Path, version: str) -> dict:
                 check_content(name, contents[relative])
     package_metadata(contents["PKG-INFO"], version)
     inputs = source_hashes()
-    mandatory = {*REQUIRED, *(f"python/uvicorn_rs/{path.name}" for path in (ROOT / "python/uvicorn_rs").glob("*.py"))}
+    mandatory = {
+        *REQUIRED,
+        *(f"python/uvicorn_rs/{path.name}" for path in (ROOT / "python/uvicorn_rs").glob("*.py")),
+    }
     if not mandatory <= set(contents):
         raise ValueError(f"source archive missing required inputs: {sorted(mandatory - set(contents))}")
     archive_hashes = validate_sdist_source_contents(contents, ROOT)

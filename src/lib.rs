@@ -36,7 +36,7 @@ use bytes::Bytes;
 use futures_util::task::AtomicWaker;
 #[cfg(not(feature = "native-tcp"))]
 use futures_util::{SinkExt, StreamExt};
-use http::header::{HeaderName, HeaderValue};
+use http::header::{HeaderName, HeaderValue, DATE};
 use http::{HeaderMap, Request, Response, StatusCode, Version};
 use http_body::{Body, Frame, SizeHint};
 use http_body_util::combinators::UnsyncBoxBody;
@@ -1505,9 +1505,13 @@ impl RuntimeDiagnostics {
 struct ServeOptions {
     host: String,
     port: u16,
+    root_path: String,
     tcp_tls: Option<TlsAcceptor>,
     quic_config: Option<quinn::ServerConfig>,
     graceful_timeout: std::time::Duration,
+    lifespan_enabled: bool,
+    default_headers: Vec<(HeaderName, HeaderValue)>,
+    date_header: bool,
 }
 
 struct ServerContext {
@@ -1515,7 +1519,10 @@ struct ServerContext {
     invoke: Arc<Py<PyAny>>,
     locals: TaskLocals,
     server_addr: SocketAddr,
+    root_path: String,
     tcp_tls: Option<TlsAcceptor>,
+    default_headers: Vec<(HeaderName, HeaderValue)>,
+    date_header: bool,
     state: Option<Arc<Py<PyDict>>>,
     #[cfg(not(feature = "native-tcp"))]
     websocket_tasks: WebSocketTasks,
@@ -1906,12 +1913,14 @@ impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
             },
             native_upgrade,
         };
+        let server = Arc::clone(&context.server);
         Box::pin(async move {
-            if is_websocket_upgrade(&request) {
+            let response = if is_websocket_upgrade(&request) {
                 Ok(handle_websocket_request(request, context).await)
             } else {
                 handle_request(request, context).await
-            }
+            }?;
+            apply_default_response_headers(&server, response)
         })
     }
 }
@@ -1977,7 +1986,11 @@ impl tower_service::Service<Request<uvicorn_rs::Http3RequestBody>> for NativeHtt
             connection_closed: ConnectionClosed::Lifetime(connection_lifetime),
             native_upgrade: None,
         };
-        Box::pin(async move { handle_http3_asgi_request(request, context).await })
+        let server = Arc::clone(&context.server);
+        Box::pin(async move {
+            let response = handle_http3_asgi_request(request, context).await?;
+            apply_default_response_headers(&server, response)
+        })
     }
 }
 
@@ -2337,16 +2350,16 @@ impl PythonTaskStarter {
                     #[cfg(coverage)]
                     let callback_result = if inline_registration_error {
                         Err(PyRuntimeError::new_err(
-                        "coverage-injected callback registration failure after inline completion",
-                    ))
+                            "coverage-injected callback registration failure after inline completion",
+                        ))
                     } else if registration_error_borrow_conflict {
                         Err(PyRuntimeError::new_err(
-                        "coverage-injected callback registration failure before completion-state borrow",
-                    ))
+                            "coverage-injected callback registration failure before completion-state borrow",
+                        ))
                     } else if failure_cleanup_error {
                         Err(PyRuntimeError::new_err(
-                        "coverage-injected callback registration failure before cancellation cleanup scheduling",
-                    ))
+                            "coverage-injected callback registration failure before cancellation cleanup scheduling",
+                        ))
                     } else {
                         callback_result
                     };
@@ -3697,7 +3710,7 @@ impl LifespanRuntime {
                     let _ = app_task.into_handle().await;
                     log_error(format_args!("uvicorn-rs: ASGI app does not support lifespan"));
                     Ok(Self {
-                        state: None,
+                        state: Some(Arc::new(state)),
                         requests: None,
                         events: None,
                         app_task: None,
@@ -3708,18 +3721,19 @@ impl LifespanRuntime {
                     // observed, including if startup is cancelled mid-await.
                     let result = app_task.as_mut().await;
                     app_task.into_handle();
-                    Self::without_lifespan(result)
+                    Self::without_lifespan(result, state)
                 },
             },
             result = app_task.as_mut() => {
                 app_task.into_handle();
-                Self::without_lifespan(result)
+                Self::without_lifespan(result, state)
             }
         }
     }
 
     fn without_lifespan(
         result: Result<PyResult<Py<PyAny>>, tokio::task::JoinError>,
+        state: Py<PyDict>,
     ) -> PyResult<Self> {
         match result {
             Ok(Ok(_)) => {}
@@ -3734,7 +3748,7 @@ impl LifespanRuntime {
             "uvicorn-rs: ASGI app does not support lifespan"
         ));
         Ok(Self {
-            state: None,
+            state: Some(Arc::new(state)),
             requests: None,
             events: None,
             app_task: None,
@@ -3822,22 +3836,75 @@ impl Drop for CancelOnDrop {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ServerStartupState {
+    Starting,
+    Started,
+    Stopped,
+}
+
+struct ServerStartupSignal {
+    sender: watch::Sender<ServerStartupState>,
+    started: bool,
+}
+
+impl ServerStartupSignal {
+    fn new(sender: watch::Sender<ServerStartupState>) -> Self {
+        Self {
+            sender,
+            started: false,
+        }
+    }
+
+    fn mark_started(&mut self) {
+        self.started = true;
+        self.sender.send_replace(ServerStartupState::Started);
+    }
+}
+
+impl Drop for ServerStartupSignal {
+    fn drop(&mut self) {
+        if !self.started {
+            self.sender.send_replace(ServerStartupState::Stopped);
+        }
+    }
+}
+
 #[pyclass]
 struct ServerControl {
     cancellation: CancellationToken,
+    startup: watch::Sender<ServerStartupState>,
 }
 
 #[pymethods]
 impl ServerControl {
     #[new]
     fn new() -> Self {
+        let (startup, _) = watch::channel(ServerStartupState::Starting);
         Self {
             cancellation: CancellationToken::new(),
+            startup,
         }
     }
 
     fn shutdown(&self) {
         self.cancellation.cancel();
+    }
+
+    fn wait_started<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let mut startup = self.startup.subscribe();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            loop {
+                match *startup.borrow_and_update() {
+                    ServerStartupState::Started => return Ok(true),
+                    ServerStartupState::Stopped => return Ok(false),
+                    ServerStartupState::Starting => {}
+                }
+                if startup.changed().await.is_err() {
+                    return Ok(false);
+                }
+            }
+        })
     }
 }
 
@@ -3936,6 +4003,8 @@ async fn pump_http_request_body(
     let mut body_segments = Vec::new();
     let mut body_len = 0usize;
     let mut body_started = None;
+    let mut body_batch_timer =
+        std::pin::pin!(tokio::time::sleep_until(tokio::time::Instant::now()));
     loop {
         if connection_closed.is_closed()
             || cancellation.is_cancelled()
@@ -3943,7 +4012,6 @@ async fn pump_http_request_body(
         {
             return;
         }
-        let flush_deadline = body_started.map(|started| started + body_batch_max_wait);
         let frame_wait_started = diagnostics.http_body_frame_wait_started();
         let frame = tokio::select! {
             biased;
@@ -3972,13 +4040,7 @@ async fn pump_http_request_body(
                 drain_http_request_body(&mut body, &mut connection_closed, &cancellation, &request_cancellation).await;
                 return;
             }
-            _ = async {
-                if let Some(deadline) = flush_deadline {
-                    tokio::time::sleep_until(deadline).await;
-                } else {
-                    std::future::pending::<()>().await;
-                }
-            } => {
+            _ = &mut body_batch_timer, if body_started.is_some() => {
                 diagnostics.http_body_frame_wait_finished(frame_wait_started);
                 diagnostics.http_body_batch_timeout_flush();
                 None
@@ -4071,7 +4133,11 @@ async fn pump_http_request_body(
                             continue;
                         }
                         if body_segments.is_empty() {
-                            body_started = Some(tokio::time::Instant::now());
+                            let started = tokio::time::Instant::now();
+                            body_batch_timer
+                                .as_mut()
+                                .reset(started + body_batch_max_wait);
+                            body_started = Some(started);
                         }
                         body_len = body_len.saturating_add(data.len());
                         body_segments.push(data);
@@ -4681,7 +4747,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, control))]
+#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan_enabled, root_path, default_headers, date_header, control))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -4695,8 +4761,24 @@ fn serve<'py>(
     certfile: Option<String>,
     keyfile: Option<String>,
     graceful_timeout: u64,
+    lifespan_enabled: bool,
+    root_path: String,
+    default_headers: Vec<(Bytes, Bytes)>,
+    date_header: bool,
     control: Py<ServerControl>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let default_headers = default_headers
+        .into_iter()
+        .map(|(name, value)| {
+            let name = HeaderName::from_bytes(&name).map_err(|error| {
+                PyValueError::new_err(format!("invalid default HTTP header name: {error}"))
+            })?;
+            let value = HeaderValue::from_bytes(&value).map_err(|error| {
+                PyValueError::new_err(format!("invalid default HTTP header value: {error}"))
+            })?;
+            Ok((name, value))
+        })
+        .collect::<PyResult<Vec<_>>>()?;
     let graceful_timeout = std::time::Duration::from_secs(graceful_timeout);
     #[cfg(coverage)]
     let graceful_timeout = if coverage_fault_take(CoverageFaultPoint::ServerGracefulTimeoutOverflow)
@@ -4744,6 +4826,7 @@ fn serve<'py>(
         coverage_fault_take(CoverageFaultPoint::ServerServeControlBorrowConflict)
             .then(|| control.borrow_mut(py));
     let cancellation = control.try_borrow(py)?.cancellation.clone();
+    let startup_signal = ServerStartupSignal::new(control.try_borrow(py)?.startup.clone());
     #[cfg(coverage)]
     drop(serve_control_borrow);
     let cancel_on_drop = CancelOnDrop(cancellation.clone());
@@ -4753,15 +4836,20 @@ fn serve<'py>(
         let options = ServeOptions {
             host,
             port,
+            root_path,
             tcp_tls,
             quic_config,
             graceful_timeout,
+            lifespan_enabled,
+            default_headers,
+            date_header,
         };
         let result = serve_forever(
             app,
             invoke,
             locals,
             cancellation,
+            startup_signal,
             options,
             diagnostics.clone(),
         )
@@ -4816,6 +4904,7 @@ async fn serve_forever(
     invoke: Py<PyAny>,
     locals: TaskLocals,
     cancellation: CancellationToken,
+    mut startup_signal: ServerStartupSignal,
     options: ServeOptions,
     diagnostics: RuntimeDiagnostics,
 ) -> PyResult<()> {
@@ -4871,22 +4960,30 @@ async fn serve_forever(
     // Lifespan cancellation cleanup has its own tracker: the main lifespan
     // application remains active while request cleanup is drained.
     let lifespan_cleanup_tasks = TaskTracker::new();
-    let lifespan_start = LifespanRuntime::start(
-        Arc::clone(&app),
-        Arc::clone(&invoke),
-        locals.clone(),
-        diagnostics.clone(),
-        lifespan_cleanup_tasks.clone(),
-    )
-    .await;
-    let mut lifespan = match lifespan_start {
-        Ok(lifespan) => lifespan,
-        Err(error) => {
-            wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
-            return Err(error);
-        }
+    let mut lifespan = if options.lifespan_enabled {
+        let lifespan_start = LifespanRuntime::start(
+            Arc::clone(&app),
+            Arc::clone(&invoke),
+            locals.clone(),
+            diagnostics.clone(),
+            lifespan_cleanup_tasks.clone(),
+        )
+        .await;
+        Some(match lifespan_start {
+            Ok(lifespan) => lifespan,
+            Err(error) => {
+                wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
+                return Err(error);
+            }
+        })
+    } else {
+        None
     };
-    let state = lifespan.state.clone();
+    let state = if options.lifespan_enabled {
+        lifespan.as_ref().and_then(|runtime| runtime.state.clone())
+    } else {
+        Some(Arc::new(Python::attach(|py| PyDict::new(py).unbind())))
+    };
     #[cfg(not(feature = "native-tcp"))]
     let websocket_tasks: WebSocketTasks = Arc::new(Mutex::new(tokio::task::JoinSet::new()));
     let request_body_tasks: RequestBodyTasks = Arc::new(Mutex::new(tokio::task::JoinSet::new()));
@@ -4899,7 +4996,10 @@ async fn serve_forever(
         invoke,
         locals,
         server_addr,
+        root_path: options.root_path,
         tcp_tls: options.tcp_tls,
+        default_headers: options.default_headers,
+        date_header: options.date_header,
         state,
         #[cfg(not(feature = "native-tcp"))]
         websocket_tasks,
@@ -4923,6 +5023,11 @@ async fn serve_forever(
             }
         })
     });
+
+    // `started` means lifespan startup completed and the bound listeners are
+    // ready to accept application traffic. Notify the Python compatibility
+    // facade only after all fallible startup work has completed.
+    startup_signal.mark_started();
 
     #[cfg(not(feature = "native-tcp"))]
     let mut connection_tasks: tokio::task::JoinSet<Result<(), BoxError>> =
@@ -4968,21 +5073,23 @@ async fn serve_forever(
         };
         let result = if let Some(acceptor) = server.tcp_tls.clone() {
             let shutdown = cancellation.clone();
-            uvicorn_rs::serve_tls(
+            uvicorn_rs::serve_tls_with_date_header(
                 listener,
                 acceptor,
                 service,
                 async move { shutdown.cancelled().await },
                 config,
+                server.date_header,
             )
             .await
         } else {
             let shutdown = cancellation.clone();
-            uvicorn_rs::serve_tcp(
+            uvicorn_rs::serve_tcp_with_date_header(
                 listener,
                 service,
                 async move { shutdown.cancelled().await },
                 config,
+                server.date_header,
             )
             .await
         };
@@ -5297,14 +5404,19 @@ async fn serve_forever(
     let lifespan_shutdown_timeout = options
         .graceful_timeout
         .max(std::time::Duration::from_millis(100));
-    let shutdown_result =
+    let shutdown_result = if let Some(lifespan) = lifespan.as_mut() {
         match tokio::time::timeout(lifespan_shutdown_timeout, lifespan.shutdown()).await {
             Ok(result) => result,
             Err(_) => Err(PyRuntimeError::new_err(
                 "ASGI lifespan shutdown exceeded the graceful timeout",
             )),
-        };
-    lifespan.cancel_and_wait().await;
+        }
+    } else {
+        Ok(())
+    };
+    if let Some(lifespan) = lifespan.as_mut() {
+        lifespan.cancel_and_wait().await;
+    }
     wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
     if let Some(error) = accept_error {
         return Err(error);
@@ -5402,21 +5514,28 @@ where
     let graceful_timeout = context.server.graceful_timeout;
     let service_active_http_requests = Arc::clone(&active_http_requests);
     let service_read_eof_waker = Arc::clone(&read_eof_waker);
+    let response_header_server = Arc::clone(&context.server);
     let service = service_fn(move |request: Request<Incoming>| {
         let context = context.clone();
+        let response_header_server = Arc::clone(&response_header_server);
         let active_http_requests = Arc::clone(&service_active_http_requests);
         let read_eof_waker = Arc::clone(&service_read_eof_waker);
         async move {
             let _active_request = ActiveHttpRequest::new(active_http_requests, read_eof_waker);
-            if is_websocket_upgrade(&request) {
+            let response = if is_websocket_upgrade(&request) {
                 Ok::<_, std::io::Error>(handle_websocket_request(request, context).await)
             } else {
                 handle_request(request, context).await
-            }
+            }?;
+            apply_default_response_headers(&response_header_server, response)
         }
     });
     let mut builder = auto::Builder::new(TokioExecutor::new());
-    builder.http1().max_buf_size(64 * 1024);
+    builder
+        .http1()
+        .auto_date_header(server.date_header)
+        .max_buf_size(64 * 1024);
+    builder.http2().auto_date_header(server.date_header);
     let connection = builder.serve_connection_with_upgrades(TokioIo::new(io), service);
     tokio::pin!(connection);
     tokio::select! {
@@ -6046,6 +6165,7 @@ async fn handle_http3_request(
     resolver: h3::server::RequestResolver<h3_quinn::Connection, Bytes>,
     context: ConnectionContext,
 ) -> Result<(), BoxError> {
+    let response_header_server = Arc::clone(&context.server);
     let resolved = resolver.resolve_request().await.map_err(BoxError::from);
     #[cfg(coverage)]
     let resolved = resolved.and_then(|(request, mut stream)| {
@@ -6102,6 +6222,7 @@ async fn handle_http3_request(
                 )
             }
         };
+    let response = apply_default_response_headers(&response_header_server, response)?;
 
     let response_result: Result<(), BoxError> = async {
         let (response_parts, mut body) = response.into_parts();
@@ -6477,6 +6598,7 @@ async fn handle_request_parts(
                 context.peer_addr,
                 context.server.server_addr,
                 context.transport_scheme,
+                &context.server.root_path,
                 context.server.state.as_ref(),
             )?;
             let awaitable = coverage_value!(
@@ -6746,6 +6868,7 @@ async fn handle_websocket_request_inner(
                 app_context.peer_addr,
                 app_context.server.server_addr,
                 app_context.transport_scheme,
+                &app_context.server.root_path,
                 app_context.server.state.as_ref(),
             )?;
             let awaitable = coverage_value!(
@@ -7279,6 +7402,7 @@ fn build_websocket_scope<'py>(
     peer_addr: SocketAddr,
     server_addr: SocketAddr,
     transport_scheme: &str,
+    root_path: &str,
     state: Option<&Arc<Py<PyDict>>>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let scope = PyDict::new(py);
@@ -7318,19 +7442,29 @@ fn build_websocket_scope<'py>(
             }
         )
     );
-    coverage_try!(
-        WebSocketScopePathSetItem,
-        scope.set_item(
-            "path",
-            percent_encoding::percent_decode_str(request.uri.path())
-                .decode_utf8_lossy()
-                .as_ref()
-        )
-    );
-    coverage_try!(
-        WebSocketScopeRawPathSetItem,
-        scope.set_item("raw_path", PyBytes::new(py, request.uri.path().as_bytes()))
-    );
+    let decoded_path = percent_encoding::percent_decode_str(request.uri.path()).decode_utf8_lossy();
+    if root_path.is_empty() {
+        coverage_try!(
+            WebSocketScopePathSetItem,
+            scope.set_item("path", decoded_path.as_ref())
+        );
+        coverage_try!(
+            WebSocketScopeRawPathSetItem,
+            scope.set_item("raw_path", PyBytes::new(py, request.uri.path().as_bytes()))
+        );
+    } else {
+        let mut path = String::with_capacity(root_path.len() + decoded_path.len());
+        path.push_str(root_path);
+        path.push_str(&decoded_path);
+        coverage_try!(WebSocketScopePathSetItem, scope.set_item("path", path));
+        let mut raw_path = Vec::with_capacity(root_path.len() + request.uri.path().len());
+        raw_path.extend_from_slice(root_path.as_bytes());
+        raw_path.extend_from_slice(request.uri.path().as_bytes());
+        coverage_try!(
+            WebSocketScopeRawPathSetItem,
+            scope.set_item("raw_path", PyBytes::new(py, &raw_path))
+        );
+    }
     coverage_try!(
         WebSocketScopeQueryStringSetItem,
         scope.set_item(
@@ -7340,7 +7474,7 @@ fn build_websocket_scope<'py>(
     );
     coverage_try!(
         WebSocketScopeRootPathSetItem,
-        scope.set_item("root_path", "")
+        scope.set_item("root_path", root_path)
     );
     coverage_try!(
         WebSocketScopeMethodSetItem,
@@ -7415,6 +7549,7 @@ fn build_scope<'py>(
     peer_addr: SocketAddr,
     server_addr: SocketAddr,
     scheme: &str,
+    root_path: &str,
     state: Option<&Arc<Py<PyDict>>>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let scope = PyDict::new(py);
@@ -7449,15 +7584,29 @@ fn build_scope<'py>(
     coverage_try!(HttpScopeSchemeSetItem, scope.set_item("scheme", scheme));
 
     let raw_path = request.uri.path().as_bytes();
-    let path = percent_encoding::percent_decode_str(request.uri.path()).decode_utf8_lossy();
-    coverage_try!(
-        HttpScopePathSetItem,
-        scope.set_item("path", PyString::new(py, path.as_ref()))
-    );
-    coverage_try!(
-        HttpScopeRawPathSetItem,
-        scope.set_item("raw_path", PyBytes::new(py, raw_path))
-    );
+    let decoded_path = percent_encoding::percent_decode_str(request.uri.path()).decode_utf8_lossy();
+    if root_path.is_empty() {
+        coverage_try!(
+            HttpScopePathSetItem,
+            scope.set_item("path", PyString::new(py, decoded_path.as_ref()))
+        );
+        coverage_try!(
+            HttpScopeRawPathSetItem,
+            scope.set_item("raw_path", PyBytes::new(py, raw_path))
+        );
+    } else {
+        let mut path = String::with_capacity(root_path.len() + decoded_path.len());
+        path.push_str(root_path);
+        path.push_str(&decoded_path);
+        coverage_try!(HttpScopePathSetItem, scope.set_item("path", path));
+        let mut full_raw_path = Vec::with_capacity(root_path.len() + raw_path.len());
+        full_raw_path.extend_from_slice(root_path.as_bytes());
+        full_raw_path.extend_from_slice(raw_path);
+        coverage_try!(
+            HttpScopeRawPathSetItem,
+            scope.set_item("raw_path", PyBytes::new(py, &full_raw_path))
+        );
+    }
     coverage_try!(
         HttpScopeQueryStringSetItem,
         scope.set_item(
@@ -7465,7 +7614,10 @@ fn build_scope<'py>(
             PyBytes::new(py, request.uri.query().unwrap_or("").as_bytes())
         )
     );
-    coverage_try!(HttpScopeRootPathSetItem, scope.set_item("root_path", ""));
+    coverage_try!(
+        HttpScopeRootPathSetItem,
+        scope.set_item("root_path", root_path)
+    );
 
     let headers = PyList::empty(py);
     let normalize_authority = matches!(request.version, Version::HTTP_2 | Version::HTTP_3);
@@ -7539,6 +7691,27 @@ fn full_body(body: Bytes) -> ResponseBody {
     Full::new(body)
         .map_err(|never| -> BoxError { match never {} })
         .boxed_unsync()
+}
+
+fn apply_default_response_headers(
+    server: &ServerContext,
+    response: Response<ResponseBody>,
+) -> Result<Response<ResponseBody>, std::io::Error> {
+    let (mut parts, body) = response.into_parts();
+    let mut headers = HeaderMap::new();
+    if server.date_header {
+        let date = httpdate::fmt_http_date(std::time::SystemTime::now());
+        let value = HeaderValue::from_bytes(date.as_bytes()).map_err(std::io::Error::other)?;
+        headers.append(DATE, value);
+    }
+    for (name, value) in &server.default_headers {
+        headers.append(name.clone(), value.clone());
+    }
+    for (name, value) in &parts.headers {
+        headers.append(name.clone(), value.clone());
+    }
+    parts.headers = headers;
+    Ok(Response::from_parts(parts, body))
 }
 
 fn response(status: StatusCode, body: ResponseBody, headers: HeaderMap) -> Response<ResponseBody> {

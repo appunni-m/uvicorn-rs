@@ -36,6 +36,7 @@ from benchmark_evidence import (
     finalize_server,
     workspace_rust_source_paths,
 )
+from uvicorn_oracle import inspect_uvicorn_oracle, python_version
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,14 +64,15 @@ def free_port() -> int:
         return sock.getsockname()[1]
 
 
-def server_command(server: dict, port: int) -> list[str]:
+def server_command(server: dict, port: int, python: Path, uvicorn_python: Path) -> list[str]:
+    server_python = python if server["kind"] == "rust" else uvicorn_python
     if server["kind"] == "rust":
         return [
-            str(PYTHON), "-m", "uvicorn_rs", "examples.bench_fastapi:app", "--host", "127.0.0.1",
+            str(server_python), "-m", "uvicorn_rs", "examples.bench_fastapi:app", "--host", "127.0.0.1",
             "--port", str(port), "--loop", server["loop"],
         ]
     return [
-        str(PYTHON), "-m", "uvicorn", "examples.bench_fastapi:app", "--host", "127.0.0.1",
+        str(server_python), "-m", "uvicorn", "examples.bench_fastapi:app", "--host", "127.0.0.1",
         "--port", str(port), "--loop", server["loop"], "--http", "httptools",
         "--ws", "websockets", "--interface", "asgi3", "--lifespan", "auto", "--no-access-log",
         "--log-level", "error", "--no-use-colors", "--no-server-header",
@@ -123,6 +125,7 @@ def run_client(port: int, seconds: float, concurrency: int, workload: dict, serv
 def source_digest() -> str:
     paths = set((
         "scripts/run_websocket_category_bench.py",
+        "scripts/uvicorn_oracle.py",
         "tools/http3-probe/src/bin/websocket.rs",
         "scripts/benchmark_evidence.py",
         "src/lib.rs",
@@ -141,12 +144,21 @@ def source_digest() -> str:
     return digest.hexdigest()
 
 
-def sample(server: dict, workload_name: str, seconds: float, warmup: float, concurrency: int, evidence: BenchmarkEvidence) -> dict:
+def sample(
+    server: dict,
+    workload_name: str,
+    seconds: float,
+    warmup: float,
+    concurrency: int,
+    python: Path,
+    uvicorn_python: Path,
+    evidence: BenchmarkEvidence,
+) -> dict:
     identity_before = evidence.before_sample()
     port = free_port()
     log = evidence.open_server_log()
     process = owned_process(
-        server_command(server, port), cwd=ROOT, stdout=log, stderr=log, text=True,
+        server_command(server, port, python, uvicorn_python), cwd=ROOT, stdout=log, stderr=log, text=True,
     )
     client_process = None
     try:
@@ -194,14 +206,36 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--seed", type=int, default=20261002)
+    parser.add_argument("--python", type=Path, default=PYTHON,
+                        help="candidate Python interpreter used by uvicorn-rs")
+    parser.add_argument("--uvicorn-python", type=Path,
+                        default=ROOT / "target" / "uvicorn-oracle" / "bin" / "python",
+                        help="isolated Python interpreter containing stock Uvicorn 0.54.0")
     parser.add_argument("--output", type=Path, default=ROOT / "benchmarks" / "results" / "websocket-categories-2026-10-02.json")
     args = parser.parse_args()
     assert_clean_coverage_environment()
+    python = args.python.absolute()
+    if not python.is_file():
+        raise SystemExit(f"candidate Python interpreter does not exist: {python}")
+    uvicorn_python = args.uvicorn_python.absolute()
     selected_servers = {name: SERVERS[name] for name in args.servers}
+    uvicorn_identity = None
+    if any(server["kind"] == "uvicorn" for server in selected_servers.values()):
+        required_packages = {"websockets"}
+        if any(
+            server["kind"] == "uvicorn" and server["loop"] == "uvloop"
+            for server in selected_servers.values()
+        ):
+            required_packages.add("uvloop")
+        uvicorn_identity = inspect_uvicorn_oracle(
+            uvicorn_python,
+            expected_python_version=python_version(python),
+            required_packages=tuple(sorted(required_packages)),
+        )
     if not CLIENT.exists():
         raise SystemExit(f"prebuild the WebSocket benchmark client before identity capture: {CLIENT}")
     evidence = BenchmarkEvidence(
-        ROOT, PYTHON,
+        ROOT, python,
         ["scripts/run_websocket_category_bench.py", "tools/http3-probe/src/bin/websocket.rs",
          "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
@@ -222,7 +256,8 @@ def main() -> None:
                 evidence.label_sample(workload, name, repetition)
                 metrics = sample(
                     SERVERS[name], workload, args.duration, args.warmup,
-                    WORKLOADS[workload].get("concurrency", args.concurrency), evidence,
+                    WORKLOADS[workload].get("concurrency", args.concurrency),
+                    python, uvicorn_python, evidence,
                 )
                 row = {"workload": workload, "server": name, "repetition": repetition, **metrics}
                 rows.append(row)
@@ -251,6 +286,7 @@ def main() -> None:
             "date": date.today().isoformat(), "platform": platform.platform(), "machine": platform.machine(),
             "logical_cpus": psutil.cpu_count(logical=True), "cpu_model": cpu_model,
             "python": platform.python_version(),
+            "uvicorn_oracle": uvicorn_identity,
             "rustc": evidence.rustc_version,
             "source_sha256": source_digest(),
             **evidence_metadata,

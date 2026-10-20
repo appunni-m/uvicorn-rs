@@ -21,7 +21,9 @@ compatibility or a performance improvement.
 The behavior gate is the manifest-backed, live source/target matrix, not a unit
 test count. The live matrix observes the server boundary by starting real
 reference and target server processes and replaying the same indexed network
-workflows against each.
+workflows against each. The `cli` profile runs the same indexed arguments in
+separate reference and target processes and compares exit status, stdout, and
+stderr byte-for-byte.
 
 For HTTP wire behavior, the applicable IETF specification is authoritative;
 ASGI requirements govern the Python application boundary. If a live oracle
@@ -33,6 +35,13 @@ HTTP/1.1, HTTP/2, and HTTP/3 claims use the applicable
 [RFC 9112](https://www.rfc-editor.org/rfc/rfc9112.html),
 [RFC 9113](https://www.rfc-editor.org/rfc/rfc9113.html), and
 [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html) requirements.
+
+The indexed CLI process cases currently compare module and installed-console
+invocations for `--help` and `--version`, plus a module invocation with an
+invalid port value and an explicit `--port` overriding an invalid
+`UVICORN_PORT`. All six pass against Uvicorn 0.54.0 on the current source.
+They do not establish broad runtime-option, environment, application-loading,
+diagnostic, or Python API parity.
 
 This follows the fixture-matrix approach used by `image-slash-star`/Pillow-RS,
 adapted to a network server. Pillow-RS compares Rust operations with pinned
@@ -218,7 +227,11 @@ three complete matrix repeats with the unified coverage runner:
 
 ```sh
 uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs-py
-uv run --group benchmark python scripts/run_parity.py --output target/parity-normal.json
+UV_PROJECT_ENVIRONMENT=target/parity-oracle uv sync --python 3.12 --locked \
+  --only-group benchmark --only-group uvicorn-oracle --no-install-project
+uv run --group benchmark python scripts/run_parity.py \
+  --oracle-python target/parity-oracle/bin/python \
+  --output target/parity-normal.json
 uv run --group benchmark python scripts/run_unified_coverage.py \
   --output build/asgi-coverage/current/coverage-report.json \
   --artifacts-dir build/asgi-coverage/current/artifacts \
@@ -308,17 +321,24 @@ support matrix.
 The parity runner starts the reference server and `uvicorn-rs` as separate
 processes, imports the same ASGI app in each, sends the same input workflows,
 and compares their live public observations. It does not contain golden
-responses. This is a version-pinned, scoped compatibility check; passing it
-does not establish complete ASGI conformance or full Uvicorn compatibility.
+responses. The Uvicorn oracle needs its own environment because `uvicorn-rs-py`
+installs the same `uvicorn` import namespace as upstream Uvicorn. The runner
+checks that the isolated interpreter imports both the pinned distribution and
+module at version 0.54.0 before starting a case. This is a version-pinned,
+scoped compatibility check; passing it does not establish complete ASGI
+conformance or full Uvicorn compatibility.
 
 ## Run it
 
-Build the local extension and sync the pinned reference-server dependencies,
-then execute the live parity input set:
+Build the local extension, sync candidate dependencies, and create the
+Uvicorn-only oracle environment before running the live parity input set:
 
 ```sh
 uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs-py
-uv run --group benchmark python scripts/run_parity.py
+UV_PROJECT_ENVIRONMENT=target/parity-oracle uv sync --python 3.12 --locked \
+  --only-group benchmark --only-group uvicorn-oracle --no-install-project
+uv run --group benchmark python scripts/run_parity.py \
+  --oracle-python target/parity-oracle/bin/python
 ```
 
 The default run selects oracle-parity rows. To include the compile-gated
@@ -327,7 +347,8 @@ instrumented extension and pass `--fault-contracts`:
 
 ```sh
 uv run --python 3.12 --group benchmark python scripts/build_coverage_extension.py
-uv run --python 3.12 --group benchmark python scripts/run_parity.py --fault-contracts
+uv run --python 3.12 --group benchmark python scripts/run_parity.py \
+  --oracle-python target/parity-oracle/bin/python --fault-contracts
 ```
 
 Fault contracts use the same workflow schema, server process, observations,
@@ -404,7 +425,7 @@ digests for the target.
 ## Scope and comparison rules
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@8`; live artifacts use
+`uvicorn-rs-parity/input@9`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -414,9 +435,15 @@ surface mapped to concrete public case IDs and explicit gaps.
 
 `tests/parity/manifest.json` indexes input-only case files under
 `tests/parity/inputs/`; a file can hold multiple cases for one profile. Inputs
-contain request methods, paths, headers, body bytes, WebSocket messages,
-disconnect workflows, and shutdown workflows. They do not contain expected
-responses or previously captured server output. The
+contain CLI invocation mode, arguments, environment overrides, working
+directory and timeout; network inputs contain request methods, paths, headers,
+body bytes, WebSocket messages, disconnect workflows, and shutdown workflows.
+They do not contain expected responses or previously captured server output.
+The current CLI cases compare help and version through `python -m uvicorn` and
+the installed `uvicorn` console command, plus invalid-port parsing and
+explicit-port precedence over an invalid
+`UVICORN_PORT` through `python -m uvicorn`. They do not establish broad option
+execution, environment handling, Python API, or full CLI compatibility. The
 fixture app is shared source code imported in fresh, independent oracle and
 target processes. Its exported ASGI callable is synchronous and returns an
 awaitable. The Uvicorn adapter forces `--interface asgi3`; the Hypercorn

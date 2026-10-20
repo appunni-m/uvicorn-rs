@@ -2,7 +2,615 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Latest exact-source validation and performance attempt (2026-10-19)
+## Latest current-main FastAPI upload attempt (Linux x86-64; 2026-10-20; unqualified)
+
+This source-tree attempt used a clean detached worktree at current `origin/main`
+commit `0bd5877529e8f8b7434b7f7ab1852c0753f5e642` on an AMD Ryzen 5 2600X
+host (12 logical CPUs, Linux x86-64, kernel `7.0.0-38-generic`). It built the
+Rust release cdylib with `cargo build --release --locked` and loaded it from the
+worktree through `PYTHONPATH`; it did not measure an installed wheel or a fresh
+Python environment. The matched Python environment used CPython 3.12.13,
+FastAPI 0.142.4, Uvicorn 0.54.0, uvloop 0.23.0, and httptools 0.8.0; Rust was
+1.91.1 and the Node.js load client was 22.15.0.
+
+The only workload was FastAPI `POST /upload/1048576`, sending a 1 MiB body in
+1 KiB client writes at concurrency 8, with a 1-second warmup, 5-second samples,
+and five repetitions for each server/loop variant. All 20 rows passed response
+body checks and server shutdown checks. Host activity invalidated 17 timing
+rows: only one Uvicorn/asyncio row and two Uvicorn/uvloop rows were valid, with
+zero valid Rust rows. The report therefore has no qualified matched pair and
+null aggregate performance metrics. It provides no speed, latency, CPU, or
+memory conclusion. Raw JSON and per-row logs remain on the host at
+`/home/appunni/work/uvicorn-rs-main-bench-20261020/target/benchmark-categories/fastapi-upload-1m-write-1k.json`.
+
+The host uses `perf_event_paranoid=4`, which prevented on-CPU perf sampling.
+A second run with the same workload and settings completed all 20 rows, with
+18 timing-valid rows: Rust/asyncio had 3/5 valid rows and each other server/loop
+variant had 5/5. The independent valid-row medians were:
+
+| Loop | Server | Valid rows | Requests/s | p50 / p95 / p99 ms | Server CPU µs/request | Peak RSS MiB |
+|---|---|---:|---:|---:|---:|---:|
+| asyncio | Uvicorn | 5/5 | 993.8 | 7.79 / 11.90 / 13.59 | 946.5 | 55.1 |
+| asyncio | uvicorn-rs | 3/5 | 829.1 | 9.52 / 12.55 / 14.22 | 2,012.5 | 57.9 |
+| uvloop | Uvicorn | 5/5 | 761.7 | 10.14 / 13.92 / 15.56 | 1,302.2 | 56.4 |
+| uvloop | uvicorn-rs | 5/5 | 970.5 | 8.16 / 11.71 / 13.84 | 1,556.8 | 60.6 |
+
+These are per-server medians, not a complete matched-pair result: two
+Rust/asyncio rows were invalidated by unrelated host CPU activity. The
+uvloop-only numbers are a signal to investigate, not a repeatable multi-workload
+gain. The second report is retained on the host at
+`/home/appunni/work/uvicorn-rs-main-bench-20261020/target/benchmark-categories/fastapi-upload-1m-write-1k-repeat-2.json`
+with SHA-256
+`b09e77270a907aa25366629d6b996f21722c660a334e1afcd18c66124e082bbc`.
+Neither local attempt qualifies performance acceptance; use a quiet, isolated
+host and require matched valid repetitions before drawing a conclusion.
+
+## Latest qualified hosted FastAPI upload comparison (GitHub run #148; 2026-10-20)
+
+[Run #148](https://github.com/appunni-m/uvicorn-rs/actions/runs/39388518337)
+completed its correctness-gated comparison on experimental commit
+[`6ca0cb4b46ca4fdb0ed87d548e4cb984e084e716`](https://github.com/appunni-m/uvicorn-rs/commit/6ca0cb4b46ca4fdb0ed87d548e4cb984e084e716).
+The [raw artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39388518337/artifacts/12248129429)
+contains all 20 rows, per-server logs, source and extension identities, and
+the excluded timing row.
+
+This measured ordinary FastAPI 0.142.4 with CPython 3.12.13 on a
+four-logical-CPU Linux ARM64 runner (kernel `7.0.0-1017-azure`, glibc 2.39).
+Rust was 1.98.1; the reference was Uvicorn 0.54.0 with httptools 0.8.0, and
+the native libcurl client was 8.5.0. The app handled
+`POST /upload/1048576` with `Request.body()`: each request carried 1 MiB in
+1 KiB client writes, at concurrency 8, with a 1-second warmup, a 5-second
+measurement window, and five repetitions per server. Both servers used
+persistent HTTP/1.1 connections. Every measured response status and complete
+body matched the workload oracle. Four asyncio pairs and all five uvloop pairs
+qualified; Uvicorn asyncio repetition 1 was excluded because the runner
+observer detected unrelated host CPU activity.
+
+| Loop | Matched repetitions | Throughput, Uvicorn → Rust (Rust/reference) | p50 / p95 / p99 ms, Uvicorn → Rust | Server CPU µs/request, Uvicorn → Rust | Peak server RSS MiB, Uvicorn → Rust | Client CPU µs/request, Uvicorn → Rust |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| asyncio | 2–5 (4 pairs) | 654 → 514 req/s (0.784×) | 12.37 / 16.71 / 19.42 → 15.37 / 20.64 / 23.13 | 1,471 → 1,876 | 56.28 → 60.66 | 4,416 → 4,359 |
+| uvloop | 1–5 (5 pairs) | 643 → 552 req/s (0.859×) | 12.49 / 17.00 / 20.30 → 14.35 / 19.34 / 21.77 | 1,496 → 1,643 | 58.38 → 62.04 | 4,475 → 4,425 |
+
+For this workload, uvicorn-rs had lower throughput and higher latency and
+server CPU per request under both event loops. Client CPU per request was
+similar, which points to extra server-side work as a measurement signal; these
+measurements do not identify the responsible function or prove a cause. The
+closed-loop client does not represent an open-loop offered-rate test, and the
+latencies include client work. This is one workload on one system, not a
+multi-system performance result or a release-wide claim.
+
+The run also repeated the earlier lifecycle observation: all five normal-build
+uvicorn-rs asyncio and all five uvicorn-rs uvloop repetitions shut down with
+return code 0, without forced cleanup, panic, or native-error diagnostics. The
+intermittent SIGSEGV from [run #143](https://github.com/appunni-m/uvicorn-rs/actions/runs/39383067488)
+did not recur in this comparison. Its root cause remains unknown.
+
+## Focused per-thread CPU profile for FastAPI upload (Linux x86-64; 2026-10-20; diagnostic only)
+
+A one-repetition signal-gated CPU profile ran the same stock FastAPI
+`POST /upload/1048576` request-body workload on Linux x86-64 (AMD Ryzen 5
+2600X, 12 logical CPUs, kernel 7.0.0-38-generic), using commit
+[`6ca0cb4b46ca4fdb0ed87d548e4cb984e084e716`](https://github.com/appunni-m/uvicorn-rs/commit/6ca0cb4b46ca4fdb0ed87d548e4cb984e084e716).
+Both environments used the same CPython 3.12.3 executable, FastAPI 0.142.4,
+Starlette 1.7.0, Pydantic 2.13.5, and httptools 0.8.0. Uvicorn was 0.54.0;
+the client was Node.js 25.1.0. The request carried 1 MiB in 1 KiB writes at
+concurrency 8, with a 1-second warmup and 5-second sample. Every response
+passed its status/body check and both servers shut down cleanly.
+
+Rust was built with `rustc 1.91.1`. Both Python environments resolve to the
+same `/usr/bin/python3.12` executable (SHA-256
+`e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f`). The
+measurement guard saw stable source inventory
+`a0468533b651759cf3a8ba1443fe27584f6e9050156b37666aa6b2e6861d44f4` and
+native extension
+`6e90e8679e53ecace87e42e03ab3cb5494d35a6a197bb5d6231ff3d535915081` before
+and after each row.
+
+| Server | Completed requests | Process CPU | Python event-loop thread CPU | Other server-thread CPU | CPU/request |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn + asyncio | 3,872 | 4.905 s | 4.905 s | <0.001 s | 1,273 µs |
+| uvicorn-rs + asyncio | 4,646 | 8.027 s | 3.829 s | 4.198 s | 1,750 µs |
+
+The host observer reported unrelated CPU activity peaks of 177.2% during the
+Rust sample and 189.4% during the Uvicorn sample. The runner marked both rows
+unrankable, and this one repetition is not a performance comparison. Its
+per-thread counters show that the Rust process used less CPU on the Python
+event-loop thread while spending 4.198 CPU seconds on other process threads.
+The native runtime configures one Tokio async worker; the OS snapshot contained
+seven threads named `tokio-rt-worker`, with one using 3.099 CPU seconds and the
+other six using 1.100 seconds combined. The snapshot records thread CPU and
+names, not which Tokio task ran on each thread, so it does not identify a
+function-level cause.
+
+The body bridge has one required copy direction and one zero-copy direction.
+For incoming requests, Rust retains Hyper's body chunks as `Bytes`, then
+materializes the immutable Python `bytes` required by the ASGI `http.request`
+event. A single chunk uses one Python allocation and copy; multiple chunks are
+copied directly into one final Python allocation. The diagnostic counter
+`http_request_python_bytes_copied` records the copied payload size. For an
+application response whose body is Python `bytes`, PyO3's `Bytes` extractor
+uses `PyBackedBytes` as the owner of `bytes::Bytes`, so Rust can retain and
+write the original immutable payload without copying it. A `bytearray` response
+is accepted by this extractor but is copied into Rust-owned storage. These
+observations describe the current bridge; they do not establish that body
+materialization is the cause of the measured CPU difference. Eliminating the
+request-side copy while preserving the ASGI `bytes` contract would require a
+different boundary representation, so the Rust-native service path remains the
+route that removes Python payload materialization entirely.
+
+The signal-gated report, per-thread profiles, source/bootstrap copies, and
+server logs are local-only ignored artifacts under
+`target/benchmark-diagnostics/20261020-cpu/loopcpu/`. A separate `py-spy`
+capture showed PyO3 and `make_http_request_message` on the Rust request path;
+its samples are wall-time stacks, so they do not quantify CPU cost. The next
+useful measurement is a repeat at a quiet host load, followed by permitted
+on-CPU function profiling before changing the bridge. The normal hosted ARM64
+run #148 remains the performance comparison for this workload.
+
+### Second single-repetition attempt (rejected by host-load guard)
+
+A repeat of the same 1 MiB upload workload used the same clean source and
+native-extension identities. Both servers passed body validation and shut down
+cleanly, with zero request failures. It again failed the host-load guard:
+unrelated CPU activity peaked at 215.1%, so these timing values are diagnostic
+only and cannot rank either implementation.
+
+| Server | Completed requests | Throughput | p95 latency | Process CPU | CPU/request |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn + asyncio | 4,607 | 920.6 req/s | 12.15 ms | 4.748 s | 1,031 µs |
+| uvicorn-rs + asyncio | 4,615 | 922.2 req/s | 13.53 ms | 7.127 s | 1,545 µs |
+
+The close observed throughput and higher Rust CPU are not performance evidence
+because unrelated host work invalidated the sample. Per-thread CPU still
+showed 3.529 seconds on the Rust Python event-loop thread and 3.599 seconds on
+other server threads. The complete diagnostic artifacts remain in the ignored
+`target/bench-profile/loopcpu-matched-upload-20261020-run3/` directory of the
+diagnostic worktree. The measurement used the same source digest and extension
+SHA-256 listed above.
+
+## Earlier focused FastAPI benchmark attempt (GitHub run #98; 2026-10-19; unqualified)
+
+GitHub Actions run [#98](https://github.com/appunni-m/uvicorn-rs/actions/runs/39277104993)
+completed with failure on `main` at commit
+[`0bd5877529e8f8b7434b7f7ab1852c0753f5e642`](https://github.com/appunni-m/uvicorn-rs/commit/0bd5877529e8f8b7434b7f7ab1852c0753f5e642).
+The focused Linux ARM64 job used Ubuntu 24.04.5, kernel
+`6.17.0-1022-azure`, and a four-core Neoverse-N2 runner. It used CPython
+3.12.13, Rust 1.98.1, GCC 13.3.0, libcurl 8.5.0, FastAPI 0.142.4, Uvicorn
+0.54.0, uvloop 0.23.0, and httptools 0.8.0. It measured the stock FastAPI
+`POST /upload/1048576` route, which consumes the full 1 MiB request with
+`Request.body()` and returns its byte count. The client limited each libcurl
+upload callback to 1 KiB. The effective workload concurrency was 8, with a
+5-second load window, 1-second warmup, and five repetitions. The dispatch-level
+requested concurrency was 64; the per-workload metadata and all raw rows record
+the effective concurrency of 8.
+
+The artifact contains 20 rows. One Rust/asyncio row was excluded for unrelated
+host CPU activity. Two Rust/uvloop rows failed correctness gating: libcurl
+timed out after 15 seconds on repetitions 2 and 3. Both failures report the
+full 1 MiB submitted by libcurl, zero response bytes, no response status or
+first-byte time, and `new_connections=0` (the worker reused its persistent
+HTTP/1.1 connection). In both server logs, FastAPI's `Request.body()` raises
+Starlette `ClientDisconnect`; Starlette's error middleware then tries to start
+a response after the client has disconnected, and the Rust ASGI adapter
+rejects that late response start. These are downstream effects of the client's
+timeout, not evidence that the application raised an unrelated error. The
+tracebacks also establish that the application did not receive the complete
+body before the timeout. Libcurl's upload count is bytes submitted by the
+client, not proof that the server delivered them to ASGI. Server shutdown
+passed for valid rows; the failed rows do not have a passed lifecycle
+assessment. This brackets the failure to the request-consumption path before
+response headers; it does not identify whether protocol reading, body-pump
+backpressure, task scheduling, or Python delivery is the stalled operation.
+The benchmark job is unqualified despite having four valid asyncio matched
+pairs and three valid uvloop matched pairs, because the run contained request
+failures.
+
+The runner's older client reports completed requests divided by wall time
+including post-window drain. It did not retain completion timestamps relative
+to the 5-second deadline. Since each of the eight client workers has at most
+one request in flight, at most eight completions can occur during drain. The
+following conservative bounds use `(requests - 8) / 5s` through `requests /
+5s` per row, then take the median of matched per-repetition Rust/Uvicorn
+ratios. These are descriptive bounds, not exact in-window counts or a
+statistical-significance claim.
+
+| Loop | Valid matched repetitions | Median paired load-window throughput ratio, Rust/Uvicorn | Median p50 / p95 / p99 ms, Uvicorn → Rust | Server CPU µs/request, Uvicorn → Rust | Peak server RSS MiB, Uvicorn → Rust |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| asyncio | 4 (repetitions 2–5) | 0.714–0.718× | 10.861 / 15.343 / 18.211 → 7.272 / 11.030 / 110.932 | 1,245 → 2,293 (+84%) | 56.90 → 58.78 |
+| uvloop | 3 (repetitions 1, 4, 5) | 0.764–0.768× | 10.939 / 15.004 / 17.546 → 8.829 / 14.084 / 18.999 | 1,303 → 1,956 (+50%) | 58.45 → 62.02 |
+
+The run therefore indicates a workload-specific sustained-throughput gap of
+about 28% with asyncio and 23% with uvloop among the valid matched samples.
+Server CPU per request is higher in both comparisons. Reported client CPU per
+request is similar for asyncio and lower for the Rust/uvloop rows, so client
+CPU alone does not explain the difference. Rust/asyncio's median per-run p99
+is elevated by two long-tail repetitions even though its median p50 and p95
+are lower. These measurements show extra server-side work and unstable tails;
+they do not attribute that work to a particular Rust function.
+
+For this Python-only FastAPI workload, the server has to move request-body
+events from the Rust HTTP runtime across the ASGI/Python boundary. The Rust
+bridge batches Hyper body segments, then materializes each ASGI body message as
+Python `bytes`; `Request.body()` subsequently buffers the body in Python. The
+HTTP/1.1 code also uses a bounded request channel between the body pump and
+ASGI receiver. These are concrete places to measure. They are not proof that
+the boundary copy or channel caused the timeouts or the full throughput gap.
+The earlier instrumented ASGI-stage run measured about 1 MiB of Python-byte
+materialization per request, but its timing was invalid for performance
+ranking. The focused connection-policy diagnostic below did not reproduce the
+ARM64 timeout. It also cannot identify the receive-path stall because it used a
+different CPU architecture, Rust compiler, and HTTP client. A same-client
+reproduction and receive-path timing are still needed before selecting an
+optimization.
+
+### Same-source x86 connection-policy diagnostic (2026-10-19; diagnostic only)
+
+A focused comparison used the run #98 source revision and native extension on
+Linux x86-64 (AMD Ryzen 5 2600X, 12 logical CPUs), with CPython 3.12.13,
+FastAPI 0.142.4, Starlette 1.7.0, Pydantic 2.13.5, Uvicorn 0.54.0, uvloop
+0.23.0, and httptools 0.8.0. The normal release extension was built with
+`rustc 1.91.1`; the ARM64 run used Rust 1.98.1. The benchmark sent the same
+stock FastAPI 1 MiB `Request.body()` upload in 1 KiB client writes at
+concurrency 8, with a 1-second warmup, 5-second load window, and three
+repetitions per server and mode. Both servers used uvloop; Uvicorn used
+httptools. This host lacked libcurl development headers, so the driver used
+Node.js 22.15.0. The ARM64 run used the native libcurl client.
+
+The input comparison left the HTTP/1.1 default persistent connection policy
+unchanged in one mode and added `Connection: close` in the other. Results are
+medians across three samples; all 12 rows had zero request failures, valid
+timing under the harness, and passed server lifecycle checks.
+
+| Connection policy | Median drain-inclusive req/s, Uvicorn → Rust | Median paired 5-second rate-ratio bound, Rust/Uvicorn | Median p50 / p95 / p99 ms, Uvicorn → Rust | Server CPU µs/request, Uvicorn → Rust | Client CPU µs/request, Uvicorn → Rust | Peak server RSS MiB, Uvicorn → Rust |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| HTTP/1.1 default persistence | 795 → 947 | 1.130–1.134× | 9.77 / 13.98 / 16.69 → 8.12 / 12.64 / 15.79 | 1,220 → 1,571 (+29%) | 1,126 → 984 | 56.45 → 61.66 |
+| `Connection: close` | 585 → 744 | 1.256–1.262× | 13.20 / 18.93 / 21.11 → 10.61 / 13.99 / 16.09 | 1,681 → 1,953 (+16%) | 1,370 → 1,182 | 54.13 → 59.47 |
+
+The completed requests-per-second medians include the client's completion
+drain. The client does not record completion timestamps relative to its
+five-second deadline, so the paired ratio bounds allow up to eight in-flight
+requests to complete during drain. Client CPU/request includes process setup,
+drain, and reporting overhead. Closing each connection reduced the
+per-server median completed rate by about 21% for Rust and 26% for Uvicorn;
+neither server timed out or disconnected. This does not support connection
+reuse alone as the cause of the ARM64 failure. In this three-repetition x86
+diagnostic Rust completed requests faster, while consuming more server CPU per
+request. The host observer recorded unrelated desktop activity reaching 0.90
+of one core, and the client, CPU architecture, and compiler differ from run
+#98. Treat these numbers as a diagnostic comparison, not as a qualified
+performance claim or a reversal of the ARM64 result.
+
+The locally retained report and driver are
+`target/benchmark-diagnostics/20261019-connreuse/uvicorn-rs-connreuse-0bd5877-debug1.json`,
+`target/benchmark-diagnostics/20261019-connreuse/uvicorn-rs-connreuse-0bd5877-debug1.jsonl`,
+and `target/benchmark-diagnostics/20261019-connreuse/uvicorn-rs-connreuse-probe.py`.
+They are ignored local artifacts. The measured source inventory SHA-256 was
+`c36b5211008d29accfc39390ce2ec51814d97ef7138e54e65ad35c09e15f8fa7`; the
+native extension SHA-256 was
+`518e629c7b91906e4adda77f85675e297ffbd090a85e07084abae4d369fc528c`.
+
+The [focused job log](https://github.com/appunni-m/uvicorn-rs/actions/runs/39277104993/job/118144250781)
+and [raw benchmark artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39277104993/artifacts/12198097403)
+retain the report, all per-repetition rows, environment, and server logs. The
+measurement source inventory SHA-256 was
+`c36b5211008d29accfc39390ce2ec51814d97ef7138e54e65ad35c09e15f8fa7` before
+and after the run.
+
+### Hyper HTTP/1.1 read-buffer cap diagnostic (2026-10-19; not adopted)
+
+To test whether Hyper's connection-buffer limit contributed to the focused
+FastAPI upload cost, I changed only `builder.http1().max_buf_size(...)` in a
+detached worktree at the run #98 source commit: from 64 KiB to 256 KiB. The
+limit bounds Hyper's HTTP/1 connection buffer; it is not a request to allocate
+that amount for every connection ([Hyper 1.11.1 builder source](https://docs.rs/hyper/1.11.1/src/hyper/server/conn/http1.rs.html)).
+The 256 KiB change was not applied to this checkout.
+
+The workload was stock FastAPI 0.142.4 / Starlette 1.7.0,
+`POST /upload/1048576` with `Request.body()`, 1 MiB per request in 1 KiB Node.js
+22.15.0 client writes, concurrency 8, one-second warmup, and a five-second
+measurement window. Both servers used CPython 3.12.13 and uvloop 0.23.0;
+Uvicorn 0.54.0 used httptools 0.8.0. The Uvicorn process used a separate
+environment with the same pinned Python dependencies and no `uvicorn_rs`
+module. Host: AMD Ryzen 5 2600X, Linux x86-64, 12 logical CPUs; Rust 1.91.1.
+
+Each reported row had zero request failures and passed graceful shutdown. All
+three 256 KiB pairs passed the timing gate. The baseline needed four attempts:
+three pairs were timing-valid, while one Rust row was excluded for unrelated
+host CPU activity of 113.7% of one core. That invalid row passed behavior and
+shutdown. The paired ratios below are medians of the valid per-run
+Rust/Uvicorn ratios; per-server rates and resource values are medians over the
+same paired rows. The rate is the harness's reported completed requests per
+second, not a claim that the two processes ran under identical instantaneous
+host load.
+
+| Variant | Valid pairs | Median Uvicorn → Rust req/s | Median paired Rust/Uvicorn rate ratio | Median p50 / p95 / p99 ms, Uvicorn → Rust | Server CPU µs/request, Uvicorn → Rust | Peak server RSS MiB, Uvicorn → Rust |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 64 KiB baseline | 3 | 752 → 901 | 1.205× | 10.24 / 14.26 / 16.61 → 8.51 / 12.84 / 16.33 | 1,322 → 1,701 (+29%) | 56.2 → 61.3 |
+| 256 KiB cap | 3 | 999 → 952 | 0.954× | 7.04 / 13.79 / 16.58 → 8.01 / 12.56 / 16.22 | 847 → 1,569 (+85%) | 55.6 → 60.7 |
+
+The Rust-only median moved from 901 to 952 req/s and from 1,701 to 1,569
+server CPU µs/request, but the paired comparison did not improve: the baseline
+ratios were 1.239×, 1.205×, and 1.137×; the 256 KiB ratios were 1.191×,
+0.954×, and 0.764×. Uvicorn's measured rate also varied substantially across
+these short runs, so the result does not establish that the buffer change
+caused either a gain or a regression. It provides no evidence that this cap
+explains the ARM64 upload timeout. I am not adopting the change; a quieter,
+same-host alternating comparison or the same focused case on a clean runner is
+needed before treating a small Rust-only median shift as a performance win.
+
+Baseline source inventory SHA-256:
+`c36b5211008d29accfc39390ce2ec51814d97ef7138e54e65ad35c09e15f8fa7`; baseline
+native extension SHA-256:
+`518e629c7b91906e4adda77f85675e297ffbd090a85e07084abae4d369fc528c`.
+The isolated 256 KiB variant source inventory SHA-256 was
+`dd7410f61000cc14d960a3499aba2de5072bf5477267507a23c9d57c94c6b0c2`; its
+native extension SHA-256 was
+`22d1e3e78374e4490cd4b07161df49a9e53716c1bcca0cf56e9d2cf86c8c34e8`.
+The local raw reports, rejected baseline sample, per-row logs, and benchmark
+driver are retained under
+`target/benchmark-diagnostics/20261019-bufcap/uvicorn-rs-bufread-20261019/`;
+these are ignored diagnostic artifacts, not release benchmark results.
+
+## FastAPI upload per-thread CPU diagnostic (2026-10-19; diagnostic only)
+
+I ran one profile pair on the Linux x86-64 host for the same stock FastAPI
+`POST /upload/1048576` workload: `Request.body()`, 1 MiB request bodies sent in
+1 KiB writes, concurrency 8, CPython 3.12.13, FastAPI 0.142.4, Starlette 1.7.0,
+and uvloop 0.23.0. Uvicorn 0.54.0 used httptools 0.8.0 from its isolated oracle
+environment; uvicorn-rs imported the native extension built from the exact
+source checkout at commit
+[`0bd5877529e8f8b7434b7f7ab1852c0753f5e642`](https://github.com/appunni-m/uvicorn-rs/commit/0bd5877529e8f8b7434b7f7ab1852c0753f5e642).
+Both rows had zero request failures and passed graceful shutdown.
+
+| Server | Completed requests | Server CPU | Event-loop thread CPU | Other server-thread CPU |
+| --- | ---: | ---: | ---: | ---: |
+| Uvicorn + uvloop | 3,635 | 4.95 s; 1,365 µs/request | 4.95 s | 0.00 s |
+| uvicorn-rs + uvloop | 4,669 | 7.28 s; 1,572 µs/request | 2.75 s | 4.53 s |
+
+This single short pair is not rankable: the host observer saw large unrelated
+CPU bursts, and the profiler deliberately marks its output diagnostic-only.
+It does show the workload split. The Python event-loop thread used about 2.2 s
+less CPU with uvicorn-rs, while the Rust server process used about 2.3 s more
+total CPU and about 15% more server CPU per completed request. The per-thread
+snapshot recorded one dominant Tokio-named thread at 3.99 s and six smaller
+Tokio-named threads totaling about 0.54 s. `src/lib.rs` configures one Tokio
+async worker. The additional thread names are consistent with Tokio's blocking
+pool, but the snapshot does not identify each thread's task.
+
+### Runtime-counter follow-up (one Rust-only diagnostic run)
+
+I rebuilt the exact source with the `runtime-diagnostics` feature and ran only
+the same upload case against uvicorn-rs. It passed the body oracle and graceful
+shutdown; host CPU activity again invalidated its timing. Runtime counters
+cover server startup, warmup, measurement, and drain, so the normalized values
+below use the 5,676 counted requests (the load window itself completed 4,847).
+
+| Counter | Per request | What it measures |
+| --- | ---: | --- |
+| Immediate ASGI receives | 2.31 | `receive()` calls answered from the ready Rust queue |
+| Pending receive futures | 3.69 | `receive()` calls returned as PyO3 futures |
+| HTTP body data frames | 65.01 | Hyper body frames read by Rust |
+| Python body-byte materializations | 6.00 | ASGI `http.request` messages / Rust-to-Python byte conversions |
+| Bytes copied into Python | 1,048,576 | Full 1 MiB request body per request |
+| Byte materialization elapsed time | 210 µs | Time inside `Bytes`-to-Python-bytes conversion; elapsed time, not a CPU counter |
+| Python task scheduling delay | 133 µs | Time from scheduling an ASGI task until its Python loop callback runs |
+| Python attach wait | 49.6 µs | Time acquiring the GIL to register the ASGI task |
+
+The measured body pump batches about 65 Hyper data frames into six ASGI body
+messages per request. Of those six `receive()` calls, about 3.69 wait for data
+and return a PyO3 future. In `pyo3-async-runtimes`, completing each such Rust
+future schedules a `spawn_blocking` callback that attaches to Python and
+resolves the captured event-loop future. That makes roughly 3.69 blocking-pool
+completion jobs per request a concrete candidate for the additional server
+CPU. The earlier per-thread profile's extra Tokio-named threads are consistent
+with this path, but do not identify those jobs individually. The byte-copy
+counter also confirms one full body copy into Python, split across six
+materializations. The measured conversion duration is about 210 µs per request;
+this is elapsed time rather than CPU time, so it cannot be treated as an
+additive share of the 1.57 ms/request CPU reading from the earlier pair.
+
+This narrows the optimization target to receive completion scheduling and
+message batching. It does not yet assign CPU to either one: elapsed conversion
+and scheduling-wait counters are not CPU profiles, and the waits overlap across
+concurrent uploads. Any bridge change should first preserve body streaming,
+backpressure, loop ownership, context, and cancellation, then rerun this one
+correctness-gated upload case before expanding the matrix. The runtime-feature
+extension used for this run had SHA-256
+`069452323d65f533adaa545cc6a2caf758e1e6aeb0a5ebd21f6749c51f66c085`; the
+normal extension was restored after the diagnostic.
+
+### Request-body batch-cap experiment (2026-10-19; not adopted)
+
+I changed only `HTTP_REQUEST_BODY_BATCH_BYTES` from 256 KiB to 512 KiB in an
+isolated build, kept the 5 ms flush deadline, and ran the same single FastAPI
+upload workload for five repetitions per version. Both versions used the same
+stock FastAPI/Uvicorn environments, CPython 3.12.13, uvloop 0.23.0, and Linux
+x86-64 host. Every row passed request correctness and graceful shutdown. The
+512 KiB build also passed the single
+`http1.request-streaming-progress-before-upload-complete` parity case.
+
+| Body batch cap | Valid Uvicorn/Rust pairs | Body messages / pending receives per request | Median Rust req/s | Median Rust CPU µs/request | Median paired Rust/Uvicorn rate ratio | Median paired CPU/request ratio |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 256 KiB | 3 of 5 | 6.00 / 3.69 | 952.5 | 1,553 | 1.299× | 1.148× |
+| 512 KiB | 5 of 5 | 4.00 / 2.83 | 919.0 | 1,596 | 1.212× | 1.257× |
+
+The 256 KiB pair medians use only repetitions 1, 4, and 5; two Rust rows were
+excluded for unrelated host CPU activity. The 512 KiB run had five valid
+matches, but the host still showed intermittent unrelated CPU load and the
+two variants were measured sequentially. These are a focused diagnostic, not
+a release performance claim. The 512 KiB cap reduced body messages and
+pending receives, but its median Rust rate was 3.5% lower and its CPU per
+request was 2.8% higher than the valid 256 KiB Rust rows. It supplies no
+repeatable gain, so I did not adopt it.
+
+A separate 1 MiB-cap counter run reduced body messages to 2.35 and pending
+receives to 1.74 per request, but increased 5 ms timeout flushes to 0.35 per
+request. It also passed the upload oracle and streaming-progress parity case;
+its instrumented timing is not suitable for a performance comparison. Raising
+the cap trades fewer Python crossings for longer buffering and more timeout
+flushes. The current evidence favors keeping 256 KiB while measuring the
+`future_into_py` completion path directly.
+
+The normal 256 KiB build's source inventory SHA-256 was
+`c36b5211008d29accfc39390ce2ec51814d97ef7138e54e65ad35c09e15f8fa7`, and its
+native extension SHA-256 was
+`22d1e3e78374e4490cd4b07161df49a9e53716c1bcca0cf56e9d2cf86c8c34e8`. The
+512 KiB build source inventory SHA-256 was
+`b3b59edc53c4e83dee9b7518ae56cbf43be48e53f2eaee044308b9161959205d`, and its
+native extension SHA-256 was
+`e9ad56c309dd4c970e72b8bb123dbb2790207943350c35fc188faa27f768bc94`. The
+source and native extension were restored to the 256 KiB build afterward.
+
+Reports, per-row logs, parity outputs, and instrumented counter runs are
+retained under
+`target/benchmark-diagnostics/20261019-loopcpu/`. They are ignored local
+diagnostics and are not release benchmark results.
+
+Raw per-thread profile, runtime counters, bootstrap, logs, and benchmark
+identity are retained under
+`target/benchmark-diagnostics/20261019-loopcpu/fastapi-upload-loopcpu-20261019-3/`.
+The runtime-counter report is under
+`target/benchmark-diagnostics/20261019-loopcpu/receive-future-counters-20261019/`.
+The measured source inventory SHA-256 was
+`c36b5211008d29accfc39390ce2ec51814d97ef7138e54e65ad35c09e15f8fa7`; the
+native extension SHA-256 was
+`518e629c7b91906e4adda77f85675e297ffbd090a85e07084abae4d369fc528c`.
+
+## Previous qualified focused FastAPI matched timing (GitHub run #97; 2026-10-19)
+
+
+GitHub Actions run [#97](https://github.com/appunni-m/uvicorn-rs/actions/runs/39269349267)
+completed successfully on `main` at commit
+[`0bd5877529e8f8b7434b7f7ab1852c0753f5e642`](https://github.com/appunni-m/uvicorn-rs/commit/0bd5877529e8f8b7434b7f7ab1852c0753f5e642).
+The focused Linux ARM64 job used CPython 3.12.13 on a four-logical-CPU
+`aarch64` runner and measured only `fastapi-upload-1m-write-1k`, with actual
+concurrency 8, 5-second samples, a 1-second warmup, and five repetitions. The
+normal release build ran without runtime or ASGI-stage instrumentation. Every
+measured response status and complete body matched the workload oracle. The
+report qualifies matched pairs for diagnosis: four asyncio pairs (the first
+Uvicorn row was excluded for unrelated host CPU activity) and five uvloop pairs.
+This minimum sample is descriptive, not a statistical-significance claim.
+
+| Loop | Matched pairs | Drain-inclusive completed req/s Uvicorn → uvicorn-rs | p50 / p95 / p99 ms Uvicorn → uvicorn-rs | Server CPU µs/request Uvicorn → uvicorn-rs | Peak server RSS MiB Uvicorn → uvicorn-rs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| asyncio | 4 | 745.439 → 330.287 requests/s (0.449×) | 10.961 / 14.984 / 17.368 → 8.383 / 12.307 / 17.257 | 1,273.335 → 2,035.306 | 57.381 → 59.463 |
+| uvloop | 5 | 760.512 → 516.541 requests/s (0.659×) | 10.558 / 14.823 / 16.772 → 9.715 / 13.947 / 16.651 | 1,282.119 → 1,754.098 | 57.586 → 62.426 |
+
+The old client stopped initiating requests after each five-second window, then
+waited for in-flight requests to finish. Its `duration_seconds` and
+`requests_per_second` include that completion drain. Uvicorn rows took about
+5.005 seconds, while Rust rows took 5.006–9.850 seconds. This makes the table's
+drain-inclusive rate mix sustained throughput with tail completion time; the
+0.449× and 0.659× ratios overstate the steady-state throughput gap.
+
+The artifact records successful request counts but not each completion time
+relative to the five-second deadline. With concurrency 8, at most eight of the
+successful responses per row can fall in the final drain. Bounding in-window
+completions by `requests - 8` and `requests` gives these median matched-pair
+ranges:
+
+| Loop | Uvicorn completions per load-window second | Rust completions per load-window second | Rust/Uvicorn matched ratio bound |
+| --- | ---: | ---: | ---: |
+| asyncio | 744.6–746.2 | 553.2–554.8 | 0.728–0.732× |
+| uvloop | 759.6–761.2 | 608.4–610.0 | 0.806–0.810× |
+
+This is a real workload-specific throughput regression of about 27% with
+asyncio and 19% with uvloop, but it is smaller than the old drain-inclusive
+metric suggested. Rust server CPU per request is about 60% and 37% higher,
+respectively. Client CPU per request is lower for Rust, so client CPU alone
+does not explain the server-side cost. The long drain shows that a small number
+of Rust requests complete well after the load window; the old p50/p95/p99
+summaries omit the mean, p99.9, maximum, and completion timestamps, so they do
+not identify those requests' exact tail latencies or the code-level cause.
+
+The local client now records the number of responses completed before the
+deadline, drain duration, mean, p99.9, and maximum latency separately. These
+fields have not yet been collected in a hosted benchmark. The next unprofiled
+focused run must collect them before selecting an optimization. This result
+does not justify a general claim about all workloads or protocols.
+
+The raw [focused job log](https://github.com/appunni-m/uvicorn-rs/actions/runs/39269349267/job/118117253524)
+and [benchmark artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39269349267/artifacts/12194532177)
+retain all 20 rows, per-repetition logs, environment details, and the matched
+summary. The report source SHA-256 is
+`c36b5211008d29accfc39390ce2ec51814d97ef7138e54e65ad35c09e15f8fa7`.
+
+A separate 2026-10-19 Samply profile used this workload, uvloop, and
+concurrency 8 on the local macOS ARM64 host. It is diagnostic only and is not
+source- or platform-matched to run #97: the local dirty-checkout source digest
+was `94759d964b8248de92ef8329d6c467f8cf683f38f2f120ae42c544716d7a1772`,
+while the hosted report source digest was
+`c36b5211008d29accfc39390ce2ec51814d97ef7138e54e65ad35c09e15f8fa7`. The
+candidate profile attributed 70.96% of sampled server CPU to `libsystem_kernel`
+(function names unresolved), 13.96% to the native extension, and 3.84% to
+Python. The Uvicorn profile attributed 41.71% to `libsystem_kernel`, 38.47% to
+Python, and 3.46% to the allocator. These shares are samples, not a valid
+benchmark or a causal decomposition. Nine Rust threads were named
+`tokio-rt-worker`; the name does not mean nine async scheduler workers, and the
+profile did not identify a sampled Tokio blocking-pool loop. The unresolved
+kernel frames and source/platform difference prevent attributing the hosted
+regression to a call site. Do not select a code change from this profile alone.
+
+Next diagnostic step: profile the exact hosted source on Linux for this one
+workload, with usable native call stacks and the same request settings, then
+change one identified cost at a time and rerun its correctness-gated matched
+comparison. Do not treat the earlier instrumented run below as a timing
+comparison.
+
+## Previous focused FastAPI ASGI-stage diagnostic (GitHub run #96; 2026-10-19)
+
+GitHub Actions run [#96](https://github.com/appunni-m/uvicorn-rs/actions/runs/39266186575)
+completed successfully on `main` at commit
+[`0bd5877529e8f8b7434b7f7ab1852c0753f5e642`](https://github.com/appunni-m/uvicorn-rs/commit/0bd5877529e8f8b7434b7f7ab1852c0753f5e642).
+The focused Linux ARM64 job used Ubuntu 24.04.5, CPython 3.12.13, and the
+`fastapi-upload-1m-write-1k` workload. Its command requested concurrency 64,
+10 repetitions, 5-second samples, a 1-second warmup, and seed `20261019`.
+However, the maintained workload overrides requested concurrency and the
+recorded JSON rows show actual concurrency 8. This is the concurrency-8 upload
+workload; the requested command-line value was not the effective value.
+
+The job enabled both runtime counters and per-ASGI-stage timing. All 40 rows
+completed with zero request failures, clean server lifecycle, zero unexpected
+panics, and zero unexpected native errors. However, **0/40 rows had valid
+timing**: ASGI instrumentation invalidated every row, and unrelated host CPU
+activity also invalidated one or more Uvicorn rows. The rates and timings below
+are diagnostic observations only, not comparative performance evidence.
+
+| Server | Rows | Observed requests/s median* | Observed server CPU/request median* | ASGI app wall p50 median* | ASGI receive p50 median* | Valid timing rows |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Uvicorn, asyncio + httptools | 10 | 739.5 | 1,271 µs | 7.55 ms | 7.21 ms | 0/10 |
+| uvicorn-rs, asyncio | 10 | 364.3 | 2,057 µs | 6.41 ms | 6.11 ms | 0/10 |
+| Uvicorn, uvloop + httptools | 10 | 741.7 | 1,274 µs | 7.81 ms | 7.46 ms | 0/10 |
+| uvicorn-rs, uvloop | 10 | 401.8 | 1,928 µs | 5.90 ms | 5.57 ms | 0/10 |
+
+\* Instrumented diagnostic values; invalid for ranking or release acceptance.
+
+The ASGI application-call p50 and `receive()`-await p50 were lower in the
+candidate rows, while observed server CPU per request was higher. Time outside
+the ASGI `send()` and `receive()` awaits was similar at p50 (about 0.20 ms for
+Uvicorn and 0.22 ms for uvicorn-rs). This does not point to FastAPI route work
+as the dominant difference, but it does not isolate a Rust call site: stage
+await durations and scheduler wait counters are elapsed wall time, not CPU
+samples.
+
+The Rust bridge recorded about four receive bridge futures per request and
+materialized about 1 MiB of request data into Python `bytes` per request, with
+roughly 115 µs median materialization time. The inspected `RequestBody` path
+keeps Hyper `Bytes` segments until the ASGI message is received, then copies
+directly into the final Python `bytes` object; it does not build an additional
+contiguous Rust body buffer first. This establishes where the Python boundary
+copy occurs, not that eliminating it alone would recover the CPU difference.
+Further attribution needs a valid uninstrumented benchmark and CPU profiling
+with usable call stacks.
+
+The [focused job log](https://github.com/appunni-m/uvicorn-rs/actions/runs/39266186575/job/118106262803)
+and [diagnostic artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39266186575/artifacts/12193203840)
+retain the full rows and stage observations. The source SHA-256 was
+`4ec950204b09ea80f6b94527ff2643daec8a9dfb2279e93592769bd75e1f57dc`; the
+native extension SHA-256 was
+`06ccb56731b23f73f49ae248d70dff456fa28074087b477d0b1fa50604fdc350`.
+
+## Previous full-matrix validation and performance attempt (2026-10-19)
 
 CI run [39205955886](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955886)
 passed on clean main commit
@@ -1997,20 +2605,17 @@ ignored report is
 
 ### Earlier generic HTTP/2 server diagnostic
 
-This section concerns the separate generic server-side diagnostic in the
-earlier focused H2 run, not the macOS client-driver timeout in run 39036702600.
-The benchmark client shares its H2 senders among workers, drops all sender
-handles after the workers finish, and awaits each H2 connection driver before
-reporting the sample. The hosted failure therefore is not explained by the
-client skipping its driver join. The original hosted server log contains only
-Hyper's generic `connection error`; that matrix commit did not log the
-concrete error detail. Focused debug-logging replays on Linux x86-64 and
-ARM64 passed five repetitions without reproducing it. The focused macOS
-upload replay also passed. These results narrow the issue to an intermittent
-or environment-specific failure, but do not identify whether it is a
-transport bug or expected peer-close condition. Preserve detailed connection
-logging and the strict lifecycle gate until a reproducing input provides the
-concrete error.
+The later H2 driver review found a separate benchmark-client race in the
+previously locked `h2 0.4.19`: `SendRequest::poll` checked whether to close the
+connection before snapshotting sender references. If the last sender was
+dropped between that check and the snapshot, it could miss the self-wake and
+leave the driver pending after responses completed. The probe now requires
+`h2 0.4.20`, whose ordering snapshots references before the shutdown check and
+wakes again when references disappear. The original hosted run remains
+incomplete and is not retroactively repaired; reruns must use the fixed probe
+and retain strict response, driver, and server-lifecycle gates. The H2 probe
+uses the workspace lock, so Hyper's server-side transitive H2 dependency also
+resolves to 0.4.20.
 
 These local runs and the later focused hosted H2 diagnostics do not explain
 the hosted H2 transport diagnostic or H3 timeout, and do not establish a
@@ -2984,6 +3589,18 @@ result; the last observed Linux jobs entered category measurements, but no
 validated three-system aggregate is recorded. Benchmark #12 is terminal
 without validated timing data: all three system jobs and aggregation failed,
 with the Linux x86-64 parity gate stopping before timing.
+
+A focused clean-source recheck on 2026-10-20 used current `origin/main`
+`0bd5877529e8f8b7434b7f7ab1852c0753f5e642` on macOS ARM64, Python 3.12.13, and
+Rust 1.98.1. The single input `http1.disconnect-before-first-asgi-receive`
+passed 10/10 consecutive runs against stock Uvicorn 0.54.0. The target reported
+`dirty: false`, source SHA-256
+`7be314247077dad7463121dcc167d0f9562a1104df8c5bc1332973bda88f37ac`, and
+extension SHA-256
+`08cd62c448496f035e651b2b8993304e68bd2640a35939cf2c06a1a7e88d4fe2`. Both
+servers observed `http.disconnect` and equal HTTP 200 follow-up responses with
+the connection open. This later local result does not identify the cause of
+the older hosted mismatch and supplies no performance measurement.
 
 ## Previous hosted benchmark matrix attempt: run #16
 

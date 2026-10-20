@@ -23,6 +23,7 @@ typedef struct {
     double deadline;
     struct curl_slist *headers;
     atomic_ullong *request_count;
+    atomic_ullong *requests_completed_in_window;
     atomic_ullong *request_bytes;
     atomic_ullong *response_bytes;
     atomic_uint *failures;
@@ -36,6 +37,7 @@ typedef struct {
     double *latencies;
     size_t latency_count;
     size_t latency_capacity;
+    double last_transfer_completed_at;
 } Worker;
 
 typedef struct FirstFailure {
@@ -213,7 +215,9 @@ static void *run_worker(void *argument) {
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &check);
         double started = now_seconds();
         CURLcode result = curl_easy_perform(curl);
-        double elapsed = now_seconds() - started;
+        double completed_at = now_seconds();
+        worker->last_transfer_completed_at = completed_at;
+        double elapsed = completed_at - started;
         if (result != CURLE_OK) {
             char reason[256];
             snprintf(reason, sizeof(reason), "libcurl: %s", curl_easy_strerror(result));
@@ -240,6 +244,9 @@ static void *run_worker(void *argument) {
         }
 
         atomic_fetch_add(shared->request_count, 1);
+        if (completed_at <= shared->deadline) {
+            atomic_fetch_add(shared->requests_completed_in_window, 1);
+        }
         if (shared->upload_bytes != 0) atomic_fetch_add(shared->request_bytes, shared->upload_bytes);
         atomic_fetch_add(shared->response_bytes, check.offset);
         if (!append_latency(worker, elapsed)) {
@@ -325,7 +332,8 @@ int main(int argc, char **argv) {
     snprintf(url, sizeof(url), "http://%s:%ld%s", host, port, path);
     struct curl_slist *headers = NULL;
     for (int index = 13; index < argc; index++) headers = curl_slist_append(headers, argv[index]);
-    atomic_ullong requests = 0, request_bytes = 0, response_bytes_total = 0;
+    atomic_ullong requests = 0, requests_completed_in_window = 0;
+    atomic_ullong request_bytes = 0, response_bytes_total = 0;
     atomic_uint failures = 0;
     pthread_mutex_t failure_lock = PTHREAD_MUTEX_INITIALIZER;
     FirstFailure first_failure = {0};
@@ -343,6 +351,7 @@ int main(int argc, char **argv) {
         .deadline = started + seconds,
         .headers = headers,
         .request_count = &requests,
+        .requests_completed_in_window = &requests_completed_in_window,
         .request_bytes = &request_bytes,
         .response_bytes = &response_bytes_total,
         .failures = &failures,
@@ -366,6 +375,12 @@ int main(int argc, char **argv) {
     }
     for (int index = 0; index < created; index++) pthread_join(threads[index], NULL);
     double elapsed = now_seconds() - started;
+    double last_transfer_completed_at = started;
+    for (int index = 0; index < created; index++) {
+        if (workers[index].last_transfer_completed_at > last_transfer_completed_at) {
+            last_transfer_completed_at = workers[index].last_transfer_completed_at;
+        }
+    }
 
     size_t latency_count = 0;
     for (int index = 0; index < created; index++) latency_count += workers[index].latency_count;
@@ -380,12 +395,23 @@ int main(int argc, char **argv) {
     qsort(latencies, latency_count, sizeof(*latencies), compare_double);
 
     unsigned long long count = atomic_load(&requests);
+    unsigned long long completed_in_window = atomic_load(&requests_completed_in_window);
     unsigned long long sent = atomic_load(&request_bytes);
     unsigned long long received = atomic_load(&response_bytes_total);
     unsigned int failure_count = atomic_load(&failures);
-    printf("{\"requests\":%llu,\"duration_seconds\":%.9f,\"requests_per_second\":%.3f,\"request_body_bytes\":%llu,\"response_body_bytes\":%llu,\"application_bytes_per_second\":%.3f,\"p50_ms\":%.6f,\"p95_ms\":%.6f,\"p99_ms\":%.6f,\"failures\":%u,\"first_failure\":",
-        count, elapsed, count / elapsed, sent, received, (sent + received) / elapsed,
-        percentile(latencies, latency_count, 0.50), percentile(latencies, latency_count, 0.95), percentile(latencies, latency_count, 0.99), failure_count);
+    double latency_sum = 0.0;
+    for (size_t index = 0; index < latency_count; index++) latency_sum += latencies[index];
+    double mean_ms = latency_count == 0 ? 0.0 : latency_sum * 1000.0 / (double)latency_count;
+    double max_ms = latency_count == 0 ? 0.0 : latencies[latency_count - 1] * 1000.0;
+    double deadline = started + seconds;
+    double drain_seconds = last_transfer_completed_at > deadline
+        ? last_transfer_completed_at - deadline
+        : 0.0;
+    printf("{\"requests\":%llu,\"duration_seconds\":%.9f,\"load_window_seconds\":%.9f,\"completion_drain_seconds\":%.9f,\"requests_per_second\":%.3f,\"requests_completed_in_window\":%llu,\"requests_completed_after_window\":%llu,\"requests_per_second_in_window\":%.3f,\"request_body_bytes\":%llu,\"response_body_bytes\":%llu,\"application_bytes_per_second\":%.3f,\"mean_ms\":%.6f,\"p50_ms\":%.6f,\"p95_ms\":%.6f,\"p99_ms\":%.6f,\"p99_9_ms\":%.6f,\"max_ms\":%.6f,\"failures\":%u,\"first_failure\":",
+        count, elapsed, seconds, drain_seconds, count / elapsed, completed_in_window,
+        count - completed_in_window, completed_in_window / seconds, sent, received, (sent + received) / elapsed,
+        mean_ms, percentile(latencies, latency_count, 0.50), percentile(latencies, latency_count, 0.95),
+        percentile(latencies, latency_count, 0.99), percentile(latencies, latency_count, 0.999), max_ms, failure_count);
     if (first_failure.reason[0] == '\0') printf("null");
     else {
         printf("{\"reason\":\"");

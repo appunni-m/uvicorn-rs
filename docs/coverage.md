@@ -407,10 +407,16 @@ one owned raw TCP reader feeds TLS/HTTP through a bounded queue while the
 protocol driver remains the sole consumer. The Python ASGI adapter selects this
 mode for HTTP/1.1 and HTTP/2 over TCP/TLS. Its native `ConnectionClosed` bridge
 observes the peer-read signal and supplies a repeatable `http.disconnect` when
-the app calls `receive()`. The current-source parity input
-`http1.disconnect-before-first-asgi-receive` passed once against Uvicorn's
-oracle. That single case verifies this boundary for its recorded input only;
-it is not full ASGI disconnect conformance.
+the app calls `receive()`. On 2026-10-20, clean `origin/main` commit
+`0bd5877529e8f8b7434b7f7ab1852c0753f5e642` passed ten consecutive selected-case
+runs of `http1.disconnect-before-first-asgi-receive` against stock Uvicorn
+0.54.0 on macOS ARM64 (Python 3.12.13, Rust 1.98.1). The source SHA-256 was
+`7be314247077dad7463121dcc167d0f9562a1104df8c5bc1332973bda88f37ac` and the
+built extension SHA-256 was
+`08cd62c448496f035e651b2b8993304e68bd2640a35939cf2c06a1a7e88d4fe2`. Every run
+observed `http.disconnect` and matching follow-up HTTP 200 responses with the
+connection open. This current-commit recheck does not explain the older hosted
+mismatch or prove full ASGI disconnect conformance.
 
 The 2026-10-17 full matrix at the top includes the current ASGI and native
 manifests, including the TCP/TLS peer-read and disconnect cases. Its passing

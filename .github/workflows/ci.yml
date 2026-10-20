@@ -201,7 +201,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-      - name: Build and install normal wheel into stock reference environment
+      - name: Build candidate wheel and prepare an isolated Uvicorn oracle
         shell: bash
         run: |
           set -euo pipefail
@@ -211,6 +211,9 @@ jobs:
           test "${#wheels[@]}" -eq 1
           uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
           .venv/bin/python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output target/asgi-parity/wheel-consumer.json
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle"
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
+            --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
       - name: Compare the installed wheel with Uvicorn on upstream Starlette
         shell: bash
         run: |
@@ -221,13 +224,18 @@ jobs:
           (
             set -euo pipefail
             environment="$RUNNER_TEMP/uvicorn-rs-starlette"
-            uv venv --python "$PYTHON_VERSION" "$environment"
+            UV_PROJECT_ENVIRONMENT="$environment" uv sync --python "$PYTHON_VERSION" \
+              --only-group benchmark --only-group fastapi-benchmark --no-install-project --frozen
             wheel="$(find target/normal-wheels -maxdepth 1 -type f -name '*.whl' -print -quit)"
             test -n "$wheel"
             uv pip install --python "$environment/bin/python" \
-              "uvicorn[standard]==0.54.0" "starlette==1.6.0" "$wheel"
+              "starlette==1.6.0" "$wheel"
+            oracle_environment="$RUNNER_TEMP/uvicorn-rs-starlette-oracle"
+            UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
+              --only-group benchmark --only-group uvicorn-oracle --only-group fastapi-benchmark --no-install-project --frozen
             "$environment/bin/python" scripts/probe_starlette_rs.py \
               --framework starlette --server-wheel "$wheel" \
+              --oracle-python "$oracle_environment/bin/python" \
               --output target/asgi-parity/starlette.json
           ) >"$starlette_log" 2>&1
           starlette_status=$?
@@ -257,13 +265,15 @@ jobs:
           framework_target="$RUNNER_TEMP/starlette-rs-cargo-target"
           framework_wheels="$RUNNER_TEMP/starlette-rs-wheels"
           framework_env="$RUNNER_TEMP/uvicorn-rs-starlette-rs"
+          oracle_env="$RUNNER_TEMP/uvicorn-rs-starlette-rs-oracle"
           mkdir -p "$framework_wheels"
           git init "$framework_dir"
           git -C "$framework_dir" remote add origin https://github.com/appunni-m/starlette-rs.git
           git -C "$framework_dir" fetch --depth 1 origin "$STARLETTE_RS_REVISION"
           git -C "$framework_dir" checkout --detach FETCH_HEAD
           test "$(git -C "$framework_dir" rev-parse HEAD)" = "$STARLETTE_RS_REVISION"
-          uv venv --python "$PYTHON_VERSION" "$framework_env"
+          UV_PROJECT_ENVIRONMENT="$framework_env" uv sync --python "$PYTHON_VERSION" \
+            --only-group benchmark --no-install-project --frozen
           (
             cd "$framework_dir"
             env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cap-lints warn" \
@@ -276,10 +286,15 @@ jobs:
           test -n "$server_wheel"
           test -n "$framework_wheel"
           uv pip install --python "$framework_env/bin/python" \
-            "uvicorn[standard]==0.54.0" "$server_wheel" "$framework_wheel"
+            "$server_wheel" "$framework_wheel"
+          UV_PROJECT_ENVIRONMENT="$oracle_env" uv sync --python "$PYTHON_VERSION" \
+            --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
+          uv pip install --python "$oracle_env/bin/python" \
+            "$framework_wheel"
           "$framework_env/bin/python" scripts/probe_starlette_rs.py \
             --framework starlette-rs --server-wheel "$server_wheel" \
             --framework-wheel "$framework_wheel" \
+            --oracle-python "$oracle_env/bin/python" \
             --output target/asgi-parity/starlette-rs.json
           .venv/bin/python scripts/compare_framework_receipts.py \
             --starlette target/asgi-parity/starlette.json \
@@ -332,7 +347,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p target/asgi-parity
-          .venv/bin/python scripts/run_parity.py --output target/asgi-parity/result.json 2>&1 | tee target/asgi-parity/run.log
+          .venv/bin/python scripts/run_parity.py \
+            --oracle-python "$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle/bin/python" \
+            --output target/asgi-parity/result.json 2>&1 | tee target/asgi-parity/run.log
           .venv/bin/python scripts/check_ci_evidence.py parity target/asgi-parity/result.json
       - name: Verify normal fault-seam exclusion with existing public cases
         run: .venv/bin/python scripts/audit_normal_build.py --output-dir target/normal-audit
@@ -449,6 +466,7 @@ jobs:
             maturin build --release --locked --interpreter python --out dist
             wheels=(dist/*.whl)
             test "${#wheels[@]}" -eq 1
+            python scripts/check_replacement_install.py --wheel "${wheels[0]}"
             python -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
             python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
           ) >"$log" 2>&1
@@ -510,7 +528,12 @@ jobs:
           wheels=(dist/*.whl)
           test "${#wheels[@]}" -eq 1
           uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
-          .venv/bin/python scripts/run_parity.py --output dist/parity-linux-x86_64.json
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-release-oracle"
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$WHEEL_PYTHON_VERSION" \
+            --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
+          .venv/bin/python scripts/run_parity.py \
+            --oracle-python "$oracle_environment/bin/python" \
+            --output dist/parity-linux-x86_64.json
           .venv/bin/python scripts/check_ci_evidence.py parity dist/parity-linux-x86_64.json
       - name: Record source, build, license and artifact identities
         shell: bash

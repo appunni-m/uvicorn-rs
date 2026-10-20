@@ -2013,10 +2013,39 @@ where
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
     Shutdown: Future<Output = ()> + Send,
 {
+    serve_tcp_with_date_header(listener, service, shutdown, config, true).await
+}
+
+/// Serves TCP HTTP with an explicit policy for Hyper's automatic `Date` field.
+///
+/// When enabled, Hyper inserts a `Date` header only when the response does not
+/// already contain one. When disabled, the service is responsible for any
+/// `Date` field it wants to send. This lets compatibility adapters reproduce
+/// servers that disable the default header while preserving [`serve_tcp`]'s
+/// existing default behavior.
+///
+/// # Errors
+///
+/// Returns the same errors as [`serve_tcp`].
+pub async fn serve_tcp_with_date_header<S, B, Shutdown>(
+    listener: TcpListener,
+    service: S,
+    shutdown: Shutdown,
+    config: ServerConfig,
+    date_header: bool,
+) -> Result<(), ServeError>
+where
+    S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+    Shutdown: Future<Output = ()> + Send,
+{
     let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
     run_with_application_lifecycle(
         config.clone(),
-        serve_listener(listener, service, shutdown, config, None),
+        serve_listener(listener, service, shutdown, config, None, date_header),
     )
     .await
 }
@@ -2050,10 +2079,42 @@ where
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
     Shutdown: Future<Output = ()> + Send,
 {
+    serve_tls_with_date_header(listener, acceptor, service, shutdown, config, true).await
+}
+
+/// Serves a TLS HTTP application with an explicit policy for Hyper's automatic
+/// `Date` field. See [`serve_tcp_with_date_header`] for the policy semantics.
+///
+/// # Errors
+///
+/// Returns the same errors as [`serve_tls`].
+pub async fn serve_tls_with_date_header<S, B, Shutdown>(
+    listener: TcpListener,
+    acceptor: TlsAcceptor,
+    service: S,
+    shutdown: Shutdown,
+    config: ServerConfig,
+    date_header: bool,
+) -> Result<(), ServeError>
+where
+    S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+    Shutdown: Future<Output = ()> + Send,
+{
     let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
     run_with_application_lifecycle(
         config.clone(),
-        serve_listener(listener, service, shutdown, config, Some(acceptor)),
+        serve_listener(
+            listener,
+            service,
+            shutdown,
+            config,
+            Some(acceptor),
+            date_header,
+        ),
     )
     .await
 }
@@ -2064,6 +2125,7 @@ async fn serve_listener<S, B>(
     shutdown: BoxedShutdownFuture<'_>,
     config: ServerConfig,
     tls_acceptor: Option<TlsAcceptor>,
+    date_header: bool,
 ) -> Result<(), ServeError>
 where
     S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
@@ -2130,6 +2192,7 @@ where
         let shutdown = shutdown_receiver.clone();
         let error_observer = config.error_observer.clone();
         let service_error_policy = config.service_error_policy;
+        let date_header = date_header;
         let tls_acceptor = tls_acceptor.clone();
         connections.spawn(async move {
             let _slot = slot;
@@ -2155,6 +2218,7 @@ where
                                 shutdown,
                                 error_observer.as_ref(),
                                 service_error_policy,
+                                date_header,
                             )
                             .await
                         }
@@ -2177,6 +2241,7 @@ where
                             shutdown,
                             error_observer.as_ref(),
                             service_error_policy,
+                            date_header,
                         )
                         .await
                     }
@@ -2345,6 +2410,7 @@ async fn serve_connection<I, S, B>(
     mut shutdown: watch::Receiver<bool>,
     error_observer: Option<&ServerErrorObserver>,
     service_error_policy: ServiceErrorPolicy,
+    date_header: bool,
 ) -> Result<(), ConnectionError>
 where
     I: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -2370,7 +2436,12 @@ where
     let mut builder = auto::Builder::new(TokioExecutor::new());
     // RFC 9112 §9.6: a client-side TCP half-close does not mean the client has
     // stopped waiting for its response. Hyper disables this behavior by default.
-    builder.http1().half_close(true).max_buf_size(64 * 1024);
+    builder
+        .http1()
+        .auto_date_header(date_header)
+        .half_close(true)
+        .max_buf_size(64 * 1024);
+    builder.http2().auto_date_header(date_header);
     let application = ServiceErrorResponse::new(
         ConnectionInfoService::<S, Incoming, B>::new(
             service,

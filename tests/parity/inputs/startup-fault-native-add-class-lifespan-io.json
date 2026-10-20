@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@8",
+  "schema": "uvicorn-rs-parity/input@9",
   "cases": [
     {
       "case_id": "fault.startup-fault-native-add-class-lifespan-io",

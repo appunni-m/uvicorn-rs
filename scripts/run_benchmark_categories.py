@@ -236,7 +236,7 @@ def capture_identity(root, python, evidence_class):
     clients = [root / "target/release" / name for name in PROBE_NAMES]
     for path in clients:
         normal_binary(path)
-    extra_dependencies = {"uvicorn-rs-py": ["uvicorn_rs"]}
+    extra_dependencies = {"uvicorn-rs-py": ["uvicorn_rs", "uvicorn"]}
     try:
         importlib.metadata.distribution("fastapi")
     except importlib.metadata.PackageNotFoundError:
@@ -251,7 +251,7 @@ def capture_identity(root, python, evidence_class):
                                   artifacts_dir=Path(directory),
                                   extra_dependencies=extra_dependencies)
         dependencies = evidence.dependencies_before
-        required = {"uvicorn", "hypercorn", "h11", "h2", "aioquic", "uvloop", "httptools", "websockets", "uvicorn-rs-py"}
+        required = {"hypercorn", "h11", "h2", "aioquic", "uvloop", "httptools", "websockets", "uvicorn-rs-py"}
         if fastapi_selected:
             required.update(FASTAPI_BENCHMARK_DISTRIBUTIONS)
         if missing := sorted(required - dependencies.keys()):
@@ -287,6 +287,17 @@ def validate_parity(root, before_path, parity_path, current, expected_count):
         raise RuntimeError(f"review the public parity denominator: expected {expected_count}, found {len(selected)}")
     result = json.loads(parity_path.read_text())
     validate_result_shape(result, selected, manifest)
+    parity_command = result.get("run", {}).get("command", [])
+    oracle_python = current.get("uvicorn_oracle", {}).get("executable")
+    try:
+        oracle_argument = parity_command[parity_command.index("--oracle-python") + 1]
+    except (AttributeError, IndexError, ValueError):
+        raise RuntimeError("public parity was not run with an explicit isolated Uvicorn oracle") from None
+    if oracle_argument != oracle_python:
+        raise RuntimeError(
+            "public parity used a different Uvicorn oracle interpreter: "
+            f"expected {oracle_python}, found {oracle_argument}"
+        )
     summary = result["summary"]
     if result["status"] != "completed" or summary["selected"] != len(selected) or summary["executed"] != len(selected) or summary["passed"] != len(selected) or any(summary[key] != 0 for key in ("failed", "not_run", "infrastructure_failed")) or result["infrastructure_errors"]:
         raise RuntimeError("all currently indexed public parity cases must pass without infrastructure failures")
@@ -322,6 +333,8 @@ def main():
     root = repository_root()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--python", type=Path, help="checkout .venv/bin/python used by every maintained category")
+    parser.add_argument("--uvicorn-python", type=Path,
+                        help="isolated interpreter containing stock Uvicorn 0.54.0")
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--duration", type=positive_seconds, default=5.0)
     parser.add_argument("--warmup", type=nonnegative_seconds, default=1.0)
@@ -377,12 +390,20 @@ def main():
         parser.error(f"Python interpreter does not exist: {python}")
     if python != (root / ".venv/bin/python").absolute():
         parser.error("maintained categories use the checkout .venv/bin/python; --python must name that interpreter")
+    uvicorn_python = (args.uvicorn_python or root / "target/uvicorn-oracle/bin/python").absolute()
     sys.path.insert(0, str(root / "scripts"))
     from benchmark_evidence import (BenchmarkEvidence, _refresh_owned, assert_clean_coverage_environment,
                                     owned_process, stop_owned)
+    from uvicorn_oracle import inspect_uvicorn_oracle, python_version as interpreter_python_version
 
     assert_clean_coverage_environment()
+    oracle_identity = inspect_uvicorn_oracle(
+        uvicorn_python,
+        expected_python_version=interpreter_python_version(python),
+        required_packages=("httptools", "uvloop", "websockets"),
+    )
     before = capture_identity(root, python, BenchmarkEvidence)
+    before["uvicorn_oracle"] = oracle_identity
     if not before["optional_workloads"]["fastapi"]["selected"]:
         raise RuntimeError("the maintained cross-category comparison requires the locked upstream fastapi-benchmark dependency group")
     requested_categories = set(args.category or (label for label, _, _ in CATEGORIES))
@@ -407,6 +428,7 @@ def main():
     record = {
         "schema": "uvicorn-rs-sequential-category-run@2", "started_at": utc_now(),
         "status": "running_not_proven", "identity_before": before, "category_runs": [],
+        "uvicorn_oracle": oracle_identity,
         "category_scope": "complete" if not omitted_categories else "selected_subset",
         "workload_scope": "selected_subset" if args.workloads else "upstream_fastapi_only",
         "application_scope": {
@@ -460,6 +482,8 @@ def main():
             ))
             command = [str(python), str(script), "--servers", *servers,
                        "--repetitions", str(args.repetitions), "--seed", str(args.seed), "--output", str(output)]
+            if label in {"http1", "websocket", "lifecycle"}:
+                command += ["--python", str(python), "--uvicorn-python", str(uvicorn_python)]
             workloads = ["lifecycle"]
             if label != "lifecycle":
                 workloads = workload_names(script)
@@ -537,7 +561,13 @@ def main():
                 process = None
                 entry.setdefault("finished_at", utc_now())
                 atomic_json(checkpoint, record)
-            if capture_identity(root, python, BenchmarkEvidence) != before:
+            current_identity = capture_identity(root, python, BenchmarkEvidence)
+            current_identity["uvicorn_oracle"] = inspect_uvicorn_oracle(
+                uvicorn_python,
+                expected_python_version=interpreter_python_version(python),
+                required_packages=("httptools", "uvloop", "websockets"),
+            )
+            if current_identity != before:
                 raise RuntimeError("source/native/apps/harness/client/dependency identity changed during categories")
             atomic_json(checkpoint, record)
             event({"event": "finished", **entry})
@@ -561,6 +591,11 @@ def main():
         record["finished_at"] = utc_now()
         try:
             record["identity_after"] = capture_identity(root, python, BenchmarkEvidence)
+            record["identity_after"]["uvicorn_oracle"] = inspect_uvicorn_oracle(
+                uvicorn_python,
+                expected_python_version=interpreter_python_version(python),
+                required_packages=("httptools", "uvloop", "websockets"),
+            )
             if record["identity_after"] != before:
                 record["status"] = "failed_not_proven"
                 failed = True

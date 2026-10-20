@@ -1283,6 +1283,16 @@ async def _app_impl(scope, receive, send):
         await _respond(send, token.encode(), content_type=b"text/plain; charset=utf-8")
         return
 
+    if path == "/scope-state-presence":
+        if "state" not in scope:
+            body = b"missing"
+        elif scope["state"] == {}:
+            body = b"empty"
+        else:
+            body = b"nonempty"
+        await _respond(send, body, content_type=b"text/plain; charset=utf-8")
+        return
+
     if path == "/upload-stream":
         await send({"type": "http.response.start", "status": 200, "headers": []})
         while True:
@@ -1509,3 +1519,37 @@ def app(scope, receive, send):
     if scope["type"] == "websocket" and scope["path"] == "/ws-sync-callable-raises":
         raise RuntimeError("parity synchronous WebSocket callable sentinel")
     return _app_impl(scope, receive, send)
+
+
+_lifespan_probe_started = False
+
+
+async def lifespan_probe_app(scope, receive, send):
+    """Expose the selected lifespan setting through one HTTP response."""
+
+    global _lifespan_probe_started
+    if scope["type"] == "lifespan":
+        while True:
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                _lifespan_probe_started = True
+                await send({"type": "lifespan.startup.complete"})
+            elif message["type"] == "lifespan.shutdown":
+                await send({"type": "lifespan.shutdown.complete"})
+                return
+    elif scope["type"] == "http":
+        await receive()
+        lifespan_status = b"lifespan-started" if _lifespan_probe_started else b"lifespan-off"
+        if "state" not in scope:
+            state_status = b"scope-state-missing"
+        elif scope["state"] == {}:
+            state_status = b"scope-state-empty"
+        else:
+            state_status = b"scope-state-populated"
+        root_path_status = b"root_path=" + scope["root_path"].encode("utf-8")
+        path_status = b"path=" + scope["path"].encode("utf-8")
+        raw_path_status = b"raw_path=" + base64.b64encode(scope["raw_path"])
+        body = b"|".join(
+            (lifespan_status, state_status, root_path_status, path_status, raw_path_status)
+        )
+        await _respond(send, body, content_type=b"text/plain")

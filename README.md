@@ -1,47 +1,64 @@
 # uvicorn-rs
 
-A Rust-first ASGI server with a Python adapter for Python applications.
+A Rust-first server for ASGI applications and Rust services.
 
 ## Project status
 
-The Rust server and the Python ASGI adapter are still experimental and have not been published to Cargo or PyPI. The current Python command is a small prototype interface; it is not yet a drop-in Uvicorn replacement.
+The Rust server and Python adapter are experimental and are not published on
+crates.io or PyPI. The Python adapter is **not yet a drop-in Uvicorn
+replacement**. If your application depends on Uvicorn's full command-line,
+Python API, worker, or reload behavior, keep using upstream Uvicorn for now.
 
-The confirmed replacement target keeps the Python distribution named uvicorn-rs-py and provides the uvicorn command and import namespace. Upstream Uvicorn 0.54.0 is the initial pinned compatibility reference. The compatibility page explains what is planned, what works today, and how replacement and rollback will work after a compatible release.
+The planned Python distribution name is `uvicorn-rs-py`; it provides the
+`uvicorn` command and import namespace after the compatibility and release
+gates pass. The current checkout has those entry points, but only a small
+prototype command and an incomplete Python API. The initial compatibility
+reference is Uvicorn 0.54.0. See [replacement status](docs/uvicorn-compatibility.md)
+for what is and is not available.
 
-There is no general performance claim. Python application code still runs on its Python-owned asyncio loop and crosses the ASGI boundary. Rust owns the network runtime, but this does not remove the Python GIL from Python application work.
+## Try the current prototype
 
-## Run the current prototype
+From a development checkout with `uv`, CPython 3.12, and a Rust toolchain
+installed:
 
-From a development checkout with Python and Rust toolchains configured:
-
-~~~sh
+```sh
 uv sync --python 3.12
-uv run uvicorn-rs-py examples.hello_asgi:app --host 127.0.0.1 --port 8000
-~~~
+uv run uvicorn examples.hello_asgi:app --host 127.0.0.1 --port 8000
+```
 
 In another terminal:
 
-~~~sh
+```sh
 curl -i http://127.0.0.1:8000/
-~~~
+```
 
-This uses the current prototype CLI. Its options and limitations are listed in the [configuration guide](docs/configuration.md).
+You should receive HTTP 200 and a text body beginning with `GET / 1.1`. This
+checkout command is for evaluating the prototype; it does not mean the package
+is published or Uvicorn-compatible. See [the quickstart](docs/quickstart.md)
+and [current options](docs/configuration.md).
 
-## What runs where
+## What to expect
 
-For a Python ASGI application, Rust handles network listeners and protocol work. The Python application remains on its owning asyncio or uvloop event loop; Python callables, ASGI messages, context, and exceptions cross the PyO3 boundary. See the [ASGI support matrix](docs/support-matrix.md).
+Python applications still execute on their Python event loop, and Python
+application code remains subject to the GIL. Current measurements do not show
+a general performance advantage over Uvicorn for Python ASGI applications;
+see the [benchmark results](docs/benchmark-results.md).
 
-Rust applications can use the Python-free uvicorn-rs Cargo library through its server-neutral service contract. The server remains independent of Starlette-RS and FastAPI-RS; those projects do not need this server as a runtime dependency. See [native Rust integration](docs/native-fastapi-composition.md).
+Rust applications can use the Python-free `uvicorn-rs` library. The server is
+independent of Starlette-RS and FastAPI-RS; those frameworks do not need it as
+a runtime dependency. See [native Rust integration](docs/native-fastapi-composition.md).
 
-## Choose a guide
+## Documentation
 
 - [Run a Python ASGI app](docs/quickstart.md)
 - [Uvicorn replacement status and migration](docs/uvicorn-compatibility.md)
-- [Current prototype configuration](docs/configuration.md)
+- [ASGI and protocol support](docs/support-matrix.md)
 - [Deployment guidance](docs/deployment.md)
-- [ASGI behavior and protocol support](docs/support-matrix.md)
 - [Benchmark results and evidence limits](docs/benchmark-results.md)
 
-Contributors and maintainers can find [contribution instructions](CONTRIBUTING.md), [security reporting](SECURITY.md), [support expectations](SUPPORT.md), [architecture](docs/architecture.md), [parity methodology](docs/parity.md), and the [release guide](docs/releases.md).
+For contributing, security reporting, support expectations, architecture, and
+release information, see [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md),
+[SUPPORT.md](SUPPORT.md), and the [documentation site](https://appunni-m.github.io/uvicorn-rs/).
 
-The project is not affiliated with the Uvicorn project. It is available under [BSD-3-Clause or MIT](LICENSE), at your option.
+The project is not affiliated with the Uvicorn project. It is available under
+[BSD-3-Clause or MIT](LICENSE), at your option.

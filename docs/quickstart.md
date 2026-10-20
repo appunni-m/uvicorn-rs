@@ -1,34 +1,46 @@
 # Run a Python ASGI app
 
-This guide starts the current development prototype from a repository checkout. PyPI wheels are not published yet.
+This guide runs the current development prototype from a repository checkout.
+There is no PyPI release yet, and the prototype is not a drop-in Uvicorn
+replacement.
 
 ## Before you start
 
-Use a checkout with the project's Python and Rust toolchains available. The local development setup is CPython 3.12; the Rust crate declares Rust 1.85 as its minimum supported version.
+You need `uv`, CPython 3.12, and Rust 1.85 or newer. From the repository root,
+install the locked development environment and start the example:
 
-## Start the example
-
-From the repository root:
-
-~~~sh
+```sh
 uv sync --python 3.12
-uv run uvicorn-rs-py examples.hello_asgi:app --host 127.0.0.1 --port 8000
-~~~
+uv run uvicorn examples.hello_asgi:app --host 127.0.0.1 --port 8000
+```
 
-In a second terminal, send a request:
+The server binds to loopback so it is reachable only from this machine. In a
+second terminal, send a request:
 
-~~~sh
+```sh
 curl -i http://127.0.0.1:8000/
-~~~
+```
 
-The example responds with the request method, path, HTTP version, and request body. Press Ctrl-C in the server terminal to request graceful shutdown.
+The response should have status `200` and a text body beginning with
+`GET / 1.1`. Press Ctrl-C in the server terminal to request shutdown.
 
 ## Run your own app
 
-The current command accepts an import string in module:attribute form. The module must be importable from the server process. The current prototype retrieves the named object directly; it does not invoke application factories.
+Use an import string in `module:attribute` form. Start the command from a
+directory where the module can be imported, or set `PYTHONPATH` to include your
+application directory:
 
-~~~sh
-uv run uvicorn-rs-py myapp:app --host 127.0.0.1 --port 8000
-~~~
+```sh
+uv run uvicorn myapp.asgi:app --host 127.0.0.1 --port 8000
+```
 
-Use the [current configuration guide](configuration.md) for available options. For the planned uvicorn command and import compatibility, see [Uvicorn replacement status](uvicorn-compatibility.md). Do not use the current prototype as a drop-in replacement for Uvicorn.
+The current prototype loads the named object directly. It does not invoke
+application factories and supports only the options listed in the
+[configuration guide](configuration.md).
+
+## Before using it instead of Uvicorn
+
+The `uvicorn` name in this checkout does not yet provide Uvicorn's full CLI,
+Python API, worker, reload, or deployment behavior. Do not remove Uvicorn from
+an application environment expecting a compatible replacement. Check the
+[replacement status](uvicorn-compatibility.md) before planning a migration.

@@ -1,7 +1,10 @@
 """Compare one shared Starlette-compatible ASGI app through Uvicorn and uvicorn-rs.
 
-Run this only in an isolated environment containing an installed uvicorn-rs
-wheel, Uvicorn, and exactly one of upstream Starlette or starlette-rs-py.
+Run this in a candidate environment containing the installed uvicorn-rs wheel
+and exactly one of upstream Starlette or starlette-rs-py. Pass
+``--oracle-python`` for a separate environment containing genuine upstream
+Uvicorn 0.54.0. Do not install both Uvicorn distributions in one environment:
+they own the same ``uvicorn`` import namespace.
 """
 
 from __future__ import annotations
@@ -42,7 +45,12 @@ def _free_port() -> int:
         return int(server.getsockname()[1])
 
 
-def _identity(framework: str, server_wheel: Path, framework_wheel) -> dict[str, object]:
+def _identity(
+    framework: str,
+    server_wheel: Path,
+    framework_wheel,
+    oracle_python: Path,
+) -> dict[str, object]:
     import starlette
 
     server_wheel = server_wheel.resolve()
@@ -129,6 +137,30 @@ def _identity(framework: str, server_wheel: Path, framework_wheel) -> dict[str, 
     ):
         raise RuntimeError("the uvicorn-rs distribution bundles a Starlette package")
 
+    oracle_probe = subprocess.run(
+        [
+            str(oracle_python),
+            "-c",
+            "import importlib.metadata, json, uvicorn; "
+            "print(json.dumps({'distribution': importlib.metadata.version('uvicorn'), "
+            "'module': uvicorn.__version__, 'path': uvicorn.__file__}))",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=20,
+    )
+    oracle_identity = json.loads(oracle_probe.stdout)
+    if (
+        oracle_identity.get("distribution") != "0.54.0"
+        or oracle_identity.get("module") != "0.54.0"
+    ):
+        raise RuntimeError(
+            "--oracle-python must import genuine Uvicorn 0.54.0, got "
+            + json.dumps(oracle_identity, sort_keys=True)
+        )
+
     return {
         "python": sys.version,
         "python_executable": str(Path(sys.executable).resolve()),
@@ -146,7 +178,8 @@ def _identity(framework: str, server_wheel: Path, framework_wheel) -> dict[str, 
             (ROOT / "examples/starlette_compat_asgi.py").read_bytes()
         ).hexdigest(),
         "probe_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-        "uvicorn_version": importlib.metadata.version("uvicorn"),
+        "uvicorn_version": oracle_identity["distribution"],
+        "uvicorn_module_path": oracle_identity["path"],
         "uvicorn_rs_version": server_distribution.version,
         "uvicorn_rs_package": str(package_path),
         "uvicorn_rs_native": str(native_path),
@@ -174,10 +207,15 @@ def _wait_listening(port: int, process: subprocess.Popen[str]) -> None:
     raise TimeoutError(f"server did not listen within ten seconds: {last_error}")
 
 
-def _start_server(server: str, port: int, marker_dir: Path) -> subprocess.Popen[str]:
+def _start_server(
+    server: str,
+    port: int,
+    marker_dir: Path,
+    oracle_python: Path,
+) -> subprocess.Popen[str]:
     module = "uvicorn" if server == "uvicorn" else "uvicorn_rs"
     command = [
-        sys.executable,
+        str(oracle_python) if server == "uvicorn" else sys.executable,
         "-m",
         module,
         APP,
@@ -402,11 +440,11 @@ def _websocket_probe(port: int) -> dict[str, object]:
         }
 
 
-def _run_server(server: str) -> dict[str, object]:
+def _run_server(server: str, oracle_python: Path) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix=f"uvicorn-rs-{server}-") as temp:
         marker_dir = Path(temp)
         port = _free_port()
-        process = _start_server(server, port, marker_dir)
+        process = _start_server(server, port, marker_dir, oracle_python)
         observations: dict[str, object] = {}
         try:
             status, body = _http_request(port, "GET", "/state")
@@ -548,12 +586,26 @@ def main() -> None:
     parser.add_argument("--server-wheel", type=Path, required=True)
     parser.add_argument("--framework-wheel", type=Path)
     parser.add_argument(
+        "--oracle-python",
+        type=Path,
+        default=Path(sys.executable),
+        help="Python environment containing genuine upstream Uvicorn, isolated from uvicorn-rs-py",
+    )
+    parser.add_argument(
         "--output", type=Path, help="write the full JSON receipt to this path"
     )
     args = parser.parse_args()
-    identity = _identity(args.framework, args.server_wheel, args.framework_wheel)
-    reference = _run_server("uvicorn")
-    candidate = _run_server("uvicorn-rs")
+    oracle_python = Path(os.path.abspath(args.oracle_python))
+    if not oracle_python.is_file() or not os.access(oracle_python, os.X_OK):
+        parser.error(f"--oracle-python must be an executable interpreter: {oracle_python}")
+    identity = _identity(
+        args.framework,
+        args.server_wheel,
+        args.framework_wheel,
+        oracle_python,
+    )
+    reference = _run_server("uvicorn", oracle_python)
+    candidate = _run_server("uvicorn-rs", oracle_python)
     if reference["observations"] != candidate["observations"]:
         raise RuntimeError(
             "Uvicorn and uvicorn-rs returned different application observations:\n"

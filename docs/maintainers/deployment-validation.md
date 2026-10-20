@@ -1,0 +1,194 @@
+# Deployment and framework integration validation
+
+The [deployment guide](../deployment.md) is the operator-facing entry point. This page preserves validation procedures, framework comparison setup, and run-specific evidence for maintainers.
+
+
+`uvicorn-rs-py` is an experimental single-process Python ASGI adapter. It
+loads an importable module:attribute; it does not create application factories,
+supervise workers, reload code, or configure proxy headers. The project has not
+published a package. Build and install a wheel into the same environment as the
+application and its Python dependencies.
+
+## Start an application
+
+```sh
+uv run uvicorn-rs-py myapp.asgi:app --host 127.0.0.1 --port 8000
+```
+
+Run the command from a directory where myapp.asgi is importable. For a
+service, set WorkingDirectory and PYTHONPATH explicitly. The default bind
+address is loopback; choose a public or private interface deliberately.
+
+Supplying both --certfile and --keyfile enables TLS on TCP and experimental
+HTTP/3 on QUIC, on the configured port. TLS TCP advertises HTTP/2 and HTTP/1.1
+through ALPN. The TLS private key must be readable by the service account. The
+server has no separate flag to disable QUIC while retaining TLS.
+
+The current CLI and its defaults are listed in the
+[configuration reference](../configuration.md#cli).
+
+The PyO3 extension also accepts the optional
+`UVICORN_RS_MAX_BLOCKING_THREADS` environment variable to set the maximum
+Tokio blocking-pool size. Use a positive integer; an invalid value prevents
+native module initialization before the application receives ASGI lifespan
+startup. The Tokio core remains a single worker, and Python application code
+remains on its asyncio event loop. This setting is specific to `uvicorn-rs-py`;
+the documented cases cover startup acceptance and rejection, not a measured
+concurrency effect. See [configuration](../configuration.md#tokio-blocking-pool-limit).
+
+## Service-manager example
+
+This example shows the documented process boundary for a Linux systemd
+service. The [hosted Linux CI run for commit `9d05c72`](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036)
+passed the installed wheel's transient systemd service and manager-stop probe.
+The persistent unit below is an example; CI does not install it into a host.
+
+```ini
+[Unit]
+Description=Python ASGI application served by uvicorn-rs-py
+After=network.target
+
+[Service]
+Type=exec
+User=asgi
+Group=asgi
+WorkingDirectory=/srv/myapp
+Environment=PYTHONPATH=/srv/myapp
+ExecStart=/srv/myapp/.venv/bin/uvicorn myapp.asgi:app --host 0.0.0.0 --port 8000 --graceful-timeout 10
+Restart=on-failure
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
+```
+
+The TLS configuration also binds UDP for HTTP/3, so firewall rules must account
+for both TCP and UDP on the configured port. TimeoutStopSec should leave
+enough time for the server's separate transport, request, lifespan, and cleanup
+stages plus application cleanup. These stages can make total shutdown longer
+than --graceful-timeout; an application that suppresses cancellation can
+outlive a cleanup window. The 60-second example is not a measured guarantee
+for every application.
+
+The installed-wheel check exercises module:app, an HTTP/1.1 request over TLS,
+and POSIX SIGTERM while an ASGI request is held. It requires that the request
+is cancelled, lifespan shutdown completes, and the process exits within five
+seconds in that probe. The hosted Linux CI check started the exact installed
+wheel as a transient systemd service, sent the manager's stop request, and
+verified request cancellation, lifespan completion, and successful exit under
+the ten-second stop bound. This was measured on the Ubuntu 24.04 runner in the
+[CI run for commit `9d05c72`](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036).
+
+To run the same service-manager probe on a Linux systemd host, first install
+the exact candidate wheel into the Python environment used to invoke the
+script, then run:
+
+```sh
+"$WORK/upstream-starlette/bin/python" "$ROOT/scripts/probe_systemd_deployment.py" \
+  --wheel "$SERVER_WHEEL" --output "$WORK/systemd.json"
+```
+
+This requires `systemd-run`, `systemctl`, `journalctl`, and passwordless
+`sudo -n` access to the system service manager. It creates a uniquely named
+transient service, stops it in cleanup, and writes a receipt only after the
+manager stop, held-request cancellation, lifespan shutdown, and exit checks
+pass. It does not install or modify the persistent unit shown above.
+The persistent unit example, launchd, container orchestration, and Windows
+service-manager behavior are not directly tested.
+
+Applications should provide their own readiness and health routes. There is no
+built-in health endpoint, worker supervisor, restart policy, or log collector.
+Use the service manager for process restart and log capture; configure TLS
+certificate renewal outside the server.
+
+## Test Starlette integrations
+
+The black-box integration probe uses one shared application fixture and runs
+it through both Uvicorn and an installed uvicorn-rs wheel. For each framework
+environment, it compares lifespan state, HTTP request and response streaming,
+background work, the HTTP 500 response from an application exception, and a
+WebSocket handshake/subprotocol/text echo. Its JSON receipt records Python,
+framework, server and native-extension identities, the complete observations,
+and shutdown outcomes.
+
+Use separate candidate environments for upstream Starlette and starlette-rs-py.
+Both distributions install a top-level `starlette` package; installing them
+together can make the selected framework ambiguous. Keep the stock Uvicorn
+oracle in a third environment: `uvicorn-rs-py` and `uvicorn` both install the
+`uvicorn` import namespace, so they must not share an environment. Neither
+framework distribution is a runtime dependency of `uvicorn-rs-py`.
+
+Build the candidate and the pinned framework wheel:
+
+```sh
+ROOT=$PWD
+WORK=$(mktemp -d /tmp/uvicorn-rs-integration.XXXXXX)
+mkdir -p "$WORK/wheels"
+
+uvx --from maturin==1.14.1 maturin build --release --locked \
+  --interpreter .venv/bin/python --out "$WORK/wheels"
+SERVER_WHEEL=$(find "$WORK/wheels" -maxdepth 1 -name 'uvicorn_rs_py-*.whl' -print -quit)
+
+git init "$WORK/starlette-rs"
+git -C "$WORK/starlette-rs" remote add origin https://github.com/appunni-m/starlette-rs.git
+git -C "$WORK/starlette-rs" fetch --depth 1 origin 738c43362938896c268ca29b9a9a2a5942df510c
+git -C "$WORK/starlette-rs" checkout --detach FETCH_HEAD
+(
+  cd "$WORK/starlette-rs"
+  env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cap-lints warn" \
+    uvx --from maturin==1.14.1 maturin build --release --locked \
+    --interpreter "$ROOT/.venv/bin/python" --out "$WORK/wheels"
+)
+FRAMEWORK_WHEEL=$(find "$WORK/wheels" -maxdepth 1 -name 'starlette_rs_py-*.whl' -print -quit)
+
+UV_PROJECT_ENVIRONMENT="$WORK/uvicorn-oracle" uv sync --python 3.12 --locked \
+  --only-group benchmark --only-group uvicorn-oracle --no-install-project
+ORACLE_PYTHON="$WORK/uvicorn-oracle/bin/python"
+```
+
+Install and run the upstream Starlette comparison:
+
+```sh
+uv venv --python 3.12 "$WORK/upstream-starlette"
+uv pip install --python "$WORK/upstream-starlette/bin/python" \
+  "$SERVER_WHEEL" "starlette==1.6.0"
+"$WORK/upstream-starlette/bin/python" "$ROOT/scripts/probe_starlette_rs.py" \
+  --framework starlette --server-wheel "$SERVER_WHEEL" \
+  --oracle-python "$ORACLE_PYTHON" \
+  --output "$WORK/upstream-starlette.json"
+```
+
+Install and run the separate starlette-rs comparison:
+
+```sh
+uv venv --python 3.12 "$WORK/starlette-rs-env"
+uv pip install --python "$WORK/starlette-rs-env/bin/python" \
+  "$SERVER_WHEEL" "$FRAMEWORK_WHEEL"
+"$WORK/starlette-rs-env/bin/python" "$ROOT/scripts/probe_starlette_rs.py" \
+  --framework starlette-rs --server-wheel "$SERVER_WHEEL" \
+  --oracle-python "$ORACLE_PYTHON" \
+  --framework-wheel "$FRAMEWORK_WHEEL" --output "$WORK/starlette-rs.json"
+```
+
+The probe uses the shared HTTP API subset implemented by both frameworks.
+At the pinned starlette-rs revision, WebSocketRoute is not part of its
+supported API, so the fixture handles its WebSocket scope with a plain ASGI
+branch. That case validates the server's WebSocket transport and ASGI boundary;
+it does not claim starlette-rs framework-level WebSocket route compatibility.
+The results are selected integration evidence, not full framework or official
+ASGI conformance.
+
+The [hosted CI run for commit `9d05c72`](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036)
+built the pinned starlette-rs wheel, passed both isolated framework
+comparisons, passed the transient systemd stop path, and completed the public
+parity and normal fault-seam exclusion checks. These results are also listed in
+the evidence index. The manual category workflow runs the starlette-rs
+comparison before performance sampling. See
+[the support matrix](../support-matrix.md#supported-behaviors) for
+the current recorded results and limits.
+
+The pinned starlette-rs snapshot denies an `unused_mut` lint that is emitted
+for its Linux build. The command caps lint severity only for this optional
+third-party integration wheel; the uvicorn-rs build keeps its normal lint
+settings, and the framework source is not modified.

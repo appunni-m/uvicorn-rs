@@ -1,6 +1,6 @@
 # uvicorn-rs
 
-Use these guides to run the current prototype, check what it supports, or understand the planned Uvicorn replacement.
+Start with the task you want to complete. The current server is experimental and is not yet a replacement for Uvicorn.
 
 ## Start or configure a server
 
@@ -10,10 +10,10 @@ Use these guides to run the current prototype, check what it supports, or unders
 
 ## Check compatibility
 
-- [Uvicorn replacement status](uvicorn-compatibility.md) — package name, command and import target, current limits, migration and rollback.
+- [Can I replace Uvicorn?](uvicorn-compatibility.md) — availability, current gaps, and future migration and rollback steps.
 - [ASGI support matrix](support-matrix.md) — live-tested protocol, event, and lifecycle behavior.
 
-The Rust server and Python adapter are experimental and have not been published. The current adapter is not a drop-in Uvicorn replacement. The target keeps the PyPI distribution name uvicorn-rs-py while providing the uvicorn CLI and imports after compatibility work and release gates pass.
+The Rust server and Python adapter are experimental and have not been published. The Python adapter is not a drop-in Uvicorn replacement. The distribution will be named `uvicorn-rs-py` and provide the `uvicorn` command and import namespace; the checkout exposes those names, but not Uvicorn's full behavior yet.
 
 ## Project information
 
@@ -23,4 +23,4 @@ The Rust server and Python adapter are experimental and have not been published.
 - [Support expectations](https://github.com/appunni-m/uvicorn-rs/blob/main/SUPPORT.md)
 - [License](https://github.com/appunni-m/uvicorn-rs/blob/main/LICENSE)
 
-Architecture decisions, detailed parity evidence, coverage, benchmark methods, and release engineering are grouped under Maintainers in the site navigation.
+Architecture decisions, detailed protocol evidence, coverage, benchmark methods, and release engineering are grouped under Maintainers in the site navigation.

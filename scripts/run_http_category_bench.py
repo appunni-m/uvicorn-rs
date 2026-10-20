@@ -36,6 +36,7 @@ from benchmark_evidence import (
     collect_bounded_client,
     finalize_server,
 )
+from uvicorn_oracle import inspect_uvicorn_oracle, python_version
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -312,10 +313,17 @@ def _port() -> int:
         return sock.getsockname()[1]
 
 
-def _command(server: dict, app: str, port: int, python: Path) -> list[str]:
+def _command(
+    server: dict,
+    app: str,
+    port: int,
+    python: Path,
+    uvicorn_python: Path,
+) -> list[str]:
+    server_python = python if server["kind"] == "rust" else uvicorn_python
     if server["kind"] == "rust":
         return [
-            str(python),
+            str(server_python),
             "-m",
             "uvicorn_rs",
             app,
@@ -327,7 +335,7 @@ def _command(server: dict, app: str, port: int, python: Path) -> list[str]:
             server["loop"],
         ]
     return [
-        str(python),
+        str(server_python),
         "-m",
         "uvicorn",
         app,
@@ -497,6 +505,7 @@ def _sample(
     warmup: float,
     concurrency: int,
     python: Path,
+    uvicorn_python: Path,
     require_runtime_diagnostics: bool = False,
     evidence: BenchmarkEvidence | None = None,
     asgi_stage_diagnostics: bool = False,
@@ -517,7 +526,7 @@ def _sample(
     if asgi_timings_path is not None:
         env["UVICORN_RS_ASGI_TIMINGS"] = str(asgi_timings_path)
     process = owned_process(
-        _command(server, app, port, python),
+        _command(server, app, port, python, uvicorn_python),
         cwd=ROOT,
         env=env,
         stdout=log,
@@ -607,15 +616,18 @@ def _sample(
         log.close()
 
 
-def _versions(python: Path) -> dict:
+def _versions(python: Path, uvicorn_identity: dict | None) -> dict:
     code = (
         "import importlib.metadata as m, json, platform, sys; "
         "print(json.dumps({'python': sys.version.split()[0], 'implementation': "
-        "platform.python_implementation(), 'uvicorn': m.version('uvicorn'), "
+        "platform.python_implementation(), "
         "'uvloop': m.version('uvloop'), 'httptools': m.version('httptools'), "
         "'hypercorn': m.version('hypercorn')}))"
     )
     versions = json.loads(subprocess.check_output([str(python), "-c", code], text=True))
+    versions["uvicorn_oracle_version"] = (
+        uvicorn_identity["uvicorn_version"] if uvicorn_identity is not None else None
+    )
     try:
         versions["fastapi"] = subprocess.check_output(
             [
@@ -638,6 +650,7 @@ def _median(rows: list[dict], metric: str):
 
 def _source_digest(workloads: list[str], asgi_stage_diagnostics: bool = False) -> str:
     paths = [
+        "scripts/uvicorn_oracle.py",
         "pyproject.toml",
         "uv.lock",
         "Cargo.toml",
@@ -694,6 +707,12 @@ def main() -> None:
         help="Python interpreter used for all measured servers (default: checkout .venv)",
     )
     parser.add_argument(
+        "--uvicorn-python",
+        type=Path,
+        default=ROOT / "target" / "uvicorn-oracle" / "bin" / "python",
+        help="isolated Python interpreter containing stock Uvicorn 0.54.0",
+    )
+    parser.add_argument(
         "--require-runtime-diagnostics",
         action="store_true",
         help="require the Rust runtime-diagnostics feature and add its counters to candidate rows",
@@ -717,6 +736,7 @@ def main() -> None:
     python = args.python.absolute()
     if not python.exists():
         raise SystemExit(f"Python interpreter does not exist: {python}")
+    uvicorn_python = args.uvicorn_python.absolute()
     assert_clean_coverage_environment()
     native_client = _build_native_client()
     node_executable = shutil.which("node")
@@ -734,6 +754,19 @@ def main() -> None:
         if node_executable is not None else None
     )
     selected_servers = {name: SERVERS[name] for name in args.servers}
+    uvicorn_identity = None
+    if any(server["kind"] == "uvicorn" for server in selected_servers.values()):
+        required_packages = {"httptools"}
+        if any(
+            server["kind"] == "uvicorn" and server["loop"] == "uvloop"
+            for server in selected_servers.values()
+        ):
+            required_packages.add("uvloop")
+        uvicorn_identity = inspect_uvicorn_oracle(
+            uvicorn_python,
+            expected_python_version=python_version(python),
+            required_packages=tuple(sorted(required_packages)),
+        )
     if args.asgi_stage_diagnostics:
         if not any(name.startswith("uvicorn-rs-") for name in selected_servers) or not any(
             name.startswith("uvicorn-") for name in selected_servers
@@ -743,6 +776,7 @@ def main() -> None:
             parser.error("--asgi-stage-diagnostics requires FastAPI workloads only")
     source_files = [
         "scripts/run_http_category_bench.py", "scripts/bench_http_matrix.mjs", "scripts/bench_http_client.c",
+        "scripts/uvicorn_oracle.py",
         "examples/bench_matrix_asgi.py", "examples/bench_sync_asgi.py", "examples/bench_fastapi.py",
     ]
     if args.asgi_stage_diagnostics:
@@ -789,6 +823,7 @@ def main() -> None:
                         warmup,
                         concurrency,
                         python,
+                        uvicorn_python,
                         args.require_runtime_diagnostics,
                         evidence,
                         args.asgi_stage_diagnostics,
@@ -851,10 +886,17 @@ def main() -> None:
                             else None
                         ),
                         "requests_per_second": None,
+                        "requests_completed_in_window": None,
+                        "requests_completed_after_window": None,
+                        "requests_per_second_in_window": None,
+                        "completion_drain_seconds": None,
                         "application_bytes_per_second": None,
+                        "mean_ms": None,
                         "p50_ms": None,
                         "p95_ms": None,
                         "p99_ms": None,
+                        "p99_9_ms": None,
+                        "max_ms": None,
                         "failures": failure_count,
                         "correctness_valid": False,
                         "server_lifecycle_gate": "not_assessed",
@@ -927,10 +969,15 @@ def main() -> None:
                 metric: median_valid(case_rows, metric)
                 for metric in (
                     "requests_per_second",
+                    "requests_per_second_in_window",
+                    "completion_drain_seconds",
                     "application_bytes_per_second",
+                    "mean_ms",
                     "p50_ms",
                     "p95_ms",
                     "p99_ms",
+                    "p99_9_ms",
+                    "max_ms",
                     "server_cpu_percent_mean",
                     "server_rss_peak_mib",
                     "client_cpu_percent_mean",
@@ -966,7 +1013,8 @@ def main() -> None:
             "machine": platform.machine(),
             "logical_cpus": psutil.cpu_count(logical=True),
             "cpu_model": cpu_model,
-            "python_environment": _versions(python),
+            "python_environment": _versions(python, uvicorn_identity),
+            "uvicorn_oracle": uvicorn_identity,
             "node": node_version,
             "rustc": evidence.rustc_version,
             "source_sha256": _source_digest(args.workloads, args.asgi_stage_diagnostics),

@@ -441,7 +441,7 @@ merging stale hit maps.
 
 The current implementation keeps one manifest-backed case model but uses
 protocol-specific input objects and adapters. It declares `manifest@2`,
-`input@8`, `result@4`, and one unified coverage extension. Cases identify a
+`input@9`, `result@4`, and one unified coverage extension. Cases identify a
 profile and operation; fault-contract rows also name an allow-listed fault and
 an observable invariant. The current runner does not yet implement a generic
 multi-action `scenario`/`stimulus` envelope. The following JSON is a future
@@ -842,7 +842,7 @@ uncovered region and its exact case attribution.
 
 ## Maintenance after completion
 
-1. Keep the `input@8`/`result@4` workflow contract and one authoritative report. The generic `scenario`/`stimulus` envelope above remains a proposal, not another implemented test family.
+1. Keep the `input@9`/`result@4` workflow contract and one authoritative report. The generic `scenario`/`stimulus` envelope above remains a proposal, not another implemented test family.
 2. Add ordinary live parity inputs for reachable behavior; add a single named fault contract for deterministic internal failures. Retain meaningful regression cases even when they add no regions.
 3. Use Coverage-MCP incremental comparisons only with fixed Rust source, instrumentation, and region inventory. A changed build requires a new full measurement.
 4. After source or input changes, pass every attribution case and three complete repeats. Require zero missing regions/lines, exact profile-union attribution, and attached matching MCP receipts.

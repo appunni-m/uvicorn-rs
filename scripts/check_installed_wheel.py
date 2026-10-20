@@ -7,6 +7,7 @@ the openssl executable.
 
 import argparse
 import asyncio
+import configparser
 import contextvars
 import hashlib
 import http.client
@@ -201,20 +202,22 @@ IP.1 = 127.0.0.1
             timeout=20,
         )
         log_path = workdir / "server.log"
+        uvicorn_script_name = "uvicorn.exe" if os.name == "nt" else "uvicorn"
+        uvicorn_script = Path(sysconfig.get_path("scripts")) / uvicorn_script_name
+        if not uvicorn_script.is_file():
+            raise RuntimeError("installed wheel did not expose the uvicorn console script")
         command = [
-            sys.executable,
-            "-m",
-            "uvicorn_rs",
+            str(uvicorn_script),
             "examples.lifespan_asgi:app",
             "--host",
             "127.0.0.1",
             "--port",
             str(port),
-            "--certfile",
+            "--ssl-certfile",
             str(certificate),
-            "--keyfile",
+            "--ssl-keyfile",
             str(private_key),
-            "--graceful-timeout",
+            "--timeout-graceful-shutdown",
             "2",
         ]
         environment = os.environ.copy()
@@ -318,7 +321,7 @@ IP.1 = 127.0.0.1
                     )
                 return {
                     "status": "passed",
-                    "command": "python -m uvicorn_rs module:app --certfile ... --keyfile ...",
+                    "command": "uvicorn module:app --ssl-certfile ... --ssl-keyfile ... (installed console script)",
                     "http_status": response_status,
                     "http_body": response_body.decode(),
                     "tls_version": tls_version,
@@ -349,11 +352,18 @@ def main():
     args = parser.parse_args()
     import uvicorn_rs
     from uvicorn_rs import _native
+    import uvicorn
+    import uvicorn.main as uvicorn_main
 
     native = Path(_native.__file__).resolve()
     package = Path(uvicorn_rs.__file__).resolve()
+    uvicorn_package = Path(uvicorn.__file__).resolve()
     checkout_python = Path(__file__).resolve().parents[1] / "python"
-    if checkout_python in native.parents or checkout_python in package.parents:
+    if (
+        checkout_python in native.parents
+        or checkout_python in package.parents
+        or checkout_python in uvicorn_package.parents
+    ):
         raise RuntimeError(
             "consumer check imported the editable checkout instead of the installed wheel"
         )
@@ -368,6 +378,36 @@ def main():
             raise RuntimeError(
                 "imported native module does not match the exact supplied wheel"
             )
+        expected_uvicorn_files = (
+            "uvicorn/__init__.py",
+            "uvicorn/__main__.py",
+            "uvicorn/main.py",
+            "uvicorn/py.typed",
+        )
+        if any(name not in archive.namelist() for name in expected_uvicorn_files):
+            raise RuntimeError("wheel omitted a required uvicorn namespace file")
+        if uvicorn_package.read_bytes() != archive.read("uvicorn/__init__.py"):
+            raise RuntimeError("imported uvicorn namespace does not match the supplied wheel")
+        metadata_name = next(
+            name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+        )
+        entry_points_name = next(
+            name for name in archive.namelist() if name.endswith(".dist-info/entry_points.txt")
+        )
+        metadata_fields = {}
+        for line in archive.read(metadata_name).decode("utf-8").splitlines():
+            if ": " in line and not line.startswith((" ", "\t")):
+                key, value = line.split(": ", 1)
+                metadata_fields.setdefault(key, []).append(value)
+        if metadata_fields.get("Name") != ["uvicorn-rs-py"]:
+            raise RuntimeError("wheel metadata does not identify uvicorn-rs-py")
+        if "standard" not in metadata_fields.get("Provides-Extra", []):
+            raise RuntimeError("wheel metadata omits the Uvicorn-compatible standard extra")
+        entry_points = configparser.ConfigParser(interpolation=None)
+        entry_points.optionxform = str
+        entry_points.read_string(archive.read(entry_points_name).decode("utf-8"))
+        if dict(entry_points["console_scripts"]).get("uvicorn") != "uvicorn.main:main":
+            raise RuntimeError("wheel metadata omits the uvicorn console command")
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-wheel-consumer-") as directory:
         cli = subprocess.run(
             [sys.executable, "-m", "uvicorn_rs", "--help"],
@@ -391,10 +431,36 @@ def main():
             timeout=20,
             check=True,
         )
+        uvicorn_script_name = "uvicorn.exe" if os.name == "nt" else "uvicorn"
+        uvicorn_script = Path(sysconfig.get_path("scripts")) / uvicorn_script_name
+        if not uvicorn_script.is_file():
+            raise RuntimeError("installed wheel did not expose the uvicorn console script")
+        uvicorn_cli = subprocess.run(
+            [str(uvicorn_script), "--help"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=True,
+        )
+        uvicorn_module_cli = subprocess.run(
+            [sys.executable, "-m", "uvicorn", "--help"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=True,
+        )
     if "module:app" not in cli.stdout:
         raise RuntimeError("installed wheel CLI help does not describe module:app")
     if "module:app" not in console_cli.stdout:
         raise RuntimeError("installed uvicorn-rs-py help does not describe module:app")
+    if not uvicorn_cli.stdout.startswith("Usage: uvicorn [OPTIONS] APP\n"):
+        raise RuntimeError("installed uvicorn help has an unexpected console usage line")
+    if not uvicorn_module_cli.stdout.startswith(
+        "Usage: python -m uvicorn [OPTIONS] APP\n"
+    ):
+        raise RuntimeError("python -m uvicorn help has an unexpected module usage line")
     evidence = {
         "schema": "uvicorn-rs-installed-wheel-consumer@1",
         "python": sys.version,
@@ -422,6 +488,12 @@ def main():
         "cli_help": "passed",
         "console_script": "uvicorn-rs-py",
         "console_script_help": "passed",
+        "uvicorn_package_path": str(uvicorn_package),
+        "uvicorn_package_version": uvicorn.__version__,
+        "uvicorn_main_callable": callable(uvicorn_main.main),
+        "uvicorn_console_script": "uvicorn",
+        "uvicorn_console_script_help": "passed",
+        "uvicorn_module_help": "passed",
         "cli_tls_and_shutdown": probe_installed_cli_tls_and_shutdown(),
         "live_asgi": asyncio.run(consume_wheel()),
         "scope": "actual package-consumer HTTP/lifespan/context/cancellation and POSIX CLI/TLS/shutdown smoke; not full oracle parity",

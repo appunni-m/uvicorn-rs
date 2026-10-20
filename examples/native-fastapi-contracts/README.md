@@ -32,6 +32,15 @@ manifest hashes recorded in the [composition evidence](../../docs/native-fastapi
 cargo run --manifest-path examples/native-fastapi-contracts/Cargo.toml --locked -- examples/native-fastapi-contracts/manifest.json
 ```
 
+To execute one manifest input while retaining the full manifest for shared
+application configuration, append `--case-id <id>`. For example:
+
+```sh
+cargo run --manifest-path examples/native-fastapi-contracts/Cargo.toml --locked -- examples/native-fastapi-contracts/manifest.json --case-id http1.request-stream-progress-before-upload-complete
+```
+
+The runner rejects unknown or duplicate case IDs before opening a listener.
+
 The older 17-input result (51/51 across three repeats) used a now-removed
 `fastapi-rs-native` crate and remains historical. The current run is one local
 source-bound repetition, not hosted CI or a release gate. The native API
