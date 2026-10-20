@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@14",
+  "schema": "uvicorn-rs-parity/input@15",
   "cases": [
     {
       "case_id": "startup-invalid-certificate-pem.invalid-certificate-pem-startup-error",

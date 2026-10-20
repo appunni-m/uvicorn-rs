@@ -419,10 +419,10 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 | CLI and environment | 22 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
-| Python API | 18 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, headers, environment files, ASGI2 selection, trusted proxy headers, and a configured WebSocket message limit. |
+| Python API | 20 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, and a configured WebSocket message limit. |
 
-These eight groups account for all 299 current oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 590 total cases. Five
+These eight groups account for all 301 current oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 592 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -438,7 +438,7 @@ digests for the target.
 ## Scope and comparison rules
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@14`; live artifacts use
+`uvicorn-rs-parity/input@15`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -579,6 +579,11 @@ run stimulus to the Python API profile. Migrate maintained `@10` inputs with
 proxy server options and Python API request-header/scope stimuli. Migrate
 maintained `@13` inputs with `python scripts/migrate_parity_input_v13_to_v14.py`;
 each migrator changes only the schema marker and preserves existing case data.
+Schema `@15` adds optional process-environment overrides to Python API HTTP-run
+inputs so environment-derived settings can be compared with explicit API
+arguments. Migrate maintained `@14` inputs with
+`python scripts/migrate_parity_input_v14_to_v15.py`; the migrator changes only
+the schema marker and preserves existing case data.
 The runner rejects older or mixed input schemas.
 
 ## CI evidence

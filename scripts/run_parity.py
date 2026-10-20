@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@14"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@15"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2199,6 +2199,7 @@ def load_contract(
                     "observe_headers",
                     "interface",
                     "application_interface",
+                    "environment",
                     "request_headers",
                     "observe_scope",
                     "proxy_headers",
@@ -2297,6 +2298,26 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.forwarded_allow_ips must be a string"
                     )
+                if "environment" in run_http:
+                    environment = run_http["environment"]
+                    if not isinstance(environment, dict):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.environment must be an object"
+                        )
+                    for name, value in environment.items():
+                        invalid_name = (
+                            not isinstance(name, str)
+                            or not name
+                            or "=" in name
+                            or "\x00" in name
+                        )
+                        valid_value = value is None or (
+                            isinstance(value, str) and "\x00" not in value
+                        )
+                        if invalid_name or not valid_value:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.environment entries must be valid strings or null"
+                            )
                 timeout_seconds = run_http["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
                     raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 8")
@@ -9443,6 +9464,12 @@ def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]
     environment.pop("PYTHONHOME", None)
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
+    run_http = case["api"].get("run_http", {})
+    for name, value in run_http.get("environment", {}).items():
+        if value is None:
+            environment.pop(name, None)
+        else:
+            environment[name] = value
     command = [
         str(python),
         str(ROOT / "tests/parity/python_api_probe.py"),

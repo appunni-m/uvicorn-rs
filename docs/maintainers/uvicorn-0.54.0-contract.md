@@ -47,7 +47,7 @@ provided by Click rather than declared as an application parameter.
 | Lifespan and interface | `--lifespan`, `--interface` | both `auto`; lifespan choices are `auto`, `on`, `off`; interface choices are `auto`, `asgi3`, `asgi2`, `wsgi`. Uvicorn's native WSGI implementation is deprecated. | `dv25`, `4fvf` |
 | App environment | `--env-file`, `Config(env_file=...)`, `run(env_file=...)` | unset; loads environment for the app before app import/factory invocation. `UVICORN_*` server settings are not loaded from this file. The module CLI and programmatic factory paths have focused parity cases; broader dotenv syntax and precedence remain unverified. | `9kbx`, `gjpr`, `4fvf` |
 | Logging | `--log-config`, `--log-level`, `--access-log` / `--no-access-log`, `--use-colors` / `--no-use-colors` | default logging config; level unset then `info`; access log true; colors auto-detected. JSON/YAML use `dictConfig`; other files use `fileConfig`. | `9kbx`, `4fvf` |
-| Proxy and response headers | `--proxy-headers` / `--no-proxy-headers`, `--forwarded-allow-ips`, `--server-header` / `--no-server-header`, `--date-header` / `--no-date-header`, repeatable `--header` | proxy/server/date headers true; trusted IPs from `FORWARDED_ALLOW_IPS` or `127.0.0.1,::1`; no custom headers | `9kbx`, `dv25`, `4fvf` |
+| Proxy and response headers | `--proxy-headers` / `--no-proxy-headers`, `--forwarded-allow-ips`, `--server-header` / `--no-server-header`, `--date-header` / `--no-date-header`, repeatable `--header` | proxy/server/date headers true; trusted IPs default from `FORWARDED_ALLOW_IPS` or `127.0.0.1,::1`; the selected `uvicorn.run()` case verifies that an explicit API argument overrides the environment value | `9kbx`, `dv25`, `4fvf` |
 | Request/resource limits | `--root-path`, `--limit-concurrency`, `--limit-max-requests`, `--limit-max-requests-jitter`, `--timeout-keep-alive` | empty root path; concurrency and request limit unset; jitter `0`; keep-alive `5` seconds. `root_path` is verified for an ASCII prefix through the API and module CLI on HTTP/1.1; other limits remain open. `--limit-concurrency` rejects excess work with 503; backlog controls the OS accept queue. | `9kbx`, `dv25`, `4fvf` |
 | TLS | `--ssl-keyfile`, `--ssl-certfile`, `--ssl-keyfile-password`, `--ssl-version`, `--ssl-cert-reqs`, `--ssl-ca-certs`, `--ssl-ciphers` | no files/password; `ssl.PROTOCOL_TLS_SERVER`; `ssl.CERT_NONE`; no CA file or explicit cipher list. Programmatic API also accepts `ssl_context_factory`. | `9kbx`, `dv25`, `4fvf` |
 | Command output | `--help`, `--version`, Click parse errors, missing/invalid app errors | version output includes Uvicorn version, Python implementation/version, and OS; startup failure uses exit status 3. Exact help/error text and stream placement are parity obligations. | `9kbx`, `4fvf` |
@@ -59,28 +59,36 @@ environment variables are `WEB_CONCURRENCY`, `FORWARDED_ALLOW_IPS`, and, for
 watchfiles reload, `WATCHFILES_FORCE_POLLING`. These are separate from the
 `UVICORN_*` prefix rule.
 
-The focused cases `http1.proxy-headers-trusted-client-and-scheme`,
-`http1.proxy-headers-disabled-ignores-forwarded-values`, and
+The six focused HTTP/1.1 cases `http1.proxy-headers-trusted-client-and-scheme`,
+`http1.proxy-headers-disabled-ignores-forwarded-values`,
 `http1.proxy-headers-untrusted-peer-ignores-forwarded-values`,
-`http1.proxy-headers-wildcard-trust-uses-first-forwarded-client`, and
-`http1.proxy-headers-cidr-trust-selects-first-untrusted-forwarded-client`,
-`http1.proxy-headers-malformed-forwarded-host-remains-opaque`,
-along with `python-api.run-applies-trusted-proxy-headers`, each pass 1/1 against
-Uvicorn 0.54.0. The exact-trust and Python API cases send
-`X-Forwarded-For: 198.51.100.25, 127.0.0.1` and `X-Forwarded-Proto: https`
-from the loopback peer with an explicit `127.0.0.1,::1` trust list; both
-servers expose client `198.51.100.25` and scheme `https` to the ASGI app. The
-disabled case uses the same forwarded values with proxy handling disabled; the
-ASGI app observes the direct peer and `http` scheme. The excluded-peer case
-keeps proxy handling enabled but uses an allowlist that excludes the loopback
-peer, producing the same direct-peer observation. The wildcard case selects
-the first forwarded client, and the `127.0.0.0/8` case trusts the final proxy
-and selects the first untrusted forwarded client; both expose
-`198.51.100.25` and scheme `https`. Other address/network combinations,
-other malformed `X-Forwarded-For` forms, `FORWARDED_ALLOW_IPS` precedence, and
-WebSocket scheme conversion remain unverified. The malformed-host case places
-`not-an-ip` between the untrusted client and trusted loopback proxy; both
-servers retain it as the reported client host with the `https` scheme.
+`http1.proxy-headers-wildcard-trust-uses-first-forwarded-client`,
+`http1.proxy-headers-cidr-trust-selects-first-untrusted-forwarded-client`, and
+`http1.proxy-headers-malformed-forwarded-host-remains-opaque` each pass 1/1
+against Uvicorn 0.54.0. The three Python API cases
+`python-api.run-applies-trusted-proxy-headers`,
+`python-api.run-uses-forwarded-allow-ips-environment`, and
+`python-api.run-argument-overrides-forwarded-allow-ips-environment` also pass
+1/1. The exact-trust HTTP/1.1 case and the trusted Python API case send
+`X-Forwarded-For: 198.51.100.25, 127.0.0.1` and
+`X-Forwarded-Proto: https` from the loopback peer with an explicit
+`127.0.0.1,::1` trust list; both expose client `198.51.100.25` and scheme
+`https` to the ASGI app. The disabled case uses the same forwarded values with
+proxy handling disabled; the ASGI app observes the direct peer and `http`
+scheme. The excluded-peer case keeps proxy handling enabled but uses an
+allowlist that excludes the loopback peer, producing the same direct-peer
+observation. The wildcard case selects the first forwarded client, and the
+`127.0.0.0/8` case trusts the final proxy and selects the first untrusted
+forwarded client; both expose `198.51.100.25` and scheme `https`. The
+malformed-host case places `not-an-ip` between the untrusted client and trusted
+loopback proxy; both retain it as the reported client host with scheme `https`.
+The environment-default API case sets `FORWARDED_ALLOW_IPS=192.0.2.1` and omits
+the API argument, so both retain the direct peer and `http` scheme. The
+override case uses the same environment value but passes
+`forwarded_allow_ips="127.0.0.1,::1"`; both expose the forwarded client and
+`https` scheme. Other address/network combinations, other malformed
+`X-Forwarded-For` forms, broader environment precedence, and WebSocket scheme
+conversion remain unverified.
 
 ## Python import and callable surface
 

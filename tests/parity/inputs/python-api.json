@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@14",
+  "schema": "uvicorn-rs-parity/input@15",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -228,6 +228,59 @@
           "observe_scope": true,
           "proxy_headers": true,
           "forwarded_allow_ips": "127.0.0.1,::1"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-uses-forwarded-allow-ips-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-proxy-headers-environment",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "request_headers": [
+            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
+            ["x-forwarded-proto", "https"]
+          ],
+          "observe_scope": true,
+          "proxy_headers": true,
+          "environment": {
+            "FORWARDED_ALLOW_IPS": "192.0.2.1"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-argument-overrides-forwarded-allow-ips-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-proxy-headers-explicit-overrides-environment",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "request_headers": [
+            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
+            ["x-forwarded-proto", "https"]
+          ],
+          "observe_scope": true,
+          "proxy_headers": true,
+          "forwarded_allow_ips": "127.0.0.1,::1",
+          "environment": {
+            "FORWARDED_ALLOW_IPS": "192.0.2.1"
+          }
         }
       }
     },
