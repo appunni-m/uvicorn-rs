@@ -194,6 +194,40 @@
       }
     },
     {
+      "case_id": "cli.http-auto-preserves-app-load-diagnostic",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_missing_cli_module_20261019:app",
+          "--http",
+          "auto"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.websocket-auto-preserves-app-load-diagnostic",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_missing_cli_module_20261019:app",
+          "--ws",
+          "auto"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.zero-workers-normalizes-to-single-worker",
       "profile": "cli",
       "operation": "cli.process",

@@ -306,6 +306,12 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
     # process. Neither value requires process supervision from the adapter.
     if options["workers"] in (0, 1):
         supported.add("workers")
+    # Explicit auto selection is equivalent to the Rust server's default
+    # HTTP/1.1 and WebSocket implementations.
+    if options["http"] == "auto":
+        supported.add("http")
+    if options["ws"] == "auto":
+        supported.add("ws")
     unsupported = [
         parameter.name
         for parameter in ctx.command.params
