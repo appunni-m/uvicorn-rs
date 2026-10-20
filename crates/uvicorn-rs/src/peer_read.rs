@@ -94,6 +94,7 @@ struct PeerReadDiagnosticCounters {
     id: u64,
     mode: PeerReadHalfCloseMode,
     peer: Option<SocketAddr>,
+    receive_buffer_size_bytes: u64,
     trace_read_events: bool,
     direct_read_polls: AtomicU64,
     direct_read_pending_polls: AtomicU64,
@@ -137,6 +138,11 @@ impl PeerReadDiagnosticsHandle {
                 Arc::new(PeerReadDiagnosticCounters::new(
                     mode,
                     stream.peer_addr().ok(),
+                    socket2::SockRef::from(stream)
+                        .recv_buffer_size()
+                        .ok()
+                        .and_then(|size| u64::try_from(size).ok())
+                        .unwrap_or(0),
                     std::env::var_os("UVICORN_RS_DIAGNOSTIC_PEER_READ_TRACE")
                         .is_some_and(|value| value != "0"),
                 ))
@@ -168,11 +174,17 @@ impl Drop for PeerReadDiagnosticsHandle {
 
 #[cfg(feature = "runtime-diagnostics")]
 impl PeerReadDiagnosticCounters {
-    fn new(mode: PeerReadHalfCloseMode, peer: Option<SocketAddr>, trace_read_events: bool) -> Self {
+    fn new(
+        mode: PeerReadHalfCloseMode,
+        peer: Option<SocketAddr>,
+        receive_buffer_size_bytes: u64,
+        trace_read_events: bool,
+    ) -> Self {
         Self {
             id: NEXT_PEER_READ_DIAGNOSTIC_ID.fetch_add(1, Ordering::Relaxed),
             mode,
             peer,
+            receive_buffer_size_bytes,
             trace_read_events,
             direct_read_polls: AtomicU64::new(0),
             direct_read_pending_polls: AtomicU64::new(0),
@@ -263,7 +275,7 @@ impl PeerReadDiagnosticCounters {
             format_args!(
                 concat!(
                     "uvicorn-rs-peer-read-diagnostics ",
-                    "id={} mode={} peer={:?} ",
+                    "id={} mode={} peer={:?} receive_buffer_size_bytes={} ",
                     "direct_polls={} direct_pending_polls={} direct_wait_ns={} direct_wait_max_ns={} direct_bytes={} ",
                     "raw_read_calls={} raw_read_bytes={} raw_read_wait_ns={} raw_read_wait_max_ns={} ",
                     "raw_reads_over_1ms={} raw_reads_over_100ms={} ",
@@ -275,6 +287,7 @@ impl PeerReadDiagnosticCounters {
                 self.id,
                 mode,
                 self.peer,
+                self.receive_buffer_size_bytes,
                 self.direct_read_polls.load(Ordering::Relaxed),
                 self.direct_read_pending_polls.load(Ordering::Relaxed),
                 self.direct_read_wait_ns.load(Ordering::Relaxed),

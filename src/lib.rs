@@ -1687,6 +1687,80 @@ impl RuntimeDiagnostics {
     }
 }
 
+/// Samples delays in the Tokio worker scheduler during focused diagnostic runs.
+///
+/// The monitor is present only in diagnostic builds and stays dormant unless
+/// `UVICORN_RS_DIAGNOSTIC_TOKIO_SCHEDULER=1` is set.
+#[cfg(feature = "runtime-diagnostics")]
+struct TokioSchedulerDiagnostics {
+    stop: Option<oneshot::Sender<()>>,
+    task: tokio::task::JoinHandle<()>,
+}
+
+#[cfg(feature = "runtime-diagnostics")]
+impl TokioSchedulerDiagnostics {
+    fn start() -> Option<Self> {
+        if !std::env::var("UVICORN_RS_DIAGNOSTIC_TOKIO_SCHEDULER").is_ok_and(|value| value == "1") {
+            return None;
+        }
+
+        let (stop, mut stopped) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            const SAMPLE_PERIOD: std::time::Duration = std::time::Duration::from_millis(10);
+
+            let started = tokio::time::Instant::now();
+            let mut deadline = started + SAMPLE_PERIOD;
+            let mut samples = 0_u64;
+            let mut max_lag_ns = 0_u64;
+            let mut lag_over_10ms = 0_u64;
+            let mut lag_over_100ms = 0_u64;
+
+            loop {
+                tokio::select! {
+                    _ = &mut stopped => break,
+                    _ = tokio::time::sleep_until(deadline) => {
+                        let now = tokio::time::Instant::now();
+                        let lag = now.saturating_duration_since(deadline);
+                        let lag_ns = lag.as_nanos().min(u64::MAX as u128) as u64;
+                        samples = samples.saturating_add(1);
+                        max_lag_ns = max_lag_ns.max(lag_ns);
+                        if lag >= std::time::Duration::from_millis(10) {
+                            lag_over_10ms = lag_over_10ms.saturating_add(1);
+                        }
+                        if lag >= std::time::Duration::from_millis(100) {
+                            lag_over_100ms = lag_over_100ms.saturating_add(1);
+                        }
+                        // Rebase after a delayed wake rather than running a
+                        // burst of catch-up ticks that would distort the load.
+                        deadline = now + SAMPLE_PERIOD;
+                    }
+                }
+            }
+
+            let elapsed_ns = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+            log_error(format_args!(
+                "uvicorn-rs-tokio-scheduler-diagnostics samples={samples} max_lag_ns={max_lag_ns} lag_over_10ms={lag_over_10ms} lag_over_100ms={lag_over_100ms} elapsed_ns={elapsed_ns}"
+            ));
+        });
+
+        Some(Self {
+            stop: Some(stop),
+            task,
+        })
+    }
+
+    async fn finish(mut self) {
+        if let Some(stop) = self.stop.take() {
+            let _ = stop.send(());
+        }
+        if let Err(error) = self.task.await {
+            log_error(format_args!(
+                "uvicorn-rs: Tokio scheduler diagnostic task failed: {error}"
+            ));
+        }
+    }
+}
+
 struct ServeOptions {
     host: String,
     port: u16,
@@ -4976,6 +5050,8 @@ fn serve<'py>(
     let diagnostics = RuntimeDiagnostics::default();
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let _cancel_on_drop = cancel_on_drop;
+        #[cfg(feature = "runtime-diagnostics")]
+        let scheduler_diagnostics = TokioSchedulerDiagnostics::start();
         let options = ServeOptions {
             host,
             port,
@@ -4992,6 +5068,10 @@ fn serve<'py>(
             diagnostics.clone(),
         )
         .await;
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(scheduler_diagnostics) = scheduler_diagnostics {
+            scheduler_diagnostics.finish().await;
+        }
         diagnostics.report();
         result
     })
