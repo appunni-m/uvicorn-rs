@@ -1989,6 +1989,32 @@
       ]
     },
     {
+      "id": "python.api.run-http-concurrency",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "response_received",
+        "response_status",
+        "response_content_type",
+        "response_body_base64",
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out"
+      ],
+      "compare": [
+        "exit_code",
+        "response_received",
+        "response_status",
+        "response_content_type",
+        "response_body_base64",
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out"
+      ]
+    },
+    {
       "id": "python.api.run-websocket",
       "kind": "command_operation",
       "observe": [

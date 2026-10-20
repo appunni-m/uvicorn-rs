@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@17"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@18"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -827,6 +827,8 @@ def load_contract(
         "application_cleanup_before_followup", "server_log",
         "body_stream_error", "trigger_error", "shutdown_clean",
         "exit_code", "stdout_base64", "stderr_base64",
+        "response_received", "response_status", "response_content_type",
+        "response_body_base64", "shutdown_signal_sent", "process_timed_out",
     }
     for operation in manifest["operations"]:
         expected_operation_keys = {"id", "kind", "observe"}
@@ -2191,7 +2193,10 @@ def load_contract(
                 "python.api.server-readiness": "server_readiness",
                 "python.api.server-startup-failure-state": "server_startup_failure",
             }
-            if case["operation"] == "python.api.run-http":
+            if case["operation"] in {
+                "python.api.run-http",
+                "python.api.run-http-concurrency",
+            }:
                 exact_keys(case["api"], {"run_http"}, f"{case_id}.api")
                 run_http = case["api"]["run_http"]
                 optional_run_http_keys = {
@@ -2204,6 +2209,7 @@ def load_contract(
                     "observe_scope",
                     "proxy_headers",
                     "forwarded_allow_ips",
+                    "limit_concurrency",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2297,6 +2303,19 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}.api.run_http.forwarded_allow_ips must be a string"
+                    )
+                if "limit_concurrency" in run_http and (
+                    type(run_http["limit_concurrency"]) is not int
+                    or run_http["limit_concurrency"] < 0
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.limit_concurrency must be a non-negative integer"
+                    )
+                if (
+                    case["operation"] == "python.api.run-http-concurrency"
+                ) != ("limit_concurrency" in run_http):
+                    raise ParityError(
+                        f"{case_id}: run-http-concurrency requires exactly one limit_concurrency input"
                     )
                 if "environment" in run_http:
                     environment = run_http["environment"]
@@ -9520,6 +9539,32 @@ def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]
         "stdout_base64": base64.b64encode(completed.stdout).decode("ascii"),
         "stderr_base64": base64.b64encode(completed.stderr).decode("ascii"),
     }
+    if case["operation"] == "python.api.run-http-concurrency":
+        try:
+            run_http_observation = json.loads(completed.stdout)["run_http"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: HTTP API probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(run_http_observation) is not dict:
+            raise ParityError(f"{case['case_id']}: HTTP API observation must be an object")
+        observation.update(
+            {
+                name: run_http_observation.get(name)
+                for name in (
+                    "response_received",
+                    "response_status",
+                    "response_content_type",
+                    "response_body_base64",
+                    "shutdown_signal_sent",
+                    "process_exit_code",
+                    "process_timed_out",
+                )
+            }
+        )
     if "run_websocket" in case["api"]:
         try:
             response = json.loads(completed.stdout)
