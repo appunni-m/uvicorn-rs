@@ -904,6 +904,16 @@ struct RuntimeDiagnosticCounters {
     http_body_batch_threshold_flushes: AtomicU64,
     http_body_channel_send_calls: AtomicU64,
     http_body_channel_send_wait_ns: AtomicU64,
+    // Detailed request-body timings distinguish completed frame polls from timer flushes.
+    http_request_body_frame_poll_completions: AtomicU64,
+    http_request_body_frame_ready_wait_ns: AtomicU64,
+    http_request_body_batch_deadline_flushes: AtomicU64,
+    // Batch age overlaps frame-ready wait because the deadline races body.frame().
+    http_request_body_batch_age_at_deadline_ns: AtomicU64,
+    http_request_body_batch_size_flushes: AtomicU64,
+    http_request_body_eof_flushes: AtomicU64,
+    http_request_body_channel_full_sends: AtomicU64,
+    http_request_body_channel_full_send_wait_ns: AtomicU64,
     tcp_read_poll_calls: AtomicU64,
     tcp_read_pending_calls: AtomicU64,
     tcp_read_bytes: AtomicU64,
@@ -1098,6 +1108,58 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    fn http_request_body_frame_poll_finished(&self, started: Option<std::time::Instant>) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(started) = started {
+            self.counters
+                .http_request_body_frame_poll_completions
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters
+                .http_request_body_frame_ready_wait_ns
+                .fetch_add(
+                    started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = started;
+    }
+
+    #[inline]
+    fn http_request_body_batch_deadline_flush(&self, elapsed: std::time::Duration) {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.counters
+                .http_request_body_batch_deadline_flushes
+                .fetch_add(1, Ordering::Relaxed);
+            self.counters
+                .http_request_body_batch_age_at_deadline_ns
+                .fetch_add(
+                    elapsed.as_nanos().min(u64::MAX as u128) as u64,
+                    Ordering::Relaxed,
+                );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = elapsed;
+    }
+
+    #[inline]
+    fn http_request_body_batch_size_flush(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .http_request_body_batch_size_flushes
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
+    fn http_request_body_eof_flush(&self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        self.counters
+            .http_request_body_eof_flushes
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[inline]
     fn http_body_data_frame(&self, bytes: usize) {
         #[cfg(feature = "runtime-diagnostics")]
         {
@@ -1142,16 +1204,28 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
-    fn http_body_channel_send_finished(&self, started: Option<std::time::Instant>) {
+    fn http_body_channel_send_finished(
+        &self,
+        started: Option<std::time::Instant>,
+        channel_was_full: bool,
+    ) {
         #[cfg(feature = "runtime-diagnostics")]
         if let Some(started) = started {
-            self.counters.http_body_channel_send_wait_ns.fetch_add(
-                started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
-                Ordering::Relaxed,
-            );
+            let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+            self.counters
+                .http_body_channel_send_wait_ns
+                .fetch_add(elapsed, Ordering::Relaxed);
+            if channel_was_full {
+                self.counters
+                    .http_request_body_channel_full_sends
+                    .fetch_add(1, Ordering::Relaxed);
+                self.counters
+                    .http_request_body_channel_full_send_wait_ns
+                    .fetch_add(elapsed, Ordering::Relaxed);
+            }
         }
         #[cfg(not(feature = "runtime-diagnostics"))]
-        let _ = started;
+        let _ = (started, channel_was_full);
     }
 
     #[inline]
@@ -1384,6 +1458,14 @@ impl RuntimeDiagnostics {
                 "http_body_batch_threshold_flushes={} ",
                 "http_body_channel_send_calls={} ",
                 "http_body_channel_send_wait_ns={} ",
+                "http_request_body_frame_poll_completions={} ",
+                "http_request_body_frame_ready_wait_ns={} ",
+                "http_request_body_batch_deadline_flushes={} ",
+                "http_request_body_batch_age_at_deadline_ns={} ",
+                "http_request_body_batch_size_flushes={} ",
+                "http_request_body_eof_flushes={} ",
+                "http_request_body_channel_full_sends={} ",
+                "http_request_body_channel_full_send_wait_ns={} ",
                 "tcp_read_poll_calls={} ",
                 "tcp_read_pending_calls={} ",
                 "tcp_read_bytes={} ",
@@ -1481,6 +1563,30 @@ impl RuntimeDiagnostics {
                 .load(Ordering::Relaxed),
             self.counters
                 .http_body_channel_send_wait_ns
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_body_frame_poll_completions
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_body_frame_ready_wait_ns
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_body_batch_deadline_flushes
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_body_batch_age_at_deadline_ns
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_body_batch_size_flushes
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_body_eof_flushes
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_body_channel_full_sends
+                .load(Ordering::Relaxed),
+            self.counters
+                .http_request_body_channel_full_send_wait_ns
                 .load(Ordering::Relaxed),
             self.counters.tcp_read_poll_calls.load(Ordering::Relaxed),
             self.counters.tcp_read_pending_calls.load(Ordering::Relaxed),
@@ -4086,7 +4192,7 @@ async fn pump_http_request_body(
     let body_batch_max_wait = HTTP_REQUEST_BODY_BATCH_MAX_WAIT;
     let mut body_segments = Vec::new();
     let mut body_len = 0usize;
-    let mut body_started = None;
+    let mut body_started: Option<tokio::time::Instant> = None;
     let mut body_batch_timer =
         std::pin::pin!(tokio::time::sleep_until(tokio::time::Instant::now()));
     loop {
@@ -4127,6 +4233,9 @@ async fn pump_http_request_body(
             _ = &mut body_batch_timer, if body_started.is_some() => {
                 diagnostics.http_body_frame_wait_finished(frame_wait_started);
                 diagnostics.http_body_batch_timeout_flush();
+                if let Some(started) = body_started {
+                    diagnostics.http_request_body_batch_deadline_flush(started.elapsed());
+                }
                 None
             },
             frame = body.frame() => {
@@ -4134,6 +4243,9 @@ async fn pump_http_request_body(
                 Some(frame)
             },
         };
+        if frame.is_some() {
+            diagnostics.http_request_body_frame_poll_finished(frame_wait_started);
+        }
         let Some(frame) = frame else {
             let message = RequestMessage {
                 body: RequestBody::take_batch(&mut body_segments, &mut body_len),
@@ -4169,6 +4281,7 @@ async fn pump_http_request_body(
                             && body_len.saturating_add(data.len()) > body_batch_limit
                         {
                             diagnostics.http_body_batch_threshold_flush();
+                            diagnostics.http_request_body_batch_size_flush();
                             let message = RequestMessage {
                                 body: RequestBody::take_batch(&mut body_segments, &mut body_len),
                                 more_body: true,
@@ -4287,6 +4400,7 @@ async fn pump_http_request_body(
             }
             None => {
                 if !body_segments.is_empty() {
+                    diagnostics.http_request_body_eof_flush();
                     let message = RequestMessage {
                         body: RequestBody::take_batch(&mut body_segments, &mut body_len),
                         more_body: true,
@@ -4357,6 +4471,10 @@ async fn send_http_request_message(
     let diagnostics = send_context.diagnostics;
     let _send_mode = send_context._mode;
     let send_wait_started = diagnostics.http_body_channel_send_started();
+    #[cfg(feature = "runtime-diagnostics")]
+    let channel_was_full = sender.capacity() == 0;
+    #[cfg(not(feature = "runtime-diagnostics"))]
+    let channel_was_full = false;
     let result = tokio::select! {
         biased;
         _ = async {
@@ -4386,11 +4504,11 @@ async fn send_http_request_message(
             }
             wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
         } => {
-            diagnostics.http_body_channel_send_finished(send_wait_started);
+            diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
             return false;
         },
         result = sender.send(message) => {
-            diagnostics.http_body_channel_send_finished(send_wait_started);
+            diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
             result
         },
     };

@@ -1186,6 +1186,29 @@ for per-workload Python-loop/Tokio CPU placement. App-boundary timers and
 Rust-only counters have different meanings; neither is a function-level CPU
 decomposition.
 
+The H1 request-body diagnostics also expose the body-pump stages. The older
+`http_body_frame_waits` and `http_body_frame_wait_ns` include both completed
+Hyper frame polls and waits that end when the batch deadline fires. Use
+`http_request_body_frame_poll_completions` and
+`http_request_body_frame_ready_wait_ns` to isolate polls completed by a frame,
+EOF, or body error; polls interrupted by the batch deadline or shutdown are
+excluded. `http_request_body_batch_deadline_flushes` and
+`http_request_body_batch_age_at_deadline_ns` count deadline flushes and the age
+from the first segment in a batch until its deadline fires. Batch age includes
+time between frame arrivals and overlaps frame-ready wait, so do not add those
+time sums. `http_request_body_batch_size_flushes` counts flushes before adding
+a frame that would exceed the configured batch limit, while
+`http_request_body_eof_flushes` counts buffered batches flushed after EOF.
+
+`http_request_body_channel_full_sends` counts send attempts whose bounded
+channel had no free slot when the attempt began;
+`http_request_body_channel_full_send_wait_ns` is the elapsed-time subset for
+those attempts. The general `http_body_channel_send_wait_ns` includes time until
+the send completes or a connection/server stop preempts it, including runtime
+scheduling as well as any channel wait. These are process-wide aggregate
+counters, not per-request histograms or CPU measurements. They are available
+only in builds with `runtime-diagnostics` enabled.
+
 ## Capture a diagnostic profile on macOS
 
 [`profile_http_workload.py`](https://github.com/appunni-m/uvicorn-rs/blob/main/scripts/profile_http_workload.py) runs the
