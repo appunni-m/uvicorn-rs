@@ -131,6 +131,30 @@
       }
     },
     {
+      "case_id": "websocket.proxy-http-forwarded-scheme-becomes-ws",
+      "profile": "websocket",
+      "operation": "websocket.scope-and-messages",
+      "covers": [
+        "websocket.scope-and-messages"
+      ],
+      "server_options": {
+        "proxy_headers": true,
+        "forwarded_allow_ips": "127.0.0.1,::1"
+      },
+      "websocket": {
+        "path": "/ws-scope-echo/proxy-headers-scheme-http",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "x-forwarded-proto",
+            "http"
+          ]
+        ],
+        "expect_close": true
+      }
+    },
+    {
       "case_id": "websocket.empty-subprotocol-token-handshake-rejected",
       "profile": "websocket",
       "operation": "websocket.protocol-error",
