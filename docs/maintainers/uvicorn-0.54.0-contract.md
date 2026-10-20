@@ -189,12 +189,17 @@ inputs passed when run individually against isolated genuine Uvicorn 0.54.0:
 14 CLI cases and 9 Python API cases. Two additional CLI cases then passed
 individually on the current dirty source: explicit `--workers 1` and
 `--workers 0` both preserve the upstream missing-application diagnostic. These
-two results used input schema `@9` and native extension SHA-256
-`fe0cd0f5d8a4f5e0d158a67c69b8c175d3fbaf63c02dd65955065ad6c794a017`; receipts
-are `target/kata-cli-workers-single.json` and
-`target/kata-cli-workers-zero.json`. They prove these two values are accepted
-as the single-process default, not multi-worker supervision. The earlier
-receipts share target base
+two results used input schema `@9` and clean exact revision
+`81ba57c3c930bffbf8e69ed7a4eaa465b6ca6dbf` with source SHA-256
+`6eacdf49526598b649b97f05eb7efcd5504b67cb2e51dd42548e951c7ce76ea1` and
+native extension SHA-256
+`fe0cd0f5d8a4f5e0d158a67c69b8c175d3fbaf63c02dd65955065ad6c794a017`. The
+run IDs are `dbf5b55507874d7795cde6eedec1f8f7` and
+`51b64155a5b540fcb9e727bb8c6bc6eb`; receipts are
+`target/kata-cli-workers-single-81ba.json` and
+`target/kata-cli-workers-zero-81ba.json`. They prove these two values are
+accepted as the single-process default, not multi-worker supervision. The
+earlier receipts share target base
 revision `9e085cecaed811d68688239ba149854f0c07d094`, dirty-source digest
 `2bf372d14ff0b82aad0b8a249a53a2ebfec3c1c8e30574dec25c424f160bd7f3`, and
 native extension SHA-256
