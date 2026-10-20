@@ -2957,7 +2957,7 @@ fn python_task_future(
 }
 
 enum WebSocketIncoming {
-    Text(tokio_tungstenite::tungstenite::Utf8Bytes),
+    Text(String),
     Bytes(Bytes),
     Disconnect { code: u16, reason: String },
 }
@@ -3403,7 +3403,7 @@ impl WebSocketIo {
                         );
                         coverage_try!(
                             WebSocketReceiveTextValueSetItem,
-                            message.set_item("text", text.as_str())
+                            message.set_item("text", text)
                         );
                     }
                     Some(WebSocketIncoming::Bytes(data)) => {
@@ -7725,9 +7725,9 @@ where
                         #[cfg(coverage)]
                         let send_failed = coverage_fault_is_armed(
                             CoverageFaultPoint::WebSocketDriverIncomingTextReceiverClosed,
-                        ) || incoming.send(WebSocketIncoming::Text(text)).await.is_err();
+                        ) || incoming.send(WebSocketIncoming::Text(text.to_string())).await.is_err();
                         #[cfg(not(coverage))]
-                        let send_failed = incoming.send(WebSocketIncoming::Text(text)).await.is_err();
+                        let send_failed = incoming.send(WebSocketIncoming::Text(text.to_string())).await.is_err();
                         if send_failed {
                             break;
                         }
