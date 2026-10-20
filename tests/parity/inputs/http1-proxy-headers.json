@@ -278,6 +278,29 @@
         ],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "http1.proxy-headers-uppercase-proto-is-ignored",
+      "profile": "http1-proxy-headers",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "server_options": {
+        "proxy_headers": true,
+        "forwarded_allow_ips": "127.0.0.1,::1"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope-echo/proxy-headers-uppercase-proto",
+        "headers": [
+          [
+            "x-forwarded-proto",
+            "HTTPS"
+          ]
+        ],
+        "body_base64": ""
+      }
     }
   ]
 }

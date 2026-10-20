@@ -59,7 +59,7 @@ environment variables are `WEB_CONCURRENCY`, `FORWARDED_ALLOW_IPS`, and, for
 watchfiles reload, `WATCHFILES_FORCE_POLLING`. These are separate from the
 `UVICORN_*` prefix rule.
 
-The ten focused HTTP/1.1 cases `http1.proxy-headers-trusted-client-and-scheme`,
+The eleven focused HTTP/1.1 cases `http1.proxy-headers-trusted-client-and-scheme`,
 `http1.proxy-headers-disabled-ignores-forwarded-values`,
 `http1.proxy-headers-untrusted-peer-ignores-forwarded-values`,
 `http1.proxy-headers-wildcard-trust-uses-first-forwarded-client`,
@@ -68,8 +68,9 @@ The ten focused HTTP/1.1 cases `http1.proxy-headers-trusted-client-and-scheme`,
 `http1.proxy-headers-empty-forwarded-for-preserves-peer`, and
 `http1.proxy-headers-all-trusted-chain-selects-first-forwarded-client`, and
 `http1.proxy-headers-duplicate-forwarded-for-fields-join-in-order`, and
-`http1.proxy-headers-duplicate-forwarded-proto-last-value-wins` each pass 1/1
-against Uvicorn 0.54.0. The WebSocket proxy cases
+`http1.proxy-headers-duplicate-forwarded-proto-last-value-wins`, and
+`http1.proxy-headers-uppercase-proto-is-ignored` each pass 1/1 against Uvicorn
+0.54.0. The WebSocket proxy cases
 `websocket.proxy-https-forwarded-scheme-becomes-wss`,
 `websocket.proxy-http-forwarded-scheme-becomes-ws`, and
 `websocket.proxy-wss-forwarded-scheme-remains-wss` also pass 1/1. The three
@@ -99,6 +100,8 @@ The duplicate-field case sends client and proxy addresses in separate
 address.
 The duplicate-protocol case sends `http` then `https`; both apply the last
 `X-Forwarded-Proto` field and expose scheme `https`.
+The uppercase-protocol case sends `HTTPS`; both ignore the unsupported token
+and retain the default HTTP scope scheme.
 The WebSocket proxy cases verify that forwarded `https` becomes `wss`,
 forwarded `http` becomes `ws`, and explicit forwarded `wss` remains `wss` in
 the ASGI scope.
