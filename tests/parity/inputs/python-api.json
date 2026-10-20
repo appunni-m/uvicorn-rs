@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@13",
+  "schema": "uvicorn-rs-parity/input@14",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -204,6 +204,30 @@
             ["X-Python-API-Sequence", "second"]
           ],
           "observe_headers": ["x-python-api-sequence"]
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-applies-trusted-proxy-headers",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-proxy-headers",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "request_headers": [
+            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
+            ["x-forwarded-proto", "https"]
+          ],
+          "observe_scope": true,
+          "proxy_headers": true,
+          "forwarded_allow_ips": "127.0.0.1,::1"
         }
       }
     },

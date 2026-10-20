@@ -60,6 +60,10 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument("--header", dest="headers", action="append", default=[])
     parser.add_argument("--server-header", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--date-header", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--proxy-headers", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument("--forwarded-allow-ips")
     return parser.parse_args(argv)
 
 
@@ -80,6 +84,11 @@ def main(argv=None, prog="uvicorn-rs-py"):
 
         print(f"INFO:     Loading environment from '{args.env_file}'", file=sys.stderr)
         load_dotenv(args.env_file)
+    forwarded_allow_ips = args.forwarded_allow_ips
+    if forwarded_allow_ips is None:
+        forwarded_allow_ips = os.environ.get(
+            "FORWARDED_ALLOW_IPS", "127.0.0.1,::1"
+        )
     try:
         app = _load_app(args.app)
     except ImportFromStringError as exc:
@@ -100,6 +109,10 @@ def main(argv=None, prog="uvicorn-rs-py"):
     from uvicorn.config import _configure_asgi_interface
 
     app, _ = _configure_asgi_interface(app, args.interface)
+    if args.proxy_headers:
+        from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+        app = ProxyHeadersMiddleware(app, trusted_hosts=forwarded_allow_ips)
 
     loop_factory = None
     if args.loop == "uvloop":

@@ -302,7 +302,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "timeout_graceful_shutdown", "app_dir", "factory", "lifespan", "root_path",
         "env_file",
         "headers", "server_header", "date_header", "interface",
-        "ws_max_size",
+        "ws_max_size", "proxy_headers", "forwarded_allow_ips",
     }
     # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
     # process. Neither value requires process supervision from the adapter.
@@ -363,6 +363,10 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.append("--no-server-header")
     if not options["date_header"]:
         argv.append("--no-date-header")
+    if not options["proxy_headers"]:
+        argv.append("--no-proxy-headers")
+    if options["forwarded_allow_ips"] is not None:
+        argv.extend(("--forwarded-allow-ips", options["forwarded_allow_ips"]))
     if options["interface"] != "auto":
         argv.extend(("--interface", options["interface"]))
     if options["ws_max_size"] != 16 * 1024 * 1024:

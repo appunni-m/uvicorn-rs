@@ -160,6 +160,11 @@ class Config:
             print(f"INFO:     Loading environment from '{env_file}'", file=sys.stderr)
             load_dotenv(dotenv_path=env_file)
 
+        if forwarded_allow_ips is None:
+            self.forwarded_allow_ips = os.environ.get(
+                "FORWARDED_ALLOW_IPS", "127.0.0.1,::1"
+            )
+
         self.workers = workers or 1
         if workers is None and "WEB_CONCURRENCY" in os.environ:
             self.workers = int(os.environ["WEB_CONCURRENCY"])
@@ -213,6 +218,12 @@ class Config:
         self.loaded_app, self.interface = _configure_asgi_interface(
             self.loaded_app, self.interface
         )
+        if self.proxy_headers:
+            from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+            self.loaded_app = ProxyHeadersMiddleware(
+                self.loaded_app, trusted_hosts=self.forwarded_allow_ips
+            )
         encoded_headers = [
             (name.lower().encode("latin1"), value.encode("latin1"))
             for name, value in (self.headers or [])
@@ -247,8 +258,6 @@ class Config:
             ),
             (self.log_level not in (None, "error", 40), "log_level"),
             (self.use_colors is not None, "use_colors"),
-            (self.proxy_headers is not True, "proxy_headers"),
-            (self.forwarded_allow_ips not in (None, []), "forwarded_allow_ips"),
             (self.limit_concurrency is not None, "limit_concurrency"),
             (self.limit_max_requests is not None, "limit_max_requests"),
             (self.limit_max_requests_jitter != 0, "limit_max_requests_jitter"),

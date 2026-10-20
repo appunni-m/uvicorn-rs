@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@13"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@14"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2303,6 +2303,10 @@ def load_contract(
                     "observe_headers",
                     "interface",
                     "application_interface",
+                    "request_headers",
+                    "observe_scope",
+                    "proxy_headers",
+                    "forwarded_allow_ips",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2342,13 +2346,13 @@ def load_contract(
                     raise ParityError(f"{case_id}.api.run_http.lifespan must be auto, on, or off")
                 if not isinstance(run_http["root_path"], str):
                     raise ParityError(f"{case_id}.api.run_http.root_path must be a string")
-                for field in ("headers", "observe_headers"):
+                for field in ("headers", "request_headers", "observe_headers"):
                     if field not in run_http:
                         continue
                     values = run_http[field]
                     if not isinstance(values, list):
                         raise ParityError(f"{case_id}.api.run_http.{field} must be an array")
-                    if field == "headers":
+                    if field in {"headers", "request_headers"}:
                         if any(
                             not isinstance(header, list)
                             or len(header) != 2
@@ -2379,6 +2383,24 @@ def load_contract(
                         raise ParityError(
                             f"{case_id}.api.run_http.observe_headers must contain unique header names"
                         )
+                if "observe_scope" in run_http and type(run_http["observe_scope"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_scope must be a boolean"
+                    )
+                if run_http.get("observe_scope") and run_http["invocation"] != "api":
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_scope is supported only for direct API invocation"
+                    )
+                if "proxy_headers" in run_http and type(run_http["proxy_headers"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.proxy_headers must be a boolean"
+                    )
+                if "forwarded_allow_ips" in run_http and not isinstance(
+                    run_http["forwarded_allow_ips"], str
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.forwarded_allow_ips must be a string"
+                    )
                 timeout_seconds = run_http["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
                     raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 8")
@@ -2875,7 +2897,32 @@ def load_contract(
                 ):
                     raise ParityError(f"{case_id}: request-sequence headers must be pairs of strings")
         elif "request" in case and supports_http_request:
-            exact_case_keys(case, {"case_id", "profile", "operation", "covers", "request"}, case_id)
+            case_keys = {"case_id", "profile", "operation", "covers", "request"}
+            if "server_options" in case:
+                case_keys.add("server_options")
+                server_options = case["server_options"]
+                if not isinstance(server_options, dict):
+                    raise ParityError(f"{case_id}: server_options must be an object")
+                allowed_options = {"proxy_headers", "forwarded_allow_ips"}
+                unknown_options = set(server_options) - allowed_options
+                if unknown_options:
+                    raise ParityError(
+                        f"{case_id}: unsupported HTTP server options: "
+                        f"{', '.join(sorted(unknown_options))}"
+                    )
+                if "proxy_headers" in server_options and type(
+                    server_options["proxy_headers"]
+                ) is not bool:
+                    raise ParityError(
+                        f"{case_id}: server_options.proxy_headers must be a boolean"
+                    )
+                if "forwarded_allow_ips" in server_options and not isinstance(
+                    server_options["forwarded_allow_ips"], str
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.forwarded_allow_ips must be a string"
+                    )
+            exact_case_keys(case, case_keys, case_id)
             request = case["request"]
             request_keys = {"method", "path", "headers", "body_base64"}
             if "h3_grease" in request:
@@ -3926,6 +3973,16 @@ def start_server(
             )
         if "ws_max_size" in server_options:
             command.extend(["--ws-max-size", str(server_options["ws_max_size"])])
+        if "proxy_headers" in server_options:
+            command.append(
+                "--proxy-headers"
+                if server_options["proxy_headers"]
+                else "--no-proxy-headers"
+            )
+        if "forwarded_allow_ips" in server_options:
+            command.extend(
+                ["--forwarded-allow-ips", server_options["forwarded_allow_ips"]]
+            )
 
     log = tempfile.TemporaryFile(mode="w+t")
     process = subprocess.Popen(

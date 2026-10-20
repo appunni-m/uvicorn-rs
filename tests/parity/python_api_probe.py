@@ -83,16 +83,22 @@ async def asgi3_app(scope, receive, send):
     root_path_status = b"root_path=" + scope["root_path"].encode("utf-8")
     path_status = b"path=" + scope["path"].encode("utf-8")
     raw_path_status = b"raw_path=" + base64.b64encode(scope["raw_path"])
-    body = b"|".join(
-        (
-            b"python-api-run-ok",
-            lifespan_status,
-            state_status,
-            root_path_status,
-            path_status,
-            raw_path_status,
+    body_parts = [
+        b"python-api-run-ok",
+        lifespan_status,
+        state_status,
+        root_path_status,
+        path_status,
+        raw_path_status,
+    ]
+    if observe_scope:
+        body_parts.extend(
+            (
+                b"proxy-scheme=" + scope["scheme"].encode("latin1"),
+                b"proxy-client=" + str(scope["client"][0]).encode("latin1"),
+            )
         )
-    )
+    body = b"|".join(body_parts)
     await send({
         "type": "http.response.start",
         "status": 200,
@@ -110,6 +116,9 @@ def asgi2_app(scope):
 
 application_interface = sys.argv[5]
 requested_interface = sys.argv[6]
+observe_scope = sys.argv[7] == "1"
+proxy_headers = sys.argv[8] == "1"
+forwarded_allow_ips = json.loads(sys.argv[9])
 app = asgi2_app if application_interface == "asgi2" else asgi3_app
 
 uvicorn.run(
@@ -120,6 +129,8 @@ uvicorn.run(
     root_path=sys.argv[3],
     headers=json.loads(sys.argv[4]),
     interface=requested_interface,
+    proxy_headers=proxy_headers,
+    forwarded_allow_ips=forwarded_allow_ips,
 )
 '''
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
@@ -150,6 +161,10 @@ uvicorn.run(
             command.extend(("--interface", request["interface"]))
         for name, value in request.get("headers", []):
             command.extend(("--header", f"{name}:{value}"))
+        if request.get("proxy_headers") is False:
+            command.append("--no-proxy-headers")
+        if request.get("forwarded_allow_ips") is not None:
+            command.extend(("--forwarded-allow-ips", request["forwarded_allow_ips"]))
     else:
         command = [
             sys.executable,
@@ -161,6 +176,9 @@ uvicorn.run(
             json.dumps(request.get("headers", []), separators=(",", ":")),
             request.get("application_interface", "asgi3"),
             request.get("interface", "auto"),
+            "1" if request.get("observe_scope", False) else "0",
+            "0" if request.get("proxy_headers") is False else "1",
+            json.dumps(request.get("forwarded_allow_ips")),
         ]
 
     environment = os.environ.copy()
@@ -195,7 +213,10 @@ uvicorn.run(
                 connection.request(
                     request["method"],
                     request["path"],
-                    headers={"Connection": "close"},
+                    headers={
+                        "Connection": "close",
+                        **dict(request.get("request_headers", [])),
+                    },
                 )
                 http_response = connection.getresponse()
                 response_body = http_response.read()

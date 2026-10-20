@@ -59,6 +59,15 @@ environment variables are `WEB_CONCURRENCY`, `FORWARDED_ALLOW_IPS`, and, for
 watchfiles reload, `WATCHFILES_FORCE_POLLING`. These are separate from the
 `UVICORN_*` prefix rule.
 
+The focused cases `http1.proxy-headers-trusted-client-and-scheme` and
+`python-api.run-applies-trusted-proxy-headers` each pass 1/1 against Uvicorn
+0.54.0. Both send `X-Forwarded-For: 198.51.100.25, 127.0.0.1` and
+`X-Forwarded-Proto: https` from the loopback peer with an explicit
+`127.0.0.1,::1` trust list; both servers expose client `198.51.100.25` and
+scheme `https` to the ASGI app. This does not establish untrusted-peer
+handling, disabled proxy headers, wildcard/CIDR trust, malformed forwarding
+chains, `FORWARDED_ALLOW_IPS` precedence, or WebSocket scheme conversion.
+
 ## Python import and callable surface
 
 The upstream package declares `__all__ = ["main", "run", "Config", "Server"]`.
@@ -175,8 +184,9 @@ supervision, or package replacement behavior.
 Python API inputs introduced `uvicorn-rs-parity/input@11` to include
 `root_path`, optional default-header stimuli and observations, and selected
 Uvicorn/application interfaces in the declared run request. The active input
-schema is now `@12`, which allows a strict per-profile `server_options` object
-for matching the same WebSocket setting on the oracle and candidate. They compare public imports/signatures, the
+schema is now `@14`, which allows strict per-profile `server_options` for
+matching WebSocket and proxy-header settings, plus Python API request-header
+and scope stimuli. They compare public imports/signatures, the
 `uvicorn.run()` missing-module diagnostic, a successful default request, an
 API request with lifespan disabled, a module CLI request with lifespan
 disabled, startup readiness, startup-failure state, and API/module-CLI requests

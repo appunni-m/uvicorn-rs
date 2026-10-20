@@ -123,6 +123,18 @@
       ]
     },
     {
+      "id": "http1-proxy-headers",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1",
+      "oracle_config": [
+        "uvloop",
+        "httptools",
+        "interface asgi3 for the synchronous callable returning an awaitable",
+        "--proxy-headers",
+        "--forwarded-allow-ips 127.0.0.1,::1"
+      ]
+    },
+    {
       "id": "http1-tls",
       "oracle": "uvicorn",
       "protocol": "http/1.1",
@@ -2048,6 +2060,7 @@
     "inputs/cli.json",
     "inputs/http1.json",
     "inputs/http1-header-policy.json",
+    "inputs/http1-proxy-headers.json",
     "inputs/http1-tls.json",
     "inputs/http2.json",
     "inputs/http3.json",
