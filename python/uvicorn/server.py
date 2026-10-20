@@ -8,12 +8,20 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import signal
 import socket
 import sys
+import threading
+from collections.abc import Generator
+from types import FrameType
 from typing import Any
 
 from .config import Config
+
+HANDLED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
+if sys.platform == "win32":  # pragma: no cover - Windows-specific signal
+    HANDLED_SIGNALS += (signal.SIGBREAK,)
 
 
 class Server:
@@ -25,6 +33,7 @@ class Server:
         self._should_exit = False
         self.force_exit = False
         self._native_server: Any = None
+        self._captured_signals: list[int] = []
 
     @property
     def should_exit(self) -> bool:
@@ -38,6 +47,10 @@ class Server:
 
     async def serve(self, sockets: list[socket.socket] | None = None) -> None:
         """Serve until shutdown, preserving caller event-loop ownership."""
+        with self.capture_signals():
+            await self._serve(sockets=sockets)
+
+    async def _serve(self, sockets: list[socket.socket] | None = None) -> None:
         if sockets is not None:
             raise NotImplementedError("uvicorn-rs does not support pre-bound sockets yet")
         self.config.validate_native_runtime()
@@ -81,38 +94,48 @@ class Server:
         finally:
             self._native_server = None
 
+    @contextlib.contextmanager
+    def capture_signals(self) -> Generator[None, None, None]:
+        """Gracefully stop on signals, then restore their normal process effect."""
+        if threading.current_thread() is not threading.main_thread():
+            yield
+            return
+
+        original_handlers = {
+            signum: signal.signal(signum, self.handle_exit)
+            for signum in HANDLED_SIGNALS
+        }
+        try:
+            yield
+        finally:
+            for signum, handler in original_handlers.items():
+                signal.signal(signum, handler)
+
+        for signum in reversed(self._captured_signals):
+            signal.raise_signal(signum)
+
+    def handle_exit(self, signum: int, frame: FrameType | None) -> None:
+        """Record a signal and request graceful shutdown from the native server."""
+        self._captured_signals.append(signum)
+        if self._should_exit and signum == signal.SIGINT:
+            self.force_exit = True
+        else:
+            self.should_exit = True
+
     def run(self, sockets: list[socket.socket] | None = None) -> None:
         """Run :meth:`serve` in a new loop and handle process signals."""
         loop_factory = self.config.get_loop_factory()
 
-        async def run_server() -> None:
-            loop = asyncio.get_running_loop()
-            installed_handlers = []
-            for signum in (signal.SIGINT, signal.SIGTERM):
-                try:
-                    loop.add_signal_handler(signum, setattr, self, "should_exit", True)
-                except (AttributeError, NotImplementedError, RuntimeError, ValueError):
-                    continue
-                installed_handlers.append(signum)
-            try:
-                await self.serve(sockets=sockets)
-            finally:
-                for signum in installed_handlers:
-                    try:
-                        loop.remove_signal_handler(signum)
-                    except (AttributeError, NotImplementedError, RuntimeError, ValueError):
-                        pass
-
         if sys.version_info >= (3, 11):
             with asyncio.Runner(loop_factory=loop_factory) as runner:
-                runner.run(run_server())
+                runner.run(self.serve(sockets=sockets))
         elif loop_factory is None:
-            asyncio.run(run_server())
+            asyncio.run(self.serve(sockets=sockets))
         else:
             loop = loop_factory()
             try:
                 asyncio.set_event_loop(loop)
-                loop.run_until_complete(run_server())
+                loop.run_until_complete(self.serve(sockets=sockets))
             finally:
                 asyncio.set_event_loop(None)
                 loop.close()

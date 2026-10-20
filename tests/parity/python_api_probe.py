@@ -120,20 +120,25 @@ observe_scope = sys.argv[7] == "1"
 proxy_headers = sys.argv[8] == "1"
 forwarded_allow_ips = json.loads(sys.argv[9])
 limit_concurrency = json.loads(sys.argv[10])
+invocation = sys.argv[11]
 app = asgi2_app if application_interface == "asgi2" else asgi3_app
 
-uvicorn.run(
-    app,
-    host="127.0.0.1",
-    port=int(sys.argv[1]),
-    lifespan=sys.argv[2],
-    root_path=sys.argv[3],
-    headers=json.loads(sys.argv[4]),
-    interface=requested_interface,
-    proxy_headers=proxy_headers,
-    forwarded_allow_ips=forwarded_allow_ips,
-    limit_concurrency=limit_concurrency,
-)
+options = {
+    "host": "127.0.0.1",
+    "port": int(sys.argv[1]),
+    "lifespan": sys.argv[2],
+    "root_path": sys.argv[3],
+    "headers": json.loads(sys.argv[4]),
+    "interface": requested_interface,
+    "proxy_headers": proxy_headers,
+    "forwarded_allow_ips": forwarded_allow_ips,
+    "limit_concurrency": limit_concurrency,
+}
+if invocation == "config-server":
+    config = uvicorn.Config(app, **options)
+    uvicorn.Server(config).run()
+else:
+    uvicorn.run(app, **options)
 '''
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
         reservation.bind(("127.0.0.1", 0))
@@ -184,6 +189,7 @@ uvicorn.run(
             "0" if request.get("proxy_headers") is False else "1",
             json.dumps(request.get("forwarded_allow_ips")),
             json.dumps(request.get("limit_concurrency")),
+            request["invocation"],
         ]
 
     environment = os.environ.copy()

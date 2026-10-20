@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@18",
+  "schema": "uvicorn-rs-parity/input@19",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -198,6 +198,24 @@
           "timeout_seconds": 5,
           "lifespan": "auto",
           "invocation": "api",
+          "root_path": "",
+          "limit_concurrency": 1
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-applies-concurrency-limit",
+      "profile": "python-api",
+      "operation": "python.api.run-http-concurrency",
+      "covers": ["python.api.run-http-concurrency"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-config-concurrency-limit",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
           "root_path": "",
           "limit_concurrency": 1
         }

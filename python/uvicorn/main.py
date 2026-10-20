@@ -495,4 +495,7 @@ def run(
         h11_max_incomplete_event_size=h11_max_incomplete_event_size,
         reset_contextvars=reset_contextvars,
     )
-    Server(config).run()
+    try:
+        Server(config).run()
+    except KeyboardInterrupt:
+        pass
