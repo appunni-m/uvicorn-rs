@@ -51,6 +51,7 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument("--app-dir", default="")
     parser.add_argument("--root-path", default="")
     parser.add_argument("--factory", action="store_true")
+    parser.add_argument("--env-file")
     parser.add_argument("--certfile", help="PEM certificate chain; enables HTTPS and HTTP/3")
     parser.add_argument("--keyfile", help="PEM private key for --certfile")
     parser.add_argument("--graceful-timeout", type=int, default=10)
@@ -72,6 +73,11 @@ def main(argv=None, prog="uvicorn-rs-py"):
         sys.path.insert(0, app_dir)
     if args.app_dir:
         sys.path.insert(0, args.app_dir)
+    if args.env_file:
+        from dotenv import load_dotenv
+
+        print(f"INFO:     Loading environment from '{args.env_file}'", file=sys.stderr)
+        load_dotenv(args.env_file)
     try:
         app = _load_app(args.app)
     except ImportFromStringError as exc:

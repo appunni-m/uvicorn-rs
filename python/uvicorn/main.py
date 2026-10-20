@@ -300,6 +300,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
     supported = {
         "host", "port", "loop", "ssl_certfile", "ssl_keyfile",
         "timeout_graceful_shutdown", "app_dir", "factory", "lifespan", "root_path",
+        "env_file",
         "headers", "server_header", "date_header", "interface",
     }
     # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
@@ -351,6 +352,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.extend(("--app-dir", options["app_dir"]))
     if options["factory"]:
         argv.append("--factory")
+    if options["env_file"]:
+        argv.extend(("--env-file", options["env_file"]))
     if options["root_path"]:
         argv.extend(("--root-path", options["root_path"]))
     for header in options["headers"]:
