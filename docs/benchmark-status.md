@@ -3,9 +3,9 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [39467113660 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39467113660)
-- Commit: [`9fac9a1a20a8bf5f74a2046447b5758c2a4bd280`](https://github.com/appunni-m/uvicorn-rs/commit/9fac9a1a20a8bf5f74a2046447b5758c2a4bd280)
-- Recorded: 2026-10-20T21:32:02Z
+- Run: [39471910457 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39471910457)
+- Commit: [`d022562b1305ca47f0ad93f37b4a042e471b8bf0`](https://github.com/appunni-m/uvicorn-rs/commit/d022562b1305ca47f0ad93f37b4a042e471b8bf0)
+- Recorded: 2026-10-20T22:47:50Z
 - Category matrix job: `failure`
 - Aggregate job: `success`
 
