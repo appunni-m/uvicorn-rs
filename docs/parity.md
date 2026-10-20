@@ -421,11 +421,11 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
-| CLI and environment | 23 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
+| CLI and environment | 24 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
 | Python API | 22 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, a configured WebSocket message limit, and concurrency-limit responses through both `uvicorn.run()` and `Config`/`Server.run()`. |
 
-These eight groups account for all 313 current oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 604 total cases. Five
+These eight groups account for all 314 declared oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 605 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -474,10 +474,11 @@ directory and timeout; network inputs contain request methods, paths, headers,
 body bytes, WebSocket messages, disconnect workflows, and shutdown workflows.
 They do not contain expected responses or previously captured server output.
 The current CLI cases compare help and version through `python -m uvicorn` and
-the installed `uvicorn` console command, plus invalid-port parsing and
-explicit-port precedence over an invalid
-`UVICORN_PORT` through `python -m uvicorn`. They do not establish broad option
-execution, environment handling, Python API, or full CLI compatibility. The
+the installed `uvicorn` console command, invalid-port parsing, explicit-port
+precedence over an invalid `UVICORN_PORT`, and acceptance of the explicit
+`--http httptools` selection before app loading. That selector case checks CLI
+argument handling; it does not establish broad option execution, environment
+handling, Python API, or full CLI compatibility. The
 fixture app is shared source code imported in fresh, independent oracle and
 target processes. Its exported ASGI callable is synchronous and returns an
 awaitable. The Uvicorn adapter forces `--interface asgi3`; the Hypercorn

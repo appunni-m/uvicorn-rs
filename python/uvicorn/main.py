@@ -315,7 +315,10 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         supported.add("timeout_worker_healthcheck")
     # Explicit auto selection is equivalent to the Rust server's default
     # HTTP/1.1 and WebSocket implementations.
-    if options["http"] == "auto":
+    # The Rust engine has one native HTTP implementation. Uvicorn's explicit
+    # httptools selection is compatible with that path just like auto; h11
+    # remains unsupported until its observable parser behavior is covered.
+    if options["http"] in {"auto", "httptools"}:
         supported.add("http")
     if options["ws"] == "auto":
         supported.add("ws")
