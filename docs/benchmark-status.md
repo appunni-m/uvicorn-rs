@@ -14,6 +14,57 @@ The three system artifacts were validated and the partial report, hashed receipt
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Current-source FastAPI upload call-path profile (macOS ARM64; 2026-10-21; diagnostic only)
+
+Matched Samply profiles captured the stock FastAPI `POST /upload/1048576`
+workload on an Apple M3 Pro running macOS 15.7.7. Both used CPython 3.12.13,
+FastAPI 0.142.4, Starlette 1.7.0, Pydantic 2.13.5, uvloop 0.23.0, and
+httptools 0.8.0. The reference was verified stock Uvicorn 0.54.0 from the
+isolated oracle environment; its installed `RECORD` hashes matched. Rust was
+1.98.1. The request uploaded 1 MiB in 1 KiB writes at concurrency 8. Each run
+used a 1-second warmup, 5-second load, and Samply 0.13.1 at a 1 ms sample
+interval. The analyzed profile covered 5.036 seconds of Rust load and 5.064
+seconds of Uvicorn load. Both correctness gates passed: 1,410 Rust requests and
+1,768 Uvicorn requests completed without failures.
+
+The profiles were captured from `main` at commit
+[`0d59870cf81b431d8ba17604191bdd139b060d54`](https://github.com/appunni-m/uvicorn-rs/commit/0d59870cf81b431d8ba17604191bdd139b060d54),
+source SHA-256
+`3b7304604203c8aac29e1c1e0aea5c2f93164a1d9f24ba0a7b02cec42fd6bf6a`, and a
+stable Rust extension SHA-256
+`cc8e625ec743c384ea371be3c3aa1608532d726f72171c6990a66c5c694fba73`.
+Uvicorn's receipt reports version 0.54.0 and the isolated package path; the
+candidate environment's separate runtime identity is not the Uvicorn server
+identity.
+
+| Observation | uvicorn-rs | Uvicorn |
+| --- | ---: | ---: |
+| Sampled CPU weight attributed to Python image | 4.60% | 41.25% |
+| Sampled CPU weight attributed to `_native.abi3.so` | 17.55% | — |
+| Sampled CPU weight attributed to `libsystem_kernel.dylib` | 63.46% | 40.05% |
+| Per-thread CPU weight on Tokio-named threads | 79.49% across 9 threads | — |
+| Per-thread CPU weight on Python thread | 20.51% | 100.00% |
+| Threads with a sampled Tokio blocking-pool `Inner::run` frame | 9 | 0 |
+
+Within the Rust profile, inclusive stacks include `pump_peer_read` at 35.34%,
+Tokio `TcpStream::poll_read_priv` at 34.04%, and `AsgiIo::receives` at 11.51%.
+These values overlap and must not be added. The analyzer now detects Tokio's
+blocking-pool loop from both demangled and Rust v0-mangled symbols; its earlier
+pattern missed these frames and incorrectly reported zero. Uvicorn's largest
+exclusive Python frame was `_PyEval_EvalFrameDefault` at 22.36% of sampled CPU
+weight.
+
+This is a diagnostic profile, not a speed comparison: sampling perturbs
+scheduling, the runs were separate, and their request counts are not rankable.
+System shared-cache function names remain unresolved, so the large
+`libsystem_kernel.dylib` share does not identify a specific system call. The
+profile narrows investigation toward the Rust request-body/socket-read path and
+runtime scheduling; it does not prove which causes the measured HTTP/1 gap or
+justify a new runtime setting or SIMD change. Full receipts, profiles, and the
+analyzed report remain local-only under
+`target/wh9k-samply-current-main-{rs,uvicorn}-20261021/` and
+`target/wh9k-samply-current-main-20261021/`.
+
 ## FastAPI WebSocket text echo and text-buffer candidate (Linux x86-64; 2026-10-21)
 
 This focused benchmark used the stock FastAPI app's 32-byte WebSocket text

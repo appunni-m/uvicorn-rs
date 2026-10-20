@@ -189,6 +189,19 @@ def _frame_rows(thread: dict, profile: dict, symbols: dict, profile_path: Path) 
     return rows
 
 
+def _is_tokio_blocking_pool_loop_frame(symbol: str) -> bool:
+    """Recognize Tokio blocking-pool loop frames in demangled and raw symbols."""
+    if (
+        "tokio::runtime::blocking::pool::Inner::run" in symbol
+        or "tokio::runtime::blocking::pool::Inner>::run" in symbol
+    ):
+        return True
+
+    # Rust v0 mangling encodes this path as `tokio7runtime8blocking4pool...`;
+    # `5Inner3run` identifies the blocking-pool loop despite generic substitutions.
+    return re.search(r"tokio7runtime8blocking4pool.*5Inner3run", symbol) is not None
+
+
 def _aggregate(
     label: str, path: Path, profile: dict, rustfilt: str | None
 ) -> dict:
@@ -278,7 +291,7 @@ def _aggregate(
                 prefix = stacks["prefix"][prefix]
             inclusive_cpu[(row["library"], row["symbol"])] += weight
             if any(
-                "tokio::runtime::blocking::pool::Inner>::run" in frame["symbol"]
+                _is_tokio_blocking_pool_loop_frame(frame["symbol"])
                 for frame in call_path
             ):
                 threads_with_blocking_pool_loop.add(thread.get("tid"))
