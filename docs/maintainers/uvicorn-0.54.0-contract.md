@@ -138,22 +138,23 @@ the evidence map below.
 | Surface | Current uvicorn-rs-py state | Owner | Required parity route |
 | --- | --- | --- | --- |
 | Distribution and `uvicorn` command/import namespace | The source package keeps distribution metadata `uvicorn-rs-py` version `0.1.0`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. `uvicorn.__version__` reports the pinned Uvicorn compatibility baseline `0.54.0`. The wheel includes both Python namespaces and the `uvicorn-rs-py` and `uvicorn` entry points. A local macOS ARM64 wheel passed the CPython 3.9.6 consumer smoke and CPython 3.12 install/replace/rollback check; this is one-host evidence. The distribution is unpublished, and full package and runtime parity remain incomplete. | `1s4z` | Input cases compare installed distribution metadata/imports, entry points, module and console commands, and executable behavior with upstream 0.54.0. |
-| CLI/settings/environment | The compatibility namespace uses Click option metadata adapted from Uvicorn 0.54.0. Fourteen declared CLI process cases passed individually under input schema `@9`, including module and console help/version, environment precedence, import diagnostics, and factory diagnostics. A current `@9` module-CLI `--root-path` request case and an HTTP/1.1 header-policy case (`--header`, disabled default Server/Date headers, and explicit `--interface asgi3`) also pass. Other runtime settings remain unverified; unsupported selected settings fail instead of being silently ignored. | `9kbx` | Extend `tests/parity/inputs/cli.json`; invoke both module and console paths with matching argv/env/cwd/files and compare exit status, stdout, stderr, and listener/app behavior. |
+| CLI/settings/environment | The compatibility namespace uses Click option metadata adapted from Uvicorn 0.54.0. The indexed `@9` CLI set has 16 cases: the 14 existing cases have earlier focused receipts, and the two new single-process worker-normalization cases pass on the current dirty source. A current `@9` module-CLI `--root-path` request case and an HTTP/1.1 header-policy case (`--header`, disabled default Server/Date headers, and explicit `--interface asgi3`) also pass. Other runtime settings remain unverified; unsupported selected settings fail instead of being silently ignored. | `9kbx` | Extend `tests/parity/inputs/cli.json`; invoke both module and console paths with matching argv/env/cwd/files and compare exit status, stdout, stderr, and listener/app behavior. |
 | `run`, `Config`, and `Server` API | `uvicorn.Config`, `uvicorn.Server(config)`, and `uvicorn.run` expose the pinned signatures. The basic ASGI 3 path delegates to the Rust server; the default request, a request with `lifespan="off"`, and an ASCII `root_path` request pass focused comparisons. Advanced Config settings, readiness, socket injection, signal details, and remaining lifecycle cases are unverified. | `gjpr` | `tests/parity/inputs/python-api.json` compares public imports, signatures, selected run behavior, and lifecycle observations against upstream Uvicorn. |
 | HTTP, WebSocket, lifespan, ASGI and errors | The current Rust server has an input-driven ASGI protocol matrix. Uvicorn is the H1/WebSocket/lifespan oracle; Hypercorn is the current H2/H3 oracle. This is not Uvicorn CLI/API compatibility. | `dv25`, `4fvf` | Extend the existing protocol cases where applicable; preserve the declared reference per protocol and compare public observations. |
 | Unix/fd sockets, reload, workers, supervision | Not exposed by the current adapter contract; not covered by the existing ASGI protocol matrix. | `dhfq` | Process-level cases run the same socket/reload/worker stimuli against upstream and installed target, and record child/process/socket outcomes. |
 | Package extras and release gates | No published package; current distribution requirements/extras do not mirror the upstream installation contract. | `1s4z`, `v5fe` | Installed-artifact cases and package-content/dependency gates on the supported OS/Python matrix. |
 
 `tests/parity/manifest.json` describes the ASGI protocol slice, a focused CLI
-process slice, and the public Python import/signature probe. Fourteen CLI inputs
+process slice, and the public Python import/signature probe. Sixteen CLI inputs
 currently cover module/console help and
 version, module invalid-port parsing, explicit-port precedence over one
 invalid environment value, invalid `UVICORN_PORT` both with and without
 `--version`, explicit `APP` over `UVICORN_APP`, missing-module and
-missing-attribute diagnostics, `UVICORN_APP` with app-dir import lookup, and an
-explicit factory `TypeError` startup failure. They do not yet cover successful
-factory serving, most settings, general environment precedence, reload,
-workers, or package replacement behavior.
+missing-attribute diagnostics, `UVICORN_APP` with app-dir import lookup, an
+explicit factory `TypeError` startup failure, and single-process normalization
+of `--workers 0` and `--workers 1`. They do not yet cover successful factory
+serving, most settings, general environment precedence, reload, multi-worker
+supervision, or package replacement behavior.
 The Python API inputs now use `uvicorn-rs-parity/input@9` to include `root_path`
 in the declared run request. They compare public imports/signatures, the
 `uvicorn.run()` missing-module diagnostic, a successful default request, an
@@ -183,9 +184,17 @@ Uvicorn drop-in replacement.
 
 ## Current focused @9 receipts (2026-10-20)
 
-On macOS 15.7.7 ARM64 / CPython 3.12.13, every currently declared process
-input passed when run as an individual case against isolated genuine Uvicorn
-0.54.0: 14 CLI cases and 9 Python API cases. These receipts share target base
+On macOS 15.7.7 ARM64 / CPython 3.12.13, the previously declared process
+inputs passed when run individually against isolated genuine Uvicorn 0.54.0:
+14 CLI cases and 9 Python API cases. Two additional CLI cases then passed
+individually on the current dirty source: explicit `--workers 1` and
+`--workers 0` both preserve the upstream missing-application diagnostic. These
+two results used input schema `@9` and native extension SHA-256
+`fe0cd0f5d8a4f5e0d158a67c69b8c175d3fbaf63c02dd65955065ad6c794a017`; receipts
+are `target/kata-cli-workers-single.json` and
+`target/kata-cli-workers-zero.json`. They prove these two values are accepted
+as the single-process default, not multi-worker supervision. The earlier
+receipts share target base
 revision `9e085cecaed811d68688239ba149854f0c07d094`, dirty-source digest
 `2bf372d14ff0b82aad0b8a249a53a2ebfec3c1c8e30574dec25c424f160bd7f3`, and
 native extension SHA-256

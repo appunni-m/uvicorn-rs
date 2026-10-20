@@ -302,6 +302,10 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "timeout_graceful_shutdown", "app_dir", "factory", "lifespan", "root_path",
         "headers", "server_header", "date_header", "interface",
     }
+    # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
+    # process. Neither value requires process supervision from the adapter.
+    if options["workers"] in (0, 1):
+        supported.add("workers")
     unsupported = [
         parameter.name
         for parameter in ctx.command.params
