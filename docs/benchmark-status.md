@@ -4001,3 +4001,23 @@ extension hashes were
 `8b24e6c6c99239ba6a571ed511779b6769f426a116b9f2a505c0e694b0a6b557` and
 `67b042b774bb30229bcce846e1675e31a2f2599a9f7faea3696f20b177e671ca`. Raw
 reports and logs remain under ignored `target/` in the Linux work folder.
+
+## Focused H3 replay after the Hypercorn failure (GitHub x86-64; 2026-10-20)
+
+The earlier H3 category run recorded a `hypercorn-asyncio` failure in
+`slow-reader-backpressure`: two header timeouts, while Hypercorn's log showed
+an HTTP/3 `KeyError(48)` during stream lookup. Whether that server error caused
+the timeouts is unconfirmed. A focused replay of that server/workload
+completed three repetitions on the GitHub Linux x86-64 runner. Each repetition
+served 40 requests and 40 MiB of response data, recorded zero request failures,
+passed the server lifecycle gate, and left an empty server log. The replay did
+not reproduce the earlier failure; its cause remains unknown.
+
+The replay used CPython 3.12.13, Hypercorn 0.18.0, and rustc 1.98.1 on an
+Intel Xeon Platinum 8573C runner with four logical CPUs. The three repetitions
+had p95 latency of 252.72, 252.49, and 252.20 ms. This was a focused correctness
+replay against Hypercorn, not a matched performance comparison. The full H3
+category remains incomplete, so these results do not qualify an H3 speed claim.
+
+Evidence: [focused replay on GitHub Actions](https://github.com/appunni-m/uvicorn-rs/actions/runs/39515929518)
+and [earlier category run](https://github.com/appunni-m/uvicorn-rs/actions/runs/39471910457).
