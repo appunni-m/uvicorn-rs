@@ -249,14 +249,20 @@ def sample(
             raise RuntimeError(f"HTTP/2 correctness gate failed: {metrics}")
         metrics["concurrency"] = workload_concurrency
         metrics.update(monitor.finish(metrics))
-        # Archived H2 samples contain this exact Rust BrokenPipe while every
-        # client response check passes. Permit one occurrence for Rust only;
-        # the finalizer still rejects other diagnostics and forced shutdown.
+        # A clean client close can race the final H2 server write and produce
+        # BrokenPipe. Bound this exact diagnostic by the configured connection
+        # count across warm-up and measurement clients. Other errors, request
+        # failures, and forced shutdown still fail the sample.
+        h2_peer_close_limit = (
+            min(4, max(1, workload_concurrency)) * (2 if warmup > 0 else 1)
+            if server["kind"] == "rust"
+            else 0
+        )
         metrics.update(
             finalize_server(
                 process,
                 log,
-                permit_h2_peer_close=server["kind"] == "rust",
+                max_h2_peer_close_diagnostics=h2_peer_close_limit,
             )
         )
         identity = evidence.after_sample(identity_before)
