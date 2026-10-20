@@ -341,19 +341,19 @@ def collect_bounded_client(process, seconds: float, server, monitor, *, interval
     return stdout, stderr
 
 
-_EXPECTED_H2_PEER_CLOSE = (
-    "uvicorn-rs: connection task failed: hyper::Error(Io, Kind(BrokenPipe))"
+_EXPECTED_H2_PEER_CLOSE = re.compile(
+    r"uvicorn-rs: connection task failed: hyper::Error\(Io, Kind\((?:BrokenPipe|ConnectionReset)\)\)"
 )
 _EXPECTED_H2_CONNECTION_CLOSE = re.compile(
     r"uvicorn-rs: HTTP connection from Some\([^\r\n]+\) failed: "
     r"HTTP connection failed: connection error \(Http\(hyper::Error\(Io, "
-    r"Kind\(BrokenPipe\)\)\)\)"
+    r"Kind\((?:BrokenPipe|ConnectionReset)\)\)\)\)"
 )
 
 
 def _is_expected_h2_peer_close(line: str) -> bool:
     return (
-        line == _EXPECTED_H2_PEER_CLOSE
+        _EXPECTED_H2_PEER_CLOSE.fullmatch(line) is not None
         or _EXPECTED_H2_CONNECTION_CLOSE.fullmatch(line) is not None
     )
 

@@ -221,10 +221,10 @@ pushes keep running the full matrix. The commit must also change a path in the
 workflow's push filter; this file is included, while `benchmark-status.md` is
 not. A Git push to `main` also starts the regular CI workflow; use the Actions
 `workflow_dispatch` inputs when you want only the focused benchmark without a
-second full CI run. This mode builds the normal
-release wheel and H2 probe client, then runs only the selected server for the
-selected workload. `workflow_dispatch` can select one server, workload, and
-runner; the focused Git-push form also accepts these commit-message tokens:
+second full CI run. This mode builds a release wheel with runtime diagnostics
+enabled by default and the H2 probe client, then runs only the selected server
+for the selected workload. `workflow_dispatch` can select one server, workload,
+and runner; the focused Git-push form also accepts these commit-message tokens:
 `[h2-server=hypercorn-uvloop]`, `[h2-workload=many-response-chunks]`,
 `[h2-system=macos-arm64]`, and `[h2-system=linux-aarch64]`. Without selectors,
 the Git-push form defaults to `uvicorn-rs-asyncio`, `protocol-scope`, and Linux
@@ -236,6 +236,8 @@ previously failing Hypercorn/uvloop chunk workload. The repetition count,
 duration, warmup, and concurrency inputs keep their normal values: five
 repetitions, 5-second samples, a 1-second warmup, requested concurrency 64, and
 seed `20261005`. Workload-specific settings can override requested concurrency.
+The runtime-diagnostics input defaults to enabled. Disable it to build the
+normal release wheel while keeping client-side protocol wait tracing enabled.
 It skips the full category matrix and aggregate step, and retains the report and
 server logs as a 90-day artifact.
 
@@ -879,20 +881,15 @@ gates while preserving its separate phase metrics and resource boundary.
 See [the feasibility report](feasibility.md) for historical interpretation and
 [the implementation review](implementation-review.md) for remaining questions.
 
-The HTTP/2 Rust-server diagnostic gate permits at most one exact
-`BrokenPipe` peer-close diagnostic per configured Rust H2 client connection.
-The benchmark client completes each response body, drops its request senders,
-and requires every H2 connection driver to shut down without error before the
-server lifecycle check. With no active streams or request senders, the H2
-client sends a `GOAWAY` with `NO_ERROR`; HTTP/2 permits an endpoint to end a
-connection and specifically describes the case where streams remain open or
-half-closed when the connection ends ([RFC 9113, Sections 5.4.1 and 5.4.3]
-(https://www.rfc-editor.org/rfc/rfc9113.html#section-5.4.1)).
-Under these conditions, Hyper may observe a peer-close `BrokenPipe` while
-finishing the connection. The report records both the accepted count and its
-per-sample connection bound. A count above that bound, any other native error,
-client failure, timeout, nonzero exit, or forced shutdown still fails the
-sample; HTTP/2 response and lifecycle checks remain strict.
+The HTTP/2 Rust-server diagnostic gate permits a bounded `BrokenPipe` or
+`ConnectionReset` peer-close diagnostic only after the benchmark client has
+validated all response bodies and its H2 connection drivers have shut down
+without error. The bound is the number of client connections opened for
+warmup and measurement. The report records the accepted count and that bound.
+This handles transport diagnostics emitted while a completed client closes;
+it does not relax response, protocol, timeout, or server-shutdown checks. A
+count above the bound, any other native error, client failure, timeout,
+nonzero exit, or forced shutdown still fails the sample.
 
 The H2 probe pins `h2` to 0.4.20. In 0.4.19, the client could check for
 connection shutdown before snapshotting sender references; if the final sender

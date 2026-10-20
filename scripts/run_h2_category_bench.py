@@ -245,7 +245,8 @@ def sample(
     hypercorn_config: Path,
     evidence: BenchmarkEvidence,
     *,
-    diagnostics: bool = False,
+    client_diagnostics: bool = False,
+    runtime_diagnostics_enabled: bool = False,
 ) -> dict:
     identity_before = evidence.before_sample()
     definition = WORKLOADS[workload]
@@ -271,7 +272,7 @@ def sample(
                 workload_concurrency,
                 case,
                 process,
-                diagnostic_progress=diagnostics,
+                diagnostic_progress=client_diagnostics,
             )
             if result["failures"]:
                 raise RuntimeError(f"HTTP/2 warm-up correctness gate failed: {result}")
@@ -283,7 +284,7 @@ def sample(
             "connections": min(4, max(1, workload_concurrency)),
             **case,
         }
-        if diagnostics:
+        if client_diagnostics:
             load_config["diagnostic_progress"] = True
         load = owned_process(
             [str(CLIENT), json.dumps(load_config)],
@@ -302,13 +303,14 @@ def sample(
             raise RuntimeError(f"HTTP/2 correctness gate failed: {metrics}")
         metrics["concurrency"] = workload_concurrency
         metrics.update(monitor.finish(metrics))
-        # The client closes each configured H2 connection only after all its
-        # streams completed and the H2 driver shut down cleanly. Hyper can
-        # report a BrokenPipe while observing that peer close; bound this
-        # exact diagnostic to one per client connection. Other diagnostics,
+        # The client closes each configured H2 connection only after every
+        # response passes its status/body check and the H2 driver shuts down
+        # cleanly. The peer close can surface as BrokenPipe or ConnectionReset
+        # in the Rust server. Bound these exact diagnostics to the connections
+        # opened by both warmup and measurement clients. Other diagnostics,
         # client failures, and forced shutdown still fail the sample.
         h2_peer_close_limit = (
-            min(4, max(1, workload_concurrency))
+            min(4, max(1, workload_concurrency)) * (2 if warmup > 0 else 1)
             if server["kind"] == "rust"
             else 0
         )
@@ -319,7 +321,7 @@ def sample(
                 max_h2_peer_close_diagnostics=h2_peer_close_limit,
             )
         )
-        if diagnostics and server["kind"] == "rust":
+        if runtime_diagnostics_enabled and server["kind"] == "rust":
             server_diagnostics = runtime_diagnostics(log)
             if server_diagnostics is None:
                 raise RuntimeError("Rust server did not emit runtime diagnostics")
@@ -346,7 +348,12 @@ def main() -> None:
     parser.add_argument(
         "--diagnostics",
         action="store_true",
-        help="allow a runtime-diagnostics server and report phase-specific client timeouts",
+        help="enable client phase tracing and accept a runtime-diagnostics server",
+    )
+    parser.add_argument(
+        "--client-diagnostics",
+        action="store_true",
+        help="trace client protocol wait phases without enabling server runtime diagnostics",
     )
     parser.add_argument("--seed", type=int, default=20261002)
     parser.add_argument("--output", type=Path, default=ROOT / "benchmarks" / "results" / "http2-categories-2026-10-02.json")
@@ -354,13 +361,15 @@ def main() -> None:
     assert_clean_coverage_environment()
     if not CLIENT.exists():
         raise SystemExit(f"prebuild the HTTP/2 benchmark client before identity capture: {CLIENT}")
+    client_diagnostics_enabled = args.diagnostics or args.client_diagnostics
+    runtime_diagnostics_enabled = args.diagnostics
     selected_servers = {name: SERVERS[name] for name in args.servers}
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
         ["scripts/run_h2_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/http2.rs",
          "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
-        allow_runtime_diagnostics=args.diagnostics,
+        allow_runtime_diagnostics=runtime_diagnostics_enabled,
         artifacts_dir=args.output.with_suffix(".artifacts"),
         extra_dependencies=FASTAPI_BENCHMARK_DISTRIBUTIONS,
     )
@@ -384,7 +393,8 @@ def main() -> None:
                         metrics = sample(
                             selected_servers[name], workload, args.duration, args.warmup,
                             args.concurrency, cert, key, ca_certificate, hypercorn_config, evidence,
-                            diagnostics=args.diagnostics,
+                            client_diagnostics=client_diagnostics_enabled,
+                            runtime_diagnostics_enabled=runtime_diagnostics_enabled,
                         )
                     except Exception as error:
                         raise RuntimeError(
@@ -430,6 +440,8 @@ def main() -> None:
             **evidence_metadata,
             "slow_reader_rate_bytes_per_second": 4_194_304,
             "h2_client": "native Rust h2 client, up to four TLS connections with multiplexed streams, full response-body equality",
+            "client_phase_diagnostics": client_diagnostics_enabled,
+            "runtime_diagnostics": runtime_diagnostics_enabled,
             "h2_request_timeout_seconds": 20,
             "source_sha256": source_digest(),
             "workloads": args.workloads,
