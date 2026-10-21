@@ -238,10 +238,14 @@ class Config:
         for name, value in values.items():
             setattr(self, name, value)
 
+        self.configure_logging()
+
         if env_file is not None:
             from dotenv import load_dotenv
 
-            print(f"INFO:     Loading environment from '{env_file}'", file=sys.stderr)
+            logging.getLogger("uvicorn.error").info(
+                "Loading environment from '%s'", env_file
+            )
             load_dotenv(dotenv_path=env_file)
 
         if forwarded_allow_ips is None:
@@ -256,7 +260,6 @@ class Config:
         self.loaded = False
         self.loaded_app: Any = None
         self.loop_factory: Callable[[], asyncio.AbstractEventLoop] | None = None
-        self.configure_logging()
 
         self.reload_dirs: list[Path] = []
         self.reload_dirs_excludes: list[Path] = []
@@ -444,13 +447,15 @@ class Config:
             self.loaded_app = self.loaded_app()
         except TypeError as exc:
             if self.factory:
-                print(f"ERROR:    Error loading ASGI app factory: {exc}", file=sys.stderr)
+                logging.getLogger("uvicorn.error").error(
+                    "Error loading ASGI app factory: %s", exc
+                )
                 raise SystemExit(3) from exc
         else:
             if not self.factory:
-                print(
-                    "WARNING:  ASGI app factory detected. Using it, but please consider setting the --factory flag explicitly.",
-                    file=sys.stderr,
+                logging.getLogger("uvicorn.error").warning(
+                    "ASGI app factory detected. Using it, but please consider "
+                    "setting the --factory flag explicitly."
                 )
         self.loaded_app, self.interface = _configure_asgi_interface(
             self.loaded_app, self.interface, self.lifespan

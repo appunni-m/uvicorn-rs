@@ -128,6 +128,51 @@
       }
     },
     {
+      "case_id": "cli.factory-type-error-forced-color-diagnostic",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_cli_app_dir:factory_type_error",
+          "--app-dir",
+          "tests/parity/fixtures/app_dir_only",
+          "--factory",
+          "--use-colors"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.implicit-factory-warning-forced-colors",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:python_api_factory_probe_app",
+          "--use-colors",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "warning",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.env-file-loads-before-factory",
       "profile": "cli",
       "operation": "cli.process",
@@ -141,6 +186,27 @@
           "--factory",
           "--env-file",
           "tests/parity/fixtures/app_dir_only/factory.env"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.env-file-forced-color-diagnostics",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_cli_app_dir:factory_env_file_error",
+          "--app-dir",
+          "tests/parity/fixtures/app_dir_only",
+          "--factory",
+          "--env-file",
+          "tests/parity/fixtures/app_dir_only/factory.env",
+          "--use-colors"
         ],
         "environment": {},
         "working_directory": "project",
