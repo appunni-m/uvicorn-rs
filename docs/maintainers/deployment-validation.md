@@ -53,7 +53,7 @@ User=asgi
 Group=asgi
 WorkingDirectory=/srv/myapp
 Environment=PYTHONPATH=/srv/myapp
-ExecStart=/srv/myapp/.venv/bin/uvicorn myapp.asgi:app --host 0.0.0.0 --port 8000 --graceful-timeout 10
+ExecStart=/srv/myapp/.venv/bin/uvicorn myapp.asgi:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 10
 Restart=on-failure
 KillSignal=SIGTERM
 TimeoutStopSec=60
@@ -66,7 +66,7 @@ The TLS configuration also binds UDP for HTTP/3, so firewall rules must account
 for both TCP and UDP on the configured port. TimeoutStopSec should leave
 enough time for the server's separate transport, request, lifespan, and cleanup
 stages plus application cleanup. These stages can make total shutdown longer
-than --graceful-timeout; an application that suppresses cancellation can
+than --timeout-graceful-shutdown; an application that suppresses cancellation can
 outlive a cleanup window. The 60-second example is not a measured guarantee
 for every application.
 

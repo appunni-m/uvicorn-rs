@@ -246,7 +246,7 @@ def _start_server(
         str(port),
     ]
     if server == "uvicorn-rs":
-        command.extend(["--graceful-timeout", "2"])
+        command.extend(["--timeout-graceful-shutdown", "2"])
     environment = os.environ.copy()
     paths = [str(ROOT)]
     if environment.get("PYTHONPATH"):

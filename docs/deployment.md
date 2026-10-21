@@ -29,7 +29,7 @@ policy; add health and readiness routes in the application and configure the
 process manager separately.
 
 The current prototype handles Ctrl-C and SIGTERM and has a configurable
-`--graceful-timeout`. Allow additional process-manager shutdown time for
+`--timeout-graceful-shutdown`. Allow additional process-manager shutdown time for
 application cleanup. This timeout does not qualify arbitrary applications or
 host shutdown behavior.
 

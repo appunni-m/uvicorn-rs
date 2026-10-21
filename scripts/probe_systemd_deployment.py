@@ -145,7 +145,7 @@ def main():
         "127.0.0.1",
         "--port",
         str(port),
-        "--graceful-timeout",
+        "--timeout-graceful-shutdown",
         "2",
     ]
     started = time.monotonic()

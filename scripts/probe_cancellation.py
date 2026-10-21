@@ -29,7 +29,7 @@ def main():
             "127.0.0.1",
             "--port",
             str(port),
-            "--graceful-timeout",
+            "--timeout-graceful-shutdown",
             "1",
         ],
         cwd=ROOT,
