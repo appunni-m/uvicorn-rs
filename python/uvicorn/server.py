@@ -175,6 +175,12 @@ class Server:
             for signum, handler in original_handlers.items():
                 signal.signal(signum, handler)
 
+        # Fault-contract runs keep the coverage-instrumented process exit
+        # normal so LLVM can flush its profile. Public signal behavior is
+        # exercised by the ordinary parity cases.
+        if os.environ.get("UVICORN_RS_COVERAGE_FAULT_FILE"):
+            return
+
         for signum in reversed(self._captured_signals):
             signal.raise_signal(signum)
 
