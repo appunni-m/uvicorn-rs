@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import base64
 from collections import Counter
 from functools import lru_cache
 import hashlib
@@ -338,6 +339,57 @@ def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
     return value
 
 
+def normalize_operation_comparison_observation(
+    observation: dict[str, Any], operation: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply the operation's declared comparison normalization to a projection."""
+    normalized = dict(observation)
+    for field, policy in operation.get("comparison_normalization", {}).items():
+        require(field in normalized, f"comparison normalization field is absent: {field}")
+        require(
+            policy == "python-traceback-exception-chain",
+            f"unsupported comparison normalization policy: {policy}",
+        )
+        stderr = base64.b64decode(normalized[field], validate=True)
+        lines = stderr.splitlines()
+        traceback_header = b"Traceback (most recent call last):"
+        if traceback_header not in lines:
+            normalized[field] = ("raw", stderr)
+            continue
+
+        chain_markers = {
+            b"The above exception was the direct cause of the following exception:",
+            b"During handling of the above exception, another exception occurred:",
+        }
+        traceback_lines: list[bytes] = []
+        inside_traceback = False
+        found_exception = False
+        for line in lines:
+            if line == traceback_header:
+                traceback_lines.append(traceback_header)
+                inside_traceback = True
+                continue
+            if not inside_traceback:
+                traceback_lines.append(line)
+                continue
+            if line in chain_markers:
+                traceback_lines.append(line)
+                continue
+            if line.startswith(b"  File ") or line.startswith(b"    ") or not line.strip():
+                continue
+            if not line.startswith((b" ", b"\t")):
+                traceback_lines.append(line)
+                inside_traceback = False
+                found_exception = True
+
+        normalized[field] = (
+            ("python-traceback-exception-chain", tuple(traceback_lines))
+            if found_exception
+            else ("raw", stderr)
+        )
+    return normalized
+
+
 def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any]) -> None:
     exact_keys(row, {"case_id", "profile", "operation", "requirements", "verification", "fault", "status",
                      "oracle_observation", "target_observation", "server_exit_codes", "difference"},
@@ -357,10 +409,16 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
                 and set(compare).issubset(operation["observe"]),
                 f"invalid comparison fields: {case['case_id']}")
         target_comparison = normalize_comparison_observation(
-            {field: target[field] for field in compare}, case["profile"]
+            normalize_operation_comparison_observation(
+                {field: target[field] for field in compare}, operation
+            ),
+            case["profile"],
         )
         oracle_comparison = normalize_comparison_observation(
-            {field: oracle[field] for field in compare}, case["profile"]
+            normalize_operation_comparison_observation(
+                {field: oracle[field] for field in compare}, operation
+            ),
+            case["profile"],
         )
         require(target_comparison == oracle_comparison,
                 f"live observations differ on declared comparison fields: {case['case_id']}")

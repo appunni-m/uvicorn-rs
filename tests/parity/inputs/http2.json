@@ -208,7 +208,7 @@
       "verification": "fault-contract",
       "fault": {
         "point": "http.app-task.panic-before-response-start",
-        "contract": "http2-500-empty-body"
+        "contract": "http2-500-generic-error-body"
       },
       "request": {
         "method": "GET",

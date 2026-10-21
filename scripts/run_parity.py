@@ -455,7 +455,7 @@ FAULT_CONTRACTS = {
     "http3-legacy-connection-task-shutdown-completes",
     "http3-connection-task-shutdown-hang-aborted",
     "http3-endpoint-accept-closes-http3",
-    "http2-500-empty-body",
+    "http2-500-generic-error-body",
     "http3-client-abort-disconnect-followup",
     "http3-peer-stop-cancels-held-app-followup-200",
     "http3-peer-stop-after-body-complete-disconnect-followup-200",
@@ -1425,7 +1425,7 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: endpoint accept closure requires startup plus an HTTP/1 follow-up"
                     )
-            elif fault["contract"] == "http2-500-empty-body":
+            elif fault["contract"] == "http2-500-generic-error-body":
                 if (
                     case.get("profile") != "http2"
                     or case.get("operation") != "http.application-error"
@@ -9584,10 +9584,11 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
         )
-    if fault["contract"] == "http2-500-empty-body":
+    if fault["contract"] == "http2-500-generic-error-body":
         return (
             observation.get("status") == 500
-            and observation.get("body_bytes") == ""
+            and observation.get("body_bytes")
+            == base64.b64encode(b"Internal Server Error").decode("ascii")
         )
     if fault["contract"] == "http3-client-abort-disconnect-followup":
         followup = observation.get("followup_response")
