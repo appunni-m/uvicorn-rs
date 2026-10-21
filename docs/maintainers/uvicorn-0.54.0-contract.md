@@ -241,15 +241,27 @@ focused cases do not close the remaining settings or lifecycle inventory.
 
 The `uvicorn-rs-parity/input@30` case
 `python-api.run-http-decodes-non-ascii-request-path` independently exercises a
-percent-encoded UTF-8 path with ASCII `root_path`; it is tracked with the
-focused parity receipt in Kata issue `9kbx`. A separate probe of Unicode
-`root_path` found a standards conflict: Uvicorn 0.54.0 returns HTTP 400 from
-its default HTTP/1.1 path, while uvicorn-rs accepts the request. The target's
-current `raw_path` includes the configured prefix, even though the
-[ASGI HTTP scope](https://asgi.readthedocs.io/en/stable/specs/www.html#http-connection-scope)
+percent-encoded UTF-8 path with ASCII `root_path`. Its clean exact-commit
+receipt is run `e714b99c45984680b722097399678a93`: 1/1 passed on commit
+`5764b1fb26aa20845d388acedf6af76db4f2c568`, macOS 15.7.7 ARM64, CPython
+3.12.13, and Uvicorn 0.54.0. The target was clean; source SHA-256 was
+`fcd8ba900a0c59ce20b48cc9d9366fd26479697bc7baff52c03c5af1cbbe6e9d`, and
+the native extension SHA-256 was
+`9f0be1f90bb7e9f2dcbea10ef9a999a3fb859b8bba13f8e4dde2d3b3b7042b5d`. The
+input digest was
+`4571f3a4379d237ae500e36e320f40293fc2345e4c2b6e7e44cc15f2f243d3d1`.
+
+A separate exploratory probe of Unicode `root_path` found a standards
+conflict: Uvicorn 0.54.0 returns HTTP 400 from its default HTTP/1.1 path, while
+uvicorn-rs accepts the request. The pinned Uvicorn source encodes `root_path`
+as ASCII when building `raw_path` ([source at the pinned commit](https://github.com/Kludex/uvicorn/blob/3eb9a9ab9af69005c687728097461c1fd2a95db9/uvicorn/protocols/http/httptools_impl.py#L261-L262)).
+The target currently includes the configured prefix in `raw_path`, even
+though the [ASGI HTTP scope](https://asgi.readthedocs.io/en/stable/specs/www.html#http-connection-scope)
 defines `root_path` as Unicode and `raw_path` as the original request path
-bytes. This behavior remains outside the parity claim until a dedicated
-conformance input and fix establish the correct scope values.
+bytes. The probe was exploratory and ran with a dirty input tree; it is not
+parity evidence. This behavior remains outside the parity claim until a
+dedicated conformance input and fix establish the correct scope values. The
+conflict and clean request-path receipt are recorded in Kata issue `9kbx`.
 
 Input schema `@9` was introduced on 2026-10-20 to declare `root_path` in the
 `run_http` stimulus. Input schema `@10` added optional default response headers
