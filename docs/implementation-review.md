@@ -386,9 +386,9 @@ hook checks remain enabled.
 - Rust diagnostics use fallible best-effort stderr writes; structured Rust
   logging is not implemented. The Uvicorn Python adapter supports the default
   access logger and the focused `access_log=False` suppression behavior through
-  both `uvicorn.run()` and the module CLI. Custom JSON and INI logging configurations
-  pass focused parity through both entry points; YAML configuration remains
-  unverified.
+  both `uvicorn.run()` and the module CLI. Custom JSON, INI, and YAML logging configurations
+  pass focused parity through both entry points; YAML uses PyYAML from the
+  `[standard]` extra.
 - The manifest declares Python `>=3.9`. Full public parity uses CPython
   3.12.13 on macOS ARM64; an actual installed-wheel HTTP/loop/context/lifespan
   and cancellation smoke also passes on CPython 3.9.25. Linux, Windows,

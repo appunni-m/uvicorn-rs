@@ -31,7 +31,7 @@ that limit is stated in the option description.
 | --timeout-worker-healthcheck SECONDS | 5 | Accepted with the single-process CLI path. Uvicorn uses this timeout only in its multi-process supervisor, so it has no effect with one worker. Multi-worker mode is not implemented. |
 | --interface {auto,asgi3} | auto | ASGI 3 applications are supported. Explicit `asgi2` and `wsgi` selections are rejected. |
 | --loop {auto,asyncio,uvloop,zuvloop} | auto | Select the Python event loop. `auto` uses uvloop when installed, otherwise asyncio. Tokio remains the Rust network runtime. |
-| --log-config PATH | Built-in Uvicorn config | Load a `.ini`, `.json`, or `.yaml` logging configuration. INI and JSON files have focused parity through `uvicorn.run()` and `python -m uvicorn`; YAML remains unverified and requires PyYAML. |
+| --log-config PATH | Built-in Uvicorn config | Load a `.ini`, `.json`, or `.yaml` logging configuration. All three formats have focused parity through `uvicorn.run()` and `python -m uvicorn`; YAML requires PyYAML, included in the `[standard]` extra. |
 | --log-level {critical,error,warning,info,debug,trace} | info | Set the server and application log threshold. Warning-level filtering has focused parity through the module CLI and `uvicorn.run()`; other levels remain unverified. |
 | --access-log/--no-access-log | Enabled | Enable or suppress request access events. `--no-access-log` and `uvicorn.run(access_log=False)` have focused parity cases. |
 | --use-colors/--no-use-colors | Automatic | Force or disable ANSI colors in default server and access logs. Focused module CLI comparisons exercise both switches, and `use_colors=True` is compared through `uvicorn.run()`, observing color sequences in captured logs. |
@@ -48,8 +48,8 @@ that limit is stated in the option description.
 | --timeout-graceful-shutdown SECONDS | None | Maximum graceful shutdown time. The current native adapter applies a 10-second timeout when omitted. |
 | --limit-concurrency INTEGER | Unset | Return HTTP 503 when active connections or request tasks reach this limit. Focused HTTP/1.1 comparisons verify limit 1 through the CLI, `uvicorn.run()`, and `Config` with `Server.run()`; other limits and protocols remain unverified. |
 
-For a custom JSON or INI logging file, pass the same path at the command line or
-through the Python API:
+For a custom INI, JSON, or YAML logging file, pass its path at the command line
+or through the Python API:
 
 ~~~sh
 uvicorn examples.hello_asgi:app --log-config logging.json
@@ -103,9 +103,10 @@ uvicorn.run("examples.hello_asgi:app", host="127.0.0.1", port=8000)
 `trace`. The Python API also accepts integer logging levels through
 `uvicorn.Config` and `uvicorn.run`. Focused comparisons verify the warning
 threshold through `python -m uvicorn` and `uvicorn.run(..., log_level=30)`;
-they do not establish every level or color mode. Custom JSON and INI logging
-configurations are compared through both `uvicorn.run(log_config=...)` and
-`python -m uvicorn --log-config ...`. YAML files remain unverified.
+they do not establish every level or color mode. Custom INI, JSON, and YAML
+logging configurations are compared through both `uvicorn.run(log_config=...)`
+and `python -m uvicorn --log-config ...`. YAML requires PyYAML, included in the
+`[standard]` extra.
 Access logging is enabled by default. Use `--no-access-log` or
 `uvicorn.run(app, access_log=False)` to suppress request access events. Focused
 comparisons cover both entry points.

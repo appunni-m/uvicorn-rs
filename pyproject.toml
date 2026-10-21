@@ -56,6 +56,7 @@ benchmark = [
     "httptools==0.8.0; python_version >= '3.10'",
     "hypercorn[h3]==0.18.0 ; python_full_version >= '3.10'",
     "psutil==7.2.2; python_version >= '3.10'",
+    "PyYAML>=5.1",
     "python-dotenv>=0.13",
     "uvloop==0.23.0; python_version >= '3.10'",
     "websockets>=13.0; python_full_version >= '3.10'",
