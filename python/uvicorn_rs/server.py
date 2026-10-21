@@ -1,6 +1,8 @@
 """Public server API backed by the Rust network runtime."""
 
 import asyncio
+import os
+import tempfile
 import sys
 
 from . import _bridge, _native
@@ -33,6 +35,7 @@ class Server:
         ws_ping_interval=20.0,
         ws_ping_timeout=20.0,
         _defer_startup_failure=False,
+        sockets=None,
     ):
         """Store the application and listener options for a server run.
 
@@ -42,6 +45,8 @@ class Server:
             port: TCP and QUIC port in the range supported by the OS.
             uds: Optional Unix domain socket path. When set, the Rust runtime
                 binds this stream socket and does not create a QUIC listener.
+            sockets: Optional list containing one pre-bound IPv4 or IPv6 TCP
+                listener. The descriptor is transferred to Rust during startup.
             backlog: Maximum pending TCP connections; negative values are
                 clamped to zero as in Uvicorn's socket-listen path.
             timeout_keep_alive: Idle timeout for persistent HTTP/1 connections
@@ -74,6 +79,7 @@ class Server:
         self.host = host
         self.port = port
         self.uds = uds
+        self.sockets = sockets
         self.backlog = backlog
         self.timeout_keep_alive = timeout_keep_alive
         self.certfile = certfile
@@ -123,43 +129,69 @@ class Server:
         then propagates ``asyncio.CancelledError``. Startup, bind, application,
         and lifespan failures propagate to the caller.
         """
+        if self.sockets is not None and self.uds is not None:
+            raise ValueError("pre-bound sockets cannot be combined with uds")
+        if self.sockets is not None and len(self.sockets) != 1:
+            raise NotImplementedError("uvicorn-rs currently supports one pre-bound TCP socket")
+        transfer_directory = None
+        transfer_path = None
+        if self.sockets is not None:
+            transfer_directory = tempfile.TemporaryDirectory(
+                prefix="uvrs-", dir="/tmp" if os.path.isdir("/tmp") else None
+            )
+            transfer_path = os.path.join(transfer_directory.name, "listener.sock")
         control = _native.ServerControl()
         self._control = control
         limit_concurrency = self.limit_concurrency
         if limit_concurrency is not None:
             limit_concurrency = min(max(limit_concurrency, 0), sys.maxsize)
-        native_task = asyncio.ensure_future(
-            _native.serve(
-                self.app,
-                _bridge.invoke,
-                self.host,
-                self.port,
-                self.uds,
-                self.backlog,
-                self.timeout_keep_alive,
-                self.certfile,
-                self.keyfile,
-                self.graceful_timeout,
-                self.lifespan,
-                self.root_path,
-                self.default_headers,
-                self.date_header,
-                self.ws_max_size,
-                self.ws_ping_interval,
-                self.ws_ping_timeout,
-                limit_concurrency,
-                control,
-                _bridge.log_concurrency_limit_rejection,
-            )
-        )
+        native_task = None
         try:
+            native_task = asyncio.ensure_future(
+                _native.serve(
+                    self.app,
+                    _bridge.invoke,
+                    self.host,
+                    self.port,
+                    self.uds,
+                    transfer_path,
+                    self.backlog,
+                    self.timeout_keep_alive,
+                    self.certfile,
+                    self.keyfile,
+                    self.graceful_timeout,
+                    self.lifespan,
+                    self.root_path,
+                    self.default_headers,
+                    self.date_header,
+                    self.ws_max_size,
+                    self.ws_ping_interval,
+                    self.ws_ping_timeout,
+                    limit_concurrency,
+                    control,
+                    _bridge.log_concurrency_limit_rejection,
+                )
+            )
+            if transfer_path is not None:
+                await asyncio.to_thread(
+                    _bridge.send_listener_fd, transfer_path, self.sockets[0]
+                )
             await asyncio.shield(native_task)
         except asyncio.CancelledError:
             control.shutdown()
-            await asyncio.shield(native_task)
+            if native_task is not None:
+                await asyncio.shield(native_task)
+            raise
+        except BaseException:
+            if native_task is not None:
+                native_task.cancel()
+                await asyncio.gather(native_task, return_exceptions=True)
             raise
         finally:
-            self.startup_failed = await control.wait_startup_failed()
+            if transfer_directory is not None:
+                transfer_directory.cleanup()
+            if native_task is not None:
+                self.startup_failed = await control.wait_startup_failed()
             if self._control is control:
                 self._control = None
         if self.startup_failed and not self._defer_startup_failure:

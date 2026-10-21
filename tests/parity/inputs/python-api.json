@@ -1068,6 +1068,78 @@
           "observe_unix_scope": true
         }
       }
+    },
+    {
+      "case_id": "python-api.module-cli-serves-request-on-inherited-fd",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-inherited-fd",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "fd": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-serves-request-on-inherited-fd",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-config-inherited-fd",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "fd": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-serves-request-on-inherited-fd",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-run-inherited-fd",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "fd": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-serves-request-on-prebound-socket",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-prebound-socket",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "server-sockets",
+          "root_path": "",
+          "fd": true
+        }
+      }
     }
   ]
 }

@@ -2233,6 +2233,7 @@ def load_contract(
                     "timeout_worker_healthcheck",
                     "uds",
                     "observe_unix_scope",
+                    "fd",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2247,9 +2248,14 @@ def load_contract(
                     } | optional_run_http_keys,
                     f"{case_id}.api.run_http",
                 )
-                if run_http["invocation"] not in {"api", "module-cli", "config-server"}:
+                if run_http["invocation"] not in {
+                    "api",
+                    "module-cli",
+                    "config-server",
+                    "server-sockets",
+                }:
                     raise ParityError(
-                        f"{case_id}.api.run_http.invocation must be api, module-cli, or config-server"
+                        f"{case_id}.api.run_http.invocation must be api, module-cli, config-server, or server-sockets"
                     )
                 if "factory" in run_http and type(run_http["factory"]) is not bool:
                     raise ParityError(
@@ -2257,6 +2263,14 @@ def load_contract(
                     )
                 if "uds" in run_http and type(run_http["uds"]) is not bool:
                     raise ParityError(f"{case_id}.api.run_http.uds must be a boolean")
+                if "fd" in run_http and type(run_http["fd"]) is not bool:
+                    raise ParityError(f"{case_id}.api.run_http.fd must be a boolean")
+                if run_http.get("fd") and run_http.get("uds"):
+                    raise ParityError(f"{case_id}.api.run_http cannot combine fd and uds")
+                if run_http["invocation"] == "server-sockets" and not run_http.get("fd"):
+                    raise ParityError(
+                        f"{case_id}.api.run_http server-sockets invocation requires fd=true"
+                    )
                 if (
                     "observe_unix_scope" in run_http
                     and type(run_http["observe_unix_scope"]) is not bool
@@ -9937,6 +9951,10 @@ def _python_api_server_log_events(
         r"^(?P<prefix>Uvicorn running on https?://.+):(?P<port>\d+)"
         r"(?P<suffix> \(Press CTRL\+C to quit\))$"
     )
+    fd_socket_running_line = re.compile(
+        r"^Uvicorn running on socket \((?P<host>[^,]+), (?P<port>\d+)"
+        r"(?P<tail>(?:, \d+, \d+)?)\) (?P<suffix>\(Press CTRL\+C to quit\))$"
+    )
     unix_socket_running_line = re.compile(
         r"^Uvicorn running on unix socket .+ \(Press CTRL\+C to quit\)$"
     )
@@ -10025,7 +10043,16 @@ def _python_api_server_log_events(
                     f"{running_match.group('prefix')}:<port>"
                     f"{running_match.group('suffix')}"
                 )
-            elif unix_socket_running_line.match(message):
+            else:
+                fd_socket_match = fd_socket_running_line.match(message)
+                if fd_socket_match:
+                    message = (
+                        "Uvicorn running on socket ("
+                        f"{fd_socket_match.group('host')}, <port>"
+                        f"{fd_socket_match.group('tail')}) "
+                        f"{fd_socket_match.group('suffix')}"
+                    )
+            if unix_socket_running_line.match(message):
                 message = "Uvicorn running on unix socket <uds> (Press CTRL+C to quit)"
             message = process_pid.sub(r"\1<pid>\2", message)
             event = {"kind": "message", "level": level, "message": message}

@@ -74,6 +74,7 @@ import base64
 import asyncio
 import json
 import logging
+import socket
 import uvicorn
 
 lifespan_state = {"started": False}
@@ -189,6 +190,7 @@ requested_interface = sys.argv[6]
 observe_scope = sys.argv[7] == "1"
 observe_loop = sys.argv[8] == "1"
 observe_unix_scope = sys.argv[25] == "1"
+fd = int(sys.argv[26]) if sys.argv[26] else None
 proxy_headers = sys.argv[9] == "1"
 forwarded_allow_ips = json.loads(sys.argv[10])
 limit_concurrency = json.loads(sys.argv[11])
@@ -230,18 +232,34 @@ options = {
     "timeout_keep_alive": timeout_keep_alive,
     "workers": workers,
     "timeout_worker_healthcheck": timeout_worker_healthcheck,
+    "fd": fd,
 }
 if uds_path is not None:
     options["uds"] = uds_path
-if invocation == "config-server":
+if invocation in {"config-server", "server-sockets"}:
+    if invocation == "server-sockets":
+        options.pop("fd", None)
     config = uvicorn.Config(app, **options)
-    uvicorn.Server(config).run()
+    if invocation == "server-sockets":
+        listener = socket.socket(fileno=fd)
+        uvicorn.Server(config).run(sockets=[listener])
+    else:
+        uvicorn.Server(config).run()
 else:
     uvicorn.run(app, **options)
 '''
     uds_directory = None
     uds_path = None
-    if request.get("uds", False):
+    inherited_listener = None
+    if request.get("fd", False):
+        if os.name == "nt":
+            raise ValueError("inherited descriptor parity input requires Unix")
+        inherited_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        inherited_listener.bind(("127.0.0.1", 0))
+        inherited_listener.listen()
+        inherited_listener.set_inheritable(True)
+        port = inherited_listener.getsockname()[1]
+    elif request.get("uds", False):
         uds_directory = tempfile.TemporaryDirectory(
             prefix="uvrs-", dir="/tmp" if os.path.isdir("/tmp") else None
         )
@@ -281,6 +299,8 @@ else:
         ]
         if uds_path is not None:
             command.extend(("--uds", uds_path))
+        if inherited_listener is not None:
+            command.extend(("--fd", str(inherited_listener.fileno())))
         if request.get("factory"):
             command.append("--factory")
         if request.get("interface", "auto") != "auto":
@@ -341,6 +361,7 @@ else:
             json.dumps(request.get("timeout_worker_healthcheck", 5)),
             uds_path or "",
             "1" if request.get("observe_unix_scope", False) else "0",
+            str(inherited_listener.fileno()) if inherited_listener is not None else "",
         ]
 
     environment = os.environ.copy()
@@ -354,16 +375,25 @@ else:
         stop_signal = signal.CTRL_BREAK_EVENT
     else:
         stop_signal = signal.SIGINT
+    if inherited_listener is not None:
+        process_options["pass_fds"] = (inherited_listener.fileno(),)
 
-    process = subprocess.Popen(
-        command,
-        cwd=os.getcwd(),
-        env=environment,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        **process_options,
-    )
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=os.getcwd(),
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **process_options,
+        )
+    except BaseException:
+        if inherited_listener is not None:
+            inherited_listener.close()
+        if uds_directory is not None:
+            uds_directory.cleanup()
+        raise
     response = None
     idle_connection_closed = None
     deadline = time.monotonic() + request["timeout_seconds"]
@@ -454,6 +484,8 @@ else:
             process.communicate()
         if uds_directory is not None:
             uds_directory.cleanup()
+        if inherited_listener is not None:
+            inherited_listener.close()
 
 
 def run_websocket_observation(request: dict) -> dict:

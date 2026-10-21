@@ -52,6 +52,9 @@ tokio-util = { version = "0.7", features = ["rt"] }
 uvicorn-rs = { version = "0.1.0", path = "crates/uvicorn-rs" }
 tower-service = "0.3"
 
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1.5", features = ["fs", "net"] }
+
 [lints.rust]
 unsafe_code = "forbid"
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)"] }

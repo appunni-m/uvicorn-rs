@@ -58,8 +58,6 @@ class Server:
             await self._serve(sockets=sockets)
 
     async def _serve(self, sockets: list[socket.socket] | None = None) -> None:
-        if sockets is not None:
-            raise NotImplementedError("uvicorn-rs does not support pre-bound sockets yet")
         self.config.validate_native_runtime()
         if not self.config.loaded:
             self.config.load()
@@ -82,48 +80,65 @@ class Server:
 
         from uvicorn_rs import Server as NativeServer
 
-        native_server = NativeServer(
-            self.config.loaded_app,
-            host=self.config.host,
-            port=self.config.port,
-            uds=self.config.uds,
-            backlog=self.config.backlog,
-            timeout_keep_alive=self.config.timeout_keep_alive,
-            certfile=self.config.ssl_certfile,
-            keyfile=self.config.ssl_keyfile,
-            graceful_timeout=self.config.timeout_graceful_shutdown,
-            lifespan="off" if wsgi_auto_lifespan else self.config.lifespan,
-            root_path=self.config.root_path,
-            default_headers=self.config.encoded_headers,
-            date_header=self.config.date_header,
-            ws_max_size=self.config.ws_max_size,
-            ws_ping_interval=self.config.ws_ping_interval,
-            ws_ping_timeout=self.config.ws_ping_timeout,
-            limit_concurrency=self.config.limit_concurrency,
-            _defer_startup_failure=True,
-        )
-        self._native_server = native_server
-        if self._should_exit:
-            native_server.shutdown()
-
-        native_task = asyncio.create_task(native_server.serve())
+        inherited_socket = None
+        if sockets is None and self.config.uds is None and self.config.fd is not None:
+            inherited_socket = socket.fromfd(
+                self.config.fd, socket.AF_INET, socket.SOCK_STREAM
+            )
+            sockets = [inherited_socket]
         try:
-            # Readiness comes from Rust after bind and lifespan, never from
-            # the scheduling yield.
-            await asyncio.sleep(0)
-            self.started = await native_server.wait_started()
-            if self.started:
-                self._log_started_message()
-            await native_task
-            if self.started:
-                logger.info("Finished server process [%d]", process_id)
-            if native_server.startup_failed:
-                raise SystemExit(3)
-        finally:
-            self._native_server = None
+            native_server = NativeServer(
+                self.config.loaded_app,
+                host=self.config.host,
+                port=self.config.port,
+                uds=self.config.uds,
+                backlog=self.config.backlog,
+                timeout_keep_alive=self.config.timeout_keep_alive,
+                certfile=self.config.ssl_certfile,
+                keyfile=self.config.ssl_keyfile,
+                graceful_timeout=self.config.timeout_graceful_shutdown,
+                lifespan="off" if wsgi_auto_lifespan else self.config.lifespan,
+                root_path=self.config.root_path,
+                default_headers=self.config.encoded_headers,
+                date_header=self.config.date_header,
+                ws_max_size=self.config.ws_max_size,
+                ws_ping_interval=self.config.ws_ping_interval,
+                ws_ping_timeout=self.config.ws_ping_timeout,
+                limit_concurrency=self.config.limit_concurrency,
+                _defer_startup_failure=True,
+                sockets=sockets,
+            )
+            self._native_server = native_server
+            if self._should_exit:
+                native_server.shutdown()
 
-    def _log_started_message(self) -> None:
+            native_task = asyncio.create_task(native_server.serve())
+            try:
+                # Readiness comes from Rust after bind and lifespan, never from
+                # the scheduling yield.
+                await asyncio.sleep(0)
+                self.started = await native_server.wait_started()
+                if self.started:
+                    self._log_started_message(sockets)
+                await native_task
+                if self.started:
+                    logger.info("Finished server process [%d]", process_id)
+                if native_server.startup_failed:
+                    raise SystemExit(3)
+            finally:
+                self._native_server = None
+        finally:
+            if inherited_socket is not None:
+                inherited_socket.close()
+
+    def _log_started_message(self, sockets: list[socket.socket] | None = None) -> None:
         """Log the selected listener URL after native startup completes."""
+        if self.config.fd is not None and sockets:
+            logger.info(
+                "Uvicorn running on socket %s (Press CTRL+C to quit)",
+                sockets[0].getsockname(),
+            )
+            return
         if self.config.uds is not None:
             logger.info(
                 "Uvicorn running on unix socket %s (Press CTRL+C to quit)",

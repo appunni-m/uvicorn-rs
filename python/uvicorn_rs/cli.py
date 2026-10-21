@@ -43,6 +43,7 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--uds", help="Bind to a Unix domain socket")
+    parser.add_argument("--fd", type=int, help="Use an inherited listening socket descriptor")
     parser.add_argument("--loop", choices=("asyncio", "uvloop"), default="asyncio")
     parser.add_argument(
         "--log-level",
@@ -113,6 +114,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
         host=args.host,
         port=args.port,
         uds=args.uds,
+        fd=args.fd,
         loop=args.loop,
         log_config=LOGGING_CONFIG if args.log_config is None else args.log_config,
         log_level=args.log_level,

@@ -317,7 +317,7 @@ class Config:
         # on Config without treating it as a native queue-size control.
         checks = (
             (self.uds is not None and os.name == "nt", "uds"),
-            (self.fd is not None, "fd"),
+            (self.fd is not None and os.name == "nt", "fd"),
             (self.reload, "reload"),
             # Uvicorn runs workers=0 and workers=1 in the current process.
             # WEB_CONCURRENCY=0 reaches Config without the explicit-value

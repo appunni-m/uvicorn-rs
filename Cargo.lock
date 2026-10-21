@@ -1540,6 +1540,7 @@ dependencies = [
  "pyo3",
  "pyo3-async-runtimes",
  "quinn",
+ "rustix",
  "rustls-pemfile",
  "tokio",
  "tokio-rustls",

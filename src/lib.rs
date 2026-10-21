@@ -62,7 +62,7 @@ use pyo3_async_runtimes::TaskLocals;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(not(feature = "native-tcp"))]
 use tokio::net::TcpStream;
-#[cfg(all(unix, feature = "native-tcp"))]
+#[cfg(unix)]
 use tokio::net::UnixListener;
 use tokio::net::{TcpListener, TcpSocket};
 use tokio::sync::mpsc::{
@@ -1627,6 +1627,7 @@ struct ServeOptions {
     host: String,
     port: u16,
     uds: Option<String>,
+    fd_transfer_path: Option<String>,
     backlog: i32,
     timeout_keep_alive: std::time::Duration,
     root_path: String,
@@ -5013,7 +5014,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, uds, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
+#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5025,6 +5026,7 @@ fn serve<'py>(
     host: String,
     port: u16,
     uds: Option<String>,
+    fd_transfer_path: Option<String>,
     backlog: i32,
     timeout_keep_alive: i64,
     certfile: Option<String>,
@@ -5156,6 +5158,7 @@ fn serve<'py>(
             host,
             port,
             uds,
+            fd_transfer_path,
             backlog,
             timeout_keep_alive,
             root_path,
@@ -5278,6 +5281,99 @@ fn bind_unix_listener(path: &str) -> std::io::Result<UnixListener> {
     Ok(listener)
 }
 
+/// Receive one listening TCP socket over a private Unix-domain control socket.
+///
+/// The Python adapter owns socket setup and sends the descriptor only during
+/// startup. `SCM_RIGHTS` gives this runtime an owned descriptor without
+/// converting an integer raw fd in Rust.
+#[cfg(unix)]
+async fn receive_prebound_tcp_listener(path: &str, backlog: i32) -> std::io::Result<TcpListener> {
+    use rustix::net::{recvmsg, RecvAncillaryBuffer, RecvAncillaryMessage, RecvFlags, ReturnFlags};
+    use std::io::{Error, ErrorKind, IoSliceMut};
+    use std::mem::MaybeUninit;
+    use std::os::fd::AsFd;
+    use tokio::io::Interest;
+
+    let control_listener = UnixListener::bind(path)?;
+    let (control_stream, _) = control_listener.accept().await?;
+    let (marker, descriptor) = loop {
+        control_stream.readable().await?;
+        let received = control_stream.try_io(Interest::READABLE, || {
+            let mut payload = [0_u8; 1];
+            let mut control_space = [MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(1))];
+            let mut ancillary = RecvAncillaryBuffer::new(&mut control_space);
+            let message = {
+                let mut payload_slices = [IoSliceMut::new(&mut payload)];
+                recvmsg(
+                    control_stream.as_fd(),
+                    &mut payload_slices,
+                    &mut ancillary,
+                    RecvFlags::empty(),
+                )?
+            };
+            if message.bytes != 1 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "inherited listener transfer omitted its marker",
+                ));
+            }
+            let mut descriptors = Vec::new();
+            for control_message in ancillary.drain() {
+                match control_message {
+                    RecvAncillaryMessage::ScmRights(received) => {
+                        descriptors.extend(received);
+                    }
+                    _ => {
+                        return Err(Error::new(
+                            ErrorKind::InvalidData,
+                            "inherited listener transfer had unexpected ancillary data",
+                        ));
+                    }
+                }
+            }
+            if message.flags.contains(ReturnFlags::CTRUNC) || descriptors.len() != 1 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "inherited listener transfer must contain exactly one descriptor",
+                ));
+            }
+            let descriptor = descriptors.pop().ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    "inherited listener transfer omitted its descriptor",
+                )
+            })?;
+            Ok((payload[0], descriptor))
+        });
+        match received {
+            Ok(result) => break result,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
+            Err(error) => return Err(error),
+        }
+    };
+    if marker != b'L' {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "inherited listener transfer had an invalid marker",
+        ));
+    }
+    let descriptor_flags = rustix::io::fcntl_getfd(&descriptor)?;
+    rustix::io::fcntl_setfd(&descriptor, descriptor_flags | rustix::io::FdFlags::CLOEXEC)?;
+    rustix::net::listen(&descriptor, backlog.max(0))?;
+
+    let standard_listener = std::net::TcpListener::from(descriptor);
+    standard_listener.set_nonblocking(true)?;
+    TcpListener::from_std(standard_listener)
+}
+
+#[cfg(not(unix))]
+async fn receive_prebound_tcp_listener(_path: &str, _backlog: i32) -> std::io::Result<TcpListener> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "inherited TCP listeners are not supported on this platform",
+    ))
+}
+
 async fn serve_forever(
     app: Py<PyAny>,
     invoke: Py<PyAny>,
@@ -5288,7 +5384,18 @@ async fn serve_forever(
     diagnostics: RuntimeDiagnostics,
 ) -> PyResult<()> {
     #[cfg(feature = "native-tcp")]
-    let (listener, server_addr) = if let Some(path) = options.uds.as_deref() {
+    let (listener, server_addr) = if let Some(path) = options.fd_transfer_path.as_deref() {
+        let listener = tokio::select! {
+            _ = cancellation.cancelled() => return Ok(()),
+            result = receive_prebound_tcp_listener(path, options.backlog) => result.map_err(|error| {
+                PyOSError::new_err(format!("could not receive inherited TCP listener: {error}"))
+            })?,
+        };
+        let server_addr = listener.local_addr().map_err(|error| {
+            PyOSError::new_err(format!("could not inspect inherited TCP listener: {error}"))
+        })?;
+        (BoundListener::Tcp(listener), server_addr)
+    } else if let Some(path) = options.uds.as_deref() {
         #[cfg(unix)]
         {
             let listener = bind_unix_listener(path).map_err(|error| {
@@ -5335,20 +5442,31 @@ async fn serve_forever(
         (BoundListener::Tcp(listener), server_addr)
     };
     #[cfg(not(feature = "native-tcp"))]
-    if options.uds.is_some() {
+    let listener = if options.fd_transfer_path.is_some() {
+        let path = options
+            .fd_transfer_path
+            .as_deref()
+            .ok_or_else(|| PyValueError::new_err("inherited TCP listener path is missing"))?;
+        tokio::select! {
+            _ = cancellation.cancelled() => return Ok(()),
+            result = receive_prebound_tcp_listener(path, options.backlog) => result.map_err(|error| {
+                PyOSError::new_err(format!("could not receive inherited TCP listener: {error}"))
+            })?,
+        }
+    } else if options.uds.is_some() {
         return Err(PyValueError::new_err(
             "Unix domain sockets require the native-tcp feature",
         ));
-    }
-    #[cfg(not(feature = "native-tcp"))]
-    let listener = bind_tcp_listener(&options.host, options.port, options.backlog)
-        .await
-        .map_err(|error| {
-            PyOSError::new_err(format!(
-                "could not bind {}:{}: {error}",
-                options.host, options.port
-            ))
-        })?;
+    } else {
+        bind_tcp_listener(&options.host, options.port, options.backlog)
+            .await
+            .map_err(|error| {
+                PyOSError::new_err(format!(
+                    "could not bind {}:{}: {error}",
+                    options.host, options.port
+                ))
+            })?
+    };
     #[cfg(not(feature = "native-tcp"))]
     let server_addr = {
         let local_addr = {

@@ -298,7 +298,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
     from uvicorn_rs.cli import main as prototype_main
 
     supported = {
-        "host", "port", "uds", "loop", "ssl_certfile", "ssl_keyfile",
+        "host", "port", "uds", "fd", "loop", "ssl_certfile", "ssl_keyfile",
         "timeout_graceful_shutdown", "app_dir", "factory", "lifespan", "root_path",
         "env_file",
         "headers", "server_header", "date_header", "interface",
@@ -353,6 +353,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
     argv = [app, "--host", options["host"], "--port", str(options["port"]), "--loop", loop]
     if options["uds"]:
         argv.extend(("--uds", options["uds"]))
+    if options["fd"] is not None:
+        argv.extend(("--fd", str(options["fd"])))
     if options["lifespan"] != "auto":
         argv.extend(("--lifespan", options["lifespan"]))
     if options["ssl_certfile"]:
