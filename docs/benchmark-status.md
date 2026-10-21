@@ -12,6 +12,25 @@
 This attempt did not produce a validated three-system aggregate. No performance result was generated or substituted. The [previous complete report](benchmark-results.md) remains the latest measured result; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/39508168315) for this attempt.
 <!-- END GENERATED LATEST ATTEMPT -->
 
+## Diagnosis of the latest failed attempt
+
+Run `39508168315` used commit
+[`87b888b5`](https://github.com/appunni-m/uvicorn-rs/commit/87b888b5c364d087dc389076846d7474ba3a15e9), before the HTTP/3 shutdown-parity correction in
+[`8a0a0e11`](https://github.com/appunni-m/uvicorn-rs/commit/8a0a0e116). Its three platform jobs stopped at the exact-binary parity gate, before timing. The eight failures were the HTTP/3 peer-close cases listed below. Their protocol observations matched; the differing field was process exit status: Hypercorn's oracle exited `0`, while uvicorn-rs was terminated with `-15` (SIGTERM).
+
+Current `main` compares HTTP/3 peer-close termination and protocol outcome without requiring those server-specific process exit codes to match. Each of the eight affected inputs was replayed individually against the live Uvicorn oracle at `ecf185f19`; all eight passed with zero infrastructure failures:
+
+- `http3.peer-close-h3-no-error`
+- `http3.peer-close-unknown-zero`
+- `http3.peer-close-registered-h3-datagram`
+- `http3.peer-close-registered-h3-general-protocol-error`
+- `http3.peer-close-registered-qpack-decompression-failed`
+- `http3.peer-close-reserved-grease`
+- `http3.peer-close-unknown-above-base-range`
+- `http3.peer-close-unknown-maximum-u62`
+
+This identifies the hosted failure as an outdated comparison rule, not a reproduced HTTP/3 runtime mismatch. The hosted attempt remains failed and produced no timing data; the full parity gate and benchmark still need a new run from current `main`.
+
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
 ## Current-source FastAPI upload call-path profile (macOS ARM64; 2026-10-21; diagnostic only)
