@@ -122,6 +122,52 @@ macOS arm64. Raw reports and server logs remain in
 ignored `target/wh9k-websocket-2026-10-21/` and
 `target/wh9k-websocket-candidate-2026-10-21/`; no report or log is committed.
 
+## Peer-read buffer reuse candidate (Linux x86-64; 2026-10-21; diagnostic only)
+
+This experiment compared `main` with a candidate that recycles bounded
+`BytesMut` buffers in the proactive peer-read path. It used the stock FastAPI
+`POST /upload/1048576` route, sending a 1 MiB body in 1 KiB writes at
+concurrency 8. Both cohorts used CPython 3.12.13, FastAPI 0.142.4, Starlette
+1.7.0, Uvicorn 0.54.0, Rust 1.91.1, Node 22.15.0, and the same AMD Ryzen 5
+2600X Linux host (12 logical CPUs, kernel `7.0.0-38-generic`). Each used a
+1-second warmup, 5-second sample window, five repetitions, and seed
+`20261021`. The verified Uvicorn oracle and complete response-body checks were
+used in both cohorts. The candidate cohort ran first; the main cohort followed
+about two minutes later.
+
+All 20 rows in the main cohort and all 20 candidate rows passed response and
+server-lifecycle checks. The timing guard accepted all 20 main rows and 19/20
+candidate rows; candidate asyncio repetition 4 was excluded for unrelated host
+CPU activity. The table gives medians over timing-valid rows. Delta is the
+candidate change relative to main.
+
+| Loop | Valid rows main/candidate | Req/s main/candidate | Latency p50 / p95 / p99 ms main/candidate | Server CPU µs/request main/candidate | Server RSS MiB main/candidate | Client CPU µs/request main/candidate | Client RSS MiB main/candidate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| asyncio | 5/5, 4/5 | 976.6 / 987.9 (+1.2%) | 7.90 / 11.30 / 13.19; 7.71 / 11.62 / 14.23 | 1,689.5 / 1,641.9 | 59.73 / 59.46 | 983.2 / 1,031.5 | 96.09 / 99.03 |
+| uvloop | 5/5, 5/5 | 1,221.7 / 1,186.7 (-2.9%) | 5.71 / 10.36 / 12.40; 5.85 / 10.59 / 12.71 | 1,117.6 / 1,159.0 | 61.52 / 61.71 | 914.3 / 917.0 | 97.94 / 99.63 |
+
+The small asyncio throughput increase did not repeat under uvloop, and p95
+latency rose in both candidate rows. The Uvicorn asyncio control also moved
+from 881 req/s in the candidate cohort to 1,078 req/s in the later main cohort,
+showing substantial between-cohort variation. These sequential runs therefore
+do not establish a causal or repeatable gain. Four focused candidate parity
+probes passed: H1 upload streaming, H1 slow-reader resource bounds, H2 upload,
+and WebSocket text/binary round-trip. The candidate is not merged to `main`.
+
+The measured main revision was `1f46d48d48beb7320c34a094820c8b7de0634bd7`
+with stable source SHA-256
+`1ef85731054342f297f3cdae01fc9492c6afca0962eaf4ea2c30be191f72895f` and
+native extension SHA-256
+`7d8d0e5fbaab1f39ea65ffc1ed2ab256494c750a15c6c4e23cb1c549547abf24`. The
+measured candidate was the same tree as local experiment commit
+`0277e3e7abbd77562e813356f91b923edca31883` (candidate build revision
+`768ae0a7caebfb78798ca1b81d160bbba62a390b`), with stable source SHA-256
+`ce1a28e26480dc05b54143b04111e3055c960645b2614bfe67ebe231d0822343` and
+native extension SHA-256
+`a704c7832ad1f0b6b3ed888fa24fba9b8384d38d8a2d4aa3118830b0096bfa87`. The
+raw reports remain outside Git under the Linux host's ignored `target/`
+directories; no report or server log is committed.
+
 ## Tokio blocking-pool cap decision (2026-10-17)
 
 The completed Linux x86-64 FastAPI upload comparison found no repeatable
