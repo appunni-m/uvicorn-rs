@@ -57,6 +57,12 @@ is historical diagnostic evidence; current Rust source uses a 64 KiB proactive
 read chunk, and the 32 KiB result needs a corrected-command replay before its
 cross-server ratio can be cited.
 
+A single FastAPI HTTP/1.1 upload workload has since completed with the corrected
+commands on Linux x86-64: all five repetitions qualified for each same-loop
+pair. The asyncio pair was slower on Rust while the uvloop pair was faster;
+this is evidence for that workload and host only. See the
+[focused result and full limits](benchmark-status.md#focused-matched-h1-upload-after-command-parity-linux-x86-64-2026-10-21).
+
 These are loopback application-server benchmarks, not end-to-end production
 capacity tests. They measure the combined server, Python ASGI app, event loops,
 protocol implementation, client, and host. The maintained cross-category

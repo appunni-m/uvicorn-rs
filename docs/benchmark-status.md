@@ -4042,3 +4042,41 @@ performance evidence. No benchmark timing was collected as part of this audit.
 Only the four command builders and these benchmark instructions/evidence notes
 were changed; raw reports, logs, and coverage artifacts remain excluded from
 Git.
+
+## Focused matched H1 upload after command parity (Linux x86-64; 2026-10-21)
+
+On main commit `c7a5e335f3f53cac8373db1e9fab2789d21859b0`, the normal release
+wheel was measured against Uvicorn 0.54.0 using the corrected H1 commands. The
+workload was upstream FastAPI 0.142.4 / Starlette 1.7.0 receiving a 1 MiB body
+in 1 KiB writes at concurrency 8, with a 1-second warmup, 5-second load window,
+and five repetitions. All 20 rows passed the response and lifecycle checks;
+all five repetitions were timing-valid for each loop pair. The report marked
+performance evidence `completed`, recorded stable source and extension
+identity, and found no unrecorded dependencies. Both servers had access logs
+disabled, `Server` headers disabled, and `Date` headers enabled; all server
+logs were empty.
+
+The host was Linux x86-64 with an AMD Ryzen 5 2600X and 12 logical CPUs. The
+runtime was CPython 3.12.13, Rust 1.98.1, uvloop 0.23.0, httptools 0.8.0,
+Uvicorn 0.54.0, and Node.js 22.15.0. The normal release wheel used one Tokio
+worker. This remains an in-process Python FastAPI application: route handling
+and application code execute in Python through the bridge.
+
+| Event loop | Server | Median in-window requests/s | p50 (ms) | p95 (ms) | p99 (ms) | Server CPU (µs/request) | Peak RSS (MiB) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| asyncio | uvicorn-rs | 984.8 | 7.819 | 11.272 | 13.863 | 1,705 | 60.21 |
+| asyncio | Uvicorn | 1,074.0 | 7.025 | 11.886 | 13.801 | 866 | 55.56 |
+| uvloop | uvicorn-rs | 1,258.8 | 5.461 | 10.388 | 11.932 | 1,044 | 60.91 |
+| uvloop | Uvicorn | 779.2 | 9.915 | 13.870 | 15.234 | 1,260 | 56.67 |
+
+For this case, uvicorn-rs reached 0.917× Uvicorn throughput under asyncio and
+1.616× under uvloop. Its median server CPU was 1.97× Uvicorn's under asyncio
+and 0.829× under uvloop. Peak RSS was about 4.2–4.7 MiB higher on Rust. The
+result shows that loop selection changes the measured outcome; it does not
+establish a general server speedup or satisfy the multi-system/category release
+gate. It also does not isolate Python execution, bridge cost, or memory copies.
+
+The raw JSON, driver log, and per-server artifacts are retained under ignored
+`target/focused-overhead/2026-10-21-c7a5e335f/`; the matching host copy remains
+under `/home/appunni/work/uvicorn-rs-bench-overhead-c7a5e335f/target/`. These
+files are not committed.
