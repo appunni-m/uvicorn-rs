@@ -86,6 +86,7 @@ class Server:
             self.config.loaded_app,
             host=self.config.host,
             port=self.config.port,
+            uds=self.config.uds,
             backlog=self.config.backlog,
             timeout_keep_alive=self.config.timeout_keep_alive,
             certfile=self.config.ssl_certfile,
@@ -123,6 +124,12 @@ class Server:
 
     def _log_started_message(self) -> None:
         """Log the selected listener URL after native startup completes."""
+        if self.config.uds is not None:
+            logger.info(
+                "Uvicorn running on unix socket %s (Press CTRL+C to quit)",
+                self.config.uds,
+            )
+            return
         host = self.config.host or "0.0.0.0"
         if ":" in host and not host.startswith("["):
             host = f"[{host}]"

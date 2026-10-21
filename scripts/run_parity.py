@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@29"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@30"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2231,6 +2231,8 @@ def load_contract(
                     "keep_alive_probe_delay_seconds",
                     "workers",
                     "timeout_worker_healthcheck",
+                    "uds",
+                    "observe_unix_scope",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2252,6 +2254,19 @@ def load_contract(
                 if "factory" in run_http and type(run_http["factory"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.factory must be a boolean"
+                    )
+                if "uds" in run_http and type(run_http["uds"]) is not bool:
+                    raise ParityError(f"{case_id}.api.run_http.uds must be a boolean")
+                if (
+                    "observe_unix_scope" in run_http
+                    and type(run_http["observe_unix_scope"]) is not bool
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_unix_scope must be a boolean"
+                    )
+                if run_http.get("observe_unix_scope") and not run_http.get("uds"):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_unix_scope requires uds=true"
                     )
                 if "backlog" in run_http and type(run_http["backlog"]) is not int:
                     raise ParityError(
@@ -9922,6 +9937,9 @@ def _python_api_server_log_events(
         r"^(?P<prefix>Uvicorn running on https?://.+):(?P<port>\d+)"
         r"(?P<suffix> \(Press CTRL\+C to quit\))$"
     )
+    unix_socket_running_line = re.compile(
+        r"^Uvicorn running on unix socket .+ \(Press CTRL\+C to quit\)$"
+    )
     process_pid = re.compile(r"((?:Started|Finished) server process \[)\d+(\])")
     exception_line = re.compile(r"^(?P<class>[A-Za-z_][\w.]*)\b(?:: ?(?P<message>.*))?$")
 
@@ -10007,6 +10025,8 @@ def _python_api_server_log_events(
                     f"{running_match.group('prefix')}:<port>"
                     f"{running_match.group('suffix')}"
                 )
+            elif unix_socket_running_line.match(message):
+                message = "Uvicorn running on unix socket <uds> (Press CTRL+C to quit)"
             message = process_pid.sub(r"\1<pid>\2", message)
             event = {"kind": "message", "level": level, "message": message}
             if logger is not None:

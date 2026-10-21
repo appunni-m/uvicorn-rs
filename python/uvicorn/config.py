@@ -117,7 +117,8 @@ class Config:
     """Store Uvicorn-shaped options and resolve an application for Rust serving.
 
     The constructor accepts the Uvicorn 0.54.0 public settings. The current
-    native runtime implements the single-process ASGI 3 TCP path; unsupported
+    native runtime implements the single-process ASGI 3 TCP and Unix-domain
+    socket paths; unsupported
     settings are rejected by :meth:`validate_native_runtime` before binding.
     """
 
@@ -315,7 +316,7 @@ class Config:
         # SansIO backend, which does not consume ws_max_queue. Leave that value
         # on Config without treating it as a native queue-size control.
         checks = (
-            (self.uds is not None, "uds"),
+            (self.uds is not None and os.name == "nt", "uds"),
             (self.fd is not None, "fd"),
             (self.reload, "reload"),
             # Uvicorn runs workers=0 and workers=1 in the current process.

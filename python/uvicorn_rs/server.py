@@ -18,6 +18,7 @@ class Server:
         app,
         host="127.0.0.1",
         port=8000,
+        uds=None,
         backlog=2048,
         timeout_keep_alive=5,
         certfile=None,
@@ -39,6 +40,8 @@ class Server:
             app: ASGI 3 application callable.
             host: TCP bind host and, when TLS is enabled, QUIC bind host.
             port: TCP and QUIC port in the range supported by the OS.
+            uds: Optional Unix domain socket path. When set, the Rust runtime
+                binds this stream socket and does not create a QUIC listener.
             backlog: Maximum pending TCP connections; negative values are
                 clamped to zero as in Uvicorn's socket-listen path.
             timeout_keep_alive: Idle timeout for persistent HTTP/1 connections
@@ -70,6 +73,7 @@ class Server:
         self.app = app
         self.host = host
         self.port = port
+        self.uds = uds
         self.backlog = backlog
         self.timeout_keep_alive = timeout_keep_alive
         self.certfile = certfile
@@ -130,6 +134,7 @@ class Server:
                 _bridge.invoke,
                 self.host,
                 self.port,
+                self.uds,
                 self.backlog,
                 self.timeout_keep_alive,
                 self.certfile,

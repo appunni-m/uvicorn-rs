@@ -1579,6 +1579,30 @@ def python_api_factory_probe_app():
     return lifespan_probe_app
 
 
+async def python_api_uds_probe_app(scope, receive, send):
+    """Expose Unix-domain HTTP scope address semantics in one response."""
+    if scope["type"] == "lifespan":
+        await lifespan_probe_app(scope, receive, send)
+        return
+    if scope["type"] != "http":
+        return
+
+    await receive()
+    client_is_none = scope.get("client") is None
+    server = scope.get("server")
+    server_has_unix_shape = (
+        isinstance(server, tuple)
+        and len(server) == 2
+        and isinstance(server[0], str)
+        and server[1] is None
+    )
+    body = (
+        f"client-is-none={str(client_is_none).lower()}|"
+        f"server-has-unix-shape={str(server_has_unix_shape).lower()}"
+    ).encode("ascii")
+    await _respond(send, body, content_type=b"text/plain")
+
+
 def python_api_wsgi_probe_app(environ, start_response):
     """Return a deterministic WSGI response for Python API parity inputs."""
 

@@ -55,7 +55,7 @@ unknown-option rejection, and limited single-process worker settings. On current
 `cli.zero-workers-normalizes-to-single-worker` and
 `cli.unknown-option-is-rejected` each pass individually against isolated
 Uvicorn 0.54.0. This evidence does not establish multi-worker supervision,
-reload/watch behavior, file-descriptor or UDS listener support, execution of
+reload/watch behavior, file-descriptor listener support, execution of
 every listed option, or full CLI and Python API parity.
 
 This follows the fixture-matrix approach used by `image-slash-star`/Pillow-RS,
@@ -524,7 +524,9 @@ WebSocket queue-option acceptance, unknown-option rejection, and single-process
 worker settings.
 Selector cases check argument handling;
 they do not prove that every option is executed or establish multi-worker,
-reload/watch, file-descriptor or UDS listener behavior. The fixture app is
+reload/watch or file-descriptor listener behavior. Focused Python API inputs
+cover plain HTTP/1.1 over UDS through the module CLI and `Config`/`Server`; they
+do not establish UDS behavior over other protocols or TLS. The fixture app is
 shared source code imported in fresh, independent oracle and target processes.
 Its exported ASGI callable is synchronous and returns an awaitable. The
 Uvicorn adapter forces `--interface asgi3`; the Hypercorn adapter uses its
@@ -699,6 +701,10 @@ only the schema marker and preserves existing case data.
 Schema `@29` permits `workers` and `timeout_worker_healthcheck` in Python API
 HTTP-run inputs; migrate maintained `@28` inputs with
 `python scripts/migrate_parity_input_v28_to_v29.py`. This migration changes
+only the schema marker and preserves existing case data.
+Schema `@30` permits `uds` and `observe_unix_scope` in Python API HTTP-run
+inputs; migrate maintained `@29` inputs with
+`python scripts/migrate_parity_input_v29_to_v30.py`. This migration changes
 only the schema marker and preserves existing case data.
 The runner rejects older or mixed input schemas.
 

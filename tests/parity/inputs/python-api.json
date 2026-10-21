@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@29",
+  "schema": "uvicorn-rs-parity/input@30",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -1028,6 +1028,44 @@
           "root_path": "",
           "interface": "wsgi",
           "application_interface": "wsgi"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-serves-unix-domain-socket-request",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-unix-socket",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "uds": true,
+          "observe_unix_scope": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-serves-unix-domain-socket-request",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-unix-socket",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "uds": true,
+          "observe_unix_scope": true
         }
       }
     }

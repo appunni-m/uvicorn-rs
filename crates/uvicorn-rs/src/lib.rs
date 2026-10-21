@@ -72,6 +72,8 @@ pub use native_app_contract::{
     ApplicationLifecycleStage,
 };
 use pin_project_lite::pin_project;
+#[cfg(unix)]
+use tokio::net::{UnixListener, UnixStream};
 #[cfg(coverage)]
 use tokio::sync::Notify;
 use tokio::{
@@ -1231,6 +1233,9 @@ impl fmt::Debug for ServerConfig {
 pub enum TransportKind {
     /// A TCP connection carrying HTTP/1.1 or HTTP/2.
     Tcp,
+    /// A Unix-domain stream socket carrying HTTP/1.1 or HTTP/2.
+    #[cfg(unix)]
+    Unix,
     /// A QUIC connection carrying HTTP/3.
     Quic,
 }
@@ -1260,7 +1265,7 @@ impl ConnectionInfo {
         self.tls.as_ref()
     }
 
-    /// Returns whether this connection uses TCP or QUIC.
+    /// Returns whether this connection uses TCP, a Unix socket, or QUIC.
     #[must_use]
     pub const fn transport(&self) -> TransportKind {
         self.transport
@@ -2252,6 +2257,342 @@ where
         ),
     )
     .await
+}
+
+/// Serves an HTTP application over a Unix-domain stream listener.
+///
+/// The listener must be bound by the caller. The server accepts the same HTTP
+/// protocols, Tower service contract, lifecycle hooks, admission limits, and
+/// graceful-drain policy as [`serve_tcp`]. Requests identify the transport as
+/// [`TransportKind::Unix`]; there is no IP peer address for a Unix socket.
+/// TLS may be enabled by passing a TLS-wrapped stream from the adapter's
+/// acceptor.
+///
+/// # Errors
+///
+/// Returns the same server-level errors as [`serve_tcp`]. Individual
+/// connection and TLS failures are reported through the configured observer
+/// and close only that connection.
+#[cfg(unix)]
+pub async fn serve_unix<S, B, Shutdown>(
+    listener: UnixListener,
+    service: S,
+    shutdown: Shutdown,
+    config: ServerConfig,
+) -> Result<(), ServeError>
+where
+    S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+    Shutdown: Future<Output = ()> + Send,
+{
+    serve_unix_with_date_header(listener, service, shutdown, config, true).await
+}
+
+/// Serves HTTP over a Unix-domain stream listener with an explicit `Date`
+/// header policy. See [`serve_tcp_with_date_header`] for the policy semantics.
+///
+/// # Errors
+///
+/// Returns the same server-level errors as [`serve_unix`].
+#[cfg(unix)]
+pub async fn serve_unix_with_date_header<S, B, Shutdown>(
+    listener: UnixListener,
+    service: S,
+    shutdown: Shutdown,
+    config: ServerConfig,
+    date_header: bool,
+) -> Result<(), ServeError>
+where
+    S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+    Shutdown: Future<Output = ()> + Send,
+{
+    let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
+    run_with_application_lifecycle(
+        config.clone(),
+        serve_unix_listener(listener, service, shutdown, config, None, date_header),
+    )
+    .await
+}
+
+/// Serves HTTP over a Unix-domain listener with TLS and an explicit `Date`
+/// header policy.
+///
+/// # Errors
+///
+/// Returns the same server-level errors as [`serve_unix`]. Individual TLS
+/// handshake failures close only their connection.
+#[cfg(unix)]
+pub async fn serve_unix_tls_with_date_header<S, B, Shutdown>(
+    listener: UnixListener,
+    acceptor: TlsAcceptor,
+    service: S,
+    shutdown: Shutdown,
+    config: ServerConfig,
+    date_header: bool,
+) -> Result<(), ServeError>
+where
+    S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+    Shutdown: Future<Output = ()> + Send,
+{
+    let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
+    run_with_application_lifecycle(
+        config.clone(),
+        serve_unix_listener(
+            listener,
+            service,
+            shutdown,
+            config,
+            Some(acceptor),
+            date_header,
+        ),
+    )
+    .await
+}
+
+#[cfg(unix)]
+async fn serve_unix_listener<S, B>(
+    listener: UnixListener,
+    service: S,
+    mut shutdown: BoxedShutdownFuture<'_>,
+    config: ServerConfig,
+    unix_tls_acceptor: Option<TlsAcceptor>,
+    date_header: bool,
+) -> Result<(), ServeError>
+where
+    S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+{
+    let connection_slots = Arc::new(Semaphore::new(config.max_connections));
+    let request_concurrency = config
+        .limit_concurrency
+        .map(|limit| Arc::new(RequestConcurrency::new(limit)));
+    let default_headers = Arc::new(config.default_headers.clone());
+    #[cfg(coverage)]
+    if take_listener_admission_closed_fault() {
+        connection_slots.close();
+    }
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let mut connections = JoinSet::new();
+    let unspecified_peer = SocketAddr::from(([0, 0, 0, 0], 0));
+
+    loop {
+        let UnixListenerEvent::Accepted { stream, slot } = next_unix_listener_event(
+            &listener,
+            &connection_slots,
+            &mut connections,
+            &mut shutdown,
+        )
+        .await?
+        else {
+            break;
+        };
+
+        let (
+            stream,
+            peer_read_half_closed,
+            peer_read_failed,
+            read_pump,
+            prioritize_receiver_close_fault,
+        ) = peer_read::observe_peer_read_unix(stream, config.peer_read_half_close);
+        let (response_body_activity, mut response_body_activity_receiver) = watch::channel(0usize);
+        let service = service.clone();
+        let shutdown = shutdown_receiver.clone();
+        let error_observer = config.error_observer.clone();
+        let concurrency_limit_observer = config.concurrency_limit_observer.clone();
+        let service_error_policy = config.service_error_policy;
+        let http1_keep_alive_timeout = config.http1_keep_alive_timeout;
+        let tls_acceptor = unix_tls_acceptor.clone();
+        let request_concurrency = request_concurrency.clone();
+        let default_headers = Arc::clone(&default_headers);
+        connections.spawn(async move {
+            let _slot = slot;
+            let connection = async {
+                match tls_acceptor {
+                    Some(acceptor) => match acceptor.accept(stream).await {
+                        Ok(stream) => {
+                            let _connection_guard = request_concurrency
+                                .as_ref()
+                                .map(RequestConcurrency::connection_started);
+                            let alpn_protocol =
+                                stream.get_ref().1.alpn_protocol().map(Arc::<[u8]>::from);
+                            serve_connection(
+                                stream,
+                                service,
+                                ConnectionInfo {
+                                    peer_addr: unspecified_peer,
+                                    tls: Some(TlsInfo { alpn_protocol }),
+                                    transport: TransportKind::Unix,
+                                },
+                                ConnectionSignals {
+                                    peer_read_half_closed: peer_read_half_closed.clone(),
+                                    peer_read_failed: peer_read_failed.clone(),
+                                    response_body_activity: response_body_activity.clone(),
+                                },
+                                shutdown,
+                                ConnectionOptions {
+                                    error_observer: error_observer.as_ref(),
+                                    concurrency_limit_observer: concurrency_limit_observer.as_ref(),
+                                    service_error_policy,
+                                    date_header,
+                                    http1_keep_alive_timeout,
+                                    request_concurrency: request_concurrency.clone(),
+                                    default_headers: Arc::clone(&default_headers),
+                                },
+                            )
+                            .await
+                        }
+                        Err(error) => Err(ConnectionError::Tls(error)),
+                    },
+                    None => {
+                        let _connection_guard = request_concurrency
+                            .as_ref()
+                            .map(RequestConcurrency::connection_started);
+                        serve_connection(
+                            stream,
+                            service,
+                            ConnectionInfo {
+                                peer_addr: unspecified_peer,
+                                tls: None,
+                                transport: TransportKind::Unix,
+                            },
+                            ConnectionSignals {
+                                peer_read_half_closed,
+                                peer_read_failed,
+                                response_body_activity: response_body_activity.clone(),
+                            },
+                            shutdown,
+                            ConnectionOptions {
+                                error_observer: error_observer.as_ref(),
+                                concurrency_limit_observer: concurrency_limit_observer.as_ref(),
+                                service_error_policy,
+                                date_header,
+                                http1_keep_alive_timeout,
+                                request_concurrency,
+                                default_headers,
+                            },
+                        )
+                        .await
+                    }
+                }
+            };
+            let result = if let Some(read_pump) = read_pump {
+                tokio::pin!(connection);
+                tokio::pin!(read_pump);
+                if prioritize_receiver_close_fault {
+                    read_pump.await;
+                    connection.await
+                } else {
+                    tokio::select! {
+                        result = &mut connection => result,
+                        outcome = &mut read_pump => match outcome {
+                            peer_read::PeerReadPumpOutcome::ReceiverClosed
+                            | peer_read::PeerReadPumpOutcome::ReadHalfClosed => connection.await,
+                            peer_read::PeerReadPumpOutcome::ReadFailed(kind) => {
+                                wait_for_connection_or_response_after_peer_read_error(
+                                    connection.as_mut(),
+                                    &mut response_body_activity_receiver,
+                                    kind,
+                                )
+                                .await
+                            }
+                        },
+                    }
+                }
+            } else {
+                connection.await
+            };
+            if let Err(error) = &result {
+                observe_error(
+                    error_observer.as_ref(),
+                    ServerErrorPhase::Connection,
+                    None,
+                    error,
+                );
+                tracing::debug!(%error, "Unix-domain HTTP connection finished with an error");
+            }
+            result
+        });
+    }
+
+    drop(listener);
+    shutdown_sender.send_replace(true);
+    let shutdown_deadline = graceful_shutdown_deadline(config.graceful_shutdown_timeout)?;
+    loop {
+        let joined = match shutdown_deadline {
+            Some(deadline) => tokio::select! {
+                biased;
+                _ = tokio::time::sleep_until(deadline), if !connections.is_empty() => {
+                    connections.abort_all();
+                    drain_aborted_connections(&mut connections).await;
+                    return Err(ServeError::GracefulShutdownTimedOut);
+                }
+                joined = connections.join_next() => joined,
+            },
+            None => connections.join_next().await,
+        };
+        match joined {
+            Some(joined) => observe_connection(joined),
+            None => break,
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+enum UnixListenerEvent {
+    Shutdown,
+    Accepted {
+        stream: UnixStream,
+        slot: OwnedSemaphorePermit,
+    },
+}
+
+#[cfg(unix)]
+async fn next_unix_listener_event(
+    listener: &UnixListener,
+    connection_slots: &Arc<Semaphore>,
+    connections: &mut JoinSet<Result<(), ConnectionError>>,
+    shutdown: &mut BoxedShutdownFuture<'_>,
+) -> Result<UnixListenerEvent, ServeError> {
+    loop {
+        let slot = tokio::select! {
+            _ = shutdown.as_mut() => return Ok(UnixListenerEvent::Shutdown),
+            joined = connections.join_next(), if !connections.is_empty() => {
+                joined.into_iter().for_each(observe_connection);
+                continue;
+            }
+            slot = Arc::clone(connection_slots).acquire_owned() => {
+                slot.map_err(ServeError::ConnectionAdmissionClosed)?
+            }
+        };
+
+        loop {
+            tokio::select! {
+                _ = shutdown.as_mut() => return Ok(UnixListenerEvent::Shutdown),
+                joined = connections.join_next(), if !connections.is_empty() => {
+                    joined.into_iter().for_each(observe_connection);
+                }
+                accepted = listener.accept() => {
+                    let (stream, _peer) = accepted.map_err(ServeError::Accept)?;
+                    return Ok(UnixListenerEvent::Accepted { stream, slot });
+                }
+            }
+        }
+    }
 }
 
 async fn serve_listener<S, B>(

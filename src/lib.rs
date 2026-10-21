@@ -20,6 +20,8 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::future::Future;
 use std::net::SocketAddr;
+#[cfg(all(unix, feature = "native-tcp"))]
+use std::os::unix::fs::PermissionsExt;
 use std::pin::Pin;
 #[cfg(feature = "runtime-diagnostics")]
 use std::sync::atomic::AtomicU64;
@@ -60,6 +62,8 @@ use pyo3_async_runtimes::TaskLocals;
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(not(feature = "native-tcp"))]
 use tokio::net::TcpStream;
+#[cfg(all(unix, feature = "native-tcp"))]
+use tokio::net::UnixListener;
 use tokio::net::{TcpListener, TcpSocket};
 use tokio::sync::mpsc::{
     self,
@@ -1622,6 +1626,7 @@ impl RuntimeDiagnostics {
 struct ServeOptions {
     host: String,
     port: u16,
+    uds: Option<String>,
     backlog: i32,
     timeout_keep_alive: std::time::Duration,
     root_path: String,
@@ -1643,6 +1648,7 @@ struct ServerContext {
     invoke: Arc<Py<PyAny>>,
     locals: TaskLocals,
     server_addr: SocketAddr,
+    uds: Option<String>,
     root_path: String,
     tcp_tls: Option<TlsAcceptor>,
     default_headers: Vec<(HeaderName, HeaderValue)>,
@@ -1663,6 +1669,13 @@ struct ServerContext {
     graceful_timeout: Option<std::time::Duration>,
     pending_python_tasks: TaskTracker,
     force_application_shutdown: CancellationToken,
+}
+
+#[cfg(feature = "native-tcp")]
+enum BoundListener {
+    Tcp(TcpListener),
+    #[cfg(unix)]
+    Unix(UnixListener),
 }
 
 #[derive(Clone, Copy)]
@@ -5000,7 +5013,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
+#[pyo3(signature = (app, invoke, host, port, uds, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5011,6 +5024,7 @@ fn serve<'py>(
     invoke: Py<PyAny>,
     host: String,
     port: u16,
+    uds: Option<String>,
     backlog: i32,
     timeout_keep_alive: i64,
     certfile: Option<String>,
@@ -5141,6 +5155,7 @@ fn serve<'py>(
         let options = ServeOptions {
             host,
             port,
+            uds,
             backlog,
             timeout_keep_alive,
             root_path,
@@ -5254,6 +5269,15 @@ async fn bind_tcp_listener(host: &str, port: u16, backlog: i32) -> std::io::Resu
     }))
 }
 
+#[cfg(all(unix, feature = "native-tcp"))]
+fn bind_unix_listener(path: &str) -> std::io::Result<UnixListener> {
+    let listener = UnixListener::bind(path)?;
+    // Match Uvicorn's AF_UNIX bind path, which applies 0666 permissions after
+    // bind and leaves the socket path available for the service manager.
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o666))?;
+    Ok(listener)
+}
+
 async fn serve_forever(
     app: Py<PyAny>,
     invoke: Py<PyAny>,
@@ -5263,6 +5287,60 @@ async fn serve_forever(
     options: ServeOptions,
     diagnostics: RuntimeDiagnostics,
 ) -> PyResult<()> {
+    #[cfg(feature = "native-tcp")]
+    let (listener, server_addr) = if let Some(path) = options.uds.as_deref() {
+        #[cfg(unix)]
+        {
+            let listener = bind_unix_listener(path).map_err(|error| {
+                PyOSError::new_err(format!("could not bind unix socket {path}: {error}"))
+            })?;
+            (
+                BoundListener::Unix(listener),
+                SocketAddr::from(([0, 0, 0, 0], 0)),
+            )
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            return Err(PyValueError::new_err(
+                "Unix domain sockets are not supported on this platform",
+            ));
+        }
+    } else {
+        let listener = bind_tcp_listener(&options.host, options.port, options.backlog)
+            .await
+            .map_err(|error| {
+                PyOSError::new_err(format!(
+                    "could not bind {}:{}: {error}",
+                    options.host, options.port
+                ))
+            })?;
+        let local_addr = {
+            #[cfg(coverage)]
+            if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
+                Err(std::io::Error::other(
+                    "coverage-injected listener address inspection error",
+                ))
+            } else {
+                listener.local_addr()
+            }
+            #[cfg(not(coverage))]
+            {
+                listener.local_addr()
+            }
+        };
+        let server_addr = local_addr.map_err(|error| {
+            PyOSError::new_err(format!("could not inspect bound listener: {error}"))
+        })?;
+        (BoundListener::Tcp(listener), server_addr)
+    };
+    #[cfg(not(feature = "native-tcp"))]
+    if options.uds.is_some() {
+        return Err(PyValueError::new_err(
+            "Unix domain sockets require the native-tcp feature",
+        ));
+    }
+    #[cfg(not(feature = "native-tcp"))]
     let listener = bind_tcp_listener(&options.host, options.port, options.backlog)
         .await
         .map_err(|error| {
@@ -5271,25 +5349,55 @@ async fn serve_forever(
                 options.host, options.port
             ))
         })?;
-    let local_addr = {
-        #[cfg(coverage)]
-        if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
-            Err(std::io::Error::other(
-                "coverage-injected listener address inspection error",
-            ))
-        } else {
-            listener.local_addr()
-        }
-        #[cfg(not(coverage))]
-        {
-            listener.local_addr()
-        }
+    #[cfg(not(feature = "native-tcp"))]
+    let server_addr = {
+        let local_addr = {
+            #[cfg(coverage)]
+            if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
+                Err(std::io::Error::other(
+                    "coverage-injected listener address inspection error",
+                ))
+            } else {
+                listener.local_addr()
+            }
+            #[cfg(not(coverage))]
+            {
+                listener.local_addr()
+            }
+        };
+        local_addr.map_err(|error| {
+            PyOSError::new_err(format!("could not inspect bound listener: {error}"))
+        })?
     };
-    let server_addr = local_addr.map_err(|error| {
-        PyOSError::new_err(format!("could not inspect bound listener: {error}"))
-    })?;
     let app = Arc::new(app);
     let invoke = Arc::new(invoke);
+    #[cfg(feature = "native-tcp")]
+    let endpoint = if matches!(&listener, BoundListener::Tcp(_)) {
+        if let Some(quic_config) = options.quic_config {
+            let endpoint = {
+                #[cfg(coverage)]
+                if coverage_fault_take(CoverageFaultPoint::ServerHttp3EndpointBindError) {
+                    Err(std::io::Error::other(
+                        "coverage-injected HTTP/3 endpoint bind error",
+                    ))
+                } else {
+                    quinn::Endpoint::server(quic_config, server_addr)
+                }
+                #[cfg(not(coverage))]
+                {
+                    quinn::Endpoint::server(quic_config, server_addr)
+                }
+            };
+            Some(endpoint.map_err(|error| {
+                PyOSError::new_err(format!("could not bind HTTP/3 endpoint: {error}"))
+            })?)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    #[cfg(not(feature = "native-tcp"))]
     let endpoint = if let Some(quic_config) = options.quic_config {
         let endpoint = {
             #[cfg(coverage)]
@@ -5357,6 +5465,7 @@ async fn serve_forever(
         invoke,
         locals,
         server_addr,
+        uds: options.uds.clone(),
         root_path: options.root_path,
         tcp_tls: options.tcp_tls,
         default_headers: options.default_headers,
@@ -5441,32 +5550,60 @@ async fn serve_forever(
         let service = NativeAsgiService {
             server: Arc::clone(&server),
         };
-        let result = if let Some(acceptor) = server.tcp_tls.clone() {
-            let shutdown = cancellation.clone();
-            uvicorn_rs::serve_tls_with_date_header(
-                listener,
-                acceptor,
-                service,
-                async move { shutdown.cancelled().await },
-                config,
-                server.date_header,
-            )
-            .await
-        } else {
-            let shutdown = cancellation.clone();
-            uvicorn_rs::serve_tcp_with_date_header(
-                listener,
-                service,
-                async move { shutdown.cancelled().await },
-                config,
-                server.date_header,
-            )
-            .await
+        let result = match listener {
+            BoundListener::Tcp(listener) => {
+                if let Some(acceptor) = server.tcp_tls.clone() {
+                    let shutdown = cancellation.clone();
+                    uvicorn_rs::serve_tls_with_date_header(
+                        listener,
+                        acceptor,
+                        service,
+                        async move { shutdown.cancelled().await },
+                        config,
+                        server.date_header,
+                    )
+                    .await
+                } else {
+                    let shutdown = cancellation.clone();
+                    uvicorn_rs::serve_tcp_with_date_header(
+                        listener,
+                        service,
+                        async move { shutdown.cancelled().await },
+                        config,
+                        server.date_header,
+                    )
+                    .await
+                }
+            }
+            #[cfg(unix)]
+            BoundListener::Unix(listener) => {
+                let shutdown = cancellation.clone();
+                if let Some(acceptor) = server.tcp_tls.clone() {
+                    uvicorn_rs::serve_unix_tls_with_date_header(
+                        listener,
+                        acceptor,
+                        service,
+                        async move { shutdown.cancelled().await },
+                        config,
+                        server.date_header,
+                    )
+                    .await
+                } else {
+                    uvicorn_rs::serve_unix_with_date_header(
+                        listener,
+                        service,
+                        async move { shutdown.cancelled().await },
+                        config,
+                        server.date_header,
+                    )
+                    .await
+                }
+            }
         };
         if let Err(error) = result {
             match error {
                 uvicorn_rs::ServeError::GracefulShutdownTimedOut => log_error(format_args!(
-                    "uvicorn-rs: TCP shutdown exceeded the graceful timeout"
+                    "uvicorn-rs: listener shutdown exceeded the graceful timeout"
                 )),
                 error => {
                     accept_error = Some(PyOSError::new_err(format!(
@@ -6976,6 +7113,7 @@ async fn handle_request_parts(
                 &parts,
                 context.peer_addr,
                 context.server.server_addr,
+                context.server.uds.as_deref(),
                 context.transport_scheme,
                 &context.server.root_path,
                 context.server.state.as_ref(),
@@ -7246,6 +7384,7 @@ async fn handle_websocket_request_inner(
                 &parts,
                 app_context.peer_addr,
                 app_context.server.server_addr,
+                app_context.server.uds.as_deref(),
                 app_context.transport_scheme,
                 &app_context.server.root_path,
                 app_context.server.state.as_ref(),
@@ -7901,6 +8040,7 @@ fn build_websocket_scope<'py>(
     request: &http::request::Parts,
     peer_addr: SocketAddr,
     server_addr: SocketAddr,
+    uds: Option<&str>,
     transport_scheme: &str,
     root_path: &str,
     state: Option<&Arc<Py<PyDict>>>,
@@ -8007,14 +8147,25 @@ fn build_websocket_scope<'py>(
         WebSocketScopeSubprotocolsSetItem,
         scope.set_item("subprotocols", subprotocols)
     );
-    coverage_try!(
-        WebSocketScopeClientSetItem,
-        scope.set_item("client", (peer_addr.ip().to_string(), peer_addr.port()))
-    );
-    coverage_try!(
-        WebSocketScopeServerSetItem,
-        scope.set_item("server", (server_addr.ip().to_string(), server_addr.port()))
-    );
+    if let Some(uds_path) = uds {
+        coverage_try!(
+            WebSocketScopeClientSetItem,
+            scope.set_item("client", py.None())
+        );
+        coverage_try!(
+            WebSocketScopeServerSetItem,
+            scope.set_item("server", (uds_path, py.None()))
+        );
+    } else {
+        coverage_try!(
+            WebSocketScopeClientSetItem,
+            scope.set_item("client", (peer_addr.ip().to_string(), peer_addr.port()))
+        );
+        coverage_try!(
+            WebSocketScopeServerSetItem,
+            scope.set_item("server", (server_addr.ip().to_string(), server_addr.port()))
+        );
+    }
     Ok(scope)
 }
 
@@ -8048,6 +8199,7 @@ fn build_scope<'py>(
     request: &http::request::Parts,
     peer_addr: SocketAddr,
     server_addr: SocketAddr,
+    uds: Option<&str>,
     scheme: &str,
     root_path: &str,
     state: Option<&Arc<Py<PyDict>>>,
@@ -8159,14 +8311,22 @@ fn build_scope<'py>(
         }
     }
     coverage_try!(HttpScopeHeadersSetItem, scope.set_item("headers", headers));
-    coverage_try!(
-        HttpScopeClientSetItem,
-        scope.set_item("client", (peer_addr.ip().to_string(), peer_addr.port()))
-    );
-    coverage_try!(
-        HttpScopeServerSetItem,
-        scope.set_item("server", (server_addr.ip().to_string(), server_addr.port()))
-    );
+    if let Some(uds_path) = uds {
+        coverage_try!(HttpScopeClientSetItem, scope.set_item("client", py.None()));
+        coverage_try!(
+            HttpScopeServerSetItem,
+            scope.set_item("server", (uds_path, py.None()))
+        );
+    } else {
+        coverage_try!(
+            HttpScopeClientSetItem,
+            scope.set_item("client", (peer_addr.ip().to_string(), peer_addr.port()))
+        );
+        coverage_try!(
+            HttpScopeServerSetItem,
+            scope.set_item("server", (server_addr.ip().to_string(), server_addr.port()))
+        );
+    }
     Ok(scope)
 }
 

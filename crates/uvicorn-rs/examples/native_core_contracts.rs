@@ -1017,6 +1017,8 @@ where
             let transport = match info.transport() {
                 TransportKind::Tcp => "tcp",
                 TransportKind::Quic => "quic",
+                #[cfg(unix)]
+                TransportKind::Unix => "unix",
             };
             let alpn = info
                 .tls()

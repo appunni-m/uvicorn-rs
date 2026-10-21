@@ -11,6 +11,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 _startup_failure_server = None
@@ -48,6 +49,20 @@ def signature(value):
             }
         )
     return result
+
+
+class UnixHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection that opens its stream over a Unix-domain socket."""
+
+    def __init__(self, socket_path: str, timeout: float):
+        super().__init__("localhost", timeout=timeout)
+        self.socket_path = socket_path
+
+    def connect(self):
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        connection.settimeout(self.timeout)
+        connection.connect(self.socket_path)
+        self.sock = connection
 
 
 def run_http_observation(request: dict) -> dict:
@@ -116,6 +131,22 @@ async def asgi3_app(scope, receive, send):
         loop = asyncio.get_running_loop()
         loop_name = f"{type(loop).__module__}.{type(loop).__qualname__}"
         body_parts.append(b"python-loop=" + loop_name.encode("ascii"))
+    if observe_unix_scope:
+        client_is_none = scope.get("client") is None
+        server = scope.get("server")
+        server_has_unix_shape = (
+            isinstance(server, tuple)
+            and len(server) == 2
+            and isinstance(server[0], str)
+            and server[1] is None
+        )
+        body_parts.extend(
+            (
+                b"client-is-none=" + str(client_is_none).lower().encode("ascii"),
+                b"server-has-unix-shape="
+                + str(server_has_unix_shape).lower().encode("ascii"),
+            )
+        )
     body = b"|".join(body_parts)
     await send({
         "type": "http.response.start",
@@ -157,6 +188,7 @@ application_interface = sys.argv[5]
 requested_interface = sys.argv[6]
 observe_scope = sys.argv[7] == "1"
 observe_loop = sys.argv[8] == "1"
+observe_unix_scope = sys.argv[25] == "1"
 proxy_headers = sys.argv[9] == "1"
 forwarded_allow_ips = json.loads(sys.argv[10])
 limit_concurrency = json.loads(sys.argv[11])
@@ -171,6 +203,7 @@ backlog = json.loads(sys.argv[20])
 timeout_keep_alive = json.loads(sys.argv[21])
 workers = json.loads(sys.argv[22])
 timeout_worker_healthcheck = json.loads(sys.argv[23])
+uds_path = sys.argv[24] or None
 app = app_factory if factory else (
     wsgi_app
     if application_interface == "wsgi"
@@ -198,18 +231,31 @@ options = {
     "workers": workers,
     "timeout_worker_healthcheck": timeout_worker_healthcheck,
 }
+if uds_path is not None:
+    options["uds"] = uds_path
 if invocation == "config-server":
     config = uvicorn.Config(app, **options)
     uvicorn.Server(config).run()
 else:
     uvicorn.run(app, **options)
 '''
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
-        reservation.bind(("127.0.0.1", 0))
-        port = reservation.getsockname()[1]
+    uds_directory = None
+    uds_path = None
+    if request.get("uds", False):
+        uds_directory = tempfile.TemporaryDirectory(
+            prefix="uvrs-", dir="/tmp" if os.path.isdir("/tmp") else None
+        )
+        uds_path = os.path.join(uds_directory.name, "u.sock")
+        port = 0
+    else:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            port = reservation.getsockname()[1]
 
     if request["invocation"] == "module-cli":
-        if request.get("factory"):
+        if request.get("uds"):
+            app_target = "tests.parity.app:python_api_uds_probe_app"
+        elif request.get("factory"):
             app_target = "tests.parity.app:python_api_factory_probe_app"
         elif request.get("application_interface") == "wsgi":
             app_target = "tests.parity.app:python_api_wsgi_probe_app"
@@ -233,6 +279,8 @@ else:
             "--lifespan",
             request["lifespan"],
         ]
+        if uds_path is not None:
+            command.extend(("--uds", uds_path))
         if request.get("factory"):
             command.append("--factory")
         if request.get("interface", "auto") != "auto":
@@ -291,6 +339,8 @@ else:
             json.dumps(request.get("timeout_keep_alive", 5)),
             json.dumps(request.get("workers")),
             json.dumps(request.get("timeout_worker_healthcheck", 5)),
+            uds_path or "",
+            "1" if request.get("observe_unix_scope", False) else "0",
         ]
 
     environment = os.environ.copy()
@@ -319,8 +369,10 @@ else:
     deadline = time.monotonic() + request["timeout_seconds"]
     try:
         while time.monotonic() < deadline and process.poll() is None:
-            connection = http.client.HTTPConnection(
-                "127.0.0.1", port, timeout=0.5
+            connection = (
+                UnixHTTPConnection(uds_path, timeout=0.5)
+                if uds_path is not None
+                else http.client.HTTPConnection("127.0.0.1", port, timeout=0.5)
             )
             try:
                 keep_alive_probe_delay = request.get("keep_alive_probe_delay_seconds")
@@ -400,6 +452,8 @@ else:
         if process.poll() is None:
             process.kill()
             process.communicate()
+        if uds_directory is not None:
+            uds_directory.cleanup()
 
 
 def run_websocket_observation(request: dict) -> dict:

@@ -6,9 +6,14 @@ use std::{
 };
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+#[cfg(unix)]
+use tokio::net::{
+    unix::OwnedReadHalf as UnixOwnedReadHalf, unix::OwnedWriteHalf as UnixOwnedWriteHalf,
+    UnixStream,
+};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf},
-    net::{tcp::OwnedReadHalf, tcp::OwnedWriteHalf, TcpStream},
+    net::{tcp::OwnedWriteHalf, TcpStream},
     sync::{mpsc, watch},
 };
 
@@ -33,14 +38,29 @@ enum ReadMode {
         closed: watch::Sender<bool>,
         failed: watch::Sender<Option<io::ErrorKind>>,
     },
-    Proactive(BufferedReadIo),
+    Proactive(BufferedReadIo<OwnedWriteHalf>),
 }
 
-struct BufferedReadIo {
-    writer: OwnedWriteHalf,
+struct BufferedReadIo<W> {
+    writer: W,
     receiver: mpsc::Receiver<ReadEvent>,
     current: Bytes,
     terminal: ReadTerminal,
+}
+
+#[cfg(unix)]
+pub(super) struct UnixPeerReadIo {
+    inner: UnixReadMode,
+}
+
+#[cfg(unix)]
+enum UnixReadMode {
+    OnRead {
+        stream: UnixStream,
+        closed: watch::Sender<bool>,
+        failed: watch::Sender<Option<io::ErrorKind>>,
+    },
+    Proactive(BufferedReadIo<UnixOwnedWriteHalf>),
 }
 
 enum ReadEvent {
@@ -122,12 +142,15 @@ pub(super) fn observe_peer_read(
     )
 }
 
-async fn pump_peer_read(
-    mut reader: OwnedReadHalf,
+async fn pump_peer_read<R>(
+    mut reader: R,
     sender: mpsc::Sender<ReadEvent>,
     closed: watch::Sender<bool>,
     failed: watch::Sender<Option<io::ErrorKind>>,
-) -> PeerReadPumpOutcome {
+) -> PeerReadPumpOutcome
+where
+    R: AsyncRead + Unpin,
+{
     #[cfg(coverage)]
     let mut delivered_data = false;
     loop {
@@ -177,7 +200,73 @@ async fn pump_peer_read(
     }
 }
 
-impl BufferedReadIo {
+#[cfg(unix)]
+pub(super) fn observe_peer_read_unix(
+    stream: UnixStream,
+    mode: PeerReadHalfCloseMode,
+) -> (
+    UnixPeerReadIo,
+    PeerReadHalfClosed,
+    super::PeerReadFailed,
+    Option<impl Future<Output = PeerReadPumpOutcome> + Send>,
+    bool,
+) {
+    let (closed, receiver) = watch::channel(false);
+    let (failed, failed_receiver) = watch::channel(None);
+    let observer = PeerReadHalfClosed {
+        closed: receiver,
+        mode,
+    };
+    let failed_observer = super::PeerReadFailed {
+        failed: failed_receiver,
+    };
+    let (inner, pump, prioritize_receiver_close_fault) = match mode {
+        PeerReadHalfCloseMode::OnRead => (
+            UnixReadMode::OnRead {
+                stream,
+                closed,
+                failed,
+            },
+            None,
+            false,
+        ),
+        PeerReadHalfCloseMode::Proactive => {
+            let (reader, writer): (UnixOwnedReadHalf, UnixOwnedWriteHalf) = stream.into_split();
+            let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
+            #[cfg(coverage)]
+            let (receiver, prioritize_receiver_close_fault) = {
+                let mut receiver = receiver;
+                if super::take_http1_peer_read_receiver_closed_fault() {
+                    receiver.close();
+                    (receiver, true)
+                } else {
+                    (receiver, false)
+                }
+            };
+            #[cfg(not(coverage))]
+            let (receiver, prioritize_receiver_close_fault) = (receiver, false);
+            (
+                UnixReadMode::Proactive(BufferedReadIo {
+                    writer,
+                    receiver,
+                    current: Bytes::new(),
+                    terminal: ReadTerminal::Open,
+                }),
+                Some(pump_peer_read(reader, sender, closed, failed)),
+                prioritize_receiver_close_fault,
+            )
+        }
+    };
+    (
+        UnixPeerReadIo { inner },
+        observer,
+        failed_observer,
+        pump,
+        prioritize_receiver_close_fault,
+    )
+}
+
+impl<W: AsyncWrite + Unpin> BufferedReadIo<W> {
     fn poll_read(
         &mut self,
         context: &mut Context<'_>,
@@ -218,6 +307,92 @@ impl BufferedReadIo {
                     )));
                 }
             }
+        }
+    }
+}
+
+#[cfg(unix)]
+impl AsyncRead for UnixPeerReadIo {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        if buffer.remaining() == 0 {
+            return Poll::Ready(Ok(()));
+        }
+        match &mut self.get_mut().inner {
+            UnixReadMode::OnRead {
+                stream,
+                closed,
+                failed,
+            } => {
+                let filled_before = buffer.filled().len();
+                let result = Pin::new(stream).poll_read(context, buffer);
+                if matches!(&result, Poll::Ready(Ok(())))
+                    && buffer.remaining() > 0
+                    && buffer.filled().len() == filled_before
+                {
+                    closed.send_replace(true);
+                }
+                if let Poll::Ready(Err(error)) = &result {
+                    failed.send_replace(Some(error.kind()));
+                }
+                result
+            }
+            UnixReadMode::Proactive(stream) => stream.poll_read(context, buffer),
+        }
+    }
+}
+
+#[cfg(unix)]
+impl AsyncWrite for UnixPeerReadIo {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        match &mut self.get_mut().inner {
+            UnixReadMode::OnRead { stream, .. } => Pin::new(stream).poll_write(context, buffer),
+            UnixReadMode::Proactive(stream) => {
+                Pin::new(&mut stream.writer).poll_write(context, buffer)
+            }
+        }
+    }
+
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffers: &[io::IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        match &mut self.get_mut().inner {
+            UnixReadMode::OnRead { stream, .. } => {
+                Pin::new(stream).poll_write_vectored(context, buffers)
+            }
+            UnixReadMode::Proactive(stream) => {
+                Pin::new(&mut stream.writer).poll_write_vectored(context, buffers)
+            }
+        }
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        match &self.inner {
+            UnixReadMode::OnRead { stream, .. } => stream.is_write_vectored(),
+            UnixReadMode::Proactive(stream) => stream.writer.is_write_vectored(),
+        }
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match &mut self.get_mut().inner {
+            UnixReadMode::OnRead { stream, .. } => Pin::new(stream).poll_flush(context),
+            UnixReadMode::Proactive(stream) => Pin::new(&mut stream.writer).poll_flush(context),
+        }
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match &mut self.get_mut().inner {
+            UnixReadMode::OnRead { stream, .. } => Pin::new(stream).poll_shutdown(context),
+            UnixReadMode::Proactive(stream) => Pin::new(&mut stream.writer).poll_shutdown(context),
         }
     }
 }
