@@ -161,6 +161,26 @@
       }
     },
     {
+      "case_id": "python-api.config-server-web-concurrency-zero-uses-single-process",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-web-concurrency-zero",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "environment": {
+            "WEB_CONCURRENCY": "0"
+          }
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-serves-request-and-shuts-down-on-signal",
       "profile": "python-api",
       "operation": "python.api.run-http",

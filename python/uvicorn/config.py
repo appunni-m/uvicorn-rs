@@ -318,7 +318,10 @@ class Config:
             (self.uds is not None, "uds"),
             (self.fd is not None, "fd"),
             (self.reload, "reload"),
-            (self.workers != 1, "workers"),
+            # Uvicorn runs workers=0 and workers=1 in the current process.
+            # WEB_CONCURRENCY=0 reaches Config without the explicit-value
+            # normalization and is still a single-process configuration.
+            (self.workers not in (0, 1), "workers"),
             (self.loop not in {"auto", "asyncio", "uvloop"}, "loop"),
             (self.http not in {"auto", "httptools"}, "http"),
             (self.ws != "auto", "ws"),
