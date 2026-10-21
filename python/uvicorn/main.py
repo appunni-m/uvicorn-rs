@@ -314,12 +314,10 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
     # has no effect when the CLI runs the single-process server.
     if options["workers"] in (None, 0, 1):
         supported.add("timeout_worker_healthcheck")
-    # Explicit auto selection is equivalent to the Rust server's default
-    # HTTP/1.1 and WebSocket implementations.
-    # The Rust engine has one native HTTP implementation. Uvicorn's explicit
-    # httptools selection is compatible with that path just like auto; h11
-    # remains unsupported until its observable parser behavior is covered.
-    if options["http"] in {"auto", "httptools"}:
+    # The Rust engine has one native HTTP/1.1 implementation. These Uvicorn
+    # selectors route to that engine; selecting h11 does not load Python h11
+    # or promise parser-specific behavior for malformed requests.
+    if options["http"] in {"auto", "h11", "httptools"}:
         supported.add("http")
     # With the pinned Uvicorn dependency, auto selects this same SansIO
     # protocol class. That implementation does not read ws_max_queue; the

@@ -45,7 +45,7 @@ different field names insignificant while preserving the order of values for a
 repeated name. HTTP/1.1 and HTTP/3 observations keep their declared comparison
 fields.
 
-The manifest currently defines 25 CLI process cases across `python -m uvicorn`
+The manifest currently defines 26 CLI process cases across `python -m uvicorn`
 and the installed `uvicorn` command. They cover help and version output,
 selected argument errors and environment precedence, app loading with
 `--app-dir` and `--factory`, environment-file loading, HTTP and WebSocket
@@ -161,9 +161,10 @@ remote code 258, two cancelled-task join diagnostics before the original accept
 error, the held/cancelled application events and a healthy fresh follow-up.
 The maintained [coverage summary](coverage.md) records the historical
 511-case adapter result and the latest complete-scope 595-case baseline. Those
-coverage and case totals are snapshots: the current manifest has 604 cases,
-including four native HTTP/1 upgrade-session inputs, later CLI environment
-precedence inputs, and the Python `Config`/`Server.run()` concurrency case.
+coverage and case totals are snapshots: the source snapshot for that report had
+604 cases. The current manifest has 618 cases, including four native HTTP/1
+upgrade-session inputs, later CLI environment-precedence inputs, the Python
+`Config`/`Server.run()` concurrency case, and the h11 selector checks.
 The selected results described here are focused results, not a full-matrix
 result. Generated per-run reports remain local and Git-ignored. The case passes
 full attribution and all three 511-case repeats; the historical report's
@@ -420,17 +421,17 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 
 | Profile group | Cases | Reference | Why |
 |---|---:|---|---|
-| HTTP/1.1, including TLS | 110 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, concurrency-limit rejection, trusted, disabled, excluded-peer, wildcard, IPv4-CIDR, malformed/empty forwarded-client, all-trusted-chain, duplicate forwarding-field, and unsupported-proto proxy cases, and WebSocket-upgrade validation. |
-| WebSocket, including TLS | 51 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, shutdown, configured message limits, and proxy-derived `ws`/`wss` scope schemes. |
+| HTTP/1.1, including TLS | 111 | Uvicorn 0.54.0, uvloop 0.23.0; httptools 0.8.0 by default, h11 0.16.0 for one case | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, concurrency-limit rejection, trusted, disabled, excluded-peer, wildcard, IPv4-CIDR, malformed/empty forwarded-client, all-trusted-chain, duplicate forwarding-field, and unsupported-proto proxy cases, WebSocket-upgrade validation, and one h11-selected POST scope/body comparison. |
+| WebSocket, including TLS | 52 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, shutdown, configured message limits, and proxy-derived `ws`/`wss` scope schemes. |
 | Startup configuration | 9 | Uvicorn 0.54.0 and the public `uvicorn_rs.Server` API | Same invalid-host and TLS startup configurations on both implementations. |
 | Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
-| CLI and environment | 25 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes. |
+| CLI and environment | 26 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes, including `--http h11` acceptance. |
 | Python API | 31 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, and access-log suppression through `uvicorn.run()` and the module CLI. HTTP-run cases compare normalized server log events alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other levels, custom logging configuration, and exact traceback frame formatting remain unverified. |
 
-These eight groups account for all 324 declared oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 615 total cases. Five
+These eight groups account for all 327 declared oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 618 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -497,10 +498,11 @@ contain CLI invocation mode, arguments, environment overrides, working
 directory and timeout; network inputs contain request methods, paths, headers,
 body bytes, WebSocket messages, disconnect workflows, and shutdown workflows.
 They do not contain expected responses or previously captured server output.
-The 25 indexed CLI cases compare module and installed-console invocations,
+The 26 indexed CLI cases compare module and installed-console invocations,
 selected parsing and environment-precedence behavior, app loading and
-environment files, protocol-selector and SansIO WebSocket queue-option
-acceptance, unknown-option rejection, and single-process worker settings.
+environment files, protocol-selector (including `--http h11`) and SansIO
+WebSocket queue-option acceptance, unknown-option rejection, and single-process
+worker settings.
 Selector cases check argument handling;
 they do not prove that every option is executed or establish multi-worker,
 reload/watch, file-descriptor or UDS listener behavior. The fixture app is

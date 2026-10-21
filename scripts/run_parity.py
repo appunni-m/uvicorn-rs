@@ -2970,6 +2970,8 @@ def load_contract(
                 allowed_options = {
                     "proxy_headers", "forwarded_allow_ips", "limit_concurrency"
                 }
+                if kind == "http1":
+                    allowed_options.add("http")
                 unknown_options = set(server_options) - allowed_options
                 if unknown_options:
                     raise ParityError(
@@ -2994,6 +2996,12 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: server_options.limit_concurrency must be a non-negative integer"
+                    )
+                if "http" in server_options and server_options["http"] not in {
+                    "auto", "h11", "httptools"
+                }:
+                    raise ParityError(
+                        f"{case_id}: server_options.http must select auto, h11, or httptools"
                     )
             exact_case_keys(case, case_keys, case_id)
             request = case["request"]
@@ -4036,6 +4044,7 @@ def start_server(
         command.extend(header_policy_args)
     elif server_id == "uvicorn":
         server_python = str(ORACLE_PYTHON)
+        http_implementation = (server_options or {}).get("http", "httptools")
         # Keep TLS WebSocket handshake progress in hosted diagnostics when the
         # reference adapter stalls before ASGI dispatch.
         websocket_tls_debug = (
@@ -4048,7 +4057,7 @@ def start_server(
             # Since Uvicorn 0.50, `auto` selects its maintained SansIO adapter
             # when websockets is installed; forcing `websockets` uses the
             # deprecated legacy adapter and changes the reference behavior.
-            "--http", "httptools", "--interface", "asgi3", "--ws", "auto",
+            "--http", http_implementation, "--interface", "asgi3", "--ws", "auto",
             "--lifespan", "auto",
             "--log-level", "debug" if websocket_tls_debug else "error",
             "--timeout-graceful-shutdown",
@@ -4074,6 +4083,8 @@ def start_server(
             raise ParityError(
                 f"server options are not supported by the {server_id} parity adapter"
             )
+        if "http" in server_options and server_id == "uvicorn-rs":
+            command.extend(["--http", server_options["http"]])
         if "ws_max_size" in server_options:
             command.extend(["--ws-max-size", str(server_options["ws_max_size"])])
         if "ws_ping_interval" in server_options:
