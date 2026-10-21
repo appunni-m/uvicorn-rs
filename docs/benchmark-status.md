@@ -120,9 +120,11 @@ allocating an intermediate Rust `String`; PyO3 still creates the Python `str`
 required by ASGI. Its median throughput was 1.4% lower under asyncio and 1.5%
 lower under uvloop than main, with slightly higher server CPU and p95 latency.
 Because the reports ran sequentially, those small shifts do not establish
-causality, and this change showed no repeatable performance gain. It remains
-on the preserved experimental branch `codex/ws-text-ownership` and was not
-merged to main.
+causality, and this change showed no repeatable performance gain. The
+implementation was later cherry-picked to `main` as `4a28c7a94` and remains in
+the current runtime; that code decision does not change this benchmark result
+or support a performance claim. The original experimental branch
+`codex/ws-text-ownership` remains preserved.
 
 The main report is bound to commit `58ed76536b21a687fb37c38f3b275fc756fcf537`
 and source SHA-256
