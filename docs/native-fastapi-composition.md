@@ -15,7 +15,35 @@ pending. The composition result is limited evidence, not a full FastAPI
 contract, Python parity result, release candidate, repeated result, or
 performance measurement.
 
-## Current main status (2026-10-20)
+## Current mainline source verification (2026-10-21)
+
+Uvicorn-RS `main` is `40b296ecd48cda884bd5b76a020c017c76ac8189`. FastAPI-RS
+`main` is `e5a6e91cb02b3229f9fbdfce1b00171c6913ccfe`; it exports
+`fastapi_rs::native` from the sole `fastapi-rs` crate. Its default feature set
+is empty, while the `python` feature enables optional PyO3. FastAPI-RS pins
+Starlette-RS `4139a72449bf5751e8902fb1c7175ee7f191d338` in package metadata.
+
+Using clean detached worktrees at those three exact revisions, the selected
+real-socket input
+`http1.request-stream-progress-before-upload-complete` passed locally. The
+locked `cargo tree --edges normal,build` for the example contained no PyO3.
+This proves one current-main H1 composition path and its dependency graph; it
+does not refresh the 17-case hosted receipt, cover H2/H3/TLS/WebSockets or
+framework lifecycle, or establish full FastAPI semantics. The native API is a
+small Rust handler surface, not a Python FastAPI replacement.
+
+The CI pins and example lockfile now target these exact mainline revisions.
+Hosted confirmation of that refreshed pin is still pending. Reproduce the
+selected input after checking out those exact revisions:
+
+```sh
+CARGO_TARGET_DIR=/tmp/native-composition-target \
+  cargo run --manifest-path examples/native-fastapi-contracts/Cargo.toml \
+  --locked -- examples/native-fastapi-contracts/manifest.json \
+  --case-id http1.request-stream-progress-before-upload-complete
+```
+
+## Earlier main status (2026-10-20; superseded)
 
 Uvicorn-RS `main` is `3c5cbb70e3bc27c07733700c1340776d8413ff23`. On that
 commit, the focused real-socket input
@@ -25,14 +53,11 @@ commit, the focused real-socket input
 graph for this candidate composition contains no PyO3 packages. This is one
 selected input, not a refreshed 17-case hosted result.
 
-The current FastAPI-RS default branch is `7efbf9b668a7757530580981d421390cffaaaa62`,
-with its pinned Starlette-RS revision `4139a72449bf5751e8902fb1c7175ee7f191d338`.
-The composition example does not build against that pair: the `fastapi_rs::native`
-module is not exported, and its normal/build dependency graph still contains
-PyO3. The passing `f438a7c` source is a feature branch and is 350 FastAPI-RS
-main commits behind; current-default-branch integration therefore remains
-unfinished. Do not describe the feature-branch receipt as current FastAPI-RS
-mainline support.
+At the time of this earlier audit, FastAPI-RS `main` was `7efbf9b` and did not
+export `fastapi_rs::native`. That finding was superseded when FastAPI-RS main
+advanced to `e5a6e91`, which now exports the native module. The older hosted
+receipt below still tests the separate `f438a7c` feature-branch snapshot and
+must not be relabeled as current-main evidence.
 
 The focused selector is committed on Uvicorn-RS `main` in
 `examples/native-fastapi-contracts/src/main.rs` (SHA-256
@@ -40,8 +65,9 @@ The focused selector is committed on Uvicorn-RS `main` in
 the full manifest for shared application configuration while executing only
 the requested case. The manifest SHA-256 is
 `5224e4c3e5a88e3699eb71490651ffc7f2ea6a41edf302b4884d3133be392bcd`.
-Reproduce the selected H2 input from the Uvicorn-RS root, with clean sibling
-checkouts at the FastAPI-RS and Starlette-RS revisions above:
+The following command reproduces the historical H2 input with Uvicorn-RS
+`3c5cbb70`, FastAPI-RS feature branch `f438a7c`, and Starlette-RS `b4c8a65`;
+it is separate from the current-main H1 check above:
 
 ```sh
 CARGO_TARGET_DIR=/tmp/native-composition-target \
@@ -205,6 +231,7 @@ lifespan integration, the full FastAPI validation/dependency/Pydantic/OpenAPI
 surface, Python FastAPI parity, repeated composition, a fully green hosted
 workflow, or performance. The older 51/51
 receipt used a separate `fastapi-rs-native` crate and is historical; it is not
-evidence for the current single-core API. The pinned FastAPI-RS revision is a
-feature branch, not a claim that the native API is already in its default
-branch.
+evidence for the current single-core API. The hosted receipt uses the old
+feature-branch revision. Current-main source availability and the one-case
+local check are recorded above; the complete current-main hosted matrix remains
+pending.

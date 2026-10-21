@@ -41,8 +41,22 @@ cargo run --manifest-path examples/native-fastapi-contracts/Cargo.toml --locked 
 
 The runner rejects unknown or duplicate case IDs before opening a listener.
 
-The older 17-input result (51/51 across three repeats) used a now-removed
-`fastapi-rs-native` crate and remains historical. The current run is one local
-source-bound repetition, not hosted CI or a release gate. The native API
-covers a small Rust handler slice; it does not claim Python FastAPI/Pydantic
-equivalence.
+## Current mainline source check
+
+FastAPI-RS main at `e5a6e91cb02b3229f9fbdfce1b00171c6913ccfe` now exports
+`fastapi_rs::native` from the sole core crate. Its default features exclude
+PyO3; the `python` feature enables it optionally. It pins Starlette-RS at
+`4139a72449bf5751e8902fb1c7175ee7f191d338`.
+
+On Uvicorn-RS `40b296ecd48cda884bd5b76a020c017c76ac8189` with clean detached
+worktrees at those exact sibling revisions, the H1 request-stream-progress
+input passed once and the locked normal/build dependency graph contained no
+PyO3. This is a focused source check, not the full 17-input hosted matrix or
+full FastAPI semantic compatibility. See the [source-bound evidence](../../docs/native-fastapi-composition.md).
+
+The earlier 17-input result (51/51 across three repeats) used a now-removed
+`fastapi-rs-native` crate and remains historical. The 17-input hosted result
+uses the preserved FastAPI-RS feature-branch snapshot; it is not current-main
+evidence. The mainline result above is one local source-bound repetition, not
+hosted CI or a release gate. The native API covers a small Rust handler slice;
+it does not claim Python FastAPI/Pydantic equivalence.

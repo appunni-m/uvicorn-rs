@@ -22,8 +22,8 @@ env:
   UV_VERSION: "0.11.29"
   MATURIN_VERSION: "1.14.1"
   STARLETTE_RS_REVISION: "738c43362938896c268ca29b9a9a2a5942df510c"
-  NATIVE_FASTAPI_RS_REVISION: "f438a7cbb2308e6c1f795aef98e333de23388533"
-  NATIVE_STARLETTE_RS_REVISION: "b4c8a65c85e1b0d251ca05874412811eaa3ac7b8"
+  NATIVE_FASTAPI_RS_REVISION: "e5a6e91cb02b3229f9fbdfce1b00171c6913ccfe"
+  NATIVE_STARLETTE_RS_REVISION: "4139a72449bf5751e8902fb1c7175ee7f191d338"
   RUSTC_WRAPPER: ""
   RUSTC_WORKSPACE_WRAPPER: ""
   RUSTFLAGS: ""
@@ -127,7 +127,7 @@ jobs:
 
           git init "$workspace/fastapi-rs"
           git -C "$workspace/fastapi-rs" remote add origin https://github.com/appunni-m/fastapi-rs.git
-          git -C "$workspace/fastapi-rs" fetch --depth 1 origin refs/heads/codex/native-fastapi-core
+          git -C "$workspace/fastapi-rs" fetch --depth 1 origin "$NATIVE_FASTAPI_RS_REVISION"
           git -C "$workspace/fastapi-rs" checkout --detach FETCH_HEAD
           test "$(git -C "$workspace/fastapi-rs" rev-parse HEAD)" = "$NATIVE_FASTAPI_RS_REVISION"
 

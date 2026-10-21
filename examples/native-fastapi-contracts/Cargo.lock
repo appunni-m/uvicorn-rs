@@ -197,6 +197,7 @@ dependencies = [
  "http-body-util",
  "serde",
  "serde_json",
+ "sha2",
  "starlette-rs",
  "tower-service",
 ]
@@ -958,11 +959,15 @@ name = "starlette-rs"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "bytes",
  "encoding_rs",
  "flate2",
  "futures",
  "getrandom 0.4.3",
  "hmac",
+ "http",
+ "http-body",
+ "http-body-util",
  "httpdate",
  "libc",
  "md-5",
@@ -971,6 +976,8 @@ dependencies = [
  "serde_json",
  "sha1 0.11.0",
  "sha2",
+ "tower-layer",
+ "tower-service",
  "unicode-general-category",
 ]
 
@@ -1089,6 +1096,12 @@ dependencies = [
  "pin-project-lite",
  "tokio",
 ]
+
+[[package]]
+name = "tower-layer"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e"
 
 [[package]]
 name = "tower-service"
