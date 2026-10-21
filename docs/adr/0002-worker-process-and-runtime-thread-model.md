@@ -12,7 +12,7 @@ Processes cannot share a Tokio runtime. A Uvicorn-style worker feature requires 
 
 ## Current prototype
 
-The Python command can start two supervised server processes for the focused module-CLI path. Each process owns its Python event loop and Tokio runtime; Python callable execution, task creation, context variables, and exception behavior stay on that process's Python-owned event loop. Python callbacks remain subject to the interpreter's GIL. Crash recovery, dynamic worker controls, other listener types, and reload are not yet qualified.
+The Python command can start two supervised server processes for the focused module-CLI path, selected either by `--workers 2` or `WEB_CONCURRENCY=2`. Each process owns its Python event loop and Tokio runtime; Python callable execution, task creation, context variables, and exception behavior stay on that process's Python-owned event loop. Python callbacks remain subject to the interpreter's GIL. Crash recovery, dynamic worker controls, other listener types, and reload are not yet qualified.
 
 ## Compatibility target
 
