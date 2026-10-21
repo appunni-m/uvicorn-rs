@@ -62,6 +62,7 @@ import logging
 import uvicorn
 
 lifespan_state = {"started": False}
+factory_invoked = False
 
 async def asgi3_app(scope, receive, send):
     if scope["type"] == "lifespan":
@@ -102,6 +103,8 @@ async def asgi3_app(scope, receive, send):
         path_status,
         raw_path_status,
     ]
+    if factory_invoked:
+        body_parts.append(b"factory-created")
     if observe_scope:
         body_parts.extend(
             (
@@ -129,6 +132,11 @@ def asgi2_app(scope):
         await asgi3_app(scope, receive, send)
     return respond
 
+def app_factory():
+    global factory_invoked
+    factory_invoked = True
+    return asgi2_app if application_interface == "asgi2" else asgi3_app
+
 application_interface = sys.argv[5]
 requested_interface = sys.argv[6]
 observe_scope = sys.argv[7] == "1"
@@ -142,7 +150,10 @@ log_level = json.loads(sys.argv[14])
 emit_level_logs = sys.argv[15] == "1"
 access_log = sys.argv[16] == "1"
 use_colors = json.loads(sys.argv[17])
-app = asgi2_app if application_interface == "asgi2" else asgi3_app
+factory = sys.argv[19] == "1"
+app = app_factory if factory else (
+    asgi2_app if application_interface == "asgi2" else asgi3_app
+)
 
 options = {
     "host": "127.0.0.1",
@@ -159,6 +170,7 @@ options = {
     "log_level": log_level,
     "access_log": access_log,
     "use_colors": use_colors,
+    "factory": factory,
 }
 if invocation == "config-server":
     config = uvicorn.Config(app, **options)
@@ -171,11 +183,14 @@ else:
         port = reservation.getsockname()[1]
 
     if request["invocation"] == "module-cli":
-        app_target = (
-            "tests.parity.app:asgi2_probe_app"
-            if request.get("application_interface") == "asgi2"
-            else "tests.parity.app:lifespan_probe_app"
-        )
+        if request.get("factory"):
+            app_target = "tests.parity.app:python_api_factory_probe_app"
+        else:
+            app_target = (
+                "tests.parity.app:asgi2_probe_app"
+                if request.get("application_interface") == "asgi2"
+                else "tests.parity.app:lifespan_probe_app"
+            )
         command = [
             sys.executable,
             "-m",
@@ -190,6 +205,8 @@ else:
             "--lifespan",
             request["lifespan"],
         ]
+        if request.get("factory"):
+            command.append("--factory")
         if request.get("interface", "auto") != "auto":
             command.extend(("--interface", request["interface"]))
         for name, value in request.get("headers", []):
@@ -233,6 +250,7 @@ else:
             "0" if request.get("access_log") is False else "1",
             json.dumps(request.get("use_colors")),
             json.dumps(request.get("log_config")),
+            "1" if request.get("factory", False) else "0",
         ]
 
     environment = os.environ.copy()

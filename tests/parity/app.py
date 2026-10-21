@@ -1560,6 +1560,12 @@ async def lifespan_probe_app(scope, receive, send):
         await _respond(send, body, content_type=b"text/plain")
 
 
+def python_api_factory_probe_app():
+    """Return the ASGI app used by Python API factory parity inputs."""
+
+    return lifespan_probe_app
+
+
 async def lifespan_startup_error_probe_app(scope, receive, send):
     """Raise during lifespan startup for strict-mode public CLI parity."""
     if scope["type"] == "lifespan":

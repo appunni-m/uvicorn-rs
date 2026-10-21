@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@24",
+  "schema": "uvicorn-rs-parity/input@25",
   "cases": [
     {
       "case_id": "http1.header-policy-custom-header-and-disabled-defaults",

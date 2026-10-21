@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@24",
+  "schema": "uvicorn-rs-parity/input@25",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -155,6 +155,24 @@
           "lifespan": "auto",
           "invocation": "api",
           "root_path": ""
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-serves-successful-application-factory",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-factory",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "factory": true
         }
       }
     },

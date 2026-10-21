@@ -19,6 +19,7 @@ for the current package status and migration guidance.
 | If you need… | Current status | What to keep in mind |
 | --- | --- | --- |
 | Run a Python ASGI 3 application | Implemented in the source checkout and covered by live protocol cases. | This is an experimental adapter; Python application code still runs in Python. |
+| Serve an application factory | `uvicorn.run(factory, factory=True)` successfully loads a no-argument factory returning an ASGI 3 app, serves an HTTP response, and shuts down on SIGINT in a focused comparison with Uvicorn 0.54.0. | This evidence covers the programmatic API. Successful factory serving through the CLI remains unverified. |
 | HTTP/1.1 | Implemented and exercised with request/response, streaming, disconnect, TLS, and keep-alive cases. | These cases cover a declared subset. They do not prove complete ASGI or Uvicorn compatibility. |
 | HTTP/2 | Implemented and exercised over TLS and cleartext prior knowledge. | The support claim is limited to the tested HTTP/2 behaviors listed in this matrix. |
 | HTTP/3 | Experimental; selected requests, streaming, cancellation, and shutdown behaviors have live cases. | There is no Uvicorn HTTP/3 baseline. Check the current benchmark status before relying on performance results. |
