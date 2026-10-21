@@ -507,7 +507,6 @@ class Config:
             (self.ssl_version != ssl.PROTOCOL_TLS_SERVER, "ssl_version"),
             (self.ssl_cert_reqs != ssl.CERT_NONE, "ssl_cert_reqs"),
             (self.h11_max_incomplete_event_size is not None, "h11_max_incomplete_event_size"),
-            (self.reset_contextvars, "reset_contextvars"),
         )
         unsupported.extend(name for enabled, name in checks if enabled)
         if unsupported:

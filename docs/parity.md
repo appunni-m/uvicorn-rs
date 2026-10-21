@@ -763,6 +763,9 @@ adds `headers`, `server_header`, and `date_header` to HTTP `server_options` so
 repeated CLI response-header settings can be compared; migrate maintained
 `@31` inputs with `python scripts/migrate_parity_input_v31_to_v32.py`. Both
 migrations change only the schema marker and preserve existing case data.
+Schema `@33` adds `reset_contextvars` to HTTP server options; migrate maintained
+`@32` inputs with `python scripts/migrate_parity_input_v32_to_v33.py`. This
+migration changes only the schema marker and preserves existing case data.
 The runner rejects older or mixed input schemas.
 
 ## CI evidence

@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@32",
+  "schema": "uvicorn-rs-parity/input@33",
   "cases": [
     {
       "case_id": "http1.scope-query-header-and-body",
@@ -5476,6 +5476,40 @@
           ]
         ],
         "body_base64": "AAECA/9wYXJpdHk="
+      }
+    },
+    {
+      "case_id": "http1.cli-contextvars-inherit-by-default",
+      "profile": "http1",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "server_options": {
+        "reset_contextvars": false
+      },
+      "request": {
+        "method": "GET",
+        "path": "/contextvars",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.cli-reset-contextvars-clears-request-context",
+      "profile": "http1",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "server_options": {
+        "reset_contextvars": true
+      },
+      "request": {
+        "method": "GET",
+        "path": "/contextvars",
+        "headers": [],
+        "body_base64": ""
       }
     }
   ]

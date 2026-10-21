@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@32"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@33"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -2297,6 +2297,7 @@ def load_contract(
                     "observe_unix_scope",
                     "fd",
                     "prebound_socket_count",
+                    "reset_contextvars",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2323,6 +2324,12 @@ def load_contract(
                 if "factory" in run_http and type(run_http["factory"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.factory must be a boolean"
+                    )
+                if "reset_contextvars" in run_http and type(
+                    run_http["reset_contextvars"]
+                ) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.reset_contextvars must be a boolean"
                     )
                 if "uds" in run_http and type(run_http["uds"]) is not bool:
                     raise ParityError(f"{case_id}.api.run_http.uds must be a boolean")
@@ -3175,6 +3182,8 @@ def load_contract(
                 }
                 if kind == "http1":
                     allowed_options.add("http")
+                if kind in {"http1", "http2"}:
+                    allowed_options.add("reset_contextvars")
                 unknown_options = set(server_options) - allowed_options
                 if unknown_options:
                     raise ParityError(
@@ -3205,6 +3214,12 @@ def load_contract(
                         raise ParityError(
                             f"{case_id}: server_options.{option} must be a boolean"
                         )
+                if "reset_contextvars" in server_options and type(
+                    server_options["reset_contextvars"]
+                ) is not bool:
+                    raise ParityError(
+                        f"{case_id}: server_options.reset_contextvars must be a boolean"
+                    )
                 if "limit_concurrency" in server_options and (
                     type(server_options["limit_concurrency"]) is not int
                     or server_options["limit_concurrency"] < 0
@@ -4408,6 +4423,8 @@ def start_server(
             command.extend(
                 ["--limit-concurrency", str(server_options["limit_concurrency"])]
             )
+        if server_options.get("reset_contextvars"):
+            command.append("--reset-contextvars")
 
     log = tempfile.TemporaryFile(mode="w+t")
     process = subprocess.Popen(

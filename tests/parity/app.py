@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from contextvars import ContextVar
 import json
 import logging
 import os
@@ -22,6 +23,8 @@ _h3_open_upload_receivers = []
 _state_copy_key = None
 _state_copy_source = None
 _state_copy_shared = None
+_request_context = ContextVar("asgi_parity_request_context", default="empty")
+_request_context.set("inherited")
 
 
 def _header_capacity_headers(query_string):
@@ -646,6 +649,13 @@ async def _app_impl(scope, receive, send):
         raise RuntimeError(f"unsupported ASGI scope type: {scope['type']}")
 
     path = scope["path"]
+    if path == "/contextvars":
+        await _respond(
+            send,
+            _request_context.get().encode("ascii"),
+            content_type=b"text/plain; charset=utf-8",
+        )
+        return
     if path == "/response-headers-order":
         await send({
             "type": "http.response.start",

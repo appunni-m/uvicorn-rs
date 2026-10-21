@@ -220,6 +220,7 @@ import sys
 import os
 import base64
 import asyncio
+import contextvars
 import json
 import logging
 import socket
@@ -227,6 +228,8 @@ import uvicorn
 
 lifespan_state = {"started": False}
 factory_invoked = False
+request_context = contextvars.ContextVar("python_api_request_context", default="empty")
+request_context.set("inherited")
 
 async def asgi3_app(scope, receive, send):
     if scope["type"] == "lifespan":
@@ -249,6 +252,18 @@ async def asgi3_app(scope, receive, send):
         logger.error("python-api log-level error sentinel")
         logger.critical("python-api log-level critical sentinel")
     await receive()
+    if scope["path"] == "/contextvars":
+        body = request_context.get().encode("ascii")
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"content-type", b"text/plain"),
+                (b"content-length", str(len(body)).encode("ascii")),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+        return
     lifespan_status = b"lifespan-started" if lifespan_state["started"] else b"lifespan-off"
     if "state" not in scope:
         state_status = b"scope-state-missing"
@@ -365,6 +380,7 @@ observe_loop = sys.argv[8] == "1"
 observe_unix_scope = sys.argv[25] == "1"
 fd = int(sys.argv[26]) if sys.argv[26] else None
 listener_fds = json.loads(sys.argv[27])
+reset_contextvars = sys.argv[28] == "1"
 proxy_headers = sys.argv[9] == "1"
 forwarded_allow_ips = json.loads(sys.argv[10])
 limit_concurrency = json.loads(sys.argv[11])
@@ -407,6 +423,7 @@ options = {
     "workers": workers,
     "timeout_worker_healthcheck": timeout_worker_healthcheck,
     "fd": fd,
+    "reset_contextvars": reset_contextvars,
 }
 if uds_path is not None:
     options["uds"] = uds_path
@@ -510,6 +527,8 @@ except KeyboardInterrupt:
             command.extend(("--log-config", request["log_config"]))
         if request.get("access_log") is False:
             command.append("--no-access-log")
+        if request.get("reset_contextvars"):
+            command.append("--reset-contextvars")
         if request.get("use_colors") is not None:
             command.append("--use-colors" if request["use_colors"] else "--no-use-colors")
     else:
@@ -544,6 +563,7 @@ except KeyboardInterrupt:
             "1" if request.get("observe_unix_scope", False) else "0",
             str(inherited_listeners[0].fileno()) if inherited_listeners else "",
             json.dumps([listener.fileno() for listener in inherited_listeners]),
+            "1" if request.get("reset_contextvars", False) else "0",
         ]
 
     environment = subprocess_environment()

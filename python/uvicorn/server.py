@@ -108,6 +108,7 @@ class Server:
                 limit_concurrency=self.config.limit_concurrency,
                 limit_max_requests=self.config.limit_max_requests,
                 limit_max_requests_jitter=self.config.limit_max_requests_jitter,
+                _reset_contextvars=self.config.reset_contextvars,
                 _defer_startup_failure=True,
                 sockets=sockets,
             )

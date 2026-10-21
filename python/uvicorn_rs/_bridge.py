@@ -1,7 +1,10 @@
 """Minimal glue that invokes ASGI callables on their owning Python loop."""
 
 import array
+import asyncio
+import contextvars
 import socket
+import sys
 import time
 import logging
 from urllib.parse import quote
@@ -108,3 +111,18 @@ async def invoke(app, scope, io):
             )
 
     await app(scope, receive, send)
+
+
+async def invoke_with_reset_contextvars(app, scope, io):
+    """Invoke HTTP requests in an empty context, matching Uvicorn's option."""
+    if scope.get("type") != "http":
+        await invoke(app, scope, io)
+        return
+
+    loop = asyncio.get_running_loop()
+    invocation = invoke(app, scope, io)
+    if sys.version_info >= (3, 11):
+        task = loop.create_task(invocation, context=contextvars.Context())
+    else:
+        task = contextvars.Context().run(loop.create_task, invocation)
+    await task

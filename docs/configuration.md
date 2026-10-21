@@ -45,6 +45,7 @@ that limit is stated in the option description.
 | --header NAME:VALUE | None | Add a default response header. HTTP/1.1 parity covers a value containing a colon and repeated identical `--header` options preserving duplicate values; `uvicorn.run` accepts equivalent `headers=[("Name", "value")]` pairs in a focused API case. |
 | --server-header/--no-server-header | Enabled | Include or omit the default `Server: uvicorn` response header. The disabled behavior is covered by the focused header-policy case. |
 | --date-header/--no-date-header | Enabled | Include or omit the default `Date` response header. The disabled behavior is covered by the focused header-policy case. |
+| --reset-contextvars | Off | Run each HTTP request in a fresh empty `contextvars.Context`. Focused HTTP/1.1 parity inputs compare default inheritance and reset behavior, and `uvicorn.run(reset_contextvars=True)` verifies the public Python API against Uvicorn 0.54.0. Lifespan and WebSocket calls keep their existing context behavior. |
 | --factory | Off | Call the imported application with no arguments. |
 | --ssl-certfile PATH | Unset | PEM certificate chain. Supply it together with --ssl-keyfile to enable TLS and experimental HTTP/3. |
 | --ssl-keyfile PATH | Unset | PEM private key paired with --ssl-certfile. |

@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@32",
+  "schema": "uvicorn-rs-parity/input@33",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -1318,6 +1318,24 @@
           "timeout_seconds": 20,
           "reload_delay": 0.1,
           "workers": 2
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-reset-contextvars-clears-http-request-context",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/contextvars",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "reset_contextvars": true
         }
       }
     }

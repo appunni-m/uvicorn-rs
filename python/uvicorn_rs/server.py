@@ -39,6 +39,7 @@ class Server:
         sockets=None,
         limit_max_requests_jitter=0,
         http2=True,
+        _reset_contextvars=False,
     ):
         """Store the application and listener options for a server run.
 
@@ -110,6 +111,7 @@ class Server:
         self.limit_max_requests = limit_max_requests
         self.limit_max_requests_jitter = limit_max_requests_jitter
         self._defer_startup_failure = _defer_startup_failure
+        self._reset_contextvars = _reset_contextvars
         self.startup_failed = False
         self._control = None
 
@@ -168,11 +170,16 @@ class Server:
             self.limit_max_requests_jitter, sys.maxsize
         )
         native_task = None
+        app_invoker = (
+            _bridge.invoke_with_reset_contextvars
+            if self._reset_contextvars
+            else _bridge.invoke
+        )
         try:
             native_task = asyncio.ensure_future(
                 _native.serve(
                     self.app,
-                    _bridge.invoke,
+                    app_invoker,
                     self.host,
                     self.port,
                     self.uds,

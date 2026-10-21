@@ -92,7 +92,7 @@
       "oracle": "uvicorn",
       "protocol": "python-api",
       "oracle_config": [
-        "CPython 3.12 public imports and signatures, Server readiness, programmatic and module-CLI HTTP serving including successful ASGI factory serving and focused WSGI requests, ASGI2/ASGI3/WSGI selection, and programmatic WebSocket message limits from Uvicorn 0.54.0"
+        "CPython 3.12 public imports and signatures, Server readiness, programmatic and module-CLI HTTP serving including successful ASGI factory serving and focused WSGI requests, ASGI2/ASGI3/WSGI selection, reset_contextvars request isolation, and programmatic WebSocket message limits from Uvicorn 0.54.0"
       ]
     },
     {
@@ -110,7 +110,8 @@
       "oracle_config": [
         "uvloop",
         "httptools",
-        "interface asgi3 for the synchronous callable returning an awaitable"
+        "interface asgi3 for the synchronous callable returning an awaitable",
+        "--reset-contextvars default inheritance and empty HTTP request context"
       ]
     },
     {

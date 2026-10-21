@@ -306,7 +306,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "limit_concurrency", "limit_max_requests", "limit_max_requests_jitter",
         "timeout_keep_alive",
         "log_config", "log_level", "access_log",
-        "use_colors", "backlog",
+        "use_colors", "backlog", "reset_contextvars",
     }
     supported.update(
         {
