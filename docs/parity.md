@@ -502,7 +502,7 @@ in the package's `[standard]` extra for users. The separate
 loads the configured file from `UVICORN_LOG_CONFIG`.
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@28`; live artifacts use
+`uvicorn-rs-parity/input@29`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -695,6 +695,10 @@ only the schema marker and preserves existing case data.
 Schema `@28` permits WSGI as the selected server and application interface in
 Python API HTTP-run inputs; migrate maintained `@27` inputs with
 `python scripts/migrate_parity_input_v27_to_v28.py`. This migration changes
+only the schema marker and preserves existing case data.
+Schema `@29` permits `workers` and `timeout_worker_healthcheck` in Python API
+HTTP-run inputs; migrate maintained `@28` inputs with
+`python scripts/migrate_parity_input_v28_to_v29.py`. This migration changes
 only the schema marker and preserves existing case data.
 The runner rejects older or mixed input schemas.
 

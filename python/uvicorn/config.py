@@ -337,7 +337,6 @@ class Config:
             (self.limit_max_requests is not None, "limit_max_requests"),
             (self.limit_max_requests_jitter != 0, "limit_max_requests_jitter"),
             (self.timeout_notify != 30, "timeout_notify"),
-            (self.timeout_worker_healthcheck != 5, "timeout_worker_healthcheck"),
             (self.callback_notify is not None, "callback_notify"),
             (self.ssl_context_factory is not None, "ssl_context_factory"),
             (self.ssl_keyfile_password is not None, "ssl_keyfile_password"),

@@ -169,6 +169,8 @@ use_colors = json.loads(sys.argv[17])
 factory = sys.argv[19] == "1"
 backlog = json.loads(sys.argv[20])
 timeout_keep_alive = json.loads(sys.argv[21])
+workers = json.loads(sys.argv[22])
+timeout_worker_healthcheck = json.loads(sys.argv[23])
 app = app_factory if factory else (
     wsgi_app
     if application_interface == "wsgi"
@@ -193,6 +195,8 @@ options = {
     "factory": factory,
     "backlog": backlog,
     "timeout_keep_alive": timeout_keep_alive,
+    "workers": workers,
+    "timeout_worker_healthcheck": timeout_worker_healthcheck,
 }
 if invocation == "config-server":
     config = uvicorn.Config(app, **options)
@@ -245,6 +249,10 @@ else:
             command.extend(("--backlog", str(request["backlog"])))
         if request.get("timeout_keep_alive") is not None:
             command.extend(("--timeout-keep-alive", str(request["timeout_keep_alive"])))
+        if request.get("workers") is not None:
+            command.extend(("--workers", str(request["workers"])))
+        if request.get("timeout_worker_healthcheck") is not None:
+            command.extend(("--timeout-worker-healthcheck", str(request["timeout_worker_healthcheck"])))
         if request.get("loop", "auto") != "auto":
             command.extend(("--loop", request["loop"]))
         if request.get("log_level") is not None:
@@ -281,6 +289,8 @@ else:
             "1" if request.get("factory", False) else "0",
             json.dumps(request.get("backlog", 2048)),
             json.dumps(request.get("timeout_keep_alive", 5)),
+            json.dumps(request.get("workers")),
+            json.dumps(request.get("timeout_worker_healthcheck", 5)),
         ]
 
     environment = os.environ.copy()

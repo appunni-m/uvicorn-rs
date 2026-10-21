@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@28",
+  "schema": "uvicorn-rs-parity/input@29",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -138,6 +138,25 @@
           "root_path": "",
           "loop": "asyncio",
           "observe_loop": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-accepts-single-worker-healthcheck-timeout",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-single-worker-healthcheck-timeout",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "workers": 1,
+          "timeout_worker_healthcheck": 7
         }
       }
     },

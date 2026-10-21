@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@28"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@29"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2229,6 +2229,8 @@ def load_contract(
                     "backlog",
                     "timeout_keep_alive",
                     "keep_alive_probe_delay_seconds",
+                    "workers",
+                    "timeout_worker_healthcheck",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2258,6 +2260,14 @@ def load_contract(
                 if "timeout_keep_alive" in run_http and type(run_http["timeout_keep_alive"]) is not int:
                     raise ParityError(
                         f"{case_id}.api.run_http.timeout_keep_alive must be an integer"
+                    )
+                if "workers" in run_http and type(run_http["workers"]) is not int:
+                    raise ParityError(f"{case_id}.api.run_http.workers must be an integer")
+                if "timeout_worker_healthcheck" in run_http and type(
+                    run_http["timeout_worker_healthcheck"]
+                ) is not int:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.timeout_worker_healthcheck must be an integer"
                     )
                 keep_alive_timeout_present = "timeout_keep_alive" in run_http
                 keep_alive_probe_present = "keep_alive_probe_delay_seconds" in run_http
