@@ -2,7 +2,7 @@
 name = "uvicorn-rs-h3-quinn"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.85"
 authors = ["Jean-Christophe BEGUE <jc.begue@pm.me>", "Appunni M"]
 license = "MIT"
 description = "QUIC transport adapter for the uvicorn-rs HTTP/3 fork"

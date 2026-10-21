@@ -61,6 +61,8 @@ jobs:
           cargo check --lib --locked
           cargo check --lib --no-default-features --locked
           cargo check --lib --all-features --locked
+          cargo check -p uvicorn-rs-h3 --lib --all-features --locked
+          cargo check -p uvicorn-rs-h3-quinn --lib --all-features --locked
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
             cargo check -p uvicorn-rs --all-targets --locked
           cargo check --manifest-path tools/http3-probe/Cargo.toml --bins --locked

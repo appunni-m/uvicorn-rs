@@ -4,7 +4,8 @@
 [`uvicorn-rs-h3`](https://github.com/appunni-m/uvicorn-rs/tree/main/crates/uvicorn-rs-h3).
 Its Rust library name remains `h3_quinn`; the distinct Cargo package name lets
 the adapter share maintained H3 protocol types in standalone registry
-consumers after both packages are published.
+consumers after both packages are published. Consumers need Rust 1.85 or newer,
+matching the Uvicorn-RS workspace MSRV.
 
 This package is based on the MIT-licensed `h3-quinn` 0.0.10 source from
 [hyperium/h3](https://github.com/hyperium/h3). Its source README and upstream

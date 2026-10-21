@@ -2,7 +2,7 @@
 name = "uvicorn-rs-h3"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.85"
 authors = [
     "Sean McArthur <sean@seanmonstar.com>",
     "Jean-Christophe BEGUE <jc.begue@pm.me>",

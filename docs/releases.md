@@ -26,6 +26,8 @@ Use these state labels precisely:
 The Python distribution remains named `uvicorn-rs-py`. The current checkout now includes the `uvicorn` command and import namespace, but their behavior is incomplete and has not passed the versioned compatibility gates. No package is published. Release verification must inspect the installed wheel and keep the Cargo server independent of Python.
 
 The Cargo workspace packages and Python package currently declare version 0.1.0.
+All published Cargo packages require Rust 1.85 or newer, the workspace MSRV
+verified by the locked CI lane.
 The PyPI package requires Python 3.9 or newer and uses the cp39-abi3 wheel ABI.
 The wheel matrix builds Linux x86-64, macOS ARM64, and Windows x86-64 artifacts.
 Those targets do not imply Linux ARM64, musl, or universal macOS wheels.

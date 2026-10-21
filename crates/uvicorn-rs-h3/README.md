@@ -4,7 +4,8 @@
 `uvicorn-rs` crates. Its Rust library name remains `h3`; Cargo publishes this
 maintained fork under the distinct package name `uvicorn-rs-h3`. Once the first
 release is published, standalone Cargo consumers can resolve it from crates.io.
-It does not depend on the Python adapter.
+It does not depend on the Python adapter. Consumers need Rust 1.85 or newer,
+matching the Uvicorn-RS workspace MSRV.
 
 This package is based on the MIT-licensed `h3` 0.0.8 source from
 [hyperium/h3](https://github.com/hyperium/h3). The upstream license and source
