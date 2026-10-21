@@ -9,9 +9,11 @@ The job used Uvicorn-RS `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`, FastAPI-RS
 execute: its `rg` command was unavailable on the hosted runner and the shell
 condition treated that command error like a no-match. A local `cargo tree
 --locked --edges normal,build` check over clean archives of these exact three
-revisions found no PyO3 package. The CI guard now uses `grep` and treats a
-checker error as a failure; hosted confirmation of that corrected guard is
-pending. The composition result is limited evidence, not a full FastAPI
+revisions found no PyO3 package. The corrected `grep` guard passed in hosted CI
+run [39601499324](https://github.com/appunni-m/uvicorn-rs/actions/runs/39601499324)
+against the prior feature-branch source pin. The refreshed current-main pin is
+queued in run [39604738708](https://github.com/appunni-m/uvicorn-rs/actions/runs/39604738708).
+The composition result is limited evidence, not a full FastAPI
 contract, Python parity result, release candidate, repeated result, or
 performance measurement.
 
