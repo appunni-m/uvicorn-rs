@@ -163,10 +163,10 @@ error, the held/cancelled application events and a healthy fresh follow-up.
 The maintained [coverage summary](coverage.md) records the historical
 511-case adapter result and the latest complete-scope 595-case baseline. Those
 coverage and case totals are snapshots: the source snapshot for that report had
-604 cases. The current manifest has 624 cases, including four native HTTP/1
+604 cases. The current manifest has 626 cases, including four native HTTP/1
 upgrade-session inputs, later CLI environment-precedence inputs, the Python
 `Config`/`Server.run()` concurrency case, the h11 selector checks, forced-color
-comparisons, and custom JSON logging through both Python entry points.
+comparisons, and custom INI/JSON logging through both Python entry points.
 The selected results described here are focused results, not a full-matrix
 result. Generated per-run reports remain local and Git-ignored. The case passes
 full attribution and all three 511-case repeats; the historical report's
@@ -430,10 +430,10 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 | CLI and environment | 27 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, and process outcomes, including `--http h11` acceptance. |
-| Python API | 36 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, access-log suppression, both CLI color switches, forced ANSI colors through `uvicorn.run()`, and custom JSON logging configuration through `uvicorn.run()` and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. INI/YAML logging configuration, other logging levels, and exact traceback frame formatting remain unverified. |
+| Python API | 38 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, access-log suppression, both CLI color switches, forced ANSI colors through `uvicorn.run()`, and custom INI/JSON logging configuration through `uvicorn.run()` and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. YAML logging configuration, other logging levels, and exact traceback frame formatting remain unverified. |
 
-These eight groups account for all 333 declared oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 624 total cases. Five
+These eight groups account for all 335 declared oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 626 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -487,6 +487,9 @@ levels, colors, and exact traceback frame formatting remain unverified. The
 `python-api.module-cli-applies-custom-json-log-config` inputs exercise a
 user-supplied JSON logging configuration through both public entry points and
 compare the resulting application log events against Uvicorn 0.54.0.
+The corresponding `python-api.run-applies-custom-ini-log-config` and
+`python-api.module-cli-applies-custom-ini-log-config` inputs do the same for
+Python's `fileConfig` INI format. YAML logging configuration remains unverified.
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
 `uvicorn-rs-parity/input@24`; live artifacts use

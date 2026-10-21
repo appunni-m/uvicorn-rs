@@ -216,6 +216,44 @@
       }
     },
     {
+      "case_id": "python-api.run-applies-custom-ini-log-config",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-custom-ini-log-config",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "log_config": "tests/parity/fixtures/custom-log-config.ini",
+          "emit_level_logs": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-applies-custom-ini-log-config",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-custom-ini-log-config",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "log_config": "tests/parity/fixtures/custom-log-config.ini",
+          "emit_level_logs": true
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-http-with-lifespan-disabled",
       "profile": "python-api",
       "operation": "python.api.run-http",
