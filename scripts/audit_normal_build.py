@@ -71,7 +71,14 @@ def capture(command: list[str], output: Path, environment: dict[str, str], timeo
     return result.stdout
 
 
-def audit(output: Path) -> int:
+def native_signature_has_fault_control(signature: object) -> bool:
+    if not isinstance(signature, str) or not signature.startswith("(") or not signature.endswith(")"):
+        return True
+    parameters = (part.strip().split("=", 1)[0].strip() for part in signature[1:-1].split(","))
+    return any({"fault", "coverage"} & set(parameter.lower().split("_")) for parameter in parameters)
+
+
+def audit(output: Path, oracle_python: Path) -> int:
     require(sys.platform in {"linux", "darwin"}, "normal native symbol audit currently requires Linux or macOS")
     output.mkdir(parents=True, exist_ok=False)
     before = source_identity()
@@ -115,7 +122,13 @@ def audit(output: Path) -> int:
     require(set(CASE_IDS) <= set(case_index), "standard normal-build audit cases are missing from the current index")
     selected = [case_index[case_id] for case_id in CASE_IDS]
     result_path = output / "parity-result.json"
-    command = [sys.executable, str(runner), "--fault-contracts"]
+    command = [
+        sys.executable,
+        str(runner),
+        "--oracle-python",
+        str(oracle_python),
+        "--fault-contracts",
+    ]
     for case_id in CASE_IDS:
         command.extend(["--case-id", case_id])
     command.extend(["--output", str(result_path)])
@@ -130,8 +143,8 @@ def audit(output: Path) -> int:
         "llvm_coverage_instrumentation_absent": not any(count for locations in llvm_counts.values() for count in locations.values()),
         "native_exports_have_no_fault_control": not any("fault" in name.lower() or "coverage" in name.lower()
                                                        for name in exports["exports"]),
-        "native_signature_has_no_fault_control": not any(
-            marker in (exports["serve_text_signature"] or "").lower() for marker in ("fault", "coverage")),
+        "native_signature_has_no_fault_control": not native_signature_has_fault_control(
+            exports["serve_text_signature"]),
         "cli_has_no_fault_option": not any("fault" in option or "coverage" in option for option in cli_options),
         "armed_fault_file_ignored": armed.read_text(encoding="utf-8") == ARMED_POINT,
         "parity_passed": parity_process.returncode == 0,
@@ -181,6 +194,7 @@ def audit(output: Path) -> int:
         "case_verification_envelopes": {case["case_id"]: case["verification"] for case in parity["cases"]},
         "parity": parity["summary"], "parity_exit_code": parity_process.returncode,
         "parity_result_sha256": sha256(result_path), "command": command,
+        "oracle_python": str(oracle_python),
         "scope": "Normal installed binary fault exclusion, one live oracle comparison and two public target support contracts; "
                  "no native fault injection, unit tests, publication, or complete-matrix claim.",
     }
@@ -193,11 +207,20 @@ def audit(output: Path) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True, help="fresh directory retaining binary and live-case evidence")
+    parser.add_argument(
+        "--oracle-python",
+        type=Path,
+        required=True,
+        help="isolated Python interpreter containing stock Uvicorn for the live parity case",
+    )
     args = parser.parse_args()
     output = args.output_dir.resolve()
+    oracle_python = Path(os.path.abspath(args.oracle_python))
+    if not oracle_python.is_file() or not os.access(oracle_python, os.X_OK):
+        parser.error(f"--oracle-python must be an executable interpreter: {oracle_python}")
     existed = output.exists()
     try:
-        return audit(output)
+        return audit(output, oracle_python)
     except (EvidenceError, OSError, ValueError, KeyError, TypeError, ImportError, subprocess.SubprocessError) as error:
         if not existed and output.is_dir() and not (output / "receipt.json").exists():
             write_json(output / "receipt.json", {"schema": "uvicorn-rs-normal-build/exclusion-audit@1",

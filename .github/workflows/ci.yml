@@ -352,7 +352,10 @@ jobs:
             --output target/asgi-parity/result.json 2>&1 | tee target/asgi-parity/run.log
           .venv/bin/python scripts/check_ci_evidence.py parity target/asgi-parity/result.json
       - name: Verify normal fault-seam exclusion with existing public cases
-        run: .venv/bin/python scripts/audit_normal_build.py --output-dir target/normal-audit
+        run: >-
+          .venv/bin/python scripts/audit_normal_build.py
+          --oracle-python "$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle/bin/python"
+          --output-dir target/normal-audit
       - name: Summarize public parity
         if: always()
         run: python scripts/summarize_parity_result.py target/asgi-parity/result.json
