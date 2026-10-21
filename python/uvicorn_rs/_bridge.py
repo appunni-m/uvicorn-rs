@@ -11,16 +11,20 @@ error_logger = logging.getLogger("uvicorn.error")
 access_logger = logging.getLogger("uvicorn.access")
 
 
-def send_listener_fd(path, listener):
-    """Transfer one pre-bound TCP listener to Rust during server startup."""
+def send_listener_fds(path, listeners):
+    """Transfer pre-bound TCP listeners to Rust during server startup."""
     if not hasattr(socket, "SCM_RIGHTS"):
         raise NotImplementedError("inherited TCP listeners require Unix descriptor passing")
-    if listener.family not in (socket.AF_INET, socket.AF_INET6):
-        raise ValueError("only pre-bound IPv4 and IPv6 TCP listeners are supported")
-    if listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM:
-        raise ValueError("the inherited socket must be a TCP stream listener")
-    listener.setblocking(False)
-    descriptors = array.array("i", [listener.fileno()])
+    listeners = list(listeners)
+    if not listeners:
+        raise ValueError("at least one pre-bound TCP listener is required")
+    for listener in listeners:
+        if listener.family not in (socket.AF_INET, socket.AF_INET6):
+            raise ValueError("only pre-bound IPv4 and IPv6 TCP listeners are supported")
+        if listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM:
+            raise ValueError("the inherited socket must be a TCP stream listener")
+    for listener in listeners:
+        listener.setblocking(False)
     deadline = time.monotonic() + 5.0
     while True:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as control:
@@ -31,11 +35,14 @@ def send_listener_fd(path, listener):
                     raise
                 time.sleep(0.01)
                 continue
-            sent = control.sendmsg(
-                [b"L"], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, descriptors)]
-            )
-            if sent != 1:
-                raise OSError("incomplete inherited listener descriptor transfer")
+            for listener in listeners:
+                descriptors = array.array("i", [listener.fileno()])
+                sent = control.sendmsg(
+                    [b"L"], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, descriptors)]
+                )
+                if sent != 1:
+                    raise OSError("incomplete inherited listener descriptor transfer")
+            control.sendall(b"E")
             return
 
 

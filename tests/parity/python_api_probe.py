@@ -216,6 +216,7 @@ observe_scope = sys.argv[7] == "1"
 observe_loop = sys.argv[8] == "1"
 observe_unix_scope = sys.argv[25] == "1"
 fd = int(sys.argv[26]) if sys.argv[26] else None
+listener_fds = json.loads(sys.argv[27])
 proxy_headers = sys.argv[9] == "1"
 forwarded_allow_ips = json.loads(sys.argv[10])
 limit_concurrency = json.loads(sys.argv[11])
@@ -266,8 +267,8 @@ if invocation in {"config-server", "server-sockets"}:
         options.pop("fd", None)
     config = uvicorn.Config(app, **options)
     if invocation == "server-sockets":
-        listener = socket.socket(fileno=fd)
-        uvicorn.Server(config).run(sockets=[listener])
+        listeners = [socket.socket(fileno=listener_fd) for listener_fd in listener_fds]
+        uvicorn.Server(config).run(sockets=listeners)
     else:
         uvicorn.Server(config).run()
 else:
@@ -275,15 +276,18 @@ else:
 '''
     uds_directory = None
     uds_path = None
-    inherited_listener = None
+    inherited_listeners = []
     if request.get("fd", False):
         if os.name == "nt":
             raise ValueError("inherited descriptor parity input requires Unix")
-        inherited_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        inherited_listener.bind(("127.0.0.1", 0))
-        inherited_listener.listen()
-        inherited_listener.set_inheritable(True)
-        port = inherited_listener.getsockname()[1]
+        listener_count = request.get("prebound_socket_count", 1)
+        for _ in range(listener_count):
+            inherited_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            inherited_listener.bind(("127.0.0.1", 0))
+            inherited_listener.listen()
+            inherited_listener.set_inheritable(True)
+            inherited_listeners.append(inherited_listener)
+        port = inherited_listeners[0].getsockname()[1]
     elif request.get("uds", False):
         uds_directory = tempfile.TemporaryDirectory(
             prefix="uvrs-", dir="/tmp" if os.path.isdir("/tmp") else None
@@ -324,8 +328,8 @@ else:
         ]
         if uds_path is not None:
             command.extend(("--uds", uds_path))
-        if inherited_listener is not None:
-            command.extend(("--fd", str(inherited_listener.fileno())))
+        if inherited_listeners:
+            command.extend(("--fd", str(inherited_listeners[0].fileno())))
         if request.get("factory"):
             command.append("--factory")
         if request.get("interface", "auto") != "auto":
@@ -386,7 +390,8 @@ else:
             json.dumps(request.get("timeout_worker_healthcheck", 5)),
             uds_path or "",
             "1" if request.get("observe_unix_scope", False) else "0",
-            str(inherited_listener.fileno()) if inherited_listener is not None else "",
+            str(inherited_listeners[0].fileno()) if inherited_listeners else "",
+            json.dumps([listener.fileno() for listener in inherited_listeners]),
         ]
 
     environment = os.environ.copy()
@@ -400,8 +405,10 @@ else:
         stop_signal = signal.CTRL_BREAK_EVENT
     else:
         stop_signal = signal.SIGINT
-    if inherited_listener is not None:
-        process_options["pass_fds"] = (inherited_listener.fileno(),)
+    if inherited_listeners:
+        process_options["pass_fds"] = tuple(
+            listener.fileno() for listener in inherited_listeners
+        )
 
     try:
         process = subprocess.Popen(
@@ -414,12 +421,18 @@ else:
             **process_options,
         )
     except BaseException:
-        if inherited_listener is not None:
+        for inherited_listener in inherited_listeners:
             inherited_listener.close()
         if uds_directory is not None:
             uds_directory.cleanup()
         raise
     response = None
+    probe_ports = (
+        [listener.getsockname()[1] for listener in inherited_listeners]
+        if inherited_listeners
+        else [port]
+    )
+    listener_responses = [None] * len(probe_ports)
     response_count = 0
     idle_connection_closed = None
     request_limit = None
@@ -438,54 +451,67 @@ else:
     deadline = time.monotonic() + request["timeout_seconds"]
     try:
         while time.monotonic() < deadline and process.poll() is None:
-            connection = (
-                UnixHTTPConnection(uds_path, timeout=0.5)
-                if uds_path is not None
-                else http.client.HTTPConnection("127.0.0.1", port, timeout=0.5)
-            )
-            try:
-                keep_alive_probe_delay = request.get("keep_alive_probe_delay_seconds")
-                connection.request(
-                    request["method"],
-                    request["path"],
-                    headers={
-                        "Connection": "keep-alive" if keep_alive_probe_delay is not None else "close",
-                        **dict(request.get("request_headers", [])),
-                    },
+            made_progress = False
+            for listener_index, listener_port in enumerate(probe_ports):
+                if listener_responses[listener_index] is not None:
+                    continue
+                connection = (
+                    UnixHTTPConnection(uds_path, timeout=0.5)
+                    if uds_path is not None
+                    else http.client.HTTPConnection(
+                        "127.0.0.1", listener_port, timeout=0.5
+                    )
                 )
-                http_response = connection.getresponse()
-                response_body = http_response.read()
-                response = {
-                    "status": http_response.status,
-                    "content_type": http_response.getheader("content-type"),
-                    "body_base64": base64.b64encode(response_body).decode("ascii"),
-                    "observed_headers": {
-                        name.lower(): http_response.headers.get_all(name, [])
-                        for name in request.get("observe_headers", [])
-                    },
-                }
-                response_count += 1
-                if keep_alive_probe_delay is not None:
-                    time.sleep(keep_alive_probe_delay)
-                    try:
-                        connection.request(
-                            request["method"],
-                            request["path"],
-                            headers={
-                                "Connection": "keep-alive",
-                                **dict(request.get("request_headers", [])),
-                            },
-                        )
-                        second_response = connection.getresponse()
-                        second_response.read()
-                        idle_connection_closed = False
-                    except (OSError, http.client.HTTPException, TimeoutError):
-                        idle_connection_closed = True
+                try:
+                    keep_alive_probe_delay = request.get("keep_alive_probe_delay_seconds")
+                    connection.request(
+                        request["method"],
+                        request["path"],
+                        headers={
+                            "Connection": "keep-alive" if keep_alive_probe_delay is not None else "close",
+                            **dict(request.get("request_headers", [])),
+                        },
+                    )
+                    http_response = connection.getresponse()
+                    response_body = http_response.read()
+                    listener_response = {
+                        "status": http_response.status,
+                        "content_type": http_response.getheader("content-type"),
+                        "body_base64": base64.b64encode(response_body).decode("ascii"),
+                        "observed_headers": {
+                            name.lower(): http_response.headers.get_all(name, [])
+                            for name in request.get("observe_headers", [])
+                        },
+                    }
+                    listener_responses[listener_index] = listener_response
+                    response_count += 1
+                    made_progress = True
+                    if listener_index == 0:
+                        response = listener_response
+                        if keep_alive_probe_delay is not None:
+                            time.sleep(keep_alive_probe_delay)
+                            try:
+                                connection.request(
+                                    request["method"],
+                                    request["path"],
+                                    headers={
+                                        "Connection": "keep-alive",
+                                        **dict(request.get("request_headers", [])),
+                                    },
+                                )
+                                second_response = connection.getresponse()
+                                second_response.read()
+                                idle_connection_closed = False
+                            except (OSError, http.client.HTTPException, TimeoutError):
+                                idle_connection_closed = True
+                except (OSError, http.client.HTTPException, TimeoutError):
+                    pass
+                finally:
+                    connection.close()
+            if all(item is not None for item in listener_responses):
                 break
-            except (OSError, http.client.HTTPException, TimeoutError):
+            if not made_progress:
                 time.sleep(0.025)
-            finally:
-                connection.close()
 
         if response is not None and request_limit is not None and request_limit > 0:
             if request_limit_jitter > 0:
@@ -550,10 +576,12 @@ else:
                 and process.returncode == 0
             )
         observation = {
-            "response_received": response is not None,
+            "response_received": bool(listener_responses)
+            and all(item is not None for item in listener_responses),
             "response_status": response["status"] if response is not None else None,
             "response_content_type": response["content_type"] if response is not None else None,
             "response_body_base64": response["body_base64"] if response is not None else "",
+            "listener_responses": listener_responses,
             "idle_connection_closed": idle_connection_closed,
             "shutdown_signal_sent": shutdown_signal_sent,
             "process_exit_code": process.returncode,
@@ -570,7 +598,7 @@ else:
             process.communicate()
         if uds_directory is not None:
             uds_directory.cleanup()
-        if inherited_listener is not None:
+        for inherited_listener in inherited_listeners:
             inherited_listener.close()
 
 

@@ -67,14 +67,16 @@ unknown-option rejection, and limited single-process worker settings. On current
 `cli.zero-workers-normalizes-to-single-worker` and
 `cli.unknown-option-is-rejected` each pass individually against isolated
 Uvicorn 0.54.0. This evidence does not establish multi-worker supervision,
-reload/watch behavior, multiple inherited listeners, IPv6, Windows, TLS,
-HTTP/2 or HTTP/3 over inherited sockets, execution of every listed option, or
-full CLI and Python API parity. Four inherited TCP-listener inputs pass
-individually on the last code-bearing `main` revision,
-`e6856a43f59af5ede1b0311f535272bffade782f`: module CLI `--fd`,
-`uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and
-`Server.run(sockets=[listener])`. These cases cover one IPv4 listener on macOS
-with Python 3.12.
+reload/watch behavior, inherited-listener support beyond the focused IPv4
+cases below, IPv6, Windows, TLS, HTTP/2 or HTTP/3 over inherited sockets,
+execution of every listed option, or full CLI and Python API parity. Five
+inherited TCP-listener inputs pass individually against Uvicorn 0.54.0 on
+macOS ARM64 / CPython 3.12.13: module
+CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and
+`Server.run(sockets=[...])` with one and two listeners. The two-listener case
+requires successful HTTP responses from both sockets and graceful SIGINT exit.
+IPv6, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets remain
+unverified.
 
 This follows the fixture-matrix approach used by `image-slash-star`/Pillow-RS,
 adapted to a network server. Pillow-RS compares Rust operations with pinned
@@ -181,19 +183,20 @@ error, the held/cancelled application events and a healthy fresh follow-up.
 The maintained [coverage summary](coverage.md) records the historical
 511-case adapter result and the latest complete-scope 595-case baseline. Those
 coverage and case totals are snapshots: the source snapshot for that report had
-604 cases. The current manifest has 654 cases, including four native HTTP/1
-upgrade-session inputs, four inherited TCP-listener inputs, later CLI
+604 cases. The current manifest has 655 cases, including four native HTTP/1
+upgrade-session inputs, five inherited TCP-listener inputs, later CLI
 environment-precedence inputs, the Python `Config`/`Server.run()` concurrency
 case, the h11 selector checks, forced-color comparisons, and custom
 INI/JSON/YAML logging through both Python entry points, including the
 `UVICORN_LOG_CONFIG` environment binding, plus module-CLI requests using a
 non-default TCP backlog and an HTTP/1 keep-alive timeout, and WSGI GET requests
 through both `uvicorn.run()` and the module CLI.
-The four inherited TCP-listener cases each passed individually against Uvicorn
-0.54.0 on macOS ARM64 / CPython 3.12.13 at source revision
-`e6856a43f59af5ede1b0311f535272bffade782f`; these selected results do not
-represent a full-matrix run. The manifest SHA-256 for that run was
-`5e43e5604300d544073be3fc4a5431e64b12eff471174324eb39b3d52ac90cfd`.
+The five inherited TCP-listener cases passed individually against Uvicorn
+0.54.0 on macOS ARM64 / CPython 3.12.13. The added multiple-listener case
+verifies status 200 from each of two IPv4 sockets and a clean server exit; the
+selected results do not represent a full-matrix run. The one-socket cases and
+the two-socket case have separate source-bound run reports in the ignored
+`target/` directory.
 The selected results described here are focused results, not a full-matrix
 result. Generated per-run reports remain local and Git-ignored. The case passes
 full attribution and all three 511-case repeats; the historical report's
@@ -457,10 +460,10 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 | CLI and environment | 28 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, and process outcomes, including `--http h11` acceptance. |
-| Python API | 65 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 and focused WSGI selection, trusted proxy headers, non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks, successful application-factory serving through the programmatic API and module CLI, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it, access-log suppression, both CLI color switches, forced ANSI colors through `uvicorn.run()`, custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI, and inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])`. WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other WSGI behavior, log levels and precedence combinations, and exact traceback frame formatting remain unverified. |
+| Python API | 66 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 and focused WSGI selection, trusted proxy headers, non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks, successful application-factory serving through the programmatic API and module CLI, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it, access-log suppression, both CLI color switches, forced ANSI colors through `uvicorn.run()`, custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI, and inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one or two listeners. WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other WSGI behavior, log levels and precedence combinations, and exact traceback frame formatting remain unverified. |
 
-These eight groups account for all 363 declared oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 654 total cases. Five
+These eight groups account for all 364 declared oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 655 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -548,11 +551,11 @@ WebSocket queue-option acceptance, unknown-option rejection, and single-process
 worker settings.
 Selector cases check argument handling;
 they do not prove that every option is executed or establish multi-worker,
-reload/watch behavior. Four inherited-listener cases verify one IPv4 TCP
-listener on macOS through the module CLI, `uvicorn.run(fd=...)`,
-`Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])`; multiple
-listeners, IPv6, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets
-remain unverified. Focused Python API inputs cover plain HTTP/1.1 over UDS
+reload/watch behavior. Five inherited-listener cases verify IPv4 TCP listeners
+on macOS through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with
+`Server.run()`, and `Server.run(sockets=[...])` with one and two sockets.
+IPv6, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets remain
+unverified. Focused Python API inputs cover plain HTTP/1.1 over UDS
 through the module CLI and `Config`/`Server`; they do not establish UDS behavior
 over other protocols or TLS. The fixture app is
 shared source code imported in fresh, independent oracle and target processes.

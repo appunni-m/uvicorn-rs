@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@30",
+  "schema": "uvicorn-rs-parity/input@31",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -1248,6 +1248,25 @@
           "invocation": "server-sockets",
           "root_path": "",
           "fd": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-serves-request-on-multiple-prebound-sockets",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-multiple-prebound-sockets",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "server-sockets",
+          "root_path": "",
+          "fd": true,
+          "prebound_socket_count": 2
         }
       }
     }

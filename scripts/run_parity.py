@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@30"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@31"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -832,7 +832,7 @@ def load_contract(
         "body_stream_error", "trigger_error", "shutdown_clean",
         "exit_code", "stdout_base64", "stderr_base64",
         "response_received", "response_status", "response_content_type",
-        "response_body_base64", "shutdown_signal_sent", "process_timed_out",
+        "response_body_base64", "listener_responses", "shutdown_signal_sent", "process_timed_out",
         "server_log_events", "request_limit_response_count",
         "request_limit_range_satisfied",
         "server_started_before_shutdown", "serve_task_finished_before_shutdown",
@@ -2237,6 +2237,7 @@ def load_contract(
                     "uds",
                     "observe_unix_scope",
                     "fd",
+                    "prebound_socket_count",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2268,6 +2269,16 @@ def load_contract(
                     raise ParityError(f"{case_id}.api.run_http.uds must be a boolean")
                 if "fd" in run_http and type(run_http["fd"]) is not bool:
                     raise ParityError(f"{case_id}.api.run_http.fd must be a boolean")
+                if "prebound_socket_count" in run_http:
+                    count = run_http["prebound_socket_count"]
+                    if type(count) is not int or not 1 <= count <= 8:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.prebound_socket_count must be an integer from 1 to 8"
+                        )
+                    if not run_http.get("fd") or run_http["invocation"] != "server-sockets":
+                        raise ParityError(
+                            f"{case_id}.api.run_http.prebound_socket_count requires fd=true and the server-sockets invocation"
+                        )
                 if run_http.get("fd") and run_http.get("uds"):
                     raise ParityError(f"{case_id}.api.run_http cannot combine fd and uds")
                 if run_http["invocation"] == "server-sockets" and not run_http.get("fd"):
@@ -10160,6 +10171,7 @@ def run_python_api_probe(
                     "response_status",
                     "response_content_type",
                     "response_body_base64",
+                    "listener_responses",
                     "idle_connection_closed",
                     "shutdown_signal_sent",
                     "process_exit_code",

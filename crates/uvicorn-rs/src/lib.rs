@@ -52,6 +52,7 @@ use std::{
 use bytes::Bytes;
 use futures_util::{
     future::{ready, Either as FutureEither, Ready},
+    stream::{FuturesUnordered, StreamExt},
     FutureExt,
 };
 use http::{
@@ -1842,6 +1843,8 @@ fn observe_error(
 /// Errors returned while accepting connections or shutting down the server.
 #[derive(Debug)]
 pub enum ServeError {
+    /// The server was asked to serve an empty set of TCP listeners.
+    EmptyListenerSet,
     /// The configured connection limit was zero.
     InvalidConnectionLimit,
     /// The configured connection limit exceeded Tokio's maximum permit count.
@@ -1885,6 +1888,7 @@ pub enum ServeError {
 impl fmt::Display for ServeError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::EmptyListenerSet => formatter.write_str("at least one TCP listener is required"),
             Self::InvalidConnectionLimit => {
                 formatter.write_str("max_connections must be greater than zero")
             }
@@ -1946,7 +1950,8 @@ impl Error for ServeError {
             Self::ConnectionAdmissionClosed(error) => Some(error),
             Self::ApplicationLifecycleFailed { error, .. } => Some(error.as_ref()),
             Self::ServerAndApplicationShutdown { server, .. } => Some(server.as_ref()),
-            Self::InvalidConnectionLimit
+            Self::EmptyListenerSet
+            | Self::InvalidConnectionLimit
             | Self::ConnectionLimitTooLarge
             | Self::InvalidGracefulShutdownTimeout
             | Self::InvalidApplicationLifecycleTimeout
@@ -2182,10 +2187,64 @@ where
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
     Shutdown: Future<Output = ()> + Send,
 {
+    serve_tcp_listeners_with_date_header(vec![(listener, service)], shutdown, config, date_header)
+        .await
+}
+
+/// Serves TCP HTTP on multiple already-bound listeners under one shutdown
+/// lifecycle and shared connection/request limits.
+///
+/// Each listener is paired with a service instance so adapters can preserve
+/// listener-specific metadata while sharing application state. All listeners
+/// share the configured maximum-connection and request-concurrency limits.
+/// A failure on any listener stops admission on its siblings and drains their
+/// active connections using the configured graceful-shutdown policy.
+///
+/// # Errors
+///
+/// Returns [`ServeError::EmptyListenerSet`] when `listeners` is empty and the
+/// same server-level errors as [`serve_tcp`].
+pub async fn serve_tcp_listeners_with_date_header<S, B, Shutdown>(
+    listeners: Vec<(TcpListener, S)>,
+    shutdown: Shutdown,
+    config: ServerConfig,
+    date_header: bool,
+) -> Result<(), ServeError>
+where
+    S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+    Shutdown: Future<Output = ()> + Send,
+{
+    if listeners.is_empty() {
+        return Err(ServeError::EmptyListenerSet);
+    }
     let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
+    if listeners.len() == 1 {
+        let mut listeners = listeners;
+        let Some((listener, service)) = listeners.pop() else {
+            return Err(ServeError::EmptyListenerSet);
+        };
+        let admission = tcp_listener_admission(&config);
+        return run_with_application_lifecycle(
+            config.clone(),
+            serve_listener(
+                listener,
+                service,
+                shutdown,
+                config,
+                None,
+                date_header,
+                admission,
+            ),
+        )
+        .await;
+    }
     run_with_application_lifecycle(
         config.clone(),
-        serve_listener(listener, service, shutdown, config, None, date_header),
+        serve_tcp_listener_set(listeners, shutdown, config, None, date_header),
     )
     .await
 }
@@ -2244,17 +2303,69 @@ where
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
     Shutdown: Future<Output = ()> + Send,
 {
+    serve_tls_listeners_with_date_header(
+        vec![(listener, service)],
+        acceptor,
+        shutdown,
+        config,
+        date_header,
+    )
+    .await
+}
+
+/// Serves a TLS HTTP application on multiple already-bound TCP listeners.
+///
+/// Each listener is paired with a service instance. The listeners share
+/// connection admission, request concurrency, graceful shutdown, and the
+/// optional application lifecycle hook. The supplied acceptor controls the
+/// certificate and client-authentication policy for every listener.
+///
+/// # Errors
+///
+/// Returns [`ServeError::EmptyListenerSet`] when `listeners` is empty and the
+/// same server-level errors as [`serve_tls`].
+pub async fn serve_tls_listeners_with_date_header<S, B, Shutdown>(
+    listeners: Vec<(TcpListener, S)>,
+    acceptor: TlsAcceptor,
+    shutdown: Shutdown,
+    config: ServerConfig,
+    date_header: bool,
+) -> Result<(), ServeError>
+where
+    S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+    Shutdown: Future<Output = ()> + Send,
+{
+    if listeners.is_empty() {
+        return Err(ServeError::EmptyListenerSet);
+    }
     let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
+    if listeners.len() == 1 {
+        let mut listeners = listeners;
+        let Some((listener, service)) = listeners.pop() else {
+            return Err(ServeError::EmptyListenerSet);
+        };
+        let admission = tcp_listener_admission(&config);
+        return run_with_application_lifecycle(
+            config.clone(),
+            serve_listener(
+                listener,
+                service,
+                shutdown,
+                config,
+                Some(acceptor),
+                date_header,
+                admission,
+            ),
+        )
+        .await;
+    }
     run_with_application_lifecycle(
         config.clone(),
-        serve_listener(
-            listener,
-            service,
-            shutdown,
-            config,
-            Some(acceptor),
-            date_header,
-        ),
+        serve_tcp_listener_set(listeners, shutdown, config, Some(acceptor), date_header),
     )
     .await
 }
@@ -2595,10 +2706,25 @@ async fn next_unix_listener_event(
     }
 }
 
-async fn serve_listener<S, B>(
-    listener: TcpListener,
-    service: S,
-    shutdown: BoxedShutdownFuture<'_>,
+struct TcpListenerAdmission {
+    connection_slots: Arc<Semaphore>,
+    request_concurrency: Option<Arc<RequestConcurrency>>,
+    default_headers: Arc<Vec<(HeaderName, HeaderValue)>>,
+}
+
+fn tcp_listener_admission(config: &ServerConfig) -> Arc<TcpListenerAdmission> {
+    Arc::new(TcpListenerAdmission {
+        connection_slots: Arc::new(Semaphore::new(config.max_connections)),
+        request_concurrency: config
+            .limit_concurrency
+            .map(|limit| Arc::new(RequestConcurrency::new(limit))),
+        default_headers: Arc::new(config.default_headers.clone()),
+    })
+}
+
+async fn serve_tcp_listener_set<S, B>(
+    listeners: Vec<(TcpListener, S)>,
+    mut shutdown: BoxedShutdownFuture<'_>,
     config: ServerConfig,
     tls_acceptor: Option<TlsAcceptor>,
     date_header: bool,
@@ -2610,11 +2736,89 @@ where
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
-    let connection_slots = Arc::new(Semaphore::new(config.max_connections));
-    let request_concurrency = config
-        .limit_concurrency
-        .map(|limit| Arc::new(RequestConcurrency::new(limit)));
-    let default_headers = Arc::new(config.default_headers.clone());
+    let admission = tcp_listener_admission(&config);
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let mut listener_tasks: FuturesUnordered<
+        Pin<Box<dyn Future<Output = Result<(), ServeError>> + Send>>,
+    > = FuturesUnordered::new();
+
+    for (listener, service) in listeners {
+        let mut listener_shutdown_receiver = shutdown_receiver.clone();
+        let admission = Arc::clone(&admission);
+        let config = config.clone();
+        let tls_acceptor = tls_acceptor.clone();
+        listener_tasks.push(Box::pin(async move {
+            let listener_shutdown: BoxedShutdownFuture<'_> = Box::pin(async move {
+                if *listener_shutdown_receiver.borrow() {
+                    return;
+                }
+                let _ = listener_shutdown_receiver.changed().await;
+            });
+            serve_listener(
+                listener,
+                service,
+                listener_shutdown,
+                config,
+                tls_acceptor,
+                date_header,
+                admission,
+            )
+            .await
+        }));
+    }
+
+    let mut stop_requested = false;
+    let mut first_error = None;
+    while !listener_tasks.is_empty() {
+        tokio::select! {
+            biased;
+            _ = shutdown.as_mut(), if !stop_requested => {
+                stop_requested = true;
+                shutdown_sender.send_replace(true);
+            }
+            result = listener_tasks.next() => match result {
+                Some(Ok(())) => {
+                    if !stop_requested {
+                        stop_requested = true;
+                        shutdown_sender.send_replace(true);
+                    }
+                }
+                Some(Err(error)) => {
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                    if !stop_requested {
+                        stop_requested = true;
+                        shutdown_sender.send_replace(true);
+                    }
+                }
+                None => break,
+            }
+        }
+    }
+
+    first_error.map_or(Ok(()), Err)
+}
+
+async fn serve_listener<S, B>(
+    listener: TcpListener,
+    service: S,
+    shutdown: BoxedShutdownFuture<'_>,
+    config: ServerConfig,
+    tls_acceptor: Option<TlsAcceptor>,
+    date_header: bool,
+    admission: Arc<TcpListenerAdmission>,
+) -> Result<(), ServeError>
+where
+    S: Service<Request<Incoming>, Response = Response<B>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    S::Error: Error + fmt::Display + Send + Sync + 'static,
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+{
+    let connection_slots = Arc::clone(&admission.connection_slots);
+    let request_concurrency = admission.request_concurrency.clone();
+    let default_headers = Arc::clone(&admission.default_headers);
     #[cfg(coverage)]
     if take_listener_admission_closed_fault() {
         connection_slots.close();

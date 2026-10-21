@@ -47,8 +47,9 @@ class Server:
             port: TCP and QUIC port in the range supported by the OS.
             uds: Optional Unix domain socket path. When set, the Rust runtime
                 binds this stream socket and does not create a QUIC listener.
-            sockets: Optional list containing one pre-bound IPv4 or IPv6 TCP
-                listener. The descriptor is transferred to Rust during startup.
+            sockets: Optional non-empty list of pre-bound IPv4 or IPv6 TCP
+                listeners. Their descriptors are transferred to Rust during
+                startup.
             backlog: Maximum pending TCP connections; negative values are
                 clamped to zero as in Uvicorn's socket-listen path.
             timeout_keep_alive: Idle timeout for persistent HTTP/1 connections
@@ -141,8 +142,8 @@ class Server:
         """
         if self.sockets is not None and self.uds is not None:
             raise ValueError("pre-bound sockets cannot be combined with uds")
-        if self.sockets is not None and len(self.sockets) != 1:
-            raise NotImplementedError("uvicorn-rs currently supports one pre-bound TCP socket")
+        if self.sockets is not None and not self.sockets:
+            raise ValueError("at least one pre-bound TCP listener is required")
         transfer_directory = None
         transfer_path = None
         if self.sockets is not None:
@@ -194,7 +195,7 @@ class Server:
             )
             if transfer_path is not None:
                 await asyncio.to_thread(
-                    _bridge.send_listener_fd, transfer_path, self.sockets[0]
+                    _bridge.send_listener_fds, transfer_path, self.sockets
                 )
             await asyncio.shield(native_task)
         except asyncio.CancelledError:

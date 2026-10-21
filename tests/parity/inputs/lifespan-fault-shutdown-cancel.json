@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@30",
+  "schema": "uvicorn-rs-parity/input@31",
   "cases": [
     {
       "case_id": "fault.lifespan.pending-task-cancel-on-forced-timeout",

@@ -1742,7 +1742,7 @@ fn apply_request_limit(
 
 #[cfg(feature = "native-tcp")]
 enum BoundListener {
-    Tcp(TcpListener),
+    Tcp(Vec<TcpListener>),
     #[cfg(unix)]
     Unix(UnixListener),
 }
@@ -2036,6 +2036,7 @@ impl ConnectionClosed {
 struct ConnectionContext {
     server: Arc<ServerContext>,
     peer_addr: SocketAddr,
+    server_addr: SocketAddr,
     transport_scheme: &'static str,
     connection_closed: ConnectionClosed,
     #[cfg(feature = "native-tcp")]
@@ -2046,6 +2047,7 @@ struct ConnectionContext {
 #[derive(Clone)]
 struct NativeAsgiService {
     server: Arc<ServerContext>,
+    server_addr: SocketAddr,
 }
 
 #[cfg(feature = "native-tcp")]
@@ -2154,6 +2156,7 @@ impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
         let context = ConnectionContext {
             server: Arc::clone(&self.server),
             peer_addr: connection_info.peer_addr(),
+            server_addr: self.server_addr,
             transport_scheme: if connection_info.tls().is_some() {
                 "https"
             } else {
@@ -2240,6 +2243,7 @@ impl tower_service::Service<Request<uvicorn_rs::Http3RequestBody>> for NativeHtt
         let context = ConnectionContext {
             server: Arc::clone(&self.server),
             peer_addr: connection_info.peer_addr(),
+            server_addr: self.server.server_addr,
             // HTTP/3 uses QUIC, whose handshake is secured with TLS.
             transport_scheme: "https",
             connection_closed: ConnectionClosed::Lifetime(connection_lifetime),
@@ -5366,7 +5370,10 @@ fn bind_unix_listener(path: &str) -> std::io::Result<UnixListener> {
 /// startup. `SCM_RIGHTS` gives this runtime an owned descriptor without
 /// converting an integer raw fd in Rust.
 #[cfg(unix)]
-async fn receive_prebound_tcp_listener(path: &str, backlog: i32) -> std::io::Result<TcpListener> {
+async fn receive_prebound_tcp_listeners(
+    path: &str,
+    backlog: i32,
+) -> std::io::Result<Vec<TcpListener>> {
     use rustix::net::{recvmsg, RecvAncillaryBuffer, RecvAncillaryMessage, RecvFlags, ReturnFlags};
     use std::io::{Error, ErrorKind, IoSliceMut};
     use std::mem::MaybeUninit;
@@ -5375,78 +5382,114 @@ async fn receive_prebound_tcp_listener(path: &str, backlog: i32) -> std::io::Res
 
     let control_listener = UnixListener::bind(path)?;
     let (control_stream, _) = control_listener.accept().await?;
-    let (marker, descriptor) = loop {
-        control_stream.readable().await?;
-        let received = control_stream.try_io(Interest::READABLE, || {
-            let mut payload = [0_u8; 1];
-            let mut control_space = [MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(1))];
-            let mut ancillary = RecvAncillaryBuffer::new(&mut control_space);
-            let message = {
-                let mut payload_slices = [IoSliceMut::new(&mut payload)];
-                recvmsg(
-                    control_stream.as_fd(),
-                    &mut payload_slices,
-                    &mut ancillary,
-                    RecvFlags::empty(),
-                )?
-            };
-            if message.bytes != 1 {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "inherited listener transfer omitted its marker",
-                ));
-            }
-            let mut descriptors = Vec::new();
-            for control_message in ancillary.drain() {
-                match control_message {
-                    RecvAncillaryMessage::ScmRights(received) => {
-                        descriptors.extend(received);
-                    }
-                    _ => {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "inherited listener transfer had unexpected ancillary data",
-                        ));
+    let mut listeners = Vec::new();
+    loop {
+        let (marker, mut descriptors) = loop {
+            control_stream.readable().await?;
+            let received = control_stream.try_io(Interest::READABLE, || {
+                let mut payload = [0_u8; 1];
+                let mut control_space = [MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(1))];
+                let mut ancillary = RecvAncillaryBuffer::new(&mut control_space);
+                let message = {
+                    let mut payload_slices = [IoSliceMut::new(&mut payload)];
+                    recvmsg(
+                        control_stream.as_fd(),
+                        &mut payload_slices,
+                        &mut ancillary,
+                        RecvFlags::empty(),
+                    )?
+                };
+                if message.bytes != 1 {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "inherited listener transfer omitted its marker",
+                    ));
+                }
+                let mut descriptors = Vec::new();
+                for control_message in ancillary.drain() {
+                    match control_message {
+                        RecvAncillaryMessage::ScmRights(received) => {
+                            descriptors.extend(received);
+                        }
+                        _ => {
+                            return Err(Error::new(
+                                ErrorKind::InvalidData,
+                                "inherited listener transfer had unexpected ancillary data",
+                            ));
+                        }
                     }
                 }
+                if message.flags.contains(ReturnFlags::CTRUNC) {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "inherited listener transfer contained too many descriptors",
+                    ));
+                }
+                Ok((payload[0], descriptors))
+            });
+            match received {
+                Ok(result) => break result,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
+                Err(error) => return Err(error),
             }
-            if message.flags.contains(ReturnFlags::CTRUNC) || descriptors.len() != 1 {
+        };
+
+        match marker {
+            b'L' if descriptors.len() == 1 => {
+                let descriptor = descriptors.pop().ok_or_else(|| {
+                    Error::new(
+                        ErrorKind::InvalidData,
+                        "inherited listener transfer omitted its descriptor",
+                    )
+                })?;
+                let descriptor_flags = rustix::io::fcntl_getfd(&descriptor)?;
+                rustix::io::fcntl_setfd(
+                    &descriptor,
+                    descriptor_flags | rustix::io::FdFlags::CLOEXEC,
+                )?;
+                rustix::net::listen(&descriptor, backlog.max(0))?;
+
+                let standard_listener = std::net::TcpListener::from(descriptor);
+                standard_listener.set_nonblocking(true)?;
+                listeners.push(TcpListener::from_std(standard_listener)?);
+            }
+            b'E' if descriptors.is_empty() => {
+                if listeners.is_empty() {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "inherited listener transfer contained no listeners",
+                    ));
+                }
+                break;
+            }
+            b'L' => {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
-                    "inherited listener transfer must contain exactly one descriptor",
+                    "each inherited listener marker must contain exactly one descriptor",
                 ));
             }
-            let descriptor = descriptors.pop().ok_or_else(|| {
-                Error::new(
+            b'E' => {
+                return Err(Error::new(
                     ErrorKind::InvalidData,
-                    "inherited listener transfer omitted its descriptor",
-                )
-            })?;
-            Ok((payload[0], descriptor))
-        });
-        match received {
-            Ok(result) => break result,
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
-            Err(error) => return Err(error),
+                    "inherited listener terminator must not contain a descriptor",
+                ));
+            }
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "inherited listener transfer had an invalid marker",
+                ));
+            }
         }
-    };
-    if marker != b'L' {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "inherited listener transfer had an invalid marker",
-        ));
     }
-    let descriptor_flags = rustix::io::fcntl_getfd(&descriptor)?;
-    rustix::io::fcntl_setfd(&descriptor, descriptor_flags | rustix::io::FdFlags::CLOEXEC)?;
-    rustix::net::listen(&descriptor, backlog.max(0))?;
-
-    let standard_listener = std::net::TcpListener::from(descriptor);
-    standard_listener.set_nonblocking(true)?;
-    TcpListener::from_std(standard_listener)
+    Ok(listeners)
 }
 
 #[cfg(not(unix))]
-async fn receive_prebound_tcp_listener(_path: &str, _backlog: i32) -> std::io::Result<TcpListener> {
+async fn receive_prebound_tcp_listeners(
+    _path: &str,
+    _backlog: i32,
+) -> std::io::Result<Vec<TcpListener>> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "inherited TCP listeners are not supported on this platform",
@@ -5464,16 +5507,24 @@ async fn serve_forever(
 ) -> PyResult<()> {
     #[cfg(feature = "native-tcp")]
     let (listener, server_addr) = if let Some(path) = options.fd_transfer_path.as_deref() {
-        let listener = tokio::select! {
+        let listeners = tokio::select! {
             _ = cancellation.cancelled() => return Ok(()),
-            result = receive_prebound_tcp_listener(path, options.backlog) => result.map_err(|error| {
-                PyOSError::new_err(format!("could not receive inherited TCP listener: {error}"))
-            })?,
+            result = receive_prebound_tcp_listeners(path, options.backlog) => result.map_err(
+                |error| {
+                    PyOSError::new_err(format!("could not receive inherited TCP listeners: {error}"))
+                },
+            )?,
         };
-        let server_addr = listener.local_addr().map_err(|error| {
-            PyOSError::new_err(format!("could not inspect inherited TCP listener: {error}"))
-        })?;
-        (BoundListener::Tcp(listener), server_addr)
+        let server_addr = listeners
+            .first()
+            .ok_or_else(|| {
+                PyValueError::new_err("at least one inherited TCP listener is required")
+            })?
+            .local_addr()
+            .map_err(|error| {
+                PyOSError::new_err(format!("could not inspect inherited TCP listener: {error}"))
+            })?;
+        (BoundListener::Tcp(listeners), server_addr)
     } else if let Some(path) = options.uds.as_deref() {
         #[cfg(unix)]
         {
@@ -5518,7 +5569,7 @@ async fn serve_forever(
         let server_addr = local_addr.map_err(|error| {
             PyOSError::new_err(format!("could not inspect bound listener: {error}"))
         })?;
-        (BoundListener::Tcp(listener), server_addr)
+        (BoundListener::Tcp(vec![listener]), server_addr)
     };
     #[cfg(not(feature = "native-tcp"))]
     let listener = if options.fd_transfer_path.is_some() {
@@ -5526,12 +5577,22 @@ async fn serve_forever(
             .fd_transfer_path
             .as_deref()
             .ok_or_else(|| PyValueError::new_err("inherited TCP listener path is missing"))?;
-        tokio::select! {
+        let mut listeners = tokio::select! {
             _ = cancellation.cancelled() => return Ok(()),
-            result = receive_prebound_tcp_listener(path, options.backlog) => result.map_err(|error| {
-                PyOSError::new_err(format!("could not receive inherited TCP listener: {error}"))
-            })?,
+            result = receive_prebound_tcp_listeners(path, options.backlog) => result.map_err(
+                |error| {
+                    PyOSError::new_err(format!("could not receive inherited TCP listeners: {error}"))
+                },
+            )?,
+        };
+        if listeners.len() != 1 {
+            return Err(PyValueError::new_err(
+                "multiple inherited TCP listeners require the native-tcp feature",
+            ));
         }
+        listeners.pop().ok_or_else(|| {
+            PyValueError::new_err("at least one inherited TCP listener is required")
+        })?
     } else if options.uds.is_some() {
         return Err(PyValueError::new_err(
             "Unix domain sockets require the native-tcp feature",
@@ -5758,17 +5819,28 @@ async fn serve_forever(
             concurrency_limit_observer: server.concurrency_limit_observer.clone(),
             ..uvicorn_rs::ServerConfig::default()
         };
-        let service = NativeAsgiService {
-            server: Arc::clone(&server),
-        };
         let result = match listener {
-            BoundListener::Tcp(listener) => {
+            BoundListener::Tcp(listeners) => {
+                let mut listener_services = Vec::with_capacity(listeners.len());
+                for listener in listeners {
+                    let listener_addr = listener.local_addr().map_err(|error| {
+                        PyOSError::new_err(format!(
+                            "could not inspect inherited TCP listener: {error}"
+                        ))
+                    })?;
+                    listener_services.push((
+                        listener,
+                        NativeAsgiService {
+                            server: Arc::clone(&server),
+                            server_addr: listener_addr,
+                        },
+                    ));
+                }
                 if let Some(acceptor) = server.tcp_tls.clone() {
                     let shutdown = cancellation.clone();
-                    uvicorn_rs::serve_tls_with_date_header(
-                        listener,
+                    uvicorn_rs::serve_tls_listeners_with_date_header(
+                        listener_services,
                         acceptor,
-                        service,
                         async move { shutdown.cancelled().await },
                         config,
                         server.date_header,
@@ -5776,9 +5848,8 @@ async fn serve_forever(
                     .await
                 } else {
                     let shutdown = cancellation.clone();
-                    uvicorn_rs::serve_tcp_with_date_header(
-                        listener,
-                        service,
+                    uvicorn_rs::serve_tcp_listeners_with_date_header(
+                        listener_services,
                         async move { shutdown.cancelled().await },
                         config,
                         server.date_header,
@@ -5788,6 +5859,10 @@ async fn serve_forever(
             }
             #[cfg(unix)]
             BoundListener::Unix(listener) => {
+                let service = NativeAsgiService {
+                    server: Arc::clone(&server),
+                    server_addr,
+                };
                 let shutdown = cancellation.clone();
                 if let Some(acceptor) = server.tcp_tls.clone() {
                     uvicorn_rs::serve_unix_tls_with_date_header(
@@ -5881,14 +5956,14 @@ async fn serve_forever(
                     let connection_task = async move {
                         #[cfg(coverage)]
                         if inject_service_error {
-                            serve_connection(stream, peer_addr, server_for_task).await?;
+                            serve_connection(stream, peer_addr, server_addr, server_for_task).await?;
                             return Err(Box::new(std::io::Error::other(
                                 "coverage-injected connection service error",
                             )) as BoxError);
                         }
                         #[cfg(coverage)]
                         if inject_join_error {
-                            serve_connection(stream, peer_addr, server_for_task).await?;
+                            serve_connection(stream, peer_addr, server_addr, server_for_task).await?;
                             let _ = completed_sender.send(());
                             return std::future::pending::<Result<(), BoxError>>().await;
                         }
@@ -5901,7 +5976,7 @@ async fn serve_forever(
                                         "coverage-injected connection service error during shutdown",
                                     ),
                                 ) as BoxError),
-                                result = serve_connection(stream, peer_addr, server_for_task) => result,
+                                result = serve_connection(stream, peer_addr, server_addr, server_for_task) => result,
                             };
                         }
                         #[cfg(coverage)]
@@ -5912,7 +5987,7 @@ async fn serve_forever(
                                     let _ = completed_sender.send(());
                                     std::future::pending::<Result<(), BoxError>>().await
                                 },
-                                result = serve_connection(stream, peer_addr, server_for_task) => result,
+                                result = serve_connection(stream, peer_addr, server_addr, server_for_task) => result,
                             };
                         }
                         #[cfg(coverage)]
@@ -5922,10 +5997,10 @@ async fn serve_forever(
                                 _ = cancellation_for_task.cancelled() => {
                                     std::future::pending::<Result<(), BoxError>>().await
                                 },
-                                result = serve_connection(stream, peer_addr, server_for_task) => result,
+                                result = serve_connection(stream, peer_addr, server_addr, server_for_task) => result,
                             };
                         }
-                        serve_connection(stream, peer_addr, server_for_task).await
+                        serve_connection(stream, peer_addr, server_addr, server_for_task).await
                     };
                     #[cfg(coverage)]
                     let abort_handle = connection_tasks.spawn(connection_task);
@@ -6168,6 +6243,7 @@ fn remaining_graceful_timeout(
 async fn serve_connection(
     stream: TcpStream,
     peer_addr: SocketAddr,
+    server_addr: SocketAddr,
     server: Arc<ServerContext>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let transport_scheme = if server.tcp_tls.is_some() {
@@ -6195,6 +6271,7 @@ async fn serve_connection(
     let context = ConnectionContext {
         server: Arc::clone(&server),
         peer_addr,
+        server_addr,
         transport_scheme,
         connection_closed: ConnectionClosed::Watch(closed_rx),
         #[cfg(feature = "native-tcp")]
@@ -6551,6 +6628,7 @@ async fn serve_http3_connection(
         let context = ConnectionContext {
             server: Arc::clone(&server),
             peer_addr,
+            server_addr: server.server_addr,
             transport_scheme: "https",
             connection_closed: ConnectionClosed::Watch(closed_rx.clone()),
             #[cfg(feature = "native-tcp")]
@@ -7328,7 +7406,7 @@ async fn handle_request_parts(
             coverage_receive_borrow_conflict!(io, py);
             let scope_context = AsgiRequestScopeContext {
                 peer_addr: context.peer_addr,
-                server_addr: context.server.server_addr,
+                server_addr: context.server_addr,
                 uds: context.server.uds.as_deref(),
                 transport_scheme: context.transport_scheme,
                 root_path: &context.server.root_path,
@@ -7598,7 +7676,7 @@ async fn handle_websocket_request_inner(
             coverage_receive_borrow_conflict!(io, py);
             let scope_context = AsgiRequestScopeContext {
                 peer_addr: app_context.peer_addr,
-                server_addr: app_context.server.server_addr,
+                server_addr: app_context.server_addr,
                 uds: app_context.server.uds.as_deref(),
                 transport_scheme: app_context.transport_scheme,
                 root_path: &app_context.server.root_path,
