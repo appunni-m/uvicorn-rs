@@ -128,6 +128,7 @@ def audit(output: Path, oracle_python: Path) -> int:
         "--oracle-python",
         str(oracle_python),
         "--fault-contracts",
+        "--installed-candidate",
     ]
     for case_id in CASE_IDS:
         command.extend(["--case-id", case_id])
