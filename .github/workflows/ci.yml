@@ -77,9 +77,15 @@ jobs:
           set -euo pipefail
           mkdir -p target/core-audit
           cargo tree -p uvicorn-rs --edges normal --prefix none > target/core-audit/dependencies.txt
-          if rg -q '^pyo3(-async-runtimes)? v' target/core-audit/dependencies.txt; then
+          if grep -Eq '^pyo3(-async-runtimes)? v' target/core-audit/dependencies.txt; then
             echo "uvicorn-rs must not depend on PyO3"
             exit 1
+          else
+            grep_status=$?
+            if [ "$grep_status" -ne 1 ]; then
+              echo "could not inspect the uvicorn-rs dependency tree"
+              exit "$grep_status"
+            fi
           fi
       - name: Run Rust-native HTTP live contract inputs
         shell: bash

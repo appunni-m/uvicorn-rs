@@ -2228,19 +2228,20 @@ where
         let Some((listener, service)) = listeners.pop() else {
             return Err(ServeError::EmptyListenerSet);
         };
-        let admission = tcp_listener_admission(&config);
-        return run_with_application_lifecycle(
-            config.clone(),
+        let serving_config = config.clone();
+        return run_with_application_lifecycle(config, async move {
+            let admission = tcp_listener_admission(&serving_config);
             serve_listener(
                 listener,
                 service,
                 shutdown,
-                config,
+                serving_config,
                 None,
                 date_header,
                 admission,
-            ),
-        )
+            )
+            .await
+        })
         .await;
     }
     run_with_application_lifecycle(
@@ -2349,19 +2350,20 @@ where
         let Some((listener, service)) = listeners.pop() else {
             return Err(ServeError::EmptyListenerSet);
         };
-        let admission = tcp_listener_admission(&config);
-        return run_with_application_lifecycle(
-            config.clone(),
+        let serving_config = config.clone();
+        return run_with_application_lifecycle(config, async move {
+            let admission = tcp_listener_admission(&serving_config);
             serve_listener(
                 listener,
                 service,
                 shutdown,
-                config,
+                serving_config,
                 Some(acceptor),
                 date_header,
                 admission,
-            ),
-        )
+            )
+            .await
+        })
         .await;
     }
     run_with_application_lifecycle(
