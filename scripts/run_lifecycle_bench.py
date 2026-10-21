@@ -58,7 +58,9 @@ def command(server: dict, app: str, port: int, python: Path, uvicorn_python: Pat
     if server["kind"] == "rust":
         return [
             str(server_python), "-m", "uvicorn_rs", app, "--host", "127.0.0.1", "--port", str(port),
-            "--loop", server["loop"], "--graceful-timeout", "2",
+            "--loop", server["loop"], "--interface", "asgi3", "--lifespan", "on",
+            "--log-level", "error", "--no-access-log", "--no-server-header",
+            "--graceful-timeout", "2",
         ]
     return [
         str(server_python), "-m", "uvicorn", app, "--host", "127.0.0.1", "--port", str(port),
