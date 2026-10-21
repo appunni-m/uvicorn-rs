@@ -58,7 +58,8 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 RUSTDOCFLAGS='-D warnings' cargo doc -p uvicorn-rs --no-deps --locked
 ```
 
-The HTTP/3 probe utility is a separate Cargo manifest and has its own lockfile:
+The HTTP/3 probe is a package in the root Cargo workspace and uses the root
+`Cargo.lock`, including when built with `--manifest-path`:
 
 ```sh
 cargo fmt --manifest-path tools/http3-probe/Cargo.toml --all -- --check

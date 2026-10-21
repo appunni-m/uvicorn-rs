@@ -54,7 +54,7 @@ def configure_protocol(protocol: str) -> tuple[object, list[str], list[str], lis
                 "scripts/run_h2_category_bench.py",
                 "tools/http3-probe/src/bin/http2.rs",
                 "tools/http3-probe/Cargo.toml",
-                "tools/http3-probe/Cargo.lock",
+                "Cargo.lock",
             ],
         )
     if protocol == "http3":
@@ -66,7 +66,7 @@ def configure_protocol(protocol: str) -> tuple[object, list[str], list[str], lis
                 "scripts/run_h3_category_bench.py",
                 "tools/http3-probe/src/bin/bench.rs",
                 "tools/http3-probe/Cargo.toml",
-                "tools/http3-probe/Cargo.lock",
+                "Cargo.lock",
             ],
         )
     return (
@@ -77,7 +77,7 @@ def configure_protocol(protocol: str) -> tuple[object, list[str], list[str], lis
             "scripts/run_websocket_category_bench.py",
             "tools/http3-probe/src/bin/websocket.rs",
             "tools/http3-probe/Cargo.toml",
-            "tools/http3-probe/Cargo.lock",
+            "Cargo.lock",
         ],
     )
 

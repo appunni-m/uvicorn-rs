@@ -291,7 +291,7 @@ def main() -> None:
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
         ["scripts/run_h3_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/bench.rs",
-         "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
+         "tools/http3-probe/Cargo.toml", "Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         artifacts_dir=args.output.with_suffix(".artifacts"),
         extra_dependencies=FASTAPI_BENCHMARK_DISTRIBUTIONS,

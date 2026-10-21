@@ -189,7 +189,7 @@ REPORT_INPUT_PATHS = (
     "tests/native-core/tls/localhost-cert.pem",
     "tests/native-core/tls/localhost-key.pem",
     "tools/http3-probe/Cargo.toml",
-    "tools/http3-probe/Cargo.lock",
+    "Cargo.lock",
     "tools/http3-probe/src/bin/parity-http3.rs",
     "scripts/run_parity.py",
     "scripts/build_coverage_extension.py",

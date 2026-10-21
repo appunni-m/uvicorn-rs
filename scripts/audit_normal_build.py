@@ -33,7 +33,7 @@ CASE_IDS = (PRIMARY_CASE, *SUPPORT_CASES)
 ARMED_POINT = "native.runtime.build.error"
 SOURCE_PATHS = ("src/lib.rs", "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock",
                 "scripts/run_parity.py", "tests/parity/manifest.json", "tests/parity/app.py",
-                "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock",
+                "tools/http3-probe/Cargo.toml",
                 "scripts/audit_normal_build.py", "scripts/check_ci_evidence.py")
 
 

@@ -369,7 +369,7 @@ def main() -> None:
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
         ["scripts/run_h2_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/http2.rs",
-         "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
+         "tools/http3-probe/Cargo.toml", "Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         allow_runtime_diagnostics=runtime_diagnostics_enabled,
         artifacts_dir=args.output.with_suffix(".artifacts"),

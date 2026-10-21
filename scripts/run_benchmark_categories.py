@@ -210,7 +210,7 @@ def checked_tool(argv, root):
 
 
 def source_paths(root):
-    fixed = ["Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock"]
+    fixed = ["Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "tools/http3-probe/Cargo.toml"]
     trees = (("src", {".rs"}), ("python", {".py"}), ("scripts", {".py", ".mjs", ".c"}),
              ("examples", {".py"}), ("tools/http3-probe/src", {".rs"}), ("tests/parity", {".py", ".json"}))
     for directory, extensions in trees:

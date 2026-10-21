@@ -389,6 +389,9 @@ cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bi
   --output-dir target/fastapi-one-tokio/results
 ```
 
+The probe is part of the root Cargo workspace. Its build and benchmark identity
+use the root `Cargo.lock`; Cargo does not use a nested probe lockfile.
+
 At five repetitions this focused run plans 40 rows (two workloads × four server
 configurations × five repetitions). Read each event-loop pair separately. The
 closed-loop load client and server share the host; keep the contention gate on,

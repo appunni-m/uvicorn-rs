@@ -239,7 +239,7 @@ def main() -> None:
     evidence = BenchmarkEvidence(
         ROOT, python,
         ["scripts/run_websocket_category_bench.py", "tools/http3-probe/src/bin/websocket.rs",
-         "tools/http3-probe/Cargo.toml", "tools/http3-probe/Cargo.lock", "examples/bench_fastapi.py"],
+         "tools/http3-probe/Cargo.toml", "Cargo.lock", "examples/bench_fastapi.py"],
         [CLIENT],
         artifacts_dir=args.output.with_suffix(".artifacts"),
         extra_dependencies=FASTAPI_BENCHMARK_DISTRIBUTIONS,
