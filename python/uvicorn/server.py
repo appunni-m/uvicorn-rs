@@ -120,7 +120,7 @@ class Server:
                 # the scheduling yield.
                 await asyncio.sleep(0)
                 self.started = await native_server.wait_started()
-                if self.started:
+                if self.started and not self.config._worker_mode:
                     self._log_started_message(sockets)
                 await native_task
                 if self.started:

@@ -13,10 +13,13 @@ import json
 import logging
 import logging.config
 import os
+import socket
 import ssl
 import sys
 from configparser import RawConfigParser
 from typing import Any, Awaitable, Callable, IO
+
+from uvicorn._ansi import style
 
 
 LOGGING_CONFIG: dict[str, Any] = {
@@ -60,6 +63,8 @@ LOG_LEVELS = {
     "debug": logging.DEBUG,
     "trace": 5,
 }
+
+STARTUP_FAILURE = 3
 
 
 def _validate_http2_backend(http: object, enabled: bool) -> None:
@@ -197,6 +202,7 @@ class Config:
         self.workers = workers or 1
         if workers is None and "WEB_CONCURRENCY" in os.environ:
             self.workers = int(os.environ["WEB_CONCURRENCY"])
+        self._worker_mode = False
         self.loaded = False
         self.loaded_app: Any = None
         self.loop_factory: Callable[[], asyncio.AbstractEventLoop] | None = None
@@ -244,6 +250,60 @@ class Config:
             access_logger = logging.getLogger("uvicorn.access")
             access_logger.handlers = []
             access_logger.propagate = False
+
+    def bind_socket(self) -> socket.socket:
+        """Bind the listener once in the parent before spawning workers."""
+        logger = logging.getLogger("uvicorn.error")
+        if self.uds is not None:
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                sock.bind(self.uds)
+                os.chmod(self.uds, 0o666)
+            except OSError as error:
+                logger.error(error)
+                raise SystemExit(STARTUP_FAILURE)
+            message = "Uvicorn running on unix socket %s (Press CTRL+C to quit)"
+            logger_args: tuple[Any, ...] = (self.uds,)
+            color_message = (
+                "Uvicorn running on "
+                + style("%s", bold=True)
+                + " (Press CTRL+C to quit)"
+            )
+        elif self.fd is not None:
+            sock = socket.fromfd(self.fd, socket.AF_UNIX, socket.SOCK_STREAM)
+            message = "Uvicorn running on socket %s (Press CTRL+C to quit)"
+            logger_args = (sock.getsockname(),)
+            color_message = (
+                "Uvicorn running on "
+                + style("%s", bold=True)
+                + " (Press CTRL+C to quit)"
+            )
+        else:
+            family = socket.AF_INET6 if self.host and ":" in self.host else socket.AF_INET
+            sock = socket.socket(family=family)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind((self.host, self.port))
+            except OSError as error:
+                logger.error(error)
+                raise SystemExit(STARTUP_FAILURE)
+            if family == socket.AF_INET6:
+                address_format = "%s://[%s]:%d"
+            else:
+                address_format = "%s://%s:%d"
+            message = (
+                f"Uvicorn running on {address_format} (Press CTRL+C to quit)"
+            )
+            color_message = (
+                "Uvicorn running on "
+                + style(address_format, bold=True)
+                + " (Press CTRL+C to quit)"
+            )
+            protocol = "https" if self.ssl_certfile else "http"
+            logger_args = (protocol, self.host, sock.getsockname()[1])
+        logger.info(message, *logger_args, extra={"color_message": color_message})
+        sock.set_inheritable(True)
+        return sock
 
     def get_loop_factory(self):
         """Return the event-loop factory selected by ``loop``."""

@@ -67,6 +67,8 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument("--certfile", help="PEM certificate chain; enables HTTPS and HTTP/3")
     parser.add_argument("--keyfile", help="PEM private key for --certfile")
     parser.add_argument("--graceful-timeout", type=int, default=10)
+    parser.add_argument("--workers", type=int)
+    parser.add_argument("--timeout-worker-healthcheck", type=int, default=5)
     parser.add_argument("--limit-concurrency", type=int)
     parser.add_argument("--limit-max-requests", type=int)
     parser.add_argument("--limit-max-requests-jitter", type=int, default=0)
@@ -137,6 +139,8 @@ def main(argv=None, prog="uvicorn-rs-py"):
         ws_ping_interval=args.ws_ping_interval,
         ws_ping_timeout=args.ws_ping_timeout,
         timeout_graceful_shutdown=args.graceful_timeout,
+        workers=args.workers,
+        timeout_worker_healthcheck=args.timeout_worker_healthcheck,
         ssl_certfile=args.certfile,
         ssl_keyfile=args.keyfile,
         headers=headers,

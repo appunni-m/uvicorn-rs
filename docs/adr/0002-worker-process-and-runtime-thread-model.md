@@ -1,6 +1,6 @@
 # ADR 0002: Single-process prototype and worker migration
 
-- **Status:** The current prototype is single-process. Excluding workers from the release target is superseded by [ADR 0005](0005-uvicorn-public-compatibility-contract.md).
+- **Status:** Partially implemented. The original single-process prototype is superseded by [ADR 0005](0005-uvicorn-public-compatibility-contract.md); one focused two-worker module-CLI path now passes, while the broader worker contract remains open.
 - **Date:** 2026-10-09
 - **Related:** [ADR 0001](0001-runtime-and-asyncio-bridge.md), Kata issue sjc2.
 
@@ -12,7 +12,7 @@ Processes cannot share a Tokio runtime. A Uvicorn-style worker feature requires 
 
 ## Current prototype
 
-The current Python command starts one server process and one Tokio core worker. It does not implement worker supervision. Python callable execution, task creation, context variables, and exception behavior stay on the Python-owned event loop. Python callbacks remain subject to the interpreter's GIL.
+The Python command can start two supervised server processes for the focused module-CLI path. Each process owns its Python event loop and Tokio runtime; Python callable execution, task creation, context variables, and exception behavior stay on that process's Python-owned event loop. Python callbacks remain subject to the interpreter's GIL. Crash recovery, dynamic worker controls, other listener types, and reload are not yet qualified.
 
 ## Compatibility target
 

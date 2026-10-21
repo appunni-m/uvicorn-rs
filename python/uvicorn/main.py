@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import ssl
 import sys
@@ -309,14 +310,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "log_config", "log_level", "access_log",
         "use_colors", "backlog",
     }
-    # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
-    # process. Neither value requires process supervision from the adapter.
-    if options["workers"] in (0, 1):
-        supported.add("workers")
-    # Uvicorn consults this timeout only in its multi-process supervisor. It
-    # has no effect when the CLI runs the single-process server.
-    if options["workers"] in (None, 0, 1):
-        supported.add("timeout_worker_healthcheck")
+    supported.update({"workers", "timeout_worker_healthcheck"})
     # The Rust engine has one native HTTP/1.1 implementation. These Uvicorn
     # selectors route to that engine; selecting h11 does not load Python h11
     # or promise parser-specific behavior for malformed requests.
@@ -406,6 +400,10 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.extend(("--log-config", options["log_config"]))
     if options["log_level"] is not None:
         argv.extend(("--log-level", options["log_level"]))
+    if options["workers"] is not None:
+        argv.extend(("--workers", str(options["workers"])))
+    if options["timeout_worker_healthcheck"] != 5:
+        argv.extend(("--timeout-worker-healthcheck", str(options["timeout_worker_healthcheck"])))
     if not options["access_log"]:
         argv.append("--no-access-log")
     if options["use_colors"] is not None:
@@ -472,7 +470,7 @@ def run(
     if app_dir is not None:
         sys.path.insert(0, app_dir)
 
-    from .config import Config
+    from .config import Config, STARTUP_FAILURE
     from .server import Server
 
     config = Config(
@@ -528,9 +526,33 @@ def run(
         h11_max_incomplete_event_size=h11_max_incomplete_event_size,
         reset_contextvars=reset_contextvars,
     )
+    # Uvicorn requires an import string when a parent process supervises
+    # workers. Keep application import and startup inside each child.
+    if config.workers > 1:
+        if not isinstance(app, str):
+            import logging
+
+            logging.getLogger("uvicorn.error").warning(
+                "You must pass the application as an import string to enable 'reload' or 'workers'."
+            )
+            raise SystemExit(STARTUP_FAILURE)
+
+        from .supervisors.multiprocess import Multiprocess
+
+        listener = config.bind_socket()
+        try:
+            Multiprocess(config, sockets=[listener]).run()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            listener.close()
+            if config.uds and os.path.exists(config.uds):
+                os.remove(config.uds)
+        return
+
     # Uvicorn resolves the app before Server startup validates the protocol
-    # when reload and worker supervision are disabled.
-    if not config.reload and config.workers == 1:
+    # in single-process mode.
+    if not config.reload:
         config.load_app()
     try:
         Server(config).run()

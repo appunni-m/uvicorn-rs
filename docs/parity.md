@@ -66,7 +66,8 @@ selector acceptance, `--ws-max-queue` with the SansIO selector,
 unknown-option rejection, and limited single-process worker settings. On current `main`,
 `cli.zero-workers-normalizes-to-single-worker` and
 `cli.unknown-option-is-rejected` each pass individually against isolated
-Uvicorn 0.54.0. This evidence does not establish multi-worker supervision,
+Uvicorn 0.54.0. A focused case now verifies two-worker module-CLI request and
+SIGINT shutdown behavior; this does not establish full multi-worker supervision,
 reload/watch behavior, inherited-listener support beyond the focused IPv4
 cases below, IPv6, Windows, TLS, HTTP/2 or HTTP/3 over inherited sockets,
 execution of every listed option, or full CLI and Python API parity. Five

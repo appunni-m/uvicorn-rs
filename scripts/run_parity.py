@@ -9993,7 +9993,10 @@ def _python_api_server_log_events(
     unix_socket_running_line = re.compile(
         r"^Uvicorn running on unix socket .+ \(Press CTRL\+C to quit\)$"
     )
-    process_pid = re.compile(r"((?:Started|Finished) server process \[)\d+(\])")
+    process_pid = re.compile(
+        r"(((?:Started|Finished) server|(?:Started|Stopping) parent|"
+        r"(?:Terminated|Waiting for) child) process \[)\d+(\])"
+    )
     exception_line = re.compile(r"^(?P<class>[A-Za-z_][\w.]*)\b(?:: ?(?P<message>.*))?$")
 
     normalized: dict[str, list[dict[str, str]]] = {"stdout": [], "stderr": []}
@@ -10089,12 +10092,68 @@ def _python_api_server_log_events(
                     )
             if unix_socket_running_line.match(message):
                 message = "Uvicorn running on unix socket <uds> (Press CTRL+C to quit)"
-            message = process_pid.sub(r"\1<pid>\2", message)
+            message = process_pid.sub(r"\1<pid>\3", message)
             event = {"kind": "message", "level": level, "message": message}
             if logger is not None:
                 event["logger"] = logger
             normalized[channel].append(event)
             index += 1
+    # Worker processes emit the same lifecycle phases concurrently. Their
+    # cross-process log order is scheduler-dependent, so compare each
+    # contiguous phase run canonically while retaining every event and its
+    # multiplicity.
+    lifecycle_order = {
+        "Started server process [<pid>]": 0,
+        "Waiting for application startup.": 1,
+        "Application startup complete.": 2,
+        "Shutting down": 3,
+        "Waiting for application shutdown.": 4,
+        "Application shutdown complete.": 5,
+        "Finished server process [<pid>]": 6,
+    }
+    stderr_events = normalized["stderr"]
+    index = 0
+    while index < len(stderr_events):
+        event = stderr_events[index]
+        message = event.get("message")
+        phase = None
+        if message is not None:
+            phase = next(
+                (
+                    order
+                    for prefix, order in lifecycle_order.items()
+                    if message == prefix or message.startswith(prefix)
+                ),
+                None,
+            )
+        if phase is None:
+            index += 1
+            continue
+        end = index + 1
+        while end < len(stderr_events):
+            candidate = stderr_events[end].get("message")
+            candidate_phase = None
+            if candidate is not None:
+                candidate_phase = next(
+                    (
+                        order
+                        for prefix, order in lifecycle_order.items()
+                        if candidate == prefix or candidate.startswith(prefix)
+                    ),
+                    None,
+                )
+            if candidate_phase is None:
+                break
+            end += 1
+        stderr_events[index:end] = sorted(
+            stderr_events[index:end],
+            key=lambda item: next(
+                order
+                for prefix, order in lifecycle_order.items()
+                if item["message"] == prefix or item["message"].startswith(prefix)
+            ),
+        )
+        index = end
     return normalized
 
 
