@@ -299,7 +299,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
     supported = {
         "host", "port", "uds", "fd", "loop", "ssl_certfile", "ssl_keyfile",
         "timeout_graceful_shutdown", "app_dir", "factory", "lifespan", "root_path",
-        "env_file",
+        "env_file", "http2",
         "headers", "server_header", "date_header", "interface",
         "ws_max_size", "ws_ping_interval", "ws_ping_timeout",
         "proxy_headers", "forwarded_allow_ips",
@@ -319,10 +319,10 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
             "reload_delay",
         }
     )
-    # The Rust engine has one native HTTP/1.1 implementation. These Uvicorn
-    # selectors route to that engine; selecting h11 does not load Python h11
-    # or promise parser-specific behavior for malformed requests.
-    if options["http"] in {"auto", "h11", "httptools"}:
+    # Uvicorn parser selectors route to the Rust HTTP engine. HTTP/2 remains
+    # opt-in through the same zttp/http2 settings as upstream Uvicorn; the
+    # Rust engine supplies the protocol implementation without importing zttp.
+    if options["http"] in {"auto", "h11", "httptools", "zttp"}:
         supported.add("http")
     # With the pinned Uvicorn dependency, auto selects this same SansIO
     # protocol class. That implementation does not read ws_max_queue; the
@@ -350,9 +350,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
             f"uvicorn-rs does not support loop={options['loop']!r}"
         )
 
-    # Normalize the accepted HTTP and WebSocket selectors to the native engines.
-    # Forward the parsed settings directly to run() so both CLI entry points use
-    # the same configuration path.
+    # Forward the parsed settings directly to run() so both CLI entry points
+    # use the same configuration path.
     headers = [tuple(header.split(":", 1)) for header in options["headers"]]
     run(
         app,
@@ -361,7 +360,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         uds=options["uds"],
         fd=options["fd"],
         loop=options["loop"],
-        http="auto",
+        http=options["http"],
         http2=options["http2"],
         ws="auto",
         ws_max_size=options["ws_max_size"],

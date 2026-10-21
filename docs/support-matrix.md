@@ -47,11 +47,15 @@ and migration guidance.
 
 ## Known behavior limits
 
-- HTTP/2 response comparisons use Hypercorn because Uvicorn has no HTTP/2
-  server. They compare repeated values in order for each field name, while
-  ignoring global order across different names and the implementation-specific
-  `Server` value. RFC 9110 [Section 5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3)
-  says order across different field names is insignificant. Raw observations
+- Uvicorn 0.54.0 now provides experimental HTTP/2 through `zttp`; the parity
+  oracle selects it with `--http zttp --http2`. A local aggregate run passed
+  all 27 maintained HTTP/2 parity inputs against that stack on macOS ARM64 and
+  CPython 3.12.13. The HTTP/2 category benchmark and hosted release evidence
+  remain pending. Earlier HTTP/2 receipts used Hypercorn. Header
+  comparisons preserve repeated values within each field name while ignoring
+  order across different names and the implementation-specific `Server` value.
+  RFC 9110 [Section 5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3)
+  says order across different field names is insignificant; raw observations
   remain available in each parity receipt.
 - The complete official ASGI conformance suite has not been run.
 - The latest matched Python FastAPI results do not establish a general speed

@@ -51,7 +51,18 @@ Run lifespan startup on the Python app loop before accepting requests. In automa
 
 Build a Rust extension/library with a thin Python CLI and loader. The server may test against `starlette-rs`, but neither its runtime nor its package metadata may depend on, import, or bundle `starlette-rs`. No package is published as part of this work.
 
-The requested contract is ASGI 3, HTTP/WebSocket 2.5 and lifespan 2.0, over HTTP/1.1, HTTP/2, and experimental HTTP/3. The support matrix separates implemented behavior from live evidence. This does not imply Uvicorn CLI, worker, reload, or deployment-option parity. Uvicorn's documented HTTP choices are `h11` and `httptools`, so HTTP/2 and HTTP/3 cannot be compared directly against Uvicorn; those protocols need a separately named server that supports the same protocol ([Uvicorn settings](https://www.uvicorn.org/settings/)).
+The requested contract is ASGI 3, HTTP/WebSocket 2.5 and lifespan 2.0, over HTTP/1.1, HTTP/2, and experimental HTTP/3. The support matrix separates implemented behavior from live evidence. This does not imply Uvicorn CLI, worker, reload, or deployment-option parity. At the time this ADR was written, Uvicorn's documented HTTP choices were `h11` and `httptools`, so HTTP/2 and HTTP/3 required separately named protocol peers for parity ([historical Uvicorn settings](https://www.uvicorn.org/settings/)).
+
+#### Superseding note (2026-10-21)
+
+Uvicorn 0.54.0 now provides experimental HTTP/2 through the optional `zttp`
+backend, enabled with `--http zttp --http2`. The compatibility adapter accepts
+that public selector while retaining the Rust protocol implementation; it does
+not add zttp as a runtime dependency. A local aggregate run on macOS ARM64 and
+CPython 3.12.13 passed all 27 maintained HTTP/2 parity inputs against Uvicorn
+0.54.0 and zttp 0.0.34. The HTTP/2 category benchmark and hosted release
+evidence remain pending. HTTP/3 still requires a separate same-protocol
+implementation for comparisons.
 
 ### 6. Retain immutable Python output buffers with PyO3 `Bytes`
 

@@ -846,6 +846,26 @@ def load_contract(
         expected_operation_keys = {"id", "kind", "observe"}
         if "compare" in operation:
             expected_operation_keys.add("compare")
+        if "comparison_normalization" in operation:
+            expected_operation_keys.add("comparison_normalization")
+            normalizations = operation["comparison_normalization"]
+            if not isinstance(normalizations, dict):
+                raise ParityError(
+                    f"{operation.get('id')}: comparison_normalization must be an object"
+                )
+            exact_keys(
+                normalizations,
+                {"stderr_base64"},
+                f"{operation.get('id')}.comparison_normalization",
+            )
+            if (
+                operation.get("id") != "cli.process"
+                or normalizations["stderr_base64"]
+                != "python-traceback-exception-chain"
+            ):
+                raise ParityError(
+                    f"{operation.get('id')}: unsupported comparison normalization"
+                )
         if "required_observations" in operation:
             expected_operation_keys.add("required_observations")
             if not set(operation["required_observations"]).issubset(observation_fields):
@@ -872,6 +892,12 @@ def load_contract(
             or not set(operation["compare"]).issubset(operation["observe"])
         ):
             raise ParityError(f"{operation.get('id')}: comparison fields must be observed")
+        if "comparison_normalization" in operation and not set(
+            operation["comparison_normalization"]
+        ).issubset(operation.get("compare", operation["observe"])):
+            raise ParityError(
+                f"{operation.get('id')}: normalized fields must be compared"
+            )
         required = operation.get("required_observations", {})
         if not isinstance(required, dict) or not set(required).issubset(operation["observe"]):
             raise ParityError(f"{operation.get('id')}: required observations must be declared in observe")
@@ -4090,6 +4116,15 @@ def start_server(
         for name in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP"):
             env.pop(name, None)
         env["PYTHONNOUSERSITE"] = "1"
+    elif server_id == "uvicorn-rs":
+        # The compatibility namespace lives under python/ and can be shadowed
+        # by the stock Uvicorn wheel in a shared developer environment. Keep
+        # the reference isolated, but make the candidate subprocess load the
+        # exact source adapter paired with the native extension.
+        source_python_path = str(ROOT / "python")
+        env["PYTHONPATH"] = os.pathsep.join(
+            path for path in (source_python_path, env.get("PYTHONPATH")) if path
+        )
     # Shutdown workflows restart a profile in the same temporary directory.
     # Readiness and request checkpoints must belong to the new process.
     events_path.write_text("", encoding="utf-8")
@@ -4220,13 +4255,17 @@ def start_server(
             sys.executable, "-m", "uvicorn", APP, *common,
             "--loop", "uvloop", "--interface", "asgi3",
         ]
+        if profile_id == "http2":
+            command.extend(["--http", "zttp", "--http2"])
         if certificate and key:
             command.extend(["--ssl-certfile", str(certificate), "--ssl-keyfile", str(key)])
         command.extend(["--timeout-graceful-shutdown", str(graceful_timeout_seconds)])
         command.extend(header_policy_args)
     elif server_id == "uvicorn":
         server_python = str(ORACLE_PYTHON)
-        http_implementation = (server_options or {}).get("http", "httptools")
+        http_implementation = (server_options or {}).get(
+            "http", "zttp" if profile_id == "http2" else "httptools"
+        )
         # Keep TLS WebSocket handshake progress in hosted diagnostics when the
         # reference adapter stalls before ASGI dispatch.
         websocket_tls_debug = (
@@ -4245,6 +4284,8 @@ def start_server(
             "--timeout-graceful-shutdown",
             str(graceful_timeout_seconds),
         ]
+        if profile_id == "http2":
+            command.append("--http2")
         if certificate and key:
             command.extend(["--ssl-certfile", str(certificate), "--ssl-keyfile", str(key)])
         command.extend(header_policy_args)
@@ -5404,7 +5445,11 @@ def http2_disconnect_request(
                 else specification["content_length"]
             )
             headers.append(("content-length", str(content_length)))
-        connection.send_headers(stream_id, headers, end_stream=empty_request)
+        # Encode a zero-length request body with an empty final DATA frame. The
+        # zttp backend requires an END_STREAM DATA event to wake ASGI receive;
+        # END_STREAM on the initial HEADERS frame currently leaves its body
+        # receive pending until the connection closes.
+        connection.send_headers(stream_id, headers, end_stream=False)
         if complete_body is not None:
             client.sendall(connection.data_to_send())
             before_body_event = specification["wait_event_before_body"]
@@ -5423,7 +5468,9 @@ def http2_disconnect_request(
                 base64.b64decode(complete_body, validate=True),
                 end_stream=True,
             )
-        elif not empty_request:
+        elif empty_request:
+            connection.send_data(stream_id, b"", end_stream=True)
+        else:
             connection.send_data(
                 stream_id,
                 base64.b64decode(specification["partial_body_base64"], validate=True),
@@ -5436,7 +5483,11 @@ def http2_disconnect_request(
         ):
             time.sleep(0.01)
         if specification["wait_event"] not in read_events(events_path)[events_before:]:
-            raise ParityError("HTTP/2 app did not reach its receive checkpoint before connection close")
+            events = read_events(events_path)[events_before:]
+            raise ParityError(
+                "HTTP/2 app did not reach its receive checkpoint before connection close "
+                f"(events={events!r})"
+            )
         if specification.get("reset_stream") is True:
             connection.reset_stream(stream_id, error_code=ErrorCodes.CANCEL)
             client.sendall(connection.data_to_send())
@@ -7801,6 +7852,61 @@ def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
     return value
 
 
+def normalize_cli_traceback_stderr(stderr_base64: str) -> tuple[str, Any]:
+    """Compare CLI tracebacks by exception outcome, retaining raw bytes elsewhere.
+
+    Python traceback frames name implementation-specific source files and line
+    numbers. CLI evidence keeps the original stderr; this comparison value keeps
+    all other stderr lines, exception-chain separators, and exception messages.
+    If stderr is not a standard traceback, its bytes remain exact.
+    """
+    stderr = base64.b64decode(stderr_base64, validate=True)
+    lines = stderr.splitlines()
+    traceback_header = b"Traceback (most recent call last):"
+    if traceback_header not in lines:
+        return ("raw", stderr)
+
+    chain_markers = {
+        b"The above exception was the direct cause of the following exception:",
+        b"During handling of the above exception, another exception occurred:",
+    }
+    normalized: list[bytes] = []
+    inside_traceback = False
+    found_exception = False
+    for line in lines:
+        if line == traceback_header:
+            normalized.append(traceback_header)
+            inside_traceback = True
+            continue
+        if not inside_traceback:
+            normalized.append(line)
+            continue
+        if line in chain_markers:
+            normalized.append(line)
+            continue
+        if line.startswith(b"  File ") or line.startswith(b"    ") or not line.strip():
+            continue
+        if not line.startswith((b" ", b"\t")):
+            normalized.append(line)
+            inside_traceback = False
+            found_exception = True
+
+    if not found_exception:
+        return ("raw", stderr)
+    return ("python-traceback-exception-chain", tuple(normalized))
+
+
+def normalize_operation_comparison_observation(
+    observation: dict[str, Any], operation: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply only the comparison normalizations declared for an operation."""
+    normalized = dict(observation)
+    for field, policy in operation.get("comparison_normalization", {}).items():
+        if policy == "python-traceback-exception-chain":
+            normalized[field] = normalize_cli_traceback_stderr(normalized[field])
+    return normalized
+
+
 def run_zero_timeout_concurrent_stream_shutdown(
     server: dict[str, Any],
     profile: dict[str, Any],
@@ -9913,10 +10019,20 @@ def run_cli_process(
     environment.pop("PYTHONHOME", None)
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
+    source_python_path = str(ROOT / "python")
+    if server_id == "uvicorn-rs":
+        environment["PYTHONPATH"] = source_python_path
     if coverage_profile_dir is not None:
         environment["ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN"] = "1"
         coverage_site = str(ROOT / "tests" / "parity" / "coverage_site")
-        environment["PYTHONPATH"] = coverage_site
+        environment["PYTHONPATH"] = os.pathsep.join(
+            path
+            for path in (
+                coverage_site,
+                source_python_path if server_id == "uvicorn-rs" else None,
+            )
+            if path
+        )
         if server_id == "uvicorn-rs":
             target_profile_dir = coverage_profile_dir / "target"
             target_profile_dir.mkdir(parents=True, exist_ok=True)
@@ -9932,6 +10048,16 @@ def run_cli_process(
             environment.pop("LLVM_PROFILE_FILE", None)
             environment.pop("ASGI_PARITY_COVERAGE_RUNTIME_MARKER_DIR", None)
     for name, value in process["environment"].items():
+        if name == "PYTHONPATH" and server_id == "uvicorn-rs":
+            environment[name] = os.pathsep.join(
+                path
+                for path in (
+                    environment.get("PYTHONPATH"),
+                    value,
+                )
+                if path
+            )
+            continue
         if name == "PYTHONPATH" and coverage_profile_dir is not None:
             environment[name] = os.pathsep.join(
                 path for path in (coverage_site, value) if path
@@ -10006,8 +10132,12 @@ def execute_cli_profile(
                     coverage_profile_dir,
                 )
                 fields = operation.get("compare", operation["observe"])
-                oracle_comparison = {field: oracle[field] for field in fields}
-                target_comparison = {field: target[field] for field in fields}
+                oracle_comparison = normalize_operation_comparison_observation(
+                    {field: oracle[field] for field in fields}, operation
+                )
+                target_comparison = normalize_operation_comparison_observation(
+                    {field: target[field] for field in fields}, operation
+                )
                 matches = oracle_comparison == target_comparison
                 difference = None
                 if not matches:

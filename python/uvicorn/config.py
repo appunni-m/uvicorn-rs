@@ -484,7 +484,7 @@ class Config:
             # normalization and is still a single-process configuration.
             (self.workers not in (0, 1) and not self.should_reload, "workers"),
             (self.loop not in {"auto", "asyncio", "uvloop"}, "loop"),
-            (self.http not in {"auto", "httptools"}, "http"),
+            (self.http not in {"auto", "h11", "httptools", "zttp"}, "http"),
             (self.ws != "auto", "ws"),
             (self.ws_per_message_deflate is not True, "ws_per_message_deflate"),
             (self.lifespan not in {"auto", "on", "off"}, "lifespan"),

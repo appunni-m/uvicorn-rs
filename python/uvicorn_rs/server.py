@@ -38,6 +38,7 @@ class Server:
         _defer_startup_failure=False,
         sockets=None,
         limit_max_requests_jitter=0,
+        http2=True,
     ):
         """Store the application and listener options for a server run.
 
@@ -69,6 +70,7 @@ class Server:
                 application's response headers. ``None`` uses Uvicorn's
                 default ``server: uvicorn`` header.
             date_header: Whether to add the standard HTTP ``Date`` header.
+            http2: Whether TCP listeners accept HTTP/2 and prior-knowledge h2c.
             ws_ping_interval: Seconds between server-initiated WebSocket pings;
                 ``None`` or a non-positive value disables keepalive pings.
             ws_ping_timeout: Seconds to wait for the matching pong before
@@ -100,6 +102,7 @@ class Server:
             [(b"server", b"uvicorn")] if default_headers is None else default_headers
         )
         self.date_header = date_header
+        self.http2 = http2
         self.ws_max_size = ws_max_size
         self.limit_concurrency = limit_concurrency
         self.ws_ping_interval = ws_ping_interval
@@ -183,6 +186,7 @@ class Server:
                     self.root_path,
                     self.default_headers,
                     self.date_header,
+                    self.http2,
                     self.ws_max_size,
                     self.ws_ping_interval,
                     self.ws_ping_timeout,

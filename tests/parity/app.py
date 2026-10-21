@@ -1381,7 +1381,7 @@ async def _app_impl(scope, receive, send):
     if path == "/disconnect-after-complete-request":
         message = await receive()
         if message["type"] != "http.request" or message.get("more_body", False):
-            raise AssertionError("empty request did not produce its final ASGI request event")
+            raise AssertionError(f"empty request did not produce its final ASGI request event: {message!r}")
         _record("http.disconnect.waiting-after-complete-request")
         message = await receive()
         _record(f"http.disconnect.after-complete-request:{message['type']}")

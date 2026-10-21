@@ -48,25 +48,31 @@ HTTP/1.1, HTTP/2, and HTTP/3 claims use the applicable
 [RFC 9113](https://www.rfc-editor.org/rfc/rfc9113.html), and
 [RFC 9114](https://www.rfc-editor.org/rfc/rfc9114.html) requirements.
 
-The HTTP/2 profile uses Hypercorn as its live oracle because Uvicorn does not
-provide HTTP/2. For HTTP/2 response comparisons, the matrix retains raw header
-observations but compares repeated values grouped by field name. It does not
-require a particular order across different field names or compare the
-implementation-specific `Server` field. RFC 9110 Section 5.3 makes order across
-different field names insignificant while preserving the order of values for a
+Uvicorn 0.54.0 provides experimental HTTP/2 through `zttp`; the HTTP/2 parity
+profile uses that reference with `--http zttp --http2`. A local aggregate run
+on macOS ARM64 and CPython 3.12.13 passed all 27 maintained HTTP/2 parity
+inputs against Uvicorn 0.54.0 with `zttp` 0.0.34; this is not hosted release
+evidence. The previous Hypercorn-based receipts remain historical. The empty
+request reset case sends an explicit empty final DATA frame because zttp does
+not wake ASGI `receive()` when END_STREAM appears on the initial HEADERS frame;
+that alternate encoding is not covered. HTTP/2 response comparisons retain raw
+header observations but compare repeated values grouped by field name. They do
+not require an order across different field names or compare the
+implementation-specific `Server` field. RFC 9110 Section 5.3 makes order
+across different field names insignificant while preserving value order for a
 repeated name. HTTP/1.1 and HTTP/3 observations keep their declared comparison
 fields.
 
-The manifest currently defines 28 CLI process cases across `python -m uvicorn`
+The manifest currently defines 29 CLI process cases across `python -m uvicorn`
 and the installed `uvicorn` command. They cover help and version output,
 selected argument errors and environment precedence, current-directory
 console-script import resolution, app loading with
 `--app-dir` and `--factory`, environment-file loading, HTTP and WebSocket
 selector acceptance, `--ws-max-queue` with the SansIO selector,
-unknown-option rejection, and limited single-process worker settings. On current `main`,
-`cli.zero-workers-normalizes-to-single-worker` and
-`cli.unknown-option-is-rejected` each pass individually against isolated
-Uvicorn 0.54.0. Two focused cases verify two-worker module-CLI request and
+unknown-option rejection, and limited single-process worker settings. A local
+source-correct aggregate passed all 29 CLI process cases against isolated
+Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Two focused cases verify
+two-worker module-CLI request and
 SIGINT shutdown behavior through explicit worker count and `WEB_CONCURRENCY`;
 this does not establish full multi-worker supervision. One separate Python API
 input starts `python -m uvicorn --reload`, edits a watched Python module,
@@ -191,7 +197,7 @@ error, the held/cancelled application events and a healthy fresh follow-up.
 The maintained [coverage summary](coverage.md) records the historical
 511-case adapter result and the latest complete-scope 595-case baseline. Those
 coverage and case totals are snapshots: the source snapshot for that report had
-604 cases. The current manifest has 655 cases, including four native HTTP/1
+604 cases. The current manifest has 659 cases, including four native HTTP/1
 upgrade-session inputs, five inherited TCP-listener inputs, later CLI
 environment-precedence inputs, the Python `Config`/`Server.run()` concurrency
 case, the h11 selector checks, forced-color comparisons, and custom
@@ -465,13 +471,13 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | WebSocket, including TLS | 52 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, shutdown, configured message limits, and proxy-derived `ws`/`wss` scope schemes. |
 | Startup configuration | 9 | Uvicorn 0.54.0 and the public `uvicorn_rs.Server` API | Same invalid-host and TLS startup configurations on both implementations. |
 | Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
-| HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
+| HTTP/2 | 27 | Uvicorn 0.54.0, zttp 0.0.34, TLS ALPN, explicit ASGI mode | Experimental Uvicorn HTTP/2 is selected with `--http zttp --http2`. A local aggregate run passed all 27 cases with the source adapter. Hosted release evidence and the HTTP/2 category benchmark remain pending. Prior Hypercorn receipts are historical. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
-| CLI and environment | 28 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, and process outcomes, including `--http h11` acceptance. |
-| Python API | 66 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 and focused WSGI selection, trusted proxy headers, non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks, successful application-factory serving through the programmatic API and module CLI, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it, access-log suppression, both CLI color switches, forced ANSI colors through `uvicorn.run()`, custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI, and inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one or two listeners. WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other WSGI behavior, log levels and precedence combinations, and exact traceback frame formatting remain unverified. |
+| CLI and environment | 29 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, and process outcomes, including `--http h11` acceptance. |
+| Python API | 69 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 and focused WSGI selection, trusted proxy headers, non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks, successful application-factory serving through the programmatic API and module CLI, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it, access-log suppression, both CLI color switches, forced ANSI colors through `uvicorn.run()`, custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI, and inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one or two listeners. WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other WSGI behavior, log levels and precedence combinations, and exact traceback frame formatting remain unverified. |
 
-These eight groups account for all 364 declared oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 655 total cases. Five
+These eight groups account for all 368 declared oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 659 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -551,7 +557,7 @@ contain CLI invocation mode, arguments, environment overrides, working
 directory and timeout; network inputs contain request methods, paths, headers,
 body bytes, WebSocket messages, disconnect workflows, and shutdown workflows.
 They do not contain expected responses or previously captured server output.
-The 28 indexed CLI cases compare module and installed-console invocations,
+The 29 indexed CLI cases compare module and installed-console invocations,
 selected parsing and environment-precedence behavior, current-directory app
 import resolution, app loading and environment files, protocol-selector
 (including `--http h11`) and SansIO

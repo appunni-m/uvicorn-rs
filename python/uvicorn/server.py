@@ -101,6 +101,7 @@ class Server:
                 root_path=self.config.root_path,
                 default_headers=self.config.encoded_headers,
                 date_header=self.config.date_header,
+                http2=self.config.http2,
                 ws_max_size=self.config.ws_max_size,
                 ws_ping_interval=self.config.ws_ping_interval,
                 ws_ping_timeout=self.config.ws_ping_timeout,

@@ -1164,6 +1164,9 @@ pub struct ServerConfig {
     /// `None` leaves the connection open until the peer or server closes it.
     /// This setting does not affect HTTP/2 or HTTP/3 connections.
     pub http1_keep_alive_timeout: Option<Duration>,
+    /// Whether TCP connections accept HTTP/2, including prior-knowledge h2c.
+    /// TLS callers must configure their acceptor's ALPN list consistently.
+    pub http2_enabled: bool,
     /// Maximum time allowed for the application startup hook when lifecycle
     /// hooks are configured. The default is 30 seconds; expiration drops the
     /// hook future. Ignored when `application_lifecycle` is `None`.
@@ -1207,6 +1210,7 @@ impl fmt::Debug for ServerConfig {
             )
             .field("graceful_shutdown_timeout", &self.graceful_shutdown_timeout)
             .field("http1_keep_alive_timeout", &self.http1_keep_alive_timeout)
+            .field("http2_enabled", &self.http2_enabled)
             .field(
                 "application_startup_timeout",
                 &self.application_startup_timeout,
@@ -1812,6 +1816,7 @@ impl Default for ServerConfig {
             default_headers: Vec::new(),
             graceful_shutdown_timeout: Some(Duration::from_secs(30)),
             http1_keep_alive_timeout: None,
+            http2_enabled: true,
             application_startup_timeout: Duration::from_secs(30),
             application_shutdown_timeout: Duration::from_secs(30),
             application_lifecycle: None,
@@ -2529,6 +2534,7 @@ where
         let concurrency_limit_observer = config.concurrency_limit_observer.clone();
         let service_error_policy = config.service_error_policy;
         let http1_keep_alive_timeout = config.http1_keep_alive_timeout;
+        let http2_enabled = config.http2_enabled;
         let tls_acceptor = unix_tls_acceptor.clone();
         let request_concurrency = request_concurrency.clone();
         let default_headers = Arc::clone(&default_headers);
@@ -2563,6 +2569,7 @@ where
                                     service_error_policy,
                                     date_header,
                                     http1_keep_alive_timeout,
+                                    http2_enabled,
                                     request_concurrency: request_concurrency.clone(),
                                     default_headers: Arc::clone(&default_headers),
                                 },
@@ -2595,6 +2602,7 @@ where
                                 service_error_policy,
                                 date_header,
                                 http1_keep_alive_timeout,
+                                http2_enabled,
                                 request_concurrency,
                                 default_headers,
                             },
@@ -2879,6 +2887,7 @@ where
         let concurrency_limit_observer = config.concurrency_limit_observer.clone();
         let service_error_policy = config.service_error_policy;
         let http1_keep_alive_timeout = config.http1_keep_alive_timeout;
+        let http2_enabled = config.http2_enabled;
         let tls_acceptor = tls_acceptor.clone();
         let request_concurrency = request_concurrency.clone();
         let default_headers = Arc::clone(&default_headers);
@@ -2913,6 +2922,7 @@ where
                                     service_error_policy,
                                     date_header,
                                     http1_keep_alive_timeout,
+                                    http2_enabled,
                                     request_concurrency: request_concurrency.clone(),
                                     default_headers: Arc::clone(&default_headers),
                                 },
@@ -2945,6 +2955,7 @@ where
                                 service_error_policy,
                                 date_header,
                                 http1_keep_alive_timeout,
+                                http2_enabled,
                                 request_concurrency,
                                 default_headers,
                             },
@@ -3124,6 +3135,7 @@ struct ConnectionOptions<'a> {
     service_error_policy: ServiceErrorPolicy,
     date_header: bool,
     http1_keep_alive_timeout: Option<Duration>,
+    http2_enabled: bool,
     request_concurrency: Option<Arc<RequestConcurrency>>,
     default_headers: Arc<Vec<(HeaderName, HeaderValue)>>,
 }
@@ -3234,6 +3246,7 @@ where
         service_error_policy,
         date_header,
         http1_keep_alive_timeout,
+        http2_enabled,
         request_concurrency,
         default_headers,
     } = options;
@@ -3266,7 +3279,9 @@ where
         .auto_date_header(date_header)
         .half_close(true)
         .max_buf_size(64 * 1024);
-    builder.http2().auto_date_header(date_header);
+    if http2_enabled {
+        builder.http2().auto_date_header(date_header);
+    }
     let application = ServiceErrorResponse::new(
         ConnectionInfoService::<S, Incoming, B>::new(
             service,

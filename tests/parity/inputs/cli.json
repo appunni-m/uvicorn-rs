@@ -457,6 +457,19 @@
         "working_directory": "project",
         "timeout_seconds": 10
       }
+    },
+    {
+      "case_id": "cli.http2-requires-explicit-zttp-backend",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": ["tests.parity.app:app", "--http2"],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
     }
   ]
 }

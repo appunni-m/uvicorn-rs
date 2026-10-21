@@ -14,6 +14,7 @@
       "runtime": "CPython 3.12",
       "protocols": [
         "http/1.1",
+        "http/2",
         "websocket",
         "lifespan",
         "cli",
@@ -31,6 +32,10 @@
         {
           "id": "websockets",
           "version": "17.1"
+        },
+        {
+          "id": "zttp",
+          "version": "0.0.34"
         }
       ]
     },
@@ -147,10 +152,11 @@
     },
     {
       "id": "http2",
-      "oracle": "hypercorn",
+      "oracle": "uvicorn",
       "protocol": "http/2",
       "oracle_config": [
         "uvloop",
+        "zttp 0.0.34 with HTTP/2 enabled",
         "TLS ALPN h2",
         "explicit ASGI mode for the synchronous callable returning an awaitable"
       ]
@@ -1984,7 +1990,10 @@
         "exit_code",
         "stdout_base64",
         "stderr_base64"
-      ]
+      ],
+      "comparison_normalization": {
+        "stderr_base64": "python-traceback-exception-chain"
+      }
     },
     {
       "id": "python.api.imports-signatures",
@@ -2354,6 +2363,7 @@
     "http_headers": "Observe only the application content-type header. Date and server-identification headers are deliberately outside this parity slice.",
     "body": "Compare response bytes exactly; byte lengths or hashes do not replace byte comparison.",
     "errors": "Compare public HTTP status and body. Runtime traceback formatting is recorded in logs but is not treated as a cross-server API.",
+    "cli_tracebacks": "Retain raw stdout and stderr in evidence. For CLI parity, compare exit code and stdout exactly; when stderr contains a standard Python traceback, compare its non-traceback lines, exception-chain markers, and exception type/message while omitting implementation-specific file paths, line numbers, and source snippets. Non-traceback stderr remains byte-exact.",
     "signal_exit": "The raw exit code is retained as a diagnostic, but parity compares that the process terminated and the ASGI cancellation/lifespan events completed. Uvicorn re-raises its handled signal after graceful cleanup; uvicorn-rs exits normally after cleanup.",
     "peer_close_diagnostics": "The HTTP/3 peer-close operation sends an explicit u62 application close code after the complete response, repeats the same request on a fresh QUIC connection, and joins server tasks through graceful shutdown. It compares the presence of ERROR/CRITICAL reference logs or native diagnostic messages, Python tracebacks, and panic messages emitted within this workflow; exact diagnostic text and addresses are retained in stderr rather than compared. Hypercorn uses its public error log level for this operation."
   }

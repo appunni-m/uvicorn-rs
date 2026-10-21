@@ -1635,6 +1635,7 @@ struct ServeOptions {
     lifespan_mode: LifespanMode,
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
+    http2_enabled: bool,
     ws_max_size: usize,
     websocket_keepalive: WebSocketKeepaliveConfig,
     concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
@@ -1654,6 +1655,7 @@ struct ServerContext {
     tcp_tls: Option<TlsAcceptor>,
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
+    http2_enabled: bool,
     ws_max_size: usize,
     websocket_keepalive: WebSocketKeepaliveConfig,
     concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
@@ -5093,7 +5095,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback))]
+#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, http2_enabled, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5115,6 +5117,7 @@ fn serve<'py>(
     root_path: String,
     default_headers: Vec<(Bytes, Bytes)>,
     date_header: bool,
+    http2_enabled: bool,
     ws_max_size: usize,
     ws_ping_interval: Option<f64>,
     ws_ping_timeout: Option<f64>,
@@ -5178,7 +5181,7 @@ fn serve<'py>(
     let (tcp_tls, quic_config) = match (certfile, keyfile) {
         (None, None) => (None, None),
         (Some(certfile), Some(keyfile)) => {
-            let (tcp_tls, quic_config) = load_tls_configs(&certfile, &keyfile)?;
+            let (tcp_tls, quic_config) = load_tls_configs(&certfile, &keyfile, http2_enabled)?;
             (Some(tcp_tls), Some(quic_config))
         }
         _ => {
@@ -5249,6 +5252,7 @@ fn serve<'py>(
             lifespan_mode,
             default_headers,
             date_header,
+            http2_enabled,
             ws_max_size,
             websocket_keepalive,
             concurrency_limit_observer: Some(concurrency_limit_observer),
@@ -5272,7 +5276,11 @@ fn serve<'py>(
     })
 }
 
-fn load_tls_configs(certfile: &str, keyfile: &str) -> PyResult<(TlsAcceptor, quinn::ServerConfig)> {
+fn load_tls_configs(
+    certfile: &str,
+    keyfile: &str,
+    http2_enabled: bool,
+) -> PyResult<(TlsAcceptor, quinn::ServerConfig)> {
     let cert_file = std::fs::File::open(certfile).map_err(|error| {
         PyOSError::new_err(format!("could not read certificate {certfile}: {error}"))
     })?;
@@ -5296,7 +5304,11 @@ fn load_tls_configs(certfile: &str, keyfile: &str) -> PyResult<(TlsAcceptor, qui
         .with_no_client_auth()
         .with_single_cert(cert_chain, key)
         .map_err(|error| PyValueError::new_err(format!("invalid TLS identity: {error}")))?;
-    tcp_tls.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+    tcp_tls.alpn_protocols = if http2_enabled {
+        vec![b"h2".to_vec(), b"http/1.1".to_vec()]
+    } else {
+        vec![b"http/1.1".to_vec()]
+    };
 
     let mut quic_tls = tcp_tls.clone();
     quic_tls.alpn_protocols = vec![b"h3".to_vec()];
@@ -5737,6 +5749,7 @@ async fn serve_forever(
         tcp_tls: options.tcp_tls,
         default_headers: options.default_headers,
         date_header: options.date_header,
+        http2_enabled: options.http2_enabled,
         ws_max_size: options.ws_max_size,
         websocket_keepalive: options.websocket_keepalive,
         concurrency_limit_observer: options.concurrency_limit_observer,
@@ -5799,6 +5812,7 @@ async fn serve_forever(
         let config = uvicorn_rs::ServerConfig {
             graceful_shutdown_timeout: options.graceful_timeout,
             http1_keep_alive_timeout: Some(options.timeout_keep_alive),
+            http2_enabled: server.http2_enabled,
             limit_concurrency: server.limit_concurrency,
             default_headers: server.default_headers.clone(),
             // Let an invalid HTTP/1 ASGI response start reach the transport,
@@ -6315,6 +6329,7 @@ where
     let cancellation = context.server.cancellation.clone();
     let graceful_timeout = context.server.graceful_timeout;
     let date_header = context.server.date_header;
+    let http2_enabled = context.server.http2_enabled;
     let service_active_http_requests = Arc::clone(&active_http_requests);
     let service_read_eof_waker = Arc::clone(&read_eof_waker);
     let response_header_server = Arc::clone(&context.server);
@@ -6344,7 +6359,9 @@ where
         .http1()
         .auto_date_header(date_header)
         .max_buf_size(64 * 1024);
-    builder.http2().auto_date_header(date_header);
+    if http2_enabled {
+        builder.http2().auto_date_header(date_header);
+    }
     let connection = builder.serve_connection_with_upgrades(TokioIo::new(io), service);
     tokio::pin!(connection);
     tokio::select! {
@@ -7258,32 +7275,16 @@ async fn handle_request(
     request: Request<Incoming>,
     context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, std::io::Error> {
-    let version = request.version();
     match handle_request_inner(request, context).await {
         Ok(response) => Ok(response),
-        Err(error)
-            if error.downcast_ref::<InvalidAsgiResponseStart>().is_some()
-                && version == Version::HTTP_2 =>
-        {
-            Ok(response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                full_body(Bytes::new()),
-                HeaderMap::new(),
-            ))
-        }
         Err(error) if error.downcast_ref::<InvalidAsgiResponseStart>().is_some() => {
             Err(std::io::Error::other(error))
         }
         Err(error) => {
             log_error(format_args!("uvicorn-rs: ASGI request failed: {error}"));
-            let body = if version == Version::HTTP_2 {
-                Bytes::new()
-            } else {
-                Bytes::from_static(b"Internal Server Error")
-            };
             Ok(response(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                full_body(body),
+                full_body(Bytes::from_static(b"Internal Server Error")),
                 HeaderMap::new(),
             ))
         }
@@ -7459,7 +7460,7 @@ async fn handle_request_parts(
         {
             return Err(Box::new(InvalidAsgiResponseStart));
         }
-        let error_body = if matches!(http_version, Version::HTTP_2 | Version::HTTP_3) {
+        let error_body = if http_version == Version::HTTP_3 {
             Bytes::new()
         } else {
             Bytes::from_static(b"Internal Server Error")
