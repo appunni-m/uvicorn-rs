@@ -5,7 +5,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{BufMut, BytesMut};
 #[cfg(unix)]
 use tokio::net::{
     unix::OwnedReadHalf as UnixOwnedReadHalf, unix::OwnedWriteHalf as UnixOwnedWriteHalf,
@@ -44,7 +44,8 @@ enum ReadMode {
 struct BufferedReadIo<W> {
     writer: W,
     receiver: mpsc::Receiver<ReadEvent>,
-    current: Bytes,
+    recycled: mpsc::Sender<BytesMut>,
+    current: Option<(BytesMut, usize)>,
     terminal: ReadTerminal,
 }
 
@@ -64,7 +65,7 @@ enum UnixReadMode {
 }
 
 enum ReadEvent {
-    Data(Bytes),
+    Data(BytesMut),
     Eof,
     Error(io::Error),
 }
@@ -109,6 +110,7 @@ pub(super) fn observe_peer_read(
         PeerReadHalfCloseMode::Proactive => {
             let (reader, writer) = stream.into_split();
             let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
+            let (recycled, recycled_receiver) = mpsc::channel(READ_QUEUE_CAPACITY + 1);
             #[cfg(coverage)]
             let (receiver, prioritize_receiver_close_fault) = {
                 let mut receiver = receiver;
@@ -125,10 +127,17 @@ pub(super) fn observe_peer_read(
                 ReadMode::Proactive(BufferedReadIo {
                     writer,
                     receiver,
-                    current: Bytes::new(),
+                    recycled,
+                    current: None,
                     terminal: ReadTerminal::Open,
                 }),
-                Some(pump_peer_read(reader, sender, closed, failed)),
+                Some(pump_peer_read(
+                    reader,
+                    sender,
+                    recycled_receiver,
+                    closed,
+                    failed,
+                )),
                 prioritize_receiver_close_fault,
             )
         }
@@ -145,6 +154,7 @@ pub(super) fn observe_peer_read(
 async fn pump_peer_read<R>(
     mut reader: R,
     sender: mpsc::Sender<ReadEvent>,
+    mut recycled: mpsc::Receiver<BytesMut>,
     closed: watch::Sender<bool>,
     failed: watch::Sender<Option<io::ErrorKind>>,
 ) -> PeerReadPumpOutcome
@@ -173,7 +183,13 @@ where
             super::observe_http1_peer_read_failure_after_data_fault();
             return PeerReadPumpOutcome::ReadFailed(kind);
         }
-        let mut chunk = BytesMut::with_capacity(READ_CHUNK_SIZE);
+        // Reuse completed chunks to avoid allocating a 64 KiB buffer for
+        // every raw socket read. The bounded pool matches the two queued
+        // chunks plus the one chunk the connection consumer may hold.
+        let mut chunk = recycled
+            .try_recv()
+            .unwrap_or_else(|_| BytesMut::with_capacity(READ_CHUNK_SIZE));
+        chunk.clear();
         let mut destination = (&mut chunk).limit(READ_CHUNK_SIZE);
         match reader.read_buf(&mut destination).await {
             Ok(0) => {
@@ -188,7 +204,7 @@ where
                 {
                     delivered_data = true;
                 }
-                permit.send(ReadEvent::Data(chunk.freeze()));
+                permit.send(ReadEvent::Data(chunk));
             }
             Err(error) => {
                 let kind = error.kind();
@@ -233,6 +249,7 @@ pub(super) fn observe_peer_read_unix(
         PeerReadHalfCloseMode::Proactive => {
             let (reader, writer): (UnixOwnedReadHalf, UnixOwnedWriteHalf) = stream.into_split();
             let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
+            let (recycled, recycled_receiver) = mpsc::channel(READ_QUEUE_CAPACITY + 1);
             #[cfg(coverage)]
             let (receiver, prioritize_receiver_close_fault) = {
                 let mut receiver = receiver;
@@ -249,10 +266,17 @@ pub(super) fn observe_peer_read_unix(
                 UnixReadMode::Proactive(BufferedReadIo {
                     writer,
                     receiver,
-                    current: Bytes::new(),
+                    recycled,
+                    current: None,
                     terminal: ReadTerminal::Open,
                 }),
-                Some(pump_peer_read(reader, sender, closed, failed)),
+                Some(pump_peer_read(
+                    reader,
+                    sender,
+                    recycled_receiver,
+                    closed,
+                    failed,
+                )),
                 prioritize_receiver_close_fault,
             )
         }
@@ -273,10 +297,16 @@ impl<W: AsyncWrite + Unpin> BufferedReadIo<W> {
         buffer: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         loop {
-            if !self.current.is_empty() {
-                let count = buffer.remaining().min(self.current.len());
-                buffer.put_slice(&self.current[..count]);
-                self.current.advance(count);
+            if let Some((current, offset)) = self.current.as_mut() {
+                let count = buffer.remaining().min(current.len() - *offset);
+                buffer.put_slice(&current[*offset..*offset + count]);
+                *offset += count;
+                if *offset == current.len() {
+                    if let Some((mut chunk, _)) = self.current.take() {
+                        chunk.clear();
+                        let _ = self.recycled.try_send(chunk);
+                    }
+                }
                 return Poll::Ready(Ok(()));
             }
             match self.terminal {
@@ -291,7 +321,7 @@ impl<W: AsyncWrite + Unpin> BufferedReadIo<W> {
             }
             match self.receiver.poll_recv(context) {
                 Poll::Pending => return Poll::Pending,
-                Poll::Ready(Some(ReadEvent::Data(chunk))) => self.current = chunk,
+                Poll::Ready(Some(ReadEvent::Data(chunk))) => self.current = Some((chunk, 0)),
                 Poll::Ready(Some(ReadEvent::Eof)) => self.terminal = ReadTerminal::Eof,
                 Poll::Ready(Some(ReadEvent::Error(error))) => {
                     self.terminal = ReadTerminal::Failed(error.kind());
