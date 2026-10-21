@@ -89,6 +89,7 @@ use tower_service::Service;
 
 type BoxBodyError = Box<dyn Error + Send + Sync + 'static>;
 type BoxedShutdownFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+type BoxedListenerFuture = Pin<Box<dyn Future<Output = Result<(), ServeError>> + Send>>;
 
 #[cfg(coverage)]
 struct CoverageFaultIo<I> {
@@ -2738,9 +2739,7 @@ where
 {
     let admission = tcp_listener_admission(&config);
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
-    let mut listener_tasks: FuturesUnordered<
-        Pin<Box<dyn Future<Output = Result<(), ServeError>> + Send>>,
-    > = FuturesUnordered::new();
+    let mut listener_tasks: FuturesUnordered<BoxedListenerFuture> = FuturesUnordered::new();
 
     for (listener, service) in listeners {
         let mut listener_shutdown_receiver = shutdown_receiver.clone();
