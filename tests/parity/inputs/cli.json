@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@23",
+  "schema": "uvicorn-rs-parity/input@24",
   "cases": [
     {
       "case_id": "cli.help",
@@ -22,6 +22,19 @@
       "process": {
         "invocation": "console",
         "arguments": ["--help"],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.console-cwd-import-resolution-before-missing-attribute",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "console",
+        "arguments": ["tests.parity.app:missing"],
         "environment": {},
         "working_directory": "project",
         "timeout_seconds": 10

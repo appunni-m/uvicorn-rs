@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@23"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@24"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2221,6 +2221,7 @@ def load_contract(
                     "loop",
                     "observe_loop",
                     "log_level",
+                    "log_config",
                     "emit_level_logs",
                     "access_log",
                     "use_colors",
@@ -2272,6 +2273,15 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}.api.run_http.log_level must be a Uvicorn level name or integer"
+                    )
+                log_config = run_http.get("log_config")
+                if log_config is not None and (
+                    not isinstance(log_config, str)
+                    or not log_config
+                    or "\x00" in log_config
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.log_config must be a non-empty path string"
                     )
                 if "emit_level_logs" in run_http and type(run_http["emit_level_logs"]) is not bool:
                     raise ParityError(
@@ -9852,6 +9862,9 @@ def _python_api_server_log_events(
     exception_line = re.compile(r"^(?P<class>[A-Za-z_][\w.]*)\b(?:: ?(?P<message>.*))?$")
 
     normalized: dict[str, list[dict[str, str]]] = {"stdout": [], "stderr": []}
+    custom_level_prefix = re.compile(
+        r"^PARITY (TRACE|DEBUG|INFO|WARNING|ERROR|CRITICAL) ([A-Za-z_][\w.]*)?: (.*)$"
+    )
     for channel in normalized:
         encoded = run_http_observation.get(f"server_{channel}_base64", "")
         try:
@@ -9893,28 +9906,34 @@ def _python_api_server_log_events(
                     break
                 continue
 
-            level_match = level_prefix.match(line)
-            if level_match is None:
-                normalized[channel].append({"kind": "raw", "message": line})
-                index += 1
-                continue
+            custom_level_match = custom_level_prefix.match(line)
+            if custom_level_match is not None:
+                level, logger, message = custom_level_match.groups()
+            else:
+                level_match = level_prefix.match(line)
+                if level_match is None:
+                    normalized[channel].append({"kind": "raw", "message": line})
+                    index += 1
+                    continue
+                level, message = level_match.groups()
+                logger = None
 
-            level, message = level_match.groups()
             access_match = access_line.match(message)
             if access_match:
-                normalized[channel].append(
-                    {
-                        "kind": "access",
-                        "level": level,
-                        "client": f"{access_match.group('client')}:<port>",
-                        "request": access_match.group("request"),
-                        "status": " ".join(
-                            part
-                            for part in (access_match.group("status"), access_match.group("phrase"))
-                            if part
-                        ),
-                    }
-                )
+                event = {
+                    "kind": "access",
+                    "level": level,
+                    "client": f"{access_match.group('client')}:<port>",
+                    "request": access_match.group("request"),
+                    "status": " ".join(
+                        part
+                        for part in (access_match.group("status"), access_match.group("phrase"))
+                        if part
+                    ),
+                }
+                if logger is not None:
+                    event["logger"] = logger
+                normalized[channel].append(event)
                 index += 1
                 continue
 
@@ -9925,9 +9944,10 @@ def _python_api_server_log_events(
                     f"{running_match.group('suffix')}"
                 )
             message = process_pid.sub(r"\1<pid>\2", message)
-            normalized[channel].append(
-                {"kind": "message", "level": level, "message": message}
-            )
+            event = {"kind": "message", "level": level, "message": message}
+            if logger is not None:
+                event["logger"] = logger
+            normalized[channel].append(event)
             index += 1
     return normalized
 

@@ -155,6 +155,7 @@ options = {
     "forwarded_allow_ips": forwarded_allow_ips,
     "limit_concurrency": limit_concurrency,
     "loop": loop,
+    "log_config": json.loads(sys.argv[18]),
     "log_level": log_level,
     "access_log": access_log,
     "use_colors": use_colors,
@@ -203,6 +204,8 @@ else:
             command.extend(("--loop", request["loop"]))
         if request.get("log_level") is not None:
             command.extend(("--log-level", str(request["log_level"])))
+        if request.get("log_config") is not None:
+            command.extend(("--log-config", request["log_config"]))
         if request.get("access_log") is False:
             command.append("--no-access-log")
         if request.get("use_colors") is not None:
@@ -229,6 +232,7 @@ else:
             "1" if request.get("emit_level_logs", False) else "0",
             "0" if request.get("access_log") is False else "1",
             json.dumps(request.get("use_colors")),
+            json.dumps(request.get("log_config")),
         ]
 
     environment = os.environ.copy()

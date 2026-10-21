@@ -320,10 +320,6 @@ class Config:
             (self.lifespan not in {"auto", "on", "off"}, "lifespan"),
             (self.interface not in {"auto", "asgi2", "asgi3"}, "interface"),
             (
-                self.log_config is not None and self.log_config != LOGGING_CONFIG,
-                "log_config",
-            ),
-            (
                 self.log_level is not None
                 and not (
                     isinstance(self.log_level, str)

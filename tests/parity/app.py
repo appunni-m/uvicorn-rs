@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os
 from pathlib import Path
 from urllib.parse import parse_qs
@@ -1539,6 +1540,10 @@ async def lifespan_probe_app(scope, receive, send):
                 return
     elif scope["type"] == "http":
         await receive()
+        if scope["path"] == "/module-cli-custom-json-log-config":
+            logging.getLogger("uvicorn.error").warning(
+                "python-api custom JSON log-config sentinel"
+            )
         lifespan_status = b"lifespan-started" if _lifespan_probe_started else b"lifespan-off"
         if "state" not in scope:
             state_status = b"scope-state-missing"

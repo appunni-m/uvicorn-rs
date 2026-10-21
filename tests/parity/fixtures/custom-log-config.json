@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "disable_existing_loggers": false,
+  "formatters": {
+    "parity": {
+      "format": "PARITY %(levelname)s %(name)s: %(message)s"
+    }
+  },
+  "handlers": {
+    "stderr": {
+      "class": "logging.StreamHandler",
+      "stream": "ext://sys.stderr",
+      "level": "DEBUG",
+      "formatter": "parity"
+    }
+  },
+  "loggers": {
+    "uvicorn.error": {
+      "handlers": ["stderr"],
+      "level": "DEBUG",
+      "propagate": false
+    },
+    "uvicorn.access": {
+      "handlers": ["stderr"],
+      "level": "DEBUG",
+      "propagate": false
+    }
+  },
+  "root": {
+    "handlers": ["stderr"],
+    "level": "DEBUG"
+  }
+}

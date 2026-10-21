@@ -2,6 +2,8 @@
 
 import argparse
 import importlib
+import os
+import sys
 
 
 class ImportFromStringError(Exception):
@@ -45,6 +47,7 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
         "--log-level",
         choices=("critical", "error", "warning", "info", "debug", "trace"),
     )
+    parser.add_argument("--log-config")
     parser.add_argument(
         "--access-log", action=argparse.BooleanOptionalAction, default=True
     )
@@ -76,9 +79,11 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
 
 def main(argv=None, prog="uvicorn-rs-py"):
     args = _parse_args(argv, prog)
+    if not args.app_dir:
+        app_directory = os.getcwd()
+        if app_directory not in sys.path:
+            sys.path.insert(0, app_directory)
     if bool(args.certfile) != bool(args.keyfile):
-        import sys
-
         print(
             f"{prog}: --certfile and --keyfile must be provided together",
             file=sys.stderr,
@@ -92,6 +97,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
         host=args.host,
         port=args.port,
         loop=args.loop,
+        log_config=args.log_config,
         log_level=args.log_level,
         access_log=args.access_log,
         use_colors=args.use_colors,

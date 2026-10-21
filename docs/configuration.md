@@ -19,7 +19,7 @@ that limit is stated in the option description.
 
 | Option | Default | Description |
 | --- | --- | --- |
-| module:attribute | Required | Import a module attribute, including nested attributes. The application can also come from `UVICORN_APP`. |
+| module:attribute | Required | Import a module attribute, including nested attributes. CLI commands search the current working directory; `--app-dir` prepends a chosen directory. The application can also come from `UVICORN_APP`. |
 | --host HOST | 127.0.0.1 | TCP bind host and, when TLS is enabled, QUIC bind host. |
 | --port PORT | 8000 | TCP/QUIC port; zero asks the OS to select a port. |
 | --http {auto,h11,httptools} | auto | These selectors route to the single Rust-native HTTP/1.1 implementation; the adapter does not instantiate the selected upstream parser. Focused parity checks the h11 app-load diagnostic and one POST scope/body request against Uvicorn configured with h11. Parser-specific malformed-request behavior is not established. Other values are rejected. |
@@ -31,8 +31,9 @@ that limit is stated in the option description.
 | --timeout-worker-healthcheck SECONDS | 5 | Accepted with the single-process CLI path. Uvicorn uses this timeout only in its multi-process supervisor, so it has no effect with one worker. Multi-worker mode is not implemented. |
 | --interface {auto,asgi3} | auto | ASGI 3 applications are supported. Explicit `asgi2` and `wsgi` selections are rejected. |
 | --loop {auto,asyncio,uvloop,zuvloop} | auto | Select the Python event loop. `auto` uses uvloop when installed, otherwise asyncio. Tokio remains the Rust network runtime. |
-| --log-level {critical,error,warning,info,debug,trace} | info | Set the server and application log threshold. Warning-level filtering has focused parity through the module CLI and `uvicorn.run()`; other levels and custom logging configuration remain unverified. |
-| --access-log/--no-access-log | Enabled | Enable or suppress request access events. `--no-access-log` and `uvicorn.run(access_log=False)` have focused parity cases; custom logging configuration remains unverified. |
+| --log-config PATH | Built-in Uvicorn config | Load a `.ini`, `.json`, or `.yaml` logging configuration. JSON configuration has focused parity through `uvicorn.run()` and `python -m uvicorn`; INI and YAML files are not yet checked against the oracle. |
+| --log-level {critical,error,warning,info,debug,trace} | info | Set the server and application log threshold. Warning-level filtering has focused parity through the module CLI and `uvicorn.run()`; other levels remain unverified. |
+| --access-log/--no-access-log | Enabled | Enable or suppress request access events. `--no-access-log` and `uvicorn.run(access_log=False)` have focused parity cases. |
 | --use-colors/--no-use-colors | Automatic | Force or disable ANSI colors in default server and access logs. Focused module CLI comparisons exercise both switches, and `use_colors=True` is compared through `uvicorn.run()`, observing color sequences in captured logs. |
 | --lifespan {auto,on,off} | auto | `off` prevents the app from receiving ASGI lifespan events. This behavior has focused live parity on macOS ARM64 / CPython 3.12.13. Focused API and module CLI cases verify that an app exception before startup under `on` leaves the server unstarted and exits with code 3. Other strict-mode failure classes remain unverified. |
 | --app-dir PATH | Current directory | Add a directory to the application import path. |
@@ -46,6 +47,19 @@ that limit is stated in the option description.
 | --ssl-keyfile PATH | Unset | PEM private key paired with --ssl-certfile. |
 | --timeout-graceful-shutdown SECONDS | None | Maximum graceful shutdown time. The current native adapter applies a 10-second timeout when omitted. |
 | --limit-concurrency INTEGER | Unset | Return HTTP 503 when active connections or request tasks reach this limit. Focused HTTP/1.1 comparisons verify limit 1 through the CLI, `uvicorn.run()`, and `Config` with `Server.run()`; other limits and protocols remain unverified. |
+
+For a custom JSON logging file, pass the same path at the command line or through
+the Python API:
+
+~~~sh
+uvicorn examples.hello_asgi:app --log-config logging.json
+~~~
+
+~~~python
+import uvicorn
+
+uvicorn.run("examples.hello_asgi:app", log_config="logging.json")
+~~~
 
 Without certificate and key files, the prototype accepts cleartext HTTP/1.1 and HTTP/2 prior knowledge. With both files, TLS uses ALPN for HTTP/1.1 and HTTP/2; experimental HTTP/3 uses QUIC. Protocol and lifecycle cases are listed in the [support matrix](support-matrix.md).
 
@@ -89,11 +103,12 @@ uvicorn.run("examples.hello_asgi:app", host="127.0.0.1", port=8000)
 `trace`. The Python API also accepts integer logging levels through
 `uvicorn.Config` and `uvicorn.run`. Focused comparisons verify the warning
 threshold through `python -m uvicorn` and `uvicorn.run(..., log_level=30)`;
-they do not establish every level, color mode, or custom logging configuration.
+they do not establish every level or color mode. A custom JSON logging
+configuration is compared through both `uvicorn.run(log_config=...)` and
+`python -m uvicorn --log-config ...`. INI and YAML files remain unverified.
 Access logging is enabled by default. Use `--no-access-log` or
 `uvicorn.run(app, access_log=False)` to suppress request access events. Focused
-comparisons cover both entry points; custom logging configuration remains
-unverified.
+comparisons cover both entry points.
 
 For an application-owned event loop, construct the server explicitly:
 

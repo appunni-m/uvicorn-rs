@@ -45,9 +45,10 @@ different field names insignificant while preserving the order of values for a
 repeated name. HTTP/1.1 and HTTP/3 observations keep their declared comparison
 fields.
 
-The manifest currently defines 26 CLI process cases across `python -m uvicorn`
+The manifest currently defines 27 CLI process cases across `python -m uvicorn`
 and the installed `uvicorn` command. They cover help and version output,
-selected argument errors and environment precedence, app loading with
+selected argument errors and environment precedence, current-directory
+console-script import resolution, app loading with
 `--app-dir` and `--factory`, environment-file loading, HTTP and WebSocket
 selector acceptance, `--ws-max-queue` with the SansIO selector,
 unknown-option rejection, and limited single-process worker settings. On current `main`,
@@ -162,10 +163,10 @@ error, the held/cancelled application events and a healthy fresh follow-up.
 The maintained [coverage summary](coverage.md) records the historical
 511-case adapter result and the latest complete-scope 595-case baseline. Those
 coverage and case totals are snapshots: the source snapshot for that report had
-604 cases. The current manifest has 621 cases, including four native HTTP/1
+604 cases. The current manifest has 624 cases, including four native HTTP/1
 upgrade-session inputs, later CLI environment-precedence inputs, the Python
-`Config`/`Server.run()` concurrency case, the h11 selector checks, and the
-forced-color module CLI and `uvicorn.run()` comparisons.
+`Config`/`Server.run()` concurrency case, the h11 selector checks, forced-color
+comparisons, and custom JSON logging through both Python entry points.
 The selected results described here are focused results, not a full-matrix
 result. Generated per-run reports remain local and Git-ignored. The case passes
 full attribution and all three 511-case repeats; the historical report's
@@ -428,11 +429,11 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
 | HTTP/2 | 27 | Hypercorn 0.18.0, uvloop 0.23.0, h2 4.4.1, TLS ALPN, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/2 reference. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
-| CLI and environment | 26 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, app loading, and process outcomes, including `--http h11` acceptance. |
-| Python API | 34 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, access-log suppression, both CLI color switches, and forced ANSI colors through `uvicorn.run()`. HTTP-run cases compare normalized server log events, including color presence, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other logging levels, custom logging configuration, and exact traceback frame formatting remain unverified. |
+| CLI and environment | 27 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, and process outcomes, including `--http h11` acceptance. |
+| Python API | 36 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 selection, trusted proxy headers, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, access-log suppression, both CLI color switches, forced ANSI colors through `uvicorn.run()`, and custom JSON logging configuration through `uvicorn.run()` and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. INI/YAML logging configuration, other logging levels, and exact traceback frame formatting remain unverified. |
 
-These eight groups account for all 330 declared oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 621 total cases. Five
+These eight groups account for all 333 declared oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 624 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -481,11 +482,14 @@ events. `python-api.run-disables-access-log` and
 `python-api.module-cli-disables-access-log` compare `uvicorn.run(access_log=False)`
 and `python -m uvicorn --no-access-log`; both suppress the request access event
 while preserving the other selected startup and shutdown observations. Other
-levels, custom logging configurations, colors, and exact traceback frame
-formatting remain unverified.
+levels, colors, and exact traceback frame formatting remain unverified. The
+`python-api.run-applies-custom-json-log-config` and
+`python-api.module-cli-applies-custom-json-log-config` inputs exercise a
+user-supplied JSON logging configuration through both public entry points and
+compare the resulting application log events against Uvicorn 0.54.0.
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@23`; live artifacts use
+`uvicorn-rs-parity/input@24`; live artifacts use
 `uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
 alongside the imported native digest; earlier archived reports retain their
 original schema and identities.
@@ -499,9 +503,10 @@ contain CLI invocation mode, arguments, environment overrides, working
 directory and timeout; network inputs contain request methods, paths, headers,
 body bytes, WebSocket messages, disconnect workflows, and shutdown workflows.
 They do not contain expected responses or previously captured server output.
-The 26 indexed CLI cases compare module and installed-console invocations,
-selected parsing and environment-precedence behavior, app loading and
-environment files, protocol-selector (including `--http h11`) and SansIO
+The 27 indexed CLI cases compare module and installed-console invocations,
+selected parsing and environment-precedence behavior, current-directory app
+import resolution, app loading and environment files, protocol-selector
+(including `--http h11`) and SansIO
 WebSocket queue-option acceptance, unknown-option rejection, and single-process
 worker settings.
 Selector cases check argument handling;
@@ -656,6 +661,10 @@ only the schema marker and preserves existing case data. Schema `@22` adds
 optional event-loop selection and observation to Python API HTTP-run inputs;
 migrate maintained `@21` inputs with
 `python scripts/migrate_parity_input_v21_to_v22.py`. This migrator changes only
+the schema marker and preserves existing case data.
+Schema `@24` adds an optional custom logging-config path to Python API HTTP-run
+inputs; migrate maintained `@23` inputs with
+`python scripts/migrate_parity_input_v23_to_v24.py`. The migration changes only
 the schema marker and preserves existing case data.
 The runner rejects older or mixed input schemas.
 
