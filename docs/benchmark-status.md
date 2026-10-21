@@ -3,13 +3,13 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [39471910457 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39471910457)
-- Commit: [`d022562b1305ca47f0ad93f37b4a042e471b8bf0`](https://github.com/appunni-m/uvicorn-rs/commit/d022562b1305ca47f0ad93f37b4a042e471b8bf0)
-- Recorded: 2026-10-20T22:47:50Z
+- Run: [39531640318 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39531640318)
+- Commit: [`0f40a8ba7a2c41f3fab9cea0a53e834077244ad5`](https://github.com/appunni-m/uvicorn-rs/commit/0f40a8ba7a2c41f3fab9cea0a53e834077244ad5)
+- Recorded: 2026-10-21T04:17:10Z
 - Category matrix job: `failure`
-- Aggregate job: `success`
+- Aggregate job: `failure`
 
-The three system artifacts were validated and the partial report, hashed receipts, and raw system bundles are retained in this run's GitHub Actions artifacts for 90 days. Generated logs and per-run files are not committed. The [previous complete report](benchmark-results.md) remains unchanged.
+This attempt did not produce a validated three-system aggregate. No performance result was generated or substituted. The [previous complete report](benchmark-results.md) remains the latest measured result; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/39531640318) for this attempt.
 <!-- END GENERATED LATEST ATTEMPT -->
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
