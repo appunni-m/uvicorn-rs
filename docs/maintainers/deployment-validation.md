@@ -3,9 +3,12 @@
 The [deployment guide](../deployment.md) is the operator-facing entry point. This page preserves validation procedures, framework comparison setup, and run-specific evidence for maintainers.
 
 
-`uvicorn-rs-py` is an experimental single-process Python ASGI adapter. It
-loads an importable module:attribute; it does not create application factories,
-supervise workers, or reload code. Proxy-header behavior has only the focused
+`uvicorn-rs-py` is an experimental single-process Python ASGI adapter. Its
+module CLI supports no-argument application factories through `--factory`, and
+`uvicorn.run()` supports them through `factory=True`; both have focused parity
+cases. The installed-wheel procedure below loads a direct module:attribute app
+and does not exercise factories, worker supervision, or reload. Worker and
+reload behavior remain incomplete. Proxy-header behavior has only the focused
 CLI and `uvicorn.run()` coverage listed in the [support matrix](../support-matrix.md).
 The project has not published a package. Build and install a wheel into the same
 environment as the application and its Python dependencies.

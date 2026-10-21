@@ -34,9 +34,16 @@ application directory:
 uv run uvicorn myapp.asgi:app --host 127.0.0.1 --port 8000
 ```
 
-The current prototype loads the named object directly. It does not invoke
-application factories and supports only the options listed in the
-[configuration guide](configuration.md).
+For a no-argument application factory, use `--factory`:
+
+```sh
+uv run uvicorn myapp.asgi:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+The module CLI and `uvicorn.run(..., factory=True)` each have a focused
+comparison with Uvicorn 0.54.0. This does not establish full CLI or Python API
+compatibility; check the [configuration guide](configuration.md) and
+[support matrix](support-matrix.md) for tested behavior and gaps.
 
 ## Before using it instead of Uvicorn
 
