@@ -3,13 +3,13 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [39508168315 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39508168315)
-- Commit: [`87b888b5c364d087dc389076846d7474ba3a15e9`](https://github.com/appunni-m/uvicorn-rs/commit/87b888b5c364d087dc389076846d7474ba3a15e9)
-- Recorded: 2026-10-21T02:18:10Z
+- Run: [39541584688 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39541584688)
+- Commit: [`a9b15f49a22fb56c5d7d624ab15c524b25907010`](https://github.com/appunni-m/uvicorn-rs/commit/a9b15f49a22fb56c5d7d624ab15c524b25907010)
+- Recorded: 2026-10-21T05:10:09Z
 - Category matrix job: `failure`
 - Aggregate job: `failure`
 
-This attempt did not produce a validated three-system aggregate. No performance result was generated or substituted. The [previous complete report](benchmark-results.md) remains the latest measured result; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/39508168315) for this attempt.
+This attempt did not produce a validated three-system aggregate. No performance result was generated or substituted. The [previous complete report](benchmark-results.md) remains the latest measured result; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/39541584688) for this attempt.
 <!-- END GENERATED LATEST ATTEMPT -->
 
 ## Diagnosis of the latest failed attempt
