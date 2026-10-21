@@ -198,8 +198,18 @@ the evidence map below.
 | Unix/fd sockets, reload, multi-worker supervision | Seven focused HTTP/1.1 comparisons pass for plain POSIX UDS and inherited IPv4 TCP listeners: UDS through the module CLI and `Config`/`Server`; inherited TCP through module CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one and two listeners. The UDS scope checks `client=None` and `server=(PATH, None)`. Two module-CLI inputs start two workers, selected by `--workers 2` and `WEB_CONCURRENCY=2`, serve a GET, and shut down on SIGINT. Reload and broader worker supervision remain unverified, including worker failure/restart, dynamic worker-count signals, and non-TCP listener combinations. | `dhfq` | Add process-level reload and multi-worker cases, then extend the socket inputs to additional address families, platforms, TLS, and protocols. |
 | Package extras and release gates | No published package; current distribution requirements/extras do not mirror the upstream installation contract. | `1s4z`, `v5fe` | Installed-artifact cases and package-content/dependency gates on the supported OS/Python matrix. |
 
+Local CLI verification for code commit
+[`6d157fd`](https://github.com/appunni-m/uvicorn-rs/commit/6d157fdc6)
+ran the 28 indexed CLI inputs individually against isolated Uvicorn 0.54.0 on
+macOS ARM64 / CPython 3.12.13; all 28 passed. A wheel from that source passed
+the clean installed-wheel consumer check, including parity of `uvicorn-rs-py`
+and `uvicorn` help options and version output. Its SHA-256 was
+`84a98faaa78c0d342d13154c82be8ed0138d3617d95ec1d0c595d34e80904f31`. This is
+local evidence for the listed cases and consumer checks, not full CLI parity
+or cross-platform validation.
+
 `tests/parity/manifest.json` describes the ASGI protocol slice, a focused CLI
-process slice, and the public Python import/signature probe. Twenty-seven CLI
+process slice, and the public Python import/signature probe. Twenty-eight CLI
 inputs cover module/console help and version; argument validation and selected
 environment precedence; current-directory and `--app-dir` import resolution;
 factory and env-file startup behavior; `UVICORN_APP` selection; HTTP and
