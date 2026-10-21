@@ -233,62 +233,49 @@ They compare public imports/signatures, the
 `uvicorn.run()` missing-module diagnostic, a successful default request, an
 API request with lifespan disabled, a module CLI request with lifespan
 disabled, startup readiness, startup-failure state, and API/module-CLI requests
-with an ASCII root path. The API and CLI root-path cases use a target contract:
-they check `root_path`, `path`, and original request `raw_path` against explicit
-ASGI expectations, and compare only exit code, response receipt, shutdown
-signal, and timeout state with Uvicorn 0.54.0. The oracle returns HTTP 200 but
-reports the contract failure body because it adds the configured prefix to
-`raw_path`. This is an intentional scope-level divergence from Uvicorn,
-consistent with the [ASGI HTTP
-scope](https://asgi.readthedocs.io/en/stable/specs/www.html#http-connection-scope),
-which defines `raw_path` as the original HTTP path component bytes, excluding
-the query string. A separate request-path parity input verifies percent-
-encoded UTF-8 decoding with an empty `root_path`. A target contract checks a
-Unicode `root_path`, the prefixed decoded `path`, and the original
-percent-encoded `raw_path`. Uvicorn 0.54.0 rejects this input before ASGI
-invocation, so the contract compares target completion and shutdown behavior
-with the oracle while checking the target response and scope against explicit
-ASGI expectations; it does not claim response parity for this case. The clean
-exact-commit receipt is run `65c922f8a0cf4b038f3f2612785cdbc3`, passed 1/1 on
-commit `c5ca9a4126cf1bf5b5643648ce66bb3a585a7f73`, macOS 15.7.7 ARM64, CPython
-3.12.13, and Uvicorn 0.54.0. The target tree was clean; source SHA-256 was
-`12b27b055f70fd1ac243e73be0cfb145e16dc1dbdce834bcc8ae4a86544db325`, and the
+with an ASCII root path.
+
+The API and CLI root-path inputs use a target contract that checks `root_path`,
+decoded `path`, and original request `raw_path` against explicit ASGI
+expectations. They compare only exit code, response receipt, shutdown signal,
+and timeout state with Uvicorn 0.54.0. For ASCII prefixes, Uvicorn returns HTTP
+200 but produces the contract failure body because its `raw_path` includes the
+configured prefix. ASGI defines `raw_path` as the original HTTP path component
+bytes, excluding the query string ([ASGI HTTP
+scope](https://asgi.readthedocs.io/en/stable/specs/www.html#http-connection-scope)).
+The separate `python-api.run-http-decodes-non-ascii-request-path` input checks
+percent-encoded UTF-8 decoding with an empty `root_path` and compares the
+complete response against Uvicorn.
+
+The `python-api.run-http-asgi-raw-path-preserves-unicode-root-path` input adds
+a Unicode prefix. Uvicorn 0.54.0 returns HTTP 400 before ASGI invocation
+because its HTTP/1.1 implementation encodes `root_path` as ASCII ([pinned
+source](https://github.com/Kludex/uvicorn/blob/3eb9a9ab9af69005c687728097461c1fd2a95db9/uvicorn/protocols/http/httptools_impl.py#L261-L262)).
+The target accepts `/mounted/应用`, prefixes the decoded `path`, and preserves
+the original percent-encoded request path in `raw_path`. This case checks the
+target scope and response against explicit ASGI expectations and compares only
+the lifecycle fields with Uvicorn; it does not claim response parity.
+
+The four focused receipts below passed individually on clean commit
+`352e6700dae4956478e8cb3037bc87d67265670b`, macOS 15.7.7 ARM64, CPython
+3.12.13, Rust 1.98.1, and Uvicorn 0.54.0. The target source SHA-256 was
+`12b27b055f70fd1ac243e73be0cfb145e16dc1dbdce834bcc8ae4a86544db325`, the
 native extension SHA-256 was
-`7d75162e3f8e16127452b503ac645b1be8985d922643a6978f4cacc026dae21b`. The
-input digest was
-`a10792e2dd1b261dd75ba919119572e4a984a4978d7e68876598fc3dcc55b361`. The
-ASGI scope contract case passed with HTTP 200 and its expected sentinel body;
-Uvicorn's oracle process exited cleanly after returning HTTP 400 with
-`Invalid HTTP request received.` The raw receipt is retained under ignored
-`target/raw-path-unicode-root-clean.json`. These focused cases do not close the
-remaining settings or lifecycle inventory.
+`7d75162e3f8e16127452b503ac645b1be8985d922643a6978f4cacc026dae21b`, the
+fixture SHA-256 was
+`de23457d5d294b2c0127affc587b21209e236e03ac3bf5d26d9a4cf84bfef94a`, and
+the Python API input SHA-256 was
+`a246103c003e81a554b9c62a34b60ec0e48367fb0902157f2ccf16fed0c0aa63`.
 
-The `uvicorn-rs-parity/input@30` case
-`python-api.run-http-decodes-non-ascii-request-path` independently exercises a
-percent-encoded UTF-8 path with an empty `root_path`. The previously recorded
-receipt used an earlier input revision with ASCII `root_path` and is historical
-for the current input. Its clean exact-commit receipt is run
-`e714b99c45984680b722097399678a93`: 1/1 passed on commit
-`5764b1fb26aa20845d388acedf6af76db4f2c568`, macOS 15.7.7 ARM64, CPython
-3.12.13, and Uvicorn 0.54.0. The target was clean; source SHA-256 was
-`fcd8ba900a0c59ce20b48cc9d9366fd26479697bc7baff52c03c5af1cbbe6e9d`, and
-the native extension SHA-256 was
-`9f0be1f90bb7e9f2dcbea10ef9a999a3fb859b8bba13f8e4dde2d3b3b7042b5d`. The
-input digest was
-`4571f3a4379d237ae500e36e320f40293fc2345e4c2b6e7e44cc15f2f243d3d1`.
+| Input | Receipt | Result |
+| --- | --- | --- |
+| `python-api.run-http-applies-root-path` | `9264de9848a8450da4cfdc6aaa50858b` | 1/1. Target matches all three ASGI expectations; Uvicorn returns the intentional contract-failure body. |
+| `python-api.module-cli-applies-root-path` | `bc118f4d93e741579239107b648fa357` | 1/1, with the same documented `raw_path` divergence. |
+| `python-api.run-http-asgi-raw-path-preserves-unicode-root-path` | `958076c562534f9c810bf520bd7e7df3` | 1/1. Target returns HTTP 200 and the expected body; Uvicorn returns HTTP 400 before ASGI invocation. |
+| `python-api.run-http-decodes-non-ascii-request-path` | `208d9789ca984d67992e9e2d7fc7751e` | 1/1 with matching HTTP 200 response and scope output. |
 
-A target conformance input now covers Unicode `root_path`. The ASGI HTTP scope
-defines `root_path` as Unicode and `raw_path` as the original request path
-bytes ([ASGI HTTP scope](https://asgi.readthedocs.io/en/stable/specs/www.html#http-connection-scope)).
-The server keeps these values separate: it accepts `/mounted/应用` as the
-root path, prefixes the decoded `path`, and reports the original
-percent-encoded request path in `raw_path`. For an ASCII prefix, Uvicorn 0.54.0
-instead prepends the configured prefix to `raw_path`. For a Unicode prefix it
-returns HTTP 400 before calling the app because it encodes `root_path` as ASCII
-([pinned source](https://github.com/Kludex/uvicorn/blob/3eb9a9ab9af69005c687728097461c1fd2a95db9/uvicorn/protocols/http/httptools_impl.py#L261-L262)).
-These are documented divergences from Uvicorn and target ASGI scope conformance
-checks, not response parity. The clean exact-commit receipt and scope
-expectations are recorded above and in Kata issue `9kbx`.
+All raw receipts are retained under ignored `target/` paths. These focused
+cases do not close the remaining settings or lifecycle inventory.
 
 Input schema `@9` was introduced on 2026-10-20 to declare `root_path` in the
 `run_http` stimulus. Input schema `@10` added optional default response headers
