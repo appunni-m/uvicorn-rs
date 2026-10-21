@@ -4,6 +4,17 @@
 
 """Process supervision used by the Uvicorn-compatible entry points."""
 
+from typing import TYPE_CHECKING
+
+from .basereload import BaseReload
 from .multiprocess import Multiprocess
 
-__all__ = ["Multiprocess"]
+if TYPE_CHECKING:
+    ChangeReload: type[BaseReload]
+else:
+    try:
+        from .watchfilesreload import WatchFilesReload as ChangeReload
+    except ImportError:
+        from .statreload import StatReload as ChangeReload
+
+__all__ = ["ChangeReload", "Multiprocess"]

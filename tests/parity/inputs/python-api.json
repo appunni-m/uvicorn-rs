@@ -1307,6 +1307,19 @@
           "prebound_socket_count": 2
         }
       }
+    },
+    {
+      "case_id": "python-api.module-cli-reload-restarts-after-watched-module-change",
+      "profile": "python-api",
+      "operation": "python.api.run-http-reload",
+      "covers": ["python.api.run-http-reload"],
+      "api": {
+        "run_http_reload": {
+          "timeout_seconds": 20,
+          "reload_delay": 0.1,
+          "workers": 2
+        }
+      }
     }
   ]
 }

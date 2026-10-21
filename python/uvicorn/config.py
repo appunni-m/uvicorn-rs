@@ -17,6 +17,7 @@ import socket
 import ssl
 import sys
 from configparser import RawConfigParser
+from pathlib import Path
 from typing import Any, Awaitable, Callable, IO
 
 from uvicorn._ansi import style
@@ -65,6 +66,55 @@ LOG_LEVELS = {
 }
 
 STARTUP_FAILURE = 3
+
+
+def is_dir(path: Path) -> bool:
+    """Return whether a reload pattern resolves to an existing directory."""
+    try:
+        if not path.is_absolute():
+            path = path.resolve()
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+def resolve_reload_patterns(
+    patterns_list: list[str], directories_list: list[str]
+) -> tuple[list[str], list[Path]]:
+    """Resolve reload patterns into stable file patterns and watch roots."""
+    directories = list(set(map(Path, directories_list.copy())))
+    patterns = patterns_list.copy()
+    current_working_directory = Path.cwd()
+    for pattern in patterns_list:
+        if pattern == ".*":
+            continue
+        patterns.append(pattern)
+        if is_dir(Path(pattern)):
+            directories.append(Path(pattern))
+        else:
+            for match in current_working_directory.glob(pattern):
+                if is_dir(match):
+                    directories.append(match)
+
+    directories = list(set(map(Path, directories)))
+    directories = [path.resolve() for path in directories if is_dir(path)]
+    children = []
+    for index, directory in enumerate(directories):
+        for other in directories[index + 1 :]:
+            if directory in other.parents:
+                children.append(other)
+            elif other in directory.parents:
+                children.append(directory)
+    directories = list(set(directories).difference(children))
+    return list(set(patterns)), directories
+
+
+def _normalize_dirs(dirs: list[str] | str | None) -> list[str]:
+    if dirs is None:
+        return []
+    if isinstance(dirs, str):
+        return [dirs]
+    return list(set(dirs))
 
 
 def _validate_http2_backend(http: object, enabled: bool) -> None:
@@ -207,6 +257,57 @@ class Config:
         self.loaded_app: Any = None
         self.loop_factory: Callable[[], asyncio.AbstractEventLoop] | None = None
         self.configure_logging()
+
+        self.reload_dirs: list[Path] = []
+        self.reload_dirs_excludes: list[Path] = []
+        self.reload_includes: list[str] = []
+        self.reload_excludes: list[str] = []
+        logger = logging.getLogger("uvicorn.error")
+        if (reload_dirs or reload_includes or reload_excludes) and not self.should_reload:
+            logger.warning(
+                "Current configuration will not reload as not all conditions are met, "
+                "please refer to documentation."
+            )
+        if self.should_reload:
+            normalized_dirs = _normalize_dirs(reload_dirs)
+            normalized_includes = _normalize_dirs(reload_includes)
+            normalized_excludes = _normalize_dirs(reload_excludes)
+            self.reload_includes, self.reload_dirs = resolve_reload_patterns(
+                normalized_includes, normalized_dirs
+            )
+            self.reload_excludes, self.reload_dirs_excludes = resolve_reload_patterns(
+                normalized_excludes, []
+            )
+
+            configured_dirs = self.reload_dirs.copy()
+            for excluded_dir in self.reload_dirs_excludes:
+                for reload_dir in configured_dirs:
+                    if excluded_dir == reload_dir or excluded_dir in reload_dir.parents:
+                        try:
+                            self.reload_dirs.remove(reload_dir)
+                        except ValueError:
+                            pass
+
+            for pattern in self.reload_excludes:
+                if pattern in self.reload_includes:
+                    self.reload_includes.remove(pattern)
+
+            if not self.reload_dirs:
+                if normalized_dirs:
+                    logger.warning(
+                        "Provided reload directories %s did not contain valid "
+                        "directories, watching current working directory.",
+                        normalized_dirs,
+                    )
+                self.reload_dirs = [Path.cwd()]
+
+            logger.info(
+                "Will watch for changes in these directories: %s",
+                sorted(map(str, self.reload_dirs)),
+            )
+
+        if self.reload and self.workers > 1:
+            logger.warning('"workers" flag is ignored when reloading is enabled.')
 
     def configure_logging(self) -> None:
         """Apply Uvicorn's logging configuration and access-log settings."""
@@ -378,11 +479,10 @@ class Config:
         checks = (
             (self.uds is not None and os.name == "nt", "uds"),
             (self.fd is not None and os.name == "nt", "fd"),
-            (self.reload, "reload"),
             # Uvicorn runs workers=0 and workers=1 in the current process.
             # WEB_CONCURRENCY=0 reaches Config without the explicit-value
             # normalization and is still a single-process configuration.
-            (self.workers not in (0, 1), "workers"),
+            (self.workers not in (0, 1) and not self.should_reload, "workers"),
             (self.loop not in {"auto", "asyncio", "uvloop"}, "loop"),
             (self.http not in {"auto", "httptools"}, "http"),
             (self.ws != "auto", "ws"),
@@ -415,3 +515,8 @@ class Config:
             raise NotImplementedError(
                 f"uvicorn-rs does not implement these Uvicorn Config settings yet: {names}"
             )
+
+    @property
+    def should_reload(self) -> bool:
+        """Whether an import-string app is supervised by the reload process."""
+        return isinstance(self.app, str) and self.reload

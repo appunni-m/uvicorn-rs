@@ -838,6 +838,9 @@ def load_contract(
         "server_started_before_shutdown", "serve_task_finished_before_shutdown",
         "serve_raised", "serve_timed_out", "server_exit_code",
         "process_stderr_has_unhandled_task_warning",
+        "first_response_body_base64", "second_response_body_base64", "reload_observed",
+        "process_stdout_base64", "process_stderr_base64",
+        "workers_ignored_warning",
     }
     for operation in manifest["operations"]:
         expected_operation_keys = {"id", "kind", "observe"}
@@ -2202,7 +2205,34 @@ def load_contract(
                 "python.api.server-readiness": "server_readiness",
                 "python.api.server-startup-failure-state": "server_startup_failure",
             }
-            if case["operation"] in {
+            if case["operation"] == "python.api.run-http-reload":
+                exact_keys(case["api"], {"run_http_reload"}, f"{case_id}.api")
+                reload_request = case["api"]["run_http_reload"]
+                exact_keys(
+                    reload_request,
+                    {"timeout_seconds", "reload_delay", "workers"},
+                    f"{case_id}.api.run_http_reload",
+                )
+                timeout_seconds = reload_request["timeout_seconds"]
+                reload_delay = reload_request["reload_delay"]
+                workers = reload_request["workers"]
+                if type(timeout_seconds) is not int or not 5 <= timeout_seconds <= 60:
+                    raise ParityError(
+                        f"{case_id}.api.run_http_reload.timeout_seconds must be from 5 through 60"
+                    )
+                if (
+                    isinstance(reload_delay, bool)
+                    or not isinstance(reload_delay, (int, float))
+                    or not 0 < reload_delay <= 2
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http_reload.reload_delay must be greater than 0 and at most 2 seconds"
+                    )
+                if type(workers) is not int or not 1 <= workers <= 16:
+                    raise ParityError(
+                        f"{case_id}.api.run_http_reload.workers must be from 1 through 16"
+                    )
+            elif case["operation"] in {
                 "python.api.run-http",
                 "python.api.run-http-request-limit",
                 "python.api.run-http-asgi-scope-contract",
@@ -10182,6 +10212,7 @@ def run_python_api_probe(
             coverage_profile_dir / "%p-%m.profraw"
         )
     run_http = case["api"].get("run_http", {})
+    run_http_reload = case["api"].get("run_http_reload")
     for name, value in run_http.get("environment", {}).items():
         if value is None:
             environment.pop(name, None)
@@ -10194,7 +10225,11 @@ def run_python_api_probe(
     ]
     probe_timeout = max(
         10,
-        run_http.get("timeout_seconds", 5) + 5 if "run_http" in case["api"] else 10,
+        run_http.get("timeout_seconds", 5) + 5
+        if "run_http" in case["api"]
+        else run_http_reload["timeout_seconds"] + 5
+        if run_http_reload is not None
+        else 10,
     )
     completed = subprocess.run(
         command,
@@ -10211,6 +10246,36 @@ def run_python_api_probe(
         "stdout_base64": base64.b64encode(completed.stdout).decode("ascii"),
         "stderr_base64": base64.b64encode(completed.stderr).decode("ascii"),
     }
+    if case["operation"] == "python.api.run-http-reload":
+        try:
+            reload_observation = json.loads(completed.stdout)["run_http_reload"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: reload probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(reload_observation) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: reload API observation must be an object"
+            )
+        observation.update(
+            {
+                name: reload_observation.get(name)
+                for name in (
+                    "first_response_body_base64",
+                    "second_response_body_base64",
+                    "reload_observed",
+                    "shutdown_signal_sent",
+                    "process_exit_code",
+                    "process_timed_out",
+                    "process_stdout_base64",
+                    "process_stderr_base64",
+                    "workers_ignored_warning",
+                )
+            }
+        )
     if case["operation"] in {
         "python.api.run-http",
         "python.api.run-http-request-limit",

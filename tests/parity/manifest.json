@@ -2039,6 +2039,41 @@
       }
     },
     {
+      "id": "python.api.run-http-reload",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "first_response_body_base64",
+        "second_response_body_base64",
+        "reload_observed",
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "workers_ignored_warning",
+        "process_stdout_base64",
+        "process_stderr_base64"
+      ],
+      "compare": [
+        "exit_code",
+        "first_response_body_base64",
+        "second_response_body_base64",
+        "reload_observed",
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "workers_ignored_warning"
+      ],
+      "required_observations": {
+        "first_response_body_base64": "YmVmb3Jl",
+        "second_response_body_base64": "YWZ0ZXI=",
+        "reload_observed": true,
+        "shutdown_signal_sent": true,
+        "process_exit_code": 0,
+        "process_timed_out": false,
+        "workers_ignored_warning": true
+      }
+    },
+    {
       "id": "python.api.run-http-request-limit",
       "kind": "command_operation",
       "observe": [

@@ -8,11 +8,13 @@ import inspect
 import json
 import os
 import signal
+import shutil
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
 
 _startup_failure_server = None
 _startup_failure_task = None
@@ -63,6 +65,143 @@ class UnixHTTPConnection(http.client.HTTPConnection):
         connection.settimeout(self.timeout)
         connection.connect(self.socket_path)
         self.sock = connection
+
+
+def run_http_reload_observation(request: dict) -> dict:
+    """Change one watched Python module and observe the replacement process."""
+
+    timeout_seconds = request["timeout_seconds"]
+    fixture_directory = Path(__file__).parent / "fixtures"
+    with tempfile.TemporaryDirectory(prefix="uvicorn-rs-reload-") as directory:
+        app_directory = Path(directory)
+        shutil.copyfile(fixture_directory / "reload_app.py", app_directory / "reload_app.py")
+        shutil.copyfile(fixture_directory / "reload_state.py", app_directory / "reload_state.py")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            port = reservation.getsockname()[1]
+
+        command = [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "reload_app:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--workers",
+            str(request["workers"]),
+            "--loop",
+            "asyncio",
+            "--reload",
+            "--reload-dir",
+            str(app_directory),
+            "--reload-delay",
+            str(request["reload_delay"]),
+            "--app-dir",
+            str(app_directory),
+        ]
+        environment = os.environ.copy()
+        environment.pop("PYTHONPATH", None)
+        environment.pop("PYTHONHOME", None)
+        environment.pop("PYTHONSTARTUP", None)
+        environment["PYTHONNOUSERSITE"] = "1"
+        creationflags = (
+            subprocess.CREATE_NEW_PROCESS_GROUP
+            if os.name == "nt"
+            else 0
+        )
+        process = subprocess.Popen(
+            command,
+            cwd=os.getcwd(),
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=creationflags,
+        )
+
+        def request_body() -> tuple[int | None, bytes | None]:
+            connection = http.client.HTTPConnection(
+                "127.0.0.1", port, timeout=0.5
+            )
+            try:
+                connection.request("GET", "/")
+                response = connection.getresponse()
+                return response.status, response.read()
+            except (OSError, http.client.HTTPException):
+                return None, None
+            finally:
+                connection.close()
+
+        first_status = None
+        first_body = None
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                break
+            first_status, first_body = request_body()
+            if first_status == 200:
+                break
+            time.sleep(0.05)
+
+        reload_observed = False
+        second_status = None
+        second_body = None
+        if first_status == 200:
+            # The reloader starts serving from its child before the parent has
+            # necessarily entered the watch iterator. Let the configured poll
+            # interval elapse before changing the module so the case measures
+            # reload behavior rather than racing watcher startup.
+            time.sleep(max(0.3, request["reload_delay"] * 3))
+            (app_directory / "reload_state.py").write_text(
+                'BODY = b"after"\n', encoding="utf-8"
+            )
+            deadline = time.monotonic() + timeout_seconds
+            while time.monotonic() < deadline:
+                if process.poll() is not None:
+                    break
+                second_status, second_body = request_body()
+                if second_status == 200 and second_body == b"after":
+                    reload_observed = True
+                    break
+                time.sleep(0.2)
+
+        shutdown_signal_sent = False
+        if process.poll() is None:
+            try:
+                process.send_signal(signal.SIGINT)
+                shutdown_signal_sent = True
+            except OSError:
+                process.terminate()
+        process_timed_out = False
+        try:
+            process.wait(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            process_timed_out = True
+            process.kill()
+            process.wait()
+        stdout, stderr = process.communicate()
+        if len(stdout) > 4 * 1024 * 1024 or len(stderr) > 4 * 1024 * 1024:
+            raise RuntimeError("reload probe process output exceeded the 4 MiB bound")
+
+        return {
+            "first_response_body_base64": base64.b64encode(
+                first_body or b""
+            ).decode("ascii"),
+            "second_response_body_base64": base64.b64encode(
+                second_body or b""
+            ).decode("ascii"),
+            "reload_observed": reload_observed,
+            "shutdown_signal_sent": shutdown_signal_sent,
+            "process_exit_code": process.returncode,
+            "process_timed_out": process_timed_out,
+            "workers_ignored_warning": (
+                b'"workers" flag is ignored when reloading is enabled.' in stderr
+            ),
+            "process_stdout_base64": base64.b64encode(stdout).decode("ascii"),
+            "process_stderr_base64": base64.b64encode(stderr).decode("ascii"),
+        }
 
 
 def run_http_observation(request: dict) -> dict:
@@ -975,6 +1114,14 @@ def module_cli_lifespan_startup_observation(request: dict) -> dict[str, object]:
 
 def main() -> None:
     request = json.loads(sys.argv[1])
+    if "run_http_reload" in request:
+        observations = {
+            "run_http_reload": run_http_reload_observation(
+                request["run_http_reload"]
+            ),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
     if "run_http" in request:
         observations = {"run_http": run_http_observation(request["run_http"])}
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))

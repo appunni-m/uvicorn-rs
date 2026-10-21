@@ -57,7 +57,7 @@ different field names insignificant while preserving the order of values for a
 repeated name. HTTP/1.1 and HTTP/3 observations keep their declared comparison
 fields.
 
-The manifest currently defines 27 CLI process cases across `python -m uvicorn`
+The manifest currently defines 28 CLI process cases across `python -m uvicorn`
 and the installed `uvicorn` command. They cover help and version output,
 selected argument errors and environment precedence, current-directory
 console-script import resolution, app loading with
@@ -68,10 +68,16 @@ unknown-option rejection, and limited single-process worker settings. On current
 `cli.unknown-option-is-rejected` each pass individually against isolated
 Uvicorn 0.54.0. Two focused cases verify two-worker module-CLI request and
 SIGINT shutdown behavior through explicit worker count and `WEB_CONCURRENCY`;
-this does not establish full multi-worker supervision,
-reload/watch behavior, inherited-listener support beyond the focused IPv4
-cases below, IPv6, Windows, TLS, HTTP/2 or HTTP/3 over inherited sockets,
-execution of every listed option, or full CLI and Python API parity. Five
+this does not establish full multi-worker supervision. One separate Python API
+input starts `python -m uvicorn --reload`, edits a watched Python module,
+verifies the replacement body, and shuts down with SIGINT; it passes locally
+against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13 with `--workers 2` set.
+It passes both without `watchfiles` (candidate `StatReload` fallback, oracle
+watchfiles) and with `watchfiles==1.3.0` installed for both. It also compares
+Uvicorn's warning that reload ignores the worker count. Reload filters and
+other platforms remain unverified. Inherited-listener support beyond the focused IPv4 cases below,
+IPv6, Windows, TLS, HTTP/2 or HTTP/3 over inherited sockets, execution of every
+listed option, and full CLI and Python API parity remain unverified. Five
 inherited TCP-listener inputs pass individually against Uvicorn 0.54.0 on
 macOS ARM64 / CPython 3.12.13: module
 CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and
@@ -545,16 +551,22 @@ contain CLI invocation mode, arguments, environment overrides, working
 directory and timeout; network inputs contain request methods, paths, headers,
 body bytes, WebSocket messages, disconnect workflows, and shutdown workflows.
 They do not contain expected responses or previously captured server output.
-The 27 indexed CLI cases compare module and installed-console invocations,
+The 28 indexed CLI cases compare module and installed-console invocations,
 selected parsing and environment-precedence behavior, current-directory app
 import resolution, app loading and environment files, protocol-selector
 (including `--http h11`) and SansIO
 WebSocket queue-option acceptance, unknown-option rejection, and single-process
 worker settings.
 Selector cases check argument handling;
-they do not prove that every option is executed or establish multi-worker,
-reload/watch behavior. Five inherited-listener cases verify IPv4 TCP listeners
-on macOS through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with
+they do not prove that every option is executed or establish full multi-worker
+supervision. One separate reload input changes a watched Python module and
+verifies the new response plus graceful SIGINT exit on local macOS ARM64 /
+CPython 3.12.13 with `--workers 2`, both without `watchfiles` and with
+`watchfiles==1.3.0`. It also compares the warning that reload ignores the
+worker count. The candidate's `StatReload` fallback and `WatchFilesReload`
+paths both pass; reload filters remain unverified. Five
+inherited-listener cases verify IPv4 TCP listeners on macOS through the module
+CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with
 `Server.run()`, and `Server.run(sockets=[...])` with one and two sockets.
 IPv6, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets remain
 unverified. Focused Python API inputs cover plain HTTP/1.1 over UDS

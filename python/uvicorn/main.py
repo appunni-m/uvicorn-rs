@@ -308,7 +308,17 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "log_config", "log_level", "access_log",
         "use_colors", "backlog",
     }
-    supported.update({"workers", "timeout_worker_healthcheck"})
+    supported.update(
+        {
+            "workers",
+            "timeout_worker_healthcheck",
+            "reload",
+            "reload_dirs",
+            "reload_includes",
+            "reload_excludes",
+            "reload_delay",
+        }
+    )
     # The Rust engine has one native HTTP/1.1 implementation. These Uvicorn
     # selectors route to that engine; selecting h11 does not load Python h11
     # or promise parser-specific behavior for malformed requests.
@@ -518,9 +528,9 @@ def run(
         h11_max_incomplete_event_size=h11_max_incomplete_event_size,
         reset_contextvars=reset_contextvars,
     )
-    # Uvicorn requires an import string when a parent process supervises
-    # workers. Keep application import and startup inside each child.
-    if config.workers > 1:
+    # Reload and workers are supervised by a parent process. The app must be
+    # imported in each child so a changed module is loaded on every restart.
+    if config.reload or config.workers > 1:
         if not isinstance(app, str):
             import logging
 
@@ -529,24 +539,33 @@ def run(
             )
             raise SystemExit(STARTUP_FAILURE)
 
-        from .supervisors.multiprocess import Multiprocess
-
-        listener = config.bind_socket()
-        try:
-            Multiprocess(config, sockets=[listener]).run()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            listener.close()
-            if config.uds and os.path.exists(config.uds):
-                os.remove(config.uds)
-        return
-
-    # Uvicorn resolves the app before Server startup validates the protocol
-    # in single-process mode.
-    if not config.reload:
+    # Uvicorn resolves the app before startup validation in single-process
+    # mode. Worker and reload children import the app after they start.
+    if not config.reload and config.workers <= 1:
         config.load_app()
+
+    server = Server(config)
     try:
-        Server(config).run()
+        if config.should_reload:
+            from .supervisors import ChangeReload
+
+            listener = config.bind_socket()
+            try:
+                ChangeReload(config, target=server.run, sockets=[listener]).run()
+            finally:
+                listener.close()
+        elif config.workers > 1:
+            from .supervisors.multiprocess import Multiprocess
+
+            listener = config.bind_socket()
+            try:
+                Multiprocess(config, sockets=[listener]).run()
+            finally:
+                listener.close()
+        else:
+            server.run()
     except KeyboardInterrupt:
         pass
+    finally:
+        if config.uds and os.path.exists(config.uds):
+            os.remove(config.uds)
