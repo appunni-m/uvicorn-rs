@@ -178,7 +178,12 @@ jobs:
           cd target/release-candidate
           sha256sum --check --strict SHA256SUMS
           cd ../..
+          mkdir -p target/asgi-coverage
+          cp -a target/release-candidate/evidence/coverage/reviewed/. target/asgi-coverage/
+          python scripts/check_ci_evidence.py coverage \
+            target/asgi-coverage/coverage-report.json --offline --require-clean
           python - "$RELEASE_VERSION" "$RELEASE_COMMIT" <<'PY'
+          import hashlib
           import json
           import os
           import sys
@@ -186,7 +191,7 @@ jobs:
 
           version, commit = sys.argv[1:]
           candidate = json.loads(Path("target/release-candidate/candidate.json").read_text())
-          if (candidate.get("schema") != "uvicorn-rs-release-candidate@2"
+          if (candidate.get("schema") != "uvicorn-rs-release-candidate@3"
                   or candidate.get("state") != "verified candidate; publication disabled"
                   or candidate.get("version") != version
                   or candidate.get("commit") != commit
@@ -194,6 +199,23 @@ jobs:
               raise SystemExit("candidate manifest does not bind the requested tag, version and source commit")
 
           root = Path("target/release-candidate/evidence")
+          selection_path = root / "coverage/handoff-selection.json"
+          selection = json.loads(selection_path.read_text())
+          coverage = candidate.get("coverage", {})
+          expected_coverage = {
+              "selection_sha256": hashlib.sha256(selection_path.read_bytes()).hexdigest(),
+              "handoff_manifest_sha256": selection.get("handoff_manifest_sha256"),
+              "reviewed_report_sha256": selection.get("reviewed_report_sha256"),
+              "coverage_mcp_receipt_sha256": selection.get("coverage_mcp_receipt_sha256"),
+              "handoff_artifact": selection.get("handoff_artifact"),
+          }
+          if (selection.get("schema") != "uvicorn-rs-coverage-mcp-selection@1"
+                  or selection.get("source_commit") != commit
+                  or selection.get("ci_run") != {"id": int(candidate["ci_run_id"]),
+                                                  "attempt": int(candidate["ci_run_attempt"]),
+                                                  "branch": "main", "event": "push"}
+                  or coverage != expected_coverage):
+              raise SystemExit("candidate Coverage-MCP evidence is missing or differs from its selection receipt")
           receipt_path = root / "standalone-h3-consumer.json"
           cargo_requested = os.environ["RELEASE_ACTION"] in {"cargo", "cargo-and-pypi"}
           if cargo_requested and receipt_path.is_file():

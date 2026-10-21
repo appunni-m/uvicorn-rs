@@ -1,0 +1,120 @@
+name: Coverage MCP handoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: Successful main CI run that produced the unified coverage artifact
+        required: true
+        type: number
+      ci_run_attempt:
+        description: Exact successful attempt number for that CI run
+        required: true
+        type: number
+      receipt_gzip_base64:
+        description: One-line base64 of gzip-compressed JSON array containing every unfiltered regions and lines MCP page
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: coverage-mcp-${{ inputs.ci_run_id }}-${{ inputs.ci_run_attempt }}
+  cancel-in-progress: false
+
+jobs:
+  attach-and-verify:
+    name: Attach exact-source Coverage-MCP evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12.13"
+      - name: Require dispatch from the exact main commit and select successful CI artifact
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          CI_RUN_ATTEMPT: ${{ inputs.ci_run_attempt }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test -z "$(git status --porcelain --untracked-files=all)"
+          python scripts/coverage_mcp_handoff.py validate-ci \
+            --repository "$GITHUB_REPOSITORY" \
+            --source "$SOURCE_COMMIT" \
+            --ci-run-id "$CI_RUN_ID" \
+            --ci-attempt "$CI_RUN_ATTEMPT" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Download the exact raw coverage artifact and verify its archive digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.ci_run_id }}
+          artifact-ids: ${{ steps.ci.outputs.raw-artifact-id }}
+          digest-mismatch: error
+          path: target/asgi-coverage
+      - name: Snapshot raw report, context, run identity, and file hashes before attachment
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          CI_RUN_ATTEMPT: ${{ inputs.ci_run_attempt }}
+          RAW_ARTIFACT_ID: ${{ steps.ci.outputs.raw-artifact-id }}
+          RAW_ARTIFACT_NAME: ${{ steps.ci.outputs.raw-artifact-name }}
+          RAW_ARTIFACT_SIZE: ${{ steps.ci.outputs.raw-artifact-size }}
+          RAW_ARTIFACT_DIGEST: ${{ steps.ci.outputs.raw-artifact-digest }}
+        run: |
+          set -euo pipefail
+          python scripts/coverage_mcp_handoff.py snapshot \
+            --report target/asgi-coverage/coverage-report.json \
+            --source "$SOURCE_COMMIT" \
+            --ci-run-id "$CI_RUN_ID" \
+            --ci-attempt "$CI_RUN_ATTEMPT" \
+            --raw-artifact-id "$RAW_ARTIFACT_ID" \
+            --raw-artifact-name "$RAW_ARTIFACT_NAME" \
+            --raw-artifact-size "$RAW_ARTIFACT_SIZE" \
+            --raw-artifact-digest "$RAW_ARTIFACT_DIGEST" \
+            --output target/coverage-handoff/raw-inventory.json
+      - name: Decode and save the bounded Coverage-MCP page receipt
+        env:
+          RECEIPT_GZIP_BASE64: ${{ inputs.receipt_gzip_base64 }}
+        run: |
+          set -euo pipefail
+          python scripts/coverage_mcp_handoff.py write-receipt \
+            --output target/asgi-coverage/coverage-mcp-receipt.json
+      - name: Attach pages and enforce strict offline coverage evidence
+        run: |
+          set -euo pipefail
+          python scripts/attach_coverage_mcp.py \
+            --report target/asgi-coverage/coverage-report.json \
+            --receipt target/asgi-coverage/coverage-mcp-receipt.json
+          python scripts/check_ci_evidence.py coverage \
+            target/asgi-coverage/coverage-report.json --offline --require-clean
+      - name: Record immutable raw, reviewed, and workflow identities
+        env:
+          HANDOFF_RUN_ID: ${{ github.run_id }}
+          HANDOFF_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python scripts/coverage_mcp_handoff.py create \
+            --snapshot target/coverage-handoff/raw-inventory.json \
+            --review-root target/asgi-coverage \
+            --handoff-run-id "$HANDOFF_RUN_ID" \
+            --handoff-attempt "$HANDOFF_RUN_ATTEMPT" \
+            --output target/coverage-handoff/handoff.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: uvicorn-rs-coverage-mcp-${{ inputs.ci_run_id }}-${{ inputs.ci_run_attempt }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            target/asgi-coverage/**
+            target/coverage-handoff/**
+          if-no-files-found: error
+          retention-days: 90

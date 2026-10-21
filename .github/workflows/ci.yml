@@ -32,6 +32,20 @@ env:
   ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG: "1"
 
 jobs:
+  release-evidence-contracts:
+    name: Release artifact and Coverage-MCP handoff contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12.13"
+      - name: Exercise exact-run handoff and fail-closed receipt cases
+        run: python scripts/test_coverage_mcp_handoff.py
+
   rust:
     name: Rust formatting, lints, feature builds and documentation
     runs-on: ubuntu-24.04
@@ -425,6 +439,30 @@ jobs:
           python scripts/summarize_unified_coverage.py \
             --report target/asgi-coverage/coverage-report.json \
             --log target/asgi-coverage/run.log
+      - name: Record exact workflow run identity in the coverage artifact
+        if: always()
+        env:
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CI_HEAD_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p target/asgi-coverage
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          identity = {
+              "schema": "uvicorn-rs-ci-artifact-identity@1",
+              "workflow_path": ".github/workflows/ci.yml",
+              "run_id": int(os.environ["CI_RUN_ID"]),
+              "run_attempt": int(os.environ["CI_RUN_ATTEMPT"]),
+              "head_sha": os.environ["CI_HEAD_SHA"],
+          }
+          Path("target/asgi-coverage/ci-run.json").write_text(
+              json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -432,6 +470,7 @@ jobs:
           path: |
             target/asgi-coverage/coverage-report.json
             target/asgi-coverage/coverage-report.json.context.json
+            target/asgi-coverage/ci-run.json
             target/asgi-coverage/run.log
             target/asgi-coverage/artifacts/
           if-no-files-found: error
@@ -440,7 +479,7 @@ jobs:
 
   release-candidate:
     name: Build and verify ${{ matrix.platform }} package artifacts
-    needs: [rust, msrv, python-package, unified-coverage]
+    needs: [rust, msrv, python-package, unified-coverage, release-evidence-contracts]
     strategy:
       fail-fast: false
       matrix:

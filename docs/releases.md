@@ -81,7 +81,10 @@ version.
    coverage repeats, 100% measured native regions and lines, exact Rust MSRV,
    installed-package checks, and native composition inputs.
 3. Run Coverage-MCP against the complete, source-matched hosted coverage report.
-   Hosted CI coverage and independent Coverage-MCP review are separate evidence.
+   Use the [Coverage-MCP release handoff](coverage.md#release-coverage-mcp-handoff).
+   Hosted CI coverage and independent Coverage-MCP review are separate evidence;
+   the tag workflow requires one successful handoff for the same commit and CI
+   run attempt.
 4. Complete the correctness-gated three-system performance matrix. Require
    matching valid repetitions and report throughput, p50/p95/p99 latency,
    server CPU per operation, and sampled peak RSS. Keep stock FastAPI and
@@ -165,17 +168,19 @@ Publish and verify in this order:
 
 Wait until each dependency is registry-visible before publishing its dependent.
 Verify each registry checksum and an isolated downstream consumer. Then
-configure the crate's Trusted Publisher for owner appunni-m, repository
-uvicorn-rs, workflow publish.yml, and environment crates-io. Later releases
-use the workflow's short-lived OIDC publisher jobs.
+configure Trusted Publishing on each of the four crates for owner appunni-m,
+repository uvicorn-rs, workflow publish.yml, and environment crates-io. Later
+releases use the workflow's short-lived OIDC publisher jobs.
 
 ### First PyPI publication
 
 Register the pending PyPI Trusted Publisher for project uvicorn-rs-py with
 owner appunni-m, repository uvicorn-rs, workflow publish.yml, and environment
-pypi. The first upload creates the project. The publish job accepts only the
-candidate's exact wheel and source-distribution filenames and checksums.
-Do not add a long-lived PyPI token to GitHub secrets.
+pypi. This can be configured before the first upload; it creates the project
+when used but does not reserve the name. Verify the name is still available
+before publication. The publish job accepts only the candidate's exact wheel
+and source-distribution filenames and checksums. Do not add a long-lived PyPI
+token to GitHub secrets.
 
 ### GitHub Release
 

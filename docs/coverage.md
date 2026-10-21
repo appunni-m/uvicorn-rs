@@ -2467,7 +2467,7 @@ filters, has no duplicate groups or repeated terminal pages, and ends at
 and can be queried directly. Run `scripts/attach_coverage_mcp.py` against the
 report and saved page array. Require matching source-span totals for both
 metrics, zero missing regions and lines, `source: matches_receipt`,
-`tests: passed`, and complete pagination before strict validation. Schema v7
+`tests: passed`, and complete pagination before strict validation. Schema v9
 retains per-function-instantiation diagnostic groups even when the union of
 identical source spans is fully covered; the checker independently reconstructs
 that union from the retained aggregate and isolated profiles.
@@ -2487,6 +2487,43 @@ uv run --python 3.12 --locked --group benchmark python scripts/check_ci_evidence
 
 CI uses `--allow-pending-mcp` only to validate the raw report while the MCP
 query is pending; it does not satisfy the strict acceptance gate.
+
+<a id="release-coverage-mcp-handoff"></a>
+
+## Complete the release Coverage-MCP handoff
+
+The release candidate needs a Coverage-MCP receipt for the exact successful
+main CI run. The handoff preserves the original artifact, attaches a derived
+reviewed report, and checks both offline before the candidate is accepted.
+
+1. Wait for the complete main CI run to succeed. Record its run ID, attempt,
+   and commit. Download `uvicorn-rs-unified-coverage` into
+   `target/asgi-coverage/` and confirm `ci-run.json` has the same run ID,
+   attempt, and commit. The report path used by Coverage-MCP must be exactly
+   `target/asgi-coverage/coverage-report.json`.
+2. Query `coverage_gaps` for that report with `metric: "regions"`, then
+   `metric: "lines"`; use `limit: 15`, no filters, and follow each
+   `next_offset` through its terminal page. Save every request with the exact
+   structured response in one JSON array.
+3. Open **Actions → Coverage MCP handoff → Run workflow**. Select `main` at
+   the same commit as the CI run, provide its run ID and attempt, and provide a
+   single-line gzip+base64 encoding of the compact JSON array as
+   `receipt_gzip_base64`. For example, save the JSON array to a local file and
+   run `gzip -c receipt.json | base64 | tr -d '\n'`. Dispatch it once for that
+   CI attempt. The handoff decodes the receipt with a 32 MiB output limit and
+   writes the page array into the ignored coverage directory.
+
+The handoff rejects stale or mismatched CI runs and artifacts, incomplete page
+chains, source/build mismatches, failed tests, and any missing region or line.
+It leaves the raw CI artifact unchanged and uploads a digest-checkable reviewed
+artifact. The release candidate selects exactly one successful handoff for its
+commit and CI attempt, checks the raw file hashes against the original CI
+artifact, and runs the strict coverage validator again. If `main` moves before
+the handoff is dispatched, use a successful CI run for the new commit and query
+its report; do not reuse pages from the previous source.
+
+The handoff artifact contains generated reports, profiles, and logs. Keep them
+in the Actions artifact; do not commit them to the repository.
 
 ## Measure an incremental case
 
