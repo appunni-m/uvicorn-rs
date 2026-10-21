@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@27"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@28"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2279,13 +2279,13 @@ def load_contract(
                         raise ParityError(
                             f"{case_id}: timeout_seconds must leave time for the second-request probe and shutdown"
                         )
-                if run_http.get("interface", "auto") not in {"auto", "asgi2", "asgi3"}:
+                if run_http.get("interface", "auto") not in {"auto", "asgi2", "asgi3", "wsgi"}:
                     raise ParityError(
-                        f"{case_id}.api.run_http.interface must be auto, asgi2, or asgi3"
+                        f"{case_id}.api.run_http.interface must be auto, asgi2, asgi3, or wsgi"
                     )
-                if run_http.get("application_interface", "asgi3") not in {"asgi2", "asgi3"}:
+                if run_http.get("application_interface", "asgi3") not in {"asgi2", "asgi3", "wsgi"}:
                     raise ParityError(
-                        f"{case_id}.api.run_http.application_interface must be asgi2 or asgi3"
+                        f"{case_id}.api.run_http.application_interface must be asgi2, asgi3, or wsgi"
                     )
                 if run_http["method"] != "GET":
                     raise ParityError(f"{case_id}: run_http currently supports the GET method")

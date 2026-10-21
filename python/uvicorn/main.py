@@ -337,9 +337,9 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
             "these Uvicorn settings are not implemented by uvicorn-rs yet: "
             + ", ".join(unsupported)
         )
-    if options["interface"] not in {"auto", "asgi2", "asgi3"}:
+    if options["interface"] not in {"auto", "asgi2", "asgi3", "wsgi"}:
         raise click.ClickException(
-            "uvicorn-rs currently supports only the ASGI 2 and ASGI 3 application interfaces"
+            "uvicorn-rs supports auto, ASGI 2, ASGI 3, and WSGI application interfaces"
         )
 
     loop = options["loop"]

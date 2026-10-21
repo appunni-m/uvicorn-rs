@@ -87,8 +87,10 @@ class _ASGI2Adapter:
         await self.app(scope)(receive, send)
 
 
-def _configure_asgi_interface(app: Any, interface: str) -> tuple[Any, str]:
-    """Select Uvicorn's ASGI2/ASGI3 call shape and adapt ASGI2 for Rust."""
+def _configure_asgi_interface(
+    app: Any, interface: str, lifespan: str
+) -> tuple[Any, str]:
+    """Select the Uvicorn interface and adapt Python callables for Rust."""
     if interface == "auto":
         if inspect.isclass(app):
             use_asgi3 = hasattr(app, "__await__")
@@ -102,6 +104,10 @@ def _configure_asgi_interface(app: Any, interface: str) -> tuple[Any, str]:
         return _ASGI2Adapter(app), interface
     if interface == "asgi3":
         return app, interface
+    if interface == "wsgi":
+        from uvicorn.middleware.wsgi import WSGILifespanAdapter, WSGIMiddleware
+
+        return WSGILifespanAdapter(WSGIMiddleware(app), lifespan), interface
     raise NotImplementedError(
         f"uvicorn-rs does not support interface={interface!r}"
     )
@@ -283,7 +289,7 @@ class Config:
                     file=sys.stderr,
                 )
         self.loaded_app, self.interface = _configure_asgi_interface(
-            self.loaded_app, self.interface
+            self.loaded_app, self.interface, self.lifespan
         )
         if self.proxy_headers:
             from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -318,7 +324,7 @@ class Config:
             (self.ws != "auto", "ws"),
             (self.ws_per_message_deflate is not True, "ws_per_message_deflate"),
             (self.lifespan not in {"auto", "on", "off"}, "lifespan"),
-            (self.interface not in {"auto", "asgi2", "asgi3"}, "interface"),
+            (self.interface not in {"auto", "asgi2", "asgi3", "wsgi"}, "interface"),
             (
                 self.log_level is not None
                 and not (

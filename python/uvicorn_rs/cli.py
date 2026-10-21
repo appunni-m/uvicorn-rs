@@ -55,7 +55,9 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
         "--use-colors", action=argparse.BooleanOptionalAction, default=None
     )
     parser.add_argument("--lifespan", choices=("auto", "on", "off"), default="auto")
-    parser.add_argument("--interface", choices=("auto", "asgi2", "asgi3"), default="auto")
+    parser.add_argument(
+        "--interface", choices=("auto", "asgi3", "asgi2", "wsgi"), default="auto"
+    )
     parser.add_argument("--app-dir", default="")
     parser.add_argument("--root-path", default="")
     parser.add_argument("--factory", action="store_true")

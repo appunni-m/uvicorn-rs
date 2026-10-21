@@ -132,9 +132,25 @@ def asgi2_app(scope):
         await asgi3_app(scope, receive, send)
     return respond
 
+def wsgi_app(environ, start_response):
+    body = b"|".join((
+        b"python-api-wsgi-ok",
+        environ["REQUEST_METHOD"].encode("ascii"),
+        environ["PATH_INFO"].encode("latin1"),
+        environ["QUERY_STRING"].encode("ascii"),
+        environ.get("HTTP_X_PYTHON_API", "missing").encode("latin1"),
+    ))
+    start_response("200 OK", [
+        ("content-type", "text/plain"),
+        ("content-length", str(len(body))),
+    ])
+    return [body]
+
 def app_factory():
     global factory_invoked
     factory_invoked = True
+    if application_interface == "wsgi":
+        return wsgi_app
     return asgi2_app if application_interface == "asgi2" else asgi3_app
 
 application_interface = sys.argv[5]
@@ -154,7 +170,9 @@ factory = sys.argv[19] == "1"
 backlog = json.loads(sys.argv[20])
 timeout_keep_alive = json.loads(sys.argv[21])
 app = app_factory if factory else (
-    asgi2_app if application_interface == "asgi2" else asgi3_app
+    wsgi_app
+    if application_interface == "wsgi"
+    else asgi2_app if application_interface == "asgi2" else asgi3_app
 )
 
 options = {
@@ -189,6 +207,8 @@ else:
     if request["invocation"] == "module-cli":
         if request.get("factory"):
             app_target = "tests.parity.app:python_api_factory_probe_app"
+        elif request.get("application_interface") == "wsgi":
+            app_target = "tests.parity.app:python_api_wsgi_probe_app"
         else:
             app_target = (
                 "tests.parity.app:asgi2_probe_app"

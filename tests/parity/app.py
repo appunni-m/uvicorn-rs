@@ -1579,6 +1579,28 @@ def python_api_factory_probe_app():
     return lifespan_probe_app
 
 
+def python_api_wsgi_probe_app(environ, start_response):
+    """Return a deterministic WSGI response for Python API parity inputs."""
+
+    body = b"|".join(
+        (
+            b"python-api-wsgi-ok",
+            environ["REQUEST_METHOD"].encode("ascii"),
+            environ["PATH_INFO"].encode("latin1"),
+            environ["QUERY_STRING"].encode("ascii"),
+            environ.get("HTTP_X_PYTHON_API", "missing").encode("latin1"),
+        )
+    )
+    start_response(
+        "200 OK",
+        [
+            ("content-type", "text/plain"),
+            ("content-length", str(len(body))),
+        ],
+    )
+    return [body]
+
+
 async def lifespan_startup_error_probe_app(scope, receive, send):
     """Raise during lifespan startup for strict-mode public CLI parity."""
     if scope["type"] == "lifespan":
