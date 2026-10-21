@@ -19,10 +19,16 @@ ASGI applications. That client still crosses the Python ASGI boundary.
 
 ## Install
 
-This repository currently prepares source-archive candidates. Registry
-publication is outside the release workstream. The versioned dependency below
-applies after publication; use a local checkout or reviewed candidate archive
-for the prototype.
+Version 0.1.0 is published on
+[crates.io](https://crates.io/crates/uvicorn-rs/0.1.0). These dependency
+requirements are Cargo semver ranges, not exact patch pins. Cargo resolves the
+newest compatible versions; commit `Cargo.lock` in applications to keep a
+deployment's exact dependency selection reproducible.
+
+HTTP/3 is included in this release and is not behind a Cargo feature. The
+published `uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` crates are transitive
+implementation dependencies; applications should depend directly on
+`uvicorn-rs` only.
 
 ```toml
 [dependencies]

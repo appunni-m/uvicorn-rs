@@ -3928,8 +3928,10 @@ hosted gates on clean commit `16ed349`. The newer ASGI benchmark matrix
 it produced no validated multi-system performance result. Its docs-update job
 pushed the evidence branch, then `gh pr create` failed because GitHub Actions
 was not permitted to create or approve pull requests. No PR was opened. No tag,
-GitHub Release, crates.io publication, or PyPI package was created. See
-[release status](releases.md).
+GitHub Release or PyPI package was created at that historical snapshot. On
+2026-10-22, the four Cargo crates were later bootstrapped at `0.1.0` from clean
+commit `9eccb4f` to enable Trusted Publisher setup; this did not create a full
+release candidate or complete the performance gate. See [release status](releases.md).
 
 ## Reproduction
 

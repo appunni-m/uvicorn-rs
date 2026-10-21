@@ -3567,6 +3567,7 @@ def load_contract(
                     "ws_ping_timeout",
                     "proxy_headers",
                     "forwarded_allow_ips",
+                    "root_path",
                 }
                 if unknown_options:
                     raise ParityError(
@@ -3600,6 +3601,12 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: server_options.forwarded_allow_ips must be a string"
+                    )
+                if "root_path" in server_options and not isinstance(
+                    server_options["root_path"], str
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.root_path must be a string"
                     )
             if "load" in case:
                 case_keys.add("load")
@@ -4391,6 +4398,8 @@ def start_server(
             raise ParityError(
                 f"server options are not supported by the {server_id} parity adapter"
             )
+        if "root_path" in server_options:
+            command.extend(["--root-path", server_options["root_path"]])
         if "http" in server_options and server_id == "uvicorn-rs":
             command.extend(["--http", server_options["http"]])
         if "ws_max_size" in server_options:

@@ -252,7 +252,7 @@
       </div>
       <div class="notice">
         <strong>Package names and language boundary</strong>
-        <p><code>uvicorn-rs</code> is the native Rust server; <code>uvicorn-rs-py</code> is its separate Python distribution. The confirmed target keeps that distribution name and provides the <code>uvicorn</code> command and import namespace with Uvicorn 0.54.0 compatibility. The current checkout now exposes the command and namespace, but their behavior is incomplete and has not passed the compatibility matrix. No package is published. Remove upstream Uvicorn only after a compatible release is available, because both distributions install the same import paths. Standard Python ASGI applications still execute in Python and cross the ASGI bridge; the Rust-native FastAPI-RS/Starlette-RS path has no Python request boundary.</p>
+        <p><code>uvicorn-rs</code> and its three companion Rust crates are published on crates.io at <code>0.1.0</code>; this is an experimental library bootstrap, not a standalone server executable or proof of full release readiness. The separate <code>uvicorn-rs-py</code> Python distribution remains unpublished. It provides the <code>uvicorn</code> command and import namespace in the checkout, but behavior is incomplete and has not passed the compatibility matrix. Remove upstream Uvicorn only after a compatible Python release is available, because both distributions install the same import paths. Standard Python ASGI applications still execute in Python and cross the ASGI bridge; the Rust-native FastAPI-RS/Starlette-RS path has no Python request boundary.</p>
       </div>
       <nav class="jump" aria-label="Architecture sections">
         <a href="#current">Current path</a>

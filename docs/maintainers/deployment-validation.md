@@ -14,8 +14,9 @@ explicit worker count and `WEB_CONCURRENCY`; worker restart, health-check,
 dynamic worker controls, and reload remain
 incomplete. Proxy-header behavior has only the focused
 CLI and `uvicorn.run()` coverage listed in the [support matrix](../support-matrix.md).
-The project has not published a package. Build and install a wheel into the same
-environment as the application and its Python dependencies.
+The Rust crates are published on crates.io at `0.1.0`; the `uvicorn-rs-py`
+Python distribution remains unpublished on PyPI. Build and install a wheel into
+the same environment as the application and its Python dependencies.
 
 ## Start an application
 

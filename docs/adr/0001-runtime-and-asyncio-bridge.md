@@ -49,7 +49,7 @@ Run lifespan startup on the Python app loop before accepting requests. In automa
 
 ### 5. Independent packaging and scope
 
-Build a Rust extension/library with a thin Python CLI and loader. The server may test against `starlette-rs`, but neither its runtime nor its package metadata may depend on, import, or bundle `starlette-rs`. No package is published as part of this work.
+Build a Rust extension/library with a thin Python CLI and loader. The server may test against `starlette-rs`, but neither its runtime nor its package metadata may depend on, import, or bundle `starlette-rs`. Package publication is handled by the separate release process, not by this architecture decision.
 
 The requested contract is ASGI 3, HTTP/WebSocket 2.5 and lifespan 2.0, over HTTP/1.1, HTTP/2, and experimental HTTP/3. The support matrix separates implemented behavior from live evidence. This does not imply Uvicorn CLI, worker, reload, or deployment-option parity. At the time this ADR was written, Uvicorn's documented HTTP choices were `h11` and `httptools`, so HTTP/2 and HTTP/3 required separately named protocol peers for parity ([historical Uvicorn settings](https://www.uvicorn.org/settings/)).
 

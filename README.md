@@ -4,10 +4,14 @@ A Rust-first server for ASGI applications and Rust services.
 
 ## Project status
 
-The Rust server and Python adapter are experimental and are not published on
-crates.io or PyPI. The Python adapter is **not yet a drop-in Uvicorn
-replacement**. If your application depends on Uvicorn's full command-line,
+The experimental Rust crates are published on crates.io as version `0.1.0`;
+the Python adapter is not published on PyPI. The Python adapter is **not yet a
+drop-in Uvicorn replacement**. If your application depends on Uvicorn's full command-line,
 Python API, worker, or reload behavior, keep using upstream Uvicorn for now.
+
+The published Cargo packages provide a Rust library, not a standalone server
+executable. The initial Cargo publication does not qualify the Python adapter
+or complete the project's release gates. See [release status](docs/releases.md).
 
 The planned Python distribution name is `uvicorn-rs-py`; it provides the
 `uvicorn` command and import namespace after the compatibility and release

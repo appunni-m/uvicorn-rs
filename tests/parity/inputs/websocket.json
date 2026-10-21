@@ -2071,6 +2071,45 @@
         "messages_per_session": 16,
         "message_bytes": 4096
       }
+    },
+    {
+      "case_id": "websocket.root-path-prefixes-decoded-path",
+      "profile": "websocket",
+      "operation": "websocket.scope-and-messages",
+      "covers": [
+        "websocket.scope-and-messages"
+      ],
+      "server_options": {
+        "root_path": "/mounted"
+      },
+      "websocket": {
+        "path": "/ws-scope-path-echo/rooted%20space-%C3%A9?tag=mounted",
+        "subprotocols": [
+          "scope-v1",
+          "parity"
+        ],
+        "messages": [],
+        "expect_close": true
+      }
+    },
+    {
+      "case_id": "websocket.root-path-preserves-request-raw-path",
+      "profile": "websocket",
+      "operation": "websocket.root-path-scope-contract",
+      "covers": [
+        "websocket.root-path-scope-contract"
+      ],
+      "server_options": {
+        "root_path": "/mounted"
+      },
+      "websocket": {
+        "path": "/ws-scope-raw-path-contract/rooted%20space-%C3%A9?tag=mounted",
+        "subprotocols": [
+          "parity"
+        ],
+        "messages": [],
+        "expect_close": true
+      }
     }
   ]
 }

@@ -138,7 +138,9 @@ connection closure. It does not establish ASGI `http.disconnect` or identify the
 request-lifetime receipt (`benchmarks/results/2026-10-12/native-request-lifetime-live/report.md`).
 The earlier 34-input package-move result remains in the
 package-promotion receipt (`benchmarks/results/2026-10-12/native-package-promotion-live/report.md`).
-The API is unpublished, and Starlette-RS/FastAPI-RS do not yet consume it.
+The [`native-app-contract` 0.1.0 crate](https://crates.io/crates/native-app-contract/0.1.0)
+is now published and exposes lifecycle hooks only. Starlette-RS/FastAPI-RS do
+not yet consume it on their current main branches.
 
 ### Preserve dependency direction
 

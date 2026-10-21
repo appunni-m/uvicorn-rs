@@ -1,9 +1,15 @@
 # native-app-contract
 
-`native-app-contract` defines runtime-neutral startup and shutdown hooks for
-Rust web applications. Frameworks implement the trait without depending on a
-server or async runtime; a server decides when to invoke the hooks and applies
-the deadlines.
+`native-app-contract` defines the runtime-neutral startup and shutdown hooks
+for Rust web applications. Its 0.1 API is intentionally small: the lifecycle
+trait, its boxed future and error types, and the startup/shutdown stage enum.
+It does not define HTTP request/response, routing, middleware, or ASGI APIs.
+
+Frameworks can implement the hooks without depending on a server or async
+runtime; a server decides when to invoke them and applies the deadlines. The
+Python-free `uvicorn-rs` server depends on and re-exports this crate, so
+frameworks can depend on this contract without taking a dependency on the
+server itself.
 
 ## Requirements
 
@@ -13,10 +19,10 @@ the deadlines.
 
 ## Install
 
-This repository currently prepares source-archive candidates. Registry
-publication is outside the release workstream. The versioned dependency below
-applies after publication; use a local checkout or reviewed candidate archive
-for the prototype.
+Version 0.1.0 is published on
+[crates.io](https://crates.io/crates/native-app-contract/0.1.0). The version
+below is a Cargo semver requirement, not an exact patch pin. A committed
+`Cargo.lock` selects the exact versions for an application build.
 
 ```toml
 [dependencies]

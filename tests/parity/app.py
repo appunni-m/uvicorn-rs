@@ -355,7 +355,52 @@ async def _app_impl(scope, receive, send):
     if scope["type"] == "websocket":
         if os.environ.get("ASGI_PARITY_TRACE_WEBSOCKET_SCOPE") == "1":
             _record(f"websocket.scope:{scope['path']}")
-        if scope["path"].startswith("/ws-scope-echo/"):
+        scope_path = scope["path"]
+        root_path = scope.get("root_path", "")
+        if root_path:
+            root_prefix = root_path.rstrip("/")
+            if scope_path.startswith(root_prefix + "/"):
+                scope_path = scope_path[len(root_prefix) :]
+        if scope_path.startswith("/ws-scope-raw-path-contract/"):
+            await receive()
+            observed = {
+                "path": scope.get("path"),
+                "root_path": root_path,
+                "raw_path_base64": (
+                    base64.b64encode(scope["raw_path"]).decode("ascii")
+                    if scope.get("raw_path") is not None
+                    else None
+                ),
+            }
+            offered = scope.get("subprotocols", [])
+            await send({
+                "type": "websocket.accept",
+                "subprotocol": "parity" if "parity" in offered else None,
+            })
+            await send({
+                "type": "websocket.send",
+                "text": json.dumps(observed, separators=(",", ":")),
+            })
+            await send({"type": "websocket.close", "code": 1000, "reason": "scope complete"})
+            return
+        if scope_path.startswith("/ws-scope-path-echo/"):
+            await receive()
+            observed = {
+                "path": scope.get("path"),
+                "root_path": scope.get("root_path", ""),
+            }
+            offered = scope.get("subprotocols", [])
+            await send({
+                "type": "websocket.accept",
+                "subprotocol": "parity" if "parity" in offered else None,
+            })
+            await send({
+                "type": "websocket.send",
+                "text": json.dumps(observed, separators=(",", ":")),
+            })
+            await send({"type": "websocket.close", "code": 1000, "reason": "scope complete"})
+            return
+        if scope_path.startswith("/ws-scope-echo/"):
             await receive()
             offered = scope.get("subprotocols", [])
             observed = {

@@ -1164,6 +1164,33 @@
       ]
     },
     {
+      "id": "websocket.root-path-scope-contract",
+      "kind": "protocol_operation",
+      "observe": [
+        "subprotocol",
+        "ordered_messages",
+        "close_code",
+        "close_reason"
+      ],
+      "compare": [
+        "subprotocol",
+        "close_code",
+        "close_reason"
+      ],
+      "required_observations": {
+        "close_code": 1000,
+        "close_reason": "scope complete"
+      },
+      "target_requirements": {
+        "ordered_messages": [
+          {
+            "kind": "text",
+            "value": "{\"path\":\"/mounted/ws-scope-raw-path-contract/rooted space-\\u00e9\",\"root_path\":\"/mounted\",\"raw_path_base64\":\"L3dzLXNjb3BlLXJhdy1wYXRoLWNvbnRyYWN0L3Jvb3RlZCUyMHNwYWNlLSVDMyVBOQ==\"}"
+          }
+        ]
+      }
+    },
+    {
       "id": "websocket.denial",
       "kind": "protocol_operation",
       "observe": [

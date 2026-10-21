@@ -1,11 +1,13 @@
 # uvicorn-rs-h3
 
-`uvicorn-rs-h3` is the HTTP/3 protocol dependency used by the Rust-native
-`uvicorn-rs` crates. Its Rust library name remains `h3`; Cargo publishes this
-maintained fork under the distinct package name `uvicorn-rs-h3`. Once the first
-release is published, standalone Cargo consumers can resolve it from crates.io.
-It does not depend on the Python adapter. Consumers need Rust 1.85 or newer,
-matching the Uvicorn-RS workspace MSRV.
+`uvicorn-rs-h3` is the HTTP/3 protocol implementation used internally by the
+Rust-native `uvicorn-rs` crate. Version 0.1.0 is published on
+[crates.io](https://crates.io/crates/uvicorn-rs-h3/0.1.0). Its Rust library
+name remains `h3`; the distinct package name lets the server depend on this
+maintained fork without colliding with the upstream registry package. Most
+applications should depend directly on `uvicorn-rs`, which pulls this crate in
+transitively. It does not depend on the Python adapter. Consumers need Rust
+1.85 or newer, matching the Uvicorn-RS workspace MSRV.
 
 This package is based on the MIT-licensed `h3` 0.0.8 source from
 [hyperium/h3](https://github.com/hyperium/h3). The upstream license and source

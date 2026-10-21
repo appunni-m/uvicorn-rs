@@ -23,7 +23,7 @@ Use these state labels precisely:
 | PyPI | uvicorn-rs-py | Optional Python compatibility client for standard Python ASGI applications. It is not required by the Python-free Rust library. |
 | Documentation | README, MkDocs site, and docs.rs | Repository docs deploy through GitHub Pages; crate API docs are generated from published Cargo archives. |
 
-The Python distribution remains named `uvicorn-rs-py`. The current checkout now includes the `uvicorn` command and import namespace, but their behavior is incomplete and has not passed the versioned compatibility gates. No package is published. Release verification must inspect the installed wheel and keep the Cargo server independent of Python.
+The Python distribution remains named `uvicorn-rs-py`. The current checkout now includes the `uvicorn` command and import namespace, but their behavior is incomplete and has not passed the versioned compatibility gates. The four Rust crates were published at `0.1.0` from clean commit `9eccb4fb8c7f27269e99c3af194feb4a2a8f7709` on 2026-10-22 as a one-time crates.io bootstrap for Trusted Publishing setup. The Python package is still unpublished. The Cargo bootstrap is not a complete application release and does not close the remaining candidate gates. Release verification must inspect the installed wheel and keep the Cargo server independent of Python.
 
 The Cargo workspace packages and Python package currently declare version 0.1.0.
 All published Cargo packages require Rust 1.85 or newer, the workspace MSRV
@@ -49,10 +49,30 @@ build and test jobs.
 This repository adapts that pattern for first publication. The Release candidate
 workflow does not publish. The manual Publish packages workflow defaults to
 prepare-only, revalidates the exact tag and candidate artifact, and grants
-short-lived OIDC publishing permission only to selected publisher jobs.
-First-time Cargo crate creation still requires a maintainer bootstrap because
-Trusted Publishing is configured on an existing crate. No release workflow
-creates or moves a tag.
+short-lived OIDC publishing permission only to selected publisher jobs. The
+four Cargo names now exist; configure Trusted Publishing on each crate before
+using the Cargo publisher jobs. The PyPI pending publisher is reported
+configured by the project owner. No release workflow creates or moves a tag.
+
+### Cargo bootstrap publication record
+
+The following immutable `0.1.0` archives were published from clean commit
+`9eccb4fb8c7f27269e99c3af194feb4a2a8f7709`. Each registry checksum was checked
+against the exact local archive after upload:
+
+| Crate | Registry | SHA-256 |
+|---|---|---|
+| `native-app-contract` | [crates.io](https://crates.io/crates/native-app-contract/0.1.0) | `ceaa890b28b5587e45ef8740dc8530e172dcfca18a96c5ea9e25260d02531ba0` |
+| `uvicorn-rs-h3` | [crates.io](https://crates.io/crates/uvicorn-rs-h3/0.1.0) | `809379da49a0f299dfd0a88c69ab0e0a948e806edbfbcc087e3e358783b52ae7` |
+| `uvicorn-rs-h3-quinn` | [crates.io](https://crates.io/crates/uvicorn-rs-h3-quinn/0.1.0) | `a5b2a3fc559156fbf948fd4838e5c2ed860223add8bfd2ce376cc4d5b2306375` |
+| `uvicorn-rs` | [crates.io](https://crates.io/crates/uvicorn-rs/0.1.0) | `064b0037134e06a7eb16aa4cbd967c5ac2ecdeb5418ba5a71552809e46f485ce` |
+
+These are real crate releases, not placeholders, and cannot be overwritten. Cargo
+archives include the source commit in `.cargo_vcs_info.json`; a candidate built
+from a later commit will have different archive bytes even if crate sources did
+not change. Future package versions must therefore be bumped if the candidate
+source is not the recorded commit. Do not treat the published crates as proof
+that the full compatibility, coverage, or performance gates passed.
 
 ## Check release readiness
 
@@ -151,36 +171,22 @@ package contents, version, and registry state. Publication requires a separate
 explicit maintainer decision. Do not publish from a dirty checkout or bypass a
 failed candidate gate.
 
-### First Cargo publication
+### Cargo Trusted Publishing setup
 
-Trusted Publishing cannot create a crate that does not exist yet. After every
-candidate gate passes, a maintainer must bootstrap the four first versions
-from a clean checkout using narrowly scoped short-lived credentials. Never put
-those credentials in GitHub secrets, repository files, chat, logs, or artifacts.
-Check the exact registry version before retrying an upload.
-
-Publish and verify in this order:
-
-1. native-app-contract
-2. uvicorn-rs-h3
-3. uvicorn-rs-h3-quinn
-4. uvicorn-rs
-
-Wait until each dependency is registry-visible before publishing its dependent.
-Verify each registry checksum and an isolated downstream consumer. Then
-configure Trusted Publishing on each of the four crates for owner appunni-m,
-repository uvicorn-rs, workflow publish.yml, and environment crates-io. Later
-releases use the workflow's short-lived OIDC publisher jobs.
+Configure each existing crate's Trusted Publisher for owner `appunni-m`,
+repository `uvicorn-rs`, workflow `publish.yml`, and environment `crates-io`.
+The publisher jobs use short-lived OIDC credentials; do not put a long-lived
+crates.io token in GitHub secrets. Before any later upload, verify the exact
+candidate version and checksum. The published `0.1.0` versions are immutable.
 
 ### First PyPI publication
 
-Register the pending PyPI Trusted Publisher for project uvicorn-rs-py with
-owner appunni-m, repository uvicorn-rs, workflow publish.yml, and environment
-pypi. This can be configured before the first upload; it creates the project
-when used but does not reserve the name. Verify the name is still available
-before publication. The publish job accepts only the candidate's exact wheel
-and source-distribution filenames and checksums. Do not add a long-lived PyPI
-token to GitHub secrets.
+The project owner reports that the pending PyPI Trusted Publisher for
+`uvicorn-rs-py` is configured with owner `appunni-m`, repository `uvicorn-rs`,
+workflow `publish.yml`, and environment `pypi`. No PyPI version has been
+uploaded. The project name must be rechecked before publication. The publish
+job accepts only the candidate's exact wheel and source-distribution filenames
+and checksums. Do not add a long-lived PyPI token to GitHub secrets.
 
 ### GitHub Release
 
