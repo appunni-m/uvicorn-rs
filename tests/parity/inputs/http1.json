@@ -34,6 +34,19 @@
       }
     },
     {
+      "case_id": "http1.httptools-selector-scope-query-header-and-body",
+      "profile": "http1",
+      "operation": "http.scope-and-body",
+      "covers": ["http.scope-and-body"],
+      "server_options": {"http": "httptools"},
+      "request": {
+        "method": "POST",
+        "path": "/scope?from=parity&http=httptools",
+        "headers": [["x-parity", "httptools-input"]],
+        "body_base64": "AAECA/9wYXJpdHk="
+      }
+    },
+    {
       "case_id": "http1.limit-concurrency-returns-503-at-connection-limit",
       "profile": "http1",
       "operation": "http.concurrency-limit",
