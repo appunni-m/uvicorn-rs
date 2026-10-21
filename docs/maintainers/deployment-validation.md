@@ -27,7 +27,7 @@ Run the command from a directory where myapp.asgi is importable. For a
 service, set WorkingDirectory and PYTHONPATH explicitly. The default bind
 address is loopback; choose a public or private interface deliberately.
 
-Supplying both --certfile and --keyfile enables TLS on TCP and experimental
+Supplying both --ssl-certfile and --ssl-keyfile enables TLS on TCP and experimental
 HTTP/3 on QUIC, on the configured port. TLS TCP advertises HTTP/2 and HTTP/1.1
 through ALPN. The TLS private key must be readable by the service account. The
 server has no separate flag to disable QUIC while retaining TLS.

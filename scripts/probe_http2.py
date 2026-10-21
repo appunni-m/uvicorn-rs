@@ -40,7 +40,7 @@ def start_server(port, certfile=None, keyfile=None):
         str(port),
     ]
     if certfile is not None:
-        command.extend(["--certfile", str(certfile), "--keyfile", str(keyfile)])
+        command.extend(["--ssl-certfile", str(certfile), "--ssl-keyfile", str(keyfile)])
     process = subprocess.Popen(
         command,
         stdout=subprocess.DEVNULL,

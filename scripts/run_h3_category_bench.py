@@ -121,7 +121,7 @@ def server_command(
     if server["kind"] == "rust":
         return [
             str(PYTHON), "-m", "uvicorn_rs", app, "--host", "127.0.0.1", "--port", str(port),
-            "--loop", server["loop"], "--certfile", str(cert), "--keyfile", str(key),
+            "--loop", server["loop"], "--ssl-certfile", str(cert), "--ssl-keyfile", str(key),
             "--lifespan", "auto", "--interface", "asgi3", "--no-access-log",
             "--no-server-header", "--no-date-header", "--log-level", "error",
         ]

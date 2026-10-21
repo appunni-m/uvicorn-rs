@@ -35,7 +35,7 @@ host shutdown behavior.
 
 ## TLS and network ports
 
-Provide both `--certfile` and `--keyfile` to enable TLS on TCP. TLS advertises
+Provide both `--ssl-certfile` and `--ssl-keyfile` to enable TLS on TCP. TLS advertises
 HTTP/1.1 and HTTP/2 through ALPN. The current prototype also enables
 experimental HTTP/3 on QUIC using the same configured port, so a firewall must
 allow both TCP and UDP when using this mode. The private key must be readable

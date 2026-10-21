@@ -743,7 +743,11 @@ def validate_consumer(value: dict, version: str, wheel_sha: str, native_sha: str
             raise ValueError("Windows consumer must identify the POSIX-only CLI/TLS/signal probe as not_run")
     elif (
         deployment.get("status") != "passed"
-        or deployment.get("command") != "python -m uvicorn_rs module:app --certfile ... --keyfile ..."
+        or deployment.get("command")
+        != (
+            "uvicorn module:app --ssl-certfile ... --ssl-keyfile ... "
+            "(installed console script)"
+        )
         or deployment.get("http_status") != 200
         or deployment.get("http_body") != "startup-token:0"
         or not isinstance(deployment.get("tls_version"), str)
