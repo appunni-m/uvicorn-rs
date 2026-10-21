@@ -249,6 +249,22 @@
       }
     },
     {
+      "case_id": "cli.use-colors-forces-colored-import-diagnostic",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_missing_cli_module_20261019:app",
+          "--use-colors"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.explicit-app-over-environment",
       "profile": "cli",
       "operation": "cli.process",

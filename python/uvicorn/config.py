@@ -429,7 +429,9 @@ class Config:
         try:
             return _load_app(self.app)
         except ImportFromStringError as exc:
-            print(f"ERROR:    Error loading ASGI app. {exc}", file=sys.stderr)
+            logging.getLogger("uvicorn.error").error(
+                "Error loading ASGI app. %s" % exc
+            )
             raise SystemExit(3) from exc
 
     def load(self) -> None:
