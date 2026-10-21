@@ -4105,6 +4105,15 @@ def start_server(
     if server_id == "uvicorn-rs" and coverage_profile_dir is not None:
         coverage_profile_dir.mkdir(parents=True, exist_ok=True)
         env["LLVM_PROFILE_FILE"] = str(coverage_profile_dir / "%p-%m.profraw")
+    coverage_capture_shutdown = (
+        os.environ.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1"
+    )
+    coverage_site = str(ROOT / "tests" / "parity" / "coverage_site")
+    if coverage_capture_shutdown:
+        env["ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN"] = "1"
+        env["PYTHONPATH"] = os.pathsep.join(
+            path for path in (coverage_site, env.get("PYTHONPATH")) if path
+        )
     if server_id == "uvicorn-rs" and coverage_fault_control_path is not None:
         env["UVICORN_RS_COVERAGE_FAULT_FILE"] = str(coverage_fault_control_path)
     api_control_path = None
@@ -7374,6 +7383,7 @@ def websocket_observation(
         shutdown_timeout = any(
             marker in shutdown_log
             for marker in (
+                "listener shutdown exceeded the graceful timeout",
                 "TCP shutdown exceeded the graceful timeout",
                 "active connections exceeded the graceful-shutdown deadline",
                 "timeout graceful shutdown exceeded",
@@ -9889,7 +9899,10 @@ def add_verification_metadata(
 
 
 def run_cli_process(
-    case: dict[str, Any], server_id: str, temporary_directory: Path
+    case: dict[str, Any],
+    server_id: str,
+    temporary_directory: Path,
+    coverage_profile_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run one argv input through the genuine CLI process for each side."""
 
@@ -9900,7 +9913,30 @@ def run_cli_process(
     environment.pop("PYTHONHOME", None)
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
+    if coverage_profile_dir is not None:
+        environment["ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN"] = "1"
+        coverage_site = str(ROOT / "tests" / "parity" / "coverage_site")
+        environment["PYTHONPATH"] = coverage_site
+        if server_id == "uvicorn-rs":
+            target_profile_dir = coverage_profile_dir / "target"
+            target_profile_dir.mkdir(parents=True, exist_ok=True)
+            environment["LLVM_PROFILE_FILE"] = str(
+                target_profile_dir / "%p-%m.profraw"
+            )
+            runtime_marker_dir = coverage_profile_dir / "runtime-probe"
+            runtime_marker_dir.mkdir(parents=True, exist_ok=True)
+            environment["ASGI_PARITY_COVERAGE_RUNTIME_MARKER_DIR"] = str(
+                runtime_marker_dir
+            )
+        else:
+            environment.pop("LLVM_PROFILE_FILE", None)
+            environment.pop("ASGI_PARITY_COVERAGE_RUNTIME_MARKER_DIR", None)
     for name, value in process["environment"].items():
+        if name == "PYTHONPATH" and coverage_profile_dir is not None:
+            environment[name] = os.pathsep.join(
+                path for path in (coverage_site, value) if path
+            )
+            continue
         if value is None:
             environment.pop(name, None)
         else:
@@ -9949,6 +9985,7 @@ def execute_cli_profile(
     profile: dict[str, Any],
     cases: list[dict[str, Any]],
     operations: dict[str, dict[str, Any]],
+    coverage_profile_dir: Path | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     outcomes = []
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-parity-cli-") as temporary:
@@ -9956,8 +9993,18 @@ def execute_cli_profile(
         for case in cases:
             operation = operations[case["operation"]]
             try:
-                oracle = run_cli_process(case, "uvicorn", temporary_directory / "cwd")
-                target = run_cli_process(case, "uvicorn-rs", temporary_directory / "cwd")
+                oracle = run_cli_process(
+                    case,
+                    "uvicorn",
+                    temporary_directory / "cwd",
+                    coverage_profile_dir,
+                )
+                target = run_cli_process(
+                    case,
+                    "uvicorn-rs",
+                    temporary_directory / "cwd",
+                    coverage_profile_dir,
+                )
                 fields = operation.get("compare", operation["observe"])
                 oracle_comparison = {field: oracle[field] for field in fields}
                 target_comparison = {field: target[field] for field in fields}
@@ -10202,15 +10249,20 @@ def run_python_api_probe(
 
     python = ORACLE_PYTHON if server_id == "uvicorn" else Path(sys.executable)
     environment = os.environ.copy()
+    coverage_capture_shutdown = (
+        os.environ.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1"
+    )
+    coverage_site = str(ROOT / "tests" / "parity" / "coverage_site")
     environment.pop("PYTHONPATH", None)
     environment.pop("PYTHONHOME", None)
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
-    if server_id == "uvicorn-rs" and coverage_profile_dir is not None:
-        coverage_profile_dir.mkdir(parents=True, exist_ok=True)
-        environment["LLVM_PROFILE_FILE"] = str(
-            coverage_profile_dir / "%p-%m.profraw"
-        )
+    if os.environ.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1":
+        # The parent signals after observing the server. The coverage-only
+        # site hook keeps both implementations on a normal exit path so LLVM
+        # can flush the target profile.
+        environment["ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN"] = "1"
+        environment["PYTHONPATH"] = coverage_site
     run_http = case["api"].get("run_http", {})
     run_http_reload = case["api"].get("run_http_reload")
     for name, value in run_http.get("environment", {}).items():
@@ -10218,6 +10270,21 @@ def run_python_api_probe(
             environment.pop(name, None)
         else:
             environment[name] = value
+    if coverage_capture_shutdown:
+        case_pythonpath = run_http.get("environment", {}).get("PYTHONPATH")
+        environment["PYTHONPATH"] = os.pathsep.join(
+            path for path in (coverage_site, case_pythonpath) if path
+        )
+        environment["ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN"] = "1"
+    if server_id == "uvicorn-rs" and coverage_profile_dir is not None:
+        environment["LLVM_PROFILE_FILE"] = str(
+            coverage_profile_dir / "%p-%m.profraw"
+        )
+        runtime_marker_dir = coverage_profile_dir / "runtime-probe"
+        runtime_marker_dir.mkdir(parents=True, exist_ok=True)
+        environment["ASGI_PARITY_COVERAGE_RUNTIME_MARKER_DIR"] = str(
+            runtime_marker_dir
+        )
     command = [
         str(python),
         str(ROOT / "tests/parity/python_api_probe.py"),
@@ -10616,7 +10683,9 @@ def execute_profile(
     coverage_profile_dir: Path | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if profile["id"] == "cli":
-        return execute_cli_profile(profile, cases, operations)
+        return execute_cli_profile(
+            profile, cases, operations, coverage_profile_dir
+        )
     if profile["id"] == "python-api":
         return execute_python_api_profile(
             profile, cases, operations, coverage_profile_dir
@@ -11345,6 +11414,7 @@ def main() -> int:
     if coverage_profile_dir is not None:
         if len(selected_cases) != 1 or not args.case_id:
             parser.error("--coverage-profile-dir requires exactly one selected --case-id")
+        os.environ["ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN"] = "1"
         (coverage_profile_dir / "runner").mkdir(parents=True, exist_ok=True)
         os.environ["LLVM_PROFILE_FILE"] = str(
             coverage_profile_dir / "runner" / "%p-%m.profraw"

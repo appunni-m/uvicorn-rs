@@ -348,7 +348,7 @@ separate gates.
 
 The JSON below is a historical schema sketch, not the current report schema.
 The current runner, evidence checker, and Coverage-MCP receipt attacher use
-`uvicorn-rs-coverage/unified@8`. Region attribution uses the exact source span
+`uvicorn-rs-coverage/unified@9`. Region attribution uses the exact source span
 across Rust monomorphizations, so an input that executes a region in one
 generic instantiation is not reported as a gap merely because another
 instantiation is LLVM's maximum-summary representative. Physical line totals
@@ -360,6 +360,18 @@ file and aggregate summaries remain in `coverage.source_files[].llvm_summary`
 and `coverage.llvm_summary`; raw LLVM function-instantiation counters remain
 in the function rows. `coverage.line_validation` records the per-file counts
 used to confirm the line/span match.
+
+The per-case index includes every selected input, including CLI and Python API
+probes that exit before loading the Rust extension. Those rows use
+`coverage_scope: "rust-runtime-not-entered"`, carry hashed per-process import
+probes, and have no LLVM profiles or attributed regions. This is an explicit
+zero-execution record, not a Rust coverage hit. The runner accepts it only when
+the live target parity case passes, every target process has a valid probe, all
+probes confirm that `uvicorn_rs._native` was not imported, and no LLVM profile
+was produced. CLI or Python API cases that load the Rust extension must produce
+attributable LLVM profiles as usual. Other ASGI and native cases continue to
+require profiles. The `case_index` still contains all input keys, while
+`coverage.attribution.per_case_profiles` counts only cases with LLVM profiles.
 
 Produce one authoritative `coverage-report.json` for the complete selected case
 matrix and exact instrumented source/build. It contains both the aggregate

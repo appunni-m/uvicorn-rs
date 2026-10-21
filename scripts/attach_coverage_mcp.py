@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION_KEY = "uvicorn_rs_unified"
-REPORT_SCHEMA = "uvicorn-rs-coverage/unified@8"
+REPORT_SCHEMA = "uvicorn-rs-coverage/unified@9"
 
 
 class ReceiptError(RuntimeError):

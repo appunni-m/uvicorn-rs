@@ -29,7 +29,7 @@ from coverage_toolchain import ToolchainError, validate_coverage_tools
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests/parity/manifest.json"
-UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@8"
+UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@9"
 PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
     "crates/uvicorn-rs/src/lib.rs",
@@ -1050,7 +1050,18 @@ def validate_coverage(
                              "profile_union_matches_attribution", "case_region_ids_verified",
                              "case_region_lookup", "case_index"}, "coverage attribution")
     case_index = attribution.get("case_index")
-    require(attribution.get("per_case_profiles") == total
+    profiled_case_count = sum(
+        bool(row.get("profile_data_artifacts"))
+        for row in asgi_rows + native_rows
+        if isinstance(row, dict)
+    )
+    no_runtime_case_count = sum(
+        isinstance(row, dict)
+        and row.get("coverage_scope") == "rust-runtime-not-entered"
+        for row in asgi_rows
+    )
+    require(attribution.get("per_case_profiles") == profiled_case_count
+            and profiled_case_count + no_runtime_case_count == total
             and attribution.get("profile_union_matches_attribution") is True
             and attribution.get("case_region_ids_verified") is True
             and isinstance(case_index, list)
@@ -1129,15 +1140,64 @@ def validate_coverage(
             checked.append(path)
         return checked
 
+    seen_runtime_probes: set[Path] = set()
+
+    def check_runtime_probes(
+        receipts: Any, *, expected_parent: Path, expected_loaded: bool | None,
+    ) -> list[bool]:
+        require(isinstance(receipts, list) and bool(receipts),
+                "Python subprocess runtime scope lacks process receipts")
+        require(not expected_parent.is_symlink(),
+                "Python subprocess runtime probe directory must not be a symlink")
+        marker_dir = expected_parent.resolve()
+        require(marker_dir.is_dir(),
+                "Python subprocess runtime probe directory is missing or unsafe")
+        loaded_states = []
+        expected_names = set()
+        for receipt in receipts:
+            exact_keys(receipt, {"path", "sha256", "pid", "rust_native_module_loaded"},
+                       "Python subprocess runtime probe receipt")
+            pid = receipt.get("pid")
+            loaded = receipt.get("rust_native_module_loaded")
+            require(type(pid) is int and pid > 0 and type(loaded) is bool,
+                    "Python subprocess runtime probe identity is invalid")
+            relative = receipt.get("path")
+            expected_path = expected_parent / f"{pid}.json"
+            require(isinstance(relative, str) and Path(relative) == expected_path,
+                    "Python subprocess runtime probe path differs from its process identity")
+            path = artifact(relative, valid_digest(receipt.get("sha256"), "Python subprocess runtime probe"))
+            require(path.parent == marker_dir and path.suffix == ".json"
+                    and path not in seen_runtime_probes,
+                    "Python subprocess runtime probe is outside its case or was reused")
+            seen_runtime_probes.add(path)
+            marker = read_json(path)
+            require(marker == {"pid": pid, "rust_native_module_loaded": loaded},
+                "Python subprocess runtime probe content differs from its receipt")
+            expected_names.add(path.name)
+            loaded_states.append(loaded)
+        require({path.name for path in marker_dir.iterdir()} == expected_names,
+                "Python subprocess runtime probe directory has missing or unreceipted files")
+        if expected_loaded is not None:
+            require(
+                any(loaded_states) if expected_loaded else not any(loaded_states),
+                "Python subprocess runtime module state differs from the declared coverage scope",
+            )
+        return loaded_states
+
     for row in asgi_rows:
         cid = row["case_id"]
         case = asgi_by_id[cid]
         require(row.get("case_key") == f"asgi:{cid}", f"ASGI case key is not namespaced: {cid}")
         validate_case_metadata(row, case)
+        scope = row.get("coverage_scope")
+        no_runtime = scope == "rust-runtime-not-entered"
         require(row.get("error") is None and row.get("transient_infrastructure_failures") == 0
                 and row.get("target_extension_sha256") == native_sha
                 and type(row.get("covered_regions")) is int
-                and row["covered_regions"] == hit_counts[f"asgi:{cid}"] == len(case_regions[f"asgi:{cid}"]) > 0,
+                and row["covered_regions"] == hit_counts[f"asgi:{cid}"] == len(case_regions[f"asgi:{cid}"])
+                and (row["covered_regions"] == 0 if no_runtime else row["covered_regions"] > 0)
+                and (case["profile"] in {"cli", "python-api"} if no_runtime
+                     else scope == "instrumented-rust-runtime"),
                 f"ASGI case receipt differs: {cid}")
         attempts = row.get("attempts")
         require(isinstance(attempts, list) and len(attempts) == 1 and attempts[0].get("attempt") == 1
@@ -1146,7 +1206,8 @@ def validate_coverage(
         attempt = attempts[0]
         require(all(attempt.get(key) == row.get(key)
                     for key in ("result_artifact", "result_sha256", "profile_data_artifacts",
-                                "profile_data_receipts", "stdout_artifact", "stderr_artifact")),
+                                "profile_data_receipts", "stdout_artifact", "stderr_artifact",
+                                "coverage_scope", "runtime_probe_receipts")),
                 f"ASGI case artifact receipts differ: {cid}")
         case_result_dir = root / "cases" / case_slug(cid)
         exact_run_artifact(row.get("result_artifact"), case_result_dir / "parity-result.json",
@@ -1173,19 +1234,44 @@ def validate_coverage(
                                              "target": observed["target_observation"],
                                              "difference": observed["difference"]},
                 f"ASGI observations differ: {cid}")
-        profiles = check_profiles(
-            row.get("profile_data_artifacts"), row.get("profile_data_receipts"), f"ASGI case {cid}",
-            expected_parent=root / "profiles" / case_slug(cid) / "attempt-1" / "target",
-        )
-        require(artifact(str(Path(row["result_artifact"]).parent / "target.profdata")).stat().st_size > 0,
-                f"ASGI merged profile missing: {cid}")
-        verified_hits = case_profile_regions(
-            profiles, label=f"asgi:{cid}", llvm_cov=llvm_cov, llvm_profdata=llvm_profdata,
-            binaries=coverage_binaries, source_digest=source["sha256"],
-            canonical_functions=canonical_functions, aggregate_region_ids=region_ids,
-        )
-        require(verified_hits == case_regions[f"asgi:{cid}"],
-                f"ASGI case-to-region attribution differs from retained profile: {cid}")
+        runtime_probe_root = root / "profiles" / case_slug(cid) / "attempt-1"
+        if case["profile"] == "python-api":
+            runtime_probe_root = runtime_probe_root / "target"
+        runtime_probe_root = runtime_probe_root / "runtime-probe"
+        if no_runtime:
+            require(case["profile"] in {"cli", "python-api"}
+                    and row.get("profile_data_artifacts") == []
+                    and row.get("profile_data_receipts") == []
+                    and not (case_result_dir / "target.profdata").exists(),
+                    f"non-entered Rust subprocess case has LLVM profile data: {cid}")
+            check_runtime_probes(
+                row.get("runtime_probe_receipts"),
+                expected_parent=runtime_probe_root,
+                expected_loaded=False,
+            )
+        else:
+            if case["profile"] in {"cli", "python-api"}:
+                check_runtime_probes(
+                    row.get("runtime_probe_receipts"),
+                    expected_parent=runtime_probe_root,
+                    expected_loaded=True,
+                )
+            else:
+                require(row.get("runtime_probe_receipts") == [],
+                        f"ASGI case outside a CLI/API subprocess carries a Python runtime probe: {cid}")
+            profiles = check_profiles(
+                row.get("profile_data_artifacts"), row.get("profile_data_receipts"), f"ASGI case {cid}",
+                expected_parent=root / "profiles" / case_slug(cid) / "attempt-1" / "target",
+            )
+            require(artifact(str(Path(row["result_artifact"]).parent / "target.profdata")).stat().st_size > 0,
+                    f"ASGI merged profile missing: {cid}")
+            verified_hits = case_profile_regions(
+                profiles, label=f"asgi:{cid}", llvm_cov=llvm_cov, llvm_profdata=llvm_profdata,
+                binaries=coverage_binaries, source_digest=source["sha256"],
+                canonical_functions=canonical_functions, aggregate_region_ids=region_ids,
+            )
+            require(verified_hits == case_regions[f"asgi:{cid}"],
+                    f"ASGI case-to-region attribution differs from retained profile: {cid}")
 
     input_root = Path(artifacts["native_input_manifests_root"])
     for cid, case in native_by_id.items():

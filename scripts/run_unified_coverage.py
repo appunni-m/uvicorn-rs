@@ -37,7 +37,7 @@ run_parity = importlib.import_module("run_parity")
 
 RUNNER = ROOT / "scripts" / "run_parity.py"
 BUILD_SCRIPT = ROOT / "scripts" / "build_coverage_extension.py"
-RESULT_SCHEMA = "uvicorn-rs-coverage/unified@8"
+RESULT_SCHEMA = "uvicorn-rs-coverage/unified@9"
 LLVM_EXTENSION_KEY = "uvicorn_rs_unified"
 SOURCE_PATHS = (
     "src",
@@ -197,6 +197,7 @@ REPORT_INPUT_PATHS = (
     "scripts/check_ci_evidence.py",
     "scripts/attach_coverage_mcp.py",
     "scripts/coverage_contract.py",
+    "tests/parity/coverage_site/sitecustomize.py",
     "scripts/run_unified_coverage.py",
     "pyproject.toml",
     "uv.lock",
@@ -231,6 +232,40 @@ def profile_receipts(paths: list[Path]) -> list[dict[str, str]]:
         {"path": str(path.relative_to(ROOT)), "sha256": digest_file(path)}
         for path in paths
     ]
+
+
+def runtime_probe_receipts(marker_dir: Path) -> list[dict[str, Any]]:
+    """Read coverage-only receipts proving whether a CLI process loaded Rust."""
+
+    if marker_dir.is_symlink() or not marker_dir.is_dir():
+        raise CoverageError(f"missing or unsafe Python subprocess runtime probe directory: {marker_dir}")
+    receipts = []
+    paths = sorted(marker_dir.glob("*.json"))
+    if {path.name for path in marker_dir.iterdir()} != {path.name for path in paths}:
+        raise CoverageError(f"Python subprocess runtime probe directory has unreceipted files: {marker_dir}")
+    for path in paths:
+        if path.is_symlink() or not path.is_file() or path.parent != marker_dir:
+            raise CoverageError(f"invalid Python subprocess runtime probe file: {path}")
+        try:
+            marker = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise CoverageError(f"invalid Python subprocess runtime probe JSON: {path}") from error
+        if (
+            not isinstance(marker, dict)
+            or set(marker) != {"pid", "rust_native_module_loaded"}
+            or type(marker.get("pid")) is not int
+            or marker["pid"] <= 0
+            or path.name != f"{marker['pid']}.json"
+            or type(marker.get("rust_native_module_loaded")) is not bool
+        ):
+            raise CoverageError(f"invalid Python subprocess runtime probe contract: {path}")
+        receipts.append({
+            "path": str(path.relative_to(ROOT)),
+            "sha256": digest_file(path),
+            "pid": marker["pid"],
+            "rust_native_module_loaded": marker["rust_native_module_loaded"],
+        })
+    return receipts
 
 
 def digest_json(value: Any) -> str:
@@ -1184,8 +1219,36 @@ def main() -> int:
                 else "infrastructure_failed"
             )
             attempt_profiles = sorted((attempt_profile_dir / "target").glob("*.profraw"))
+            attempt_coverage_scope = "instrumented-rust-runtime"
+            attempt_runtime_probes: list[dict[str, Any]] = []
+            has_runtime_probe = case.get("profile") in {"cli", "python-api"}
+            if has_runtime_probe:
+                runtime_probe_dir = (
+                    attempt_profile_dir / "target" / "runtime-probe"
+                    if case.get("profile") == "python-api"
+                    else attempt_profile_dir / "runtime-probe"
+                )
+                try:
+                    attempt_runtime_probes = runtime_probe_receipts(
+                        runtime_probe_dir
+                    )
+                except CoverageError as probe_error:
+                    attempt_status = "infrastructure_failed"
+                    error = str(probe_error)
+                loaded_runtime = any(
+                    probe["rust_native_module_loaded"]
+                    for probe in attempt_runtime_probes
+                )
+                if (
+                    not attempt_runtime_probes
+                    or loaded_runtime != bool(attempt_profiles)
+                ):
+                    attempt_status = "infrastructure_failed"
+                    error = "Python subprocess runtime probes and target LLVM profiles disagree"
+                elif not loaded_runtime:
+                    attempt_coverage_scope = "rust-runtime-not-entered"
             if (
-                not attempt_profiles
+                (not attempt_profiles and attempt_coverage_scope != "rust-runtime-not-entered")
                 or attempt_exit_code not in (0, 1)
                 or (attempt_result is not None and attempt_result.get("infrastructure_errors"))
             ):
@@ -1193,6 +1256,8 @@ def main() -> int:
             attempts.append({
                 "attempt": attempt_index + 1,
                 "status": attempt_status,
+                "coverage_scope": attempt_coverage_scope,
+                "runtime_probe_receipts": attempt_runtime_probes,
                 "runner_exit_code": attempt_exit_code,
                 "stdout_artifact": str((attempt_dir / "stdout.log").relative_to(ROOT)),
                 "stderr_artifact": str((attempt_dir / "stderr.log").relative_to(ROOT)),
@@ -1240,6 +1305,67 @@ def main() -> int:
             continue
 
         if not all_raw_profiles:
+            no_runtime_profile = (
+                case.get("profile") in {"cli", "python-api"}
+                and attempts[-1].get("coverage_scope") == "rust-runtime-not-entered"
+                and result is not None
+                and case_result is not None
+                and final_exit_code in (0, 1)
+                and not result.get("infrastructure_errors")
+            )
+            if no_runtime_profile:
+                run_meta = result.get("run", {})
+                run_identity = (
+                    run_meta.get("target", {}).get("native_extension", {}).get("sha256", ""),
+                    run_meta.get("manifest", {}).get("sha256", ""),
+                    run_meta.get("target", {}).get("cargo_lock_sha256", ""),
+                )
+                if immutable_identity is None:
+                    immutable_identity = run_identity
+                elif run_identity != immutable_identity:
+                    raise CoverageError(
+                        f"source/build identity changed while measuring case {case['case_id']}"
+                    )
+                scope_receipt = {
+                    "case_id": case["case_id"],
+                    "case_key": case_key("asgi", case["case_id"]),
+                    "profile": case["profile"],
+                    "operation": case["operation"],
+                    "requirements": case["covers"],
+                    "verification": case.get("verification", "oracle-parity"),
+                    "fault": case.get("fault"),
+                    "status": status,
+                    "coverage_scope": "rust-runtime-not-entered",
+                    "error": error if status != "passed" else None,
+                    "observations": {
+                        "oracle": case_result.get("oracle_observation"),
+                        "target": case_result.get("target_observation"),
+                        "difference": case_result.get("difference"),
+                    },
+                    "result_artifact": str(result_path.relative_to(ROOT)),
+                    "result_sha256": digest_file(result_path),
+                    "stdout_artifact": str((result_path.parent / "stdout.log").relative_to(ROOT)),
+                    "stderr_artifact": str((result_path.parent / "stderr.log").relative_to(ROOT)),
+                    "run_id": run_meta.get("run_id"),
+                    "target_extension_sha256": run_identity[0],
+                    "profile_data_artifacts": [],
+                    "profile_data_receipts": [],
+                    "runtime_probe_receipts": attempts[-1]["runtime_probe_receipts"],
+                    "hit_region_ids": [],
+                    "covered_regions": 0,
+                    "attempts": attempts,
+                    "transient_infrastructure_failures": sum(
+                        attempt["status"] == "infrastructure_failed"
+                        for attempt in attempts[:-1]
+                    ),
+                }
+                case_receipts.append(scope_receipt)
+                print(
+                    f"[{index}/{len(cases)}] {status.upper()} {case['case_id']} "
+                    "(Rust runtime not entered)",
+                    flush=True,
+                )
+                continue
             case_receipts.append({
                 "case_id": case["case_id"],
                 "case_key": case_key("asgi", case["case_id"]),
@@ -1311,6 +1437,7 @@ def main() -> int:
             "verification": case.get("verification", "oracle-parity"),
             "fault": case.get("fault"),
             "status": status if final_exit_code in (0, 1) else "infrastructure_failed",
+            "coverage_scope": "instrumented-rust-runtime",
             "error": error or (None if final_exit_code in (0, 1) else f"runner exit status {final_exit_code}"),
             "observations": {
                 "oracle": case_result.get("oracle_observation") if case_result else None,
@@ -1325,6 +1452,7 @@ def main() -> int:
             "target_extension_sha256": run_identity[0],
             "profile_data_artifacts": [str(path.relative_to(ROOT)) for path in all_raw_profiles],
             "profile_data_receipts": profile_receipts(all_raw_profiles),
+            "runtime_probe_receipts": attempts[-1]["runtime_probe_receipts"],
             "hit_region_ids": [],
             "covered_regions": 0,
             "attempts": attempts,
@@ -1780,7 +1908,9 @@ def main() -> int:
     for region in all_case_regions.values():
         region["hit_by"] = sorted(set(region["hit_by"]))
         region["covered"] = bool(region["hit_by"])
-    case_index = sorted(receipt["case_key"] for _, receipt, _ in attribution_cases)
+    case_index = sorted(
+        receipt["case_key"] for receipt in case_receipts + native_case_receipts
+    )
     case_index_by_key = {case_key: index for index, case_key in enumerate(case_index)}
 
     source_region_summaries = {
@@ -1831,6 +1961,19 @@ def main() -> int:
         and all(item["status"] == "passed" for item in case_receipts + native_case_receipts)
         and all(len(item.get("attempts", [])) == 1 for item in case_receipts + native_case_receipts)
         and all(item.get("transient_infrastructure_failures", 0) == 0 for item in case_receipts + native_case_receipts)
+    )
+    case_attribution_complete = (
+        len(attribution_cases)
+        + sum(
+            item.get("coverage_scope") == "rust-runtime-not-entered"
+            and bool(item.get("runtime_probe_receipts"))
+            and all(
+                probe.get("rust_native_module_loaded") is False
+                for probe in item["runtime_probe_receipts"]
+            )
+            for item in case_receipts
+        )
+        == len(cases) + len(native_cases)
     )
     oracle_case_receipts = [item for item in case_receipts if item["verification"] == "oracle-parity"]
     fault_case_receipts = [item for item in case_receipts if item["verification"] == "fault-contract"]
@@ -1959,7 +2102,7 @@ def main() -> int:
             "verification_runs": matrix_runs,
             "native_verification_runs": native_matrix_runs,
             "verification_runs_required": 3,
-            "case_attribution_complete": len(attribution_cases) == len(cases) + len(native_cases),
+            "case_attribution_complete": case_attribution_complete,
             # Region rows retain the complete hit_by relation. Repeating the
             # inverse SHA256 lists in every case makes a full report exceed
             # Coverage-MCP's size limit without adding evidence.

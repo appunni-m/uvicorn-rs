@@ -22,6 +22,18 @@ _lifespan_startup_server = None
 _lifespan_startup_task = None
 
 
+def subprocess_environment() -> dict[str, str]:
+    """Build an isolated child environment, retaining the coverage shim only."""
+
+    environment = os.environ.copy()
+    for name in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP"):
+        environment.pop(name, None)
+    environment["PYTHONNOUSERSITE"] = "1"
+    if environment.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1":
+        environment["PYTHONPATH"] = str(Path(__file__).parent / "coverage_site")
+    return environment
+
+
 def resolve(path: str):
     module_name, separator, attributes = path.partition(":")
     if not separator:
@@ -101,11 +113,7 @@ def run_http_reload_observation(request: dict) -> dict:
             "--app-dir",
             str(app_directory),
         ]
-        environment = os.environ.copy()
-        environment.pop("PYTHONPATH", None)
-        environment.pop("PYTHONHOME", None)
-        environment.pop("PYTHONSTARTUP", None)
-        environment["PYTHONNOUSERSITE"] = "1"
+        environment = subprocess_environment()
         creationflags = (
             subprocess.CREATE_NEW_PROCESS_GROUP
             if os.name == "nt"
@@ -209,6 +217,7 @@ def run_http_observation(request: dict) -> dict:
 
     child_code = r'''
 import sys
+import os
 import base64
 import asyncio
 import json
@@ -401,17 +410,21 @@ options = {
 }
 if uds_path is not None:
     options["uds"] = uds_path
-if invocation in {"config-server", "server-sockets"}:
-    if invocation == "server-sockets":
-        options.pop("fd", None)
-    config = uvicorn.Config(app, **options)
-    if invocation == "server-sockets":
-        listeners = [socket.socket(fileno=listener_fd) for listener_fd in listener_fds]
-        uvicorn.Server(config).run(sockets=listeners)
+try:
+    if invocation in {"config-server", "server-sockets"}:
+        if invocation == "server-sockets":
+            options.pop("fd", None)
+        config = uvicorn.Config(app, **options)
+        if invocation == "server-sockets":
+            listeners = [socket.socket(fileno=listener_fd) for listener_fd in listener_fds]
+            uvicorn.Server(config).run(sockets=listeners)
+        else:
+            uvicorn.Server(config).run()
     else:
-        uvicorn.Server(config).run()
-else:
-    uvicorn.run(app, **options)
+        uvicorn.run(app, **options)
+except KeyboardInterrupt:
+    if os.environ.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") != "1":
+        raise
 '''
     uds_directory = None
     uds_path = None
@@ -533,11 +546,7 @@ else:
             json.dumps([listener.fileno() for listener in inherited_listeners]),
         ]
 
-    environment = os.environ.copy()
-    environment.pop("PYTHONPATH", None)
-    environment.pop("PYTHONHOME", None)
-    environment.pop("PYTHONSTARTUP", None)
-    environment["PYTHONNOUSERSITE"] = "1"
+    environment = subprocess_environment()
     process_options = {}
     if os.name == "nt":
         process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -783,11 +792,7 @@ uvicorn.run(
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
 
-    environment = os.environ.copy()
-    environment.pop("PYTHONPATH", None)
-    environment.pop("PYTHONHOME", None)
-    environment.pop("PYTHONSTARTUP", None)
-    environment["PYTHONNOUSERSITE"] = "1"
+    environment = subprocess_environment()
     process_options = {}
     if os.name == "nt":
         process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -1082,11 +1087,7 @@ def module_cli_lifespan_startup_observation(request: dict) -> dict[str, object]:
         "--lifespan",
         request["lifespan"],
     ]
-    environment = os.environ.copy()
-    environment.pop("PYTHONPATH", None)
-    environment.pop("PYTHONHOME", None)
-    environment.pop("PYTHONSTARTUP", None)
-    environment["PYTHONNOUSERSITE"] = "1"
+    environment = subprocess_environment()
     try:
         completed = subprocess.run(
             command,

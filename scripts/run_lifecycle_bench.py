@@ -326,26 +326,26 @@ def diagnostic_gate(output: str, server: dict, phase: str, returncode: int, evid
             lines, server, evidence, uvicorn_identity
         )
         normalization_receipt.append(receipt)
-    # The native TCP layer reports its configured grace deadline when it
+    # The native listener reports its configured grace deadline when it
     # aborts the one deliberately held connection. This is the Rust-side
     # equivalent of Uvicorn's expected graceful-timeout cancellation. Accept
     # only one exact diagnostic, before the ASGI task cancellation marker.
-    native_shutdown_timeout = "uvicorn-rs: TCP shutdown exceeded the graceful timeout"
+    native_shutdown_timeout = "uvicorn-rs: listener shutdown exceeded the graceful timeout"
     native_shutdown_timeout_indices = [
         index for index, line in enumerate(lines) if line == native_shutdown_timeout
     ]
     if native_shutdown_timeout_indices:
         if phase != "active" or server["kind"] != "rust":
-            raise RuntimeError("native TCP graceful timeout occurred outside the active Rust cancellation phase")
+            raise RuntimeError("native listener graceful timeout occurred outside the active Rust cancellation phase")
         if len(native_shutdown_timeout_indices) != 1:
-            raise RuntimeError("native TCP graceful timeout diagnostic occurred more than once")
+            raise RuntimeError("native listener graceful timeout diagnostic occurred more than once")
         timeout_index = native_shutdown_timeout_indices[0]
         cancellation_index = lines.index("APP_CANCELLED_BY_SHUTDOWN")
         if timeout_index >= cancellation_index:
-            raise RuntimeError("native TCP graceful timeout did not precede held ASGI task cancellation")
+            raise RuntimeError("native listener graceful timeout did not precede held ASGI task cancellation")
         normalized_indices.add(timeout_index)
         normalization_receipt.append({
-            "kind": "single native TCP graceful deadline for the deliberately held request",
+            "kind": "single native listener graceful deadline for the deliberately held request",
             "exact_line": native_shutdown_timeout,
             "occurrences": 1,
         })
@@ -637,8 +637,8 @@ def main() -> None:
                 "phase": "active", "maximum_occurrences": 1,
                 "rust_exact_line": "uvicorn-rs: ASGI request failed: CancelledError:",
                 "rust_optional_suffix": "one trailing space from PyErr's empty-message display",
-                "rust_tcp_timeout_exact_line": "uvicorn-rs: TCP shutdown exceeded the graceful timeout",
-                "rust_tcp_timeout_condition": "only for the active held request, at most once and before APP_CANCELLED_BY_SHUTDOWN",
+                "rust_listener_timeout_exact_line": "uvicorn-rs: listener shutdown exceeded the graceful timeout",
+                "rust_listener_timeout_condition": "only for the active held request, at most once and before APP_CANCELLED_BY_SHUTDOWN",
                 "uvicorn_log_level": "publicERROR without colors; unexpected logger errors remain visible",
                 "uvicorn_timeout_line": "ERROR:    Cancel 1 running task(s), timeout graceful shutdown exceeded",
                 "uvicorn_terminal_exception": "asyncio.exceptions.CancelledError: Task cancelled, timeout graceful shutdown exceeded",
