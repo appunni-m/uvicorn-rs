@@ -77,11 +77,7 @@ class Server:
             timeout_keep_alive=self.config.timeout_keep_alive,
             certfile=self.config.ssl_certfile,
             keyfile=self.config.ssl_keyfile,
-            graceful_timeout=(
-                10
-                if self.config.timeout_graceful_shutdown is None
-                else self.config.timeout_graceful_shutdown
-            ),
+            graceful_timeout=self.config.timeout_graceful_shutdown,
             lifespan=self.config.lifespan,
             root_path=self.config.root_path,
             default_headers=self.config.encoded_headers,

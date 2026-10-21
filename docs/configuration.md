@@ -47,7 +47,7 @@ that limit is stated in the option description.
 | --factory | Off | Call the imported application with no arguments. |
 | --ssl-certfile PATH | Unset | PEM certificate chain. Supply it together with --ssl-keyfile to enable TLS and experimental HTTP/3. |
 | --ssl-keyfile PATH | Unset | PEM private key paired with --ssl-certfile. |
-| --timeout-graceful-shutdown SECONDS | None | Maximum graceful shutdown time. The current native adapter applies a 10-second timeout when omitted. |
+| --timeout-graceful-shutdown SECONDS | None | Maximum time to drain active work. The default `None` has no deadline, matching Uvicorn; an explicit value bounds the drain. A focused parity case verifies the default can wait more than 10 seconds for lifespan shutdown. |
 | --limit-concurrency INTEGER | Unset | Return HTTP 503 when active connections or request tasks reach this limit. Focused HTTP/1.1 comparisons verify limit 1 through the CLI, `uvicorn.run()`, and `Config` with `Server.run()`; other limits and protocols remain unverified. |
 
 For a custom INI, JSON, or YAML logging file, pass its path at the command line

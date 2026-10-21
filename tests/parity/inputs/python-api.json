@@ -510,6 +510,26 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-default-graceful-shutdown-waits-for-lifespan",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-default-graceful-shutdown",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 20,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "request_headers": [
+            ["x-parity-lifespan-shutdown-delay", "11"]
+          ]
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-applies-root-path",
       "profile": "python-api",
       "operation": "python.api.run-http",

@@ -1627,7 +1627,7 @@ struct ServeOptions {
     root_path: String,
     tcp_tls: Option<TlsAcceptor>,
     quic_config: Option<quinn::ServerConfig>,
-    graceful_timeout: std::time::Duration,
+    graceful_timeout: Option<std::time::Duration>,
     lifespan_mode: LifespanMode,
     default_headers: Vec<(HeaderName, HeaderValue)>,
     date_header: bool,
@@ -1660,7 +1660,7 @@ struct ServerContext {
     completed_request_body_pumps: Arc<AtomicUsize>,
     diagnostics: RuntimeDiagnostics,
     cancellation: CancellationToken,
-    graceful_timeout: std::time::Duration,
+    graceful_timeout: Option<std::time::Duration>,
     pending_python_tasks: TaskTracker,
     force_application_shutdown: CancellationToken,
 }
@@ -5015,7 +5015,7 @@ fn serve<'py>(
     timeout_keep_alive: i64,
     certfile: Option<String>,
     keyfile: Option<String>,
-    graceful_timeout: u64,
+    graceful_timeout: Option<u64>,
     lifespan: Bound<'py, PyAny>,
     root_path: String,
     default_headers: Vec<(Bytes, Bytes)>,
@@ -5049,22 +5049,24 @@ fn serve<'py>(
             Ok((name, value))
         })
         .collect::<PyResult<Vec<_>>>()?;
-    let graceful_timeout = std::time::Duration::from_secs(graceful_timeout);
+    let graceful_timeout = graceful_timeout.map(std::time::Duration::from_secs);
     let timeout_keep_alive = std::time::Duration::from_secs(timeout_keep_alive.max(0) as u64);
     #[cfg(coverage)]
     let graceful_timeout = if coverage_fault_take(CoverageFaultPoint::ServerGracefulTimeoutOverflow)
     {
-        std::time::Duration::from_secs(u64::MAX)
+        Some(std::time::Duration::from_secs(u64::MAX))
     } else {
         graceful_timeout
     };
     // Reject an unrepresentable duration before allocating application tasks
     // or opening listeners. The shutdown budget still starts at shutdown.
-    tokio::time::Instant::now()
-        .checked_add(graceful_timeout)
-        .ok_or_else(|| {
-            PyValueError::new_err("graceful_timeout exceeds the supported monotonic deadline range")
-        })?;
+    if graceful_timeout
+        .is_some_and(|timeout| tokio::time::Instant::now().checked_add(timeout).is_none())
+    {
+        return Err(PyValueError::new_err(
+            "graceful_timeout exceeds the supported monotonic deadline range",
+        ));
+    }
     #[cfg(coverage)]
     {
         let result = if coverage_fault_take(CoverageFaultPoint::ServerControlShutdownBorrowConflict)
@@ -5604,26 +5606,23 @@ async fn serve_forever(
     cancellation.cancel();
     let shutdown_started = tokio::time::Instant::now();
     if let Some(mut http3_task) = http3_task {
-        if let Err(error) = tokio::time::timeout(
-            options
-                .graceful_timeout
-                .saturating_sub(shutdown_started.elapsed()),
+        if timeout_optional(
+            remaining_graceful_timeout(options.graceful_timeout, shutdown_started),
             &mut http3_task,
         )
         .await
+        .is_err()
         {
             log_error(format_args!(
-                "uvicorn-rs: HTTP/3 shutdown exceeded grace period: {error}"
+                "uvicorn-rs: HTTP/3 shutdown exceeded grace period"
             ));
             http3_task.abort();
             let _ = http3_task.await;
         }
     }
     #[cfg(not(feature = "native-tcp"))]
-    if tokio::time::timeout(
-        options
-            .graceful_timeout
-            .saturating_sub(shutdown_started.elapsed()),
+    if timeout_optional(
+        remaining_graceful_timeout(options.graceful_timeout, shutdown_started),
         async {
             while let Some(result) = connection_tasks.join_next().await {
                 match result {
@@ -5651,10 +5650,8 @@ async fn serve_forever(
         abort_handle.abort();
         tokio::task::yield_now().await;
     }
-    if tokio::time::timeout(
-        options
-            .graceful_timeout
-            .saturating_sub(shutdown_started.elapsed()),
+    if timeout_optional(
+        remaining_graceful_timeout(options.graceful_timeout, shutdown_started),
         async {
             while let Some(result) = request_body_tasks.join_next().await {
                 if let Err(error) = result {
@@ -5704,10 +5701,8 @@ async fn serve_forever(
     #[cfg(not(feature = "native-tcp"))]
     {
         let mut websocket_tasks = server.websocket_tasks.lock().await;
-        if tokio::time::timeout(
-            options
-                .graceful_timeout
-                .saturating_sub(shutdown_started.elapsed()),
+        if timeout_optional(
+            remaining_graceful_timeout(options.graceful_timeout, shutdown_started),
             async {
                 while let Some(result) = websocket_tasks.join_next().await {
                     if let Err(error) = result {
@@ -5727,7 +5722,7 @@ async fn serve_forever(
         drop(websocket_tasks);
     }
     server.pending_python_tasks.close();
-    if tokio::time::timeout(options.graceful_timeout, server.pending_python_tasks.wait())
+    if timeout_optional(options.graceful_timeout, server.pending_python_tasks.wait())
         .await
         .is_err()
     {
@@ -5740,8 +5735,8 @@ async fn serve_forever(
         server.force_application_shutdown.cancel();
         let cleanup_timeout = options
             .graceful_timeout
-            .max(std::time::Duration::from_millis(100));
-        if tokio::time::timeout(cleanup_timeout, server.pending_python_tasks.wait())
+            .map(|timeout| timeout.max(std::time::Duration::from_millis(100)));
+        if timeout_optional(cleanup_timeout, server.pending_python_tasks.wait())
             .await
             .is_err()
         {
@@ -5752,28 +5747,21 @@ async fn serve_forever(
             ));
         }
     }
-    // Lifespan shutdown is a separate ASGI phase. The connection drain may
-    // consume its full grace period while cancelling outstanding applications;
-    // still give the lifespan task its own bounded window to finish.
+    // Uvicorn's graceful timeout bounds connection/application draining only.
+    // It does not impose a deadline on the ASGI lifespan shutdown handshake.
     #[cfg(coverage)]
     let lifespan_shutdown_timeout =
         if coverage_fault_is_armed(CoverageFaultPoint::LifespanShutdownForceTimeout) {
             // Give the Python app time to receive shutdown and enter its held
             // state before the timeout cancels the lifespan task.
-            std::time::Duration::from_secs(1)
+            Some(std::time::Duration::from_secs(1))
         } else {
-            // Zero grace disables active request draining, but still needs a
-            // bounded event-loop window to deliver and answer ASGI shutdown.
-            options
-                .graceful_timeout
-                .max(std::time::Duration::from_millis(100))
+            None
         };
     #[cfg(not(coverage))]
-    let lifespan_shutdown_timeout = options
-        .graceful_timeout
-        .max(std::time::Duration::from_millis(100));
+    let lifespan_shutdown_timeout = None;
     let shutdown_result = if let Some(lifespan) = lifespan.as_mut() {
-        match tokio::time::timeout(lifespan_shutdown_timeout, lifespan.shutdown()).await {
+        match timeout_optional(lifespan_shutdown_timeout, lifespan.shutdown()).await {
             Ok(result) => result,
             Err(_) => Err(PyRuntimeError::new_err(
                 "ASGI lifespan shutdown exceeded the graceful timeout",
@@ -5792,10 +5780,14 @@ async fn serve_forever(
     shutdown_result
 }
 
-async fn wait_for_lifespan_cleanup(tracker: &TaskTracker, graceful_timeout: std::time::Duration) {
+async fn wait_for_lifespan_cleanup(
+    tracker: &TaskTracker,
+    graceful_timeout: Option<std::time::Duration>,
+) {
     tracker.close();
-    let cleanup_timeout = graceful_timeout.max(std::time::Duration::from_millis(100));
-    if tokio::time::timeout(cleanup_timeout, tracker.wait())
+    let cleanup_timeout =
+        graceful_timeout.map(|timeout| timeout.max(std::time::Duration::from_millis(100)));
+    if timeout_optional(cleanup_timeout, tracker.wait())
         .await
         .is_err()
     {
@@ -5805,6 +5797,23 @@ async fn wait_for_lifespan_cleanup(tracker: &TaskTracker, graceful_timeout: std:
             "uvicorn-rs: Python ASGI lifespan cancellation cleanup exceeded the graceful timeout"
         ));
     }
+}
+
+async fn timeout_optional<T>(
+    timeout: Option<std::time::Duration>,
+    future: impl Future<Output = T>,
+) -> Result<T, ()> {
+    match timeout {
+        Some(timeout) => tokio::time::timeout(timeout, future).await.map_err(|_| ()),
+        None => Ok(future.await),
+    }
+}
+
+fn remaining_graceful_timeout(
+    timeout: Option<std::time::Duration>,
+    started: tokio::time::Instant,
+) -> Option<std::time::Duration> {
+    timeout.map(|timeout| timeout.saturating_sub(started.elapsed()))
 }
 
 #[cfg(not(feature = "native-tcp"))]
@@ -5911,7 +5920,7 @@ where
         result = &mut connection => result?,
         _ = cancellation.cancelled() => {
             connection.as_mut().graceful_shutdown();
-            if let Ok(Err(error)) = tokio::time::timeout(graceful_timeout, &mut connection).await {
+            if let Ok(Err(error)) = timeout_optional(graceful_timeout, &mut connection).await {
                 // Hyper's auto detector reports its explicit graceful cancellation
                 // as a direct Interrupted I/O error before choosing HTTP/1 or HTTP/2.
                 // Established connections return hyper::Error instead.
@@ -6083,13 +6092,13 @@ async fn serve_legacy_http3(
     }
     #[cfg(coverage)]
     let connection_drain_timeout = if inject_connection_task_shutdown_hang {
-        std::time::Duration::from_millis(100)
+        Some(std::time::Duration::from_millis(100))
     } else {
         server.graceful_timeout
     };
     #[cfg(not(coverage))]
     let connection_drain_timeout = server.graceful_timeout;
-    if tokio::time::timeout(connection_drain_timeout, async {
+    if timeout_optional(connection_drain_timeout, async {
         while let Some(result) = connections.join_next().await {
             if let Err(error) = result {
                 log_error(format_args!(
@@ -6107,7 +6116,7 @@ async fn serve_legacy_http3(
         connections.abort_all();
         while connections.join_next().await.is_some() {}
     }
-    let _ = tokio::time::timeout(server.graceful_timeout, endpoint.wait_idle()).await;
+    let _ = timeout_optional(server.graceful_timeout, endpoint.wait_idle()).await;
     Ok(())
 }
 

@@ -2768,7 +2768,7 @@ async fn main() -> ProbeResult<()> {
         shutdown_on_change(clear_shutdown),
         uvicorn_rs::ServerConfig {
             max_connections: 16,
-            graceful_shutdown_timeout: Duration::from_secs(2),
+            graceful_shutdown_timeout: Some(Duration::from_secs(2)),
             error_observer: Some(clear_errors),
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -2781,7 +2781,7 @@ async fn main() -> ProbeResult<()> {
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             max_connections: 16,
-            graceful_shutdown_timeout: Duration::from_secs(2),
+            graceful_shutdown_timeout: Some(Duration::from_secs(2)),
             error_observer: Some(tls_errors),
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -2794,7 +2794,7 @@ async fn main() -> ProbeResult<()> {
         shutdown_on_change(h3_shutdown),
         uvicorn_rs::ServerConfig {
             max_connections: 16,
-            graceful_shutdown_timeout: Duration::from_secs(2),
+            graceful_shutdown_timeout: Some(Duration::from_secs(2)),
             error_observer: Some(h3_errors),
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -3164,7 +3164,7 @@ fn lifecycle_server_config(
         max_connections: 8,
         limit_concurrency: None,
         default_headers: Vec::new(),
-        graceful_shutdown_timeout: graceful_timeout,
+        graceful_shutdown_timeout: Some(graceful_timeout),
         http1_keep_alive_timeout: None,
         application_startup_timeout: hook_timeout,
         application_shutdown_timeout: hook_timeout,
@@ -3751,7 +3751,7 @@ async fn run_isolated_http1_shutdown_drain_completed_case(case: &Value) -> Probe
             application,
             shutdown,
             uvicorn_rs::ServerConfig {
-                graceful_shutdown_timeout: Duration::from_millis(graceful_timeout_ms),
+                graceful_shutdown_timeout: Some(Duration::from_millis(graceful_timeout_ms)),
                 ..uvicorn_rs::ServerConfig::default()
             },
         ),
@@ -4078,7 +4078,7 @@ async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()
         }
     });
     let mut server_config = uvicorn_rs::ServerConfig {
-        graceful_shutdown_timeout: Duration::from_millis(500),
+        graceful_shutdown_timeout: Some(Duration::from_millis(500)),
         ..uvicorn_rs::ServerConfig::default()
     };
     server_config.error_observer = Some(error_observer);
@@ -4654,7 +4654,7 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
         application,
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_millis(500),
+            graceful_shutdown_timeout: Some(Duration::from_millis(500)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -5811,7 +5811,7 @@ async fn run_isolated_tls_pending_handshake_shutdown_case(case: &Value) -> Probe
         contract_app(shutdown_sender.clone()),
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_millis(graceful_timeout_ms),
+            graceful_shutdown_timeout: Some(Duration::from_millis(graceful_timeout_ms)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -8152,7 +8152,7 @@ async fn run_server_config_validation_case(case: &Value) -> ProbeResult<()> {
         "connection-limit-overflow" => {
             config.max_connections = tokio::sync::Semaphore::MAX_PERMITS + 1;
         }
-        "graceful-timeout-overflow" => config.graceful_shutdown_timeout = Duration::MAX,
+        "graceful-timeout-overflow" => config.graceful_shutdown_timeout = Some(Duration::MAX),
         "lifecycle-timeout-overflow" => {
             config.application_startup_timeout = Duration::MAX;
         }
@@ -8253,7 +8253,7 @@ async fn run_public_error_contract_case(case: &Value) -> ProbeResult<()> {
         max_connections: 8,
         limit_concurrency: None,
         default_headers: Vec::new(),
-        graceful_shutdown_timeout: Duration::from_millis(250),
+        graceful_shutdown_timeout: Some(Duration::from_millis(250)),
         http1_keep_alive_timeout: Some(Duration::from_secs(2)),
         application_startup_timeout: Duration::from_millis(125),
         application_shutdown_timeout: Duration::from_millis(175),
@@ -8489,7 +8489,7 @@ async fn run_isolated_service_error_propagation_case(case: &Value) -> ProbeResul
     });
     let config = uvicorn_rs::ServerConfig {
         max_connections: 8,
-        graceful_shutdown_timeout: Duration::from_millis(500),
+        graceful_shutdown_timeout: Some(Duration::from_millis(500)),
         error_observer: Some(error_observer),
         service_error_policy,
         ..uvicorn_rs::ServerConfig::default()
@@ -12575,7 +12575,7 @@ async fn run_isolated_graceful_case(case: &Value) -> ProbeResult<()> {
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             max_connections: 16,
-            graceful_shutdown_timeout: Duration::from_secs(2),
+            graceful_shutdown_timeout: Some(Duration::from_secs(2)),
             error_observer: None,
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -12616,7 +12616,7 @@ async fn run_isolated_proactive_peer_eof_case(case: &Value) -> ProbeResult<()> {
     let application = contract_app(shutdown_sender.clone());
     let config = uvicorn_rs::ServerConfig {
         peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::Proactive,
-        graceful_shutdown_timeout: Duration::from_secs(1),
+        graceful_shutdown_timeout: Some(Duration::from_secs(1)),
         ..uvicorn_rs::ServerConfig::default()
     };
     let server = tokio::spawn(async move {
@@ -12807,7 +12807,7 @@ async fn run_isolated_proactive_upload_reset_case(case: &Value) -> ProbeResult<(
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::Proactive,
-            graceful_shutdown_timeout: Duration::from_secs(1),
+            graceful_shutdown_timeout: Some(Duration::from_secs(1)),
             error_observer,
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -13237,7 +13237,7 @@ async fn run_isolated_proactive_upload_flood_case(case: &Value) -> ProbeResult<(
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::Proactive,
-            graceful_shutdown_timeout: Duration::from_millis(graceful_shutdown_timeout_ms),
+            graceful_shutdown_timeout: Some(Duration::from_millis(graceful_shutdown_timeout_ms)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -13472,7 +13472,7 @@ async fn run_isolated_peer_read_receiver_closed_case(case: &Value) -> ProbeResul
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::Proactive,
-            graceful_shutdown_timeout: Duration::from_secs(1),
+            graceful_shutdown_timeout: Some(Duration::from_secs(1)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -13931,7 +13931,7 @@ async fn run_isolated_peer_read_observer_unavailable_case(case: &Value) -> Probe
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             max_connections: 8,
-            graceful_shutdown_timeout: Duration::from_secs(2),
+            graceful_shutdown_timeout: Some(Duration::from_secs(2)),
             error_observer: None,
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -14074,7 +14074,7 @@ async fn run_isolated_graceful_timeout_case(case: &Value) -> ProbeResult<()> {
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             max_connections: 8,
-            graceful_shutdown_timeout: Duration::from_millis(graceful_timeout_ms),
+            graceful_shutdown_timeout: Some(Duration::from_millis(graceful_timeout_ms)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -14194,7 +14194,7 @@ async fn run_isolated_graceful_deadline_overflow_case(case: &Value) -> ProbeResu
                 contract_app(shutdown_sender.clone()),
                 shutdown_on_change(shutdown_receiver),
                 uvicorn_rs::ServerConfig {
-                    graceful_shutdown_timeout: Duration::from_secs(2),
+                    graceful_shutdown_timeout: Some(Duration::from_secs(2)),
                     ..uvicorn_rs::ServerConfig::default()
                 },
             ));
@@ -14447,7 +14447,7 @@ async fn run_isolated_http3_graceful_case(case: &Value) -> ProbeResult<()> {
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             max_connections: 8,
-            graceful_shutdown_timeout: Duration::from_secs(2),
+            graceful_shutdown_timeout: Some(Duration::from_secs(2)),
             error_observer: None,
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -14556,7 +14556,7 @@ async fn run_isolated_http3_graceful_timeout_case(case: &Value) -> ProbeResult<(
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             max_connections: 8,
-            graceful_shutdown_timeout: Duration::from_millis(graceful_timeout_ms),
+            graceful_shutdown_timeout: Some(Duration::from_millis(graceful_timeout_ms)),
             error_observer: None,
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -14672,7 +14672,7 @@ async fn run_isolated_http3_peer_goaway_case(case: &Value) -> ProbeResult<()> {
         application,
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_secs(1),
+            graceful_shutdown_timeout: Some(Duration::from_secs(1)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -14826,7 +14826,7 @@ async fn run_isolated_http3_server_shutdown_case(case: &Value) -> ProbeResult<()
         application,
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_millis(server_wait_ms),
+            graceful_shutdown_timeout: Some(Duration::from_millis(server_wait_ms)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -15065,7 +15065,7 @@ async fn run_isolated_http3_response_send_failure_case(case: &Value) -> ProbeRes
         application,
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_secs(1),
+            graceful_shutdown_timeout: Some(Duration::from_secs(1)),
             error_observer: Some(error_observer),
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -16080,7 +16080,10 @@ async fn run_isolated_http3_client_adapter_application_close_case(case: &Value) 
         application,
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_millis(required_u64(case, "server_wait_ms")?),
+            graceful_shutdown_timeout: Some(Duration::from_millis(required_u64(
+                case,
+                "server_wait_ms",
+            )?)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -16424,7 +16427,10 @@ async fn run_isolated_http3_client_adapter_stream_credit_case(case: &Value) -> P
         contract_app(shutdown_sender.clone()),
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_millis(required_u64(case, "server_wait_ms")?),
+            graceful_shutdown_timeout: Some(Duration::from_millis(required_u64(
+                case,
+                "server_wait_ms",
+            )?)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -16551,7 +16557,10 @@ async fn run_isolated_http3_client_adapter_idle_timeout_case(case: &Value) -> Pr
         contract_app(shutdown_sender.clone()),
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_millis(required_u64(case, "server_wait_ms")?),
+            graceful_shutdown_timeout: Some(Duration::from_millis(required_u64(
+                case,
+                "server_wait_ms",
+            )?)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -16668,10 +16677,10 @@ async fn run_isolated_http3_client_adapter_read_connection_lost_case(
         contract_app(shutdown_sender.clone()),
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_millis(required_u64(
+            graceful_shutdown_timeout: Some(Duration::from_millis(required_u64(
                 case,
                 "server_grace_ms",
-            )?),
+            )?)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -16905,7 +16914,10 @@ async fn run_isolated_http3_client_adapter_closed_stream_case(case: &Value) -> P
         contract_app(shutdown_sender.clone()),
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_millis(required_u64(case, "server_wait_ms")?),
+            graceful_shutdown_timeout: Some(Duration::from_millis(required_u64(
+                case,
+                "server_wait_ms",
+            )?)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -17048,7 +17060,7 @@ async fn run_isolated_http3_control_stream_stop_shutdown_case(case: &Value) -> P
         contract_app(shutdown_sender.clone()),
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_secs(2),
+            graceful_shutdown_timeout: Some(Duration::from_secs(2)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -17197,7 +17209,7 @@ async fn run_isolated_http3_incomplete_request_recovery_case(case: &Value) -> Pr
         application,
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_secs(1),
+            graceful_shutdown_timeout: Some(Duration::from_secs(1)),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -17318,7 +17330,7 @@ async fn run_http3_response_send_cancel_contract_app(case: &Value) -> ProbeResul
         application,
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
-            graceful_shutdown_timeout: Duration::from_secs(1),
+            graceful_shutdown_timeout: Some(Duration::from_secs(1)),
             error_observer: Some(error_observer),
             ..uvicorn_rs::ServerConfig::default()
         },
@@ -17808,7 +17820,7 @@ async fn run_isolated_http3_idle_connection_shutdown_timeout_case(case: &Value) 
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             max_connections: 8,
-            graceful_shutdown_timeout: Duration::from_millis(graceful_timeout_ms),
+            graceful_shutdown_timeout: Some(Duration::from_millis(graceful_timeout_ms)),
             error_observer: None,
             ..uvicorn_rs::ServerConfig::default()
         },

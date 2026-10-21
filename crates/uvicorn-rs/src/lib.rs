@@ -1154,7 +1154,8 @@ pub struct ServerConfig {
     /// Application responses remain the application's responsibility.
     pub default_headers: Vec<(HeaderName, HeaderValue)>,
     /// Maximum time to drain active connections after shutdown begins.
-    pub graceful_shutdown_timeout: Duration,
+    /// `None` waits for active connections without a deadline.
+    pub graceful_shutdown_timeout: Option<Duration>,
     /// Maximum idle time for a persistent HTTP/1 connection after a response.
     /// `None` leaves the connection open until the peer or server closes it.
     /// This setting does not affect HTTP/2 or HTTP/3 connections.
@@ -1802,7 +1803,7 @@ impl Default for ServerConfig {
             max_connections: 1_024,
             limit_concurrency: None,
             default_headers: Vec::new(),
-            graceful_shutdown_timeout: Duration::from_secs(30),
+            graceful_shutdown_timeout: Some(Duration::from_secs(30)),
             http1_keep_alive_timeout: None,
             application_startup_timeout: Duration::from_secs(30),
             application_shutdown_timeout: Duration::from_secs(30),
@@ -1975,7 +1976,10 @@ fn validate_server_config(config: &ServerConfig) -> Result<(), ServeError> {
         return Err(ServeError::ConnectionLimitTooLarge);
     }
     let now = Instant::now();
-    if now.checked_add(config.graceful_shutdown_timeout).is_none() {
+    if config
+        .graceful_shutdown_timeout
+        .is_some_and(|timeout| now.checked_add(timeout).is_none())
+    {
         return Err(ServeError::InvalidGracefulShutdownTimeout);
     }
     if config.application_lifecycle.is_some()
@@ -1991,7 +1995,10 @@ fn validate_server_config(config: &ServerConfig) -> Result<(), ServeError> {
     Ok(())
 }
 
-fn graceful_shutdown_deadline(timeout: Duration) -> Result<Instant, ServeError> {
+fn graceful_shutdown_deadline(timeout: Option<Duration>) -> Result<Option<Instant>, ServeError> {
+    let Some(timeout) = timeout else {
+        return Ok(None);
+    };
     let deadline = Instant::now().checked_add(timeout);
     #[cfg(coverage)]
     let deadline = if take_graceful_shutdown_deadline_overflow_fault() {
@@ -1999,7 +2006,9 @@ fn graceful_shutdown_deadline(timeout: Duration) -> Result<Instant, ServeError> 
     } else {
         deadline
     };
-    deadline.ok_or(ServeError::InvalidGracefulShutdownTimeout)
+    deadline
+        .map(Some)
+        .ok_or(ServeError::InvalidGracefulShutdownTimeout)
 }
 
 pub(crate) async fn run_with_application_lifecycle<F>(
@@ -2103,7 +2112,8 @@ async fn run_lifecycle_hook(
 ///
 /// The `shutdown` future should resolve when the process wants to stop
 /// accepting requests. Active connections then receive protocol graceful
-/// shutdown and are drained until `config.graceful_shutdown_timeout` expires.
+/// shutdown and are drained until `config.graceful_shutdown_timeout` expires,
+/// or until all active connections finish when that timeout is `None`.
 /// When `application_lifecycle` is configured, startup runs before acceptance
 /// and shutdown runs after the serving loop drains or cancels active work. The
 /// shutdown hook has its own timeout; the total stop interval can therefore
@@ -2448,22 +2458,24 @@ where
     drop(listener);
     shutdown_sender.send_replace(true);
     let shutdown_deadline = graceful_shutdown_deadline(config.graceful_shutdown_timeout)?;
-    let shutdown_deadline = tokio::time::sleep_until(shutdown_deadline);
-    tokio::pin!(shutdown_deadline);
     loop {
-        tokio::select! {
-            biased;
-            // Keep the original deadline strict, while letting an empty
-            // set finish through `join_next()` even after the deadline.
-            _ = &mut shutdown_deadline, if !connections.is_empty() => {
-                connections.abort_all();
-                drain_aborted_connections(&mut connections).await;
-                return Err(ServeError::GracefulShutdownTimedOut);
-            }
-            joined = connections.join_next() => match joined {
-                Some(joined) => observe_connection(joined),
-                None => break,
+        let joined = match shutdown_deadline {
+            Some(deadline) => tokio::select! {
+                biased;
+                // Keep the original deadline strict, while letting an empty
+                // set finish through `join_next()` even after the deadline.
+                _ = tokio::time::sleep_until(deadline), if !connections.is_empty() => {
+                    connections.abort_all();
+                    drain_aborted_connections(&mut connections).await;
+                    return Err(ServeError::GracefulShutdownTimedOut);
+                }
+                joined = connections.join_next() => joined,
             },
+            None => connections.join_next().await,
+        };
+        match joined {
+            Some(joined) => observe_connection(joined),
+            None => break,
         }
     }
 

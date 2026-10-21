@@ -500,7 +500,7 @@ async fn start_server(
                 let _ = shutdown_receiver.await;
             },
             ServerConfig {
-                graceful_shutdown_timeout: Duration::from_secs(2),
+                graceful_shutdown_timeout: Some(Duration::from_secs(2)),
                 ..ServerConfig::default()
             },
         )

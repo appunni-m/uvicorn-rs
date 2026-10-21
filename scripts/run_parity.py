@@ -2437,8 +2437,26 @@ def load_contract(
                                 f"{case_id}.api.run_http.environment entries must be valid strings or null"
                             )
                 timeout_seconds = run_http["timeout_seconds"]
-                if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
-                    raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 8")
+                if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 60:
+                    raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 60")
+                shutdown_delay_values = [
+                    value
+                    for name, value in run_http.get("request_headers", [])
+                    if name.lower() == "x-parity-lifespan-shutdown-delay"
+                ]
+                if shutdown_delay_values:
+                    value = shutdown_delay_values[0]
+                    if (
+                        run_http["invocation"] != "module-cli"
+                        or len(shutdown_delay_values) != 1
+                        or not value.isascii()
+                        or not value.isdigit()
+                        or not 11 <= int(value) <= 30
+                        or timeout_seconds < int(value) + 3
+                    ):
+                        raise ParityError(
+                            f"{case_id}: lifespan shutdown delay must be one module-CLI header from 11 through 30 seconds, with three seconds of probe margin"
+                        )
             elif case["operation"] == "python.api.run-websocket":
                 exact_keys(case["api"], {"run_websocket"}, f"{case_id}.api")
                 run_websocket = case["api"]["run_websocket"]
@@ -9988,7 +10006,11 @@ def _python_api_server_log_events(
     return normalized
 
 
-def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]:
+def run_python_api_probe(
+    case: dict[str, Any],
+    server_id: str,
+    coverage_profile_dir: Path | None = None,
+) -> dict[str, Any]:
     """Run one input-selected Python public-surface probe on each interpreter."""
 
     python = ORACLE_PYTHON if server_id == "uvicorn" else Path(sys.executable)
@@ -9997,6 +10019,11 @@ def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]
     environment.pop("PYTHONHOME", None)
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
+    if server_id == "uvicorn-rs" and coverage_profile_dir is not None:
+        coverage_profile_dir.mkdir(parents=True, exist_ok=True)
+        environment["LLVM_PROFILE_FILE"] = str(
+            coverage_profile_dir / "%p-%m.profraw"
+        )
     run_http = case["api"].get("run_http", {})
     for name, value in run_http.get("environment", {}).items():
         if value is None:
@@ -10008,12 +10035,16 @@ def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]
         str(ROOT / "tests/parity/python_api_probe.py"),
         json.dumps(case["api"], sort_keys=True, separators=(",", ":")),
     ]
+    probe_timeout = max(
+        10,
+        run_http.get("timeout_seconds", 5) + 5 if "run_http" in case["api"] else 10,
+    )
     completed = subprocess.run(
         command,
         cwd=ROOT,
         env=environment,
         capture_output=True,
-        timeout=10,
+        timeout=probe_timeout,
         check=False,
     )
     if len(completed.stdout) > 4 * 1024 * 1024 or len(completed.stderr) > 4 * 1024 * 1024:
@@ -10130,13 +10161,20 @@ def execute_python_api_profile(
     profile: dict[str, Any],
     cases: list[dict[str, Any]],
     operations: dict[str, dict[str, Any]],
+    coverage_profile_dir: Path | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     outcomes = []
     for case in cases:
         operation = operations[case["operation"]]
         try:
             oracle = run_python_api_probe(case, "uvicorn")
-            target = run_python_api_probe(case, "uvicorn-rs")
+            target = run_python_api_probe(
+                case,
+                "uvicorn-rs",
+                coverage_profile_dir / "target"
+                if coverage_profile_dir is not None
+                else None,
+            )
             fields = operation.get("compare", operation["observe"])
             matches = {field: oracle[field] for field in fields} == {
                 field: target[field] for field in fields
@@ -10341,7 +10379,9 @@ def execute_profile(
     if profile["id"] == "cli":
         return execute_cli_profile(profile, cases, operations)
     if profile["id"] == "python-api":
-        return execute_python_api_profile(profile, cases, operations)
+        return execute_python_api_profile(
+            profile, cases, operations, coverage_profile_dir
+        )
     server_option_groups: dict[str, list[dict[str, Any]]] = {}
     for case in cases:
         option_key = json.dumps(

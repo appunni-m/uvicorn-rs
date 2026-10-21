@@ -365,18 +365,19 @@ workflows; see [latest local evidence](coverage.md#current-unified-coverage-stat
 Lifespan has a dedicated cleanup tracker. Its main native task remains outside
 that tracker while startup and shutdown run, so request cleanup does not wait
 for an active lifespan application. Startup failures abort and await the native
-task before draining lifespan cleanup. After the bounded lifespan shutdown
-phase, the server also aborts and awaits any retained native lifespan task
-before waiting for Python cleanup. This ordering makes the bridge's cleanup
-registration visible before the tracker is drained.
+task before draining lifespan cleanup. After the unbounded ASGI lifespan
+shutdown phase, the server also aborts and awaits any retained native lifespan
+task before waiting for Python cleanup. This ordering makes the bridge's
+cleanup registration visible before the tracker is drained.
 An abort-on-drop guard remains owned until the native result is observed.
 Unexpected destruction aborts the lifespan task before its channels are
 released. This ownership passed the historical shared-write full matrix after the exclusion
 correction.
 
-Transport and request draining use the configured grace period. ASGI lifespan
-shutdown and Python cancellation cleanup each have a 100 ms minimum window,
-including when `graceful_timeout` is zero. Total shutdown time can exceed
+When a finite grace period is configured, transport and request draining use
+the remaining budget. ASGI lifespan shutdown has no deadline, matching
+Uvicorn. Forced Python cancellation cleanup has a 100 ms minimum window,
+including when `graceful_timeout` is zero. Total shutdown can exceed a finite
 `graceful_timeout` because transport drain, request cleanup, lifespan shutdown,
 and lifespan cleanup have separate windows.
 An unfinished cleanup window produces a diagnostic while preserving the

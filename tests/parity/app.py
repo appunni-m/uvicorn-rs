@@ -1523,12 +1523,13 @@ def app(scope, receive, send):
 
 
 _lifespan_probe_started = False
+_lifespan_probe_shutdown_delay = 0.0
 
 
 async def lifespan_probe_app(scope, receive, send):
     """Expose the selected lifespan setting through one HTTP response."""
 
-    global _lifespan_probe_started
+    global _lifespan_probe_started, _lifespan_probe_shutdown_delay
     if scope["type"] == "lifespan":
         while True:
             message = await receive()
@@ -1536,10 +1537,15 @@ async def lifespan_probe_app(scope, receive, send):
                 _lifespan_probe_started = True
                 await send({"type": "lifespan.startup.complete"})
             elif message["type"] == "lifespan.shutdown":
+                if _lifespan_probe_shutdown_delay:
+                    await asyncio.sleep(_lifespan_probe_shutdown_delay)
                 await send({"type": "lifespan.shutdown.complete"})
                 return
     elif scope["type"] == "http":
         await receive()
+        for name, value in scope.get("headers", []):
+            if name.lower() == b"x-parity-lifespan-shutdown-delay":
+                _lifespan_probe_shutdown_delay = float(value.decode("ascii"))
         if scope["path"] == "/module-cli-custom-json-log-config":
             logging.getLogger("uvicorn.error").warning(
                 "python-api custom JSON log-config sentinel"

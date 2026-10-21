@@ -286,37 +286,43 @@ async fn finish_http3_shutdown(
     endpoint: quinn::Endpoint,
     shutdown_sender: watch::Sender<bool>,
     connections: &mut JoinSet<()>,
-    graceful_shutdown_timeout: Duration,
+    graceful_shutdown_timeout: Option<Duration>,
 ) -> Result<(), ServeError> {
     endpoint.set_server_config(None);
     shutdown_sender.send_replace(true);
     let shutdown_deadline = crate::graceful_shutdown_deadline(graceful_shutdown_timeout)?;
-    let shutdown_deadline = tokio::time::sleep_until(shutdown_deadline);
-    tokio::pin!(shutdown_deadline);
     loop {
-        tokio::select! {
-            biased;
-            // Keep the original deadline strict, while letting an empty
-            // set finish through `join_next()` even after the deadline.
-            _ = &mut shutdown_deadline, if !connections.is_empty() => {
-                connections.abort_all();
-                drain_connection_tasks(connections).await;
-                endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown deadline");
-                return Err(ServeError::GracefulShutdownTimedOut);
-            }
-            joined = connections.join_next() => match joined {
-                Some(joined) => observe_connection_task(Some(joined)),
-                None => break,
+        let joined = match shutdown_deadline {
+            Some(deadline) => tokio::select! {
+                biased;
+                // Keep the original deadline strict, while letting an empty
+                // set finish through `join_next()` even after the deadline.
+                _ = tokio::time::sleep_until(deadline), if !connections.is_empty() => {
+                    connections.abort_all();
+                    drain_connection_tasks(connections).await;
+                    endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown deadline");
+                    return Err(ServeError::GracefulShutdownTimedOut);
+                }
+                joined = connections.join_next() => joined,
             },
+            None => connections.join_next().await,
+        };
+        match joined {
+            Some(joined) => observe_connection_task(Some(joined)),
+            None => break,
         }
     }
 
     endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown");
-    if tokio::time::timeout(graceful_shutdown_timeout, endpoint.wait_idle())
-        .await
-        .is_err()
-    {
-        return Err(ServeError::GracefulShutdownTimedOut);
+    if let Some(timeout) = graceful_shutdown_timeout {
+        if tokio::time::timeout(timeout, endpoint.wait_idle())
+            .await
+            .is_err()
+        {
+            return Err(ServeError::GracefulShutdownTimedOut);
+        }
+    } else {
+        endpoint.wait_idle().await;
     }
     Ok(())
 }

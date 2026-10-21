@@ -46,7 +46,8 @@ class Server:
             certfile: Optional PEM certificate chain. Pair with ``keyfile`` to
                 enable HTTPS and HTTP/3.
             keyfile: Optional PEM private key paired with ``certfile``.
-            graceful_timeout: Non-negative shutdown grace period in seconds.
+            graceful_timeout: Non-negative shutdown grace period in seconds;
+                ``None`` waits for shutdown to finish without a deadline.
             lifespan: A boolean enabling automatic lifespan detection, or one
                 of ``"auto"``, ``"on"``, or ``"off"``. Strict ``"on"`` mode
                 propagates startup failure with Uvicorn's exit status 3.
