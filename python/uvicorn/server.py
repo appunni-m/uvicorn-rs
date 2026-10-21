@@ -67,6 +67,19 @@ class Server:
         process_id = os.getpid()
         logger.info("Started server process [%d]", process_id)
 
+        wsgi_auto_lifespan = (
+            self.config.interface == "wsgi" and self.config.lifespan == "auto"
+        )
+        if wsgi_auto_lifespan:
+            # Uvicorn's WSGI middleware rejects the lifespan scope. Its auto
+            # lifespan handler logs this at INFO, treats startup as complete,
+            # and skips lifespan shutdown. Keep that behavior in the Python
+            # adapter while preventing the Rust lifecycle driver from logging
+            # a fatal-looking unsupported-app diagnostic.
+            logger.info("Waiting for application startup.")
+            logger.info("ASGI 'lifespan' protocol appears unsupported.")
+            logger.info("Application startup complete.")
+
         from uvicorn_rs import Server as NativeServer
 
         native_server = NativeServer(
@@ -78,7 +91,7 @@ class Server:
             certfile=self.config.ssl_certfile,
             keyfile=self.config.ssl_keyfile,
             graceful_timeout=self.config.timeout_graceful_shutdown,
-            lifespan=self.config.lifespan,
+            lifespan="off" if wsgi_auto_lifespan else self.config.lifespan,
             root_path=self.config.root_path,
             default_headers=self.config.encoded_headers,
             date_header=self.config.date_header,
