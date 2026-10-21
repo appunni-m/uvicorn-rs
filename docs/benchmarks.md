@@ -57,11 +57,13 @@ is historical diagnostic evidence; current Rust source uses a 64 KiB proactive
 read chunk, and the 32 KiB result needs a corrected-command replay before its
 cross-server ratio can be cited.
 
-A single FastAPI HTTP/1.1 upload workload has since completed with the corrected
-commands on Linux x86-64: all five repetitions qualified for each same-loop
-pair. The asyncio pair was slower on Rust while the uvloop pair was faster;
-this is evidence for that workload and host only. See the
-[focused result and full limits](benchmark-status.md#focused-matched-h1-upload-after-command-parity-linux-x86-64-2026-10-21).
+A focused Linux x86-64 slice now has one representative workload for each
+maintained protocol category plus the lifecycle scenario. It shows different
+outcomes by workload: H2 and H3 `protocol-scope` were faster on Rust, H1 upload
+was mixed by event loop, WebSocket text echo was slower, and lifecycle
+observations favored Rust on shutdown time. This is one host and one workload
+per protocol, not a release-wide speed claim. See the
+[focused results and limits](benchmark-status.md#focused-matched-protocol-and-lifecycle-slice-linux-x86-64-2026-10-21).
 
 These are loopback application-server benchmarks, not end-to-end production
 capacity tests. They measure the combined server, Python ASGI app, event loops,
@@ -637,15 +639,19 @@ policies. The scope workload sends the same 32 explicit request headers through
 the native and fallback clients. Payload gates do not compare every response
 header; use the live parity matrix for the supported header/protocol contract.
 
-All comparison servers use automatic lifespan behavior: Uvicorn explicitly uses
-`--lifespan auto`, Hypercorn uses its default automatic support detection, and
-Rust uses its automatic bridge. Reports record `lifespan_policy`. Startup
+The protocol load categories use automatic lifespan behavior: Uvicorn explicitly
+uses `--lifespan auto`, Hypercorn uses its default automatic support detection,
+and Rust uses its automatic bridge. Reports record `lifespan_policy`. Startup
 precedes readiness/warmup/load; the lifespan task and state remain present
 during load and shutdown. The synchronous-callable fixture implements lifespan
 while retaining its callable-returning-awaitable shape and identical HTTP
-behavior. The historical 120-sample A/B used reference lifespan off and CRITICAL
-logs; its response checks do not certify the final matched automatic-lifespan
-and visible-error policies. Raw historical artifacts remain unchanged.
+behavior. The lifecycle category separately uses `--lifespan on` and
+`--interface asgi3` on both servers because its fixture requires lifespan
+support.
+
+The historical 120-sample A/B used reference lifespan off and CRITICAL logs; its
+response checks do not certify the final matched automatic-lifespan and
+visible-error policies. Raw historical artifacts remain unchanged.
 
 The `exception-to-500` case is a capped correctness case: concurrency 1, at most
 200 requests, 1-second duration and no warmup. Its exception diagnostic policies
@@ -683,10 +689,10 @@ digests, resource samples and shutdown receipts. `lifecycle.jsonl` checkpoints
 whole rows, `lifecycle.phases.jsonl` checkpoints each completed or failed phase,
 and `lifecycle.failure.json` records an aborted category as `not_proven`.
 
-Measured shutdown sends SIGTERM to the owned leader. Rust must exit 0;
-Uvicorn may exit 0 or re-raise SIGTERM only after the exact lifespan completion
-marker. The active phase must first observe `APP_HOLD_STARTED` while the server
-is alive, then cancellation before lifespan completion. Its strict log gate
+Measured shutdown sends SIGTERM to the owned leader. Either server may exit 0
+or re-raise SIGTERM, but only after the exact lifespan completion marker. The
+active phase must first observe `APP_HOLD_STARTED` while the server is alive,
+then cancellation before lifespan completion. Its strict log gate
 normalizes at most one exact Rust `CancelledError` line and, only for the active
 Rust held-request phase, one native TCP graceful-timeout line that precedes the
 ASGI cancellation marker. This is the native transport's report that it reached

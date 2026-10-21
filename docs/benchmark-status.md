@@ -4080,3 +4080,78 @@ The raw JSON, driver log, and per-server artifacts are retained under ignored
 `target/focused-overhead/2026-10-21-c7a5e335f/`; the matching host copy remains
 under `/home/appunni/work/uvicorn-rs-bench-overhead-c7a5e335f/target/`. These
 files are not committed.
+
+## Focused matched protocol and lifecycle slice (Linux x86-64; 2026-10-21)
+
+One representative workload was measured for each maintained protocol
+category, plus the lifecycle scenario. HTTP/1.1 used stock FastAPI 0.142.4 /
+Starlette 1.7.0 and a 1 MiB upload written in 1 KiB chunks (concurrency 8).
+HTTP/2 and HTTP/3 used `protocol-scope` against Hypercorn 0.18.0 (concurrency 64
+and 1 respectively). The WebSocket case echoed 32-byte text messages from the
+same FastAPI app (concurrency 32). Each protocol sample used a one-second
+warmup, five-second measurement, and five planned repetitions. The lifecycle
+scenario measured cold start, idle SIGTERM shutdown, and SIGTERM while one ASGI
+request was held.
+
+All reports used CPython 3.12.13 and Rust 1.98.1 on Linux x86-64, an AMD Ryzen 5
+2600X with 12 logical CPUs. The pinned references were Uvicorn 0.54.0,
+Hypercorn 0.18.0, uvloop 0.23.0, httptools 0.8.0, FastAPI 0.142.4, and
+Starlette 1.7.0. H1, H2, H3, and WebSocket used matched access-log and
+`Server`-header settings; `Date` was enabled for H1, H2, and WebSockets and
+disabled for H3. Source identity was stable in every report and no unrecorded
+dependencies were found.
+
+Every request/message and lifecycle correctness check passed. H1 and WebSocket
+had 20/20 timing-valid rows. H2, H3, and lifecycle each had 19/20 timing-valid
+rows; the excluded row in each case failed the unrelated-host-CPU guard. Each
+same-loop comparison retained at least four matching repetitions. Throughput
+and resource values below are per-server medians; the ratio is Rust's median
+divided by the reference median.
+
+| Category and workload | Loop | Reference → Rust throughput | Rust/reference | Reference p50/p95/p99 (ms) | Rust p50/p95/p99 (ms) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| H1 FastAPI upload, 1 MiB / 1 KiB writes | asyncio | 1,074.0 → 984.8 req/s | 0.917× | 7.025 / 11.886 / 13.801 | 7.819 / 11.272 / 13.863 |
+| H1 FastAPI upload, 1 MiB / 1 KiB writes | uvloop | 779.2 → 1,258.8 req/s | 1.616× | 9.915 / 13.870 / 15.234 | 5.461 / 10.388 / 11.932 |
+| H2 `protocol-scope` | asyncio | 2,620.6 → 5,622.3 req/s | 2.145× | 23.537 / 39.503 / 42.107 | 11.459 / 18.054 / 21.319 |
+| H2 `protocol-scope` | uvloop | 2,559.5 → 6,598.0 req/s | 2.578× | 24.024 / 40.772 / 43.064 | 9.688 / 15.372 / 18.044 |
+| H3 `protocol-scope` | asyncio | 1,370.2 → 2,254.8 req/s | 1.646× | 0.736 / 0.756 / 0.794 | 0.457 / 0.527 / 0.565 |
+| H3 `protocol-scope` | uvloop | 1,465.8 → 2,382.3 req/s | 1.625× | 0.682 / 0.748 / 0.830 | 0.426 / 0.479 / 0.514 |
+| WebSocket 32-byte text echo | asyncio | 21,780.5 → 9,099.6 messages/s | 0.418× | 1.420 / 1.737 / 1.805 | 3.672 / 5.034 / 5.595 |
+| WebSocket 32-byte text echo | uvloop | 23,400.1 → 15,851.0 messages/s | 0.677× | 1.371 / 1.577 / 1.639 | 2.140 / 2.824 / 3.028 |
+
+| Category and loop | Reference → Rust server CPU (µs/request or message) | Reference → Rust peak RSS (MiB) |
+| --- | ---: | ---: |
+| H1 asyncio | 866 → 1,705 | 55.56 → 60.21 |
+| H1 uvloop | 1,260 → 1,044 | 56.67 → 60.91 |
+| H2 asyncio | 378.391 → 222.703 | 92.094 → 50.387 |
+| H2 uvloop | 386.380 → 190.591 | 94.492 → 52.992 |
+| H3 asyncio | 725.442 → 432.203 | 109.387 → 48.645 |
+| H3 uvloop | 676.723 → 395.471 | 111.275 → 51.320 |
+| WebSocket asyncio | 45.705 → 182.912 | 48.477 → 54.684 |
+| WebSocket uvloop | 42.462 → 104.663 | 50.949 → 57.203 |
+
+The lifecycle measurements are separate observations, not request-throughput
+results. Values are medians in milliseconds (reference → Rust); RSS is the
+sampled server peak.
+
+| Loop | Cold start to lifespan response | Idle SIGTERM to exit | Held-request SIGTERM to exit | Peak RSS (MiB) |
+| --- | ---: | ---: | ---: | ---: |
+| asyncio | 342.260 → 338.573 | 205.244 → 15.394 | 2,207.171 → 2,018.061 | 43.898 → 45.547 |
+| uvloop | 342.442 → 342.902 | 219.652 → 7.328 | 2,224.131 → 2,034.127 | 46.922 → 48.170 |
+
+These results are workload-specific. H2 and H3 were faster on this small
+`protocol-scope` case, H1 changed direction with the event loop, and the Rust
+WebSocket implementation was slower on 32-byte text echo. Lifecycle startup was
+similar; measured shutdown was shorter for Rust in this scenario. They do not
+establish a broad speedup, a high-concurrency H3 result, or a multi-system
+release claim. More workload families and additional systems remain to be
+measured.
+
+The H2 runner accepted nine single `BrokenPipe` peer-close diagnostics from ten
+Rust samples, each within its recorded limit of eight after the client had
+validated responses and shut down its HTTP/2 driver; unexpected native errors
+remained zero. Each Uvicorn WebSocket reference launch emitted the pinned
+`--ws websockets` deprecation warning before timing; all 20 rows still passed
+correctness and lifecycle checks. Raw JSON, JSONL checkpoints, logs, and
+per-server artifacts remain under ignored `target/focused-overhead/2026-10-21-c7a5e335f/`
+and the Linux work folder; no raw result or coverage report is committed.
