@@ -451,16 +451,58 @@ def main():
             timeout=20,
             check=True,
         )
-    if "module:app" not in cli.stdout:
-        raise RuntimeError("installed wheel CLI help does not describe module:app")
-    if "module:app" not in console_cli.stdout:
-        raise RuntimeError("installed uvicorn-rs-py help does not describe module:app")
-    if not uvicorn_cli.stdout.startswith("Usage: uvicorn [OPTIONS] APP\n"):
-        raise RuntimeError("installed uvicorn help has an unexpected console usage line")
+        console_version = subprocess.run(
+            [str(console_script), "--version"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        uvicorn_version = subprocess.run(
+            [str(uvicorn_script), "--version"],
+            cwd=directory,
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+    if not cli.stdout.startswith(
+        "Usage: uvicorn-rs-py [OPTIONS] APP\n"
+    ):
+        raise RuntimeError(
+            "installed python -m uvicorn_rs help has an unexpected usage line"
+        )
+    if cli.stdout != console_cli.stdout:
+        raise RuntimeError("python -m uvicorn_rs and uvicorn-rs-py help differ")
+    if not uvicorn_cli.stdout.startswith(
+        "Usage: uvicorn [OPTIONS] APP\n"
+    ):
+        raise RuntimeError(
+            "installed uvicorn help has an unexpected console usage line"
+        )
+    if not console_cli.stdout.startswith(
+        "Usage: uvicorn-rs-py [OPTIONS] APP\n"
+    ):
+        raise RuntimeError(
+            "installed uvicorn-rs-py help has an unexpected usage line"
+        )
+    if (
+        console_cli.stdout.split("\n", 1)[1]
+        != uvicorn_cli.stdout.split("\n", 1)[1]
+    ):
+        raise RuntimeError("installed uvicorn-rs-py options differ from the uvicorn CLI")
     if not uvicorn_module_cli.stdout.startswith(
         "Usage: python -m uvicorn [OPTIONS] APP\n"
     ):
         raise RuntimeError("python -m uvicorn help has an unexpected module usage line")
+    if (
+        console_version.returncode != 0
+        or uvicorn_version.returncode != 0
+        or console_version.stdout != uvicorn_version.stdout
+        or console_version.stderr != uvicorn_version.stderr
+    ):
+        raise RuntimeError("installed uvicorn-rs-py and uvicorn version output differs")
     evidence = {
         "schema": "uvicorn-rs-installed-wheel-consumer@1",
         "python": sys.version,

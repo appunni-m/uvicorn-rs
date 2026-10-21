@@ -296,8 +296,6 @@ def print_version(ctx: click.Context, param: click.Parameter, value: bool) -> No
 )
 @click.pass_context
 def main(ctx: click.Context, app: str, **options: Any) -> None:
-    from uvicorn_rs.cli import main as prototype_main
-
     supported = {
         "host", "port", "uds", "fd", "loop", "ssl_certfile", "ssl_keyfile",
         "timeout_graceful_shutdown", "app_dir", "factory", "lifespan", "root_path",
@@ -337,78 +335,72 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         raise click.ClickException(
             "uvicorn-rs supports auto, ASGI 2, ASGI 3, and WSGI application interfaces"
         )
+    if options["loop"] not in {"auto", "asyncio", "uvloop"}:
+        raise click.ClickException(
+            f"uvicorn-rs does not support loop={options['loop']!r}"
+        )
 
-    loop = options["loop"]
-    if loop == "auto":
-        try:
-            import uvloop  # noqa: F401
-        except ImportError:
-            loop = "asyncio"
-        else:
-            loop = "uvloop"
-    argv = [app, "--host", options["host"], "--port", str(options["port"]), "--loop", loop]
-    if options["uds"]:
-        argv.extend(("--uds", options["uds"]))
-    if options["fd"] is not None:
-        argv.extend(("--fd", str(options["fd"])))
-    if options["lifespan"] != "auto":
-        argv.extend(("--lifespan", options["lifespan"]))
-    if options["ssl_certfile"]:
-        argv.extend(("--certfile", options["ssl_certfile"]))
-    if options["ssl_keyfile"]:
-        argv.extend(("--keyfile", options["ssl_keyfile"]))
-    if options["app_dir"]:
-        argv.extend(("--app-dir", options["app_dir"]))
-    if options["factory"]:
-        argv.append("--factory")
-    if options["backlog"] != 2048:
-        argv.extend(("--backlog", str(options["backlog"])))
-    if options["timeout_keep_alive"] != 5:
-        argv.extend(("--timeout-keep-alive", str(options["timeout_keep_alive"])))
-    if options["env_file"]:
-        argv.extend(("--env-file", options["env_file"]))
-    if options["root_path"]:
-        argv.extend(("--root-path", options["root_path"]))
-    for header in options["headers"]:
-        argv.extend(("--header", header))
-    if not options["server_header"]:
-        argv.append("--no-server-header")
-    if not options["date_header"]:
-        argv.append("--no-date-header")
-    if not options["proxy_headers"]:
-        argv.append("--no-proxy-headers")
-    if options["forwarded_allow_ips"] is not None:
-        argv.extend(("--forwarded-allow-ips", options["forwarded_allow_ips"]))
-    if options["interface"] != "auto":
-        argv.extend(("--interface", options["interface"]))
-    if options["ws_max_size"] != 16 * 1024 * 1024:
-        argv.extend(("--ws-max-size", str(options["ws_max_size"])))
-    if options["ws_ping_interval"] != 20.0:
-        argv.extend(("--ws-ping-interval", str(options["ws_ping_interval"])))
-    if options["ws_ping_timeout"] != 20.0:
-        argv.extend(("--ws-ping-timeout", str(options["ws_ping_timeout"])))
-    graceful_timeout = options["timeout_graceful_shutdown"]
-    if graceful_timeout is not None:
-        argv.extend(("--graceful-timeout", str(graceful_timeout)))
-    if options["limit_concurrency"] is not None:
-        argv.extend(("--limit-concurrency", str(options["limit_concurrency"])))
-    if options["limit_max_requests"] is not None:
-        argv.extend(("--limit-max-requests", str(options["limit_max_requests"])))
-    if options["limit_max_requests_jitter"]:
-        argv.extend(("--limit-max-requests-jitter", str(options["limit_max_requests_jitter"])))
-    if options["log_config"] is not None:
-        argv.extend(("--log-config", options["log_config"]))
-    if options["log_level"] is not None:
-        argv.extend(("--log-level", options["log_level"]))
-    if options["workers"] is not None:
-        argv.extend(("--workers", str(options["workers"])))
-    if options["timeout_worker_healthcheck"] != 5:
-        argv.extend(("--timeout-worker-healthcheck", str(options["timeout_worker_healthcheck"])))
-    if not options["access_log"]:
-        argv.append("--no-access-log")
-    if options["use_colors"] is not None:
-        argv.append("--use-colors" if options["use_colors"] else "--no-use-colors")
-    prototype_main(argv, prog="uvicorn")
+    # Normalize the accepted HTTP and WebSocket selectors to the native engines.
+    # Forward the parsed settings directly to run() so both CLI entry points use
+    # the same configuration path.
+    headers = [tuple(header.split(":", 1)) for header in options["headers"]]
+    run(
+        app,
+        host=options["host"],
+        port=options["port"],
+        uds=options["uds"],
+        fd=options["fd"],
+        loop=options["loop"],
+        http="auto",
+        http2=options["http2"],
+        ws="auto",
+        ws_max_size=options["ws_max_size"],
+        ws_max_queue=options["ws_max_queue"],
+        ws_ping_interval=options["ws_ping_interval"],
+        ws_ping_timeout=options["ws_ping_timeout"],
+        ws_per_message_deflate=options["ws_per_message_deflate"],
+        lifespan=options["lifespan"],
+        interface=options["interface"],
+        reload=options["reload"],
+        reload_dirs=options["reload_dirs"] or None,
+        reload_includes=options["reload_includes"] or None,
+        reload_excludes=options["reload_excludes"] or None,
+        reload_delay=options["reload_delay"],
+        workers=options["workers"],
+        env_file=options["env_file"],
+        log_config=(
+            LOGGING_CONFIG
+            if options["log_config"] is None
+            else options["log_config"]
+        ),
+        log_level=options["log_level"],
+        access_log=options["access_log"],
+        proxy_headers=options["proxy_headers"],
+        server_header=options["server_header"],
+        date_header=options["date_header"],
+        forwarded_allow_ips=options["forwarded_allow_ips"],
+        root_path=options["root_path"],
+        limit_concurrency=options["limit_concurrency"],
+        backlog=options["backlog"],
+        limit_max_requests=options["limit_max_requests"],
+        limit_max_requests_jitter=options["limit_max_requests_jitter"],
+        timeout_keep_alive=options["timeout_keep_alive"],
+        timeout_graceful_shutdown=options["timeout_graceful_shutdown"],
+        timeout_worker_healthcheck=options["timeout_worker_healthcheck"],
+        ssl_keyfile=options["ssl_keyfile"],
+        ssl_certfile=options["ssl_certfile"],
+        ssl_keyfile_password=options["ssl_keyfile_password"],
+        ssl_version=options["ssl_version"],
+        ssl_cert_reqs=options["ssl_cert_reqs"],
+        ssl_ca_certs=options["ssl_ca_certs"],
+        ssl_ciphers=options["ssl_ciphers"],
+        headers=headers,
+        use_colors=options["use_colors"],
+        app_dir=options["app_dir"],
+        factory=options["factory"],
+        h11_max_incomplete_event_size=options["h11_max_incomplete_event_size"],
+        reset_contextvars=options["reset_contextvars"],
+    )
 
 
 def run(
