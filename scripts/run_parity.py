@@ -10,7 +10,6 @@ import errno
 import hashlib
 import http.client
 import importlib
-import importlib.metadata
 import io
 import json
 import logging
@@ -3915,6 +3914,10 @@ def load_contract(
 
 def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     actual = {}
+    requirements = []
+    for oracle in manifest["oracles"]:
+        requirements.append((oracle["id"], oracle["version"]))
+        requirements.extend((component["id"], component["version"]) for component in oracle["components"])
     oracle_uvicorn = None
     if any(oracle["id"] == "uvicorn" for oracle in manifest["oracles"]):
         probe = subprocess.run(
@@ -3950,20 +3953,56 @@ def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str
                 "pass --oracle-python for an environment without uvicorn-rs-py: "
                 f"{details}"
             )
-    for oracle in manifest["oracles"]:
-        requirements = [(oracle["id"], oracle["version"])]
-        requirements.extend((component["id"], component["version"]) for component in oracle["components"])
-        for distribution, required in requirements:
-            if distribution == "uvicorn" and oracle_uvicorn is not None:
-                observed = oracle_uvicorn["distribution"]
-            else:
-                try:
-                    observed = importlib.metadata.version(distribution)
-                except importlib.metadata.PackageNotFoundError as error:
-                    raise ParityError(f"required reference dependency is missing: {distribution}") from error
-            if observed != required:
-                raise ParityError(f"{distribution} version mismatch: expected {required}, found {observed}")
-            actual[distribution] = observed
+    requirement_names = sorted({distribution for distribution, _ in requirements})
+    dependency_probe = subprocess.run(
+        [
+            str(ORACLE_PYTHON),
+            "-c",
+            "import importlib.metadata, json, sys\n"
+            "versions = {}\n"
+            "missing = []\n"
+            "for name in json.loads(sys.argv[1]):\n"
+            "    try:\n"
+            "        versions[name] = importlib.metadata.version(name)\n"
+            "    except importlib.metadata.PackageNotFoundError:\n"
+            "        missing.append(name)\n"
+            "print(json.dumps({'versions': versions, 'missing': missing}, sort_keys=True))",
+            json.dumps(requirement_names),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    if dependency_probe.returncode != 0:
+        raise ParityError(
+            f"could not inspect reference dependencies from {ORACLE_PYTHON}: "
+            f"{dependency_probe.stderr[-1000:]}"
+        )
+    try:
+        oracle_dependencies = json.loads(dependency_probe.stdout)
+    except json.JSONDecodeError as error:
+        raise ParityError("reference dependency probe returned invalid JSON") from error
+    if not isinstance(oracle_dependencies, dict):
+        raise ParityError("reference dependency probe returned an invalid result")
+    missing_dependencies = oracle_dependencies.get("missing")
+    dependency_versions = oracle_dependencies.get("versions")
+    if not isinstance(missing_dependencies, list) or not isinstance(dependency_versions, dict):
+        raise ParityError("reference dependency probe returned an invalid result")
+    if missing_dependencies:
+        raise ParityError(
+            f"required reference dependencies are missing from {ORACLE_PYTHON}: "
+            f"{', '.join(missing_dependencies)}"
+        )
+    for distribution, required in requirements:
+        observed = dependency_versions.get(distribution)
+        if not isinstance(observed, str):
+            raise ParityError(
+                f"reference dependency probe omitted {distribution} from {ORACLE_PYTHON}"
+            )
+        if observed != required:
+            raise ParityError(f"{distribution} version mismatch: expected {required}, found {observed}")
+        actual[distribution] = observed
     revision = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
     ).stdout.strip()
