@@ -70,6 +70,12 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
         default=2048,
         help="Maximum number of connections to hold in backlog",
     )
+    parser.add_argument(
+        "--timeout-keep-alive",
+        type=int,
+        default=5,
+        help="Close idle keep-alive connections after this many seconds",
+    )
     parser.add_argument("--ws-max-size", type=int, default=16 * 1024 * 1024)
     parser.add_argument("--ws-ping-interval", type=float, default=20.0)
     parser.add_argument("--ws-ping-timeout", type=float, default=20.0)
@@ -116,6 +122,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
         root_path=args.root_path,
         limit_concurrency=args.limit_concurrency,
         backlog=args.backlog,
+        timeout_keep_alive=args.timeout_keep_alive,
         ws_max_size=args.ws_max_size,
         ws_ping_interval=args.ws_ping_interval,
         ws_ping_timeout=args.ws_ping_timeout,

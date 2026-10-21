@@ -441,9 +441,7 @@ where
         connection_info,
         connection_lifetime,
         None,
-        None,
-        None,
-        None,
+        crate::ConnectionRequestMetadata::default(),
     );
     let application =
         ServiceErrorResponse::<_, crate::RequestLifetimeBody<B>, Http3RequestBody>::new(

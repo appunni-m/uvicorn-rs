@@ -74,6 +74,7 @@ class Server:
             host=self.config.host,
             port=self.config.port,
             backlog=self.config.backlog,
+            timeout_keep_alive=self.config.timeout_keep_alive,
             certfile=self.config.ssl_certfile,
             keyfile=self.config.ssl_keyfile,
             graceful_timeout=(

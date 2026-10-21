@@ -304,7 +304,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "headers", "server_header", "date_header", "interface",
         "ws_max_size", "ws_ping_interval", "ws_ping_timeout",
         "proxy_headers", "forwarded_allow_ips",
-        "limit_concurrency", "log_config", "log_level", "access_log",
+        "limit_concurrency", "timeout_keep_alive", "log_config", "log_level", "access_log",
         "use_colors", "backlog",
     }
     # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
@@ -363,6 +363,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.append("--factory")
     if options["backlog"] != 2048:
         argv.extend(("--backlog", str(options["backlog"])))
+    if options["timeout_keep_alive"] != 5:
+        argv.extend(("--timeout-keep-alive", str(options["timeout_keep_alive"])))
     if options["env_file"]:
         argv.extend(("--env-file", options["env_file"]))
     if options["root_path"]:

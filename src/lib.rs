@@ -1623,6 +1623,7 @@ struct ServeOptions {
     host: String,
     port: u16,
     backlog: i32,
+    timeout_keep_alive: std::time::Duration,
     root_path: String,
     tcp_tls: Option<TlsAcceptor>,
     quic_config: Option<quinn::ServerConfig>,
@@ -4999,7 +5000,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, backlog, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
+#[pyo3(signature = (app, invoke, host, port, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5011,6 +5012,7 @@ fn serve<'py>(
     host: String,
     port: u16,
     backlog: i32,
+    timeout_keep_alive: i64,
     certfile: Option<String>,
     keyfile: Option<String>,
     graceful_timeout: u64,
@@ -5048,6 +5050,7 @@ fn serve<'py>(
         })
         .collect::<PyResult<Vec<_>>>()?;
     let graceful_timeout = std::time::Duration::from_secs(graceful_timeout);
+    let timeout_keep_alive = std::time::Duration::from_secs(timeout_keep_alive.max(0) as u64);
     #[cfg(coverage)]
     let graceful_timeout = if coverage_fault_take(CoverageFaultPoint::ServerGracefulTimeoutOverflow)
     {
@@ -5137,6 +5140,7 @@ fn serve<'py>(
             host,
             port,
             backlog,
+            timeout_keep_alive,
             root_path,
             tcp_tls,
             quic_config,
@@ -5411,6 +5415,7 @@ async fn serve_forever(
         let peer_read_half_close = uvicorn_rs::PeerReadHalfCloseMode::Proactive;
         let config = uvicorn_rs::ServerConfig {
             graceful_shutdown_timeout: options.graceful_timeout,
+            http1_keep_alive_timeout: Some(options.timeout_keep_alive),
             limit_concurrency: server.limit_concurrency,
             default_headers: server.default_headers.clone(),
             // Let an invalid HTTP/1 ASGI response start reach the transport,

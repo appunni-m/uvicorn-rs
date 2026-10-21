@@ -34,7 +34,8 @@
 //! guaranteed while neither request body nor response is being polled.
 
 #[cfg(coverage)]
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{
     error::Error,
     fmt,
@@ -54,7 +55,7 @@ use futures_util::{
     FutureExt,
 };
 use http::{
-    header::{HeaderName, HeaderValue, CONNECTION, CONTENT_LENGTH, CONTENT_TYPE},
+    header::{HeaderName, HeaderValue, CONNECTION, CONTENT_LENGTH, CONTENT_TYPE, UPGRADE},
     Method, Request, Response, StatusCode, Uri, Version,
 };
 use http_body::Body;
@@ -1154,6 +1155,10 @@ pub struct ServerConfig {
     pub default_headers: Vec<(HeaderName, HeaderValue)>,
     /// Maximum time to drain active connections after shutdown begins.
     pub graceful_shutdown_timeout: Duration,
+    /// Maximum idle time for a persistent HTTP/1 connection after a response.
+    /// `None` leaves the connection open until the peer or server closes it.
+    /// This setting does not affect HTTP/2 or HTTP/3 connections.
+    pub http1_keep_alive_timeout: Option<Duration>,
     /// Maximum time allowed for the application startup hook when lifecycle
     /// hooks are configured. The default is 30 seconds; expiration drops the
     /// hook future. Ignored when `application_lifecycle` is `None`.
@@ -1196,6 +1201,7 @@ impl fmt::Debug for ServerConfig {
                 &!self.default_headers.is_empty(),
             )
             .field("graceful_shutdown_timeout", &self.graceful_shutdown_timeout)
+            .field("http1_keep_alive_timeout", &self.http1_keep_alive_timeout)
             .field(
                 "application_startup_timeout",
                 &self.application_startup_timeout,
@@ -1555,22 +1561,67 @@ impl Drop for ConnectionLifetimeGuard {
     }
 }
 
+#[derive(Clone)]
+struct Http1KeepAlive {
+    deadline: watch::Sender<Option<Instant>>,
+    active_requests: Arc<AtomicUsize>,
+    timeout: Duration,
+}
+
+impl Http1KeepAlive {
+    fn request_started(self: &Arc<Self>) -> Http1KeepAliveRequestGuard {
+        self.deadline.send_replace(None);
+        let _ = self
+            .active_requests
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+                Some(active.saturating_add(1))
+            });
+        Http1KeepAliveRequestGuard {
+            state: Arc::clone(self),
+        }
+    }
+}
+
+struct Http1KeepAliveRequestGuard {
+    state: Arc<Http1KeepAlive>,
+}
+
+impl Drop for Http1KeepAliveRequestGuard {
+    fn drop(&mut self) {
+        let active = self.state.active_requests.fetch_update(
+            Ordering::AcqRel,
+            Ordering::Acquire,
+            |active| Some(active.saturating_sub(1)),
+        );
+        if active.is_ok_and(|active| active == 1) {
+            self.state
+                .deadline
+                .send_replace(Instant::now().checked_add(self.state.timeout));
+        }
+    }
+}
+
 struct RequestLifetimeGuard {
     ended: watch::Sender<Option<RequestEndReason>>,
     response_body_activity: Option<watch::Sender<usize>>,
+    http1_keep_alive_request: Option<Http1KeepAliveRequestGuard>,
     drop_reason: RequestEndReason,
     response_body_active: bool,
     finished: bool,
 }
 
 impl RequestLifetimeGuard {
-    fn new(response_body_activity: Option<watch::Sender<usize>>) -> (RequestLifetime, Self) {
+    fn new(
+        response_body_activity: Option<watch::Sender<usize>>,
+        http1_keep_alive_request: Option<Http1KeepAliveRequestGuard>,
+    ) -> (RequestLifetime, Self) {
         let (ended, receiver) = watch::channel(None);
         (
             RequestLifetime { ended: receiver },
             Self {
                 ended,
                 response_body_activity,
+                http1_keep_alive_request,
                 drop_reason: RequestEndReason::ServiceFutureDropped,
                 response_body_active: false,
                 finished: false,
@@ -1596,6 +1647,7 @@ impl RequestLifetimeGuard {
                     response_body_activity.send_modify(|active| *active = active.saturating_sub(1));
                 }
             }
+            drop(self.http1_keep_alive_request.take());
             self.ended.send_replace(Some(reason));
         }
     }
@@ -1751,6 +1803,7 @@ impl Default for ServerConfig {
             limit_concurrency: None,
             default_headers: Vec::new(),
             graceful_shutdown_timeout: Duration::from_secs(30),
+            http1_keep_alive_timeout: None,
             application_startup_timeout: Duration::from_secs(30),
             application_shutdown_timeout: Duration::from_secs(30),
             application_lifecycle: None,
@@ -2269,6 +2322,7 @@ where
         let error_observer = config.error_observer.clone();
         let concurrency_limit_observer = config.concurrency_limit_observer.clone();
         let service_error_policy = config.service_error_policy;
+        let http1_keep_alive_timeout = config.http1_keep_alive_timeout;
         let tls_acceptor = tls_acceptor.clone();
         let request_concurrency = request_concurrency.clone();
         let default_headers = Arc::clone(&default_headers);
@@ -2302,6 +2356,7 @@ where
                                     concurrency_limit_observer: concurrency_limit_observer.as_ref(),
                                     service_error_policy,
                                     date_header,
+                                    http1_keep_alive_timeout,
                                     request_concurrency: request_concurrency.clone(),
                                     default_headers: Arc::clone(&default_headers),
                                 },
@@ -2333,6 +2388,7 @@ where
                                 concurrency_limit_observer: concurrency_limit_observer.as_ref(),
                                 service_error_policy,
                                 date_header,
+                                http1_keep_alive_timeout,
                                 request_concurrency,
                                 default_headers,
                             },
@@ -2496,13 +2552,105 @@ struct ConnectionSignals {
     response_body_activity: watch::Sender<usize>,
 }
 
+#[derive(Default)]
+struct ConnectionRequestMetadata {
+    peer_read_half_closed: Option<PeerReadHalfClosed>,
+    peer_read_failed: Option<PeerReadFailed>,
+    response_body_activity: Option<watch::Sender<usize>>,
+    http1_keep_alive: Option<Arc<Http1KeepAlive>>,
+}
+
 struct ConnectionOptions<'a> {
     error_observer: Option<&'a ServerErrorObserver>,
     concurrency_limit_observer: Option<&'a ConcurrencyLimitObserver>,
     service_error_policy: ServiceErrorPolicy,
     date_header: bool,
+    http1_keep_alive_timeout: Option<Duration>,
     request_concurrency: Option<Arc<RequestConcurrency>>,
     default_headers: Arc<Vec<(HeaderName, HeaderValue)>>,
+}
+
+struct Http1KeepAliveIo<I> {
+    inner: I,
+    deadline: Option<watch::Sender<Option<Instant>>>,
+}
+
+impl<I> Http1KeepAliveIo<I> {
+    fn new(inner: I, deadline: Option<watch::Sender<Option<Instant>>>) -> Self {
+        Self { inner, deadline }
+    }
+}
+
+impl<I: AsyncRead + Unpin> AsyncRead for Http1KeepAliveIo<I> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let this = self.get_mut();
+        let filled_before = buffer.filled().len();
+        let result = Pin::new(&mut this.inner).poll_read(context, buffer);
+        if matches!(&result, Poll::Ready(Ok(()))) && buffer.filled().len() > filled_before {
+            if let Some(deadline) = &this.deadline {
+                deadline.send_replace(None);
+            }
+        }
+        result
+    }
+}
+
+impl<I: AsyncWrite + Unpin> AsyncWrite for Http1KeepAliveIo<I> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffer: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().inner).poll_write(context, buffer)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_flush(context)
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().inner).poll_shutdown(context)
+    }
+
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        context: &mut Context<'_>,
+        buffers: &[io::IoSlice<'_>],
+    ) -> Poll<io::Result<usize>> {
+        Pin::new(&mut self.get_mut().inner).poll_write_vectored(context, buffers)
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        self.inner.is_write_vectored()
+    }
+}
+
+async fn wait_for_http1_keep_alive_timeout(deadline: &mut watch::Receiver<Option<Instant>>) {
+    loop {
+        let Some(current_deadline) = *deadline.borrow_and_update() else {
+            if deadline.changed().await.is_err() {
+                return;
+            }
+            continue;
+        };
+
+        tokio::select! {
+            _ = tokio::time::sleep_until(current_deadline) => {
+                if *deadline.borrow_and_update() == Some(current_deadline) {
+                    return;
+                }
+            }
+            changed = deadline.changed() => {
+                if changed.is_err() {
+                    return;
+                }
+            }
+        }
+    }
 }
 
 async fn serve_connection<I, S, B>(
@@ -2527,6 +2675,7 @@ where
         concurrency_limit_observer,
         service_error_policy,
         date_header,
+        http1_keep_alive_timeout,
         request_concurrency,
         default_headers,
     } = options;
@@ -2542,6 +2691,15 @@ where
         sessions: upgrade_sender,
         shutdown: upgrade_shutdown_receiver,
     };
+    let (keep_alive_deadline_sender, mut keep_alive_deadline_receiver) = watch::channel(None);
+    let http1_keep_alive = http1_keep_alive_timeout.map(|timeout| {
+        Arc::new(Http1KeepAlive {
+            deadline: keep_alive_deadline_sender.clone(),
+            active_requests: Arc::new(AtomicUsize::new(0)),
+            timeout,
+        })
+    });
+    let keep_alive_timeout_enabled = http1_keep_alive.is_some();
     let mut builder = auto::Builder::new(TokioExecutor::new());
     // RFC 9112 §9.6: a client-side TCP half-close does not mean the client has
     // stopped waiting for its response. Hyper disables this behavior by default.
@@ -2557,9 +2715,12 @@ where
             connection_info,
             connection_lifetime,
             Some(connection_upgrade),
-            Some(peer_read_half_closed),
-            Some(peer_read_failed),
-            Some(response_body_activity),
+            ConnectionRequestMetadata {
+                peer_read_half_closed: Some(peer_read_half_closed),
+                peer_read_failed: Some(peer_read_failed),
+                response_body_activity: Some(response_body_activity),
+                http1_keep_alive,
+            },
         ),
         error_observer.cloned(),
         concurrency_limit_observer.cloned(),
@@ -2569,6 +2730,10 @@ where
         default_headers,
     );
     let service = TowerToHyperService::new(application);
+    let stream = Http1KeepAliveIo::new(
+        stream,
+        keep_alive_timeout_enabled.then_some(keep_alive_deadline_sender),
+    );
     #[cfg(coverage)]
     let stream = CoverageFaultIo::new(stream);
     let connection = builder.serve_connection_with_upgrades(TokioIo::new(stream), service);
@@ -2609,6 +2774,14 @@ where
                     upgrade_receiver_open = false;
                 }
             },
+            _ = wait_for_http1_keep_alive_timeout(&mut keep_alive_deadline_receiver), if keep_alive_timeout_enabled && connection_result.is_none() => {
+                connection_result = Some(Ok(()));
+                upgrade_receiver.close();
+                while let Ok(session) = upgrade_receiver.try_recv() {
+                    upgrade_sessions.spawn(session);
+                }
+                upgrade_receiver_open = false;
+            }
             joined = upgrade_sessions.join_next(), if !upgrade_sessions.is_empty() => {
                 match joined {
                     Some(Ok(Ok(()))) | None => {}
@@ -2647,6 +2820,7 @@ struct ConnectionInfoService<S, RequestBody, B> {
     peer_read_half_closed: Option<PeerReadHalfClosed>,
     peer_read_failed: Option<PeerReadFailed>,
     response_body_activity: Option<watch::Sender<usize>>,
+    http1_keep_alive: Option<Arc<Http1KeepAlive>>,
     _types: std::marker::PhantomData<fn(RequestBody) -> B>,
 }
 
@@ -2663,6 +2837,7 @@ where
             peer_read_half_closed: self.peer_read_half_closed.clone(),
             peer_read_failed: self.peer_read_failed.clone(),
             response_body_activity: self.response_body_activity.clone(),
+            http1_keep_alive: self.http1_keep_alive.clone(),
             _types: std::marker::PhantomData,
         }
     }
@@ -2674,18 +2849,17 @@ impl<S, RequestBody, B> ConnectionInfoService<S, RequestBody, B> {
         connection_info: ConnectionInfo,
         connection_lifetime: ConnectionLifetime,
         connection_upgrade: Option<ConnectionUpgrade>,
-        peer_read_half_closed: Option<PeerReadHalfClosed>,
-        peer_read_failed: Option<PeerReadFailed>,
-        response_body_activity: Option<watch::Sender<usize>>,
+        request_metadata: ConnectionRequestMetadata,
     ) -> Self {
         Self {
             inner,
             connection_info,
             connection_lifetime,
             connection_upgrade,
-            peer_read_half_closed,
-            peer_read_failed,
-            response_body_activity,
+            peer_read_half_closed: request_metadata.peer_read_half_closed,
+            peer_read_failed: request_metadata.peer_read_failed,
+            response_body_activity: request_metadata.response_body_activity,
+            http1_keep_alive: request_metadata.http1_keep_alive,
             _types: std::marker::PhantomData,
         }
     }
@@ -2720,13 +2894,24 @@ where
             request.extensions_mut().insert(peer_read_failed.clone());
         }
         let request_version = request.version();
+        let is_keep_alive_http1_request =
+            matches!(request_version, Version::HTTP_10 | Version::HTTP_11)
+                && !request.headers().contains_key(UPGRADE)
+                && request.method() != Method::CONNECT;
         insert_http1_upgrade_extension(
             request.extensions_mut(),
             request_version,
             self.connection_upgrade.as_ref(),
         );
+        let keep_alive_request = if is_keep_alive_http1_request {
+            self.http1_keep_alive
+                .as_ref()
+                .map(Http1KeepAlive::request_started)
+        } else {
+            None
+        };
         let (request_lifetime, guard) =
-            RequestLifetimeGuard::new(self.response_body_activity.clone());
+            RequestLifetimeGuard::new(self.response_body_activity.clone(), keep_alive_request);
         request.extensions_mut().insert(request_lifetime);
         RequestLifetimeFuture::new(self.inner.call(request), guard)
     }

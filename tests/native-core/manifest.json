@@ -1076,8 +1076,8 @@
     {
       "id": "api.public-server-error-display-source-and-config-debug-contract",
       "operation": "public-error-contract",
-      "expected_default_config_debug": "ServerConfig { max_connections: 1024, limit_concurrency: None, default_headers_configured: false, graceful_shutdown_timeout: 30s, application_startup_timeout: 30s, application_shutdown_timeout: 30s, application_lifecycle_configured: false, error_observer_configured: false, concurrency_limit_observer_configured: false, service_error_policy: RespondInternalServerError, peer_read_half_close: OnRead }",
-      "expected_configured_config_debug": "ServerConfig { max_connections: 8, limit_concurrency: None, default_headers_configured: false, graceful_shutdown_timeout: 250ms, application_startup_timeout: 125ms, application_shutdown_timeout: 175ms, application_lifecycle_configured: true, error_observer_configured: true, concurrency_limit_observer_configured: false, service_error_policy: Propagate, peer_read_half_close: OnRead }",
+      "expected_default_config_debug": "ServerConfig { max_connections: 1024, limit_concurrency: None, default_headers_configured: false, graceful_shutdown_timeout: 30s, http1_keep_alive_timeout: None, application_startup_timeout: 30s, application_shutdown_timeout: 30s, application_lifecycle_configured: false, error_observer_configured: false, concurrency_limit_observer_configured: false, service_error_policy: RespondInternalServerError, peer_read_half_close: OnRead }",
+      "expected_configured_config_debug": "ServerConfig { max_connections: 8, limit_concurrency: None, default_headers_configured: false, graceful_shutdown_timeout: 250ms, http1_keep_alive_timeout: Some(2s), application_startup_timeout: 125ms, application_shutdown_timeout: 175ms, application_lifecycle_configured: true, error_observer_configured: true, concurrency_limit_observer_configured: false, service_error_policy: Propagate, peer_read_half_close: OnRead }",
       "errors": [
         {
           "variant": "invalid-connection-limit",

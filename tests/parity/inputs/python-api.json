@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@26",
+  "schema": "uvicorn-rs-parity/input@27",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -487,6 +487,25 @@
           "lifespan": "auto",
           "invocation": "api",
           "root_path": "/mounted"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-timeout-keep-alive-closes-idle-connection",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-timeout-keep-alive",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 6,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "timeout_keep_alive": 1,
+          "keep_alive_probe_delay_seconds": 2
         }
       }
     },

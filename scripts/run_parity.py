@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@26"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@27"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2227,6 +2227,8 @@ def load_contract(
                     "use_colors",
                     "factory",
                     "backlog",
+                    "timeout_keep_alive",
+                    "keep_alive_probe_delay_seconds",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2253,6 +2255,30 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.backlog must be an integer"
                     )
+                if "timeout_keep_alive" in run_http and type(run_http["timeout_keep_alive"]) is not int:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.timeout_keep_alive must be an integer"
+                    )
+                keep_alive_timeout_present = "timeout_keep_alive" in run_http
+                keep_alive_probe_present = "keep_alive_probe_delay_seconds" in run_http
+                if keep_alive_timeout_present != keep_alive_probe_present:
+                    raise ParityError(
+                        f"{case_id}: timeout_keep_alive and keep_alive_probe_delay_seconds must be provided together"
+                    )
+                if keep_alive_probe_present:
+                    probe_delay = run_http["keep_alive_probe_delay_seconds"]
+                    if type(probe_delay) is not int or not 1 <= probe_delay <= 5:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.keep_alive_probe_delay_seconds must be from 1 through 5"
+                        )
+                    if probe_delay <= max(0, run_http["timeout_keep_alive"]):
+                        raise ParityError(
+                            f"{case_id}: the second request must arrive after the configured keep-alive timeout"
+                        )
+                    if run_http["timeout_seconds"] <= probe_delay + 1:
+                        raise ParityError(
+                            f"{case_id}: timeout_seconds must leave time for the second-request probe and shutdown"
+                        )
                 if run_http.get("interface", "auto") not in {"auto", "asgi2", "asgi3"}:
                     raise ParityError(
                         f"{case_id}.api.run_http.interface must be auto, asgi2, or asgi3"
@@ -10020,6 +10046,7 @@ def run_python_api_probe(case: dict[str, Any], server_id: str) -> dict[str, Any]
                     "response_status",
                     "response_content_type",
                     "response_body_base64",
+                    "idle_connection_closed",
                     "shutdown_signal_sent",
                     "process_exit_code",
                     "process_timed_out",

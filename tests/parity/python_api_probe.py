@@ -152,6 +152,7 @@ access_log = sys.argv[16] == "1"
 use_colors = json.loads(sys.argv[17])
 factory = sys.argv[19] == "1"
 backlog = json.loads(sys.argv[20])
+timeout_keep_alive = json.loads(sys.argv[21])
 app = app_factory if factory else (
     asgi2_app if application_interface == "asgi2" else asgi3_app
 )
@@ -173,6 +174,7 @@ options = {
     "use_colors": use_colors,
     "factory": factory,
     "backlog": backlog,
+    "timeout_keep_alive": timeout_keep_alive,
 }
 if invocation == "config-server":
     config = uvicorn.Config(app, **options)
@@ -221,6 +223,8 @@ else:
             command.extend(("--limit-concurrency", str(request["limit_concurrency"])))
         if request.get("backlog") is not None:
             command.extend(("--backlog", str(request["backlog"])))
+        if request.get("timeout_keep_alive") is not None:
+            command.extend(("--timeout-keep-alive", str(request["timeout_keep_alive"])))
         if request.get("loop", "auto") != "auto":
             command.extend(("--loop", request["loop"]))
         if request.get("log_level") is not None:
@@ -256,6 +260,7 @@ else:
             json.dumps(request.get("log_config")),
             "1" if request.get("factory", False) else "0",
             json.dumps(request.get("backlog", 2048)),
+            json.dumps(request.get("timeout_keep_alive", 5)),
         ]
 
     environment = os.environ.copy()
@@ -280,6 +285,7 @@ else:
         **process_options,
     )
     response = None
+    idle_connection_closed = None
     deadline = time.monotonic() + request["timeout_seconds"]
     try:
         while time.monotonic() < deadline and process.poll() is None:
@@ -287,11 +293,12 @@ else:
                 "127.0.0.1", port, timeout=0.5
             )
             try:
+                keep_alive_probe_delay = request.get("keep_alive_probe_delay_seconds")
                 connection.request(
                     request["method"],
                     request["path"],
                     headers={
-                        "Connection": "close",
+                        "Connection": "keep-alive" if keep_alive_probe_delay is not None else "close",
                         **dict(request.get("request_headers", [])),
                     },
                 )
@@ -306,6 +313,22 @@ else:
                         for name in request.get("observe_headers", [])
                     },
                 }
+                if keep_alive_probe_delay is not None:
+                    time.sleep(keep_alive_probe_delay)
+                    try:
+                        connection.request(
+                            request["method"],
+                            request["path"],
+                            headers={
+                                "Connection": "keep-alive",
+                                **dict(request.get("request_headers", [])),
+                            },
+                        )
+                        second_response = connection.getresponse()
+                        second_response.read()
+                        idle_connection_closed = False
+                    except (OSError, http.client.HTTPException, TimeoutError):
+                        idle_connection_closed = True
                 break
             except (OSError, http.client.HTTPException, TimeoutError):
                 time.sleep(0.025)
@@ -335,6 +358,7 @@ else:
             "response_status": response["status"] if response is not None else None,
             "response_content_type": response["content_type"] if response is not None else None,
             "response_body_base64": response["body_base64"] if response is not None else "",
+            "idle_connection_closed": idle_connection_closed,
             "shutdown_signal_sent": shutdown_signal_sent,
             "process_exit_code": process.returncode,
             "process_timed_out": process_timed_out,

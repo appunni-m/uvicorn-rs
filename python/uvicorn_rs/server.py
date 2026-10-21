@@ -19,6 +19,7 @@ class Server:
         host="127.0.0.1",
         port=8000,
         backlog=2048,
+        timeout_keep_alive=5,
         certfile=None,
         keyfile=None,
         graceful_timeout=10,
@@ -40,6 +41,8 @@ class Server:
             port: TCP and QUIC port in the range supported by the OS.
             backlog: Maximum pending TCP connections; negative values are
                 clamped to zero as in Uvicorn's socket-listen path.
+            timeout_keep_alive: Idle timeout for persistent HTTP/1 connections
+                in seconds. HTTP/2 and HTTP/3 connections are not affected.
             certfile: Optional PEM certificate chain. Pair with ``keyfile`` to
                 enable HTTPS and HTTP/3.
             keyfile: Optional PEM private key paired with ``certfile``.
@@ -67,6 +70,7 @@ class Server:
         self.host = host
         self.port = port
         self.backlog = backlog
+        self.timeout_keep_alive = timeout_keep_alive
         self.certfile = certfile
         self.keyfile = keyfile
         self.graceful_timeout = graceful_timeout
@@ -126,6 +130,7 @@ class Server:
                 self.host,
                 self.port,
                 self.backlog,
+                self.timeout_keep_alive,
                 self.certfile,
                 self.keyfile,
                 self.graceful_timeout,

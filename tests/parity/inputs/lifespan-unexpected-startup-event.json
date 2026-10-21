@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@26",
+  "schema": "uvicorn-rs-parity/input@27",
   "cases": [
     {
       "case_id": "lifespan-unexpected-startup-event.startup-does-not-complete",

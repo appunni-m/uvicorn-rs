@@ -330,7 +330,6 @@ class Config:
             ),
             (self.limit_max_requests is not None, "limit_max_requests"),
             (self.limit_max_requests_jitter != 0, "limit_max_requests_jitter"),
-            (self.timeout_keep_alive != 5, "timeout_keep_alive"),
             (self.timeout_notify != 30, "timeout_notify"),
             (self.timeout_worker_healthcheck != 5, "timeout_worker_healthcheck"),
             (self.callback_notify is not None, "callback_notify"),
