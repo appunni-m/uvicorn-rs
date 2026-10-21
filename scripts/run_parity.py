@@ -10167,14 +10167,16 @@ def execute_python_api_profile(
     for case in cases:
         operation = operations[case["operation"]]
         try:
-            oracle = run_python_api_probe(case, "uvicorn")
-            target = run_python_api_probe(
+            oracle_raw = run_python_api_probe(case, "uvicorn")
+            target_raw = run_python_api_probe(
                 case,
                 "uvicorn-rs",
                 coverage_profile_dir / "target"
                 if coverage_profile_dir is not None
                 else None,
             )
+            oracle = {name: oracle_raw[name] for name in operation["observe"]}
+            target = {name: target_raw[name] for name in operation["observe"]}
             fields = operation.get("compare", operation["observe"])
             matches = {field: oracle[field] for field in fields} == {
                 field: target[field] for field in fields

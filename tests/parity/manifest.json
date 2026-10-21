@@ -2033,7 +2033,6 @@
         "response_received": true,
         "response_status": 200,
         "shutdown_signal_sent": true,
-        "process_exit_code": 0,
         "process_timed_out": false
       }
     },
