@@ -292,6 +292,27 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-uses-log-config-from-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-environment-log-config",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "environment": {
+            "UVICORN_LOG_CONFIG": "tests/parity/fixtures/custom-log-config.json"
+          },
+          "emit_level_logs": true
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-http-with-lifespan-disabled",
       "profile": "python-api",
       "operation": "python.api.run-http",
