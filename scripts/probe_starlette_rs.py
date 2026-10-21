@@ -558,9 +558,9 @@ def _run_server(server: str, oracle_python: Path) -> dict[str, object]:
                 ) from error
             elapsed = time.monotonic() - started
             _, stderr = process.communicate()
-            accepted_exit_codes = (
-                (0,) if server == "uvicorn-rs" else (0, -signal.SIGTERM)
-            )
+            # Uvicorn re-raises captured signals after graceful cleanup, so a
+            # clean SIGTERM shutdown can be reported by subprocess as -SIGTERM.
+            accepted_exit_codes = (0, -signal.SIGTERM)
             if process.returncode not in accepted_exit_codes:
                 raise RuntimeError(
                     f"{server} shutdown exited {process.returncode}:\n{stderr}"
@@ -638,6 +638,12 @@ def main() -> None:
                 indent=2,
                 sort_keys=True,
             )
+        )
+    if reference["shutdown"]["exit_code"] != candidate["shutdown"]["exit_code"]:
+        raise RuntimeError(
+            "Uvicorn and uvicorn-rs exited differently after SIGTERM: "
+            f"{reference['shutdown']['exit_code']} != "
+            f"{candidate['shutdown']['exit_code']}"
         )
     result = {
         "schema": "uvicorn-rs-starlette-integration@1",
