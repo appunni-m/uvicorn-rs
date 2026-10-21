@@ -515,8 +515,8 @@
     {
       "case_id": "python-api.run-http-applies-root-path",
       "profile": "python-api",
-      "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "operation": "python.api.run-http-asgi-scope-contract",
+      "covers": ["python.api.run-http-asgi-scope-contract"],
       "api": {
         "run_http": {
           "method": "GET",
@@ -525,7 +525,11 @@
           "timeout_seconds": 5,
           "lifespan": "auto",
           "invocation": "api",
-          "root_path": "/mounted"
+          "root_path": "/mounted",
+          "request_headers": [
+            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
+            ["x-asgi-expected-raw-path-base64", "L3B5dGhvbi1hcGktcm9vdC1wYXRo"]
+          ]
         }
       }
     },
@@ -542,7 +546,28 @@
           "timeout_seconds": 5,
           "lifespan": "auto",
           "invocation": "api",
-          "root_path": "/mounted"
+          "root_path": ""
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-http-asgi-raw-path-preserves-unicode-root-path",
+      "profile": "python-api",
+      "operation": "python.api.run-http-asgi-scope-contract",
+      "covers": ["python.api.run-http-asgi-scope-contract"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-asgi-scope-contract/%E5%BA%94%E7%94%A8?mode=raw",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 8,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "/mounted/应用",
+          "request_headers": [
+            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQv5bqU55So"],
+            ["x-asgi-expected-raw-path-base64", "L3B5dGhvbi1hcGktYXNnaS1zY29wZS1jb250cmFjdC8lRTUlQkElOTQlRTclOTQlQTg="]
+          ]
         }
       }
     },
@@ -588,8 +613,8 @@
     {
       "case_id": "python-api.module-cli-applies-root-path",
       "profile": "python-api",
-      "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "operation": "python.api.run-http-asgi-scope-contract",
+      "covers": ["python.api.run-http-asgi-scope-contract"],
       "api": {
         "run_http": {
           "method": "GET",
@@ -598,7 +623,11 @@
           "timeout_seconds": 5,
           "lifespan": "auto",
           "invocation": "module-cli",
-          "root_path": "/mounted"
+          "root_path": "/mounted",
+          "request_headers": [
+            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
+            ["x-asgi-expected-raw-path-base64", "L21vZHVsZS1jbGktcm9vdC1wYXRo"]
+          ]
         }
       }
     },

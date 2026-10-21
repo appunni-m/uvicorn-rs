@@ -108,6 +108,31 @@ async def asgi3_app(scope, receive, send):
         state_status = b"scope-state-empty"
     else:
         state_status = b"scope-state-populated"
+    scope_headers = dict(scope.get("headers", []))
+    expected_root_path = scope_headers.get(b"x-asgi-expected-root-path-base64")
+    expected_raw_path = scope_headers.get(b"x-asgi-expected-raw-path-base64")
+    if expected_root_path is not None and expected_raw_path is not None:
+        root_path_matches = scope["root_path"] == base64.b64decode(
+            expected_root_path, validate=True
+        ).decode("utf-8")
+        raw_path_matches = scope["raw_path"] == base64.b64decode(
+            expected_raw_path, validate=True
+        )
+        body = (
+            b"asgi-scope-contract-passed"
+            if root_path_matches and raw_path_matches
+            else b"asgi-scope-contract-failed"
+        )
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"content-type", b"text/plain"),
+                (b"content-length", str(len(body)).encode("ascii")),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+        return
     root_path_status = b"root_path=" + scope["root_path"].encode("utf-8")
     path_status = b"path=" + scope["path"].encode("utf-8")
     raw_path_status = b"raw_path=" + base64.b64encode(scope["raw_path"])

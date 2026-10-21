@@ -2037,6 +2037,31 @@
       }
     },
     {
+      "id": "python.api.run-http-asgi-scope-contract",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "response_received",
+        "response_status",
+        "response_body_base64",
+        "shutdown_signal_sent",
+        "process_timed_out"
+      ],
+      "compare": [
+        "exit_code",
+        "response_received",
+        "shutdown_signal_sent",
+        "process_timed_out"
+      ],
+      "target_requirements": {
+        "response_received": true,
+        "response_status": 200,
+        "response_body_base64": "YXNnaS1zY29wZS1jb250cmFjdC1wYXNzZWQ=",
+        "shutdown_signal_sent": true,
+        "process_timed_out": false
+      }
+    },
+    {
       "id": "python.api.run-http-concurrency",
       "kind": "command_operation",
       "observe": [

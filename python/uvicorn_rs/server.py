@@ -59,8 +59,9 @@ class Server:
             lifespan: A boolean enabling automatic lifespan detection, or one
                 of ``"auto"``, ``"on"``, or ``"off"``. Strict ``"on"`` mode
                 propagates startup failure with Uvicorn's exit status 3.
-            root_path: Prefix used for the ASGI ``root_path``, ``path``, and
-                ``raw_path`` scope values.
+            root_path: Prefix used for the ASGI ``root_path`` and ``path``
+                scope values. ``raw_path`` always preserves the request path
+                bytes received from the client.
             default_headers: Encoded response headers inserted before the
                 application's response headers. ``None`` uses Uvicorn's
                 default ``server: uvicorn`` header.

@@ -1546,6 +1546,23 @@ async def lifespan_probe_app(scope, receive, send):
         for name, value in scope.get("headers", []):
             if name.lower() == b"x-parity-lifespan-shutdown-delay":
                 _lifespan_probe_shutdown_delay = float(value.decode("ascii"))
+        scope_headers = {name.lower(): value for name, value in scope.get("headers", [])}
+        expected_root_path = scope_headers.get(b"x-asgi-expected-root-path-base64")
+        expected_raw_path = scope_headers.get(b"x-asgi-expected-raw-path-base64")
+        if expected_root_path is not None and expected_raw_path is not None:
+            root_path_matches = scope["root_path"] == base64.b64decode(
+                expected_root_path, validate=True
+            ).decode("utf-8")
+            raw_path_matches = scope["raw_path"] == base64.b64decode(
+                expected_raw_path, validate=True
+            )
+            body = (
+                b"asgi-scope-contract-passed"
+                if root_path_matches and raw_path_matches
+                else b"asgi-scope-contract-failed"
+            )
+            await _respond(send, body, content_type=b"text/plain")
+            return
         if scope["path"] == "/module-cli-custom-json-log-config":
             logging.getLogger("uvicorn.error").warning(
                 "python-api custom JSON log-config sentinel"

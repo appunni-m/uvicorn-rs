@@ -2203,6 +2203,7 @@ def load_contract(
             }
             if case["operation"] in {
                 "python.api.run-http",
+                "python.api.run-http-asgi-scope-contract",
                 "python.api.run-http-concurrency",
             }:
                 exact_keys(case["api"], {"run_http"}, f"{case_id}.api")
@@ -10113,6 +10114,7 @@ def run_python_api_probe(
     }
     if case["operation"] in {
         "python.api.run-http",
+        "python.api.run-http-asgi-scope-contract",
         "python.api.run-http-concurrency",
     }:
         try:
@@ -10250,6 +10252,16 @@ def execute_python_api_profile(
                 matches = False
                 if difference is None:
                     difference = f"required observations did not match {required!r}"
+            target_requirements = operation.get("target_requirements", {})
+            if any(
+                target.get(field) != value
+                for field, value in target_requirements.items()
+            ):
+                matches = False
+                if difference is None:
+                    difference = (
+                        f"target requirement did not match {target_requirements!r}"
+                    )
             outcomes.append({
                 "case_id": case["case_id"],
                 "profile": profile["id"],

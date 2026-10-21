@@ -8215,12 +8215,11 @@ fn build_websocket_scope<'py>(
         path.push_str(root_path);
         path.push_str(&decoded_path);
         coverage_try!(WebSocketScopePathSetItem, scope.set_item("path", path));
-        let mut raw_path = Vec::with_capacity(root_path.len() + request.uri.path().len());
-        raw_path.extend_from_slice(root_path.as_bytes());
-        raw_path.extend_from_slice(request.uri.path().as_bytes());
+        // ASGI raw_path is the request target's original path bytes; root_path
+        // remains a separate scope field.
         coverage_try!(
             WebSocketScopeRawPathSetItem,
-            scope.set_item("raw_path", PyBytes::new(py, &raw_path))
+            scope.set_item("raw_path", PyBytes::new(py, request.uri.path().as_bytes()))
         );
     }
     coverage_try!(
@@ -8369,12 +8368,11 @@ fn build_scope<'py>(
         path.push_str(root_path);
         path.push_str(&decoded_path);
         coverage_try!(HttpScopePathSetItem, scope.set_item("path", path));
-        let mut full_raw_path = Vec::with_capacity(root_path.len() + raw_path.len());
-        full_raw_path.extend_from_slice(root_path.as_bytes());
-        full_raw_path.extend_from_slice(raw_path);
+        // ASGI raw_path is the request target's original path bytes; root_path
+        // remains a separate scope field.
         coverage_try!(
             HttpScopeRawPathSetItem,
-            scope.set_item("raw_path", PyBytes::new(py, &full_raw_path))
+            scope.set_item("raw_path", PyBytes::new(py, raw_path))
         );
     }
     coverage_try!(
