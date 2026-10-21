@@ -90,6 +90,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
         )
         raise SystemExit(2)
     from uvicorn import run as uvicorn_run
+    from uvicorn.config import LOGGING_CONFIG
 
     headers = [header.split(":", 1) for header in args.headers]
     uvicorn_run(
@@ -97,7 +98,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
         host=args.host,
         port=args.port,
         loop=args.loop,
-        log_config=args.log_config,
+        log_config=LOGGING_CONFIG if args.log_config is None else args.log_config,
         log_level=args.log_level,
         access_log=args.access_log,
         use_colors=args.use_colors,

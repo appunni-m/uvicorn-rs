@@ -1544,6 +1544,13 @@ async def lifespan_probe_app(scope, receive, send):
             logging.getLogger("uvicorn.error").warning(
                 "python-api custom JSON log-config sentinel"
             )
+        if scope["path"] == "/module-cli-environment-log-level":
+            logger = logging.getLogger("uvicorn.error")
+            logger.debug("python-api environment log-level debug sentinel")
+            logger.info("python-api environment log-level info sentinel")
+            logger.warning("python-api environment log-level warning sentinel")
+            logger.error("python-api environment log-level error sentinel")
+            logger.critical("python-api environment log-level critical sentinel")
         lifespan_status = b"lifespan-started" if _lifespan_probe_started else b"lifespan-off"
         if "state" not in scope:
             state_status = b"scope-state-missing"

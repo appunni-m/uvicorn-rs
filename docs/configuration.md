@@ -32,7 +32,7 @@ that limit is stated in the option description.
 | --interface {auto,asgi3} | auto | ASGI 3 applications are supported. Explicit `asgi2` and `wsgi` selections are rejected. |
 | --loop {auto,asyncio,uvloop,zuvloop} | auto | Select the Python event loop. `auto` uses uvloop when installed, otherwise asyncio. Tokio remains the Rust network runtime. |
 | --log-config PATH | Built-in Uvicorn config | Load a `.ini`, `.json`, or `.yaml` logging configuration. All three formats have focused parity through `uvicorn.run()` and `python -m uvicorn`; the module CLI also reads `UVICORN_LOG_CONFIG`. YAML requires PyYAML, included in the `[standard]` extra. |
-| --log-level {critical,error,warning,info,debug,trace} | info | Set the server and application log threshold. Warning-level filtering has focused parity through the module CLI and `uvicorn.run()`; other levels remain unverified. |
+| --log-level {critical,error,warning,info,debug,trace} | info | Set the server and application log threshold. Warning-level filtering has focused parity through the module CLI and `uvicorn.run()`; `UVICORN_LOG_LEVEL=debug` has focused parity through the module CLI. Other levels and CLI-over-environment precedence remain unverified. |
 | --access-log/--no-access-log | Enabled | Enable or suppress request access events. `--no-access-log` and `uvicorn.run(access_log=False)` have focused parity cases. |
 | --use-colors/--no-use-colors | Automatic | Force or disable ANSI colors in default server and access logs. Focused module CLI comparisons exercise both switches, and `use_colors=True` is compared through `uvicorn.run()`, observing color sequences in captured logs. |
 | --lifespan {auto,on,off} | auto | `off` prevents the app from receiving ASGI lifespan events. This behavior has focused live parity on macOS ARM64 / CPython 3.12.13. Focused API and module CLI cases verify that an app exception before startup under `on` leaves the server unstarted and exits with code 3. Other strict-mode failure classes remain unverified. |
@@ -102,8 +102,9 @@ uvicorn.run("examples.hello_asgi:app", host="127.0.0.1", port=8000)
 `--log-level` accepts `critical`, `error`, `warning`, `info`, `debug`, and
 `trace`. The Python API also accepts integer logging levels through
 `uvicorn.Config` and `uvicorn.run`. Focused comparisons verify the warning
-threshold through `python -m uvicorn` and `uvicorn.run(..., log_level=30)`;
-they do not establish every level or color mode. Custom INI, JSON, and YAML
+threshold through `python -m uvicorn` and `uvicorn.run(..., log_level=30)`, and
+verify `UVICORN_LOG_LEVEL=debug` through the module CLI; they do not establish
+every level or CLI-over-environment precedence. Custom INI, JSON, and YAML
 logging configurations are compared through both `uvicorn.run(log_config=...)`
 and `python -m uvicorn --log-config ...`. YAML requires PyYAML, included in the
 `[standard]` extra.
