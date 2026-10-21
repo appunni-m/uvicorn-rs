@@ -357,6 +357,7 @@ jobs:
           mkdir -p target/asgi-parity
           .venv/bin/python scripts/run_parity.py \
             --oracle-python "$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle/bin/python" \
+            --installed-candidate \
             --output target/asgi-parity/result.json 2>&1 | tee target/asgi-parity/run.log
           .venv/bin/python scripts/check_ci_evidence.py parity target/asgi-parity/result.json
       - name: Verify normal fault-seam exclusion with existing public cases
@@ -550,6 +551,7 @@ jobs:
             --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
           .venv/bin/python scripts/run_parity.py \
             --oracle-python "$oracle_environment/bin/python" \
+            --installed-candidate \
             --output dist/parity-linux-x86_64.json
           .venv/bin/python scripts/check_ci_evidence.py parity dist/parity-linux-x86_64.json
       - name: Record source, build, license and artifact identities

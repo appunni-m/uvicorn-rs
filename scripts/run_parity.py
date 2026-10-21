@@ -51,6 +51,10 @@ MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
 INPUT_SCHEMA = "uvicorn-rs-parity/input@31"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
+# Normal-wheel parity must exercise the installed wheel built for this run.
+# Source-tree parity leaves this disabled so its Python adapter is loaded from
+# the checkout beside the instrumented native extension.
+INSTALLED_CANDIDATE_MODE = False
 # These messages authorize one deliberately injected panic per attempted
 # coverage fault case. They never authorize ordinary target/reference panics
 # or a failing process exit. The hook event, not a repeated JoinError log,
@@ -4008,6 +4012,15 @@ def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str
     ).stdout.strip()
     dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip())
     rustc = subprocess.run(["rustc", "--version"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    package = importlib.import_module("uvicorn_rs")
+    if INSTALLED_CANDIDATE_MODE:
+        checkout_adapter = (ROOT / "python" / "uvicorn_rs").resolve()
+        package_path = Path(package.__file__).resolve()
+        if package_path.is_relative_to(checkout_adapter):
+            raise ParityError(
+                "installed-candidate mode resolved uvicorn_rs from the checkout "
+                f"instead of the installed wheel: {package_path}"
+            )
     native_extension = Path(importlib.import_module("uvicorn_rs._native").__file__).resolve()
     try:
         native_extension_path = str(native_extension.relative_to(ROOT))
@@ -4156,14 +4169,19 @@ def start_server(
             env.pop(name, None)
         env["PYTHONNOUSERSITE"] = "1"
     elif server_id == "uvicorn-rs":
-        # The compatibility namespace lives under python/ and can be shadowed
-        # by the stock Uvicorn wheel in a shared developer environment. Keep
-        # the reference isolated, but make the candidate subprocess load the
-        # exact source adapter paired with the native extension.
-        source_python_path = str(ROOT / "python")
-        env["PYTHONPATH"] = os.pathsep.join(
-            path for path in (source_python_path, env.get("PYTHONPATH")) if path
-        )
+        if INSTALLED_CANDIDATE_MODE:
+            for name in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP"):
+                env.pop(name, None)
+            env["PYTHONNOUSERSITE"] = "1"
+        else:
+            # The compatibility namespace lives under python/ and can be
+            # shadowed by the stock Uvicorn wheel in a shared developer
+            # environment. Source parity loads the adapter beside the native
+            # extension built into the checkout.
+            source_python_path = str(ROOT / "python")
+            env["PYTHONPATH"] = os.pathsep.join(
+                path for path in (source_python_path, env.get("PYTHONPATH")) if path
+            )
     # Shutdown workflows restart a profile in the same temporary directory.
     # Readiness and request checkpoints must belong to the new process.
     events_path.write_text("", encoding="utf-8")
@@ -10059,7 +10077,7 @@ def run_cli_process(
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
     source_python_path = str(ROOT / "python")
-    if server_id == "uvicorn-rs":
+    if server_id == "uvicorn-rs" and not INSTALLED_CANDIDATE_MODE:
         environment["PYTHONPATH"] = source_python_path
     if coverage_profile_dir is not None:
         environment["ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN"] = "1"
@@ -11556,13 +11574,24 @@ def main() -> int:
         action="store_true",
         help="use the prebuilt HTTP/3 client without invoking Cargo; required for frozen benchmark identity",
     )
+    parser.add_argument(
+        "--installed-candidate",
+        action="store_true",
+        help=(
+            "run target subprocesses against the installed uvicorn-rs-py wheel "
+            "without prepending the checkout Python adapter"
+        ),
+    )
     args = parser.parse_args()
-    global ORACLE_PYTHON
+    global INSTALLED_CANDIDATE_MODE, ORACLE_PYTHON
     # Keep the venv's python symlink intact; resolving it points at the base
     # interpreter, whose site-packages do not contain the isolated oracle.
     ORACLE_PYTHON = Path(os.path.abspath(args.oracle_python))
     if not ORACLE_PYTHON.is_file() or not os.access(ORACLE_PYTHON, os.X_OK):
         parser.error(f"--oracle-python must be an executable interpreter: {ORACLE_PYTHON}")
+    if args.installed_candidate and args.coverage_profile_dir:
+        parser.error("--installed-candidate cannot be combined with --coverage-profile-dir")
+    INSTALLED_CANDIDATE_MODE = args.installed_candidate
 
     manifest, inputs, input_paths = load_contract()
     if args.case_id:

@@ -332,6 +332,7 @@ jobs:
           set -euo pipefail
           .venv/bin/python scripts/run_parity.py \
             --oracle-python "$UVICORN_ORACLE_PYTHON" \
+            --installed-candidate \
             --prebuilt-http3-client \
             --output target/benchmark-preparation/parity.json \
             2>&1 | tee target/benchmark-preparation/parity.log
