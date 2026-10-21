@@ -467,7 +467,7 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 
 | Profile group | Cases | Reference | Why |
 |---|---:|---|---|
-| HTTP/1.1, including TLS | 111 | Uvicorn 0.54.0, uvloop 0.23.0; httptools 0.8.0 by default, h11 0.16.0 for one case | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, concurrency-limit rejection, trusted, disabled, excluded-peer, wildcard, IPv4-CIDR, malformed/empty forwarded-client, all-trusted-chain, duplicate forwarding-field, and unsupported-proto proxy cases, WebSocket-upgrade validation, and one h11-selected POST scope/body comparison. |
+| HTTP/1.1, including TLS | 112 | Uvicorn 0.54.0, uvloop 0.23.0; httptools 0.8.0 by default, h11 0.16.0 for one case | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, concurrency-limit rejection, trusted, disabled, excluded-peer, wildcard, IPv4-CIDR, malformed/empty forwarded-client, all-trusted-chain, duplicate forwarding-field, and unsupported-proto proxy cases, WebSocket-upgrade validation, repeated CLI response headers with disabled Server/Date defaults, and one h11-selected POST scope/body comparison. |
 | WebSocket, including TLS | 52 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, shutdown, configured message limits, and proxy-derived `ws`/`wss` scope schemes. |
 | Startup configuration | 9 | Uvicorn 0.54.0 and the public `uvicorn_rs.Server` API | Same invalid-host and TLS startup configurations on both implementations. |
 | Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
@@ -476,8 +476,8 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | CLI and environment | 29 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, and process outcomes, including `--http h11` acceptance. |
 | Python API | 69 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 and focused WSGI selection, trusted proxy headers, non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks, successful application-factory serving through the programmatic API and module CLI, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it, access-log suppression, both CLI color switches, forced ANSI colors through `uvicorn.run()`, custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI, and inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one or two listeners. WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other WSGI behavior, log levels and precedence combinations, and exact traceback frame formatting remain unverified. |
 
-These eight groups account for all 368 declared oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 659 total cases. Five
+These eight groups account for all 369 declared oracle-parity cases. The other
+291 cases are target-only fault/support contracts, for 660 total cases. Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -756,7 +756,13 @@ only the schema marker and preserves existing case data.
 Schema `@30` permits `uds` and `observe_unix_scope` in Python API HTTP-run
 inputs; migrate maintained `@29` inputs with
 `python scripts/migrate_parity_input_v29_to_v30.py`. This migration changes
-only the schema marker and preserves existing case data.
+only the schema marker and preserves existing case data. Schema `@31` adds
+`prebound_socket_count` to public Python API cases; migrate maintained `@30`
+inputs with `python scripts/migrate_parity_input_v30_to_v31.py`. Schema `@32`
+adds `headers`, `server_header`, and `date_header` to HTTP `server_options` so
+repeated CLI response-header settings can be compared; migrate maintained
+`@31` inputs with `python scripts/migrate_parity_input_v31_to_v32.py`. Both
+migrations change only the schema marker and preserve existing case data.
 The runner rejects older or mixed input schemas.
 
 ## CI evidence

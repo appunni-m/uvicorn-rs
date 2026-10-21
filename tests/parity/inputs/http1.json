@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@31",
+  "schema": "uvicorn-rs-parity/input@32",
   "cases": [
     {
       "case_id": "http1.scope-query-header-and-body",
@@ -5449,6 +5449,33 @@
         "partial_body_base64": "YQ==",
         "wait_event": "http.disconnect.waiting",
         "wait_event_after_disconnect": "http.disconnect.second:http.disconnect"
+      }
+    },
+    {
+      "case_id": "http1.cli-response-header-policy-options",
+      "profile": "http1",
+      "operation": "http.response-headers",
+      "covers": [
+        "http.response-headers"
+      ],
+      "server_options": {
+        "date_header": false,
+        "server_header": false,
+        "headers": [
+          "x-cli-parity:first",
+          "x-cli-parity:second"
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "path": "/scope?from=parity&v=1",
+        "headers": [
+          [
+            "x-parity",
+            "h1-input"
+          ]
+        ],
+        "body_base64": "AAECA/9wYXJpdHk="
       }
     }
   ]

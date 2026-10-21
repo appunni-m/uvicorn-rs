@@ -48,7 +48,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@31"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@32"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -3170,7 +3170,8 @@ def load_contract(
                 if not isinstance(server_options, dict):
                     raise ParityError(f"{case_id}: server_options must be an object")
                 allowed_options = {
-                    "proxy_headers", "forwarded_allow_ips", "limit_concurrency"
+                    "proxy_headers", "forwarded_allow_ips", "limit_concurrency",
+                    "headers", "server_header", "date_header",
                 }
                 if kind == "http1":
                     allowed_options.add("http")
@@ -3192,6 +3193,18 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: server_options.forwarded_allow_ips must be a string"
                     )
+                if "headers" in server_options and (
+                    not isinstance(server_options["headers"], list)
+                    or any(not isinstance(header, str) for header in server_options["headers"])
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.headers must be a list of strings"
+                    )
+                for option in ("server_header", "date_header"):
+                    if option in server_options and type(server_options[option]) is not bool:
+                        raise ParityError(
+                            f"{case_id}: server_options.{option} must be a boolean"
+                        )
                 if "limit_concurrency" in server_options and (
                     type(server_options["limit_concurrency"]) is not int
                     or server_options["limit_concurrency"] < 0
@@ -4375,6 +4388,12 @@ def start_server(
             command.extend(
                 ["--ws-ping-timeout", str(server_options["ws_ping_timeout"])]
             )
+        for option in ("server_header", "date_header"):
+            if option in server_options:
+                flag = option.replace("_", "-")
+                command.append(f"--{flag}" if server_options[option] else f"--no-{flag}")
+        for header in server_options.get("headers", []):
+            command.extend(["--header", header])
         if "proxy_headers" in server_options:
             command.append(
                 "--proxy-headers"
