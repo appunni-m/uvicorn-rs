@@ -304,7 +304,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "headers", "server_header", "date_header", "interface",
         "ws_max_size", "ws_ping_interval", "ws_ping_timeout",
         "proxy_headers", "forwarded_allow_ips",
-        "limit_concurrency", "limit_max_requests", "timeout_keep_alive",
+        "limit_concurrency", "limit_max_requests", "limit_max_requests_jitter",
+        "timeout_keep_alive",
         "log_config", "log_level", "access_log",
         "use_colors", "backlog",
     }
@@ -399,6 +400,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.extend(("--limit-concurrency", str(options["limit_concurrency"])))
     if options["limit_max_requests"] is not None:
         argv.extend(("--limit-max-requests", str(options["limit_max_requests"])))
+    if options["limit_max_requests_jitter"]:
+        argv.extend(("--limit-max-requests-jitter", str(options["limit_max_requests_jitter"])))
     if options["log_config"] is not None:
         argv.extend(("--log-config", options["log_config"]))
     if options["log_level"] is not None:

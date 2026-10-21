@@ -31,6 +31,7 @@ native-tcp = []
 
 [dependencies]
 bytes = "1"
+fastrand = "2.0.1"
 futures-util = "0.3"
 http = "1"
 http-body = "1"

@@ -37,6 +37,7 @@ class Server:
         limit_max_requests=None,
         _defer_startup_failure=False,
         sockets=None,
+        limit_max_requests_jitter=0,
     ):
         """Store the application and listener options for a server run.
 
@@ -76,6 +77,8 @@ class Server:
             limit_max_requests: Maximum number of completed HTTP responses
                 before graceful server shutdown. Non-positive values stop
                 after startup, matching Uvicorn's request counter semantics.
+            limit_max_requests_jitter: Random non-negative addition to the
+                completed-response threshold, selected once at startup.
 
         Configuration errors are reported when :meth:`serve` starts the native
         runtime.
@@ -101,6 +104,7 @@ class Server:
         self.ws_ping_interval = ws_ping_interval
         self.ws_ping_timeout = ws_ping_timeout
         self.limit_max_requests = limit_max_requests
+        self.limit_max_requests_jitter = limit_max_requests_jitter
         self._defer_startup_failure = _defer_startup_failure
         self.startup_failed = False
         self._control = None
@@ -154,6 +158,11 @@ class Server:
         limit_max_requests = self.limit_max_requests
         if limit_max_requests is not None:
             limit_max_requests = min(max(limit_max_requests, 0), sys.maxsize)
+        if self.limit_max_requests_jitter < 0:
+            raise ValueError("limit_max_requests_jitter must be non-negative")
+        limit_max_requests_jitter = min(
+            self.limit_max_requests_jitter, sys.maxsize
+        )
         native_task = None
         try:
             native_task = asyncio.ensure_future(
@@ -178,6 +187,7 @@ class Server:
                     self.ws_ping_timeout,
                     limit_concurrency,
                     limit_max_requests,
+                    limit_max_requests_jitter,
                     control,
                     _bridge.log_concurrency_limit_rejection,
                 )

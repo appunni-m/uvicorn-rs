@@ -420,7 +420,21 @@ else:
             uds_directory.cleanup()
         raise
     response = None
+    response_count = 0
     idle_connection_closed = None
+    request_limit = None
+    request_limit_jitter = 0
+    limit_environment = request.get("environment", {})
+    try:
+        if "UVICORN_LIMIT_MAX_REQUESTS" in limit_environment:
+            request_limit = int(limit_environment["UVICORN_LIMIT_MAX_REQUESTS"])
+        if "UVICORN_LIMIT_MAX_REQUESTS_JITTER" in limit_environment:
+            request_limit_jitter = int(
+                limit_environment["UVICORN_LIMIT_MAX_REQUESTS_JITTER"]
+            )
+    except (TypeError, ValueError):
+        request_limit = None
+        request_limit_jitter = 0
     deadline = time.monotonic() + request["timeout_seconds"]
     try:
         while time.monotonic() < deadline and process.poll() is None:
@@ -450,6 +464,7 @@ else:
                         for name in request.get("observe_headers", [])
                     },
                 }
+                response_count += 1
                 if keep_alive_probe_delay is not None:
                     time.sleep(keep_alive_probe_delay)
                     try:
@@ -472,20 +487,43 @@ else:
             finally:
                 connection.close()
 
-        shutdown_signal_sent = False
-        requested_limit = request.get("environment", {}).get(
-            "UVICORN_LIMIT_MAX_REQUESTS"
-        )
-        if response is not None and requested_limit is not None:
-            try:
-                wait_for_request_limit = int(requested_limit) > 0
-            except (TypeError, ValueError):
-                wait_for_request_limit = False
-            if wait_for_request_limit and process.poll() is None:
+        if response is not None and request_limit is not None and request_limit > 0:
+            if request_limit_jitter > 0:
+                max_requests = request_limit + request_limit_jitter
+                for _ in range(response_count, max_requests):
+                    if process.poll() is not None:
+                        break
+                    connection = http.client.HTTPConnection(
+                        "127.0.0.1", port, timeout=0.5
+                    )
+                    try:
+                        connection.request(
+                            request["method"],
+                            request["path"],
+                            headers={
+                                "Connection": "close",
+                                **dict(request.get("request_headers", [])),
+                            },
+                        )
+                        additional_response = connection.getresponse()
+                        additional_response.read()
+                        response_count += 1
+                    except (OSError, http.client.HTTPException, TimeoutError):
+                        break
+                    finally:
+                        connection.close()
+                    if process.poll() is None:
+                        try:
+                            process.wait(timeout=0.5)
+                        except subprocess.TimeoutExpired:
+                            pass
+            if process.poll() is None:
                 try:
                     process.wait(timeout=0.5)
                 except subprocess.TimeoutExpired:
                     pass
+
+        shutdown_signal_sent = False
         if process.poll() is None:
             try:
                 process.send_signal(stop_signal)
@@ -503,6 +541,14 @@ else:
             process_timed_out = True
             process.kill()
             server_stdout, server_stderr = process.communicate()
+        request_limit_range_satisfied = None
+        if request_limit is not None and request_limit > 0 and request_limit_jitter >= 0:
+            request_limit_range_satisfied = (
+                request_limit <= response_count <= request_limit + request_limit_jitter
+                and not shutdown_signal_sent
+                and not process_timed_out
+                and process.returncode == 0
+            )
         observation = {
             "response_received": response is not None,
             "response_status": response["status"] if response is not None else None,
@@ -512,6 +558,8 @@ else:
             "shutdown_signal_sent": shutdown_signal_sent,
             "process_exit_code": process.returncode,
             "process_timed_out": process_timed_out,
+            "request_limit_response_count": response_count,
+            "request_limit_range_satisfied": request_limit_range_satisfied,
             "server_stdout_base64": base64.b64encode(server_stdout).decode("ascii"),
             "server_stderr_base64": base64.b64encode(server_stderr).decode("ascii"),
         }

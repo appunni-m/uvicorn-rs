@@ -1639,6 +1639,7 @@ struct ServeOptions {
     websocket_keepalive: WebSocketKeepaliveConfig,
     concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
     limit_max_requests: Option<usize>,
+    limit_max_requests_jitter: usize,
     #[cfg(feature = "native-tcp")]
     limit_concurrency: Option<usize>,
 }
@@ -5088,7 +5089,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, control, concurrency_limit_callback))]
+#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5115,6 +5116,7 @@ fn serve<'py>(
     ws_ping_timeout: Option<f64>,
     limit_concurrency: Option<usize>,
     limit_max_requests: Option<usize>,
+    limit_max_requests_jitter: usize,
     control: Py<ServerControl>,
     concurrency_limit_callback: Py<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -5247,6 +5249,7 @@ fn serve<'py>(
             websocket_keepalive,
             concurrency_limit_observer: Some(concurrency_limit_observer),
             limit_max_requests,
+            limit_max_requests_jitter,
             #[cfg(feature = "native-tcp")]
             limit_concurrency,
         };
@@ -5654,6 +5657,15 @@ async fn serve_forever(
     // cleanup. An aborted Tokio task can register that cleanup only when its
     // future is dropped, so shutdown must wait for both levels.
     let pending_python_tasks = TaskTracker::new();
+    // Uvicorn caches one random request threshold per server, not per response.
+    let limit_max_requests = options.limit_max_requests.map(|limit| {
+        let jitter = if options.limit_max_requests_jitter == 0 {
+            0
+        } else {
+            fastrand::usize(0..=options.limit_max_requests_jitter)
+        };
+        limit.saturating_add(jitter)
+    });
     let server = Arc::new(ServerContext {
         app,
         invoke,
@@ -5667,7 +5679,7 @@ async fn serve_forever(
         ws_max_size: options.ws_max_size,
         websocket_keepalive: options.websocket_keepalive,
         concurrency_limit_observer: options.concurrency_limit_observer,
-        limit_max_requests: options.limit_max_requests,
+        limit_max_requests,
         completed_http_requests: AtomicUsize::new(0),
         #[cfg(feature = "native-tcp")]
         limit_concurrency: options.limit_concurrency,

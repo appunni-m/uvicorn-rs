@@ -833,7 +833,8 @@ def load_contract(
         "exit_code", "stdout_base64", "stderr_base64",
         "response_received", "response_status", "response_content_type",
         "response_body_base64", "shutdown_signal_sent", "process_timed_out",
-        "server_log_events",
+        "server_log_events", "request_limit_response_count",
+        "request_limit_range_satisfied",
         "server_started_before_shutdown", "serve_task_finished_before_shutdown",
         "serve_raised", "serve_timed_out", "server_exit_code",
         "process_stderr_has_unhandled_task_warning",
@@ -2477,6 +2478,27 @@ def load_contract(
                             raise ParityError(
                                 f"{case_id}.api.run_http.environment entries must be valid strings or null"
                             )
+                if case["operation"] == "python.api.run-http-request-limit":
+                    environment = run_http.get("environment", {})
+                    try:
+                        request_limit = int(
+                            environment["UVICORN_LIMIT_MAX_REQUESTS"]
+                        )
+                        request_limit_jitter = int(
+                            environment.get("UVICORN_LIMIT_MAX_REQUESTS_JITTER", "0")
+                        )
+                    except (KeyError, TypeError, ValueError) as error:
+                        raise ParityError(
+                            f"{case_id}: request-limit operation requires integer limit and jitter environment values"
+                        ) from error
+                    if (
+                        request_limit < 1
+                        or request_limit_jitter < 0
+                        or request_limit + request_limit_jitter > 16
+                    ):
+                        raise ParityError(
+                            f"{case_id}: request-limit probe bound must be from 1 through 16"
+                        )
                 timeout_seconds = run_http["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 60:
                     raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 60")
@@ -10142,6 +10164,8 @@ def run_python_api_probe(
                     "shutdown_signal_sent",
                     "process_exit_code",
                     "process_timed_out",
+                    "request_limit_response_count",
+                    "request_limit_range_satisfied",
                 )
             }
         )
