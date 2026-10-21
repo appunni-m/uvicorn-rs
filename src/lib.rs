@@ -7326,16 +7326,15 @@ async fn handle_request_parts(
                 )
             )?;
             coverage_receive_borrow_conflict!(io, py);
-            let scope = build_scope(
-                py,
-                &parts,
-                context.peer_addr,
-                context.server.server_addr,
-                context.server.uds.as_deref(),
-                context.transport_scheme,
-                &context.server.root_path,
-                context.server.state.as_ref(),
-            )?;
+            let scope_context = AsgiRequestScopeContext {
+                peer_addr: context.peer_addr,
+                server_addr: context.server.server_addr,
+                uds: context.server.uds.as_deref(),
+                transport_scheme: context.transport_scheme,
+                root_path: &context.server.root_path,
+                state: context.server.state.as_ref(),
+            };
+            let scope = build_scope(py, &parts, &scope_context)?;
             let awaitable = coverage_value!(
                 HttpAppInvokeCall,
                 context
@@ -7597,16 +7596,15 @@ async fn handle_websocket_request_inner(
         let app_future = Python::attach(move |py| {
             let io = coverage_value!(WebSocketIoAllocate, Py::new(py, websocket_io))?;
             coverage_receive_borrow_conflict!(io, py);
-            let scope = build_websocket_scope(
-                py,
-                &parts,
-                app_context.peer_addr,
-                app_context.server.server_addr,
-                app_context.server.uds.as_deref(),
-                app_context.transport_scheme,
-                &app_context.server.root_path,
-                app_context.server.state.as_ref(),
-            )?;
+            let scope_context = AsgiRequestScopeContext {
+                peer_addr: app_context.peer_addr,
+                server_addr: app_context.server.server_addr,
+                uds: app_context.server.uds.as_deref(),
+                transport_scheme: app_context.transport_scheme,
+                root_path: &app_context.server.root_path,
+                state: app_context.server.state.as_ref(),
+            };
+            let scope = build_websocket_scope(py, &parts, &scope_context)?;
             let awaitable = coverage_value!(
                 WebSocketAppInvokeCall,
                 app_context.server.invoke.bind(py).call1((
@@ -8253,15 +8251,19 @@ where
     driver_error.map_or(Ok(()), Err)
 }
 
+struct AsgiRequestScopeContext<'a> {
+    peer_addr: SocketAddr,
+    server_addr: SocketAddr,
+    uds: Option<&'a str>,
+    transport_scheme: &'a str,
+    root_path: &'a str,
+    state: Option<&'a Arc<Py<PyDict>>>,
+}
+
 fn build_websocket_scope<'py>(
     py: Python<'py>,
     request: &http::request::Parts,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    uds: Option<&str>,
-    transport_scheme: &str,
-    root_path: &str,
-    state: Option<&Arc<Py<PyDict>>>,
+    context: &AsgiRequestScopeContext<'_>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let scope = PyDict::new(py);
     let asgi = PyDict::new(py);
@@ -8278,7 +8280,7 @@ fn build_websocket_scope<'py>(
         scope.set_item("type", "websocket")
     );
     coverage_try!(WebSocketScopeAsgiSetItem, scope.set_item("asgi", asgi));
-    set_scope_state(py, &scope, state)?;
+    set_scope_state(py, &scope, context.state)?;
     coverage_try!(
         WebSocketScopeHttpVersionSetItem,
         scope.set_item(
@@ -8293,7 +8295,7 @@ fn build_websocket_scope<'py>(
         WebSocketScopeSchemeSetItem,
         scope.set_item(
             "scheme",
-            if transport_scheme == "https" {
+            if context.transport_scheme == "https" {
                 "wss"
             } else {
                 "ws"
@@ -8301,7 +8303,7 @@ fn build_websocket_scope<'py>(
         )
     );
     let decoded_path = percent_encoding::percent_decode_str(request.uri.path()).decode_utf8_lossy();
-    if root_path.is_empty() {
+    if context.root_path.is_empty() {
         coverage_try!(
             WebSocketScopePathSetItem,
             scope.set_item("path", decoded_path.as_ref())
@@ -8311,8 +8313,8 @@ fn build_websocket_scope<'py>(
             scope.set_item("raw_path", PyBytes::new(py, request.uri.path().as_bytes()))
         );
     } else {
-        let mut path = String::with_capacity(root_path.len() + decoded_path.len());
-        path.push_str(root_path);
+        let mut path = String::with_capacity(context.root_path.len() + decoded_path.len());
+        path.push_str(context.root_path);
         path.push_str(&decoded_path);
         coverage_try!(WebSocketScopePathSetItem, scope.set_item("path", path));
         // ASGI raw_path is the request target's original path bytes; root_path
@@ -8331,7 +8333,7 @@ fn build_websocket_scope<'py>(
     );
     coverage_try!(
         WebSocketScopeRootPathSetItem,
-        scope.set_item("root_path", root_path)
+        scope.set_item("root_path", context.root_path)
     );
     coverage_try!(
         WebSocketScopeMethodSetItem,
@@ -8364,7 +8366,7 @@ fn build_websocket_scope<'py>(
         WebSocketScopeSubprotocolsSetItem,
         scope.set_item("subprotocols", subprotocols)
     );
-    if let Some(uds_path) = uds {
+    if let Some(uds_path) = context.uds {
         coverage_try!(
             WebSocketScopeClientSetItem,
             scope.set_item("client", py.None())
@@ -8376,11 +8378,20 @@ fn build_websocket_scope<'py>(
     } else {
         coverage_try!(
             WebSocketScopeClientSetItem,
-            scope.set_item("client", (peer_addr.ip().to_string(), peer_addr.port()))
+            scope.set_item(
+                "client",
+                (context.peer_addr.ip().to_string(), context.peer_addr.port(),),
+            )
         );
         coverage_try!(
             WebSocketScopeServerSetItem,
-            scope.set_item("server", (server_addr.ip().to_string(), server_addr.port()))
+            scope.set_item(
+                "server",
+                (
+                    context.server_addr.ip().to_string(),
+                    context.server_addr.port(),
+                ),
+            )
         );
     }
     Ok(scope)
@@ -8414,12 +8425,7 @@ fn observe_app_before_response_start(
 fn build_scope<'py>(
     py: Python<'py>,
     request: &http::request::Parts,
-    peer_addr: SocketAddr,
-    server_addr: SocketAddr,
-    uds: Option<&str>,
-    scheme: &str,
-    root_path: &str,
-    state: Option<&Arc<Py<PyDict>>>,
+    context: &AsgiRequestScopeContext<'_>,
 ) -> PyResult<Bound<'py, PyDict>> {
     let scope = PyDict::new(py);
     let asgi = PyDict::new(py);
@@ -8430,7 +8436,7 @@ fn build_scope<'py>(
     );
     coverage_try!(HttpScopeTypeSetItem, scope.set_item("type", "http"));
     coverage_try!(HttpScopeAsgiSetItem, scope.set_item("asgi", asgi));
-    set_scope_state(py, &scope, state)?;
+    set_scope_state(py, &scope, context.state)?;
     coverage_try!(
         HttpScopeHttpVersionSetItem,
         scope.set_item(
@@ -8450,11 +8456,14 @@ fn build_scope<'py>(
         HttpScopeMethodSetItem,
         scope.set_item("method", request.method.as_str().to_ascii_uppercase())
     );
-    coverage_try!(HttpScopeSchemeSetItem, scope.set_item("scheme", scheme));
+    coverage_try!(
+        HttpScopeSchemeSetItem,
+        scope.set_item("scheme", context.transport_scheme)
+    );
 
     let raw_path = request.uri.path().as_bytes();
     let decoded_path = percent_encoding::percent_decode_str(request.uri.path()).decode_utf8_lossy();
-    if root_path.is_empty() {
+    if context.root_path.is_empty() {
         coverage_try!(
             HttpScopePathSetItem,
             scope.set_item("path", PyString::new(py, decoded_path.as_ref()))
@@ -8464,8 +8473,8 @@ fn build_scope<'py>(
             scope.set_item("raw_path", PyBytes::new(py, raw_path))
         );
     } else {
-        let mut path = String::with_capacity(root_path.len() + decoded_path.len());
-        path.push_str(root_path);
+        let mut path = String::with_capacity(context.root_path.len() + decoded_path.len());
+        path.push_str(context.root_path);
         path.push_str(&decoded_path);
         coverage_try!(HttpScopePathSetItem, scope.set_item("path", path));
         // ASGI raw_path is the request target's original path bytes; root_path
@@ -8484,7 +8493,7 @@ fn build_scope<'py>(
     );
     coverage_try!(
         HttpScopeRootPathSetItem,
-        scope.set_item("root_path", root_path)
+        scope.set_item("root_path", context.root_path)
     );
 
     let headers = PyList::empty(py);
@@ -8527,7 +8536,7 @@ fn build_scope<'py>(
         }
     }
     coverage_try!(HttpScopeHeadersSetItem, scope.set_item("headers", headers));
-    if let Some(uds_path) = uds {
+    if let Some(uds_path) = context.uds {
         coverage_try!(HttpScopeClientSetItem, scope.set_item("client", py.None()));
         coverage_try!(
             HttpScopeServerSetItem,
@@ -8536,11 +8545,20 @@ fn build_scope<'py>(
     } else {
         coverage_try!(
             HttpScopeClientSetItem,
-            scope.set_item("client", (peer_addr.ip().to_string(), peer_addr.port()))
+            scope.set_item(
+                "client",
+                (context.peer_addr.ip().to_string(), context.peer_addr.port(),),
+            )
         );
         coverage_try!(
             HttpScopeServerSetItem,
-            scope.set_item("server", (server_addr.ip().to_string(), server_addr.port()))
+            scope.set_item(
+                "server",
+                (
+                    context.server_addr.ip().to_string(),
+                    context.server_addr.port(),
+                ),
+            )
         );
     }
     Ok(scope)

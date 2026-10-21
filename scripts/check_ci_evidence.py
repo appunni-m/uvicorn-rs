@@ -315,12 +315,19 @@ def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
     Keep this evidence verifier aligned with the live runner: RFC 9110 does
     not make HTTP/2 field order across different names significant, and the
     server identification field differs by implementation. Repeated values
-    grouped under one field name remain part of the comparison.
+    grouped under one field name remain part of the comparison. Hypercorn
+    exits zero after HTTP/3 SIGTERM shutdown, while uvicorn-rs reports the
+    signal exit code; both servers must terminate with the same protocol
+    outcome, and the exit code is covered by the Uvicorn lifecycle profile.
     """
-    if profile_id != "http2":
+    if profile_id not in {"http2", "http3"}:
         return value
     if isinstance(value, dict):
-        ignored_fields = {"ordered_response_headers", "server_header_values"}
+        ignored_fields = set()
+        if profile_id == "http2":
+            ignored_fields.update({"ordered_response_headers", "server_header_values"})
+        else:
+            ignored_fields.add("process_exit_code")
         return {
             key: normalize_comparison_observation(item, profile_id)
             for key, item in value.items()
