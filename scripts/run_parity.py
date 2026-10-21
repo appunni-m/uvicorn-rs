@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@25"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@26"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
 ORACLE_PYTHON = Path(sys.executable)
 # These messages authorize one deliberately injected panic per attempted
@@ -2226,6 +2226,7 @@ def load_contract(
                     "access_log",
                     "use_colors",
                     "factory",
+                    "backlog",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2247,6 +2248,10 @@ def load_contract(
                 if "factory" in run_http and type(run_http["factory"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.factory must be a boolean"
+                    )
+                if "backlog" in run_http and type(run_http["backlog"]) is not int:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.backlog must be an integer"
                     )
                 if run_http.get("interface", "auto") not in {"auto", "asgi2", "asgi3"}:
                     raise ParityError(

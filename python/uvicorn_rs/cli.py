@@ -64,6 +64,12 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument("--keyfile", help="PEM private key for --certfile")
     parser.add_argument("--graceful-timeout", type=int, default=10)
     parser.add_argument("--limit-concurrency", type=int)
+    parser.add_argument(
+        "--backlog",
+        type=int,
+        default=2048,
+        help="Maximum number of connections to hold in backlog",
+    )
     parser.add_argument("--ws-max-size", type=int, default=16 * 1024 * 1024)
     parser.add_argument("--ws-ping-interval", type=float, default=20.0)
     parser.add_argument("--ws-ping-timeout", type=float, default=20.0)
@@ -109,6 +115,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
         proxy_headers=args.proxy_headers,
         root_path=args.root_path,
         limit_concurrency=args.limit_concurrency,
+        backlog=args.backlog,
         ws_max_size=args.ws_max_size,
         ws_ping_interval=args.ws_ping_interval,
         ws_ping_timeout=args.ws_ping_timeout,

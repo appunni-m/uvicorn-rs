@@ -58,9 +58,9 @@ use pyo3::types::{PyBytes, PyDict, PyList, PyString};
 use pyo3_async_runtimes::TaskLocals;
 #[cfg(not(feature = "native-tcp"))]
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::net::TcpListener;
 #[cfg(not(feature = "native-tcp"))]
 use tokio::net::TcpStream;
+use tokio::net::{TcpListener, TcpSocket};
 use tokio::sync::mpsc::{
     self,
     error::{TryRecvError, TrySendError},
@@ -1622,6 +1622,7 @@ impl RuntimeDiagnostics {
 struct ServeOptions {
     host: String,
     port: u16,
+    backlog: i32,
     root_path: String,
     tcp_tls: Option<TlsAcceptor>,
     quic_config: Option<quinn::ServerConfig>,
@@ -4998,7 +4999,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
+#[pyo3(signature = (app, invoke, host, port, backlog, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5009,6 +5010,7 @@ fn serve<'py>(
     invoke: Py<PyAny>,
     host: String,
     port: u16,
+    backlog: i32,
     certfile: Option<String>,
     keyfile: Option<String>,
     graceful_timeout: u64,
@@ -5134,6 +5136,7 @@ fn serve<'py>(
         let options = ServeOptions {
             host,
             port,
+            backlog,
             root_path,
             tcp_tls,
             quic_config,
@@ -5202,6 +5205,49 @@ fn load_tls_configs(certfile: &str, keyfile: &str) -> PyResult<(TlsAcceptor, qui
     Ok((TlsAcceptor::from(Arc::new(tcp_tls)), quic_config))
 }
 
+async fn bind_tcp_listener(host: &str, port: u16, backlog: i32) -> std::io::Result<TcpListener> {
+    let addresses = tokio::net::lookup_host((host, port)).await?;
+    let mut last_error = None;
+
+    for address in addresses {
+        let socket = if address.is_ipv4() {
+            TcpSocket::new_v4()
+        } else {
+            TcpSocket::new_v6()
+        };
+        let socket = match socket {
+            Ok(socket) => socket,
+            Err(error) => {
+                last_error = Some(error);
+                continue;
+            }
+        };
+
+        #[cfg(not(windows))]
+        if let Err(error) = socket.set_reuseaddr(true) {
+            last_error = Some(error);
+            continue;
+        }
+
+        if let Err(error) = socket.bind(address) {
+            last_error = Some(error);
+            continue;
+        }
+
+        match socket.listen(backlog.max(0) as u32) {
+            Ok(listener) => return Ok(listener),
+            Err(error) => last_error = Some(error),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "could not resolve to any address",
+        )
+    }))
+}
+
 async fn serve_forever(
     app: Py<PyAny>,
     invoke: Py<PyAny>,
@@ -5211,7 +5257,7 @@ async fn serve_forever(
     options: ServeOptions,
     diagnostics: RuntimeDiagnostics,
 ) -> PyResult<()> {
-    let listener = TcpListener::bind((options.host.as_str(), options.port))
+    let listener = bind_tcp_listener(&options.host, options.port, options.backlog)
         .await
         .map_err(|error| {
             PyOSError::new_err(format!(

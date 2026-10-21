@@ -305,7 +305,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "ws_max_size", "ws_ping_interval", "ws_ping_timeout",
         "proxy_headers", "forwarded_allow_ips",
         "limit_concurrency", "log_config", "log_level", "access_log",
-        "use_colors",
+        "use_colors", "backlog",
     }
     # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
     # process. Neither value requires process supervision from the adapter.
@@ -361,6 +361,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.extend(("--app-dir", options["app_dir"]))
     if options["factory"]:
         argv.append("--factory")
+    if options["backlog"] != 2048:
+        argv.extend(("--backlog", str(options["backlog"])))
     if options["env_file"]:
         argv.extend(("--env-file", options["env_file"]))
     if options["root_path"]:

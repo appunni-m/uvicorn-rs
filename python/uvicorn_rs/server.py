@@ -18,6 +18,7 @@ class Server:
         app,
         host="127.0.0.1",
         port=8000,
+        backlog=2048,
         certfile=None,
         keyfile=None,
         graceful_timeout=10,
@@ -37,6 +38,8 @@ class Server:
             app: ASGI 3 application callable.
             host: TCP bind host and, when TLS is enabled, QUIC bind host.
             port: TCP and QUIC port in the range supported by the OS.
+            backlog: Maximum pending TCP connections; negative values are
+                clamped to zero as in Uvicorn's socket-listen path.
             certfile: Optional PEM certificate chain. Pair with ``keyfile`` to
                 enable HTTPS and HTTP/3.
             keyfile: Optional PEM private key paired with ``certfile``.
@@ -63,6 +66,7 @@ class Server:
         self.app = app
         self.host = host
         self.port = port
+        self.backlog = backlog
         self.certfile = certfile
         self.keyfile = keyfile
         self.graceful_timeout = graceful_timeout
@@ -121,6 +125,7 @@ class Server:
                 _bridge.invoke,
                 self.host,
                 self.port,
+                self.backlog,
                 self.certfile,
                 self.keyfile,
                 self.graceful_timeout,

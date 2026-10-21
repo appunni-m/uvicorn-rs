@@ -151,6 +151,7 @@ emit_level_logs = sys.argv[15] == "1"
 access_log = sys.argv[16] == "1"
 use_colors = json.loads(sys.argv[17])
 factory = sys.argv[19] == "1"
+backlog = json.loads(sys.argv[20])
 app = app_factory if factory else (
     asgi2_app if application_interface == "asgi2" else asgi3_app
 )
@@ -171,6 +172,7 @@ options = {
     "access_log": access_log,
     "use_colors": use_colors,
     "factory": factory,
+    "backlog": backlog,
 }
 if invocation == "config-server":
     config = uvicorn.Config(app, **options)
@@ -217,6 +219,8 @@ else:
             command.extend(("--forwarded-allow-ips", request["forwarded_allow_ips"]))
         if request.get("limit_concurrency") is not None:
             command.extend(("--limit-concurrency", str(request["limit_concurrency"])))
+        if request.get("backlog") is not None:
+            command.extend(("--backlog", str(request["backlog"])))
         if request.get("loop", "auto") != "auto":
             command.extend(("--loop", request["loop"]))
         if request.get("log_level") is not None:
@@ -251,6 +255,7 @@ else:
             json.dumps(request.get("use_colors")),
             json.dumps(request.get("log_config")),
             "1" if request.get("factory", False) else "0",
+            json.dumps(request.get("backlog", 2048)),
         ]
 
     environment = os.environ.copy()

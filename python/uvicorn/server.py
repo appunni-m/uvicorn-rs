@@ -73,6 +73,7 @@ class Server:
             self.config.loaded_app,
             host=self.config.host,
             port=self.config.port,
+            backlog=self.config.backlog,
             certfile=self.config.ssl_certfile,
             keyfile=self.config.ssl_keyfile,
             graceful_timeout=(
