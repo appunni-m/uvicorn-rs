@@ -408,16 +408,24 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
     for name in LICENSES:
         if contents[f"{prefix}/licenses/{name}"] != (ROOT / name).read_bytes():
             raise ValueError(f"packaged license differs: {name}")
-    for source in sorted((ROOT / "python/uvicorn_rs").glob("*.py")):
-        name = f"uvicorn_rs/{source.name}"
-        if contents[name] != source.read_bytes():
-            raise ValueError(f"packaged Python source differs: {name}")
-    for source in sorted((ROOT / "python/uvicorn").iterdir()):
-        if not source.is_file():
-            continue
-        name = f"uvicorn/{source.name}"
-        if name not in contents or contents[name] != source.read_bytes():
-            raise ValueError(f"packaged Python source differs: {name}")
+    python_sources = {}
+    for package in ("uvicorn_rs", "uvicorn"):
+        package_path = Path("python") / package
+        tracked = subprocess.run(
+            ["git", "ls-files", "-z", "--", package_path.as_posix()],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout
+        for item in sorted(path for path in tracked.split(b"\0") if path):
+            relative = Path(os.fsdecode(item))
+            source = ROOT / relative
+            if not source.is_file():
+                raise ValueError(f"tracked Python package source is missing: {relative}")
+            name = f"{package}/{relative.relative_to(package_path).as_posix()}"
+            python_sources[name] = source.read_bytes()
+            if contents.get(name) != python_sources[name]:
+                raise ValueError(f"packaged Python source differs: {name}")
     native_names = [name for name in contents if name.startswith("uvicorn_rs/_native.") and name.endswith((".so", ".pyd"))]
     if len(native_names) != 1:
         raise ValueError("wheel must contain exactly one native module")
@@ -425,8 +433,7 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
         raise ValueError("native library extension does not match wheel platform")
     allowed = {metadata_name, wheel_name, record_name, f"{prefix}/entry_points.txt", *native_names}
     allowed.update(f"{prefix}/licenses/{name}" for name in LICENSES)
-    allowed.update(f"uvicorn_rs/{source.name}" for source in (ROOT / "python/uvicorn_rs").glob("*.py"))
-    allowed.update(f"uvicorn/{source.name}" for source in (ROOT / "python/uvicorn").iterdir() if source.is_file())
+    allowed.update(python_sources)
     extras = set(contents) - allowed
     if any(not re.fullmatch(re.escape(prefix) + r"/sboms/[^/]+\.json", name) for name in extras):
         raise ValueError(f"unexpected files in wheel: {sorted(extras)}")
