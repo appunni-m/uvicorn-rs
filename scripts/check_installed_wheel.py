@@ -305,7 +305,7 @@ IP.1 = 127.0.0.1
                 shutdown_elapsed = time.monotonic() - shutdown_started
                 logs.flush()
                 log_text = log_path.read_text(encoding="utf-8")
-                if process.returncode != 0:
+                if process.returncode not in {0, -signal.SIGTERM}:
                     raise RuntimeError(
                         f"installed CLI exited {process.returncode} after SIGTERM:\n{log_text}"
                     )

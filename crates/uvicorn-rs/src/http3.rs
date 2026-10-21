@@ -241,15 +241,18 @@ where
                         let default_headers = Arc::clone(&default_headers);
                         connections.spawn(async move {
                             let _slot = slot;
+                            let connection_options = Http3ConnectionOptions {
+                                error_observer: error_observer.as_ref(),
+                                concurrency_limit_observer: concurrency_limit_observer.as_ref(),
+                                service_error_policy,
+                                request_concurrency,
+                                default_headers,
+                            };
                             if let Err(error) = serve_incoming_connection(
                                 incoming,
                                 service,
                                 shutdown,
-                                error_observer.as_ref(),
-                                concurrency_limit_observer.as_ref(),
-                                service_error_policy,
-                                request_concurrency,
-                                default_headers,
+                                connection_options,
                             ).await {
                                 tracing::debug!(%error, "HTTP/3 connection finished with an error");
                             }
@@ -269,6 +272,14 @@ where
         .await
     })
     .await
+}
+
+struct Http3ConnectionOptions<'a> {
+    error_observer: Option<&'a ServerErrorObserver>,
+    concurrency_limit_observer: Option<&'a ConcurrencyLimitObserver>,
+    service_error_policy: ServiceErrorPolicy,
+    request_concurrency: Option<Arc<crate::RequestConcurrency>>,
+    default_headers: Arc<Vec<(http::HeaderName, http::HeaderValue)>>,
 }
 
 async fn finish_http3_shutdown(
@@ -314,11 +325,7 @@ async fn serve_incoming_connection<S, B>(
     incoming: quinn::Incoming,
     service: S,
     mut shutdown: watch::Receiver<bool>,
-    error_observer: Option<&ServerErrorObserver>,
-    concurrency_limit_observer: Option<&ConcurrencyLimitObserver>,
-    service_error_policy: ServiceErrorPolicy,
-    request_concurrency: Option<Arc<crate::RequestConcurrency>>,
-    default_headers: Arc<Vec<(http::HeaderName, http::HeaderValue)>>,
+    connection_options: Http3ConnectionOptions<'_>,
 ) -> Result<(), Http3ConnectionError>
 where
     S: Service<Request<Http3RequestBody>, Response = Response<B>> + Clone + Send + 'static,
@@ -337,7 +344,7 @@ where
         Err(error) => {
             let error = Http3ConnectionError::Quic(error);
             observe_error(
-                error_observer,
+                connection_options.error_observer,
                 ServerErrorPhase::Connection,
                 Some(peer_addr),
                 &error,
@@ -357,7 +364,7 @@ where
         );
         let error = Http3ConnectionError::AlpnNotH3;
         observe_error(
-            error_observer,
+            connection_options.error_observer,
             ServerErrorPhase::Connection,
             Some(peer_addr),
             &error,
@@ -386,7 +393,8 @@ where
         }),
         transport: TransportKind::Quic,
     };
-    let _connection_guard = request_concurrency
+    let _connection_guard = connection_options
+        .request_concurrency
         .as_ref()
         .map(crate::RequestConcurrency::connection_started);
     let result = serve_http3_connection(
@@ -394,16 +402,12 @@ where
         service,
         connection_info,
         &mut shutdown,
-        error_observer,
-        concurrency_limit_observer,
-        service_error_policy,
-        request_concurrency,
-        default_headers,
+        &connection_options,
     )
     .await;
     if let Err(error) = &result {
         observe_error(
-            error_observer,
+            connection_options.error_observer,
             ServerErrorPhase::Connection,
             Some(peer_addr),
             error,
@@ -417,11 +421,7 @@ async fn serve_http3_connection<S, B>(
     service: S,
     connection_info: ConnectionInfo,
     shutdown: &mut watch::Receiver<bool>,
-    error_observer: Option<&ServerErrorObserver>,
-    concurrency_limit_observer: Option<&ConcurrencyLimitObserver>,
-    service_error_policy: ServiceErrorPolicy,
-    request_concurrency: Option<Arc<crate::RequestConcurrency>>,
-    default_headers: Arc<Vec<(http::HeaderName, http::HeaderValue)>>,
+    connection_options: &Http3ConnectionOptions<'_>,
 ) -> Result<(), Http3ConnectionError>
 where
     S: Service<Request<Http3RequestBody>, Response = Response<B>> + Clone + Send + 'static,
@@ -448,12 +448,12 @@ where
     let application =
         ServiceErrorResponse::<_, crate::RequestLifetimeBody<B>, Http3RequestBody>::new(
             info_service,
-            error_observer.cloned(),
-            concurrency_limit_observer.cloned(),
+            connection_options.error_observer.cloned(),
+            connection_options.concurrency_limit_observer.cloned(),
             peer_addr,
-            service_error_policy,
-            request_concurrency,
-            default_headers,
+            connection_options.service_error_policy,
+            connection_options.request_concurrency.clone(),
+            Arc::clone(&connection_options.default_headers),
         );
     let mut h3_connection = created;
     let mut requests = JoinSet::new();
@@ -479,7 +479,7 @@ where
                 match accepted {
                     Ok(Some(resolver)) => {
                         let application = application.clone();
-                        let error_observer = error_observer.cloned();
+                        let error_observer = connection_options.error_observer.cloned();
                         let peer_stops = peer_stops.clone();
                         requests.spawn(async move {
                             if let Err(error) = handle_http3_request(

@@ -7590,18 +7590,29 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
 
 
 def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
-    """Compare only HTTP semantics shared by the HTTP/2 reference and target.
+    """Normalize transport-independent observations before parity comparison.
 
     The HTTP/2 oracle is Hypercorn because Uvicorn does not implement HTTP/2.
     HTTP field order across different names is not significant (RFC 9110,
     Section 5.3), while the order of values for one field name is significant.
     Keep ``response_header_values_by_name`` in the comparison and omit the
     transport-specific global field order and server identification header.
+
+    The HTTP/3 oracle is also Hypercorn because Uvicorn does not implement
+    HTTP/3. Hypercorn exits with status zero after SIGTERM, while Uvicorn
+    restores and re-raises the signal after graceful shutdown. The HTTP/3
+    contract still compares whether each server terminated and its protocol
+    outcome; the Uvicorn signal exit code is covered by the Uvicorn lifecycle
+    profile.
     """
-    if profile_id != "http2":
+    if profile_id not in {"http2", "http3"}:
         return value
     if isinstance(value, dict):
-        ignored_fields = {"ordered_response_headers", "server_header_values"}
+        ignored_fields = set()
+        if profile_id == "http2":
+            ignored_fields.update({"ordered_response_headers", "server_header_values"})
+        elif profile_id == "http3":
+            ignored_fields.add("process_exit_code")
         return {
             key: normalize_comparison_observation(item, profile_id)
             for key, item in value.items()
@@ -9092,7 +9103,7 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
             and observation.get("process_terminated") is True
-            and observation.get("process_exit_code") == 0
+            and observation.get("process_exit_code") in {0, -signal.SIGTERM}
             and observation.get("server_error_observed") is True
         )
     if fault["contract"] == "http3-legacy-peer-close-no-error":
@@ -9102,7 +9113,7 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
             and observation.get("process_terminated") is True
-            and observation.get("process_exit_code") == 0
+            and observation.get("process_exit_code") in {0, -signal.SIGTERM}
             and observation.get("server_error_observed") is False
             and observation.get("fault_consumed") is True
         )
@@ -9113,7 +9124,7 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
             and observation.get("process_terminated") is True
-            and observation.get("process_exit_code") == 0
+            and observation.get("process_exit_code") in {0, -signal.SIGTERM}
             and observation.get("server_error_observed") is False
             and observation.get("fault_consumed") is True
         )
@@ -9124,7 +9135,7 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
             and observation.get("process_terminated") is True
-            and observation.get("process_exit_code") == 0
+            and observation.get("process_exit_code") in {0, -signal.SIGTERM}
             and observation.get("server_error_observed") is True
             and observation.get("fault_consumed") is True
         )
