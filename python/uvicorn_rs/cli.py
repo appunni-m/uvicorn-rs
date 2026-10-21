@@ -48,6 +48,9 @@ def _parse_args(argv=None, prog="uvicorn-rs-py"):
     parser.add_argument(
         "--access-log", action=argparse.BooleanOptionalAction, default=True
     )
+    parser.add_argument(
+        "--use-colors", action=argparse.BooleanOptionalAction, default=None
+    )
     parser.add_argument("--lifespan", choices=("auto", "on", "off"), default="auto")
     parser.add_argument("--interface", choices=("auto", "asgi2", "asgi3"), default="auto")
     parser.add_argument("--app-dir", default="")
@@ -91,6 +94,7 @@ def main(argv=None, prog="uvicorn-rs-py"):
         loop=args.loop,
         log_level=args.log_level,
         access_log=args.access_log,
+        use_colors=args.use_colors,
         lifespan=args.lifespan,
         interface=args.interface,
         env_file=args.env_file,

@@ -305,6 +305,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         "ws_max_size", "ws_ping_interval", "ws_ping_timeout",
         "proxy_headers", "forwarded_allow_ips",
         "limit_concurrency", "log_level", "access_log",
+        "use_colors",
     }
     # Uvicorn normalizes workers=0 to 1 and runs workers=1 in the current
     # process. Neither value requires process supervision from the adapter.
@@ -391,6 +392,8 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         argv.extend(("--log-level", options["log_level"]))
     if not options["access_log"]:
         argv.append("--no-access-log")
+    if options["use_colors"] is not None:
+        argv.append("--use-colors" if options["use_colors"] else "--no-use-colors")
     prototype_main(argv, prog="uvicorn")
 
 

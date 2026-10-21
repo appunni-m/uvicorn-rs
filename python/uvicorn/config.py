@@ -332,7 +332,6 @@ class Config:
                 ),
                 "log_level",
             ),
-            (self.use_colors is not None, "use_colors"),
             (self.limit_max_requests is not None, "limit_max_requests"),
             (self.limit_max_requests_jitter != 0, "limit_max_requests_jitter"),
             (self.backlog != 2048, "backlog"),

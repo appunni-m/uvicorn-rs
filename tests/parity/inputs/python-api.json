@@ -587,6 +587,62 @@
           "timeout_seconds": 5
         }
       }
+    },
+    {
+      "case_id": "python-api.module-cli-forces-colored-server-logs",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-module-cli-colors",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "use_colors": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-forces-colored-server-logs",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-run-colors",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "log_level": "info",
+          "emit_level_logs": true,
+          "use_colors": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-disables-colored-server-logs",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-module-cli-no-colors",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "use_colors": false
+        }
+      }
     }
   ]
 }

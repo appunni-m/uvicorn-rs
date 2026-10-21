@@ -141,6 +141,7 @@ invocation = sys.argv[13]
 log_level = json.loads(sys.argv[14])
 emit_level_logs = sys.argv[15] == "1"
 access_log = sys.argv[16] == "1"
+use_colors = json.loads(sys.argv[17])
 app = asgi2_app if application_interface == "asgi2" else asgi3_app
 
 options = {
@@ -156,6 +157,7 @@ options = {
     "loop": loop,
     "log_level": log_level,
     "access_log": access_log,
+    "use_colors": use_colors,
 }
 if invocation == "config-server":
     config = uvicorn.Config(app, **options)
@@ -203,6 +205,8 @@ else:
             command.extend(("--log-level", str(request["log_level"])))
         if request.get("access_log") is False:
             command.append("--no-access-log")
+        if request.get("use_colors") is not None:
+            command.append("--use-colors" if request["use_colors"] else "--no-use-colors")
     else:
         command = [
             sys.executable,
@@ -224,6 +228,7 @@ else:
             json.dumps(request.get("log_level")),
             "1" if request.get("emit_level_logs", False) else "0",
             "0" if request.get("access_log") is False else "1",
+            json.dumps(request.get("use_colors")),
         ]
 
     environment = os.environ.copy()

@@ -2223,6 +2223,7 @@ def load_contract(
                     "log_level",
                     "emit_level_logs",
                     "access_log",
+                    "use_colors",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2279,6 +2280,10 @@ def load_contract(
                 if "access_log" in run_http and type(run_http["access_log"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.access_log must be a boolean"
+                    )
+                if "use_colors" in run_http and type(run_http["use_colors"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.use_colors must be a boolean"
                     )
                 if not isinstance(run_http["root_path"], str):
                     raise ParityError(f"{case_id}.api.run_http.root_path must be a string")
@@ -9844,7 +9849,11 @@ def _python_api_server_log_events(
             raise ParityError(f"Python API server {channel} log is not valid base64") from error
         lines = content.splitlines()
         index = 0
+        saw_ansi_colors = False
         while index < len(lines):
+            if ansi_escape.search(lines[index]) and not saw_ansi_colors:
+                normalized[channel].append({"kind": "ansi-colors"})
+                saw_ansi_colors = True
             line = ansi_escape.sub("", lines[index])
             if not line:
                 index += 1
