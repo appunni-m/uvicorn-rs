@@ -530,6 +530,23 @@
       }
     },
     {
+      "case_id": "python-api.run-http-decodes-non-ascii-request-path",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-non-ascii/%E5%BA%94%E7%94%A8",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "/mounted"
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-timeout-keep-alive-closes-idle-connection",
       "profile": "python-api",
       "operation": "python.api.run-http",
