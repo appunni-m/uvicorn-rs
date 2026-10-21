@@ -105,6 +105,7 @@ class Server:
                 ws_ping_interval=self.config.ws_ping_interval,
                 ws_ping_timeout=self.config.ws_ping_timeout,
                 limit_concurrency=self.config.limit_concurrency,
+                limit_max_requests=self.config.limit_max_requests,
                 _defer_startup_failure=True,
                 sockets=sockets,
             )

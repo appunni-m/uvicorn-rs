@@ -404,6 +404,27 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-limit-max-requests-exits-after-one-response",
+      "profile": "python-api",
+      "operation": "python.api.run-http-request-limit",
+      "covers": ["python.api.run-http-request-limit"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-limit-max-requests",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "environment": {
+            "UVICORN_LIMIT_MAX_REQUESTS": "1"
+          },
+          "log_level": "critical"
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-applies-warning-log-level",
       "profile": "python-api",
       "operation": "python.api.run-http",

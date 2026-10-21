@@ -473,6 +473,19 @@ else:
                 connection.close()
 
         shutdown_signal_sent = False
+        requested_limit = request.get("environment", {}).get(
+            "UVICORN_LIMIT_MAX_REQUESTS"
+        )
+        if response is not None and requested_limit is not None:
+            try:
+                wait_for_request_limit = int(requested_limit) > 0
+            except (TypeError, ValueError):
+                wait_for_request_limit = False
+            if wait_for_request_limit and process.poll() is None:
+                try:
+                    process.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    pass
         if process.poll() is None:
             try:
                 process.send_signal(stop_signal)

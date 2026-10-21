@@ -338,7 +338,6 @@ class Config:
                 ),
                 "log_level",
             ),
-            (self.limit_max_requests is not None, "limit_max_requests"),
             (self.limit_max_requests_jitter != 0, "limit_max_requests_jitter"),
             (self.timeout_notify != 30, "timeout_notify"),
             (self.callback_notify is not None, "callback_notify"),

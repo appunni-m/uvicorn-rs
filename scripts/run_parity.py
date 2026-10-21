@@ -2203,6 +2203,7 @@ def load_contract(
             }
             if case["operation"] in {
                 "python.api.run-http",
+                "python.api.run-http-request-limit",
                 "python.api.run-http-asgi-scope-contract",
                 "python.api.run-http-concurrency",
             }:
@@ -10114,6 +10115,7 @@ def run_python_api_probe(
     }
     if case["operation"] in {
         "python.api.run-http",
+        "python.api.run-http-request-limit",
         "python.api.run-http-asgi-scope-contract",
         "python.api.run-http-concurrency",
     }:

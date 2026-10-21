@@ -25,9 +25,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::pin::Pin;
 #[cfg(feature = "runtime-diagnostics")]
 use std::sync::atomic::AtomicU64;
-#[cfg(any(not(feature = "native-tcp"), coverage))]
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::task::{Context, Poll};
 
@@ -1640,6 +1638,7 @@ struct ServeOptions {
     ws_max_size: usize,
     websocket_keepalive: WebSocketKeepaliveConfig,
     concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
+    limit_max_requests: Option<usize>,
     #[cfg(feature = "native-tcp")]
     limit_concurrency: Option<usize>,
 }
@@ -1657,6 +1656,8 @@ struct ServerContext {
     ws_max_size: usize,
     websocket_keepalive: WebSocketKeepaliveConfig,
     concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
+    limit_max_requests: Option<usize>,
+    completed_http_requests: AtomicUsize,
     #[cfg(feature = "native-tcp")]
     limit_concurrency: Option<usize>,
     state: Option<Arc<Py<PyDict>>>,
@@ -1670,6 +1671,72 @@ struct ServerContext {
     graceful_timeout: Option<std::time::Duration>,
     pending_python_tasks: TaskTracker,
     force_application_shutdown: CancellationToken,
+}
+
+impl ServerContext {
+    fn record_completed_http_request(&self) {
+        let Some(limit) = self.limit_max_requests else {
+            return;
+        };
+        let completed = self
+            .completed_http_requests
+            .fetch_add(1, Ordering::AcqRel)
+            .saturating_add(1);
+        if completed >= limit {
+            self.cancellation.cancel();
+        }
+    }
+}
+
+struct RequestLimitBody {
+    inner: ResponseBody,
+    server: Arc<ServerContext>,
+    completed: bool,
+}
+
+impl Body for RequestLimitBody {
+    type Data = Bytes;
+    type Error = BoxError;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        let this = self.get_mut();
+        let frame = Pin::new(&mut this.inner).poll_frame(cx);
+        if matches!(&frame, Poll::Ready(None)) && !this.completed {
+            this.completed = true;
+            this.server.record_completed_http_request();
+        }
+        frame
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.completed
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        // Keep empty bodies pollable so completion is counted after the
+        // transport consumes the response body, including zero-byte replies.
+        SizeHint::new()
+    }
+}
+
+fn apply_request_limit(
+    server: &Arc<ServerContext>,
+    response: Response<ResponseBody>,
+) -> Response<ResponseBody> {
+    if server.limit_max_requests.is_none() {
+        return response;
+    }
+    response.map(|inner| {
+        RequestLimitBody {
+            inner,
+            server: Arc::clone(server),
+            completed: false,
+        }
+        .boxed_unsync()
+    })
 }
 
 #[cfg(feature = "native-tcp")]
@@ -2100,11 +2167,17 @@ impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
         };
         let server = Arc::clone(&context.server);
         Box::pin(async move {
-            let response = if is_websocket_upgrade(&request) {
+            let websocket_upgrade = is_websocket_upgrade(&request);
+            let response = if websocket_upgrade {
                 Ok(handle_websocket_request(request, context).await)
             } else {
                 handle_request(request, context).await
             }?;
+            let response = if websocket_upgrade {
+                response
+            } else {
+                apply_request_limit(&server, response)
+            };
             apply_default_response_headers(&server, response)
         })
     }
@@ -2174,6 +2247,7 @@ impl tower_service::Service<Request<uvicorn_rs::Http3RequestBody>> for NativeHtt
         let server = Arc::clone(&context.server);
         Box::pin(async move {
             let response = handle_http3_asgi_request(request, context).await?;
+            let response = apply_request_limit(&server, response);
             apply_default_response_headers(&server, response)
         })
     }
@@ -5014,7 +5088,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, control, concurrency_limit_callback))]
+#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, control, concurrency_limit_callback))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5040,6 +5114,7 @@ fn serve<'py>(
     ws_ping_interval: Option<f64>,
     ws_ping_timeout: Option<f64>,
     limit_concurrency: Option<usize>,
+    limit_max_requests: Option<usize>,
     control: Py<ServerControl>,
     concurrency_limit_callback: Py<PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -5171,6 +5246,7 @@ fn serve<'py>(
             ws_max_size,
             websocket_keepalive,
             concurrency_limit_observer: Some(concurrency_limit_observer),
+            limit_max_requests,
             #[cfg(feature = "native-tcp")]
             limit_concurrency,
         };
@@ -5591,6 +5667,8 @@ async fn serve_forever(
         ws_max_size: options.ws_max_size,
         websocket_keepalive: options.websocket_keepalive,
         concurrency_limit_observer: options.concurrency_limit_observer,
+        limit_max_requests: options.limit_max_requests,
+        completed_http_requests: AtomicUsize::new(0),
         #[cfg(feature = "native-tcp")]
         limit_concurrency: options.limit_concurrency,
         state,
@@ -5620,6 +5698,9 @@ async fn serve_forever(
     // `started` means lifespan startup completed and the bound listeners are
     // ready to accept application traffic. Notify the Python compatibility
     // facade only after all fallible startup work has completed.
+    if server.limit_max_requests == Some(0) {
+        server.cancellation.cancel();
+    }
     startup_signal.mark_started();
 
     #[cfg(not(feature = "native-tcp"))]
@@ -6155,11 +6236,17 @@ where
         let read_eof_waker = Arc::clone(&service_read_eof_waker);
         async move {
             let _active_request = ActiveHttpRequest::new(active_http_requests, read_eof_waker);
-            let response = if is_websocket_upgrade(&request) {
+            let websocket_upgrade = is_websocket_upgrade(&request);
+            let response = if websocket_upgrade {
                 Ok::<_, std::io::Error>(handle_websocket_request(request, context).await)
             } else {
                 handle_request(request, context).await
             }?;
+            let response = if websocket_upgrade {
+                response
+            } else {
+                apply_request_limit(&response_header_server, response)
+            };
             apply_default_response_headers(&response_header_server, response)
         }
     });
@@ -6856,6 +6943,7 @@ async fn handle_http3_request(
                 )
             }
         };
+    let response = apply_request_limit(&response_header_server, response);
     let response = apply_default_response_headers(&response_header_server, response)?;
 
     let response_result: Result<(), BoxError> = async {

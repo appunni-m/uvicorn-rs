@@ -34,6 +34,7 @@ class Server:
         limit_concurrency=None,
         ws_ping_interval=20.0,
         ws_ping_timeout=20.0,
+        limit_max_requests=None,
         _defer_startup_failure=False,
         sockets=None,
     ):
@@ -72,6 +73,9 @@ class Server:
                 closing with code 1011; ``None`` disables the pong deadline.
             limit_concurrency: Maximum active connections or request tasks
                 before the Rust runtime returns HTTP 503.
+            limit_max_requests: Maximum number of completed HTTP responses
+                before graceful server shutdown. Non-positive values stop
+                after startup, matching Uvicorn's request counter semantics.
 
         Configuration errors are reported when :meth:`serve` starts the native
         runtime.
@@ -96,6 +100,7 @@ class Server:
         self.limit_concurrency = limit_concurrency
         self.ws_ping_interval = ws_ping_interval
         self.ws_ping_timeout = ws_ping_timeout
+        self.limit_max_requests = limit_max_requests
         self._defer_startup_failure = _defer_startup_failure
         self.startup_failed = False
         self._control = None
@@ -146,6 +151,9 @@ class Server:
         limit_concurrency = self.limit_concurrency
         if limit_concurrency is not None:
             limit_concurrency = min(max(limit_concurrency, 0), sys.maxsize)
+        limit_max_requests = self.limit_max_requests
+        if limit_max_requests is not None:
+            limit_max_requests = min(max(limit_max_requests, 0), sys.maxsize)
         native_task = None
         try:
             native_task = asyncio.ensure_future(
@@ -169,6 +177,7 @@ class Server:
                     self.ws_ping_interval,
                     self.ws_ping_timeout,
                     limit_concurrency,
+                    limit_max_requests,
                     control,
                     _bridge.log_concurrency_limit_rejection,
                 )
