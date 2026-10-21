@@ -303,9 +303,10 @@ def diagnostic_gate(output: str, server: dict, phase: str, returncode: int, evid
     lifespan_complete = lines.count("LIFESPAN_SHUTDOWN_COMPLETE")
     cancelled = lines.count("APP_CANCELLED_BY_SHUTDOWN")
     held = lines.count("APP_HOLD_STARTED")
-    # Uvicorn restores the original signal handler after ASGI cleanup and then
-    # re-raises SIGTERM. Rust's CLI consumes its cancellation and exits zero.
-    allowed_exit = (0, -signal.SIGTERM) if server["kind"] == "uvicorn" else (0,)
+    # Both CLIs restore the original signal handler after ASGI cleanup and then
+    # re-raise SIGTERM. The lifecycle markers below prove cleanup completed
+    # before accepting that normal signal-derived process status.
+    allowed_exit = (0, -signal.SIGTERM)
     if returncode not in allowed_exit:
         raise RuntimeError(f"{phase} shutdown exited unexpectedly: {returncode}")
     if lifespan_complete != 1 or cancelled != (1 if phase == "active" else 0) or held != (1 if phase == "active" else 0):
