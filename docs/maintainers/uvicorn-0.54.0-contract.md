@@ -48,7 +48,7 @@ provided by Click rather than declared as an application parameter.
 | App environment | `--env-file`, `Config(env_file=...)`, `run(env_file=...)` | unset; loads environment for the app before app import/factory invocation. `UVICORN_*` server settings are not loaded from this file. The module CLI and programmatic factory paths have focused parity cases; broader dotenv syntax and precedence remain unverified. | `9kbx`, `gjpr`, `4fvf` |
 | Logging | `--log-config`, `--log-level`, `--access-log` / `--no-access-log`, `--use-colors` / `--no-use-colors` | Selected default startup, access, shutdown, and concurrency-limit warning events are compared for `uvicorn.run()`, `Config`/`Server.run()`, and module CLI requests. `python-api.run-applies-numeric-warning-log-level` verifies that API level 30 filters application DEBUG/INFO events while retaining WARNING and above; module CLI cases verify that `--log-level warning` suppresses startup/access INFO events, `UVICORN_LOG_LEVEL=debug` enables DEBUG application logs, and an explicit warning option overrides that debug environment value. `python-api.run-disables-access-log` and `python-api.module-cli-disables-access-log` verify access-log suppression while retaining other normalized lifecycle events. Custom JSON, INI, and YAML formatter cases compare through both public entry points; the YAML cases run with PyYAML from the benchmark dependency group, matching the package's `[standard]` extra. `python-api.module-cli-uses-log-config-from-environment` confirms that `UVICORN_LOG_CONFIG` overrides the built-in setting. Raw child logs remain in result artifacts; other levels, precedence combinations, color combinations, and exact traceback frames remain unverified. | `9kbx`, `gjpr`, `4fvf` |
 | Proxy and response headers | `--proxy-headers` / `--no-proxy-headers`, `--forwarded-allow-ips`, `--server-header` / `--no-server-header`, `--date-header` / `--no-date-header`, repeatable `--header` | proxy/server/date headers true; trusted IPs default from `FORWARDED_ALLOW_IPS` or `127.0.0.1,::1`; the selected `uvicorn.run()` case verifies that an explicit API argument overrides the environment value | `9kbx`, `dv25`, `4fvf` |
-| Request/resource limits | `--root-path`, `--limit-concurrency`, `--limit-max-requests`, `--limit-max-requests-jitter`, `--timeout-keep-alive` | Empty root path; concurrency and request limit unset; jitter `0`; keep-alive `5` seconds. `root_path` is verified for an ASCII prefix through the API and module CLI on HTTP/1.1; the API case also covers a percent-encoded UTF-8 request path. A Unicode `root_path` is not parity-supported: Uvicorn 0.54.0's default HTTP/1.1 path returns 400, while uvicorn-rs accepts it and currently prepends the configured prefix to `raw_path`, contrary to the ASGI scope definition. HTTP/1.1 CLI, `uvicorn.run(limit_concurrency=1)`, and `Config`/`Server.run()` inputs verify the 503 behavior at limit 1. `python-api.module-cli-timeout-keep-alive-closes-idle-connection` verifies that a one-second timeout closes an idle HTTP/1 connection after a two-second wait; other timeout values and HTTP/2/HTTP/3 behavior remain unverified. Backlog controls the OS accept queue. | `9kbx`, `dv25`, `4fvf` |
+| Request/resource limits | `--root-path`, `--limit-concurrency`, `--limit-max-requests`, `--limit-max-requests-jitter`, `--timeout-keep-alive` | Empty root path; concurrency and request limit unset; jitter `0`; keep-alive `5` seconds. HTTP/1.1 target contract inputs cover ASCII `root_path` through the API and module CLI; they validate all three relevant ASGI scope values against explicit expectations and compare exit code, response receipt, shutdown signal, and timeout state with Uvicorn. Uvicorn 0.54.0 adds the configured prefix to `raw_path`, so response-body parity is not claimed for these cases. A separate case covers percent-encoded UTF-8 request-path decoding with an empty root path. A target conformance case checks Unicode `root_path` and original `raw_path` bytes; Uvicorn 0.54.0 rejects the Unicode prefix before ASGI invocation. HTTP/1.1 CLI, `uvicorn.run(limit_concurrency=1)`, and `Config`/`Server.run()` inputs verify the 503 behavior at limit 1. `python-api.module-cli-timeout-keep-alive-closes-idle-connection` verifies that a one-second timeout closes an idle HTTP/1 connection after a two-second wait; other timeout values and HTTP/2/HTTP/3 behavior remain unverified. Backlog controls the OS accept queue. | `9kbx`, `dv25`, `4fvf` |
 | TLS | `--ssl-keyfile`, `--ssl-certfile`, `--ssl-keyfile-password`, `--ssl-version`, `--ssl-cert-reqs`, `--ssl-ca-certs`, `--ssl-ciphers` | no files/password; `ssl.PROTOCOL_TLS_SERVER`; `ssl.CERT_NONE`; no CA file or explicit cipher list. Programmatic API also accepts `ssl_context_factory`. | `9kbx`, `dv25`, `4fvf` |
 | Command output | `--help`, `--version`, Click parse errors, missing/invalid app errors | version output includes Uvicorn version, Python implementation/version, and OS; startup failure uses exit status 3. Exact help/error text and stream placement are parity obligations. | `9kbx`, `4fvf` |
 
@@ -193,7 +193,7 @@ the evidence map below.
 | --- | --- | --- | --- |
 | Distribution and `uvicorn` command/import namespace | The source package keeps distribution metadata `uvicorn-rs-py` version `0.1.0`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. `uvicorn.__version__` reports the pinned Uvicorn compatibility baseline `0.54.0`. The wheel includes both Python namespaces and the `uvicorn-rs-py` and `uvicorn` entry points. A local macOS ARM64 wheel passed the CPython 3.9.6 consumer smoke and CPython 3.12 install/replace/rollback check; this is one-host evidence. The distribution is unpublished, and full package and runtime parity remain incomplete. | `1s4z` | Input cases compare installed distribution metadata/imports, entry points, module and console commands, and executable behavior with upstream 0.54.0. |
 | CLI/settings/environment | The compatibility namespace uses Click option metadata adapted from Uvicorn 0.54.0. The indexed CLI process set has 27 cases: help/version, validation, app selection and loading, current-directory import resolution from the installed console command, worker-option normalization, selected protocol options, `--root-path`, environment-file behavior, and response-header policy. A separate HTTP/1.1 protocol input compares `--limit-concurrency 1` 503 responses. These selected cases do not prove worker supervision or all option effects. Unsupported selected settings fail instead of being silently ignored. | `9kbx` | Extend `tests/parity/inputs/cli.json`; invoke both module and console paths with matching argv/env/cwd/files and compare exit status, stdout, stderr, and listener/app behavior. |
-| `run`, `Config`, and `Server` API | `uvicorn.Config`, `uvicorn.Server(config)`, and `uvicorn.run` expose the pinned signatures. Focused comparisons cover default ASGI3 serving, successful programmatic ASGI3 application-factory serving, ASGI2 auto-detection and explicit selection, WSGI GETs through `uvicorn.run()` and the module CLI with `lifespan="off"` and `lifespan="auto"`, lifespan, `root_path`, environment files, custom headers, readiness, startup-failure state, concurrency-limit responses, single-worker acceptance of a non-default healthcheck timeout, `WEB_CONCURRENCY=0` selecting one in-process server, warning-level filtering, `UVICORN_LOG_LEVEL=debug` and explicit CLI precedence over that environment value, custom JSON, INI, and YAML logging configuration through `uvicorn.run()` and the module CLI, and selected SIGINT shutdown outcomes. The input set contains 42 ordinary HTTP-run and two concurrency cases. WSGI auto-mode cases compare the unsupported-lifespan fallback with no logging, configured logging, and default module-CLI logging; all five WSGI request cases check method, path, query, and request-header mapping. The three auto-mode cases and the two `lifespan="off"` cases pass individually against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Advanced Config settings, WSGI request-body/streaming/error behavior, other strict-mode failure classes, other log levels and precedence combinations, socket injection, and broader lifecycle behavior remain unverified. | `gjpr` | `tests/parity/inputs/python-api.json` compares public imports, signatures, selected run behavior, custom headers, environment-file loading, successful application-factory loading, ASGI/WSGI interface handling, resource-limit responses, logging configuration, lifecycle observations, and normalized log events against upstream Uvicorn. |
+| `run`, `Config`, and `Server` API | `uvicorn.Config`, `uvicorn.Server(config)`, and `uvicorn.run` expose the pinned signatures. Focused comparisons cover default ASGI3 serving, successful programmatic ASGI3 application-factory serving, ASGI2 auto-detection and explicit selection, WSGI GETs through `uvicorn.run()` and the module CLI with `lifespan="off"` and `lifespan="auto"`, lifespan, the `root_path` ASGI scope contract, environment files, custom headers, readiness, startup-failure state, concurrency-limit responses, single-worker acceptance of a non-default healthcheck timeout, `WEB_CONCURRENCY=0` selecting one in-process server, warning-level filtering, `UVICORN_LOG_LEVEL=debug` and explicit CLI precedence over that environment value, custom JSON, INI, and YAML logging configuration through `uvicorn.run()` and the module CLI, and selected SIGINT shutdown outcomes. The input set contains 42 ordinary HTTP-run and two concurrency cases. WSGI auto-mode cases compare the unsupported-lifespan fallback with no logging, configured logging, and default module-CLI logging; all five WSGI request cases check method, path, query, and request-header mapping. The three auto-mode cases and the two `lifespan="off"` cases pass individually against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Advanced Config settings, WSGI request-body/streaming/error behavior, other strict-mode failure classes, other log levels and precedence combinations, socket injection, and broader lifecycle behavior remain unverified. | `gjpr` | `tests/parity/inputs/python-api.json` compares public imports, signatures, selected run behavior, custom headers, environment-file loading, successful application-factory loading, ASGI/WSGI interface handling, resource-limit responses, logging configuration, lifecycle observations, and normalized log events against upstream Uvicorn. |
 | HTTP, WebSocket, lifespan, ASGI and errors | The current Rust server has an input-driven ASGI protocol matrix. Uvicorn is the H1/WebSocket/lifespan oracle; Hypercorn is the current H2/H3 oracle. This is not Uvicorn CLI/API compatibility. | `dv25`, `4fvf` | Extend the existing protocol cases where applicable; preserve the declared reference per protocol and compare public observations. |
 | Unix/fd sockets, reload, multi-worker supervision | Unix/fd listeners, reload, and multi-worker process supervision are not implemented. Single-process `workers` normalization and the worker-healthcheck setting have selected CLI/API cases. | `dhfq` | Process-level cases run the same socket/reload/worker stimuli against upstream and installed target, and record child/process/socket outcomes. |
 | Package extras and release gates | No published package; current distribution requirements/extras do not mirror the upstream installation contract. | `1s4z`, `v5fe` | Installed-artifact cases and package-content/dependency gates on the supported OS/Python matrix. |
@@ -233,16 +233,42 @@ They compare public imports/signatures, the
 `uvicorn.run()` missing-module diagnostic, a successful default request, an
 API request with lifespan disabled, a module CLI request with lifespan
 disabled, startup readiness, startup-failure state, and API/module-CLI requests
-with an ASCII root path. The focused API and CLI root-path cases compare the
-ASGI `root_path`, `path`, and `raw_path` values and pass individually against
-Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Receipts are under ignored
-`target/kata-root-path-api.json` and `target/kata-root-path-cli.json`. These
-focused cases do not close the remaining settings or lifecycle inventory.
+with an ASCII root path. The API and CLI root-path cases use a target contract:
+they check `root_path`, `path`, and original request `raw_path` against explicit
+ASGI expectations, and compare only exit code, response receipt, shutdown
+signal, and timeout state with Uvicorn 0.54.0. The oracle returns HTTP 200 but
+reports the contract failure body because it adds the configured prefix to
+`raw_path`. This is an intentional scope-level divergence from Uvicorn,
+consistent with the [ASGI HTTP
+scope](https://asgi.readthedocs.io/en/stable/specs/www.html#http-connection-scope),
+which defines `raw_path` as the original HTTP path component bytes, excluding
+the query string. A separate request-path parity input verifies percent-
+encoded UTF-8 decoding with an empty `root_path`. A target contract checks a
+Unicode `root_path`, the prefixed decoded `path`, and the original
+percent-encoded `raw_path`. Uvicorn 0.54.0 rejects this input before ASGI
+invocation, so the contract compares target completion and shutdown behavior
+with the oracle while checking the target response and scope against explicit
+ASGI expectations; it does not claim response parity for this case. The clean
+exact-commit receipt is run `65c922f8a0cf4b038f3f2612785cdbc3`, passed 1/1 on
+commit `c5ca9a4126cf1bf5b5643648ce66bb3a585a7f73`, macOS 15.7.7 ARM64, CPython
+3.12.13, and Uvicorn 0.54.0. The target tree was clean; source SHA-256 was
+`12b27b055f70fd1ac243e73be0cfb145e16dc1dbdce834bcc8ae4a86544db325`, and the
+native extension SHA-256 was
+`7d75162e3f8e16127452b503ac645b1be8985d922643a6978f4cacc026dae21b`. The
+input digest was
+`a10792e2dd1b261dd75ba919119572e4a984a4978d7e68876598fc3dcc55b361`. The
+ASGI scope contract case passed with HTTP 200 and its expected sentinel body;
+Uvicorn's oracle process exited cleanly after returning HTTP 400 with
+`Invalid HTTP request received.` The raw receipt is retained under ignored
+`target/raw-path-unicode-root-clean.json`. These focused cases do not close the
+remaining settings or lifecycle inventory.
 
 The `uvicorn-rs-parity/input@30` case
 `python-api.run-http-decodes-non-ascii-request-path` independently exercises a
-percent-encoded UTF-8 path with ASCII `root_path`. Its clean exact-commit
-receipt is run `e714b99c45984680b722097399678a93`: 1/1 passed on commit
+percent-encoded UTF-8 path with an empty `root_path`. The previously recorded
+receipt used an earlier input revision with ASCII `root_path` and is historical
+for the current input. Its clean exact-commit receipt is run
+`e714b99c45984680b722097399678a93`: 1/1 passed on commit
 `5764b1fb26aa20845d388acedf6af76db4f2c568`, macOS 15.7.7 ARM64, CPython
 3.12.13, and Uvicorn 0.54.0. The target was clean; source SHA-256 was
 `fcd8ba900a0c59ce20b48cc9d9366fd26479697bc7baff52c03c5af1cbbe6e9d`, and
@@ -251,17 +277,18 @@ the native extension SHA-256 was
 input digest was
 `4571f3a4379d237ae500e36e320f40293fc2345e4c2b6e7e44cc15f2f243d3d1`.
 
-A separate exploratory probe of Unicode `root_path` found a standards
-conflict: Uvicorn 0.54.0 returns HTTP 400 from its default HTTP/1.1 path, while
-uvicorn-rs accepts the request. The pinned Uvicorn source encodes `root_path`
-as ASCII when building `raw_path` ([source at the pinned commit](https://github.com/Kludex/uvicorn/blob/3eb9a9ab9af69005c687728097461c1fd2a95db9/uvicorn/protocols/http/httptools_impl.py#L261-L262)).
-The target currently includes the configured prefix in `raw_path`, even
-though the [ASGI HTTP scope](https://asgi.readthedocs.io/en/stable/specs/www.html#http-connection-scope)
+A target conformance input now covers Unicode `root_path`. The ASGI HTTP scope
 defines `root_path` as Unicode and `raw_path` as the original request path
-bytes. The probe was exploratory and ran with a dirty input tree; it is not
-parity evidence. This behavior remains outside the parity claim until a
-dedicated conformance input and fix establish the correct scope values. The
-conflict and clean request-path receipt are recorded in Kata issue `9kbx`.
+bytes ([ASGI HTTP scope](https://asgi.readthedocs.io/en/stable/specs/www.html#http-connection-scope)).
+The server keeps these values separate: it accepts `/mounted/应用` as the
+root path, prefixes the decoded `path`, and reports the original
+percent-encoded request path in `raw_path`. For an ASCII prefix, Uvicorn 0.54.0
+instead prepends the configured prefix to `raw_path`. For a Unicode prefix it
+returns HTTP 400 before calling the app because it encodes `root_path` as ASCII
+([pinned source](https://github.com/Kludex/uvicorn/blob/3eb9a9ab9af69005c687728097461c1fd2a95db9/uvicorn/protocols/http/httptools_impl.py#L261-L262)).
+These are documented divergences from Uvicorn and target ASGI scope conformance
+checks, not response parity. The clean exact-commit receipt and scope
+expectations are recorded above and in Kata issue `9kbx`.
 
 Input schema `@9` was introduced on 2026-10-20 to declare `root_path` in the
 `run_http` stimulus. Input schema `@10` added optional default response headers

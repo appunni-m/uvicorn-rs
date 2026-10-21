@@ -40,7 +40,7 @@ that limit is stated in the option description.
 | --lifespan {auto,on,off} | auto | `off` prevents the app from receiving ASGI lifespan events. This behavior has focused live parity on macOS ARM64 / CPython 3.12.13. Focused API and module CLI cases verify that an app exception before startup under `on` leaves the server unstarted and exits with code 3. Other strict-mode failure classes remain unverified. |
 | --app-dir PATH | Current directory | Add a directory to the application import path. |
 | --env-file PATH | Unset | Load application environment variables before importing the app. One focused CLI parity case confirms a pre-existing process value wins over the same key in the file. Requires `python-dotenv`, included in the `[standard]` extra. CLI and programmatic factory behavior have focused parity cases. |
-| --root-path PATH | Empty | Prefix `scope["path"]` and `scope["raw_path"]`, and set `scope["root_path"]`. Focused parity covers an ASCII prefix on HTTP/1.1. |
+| --root-path PATH | Empty | Set `scope["root_path"]` and prefix `scope["path"]`. Preserve `scope["raw_path"]` as the original HTTP path bytes, excluding the query string and configured prefix. Focused HTTP/1.1 contract inputs cover ASCII prefixes through the API and module CLI, plus a Unicode prefix, and check all three scope values against ASGI expectations. Uvicorn 0.54.0 includes the prefix in `raw_path`, so response-body parity is not claimed for those cases. |
 | --header NAME:VALUE | None | Add a default response header. The CLI has an HTTP/1.1 parity case for a value containing a colon; `uvicorn.run` accepts the equivalent `headers=[("Name", "value")]` pairs, verified by a focused API case. |
 | --server-header/--no-server-header | Enabled | Include or omit the default `Server: uvicorn` response header. The disabled behavior is covered by the focused header-policy case. |
 | --date-header/--no-date-header | Enabled | Include or omit the default `Date` response header. The disabled behavior is covered by the focused header-policy case. |
@@ -68,9 +68,17 @@ Without certificate and key files, the prototype accepts cleartext HTTP/1.1 and 
 Ctrl-C and SIGTERM request shutdown. By default the prototype runs ASGI lifespan startup before serving and lifespan shutdown after draining or cancelling active work. With `--lifespan off`, it skips calling the application with a lifespan scope while HTTP scopes still receive an empty `state` mapping. The Python API accepts the same setting as `uvicorn.run(app, lifespan="off")` or `Config(app, lifespan="off")`.
 
 The same root-path setting is available through `uvicorn.run(app,
-root_path="/mounted")` and `--root-path /mounted`. The parity cases verify the
-resulting `root_path`, prefixed `path`, and prefixed `raw_path` for HTTP/1.1.
-Other protocols and non-ASCII prefixes remain unverified.
+root_path="/mounted")` and `--root-path /mounted`. Focused HTTP/1.1 contract
+cases verify the resulting `root_path`, prefixed `path`, and original request
+`raw_path`. The ASGI HTTP scope defines `raw_path` as the original HTTP path
+component bytes, excluding the query string, so it does not include a
+configured `root_path`. Uvicorn 0.54.0 adds that prefix to `raw_path`; the
+contract cases check uvicorn-rs against the ASGI scope expectations and compare
+only exit code, response receipt, shutdown signal, and timeout state with
+Uvicorn. Uvicorn also rejects a
+Unicode prefix before the ASGI app runs. Other protocols remain unverified.
+See the [support matrix](support-matrix.md) and
+[maintainer evidence](maintainers/uvicorn-0.54.0-contract.md).
 
 Programmatic default response headers use `(name, value)` pairs, for example
 `uvicorn.run(app, headers=[("X-Application", "example")])`. Focused API

@@ -528,6 +528,7 @@
           "root_path": "/mounted",
           "request_headers": [
             ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
+            ["x-asgi-expected-path-base64", "L21vdW50ZWQvcHl0aG9uLWFwaS1yb290LXBhdGg="],
             ["x-asgi-expected-raw-path-base64", "L3B5dGhvbi1hcGktcm9vdC1wYXRo"]
           ]
         }
@@ -566,6 +567,7 @@
           "root_path": "/mounted/应用",
           "request_headers": [
             ["x-asgi-expected-root-path-base64", "L21vdW50ZWQv5bqU55So"],
+            ["x-asgi-expected-path-base64", "L21vdW50ZWQv5bqU55SoL3B5dGhvbi1hcGktYXNnaS1zY29wZS1jb250cmFjdC/lupTnlKg="],
             ["x-asgi-expected-raw-path-base64", "L3B5dGhvbi1hcGktYXNnaS1zY29wZS1jb250cmFjdC8lRTUlQkElOTQlRTclOTQlQTg="]
           ]
         }
@@ -626,6 +628,7 @@
           "root_path": "/mounted",
           "request_headers": [
             ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
+            ["x-asgi-expected-path-base64", "L21vdW50ZWQvbW9kdWxlLWNsaS1yb290LXBhdGg="],
             ["x-asgi-expected-raw-path-base64", "L21vZHVsZS1jbGktcm9vdC1wYXRo"]
           ]
         }

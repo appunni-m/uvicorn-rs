@@ -1548,17 +1548,25 @@ async def lifespan_probe_app(scope, receive, send):
                 _lifespan_probe_shutdown_delay = float(value.decode("ascii"))
         scope_headers = {name.lower(): value for name, value in scope.get("headers", [])}
         expected_root_path = scope_headers.get(b"x-asgi-expected-root-path-base64")
+        expected_path = scope_headers.get(b"x-asgi-expected-path-base64")
         expected_raw_path = scope_headers.get(b"x-asgi-expected-raw-path-base64")
-        if expected_root_path is not None and expected_raw_path is not None:
+        if (
+            expected_root_path is not None
+            and expected_path is not None
+            and expected_raw_path is not None
+        ):
             root_path_matches = scope["root_path"] == base64.b64decode(
                 expected_root_path, validate=True
+            ).decode("utf-8")
+            path_matches = scope["path"] == base64.b64decode(
+                expected_path, validate=True
             ).decode("utf-8")
             raw_path_matches = scope["raw_path"] == base64.b64decode(
                 expected_raw_path, validate=True
             )
             body = (
                 b"asgi-scope-contract-passed"
-                if root_path_matches and raw_path_matches
+                if root_path_matches and path_matches and raw_path_matches
                 else b"asgi-scope-contract-failed"
             )
             await _respond(send, body, content_type=b"text/plain")
