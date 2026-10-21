@@ -10099,9 +10099,11 @@ def _python_api_server_log_events(
             normalized[channel].append(event)
             index += 1
     # Worker processes emit the same lifecycle phases concurrently. Their
-    # cross-process log order is scheduler-dependent, so compare each
-    # contiguous phase run canonically while retaining every event and its
-    # multiplicity.
+    # cross-process log order is scheduler-dependent, and parent-process
+    # messages can split the events from one phase across several log runs.
+    # For multiprocess runs, compare the complete worker lifecycle sequence
+    # canonically while retaining every event and its multiplicity. Keep
+    # parent and application log events in their original relative order.
     lifecycle_order = {
         "Started server process [<pid>]": 0,
         "Waiting for application startup.": 1,
@@ -10112,48 +10114,52 @@ def _python_api_server_log_events(
         "Finished server process [<pid>]": 6,
     }
     stderr_events = normalized["stderr"]
-    index = 0
-    while index < len(stderr_events):
-        event = stderr_events[index]
+    def lifecycle_phase(event: dict[str, str]) -> int | None:
         message = event.get("message")
-        phase = None
-        if message is not None:
-            phase = next(
-                (
-                    order
-                    for prefix, order in lifecycle_order.items()
-                    if message == prefix or message.startswith(prefix)
-                ),
-                None,
-            )
-        if phase is None:
-            index += 1
-            continue
-        end = index + 1
-        while end < len(stderr_events):
-            candidate = stderr_events[end].get("message")
-            candidate_phase = None
-            if candidate is not None:
-                candidate_phase = next(
-                    (
-                        order
-                        for prefix, order in lifecycle_order.items()
-                        if candidate == prefix or candidate.startswith(prefix)
-                    ),
-                    None,
-                )
-            if candidate_phase is None:
-                break
-            end += 1
-        stderr_events[index:end] = sorted(
-            stderr_events[index:end],
-            key=lambda item: next(
+        if message is None:
+            return None
+        return next(
+            (
                 order
                 for prefix, order in lifecycle_order.items()
-                if item["message"] == prefix or item["message"].startswith(prefix)
+                if message == prefix or message.startswith(prefix)
             ),
+            None,
         )
-        index = end
+
+    has_parent_process = any(
+        event.get("message", "").startswith("Started parent process [")
+        for event in stderr_events
+    )
+    if has_parent_process:
+        worker_events: list[dict[str, str]] = []
+        other_events: list[dict[str, str]] = []
+        insertion_index = None
+        for event in stderr_events:
+            if lifecycle_phase(event) is not None:
+                if insertion_index is None:
+                    insertion_index = len(other_events)
+                worker_events.append(event)
+            else:
+                other_events.append(event)
+        if insertion_index is not None:
+            worker_events.sort(key=lambda event: lifecycle_phase(event) or 0)
+            other_events[insertion_index:insertion_index] = worker_events
+            stderr_events[:] = other_events
+    else:
+        index = 0
+        while index < len(stderr_events):
+            if lifecycle_phase(stderr_events[index]) is None:
+                index += 1
+                continue
+            end = index + 1
+            while end < len(stderr_events) and lifecycle_phase(stderr_events[end]) is not None:
+                end += 1
+            stderr_events[index:end] = sorted(
+                stderr_events[index:end],
+                key=lambda event: lifecycle_phase(event) or 0,
+            )
+            index = end
     return normalized
 
 
