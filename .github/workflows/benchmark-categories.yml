@@ -486,7 +486,7 @@ jobs:
           else
             printf '%s\n' 'No complete benchmark analysis: inspect retained preparation/parity/category logs.' >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: asgi-category-benchmarks-${{ matrix.system.id }}
@@ -580,7 +580,7 @@ jobs:
             2>&1 | tee "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.log"
       - name: Retain focused FastAPI diagnostic evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fastapi-stage-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ github.sha }}
           path: |
@@ -725,7 +725,7 @@ jobs:
           cat target/fastapi-match/summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: Retain focused FastAPI matched timing evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fastapi-match-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ github.sha }}
           path: |
@@ -827,7 +827,7 @@ jobs:
             2>&1 | tee target/benchmark-preparation/h2-focused-driver.log
       - name: Retain focused diagnostic evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: h2-focused-${{ inputs.h2_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=macos-arm64]') && 'macos-arm64') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.h2_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || 'uvicorn-rs-asyncio' }}-${{ inputs.h2_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h2-workload=request-upload-small-chunks]') && 'request-upload-small-chunks') || 'protocol-scope' }}-${{ github.sha }}
           path: |
@@ -914,7 +914,7 @@ jobs:
             2>&1 | tee target/benchmark-preparation/h3-focused-driver.log
       - name: Retain focused diagnostic evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: h3-focused-${{ github.sha }}
           path: |
@@ -959,7 +959,7 @@ jobs:
           matrix_status="$(python -c 'import json; from pathlib import Path; print(json.loads(Path("target/benchmark-matrix/aggregate/matrix.json").read_text())["status"])')"
           printf 'matrix_status=%s\n' "$matrix_status" >> "$GITHUB_OUTPUT"
           cat target/benchmark-matrix/aggregate/report.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: asgi-benchmark-matrix-${{ github.run_id }}-${{ github.run_attempt }}
           path: target/benchmark-matrix/aggregate/
