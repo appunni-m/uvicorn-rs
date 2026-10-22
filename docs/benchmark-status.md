@@ -3,13 +3,13 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [39543497367 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39543497367)
-- Commit: [`f09ce956a7c030660c2d822f8abb1987aa5f1e0f`](https://github.com/appunni-m/uvicorn-rs/commit/f09ce956a7c030660c2d822f8abb1987aa5f1e0f)
-- Recorded: 2026-10-21T05:20:44Z
+- Run: [39689988939 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
+- Commit: [`86e72e181d00feca1b4db7f30377d5d9d4345b83`](https://github.com/appunni-m/uvicorn-rs/commit/86e72e181d00feca1b4db7f30377d5d9d4345b83)
+- Recorded: 2026-10-22T00:42:21Z
 - Category matrix job: `failure`
-- Aggregate job: `failure`
+- Aggregate job: `success`
 
-This attempt did not produce a validated three-system aggregate. No performance result was generated or substituted. The [previous complete report](benchmark-results.md) remains the latest measured result; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/39543497367) for this attempt.
+The three system artifacts were validated and the partial report, hashed receipts, and raw system bundles are retained in this run's GitHub Actions artifacts for 90 days. Generated logs and per-run files are not committed. The [previous complete report](benchmark-results.md) remains unchanged.
 <!-- END GENERATED LATEST ATTEMPT -->
 
 ## Diagnosis of the latest failed attempt
