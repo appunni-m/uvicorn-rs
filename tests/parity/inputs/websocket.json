@@ -731,6 +731,27 @@
       }
     },
     {
+      "case_id": "websocket.compressed-session-rejects-stray-continuation-frame",
+      "profile": "websocket",
+      "operation": "websocket.raw-frame-disconnect",
+      "covers": [
+        "websocket.raw-frame-disconnect"
+      ],
+      "websocket": {
+        "path": "/ws-wait-for-disconnect",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "raw_frame_base64": "gIABAgME",
+        "followup_path": "/scope"
+      }
+    },
+    {
       "case_id": "websocket.invalid-accept-header-container",
       "profile": "websocket",
       "operation": "websocket.handshake-rejected",

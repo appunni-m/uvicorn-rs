@@ -7910,6 +7910,22 @@ def websocket_raw_frame_observation(
         if offered_subprotocols
         else ""
     )
+    additional_header_lines: list[str] = []
+    for name, value in specification.get("headers", []):
+        if (
+            not name
+            or any(character in name for character in ":\r\n")
+            or any(character in value for character in "\r\n")
+        ):
+            raise ParityError(
+                "raw WebSocket headers must not contain line breaks or name separators"
+            )
+        try:
+            f"{name}: {value}".encode("ascii")
+        except UnicodeEncodeError as error:
+            raise ParityError("raw WebSocket headers must contain ASCII text") from error
+        additional_header_lines.append(f"{name}: {value}\r\n")
+    additional_headers = "".join(additional_header_lines)
     raw_request = (
         f"GET {specification['path']} HTTP/1.1\r\n"
         f"Host: 127.0.0.1:{server['port']}\r\n"
@@ -7917,7 +7933,7 @@ def websocket_raw_frame_observation(
         "Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: {raw_key}\r\n"
         "Sec-WebSocket-Version: 13\r\n"
-        f"{subprotocol_header}\r\n"
+        f"{subprotocol_header}{additional_headers}\r\n"
     ).encode("ascii")
     try:
         client.sendall(raw_request)
