@@ -229,7 +229,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv sync --python "$PYTHON_VERSION" --group benchmark --frozen --no-install-project
+          uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard --frozen --no-install-project
           uvx --from "maturin==$MATURIN_VERSION" maturin build --release --locked --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" --out target/normal-wheels
           wheels=(target/normal-wheels/*.whl)
           test "${#wheels[@]}" -eq 1
@@ -416,7 +416,7 @@ jobs:
           enable-cache: true
       - name: Install locked references and pinned coverage tools
         run: |
-          uv sync --python "$PYTHON_VERSION" --group benchmark --frozen
+          uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard --frozen
           uv pip install --python .venv/bin/python "gunicorn==$GUNICORN_VERSION"
           cargo install cargo-llvm-cov --version 0.8.7 --locked
       - name: Prepare the isolated stock Uvicorn oracle
@@ -600,7 +600,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv sync --python "$WHEEL_PYTHON_VERSION" --group benchmark --frozen --no-install-project
+          uv sync --python "$WHEEL_PYTHON_VERSION" --group benchmark --extra standard --frozen --no-install-project
           wheels=(dist/*.whl)
           test "${#wheels[@]}" -eq 1
           uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"

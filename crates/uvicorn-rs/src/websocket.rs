@@ -394,9 +394,14 @@ impl WebSocketUpgrade {
     }
 }
 
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Boxing Tungstenite would allocate for every WebSocket session."
+)]
 enum WebSocketStreamKind {
     Tungstenite(WebSocketStream<TokioIo<Upgraded>>),
-    Yawc(YawcWebSocket),
+    // Extensions use Yawc; keep the common Tungstenite-only session compact.
+    Yawc(Box<YawcWebSocket>),
 }
 
 /// A framed WebSocket session owned by the native HTTP/1.1 connection.
@@ -463,7 +468,7 @@ impl WebSocketSession {
                         error,
                     )))
                 })?;
-                WebSocketStreamKind::Yawc(
+                WebSocketStreamKind::Yawc(Box::new(
                     YawcWebSocket::from_stream_with_extensions(
                         YawcHttpStream::from(stream),
                         YawcRole::Server,
@@ -471,7 +476,7 @@ impl WebSocketSession {
                         yawc_options(max_message_size),
                     )
                     .map_err(yawc_error)?,
-                )
+                ))
             }
             None => {
                 let mut config = WebSocketConfig::default();

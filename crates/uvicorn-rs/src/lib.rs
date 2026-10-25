@@ -3845,10 +3845,8 @@ where
                     self.peer_addr,
                     &request,
                 );
-                let close_connection = match request.version() {
-                    Version::HTTP_10 | Version::HTTP_11 => true,
-                    _ => false,
-                };
+                let close_connection =
+                    matches!(request.version(), Version::HTTP_10 | Version::HTTP_11);
                 return FutureEither::Right(ready(Ok(service_unavailable(
                     self.default_headers.as_slice(),
                     close_connection,
