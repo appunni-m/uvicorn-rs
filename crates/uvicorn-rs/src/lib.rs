@@ -42,22 +42,26 @@ use std::{
     future::Future,
     io,
     net::SocketAddr,
-    panic::{catch_unwind, AssertUnwindSafe},
+    panic::{AssertUnwindSafe, catch_unwind},
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context, Poll},
     time::Duration,
 };
 
+pub use asgi_lifespan_protocol_rs::{
+    ApplicationLifecycle, ApplicationLifecycleError, ApplicationLifecycleFuture,
+    ApplicationLifecycleStage,
+};
 use bytes::Bytes;
 use futures_util::{
-    future::{ready, Either as FutureEither, Ready},
-    stream::{FuturesUnordered, StreamExt},
     FutureExt,
+    future::{Either as FutureEither, Ready, ready},
+    stream::{FuturesUnordered, StreamExt},
 };
 use http::{
-    header::{HeaderName, HeaderValue, CONNECTION, CONTENT_LENGTH, CONTENT_TYPE, UPGRADE},
     Method, Request, Response, StatusCode, Uri, Version,
+    header::{CONNECTION, CONTENT_LENGTH, CONTENT_TYPE, HeaderName, HeaderValue, UPGRADE},
 };
 use http_body::Body;
 use http_body_util::{Either as BodyEither, Full};
@@ -68,19 +72,15 @@ use hyper_util::{
     server::conn::auto,
     service::TowerToHyperService,
 };
-pub use native_app_contract::{
-    ApplicationLifecycle, ApplicationLifecycleError, ApplicationLifecycleFuture,
-    ApplicationLifecycleStage,
-};
 use pin_project_lite::pin_project;
 #[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 use tokio::sync::Notify;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpListener,
-    sync::{mpsc, watch, OwnedSemaphorePermit, Semaphore},
+    sync::{OwnedSemaphorePermit, Semaphore, mpsc, watch},
     task::{JoinError, JoinSet},
     time::Instant,
 };
@@ -201,13 +201,13 @@ impl<I: AsyncWrite + Unpin> AsyncWrite for CoverageFaultIo<I> {
 ///
 /// This type is compiled only in coverage builds and is not part of the normal
 /// crate API.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub struct CoverageHttp3Client {
     inner: http3::CoverageClient,
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 impl CoverageHttp3Client {
     /// Connects an established QUIC connection through the HTTP/3 adapter.
     pub async fn connect(
@@ -237,7 +237,7 @@ impl CoverageHttp3Client {
 
 /// Opens a bidirectional stream through the coverage-only adapter and returns
 /// the peer's HTTP/3 application close code.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub async fn coverage_http3_open_bidi_application_close_code(
     connection: h3_quinn::quinn::Connection,
@@ -247,7 +247,7 @@ pub async fn coverage_http3_open_bidi_application_close_code(
 
 /// Observes the HTTP/3 adapter's client-close result while waiting for a
 /// bidirectional request stream. This entry point is absent from normal builds.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub async fn coverage_http3_accept_bidi_error(
     connection: h3_quinn::quinn::Connection,
@@ -256,7 +256,7 @@ pub async fn coverage_http3_accept_bidi_error(
 }
 
 /// Exercises the coverage-only client-side HTTP/3 stream adapter contract.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub async fn coverage_http3_client_adapter_contract(
     connection: h3_quinn::quinn::Connection,
@@ -265,7 +265,7 @@ pub async fn coverage_http3_client_adapter_contract(
 }
 
 /// Exercises HTTP/3 send-sequence errors and verifies the connection recovers.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub async fn coverage_http3_finish_after_reset(
     connection: h3_quinn::quinn::Connection,
@@ -331,7 +331,7 @@ pub fn coverage_proactive_peer_read(
 /// The instrumented server test configures the next connection with zero
 /// initial bidirectional stream credit. The test then explicitly grants one
 /// stream after observing backpressure. This hook is coverage-build-only.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_peer_bidi_stream_credit_gate() -> bool {
     HTTP3_PEER_BIDI_STREAM_CREDIT_GATE
@@ -340,14 +340,14 @@ pub fn arm_http3_peer_bidi_stream_credit_gate() -> bool {
 }
 
 /// Returns whether the coverage-only peer stream-credit gate was installed.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn http3_peer_bidi_stream_credit_gate_installed() -> bool {
     HTTP3_PEER_BIDI_STREAM_CREDIT_GATE.load(Ordering::Acquire) >= 3
 }
 
 /// Releases the coverage-only HTTP/3 peer stream-credit gate.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn release_http3_peer_bidi_stream_credit_gate() -> bool {
     if HTTP3_PEER_BIDI_STREAM_CREDIT_GATE
@@ -363,7 +363,7 @@ pub fn release_http3_peer_bidi_stream_credit_gate() -> bool {
 
 /// Finishes the coverage-only peer stream-credit gate and reports whether it
 /// granted credit to the peer.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub async fn finish_http3_peer_bidi_stream_credit_gate() -> bool {
     let deadline = Instant::now() + Duration::from_secs(1);
@@ -375,14 +375,14 @@ pub async fn finish_http3_peer_bidi_stream_credit_gate() -> bool {
     HTTP3_PEER_BIDI_STREAM_CREDIT_GATE.swap(0, Ordering::AcqRel) == 5
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_peer_bidi_stream_credit_gate() -> bool {
     HTTP3_PEER_BIDI_STREAM_CREDIT_GATE
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn observe_http3_peer_bidi_stream_credit_gate_installed() {
     let _ = HTTP3_PEER_BIDI_STREAM_CREDIT_GATE.compare_exchange(
         2,
@@ -392,12 +392,12 @@ pub(crate) fn observe_http3_peer_bidi_stream_credit_gate_installed() {
     );
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) async fn wait_for_http3_peer_bidi_stream_credit_release() {
     HTTP3_PEER_BIDI_STREAM_CREDIT_RELEASE.notified().await;
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn observe_http3_peer_bidi_stream_credit_granted() {
     let _ = HTTP3_PEER_BIDI_STREAM_CREDIT_GATE.compare_exchange(
         4,
@@ -409,14 +409,23 @@ pub(crate) fn observe_http3_peer_bidi_stream_credit_granted() {
 
 #[cfg(coverage)]
 mod coverage;
+#[cfg(feature = "http3")]
 mod http3;
 mod peer_read;
 mod websocket;
 
+#[cfg(all(coverage, unix))]
+#[doc(hidden)]
+pub use coverage::http1_on_read_unix_peer_read as coverage_http1_on_read_unix_peer_read;
+#[cfg(all(coverage, unix))]
+#[doc(hidden)]
+pub use coverage::http1_proactive_unix_peer_read as coverage_http1_proactive_unix_peer_read;
 #[cfg(coverage)]
 #[doc(hidden)]
 pub use coverage::{
+    arm_http1_unix_peer_read_on_read_error_fault,
     connection_error_source_variants as coverage_connection_error_source_variants,
+    finish_http1_unix_peer_read_on_read_error_fault,
     http1_on_read_peer_read as coverage_http1_on_read_peer_read,
     http1_response_activity_watch_outcomes as coverage_http1_response_activity_watch_outcomes,
 };
@@ -432,35 +441,36 @@ static HTTP1_UPGRADE_RECEIVER_CLOSED_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static HTTP1_PEER_READ_RECEIVER_CLOSED_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
+#[cfg(coverage)]
 static HTTP1_PEER_READ_FAILURE_AFTER_DATA_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_PEER_STOP_OBSERVER_UNAVAILABLE_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_PEER_STOP_OBSERVER_OUTCOME_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_INVALID_STREAM_ID_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_READ_CLOSED_STREAM_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_WRITE_CLOSED_STREAM_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_RESPONSE_SEND_DATA_FAULT_STAGE: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_RESPONSE_SEND_DATA_FAULT_CALLS: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_SEND_DATA_PENDING_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_REQUEST_BODY_TRAILERS_PENDING_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_RESPONSE_FINISH_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_RESPONSE_FALLBACK_FINISH_FAULT: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_PEER_BIDI_STREAM_CREDIT_GATE: AtomicU8 = AtomicU8::new(0);
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 static HTTP3_PEER_BIDI_STREAM_CREDIT_RELEASE: Notify = Notify::const_new();
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[derive(Clone, Copy)]
 pub(crate) enum Http3PeerStopObserverOutcomeFault {
     Error,
@@ -586,7 +596,7 @@ pub(crate) fn observe_http1_peer_read_failure_after_data_fault() {
 ///
 /// The next accepted request stream omits its internal peer-stop observer.
 /// This is compiled only for instrumented coverage builds.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_peer_stop_observer_unavailable_fault() -> bool {
     HTTP3_PEER_STOP_OBSERVER_UNAVAILABLE_FAULT
@@ -595,20 +605,20 @@ pub fn arm_http3_peer_stop_observer_unavailable_fault() -> bool {
 }
 
 /// Finishes the coverage-only HTTP/3 peer-stop observer fault.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_peer_stop_observer_unavailable_fault() -> bool {
     HTTP3_PEER_STOP_OBSERVER_UNAVAILABLE_FAULT.swap(0, Ordering::AcqRel) == 3
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_peer_stop_observer_unavailable_fault() -> bool {
     HTTP3_PEER_STOP_OBSERVER_UNAVAILABLE_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn observe_http3_peer_stop_observer_unavailable_fault() {
     let _ = HTTP3_PEER_STOP_OBSERVER_UNAVAILABLE_FAULT.compare_exchange(
         2,
@@ -619,7 +629,7 @@ pub(crate) fn observe_http3_peer_stop_observer_unavailable_fault() {
 }
 
 /// Arms a coverage-only HTTP/3 peer-stop observer error.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_peer_stop_observer_error_fault() -> bool {
     HTTP3_PEER_STOP_OBSERVER_OUTCOME_FAULT
@@ -628,14 +638,14 @@ pub fn arm_http3_peer_stop_observer_error_fault() -> bool {
 }
 
 /// Finishes the coverage-only HTTP/3 peer-stop observer error.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_peer_stop_observer_error_fault() -> bool {
     HTTP3_PEER_STOP_OBSERVER_OUTCOME_FAULT.swap(0, Ordering::AcqRel) == 2
 }
 
 /// Arms a coverage-only HTTP/3 local send-retirement observer result.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_peer_stop_local_retirement_fault() -> bool {
     HTTP3_PEER_STOP_OBSERVER_OUTCOME_FAULT
@@ -644,15 +654,15 @@ pub fn arm_http3_peer_stop_local_retirement_fault() -> bool {
 }
 
 /// Finishes the coverage-only HTTP/3 local send-retirement observer result.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_peer_stop_local_retirement_fault() -> bool {
     HTTP3_PEER_STOP_OBSERVER_OUTCOME_FAULT.swap(0, Ordering::AcqRel) == 5
 }
 
-#[cfg(coverage)]
-pub(crate) fn take_http3_peer_stop_observer_outcome_fault(
-) -> Option<Http3PeerStopObserverOutcomeFault> {
+#[cfg(all(coverage, feature = "http3"))]
+pub(crate) fn take_http3_peer_stop_observer_outcome_fault()
+-> Option<Http3PeerStopObserverOutcomeFault> {
     if HTTP3_PEER_STOP_OBSERVER_OUTCOME_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
@@ -673,7 +683,7 @@ pub(crate) fn take_http3_peer_stop_observer_outcome_fault(
 /// The adapter receives Quinn's `ClosedStream` result at its normal read
 /// boundary. This result cannot be selected by a valid peer request, so the
 /// hook is compiled only for instrumented coverage builds.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_read_closed_stream_fault() -> bool {
     HTTP3_READ_CLOSED_STREAM_FAULT
@@ -682,13 +692,13 @@ pub fn arm_http3_read_closed_stream_fault() -> bool {
 }
 
 /// Finishes the coverage-only HTTP/3 client-adapter read fault.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_read_closed_stream_fault() -> bool {
     HTTP3_READ_CLOSED_STREAM_FAULT.swap(0, Ordering::AcqRel) == 2
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_read_closed_stream_fault() -> bool {
     HTTP3_READ_CLOSED_STREAM_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
@@ -700,7 +710,7 @@ pub(crate) fn take_http3_read_closed_stream_fault() -> bool {
 /// The adapter receives Quinn's `ClosedStream` result at its normal write
 /// boundary. This result cannot be selected by a valid peer request, so the
 /// hook is compiled only for instrumented coverage builds.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_write_closed_stream_fault() -> bool {
     HTTP3_WRITE_CLOSED_STREAM_FAULT
@@ -709,13 +719,13 @@ pub fn arm_http3_write_closed_stream_fault() -> bool {
 }
 
 /// Finishes the coverage-only HTTP/3 client-adapter write fault.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_write_closed_stream_fault() -> bool {
     HTTP3_WRITE_CLOSED_STREAM_FAULT.swap(0, Ordering::AcqRel) == 2
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_write_closed_stream_fault() -> bool {
     HTTP3_WRITE_CLOSED_STREAM_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
@@ -727,7 +737,7 @@ pub(crate) fn take_http3_write_closed_stream_fault() -> bool {
 /// Stage 1 is response headers, stage 2 is DATA, and stage 3 is trailers. The
 /// fault returns a Quinn `ClosedStream` result from the server adapter's
 /// normal send-data method. This hook is absent from normal builds.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_response_send_data_fault(stage: u8) -> bool {
     HTTP3_RESPONSE_SEND_DATA_FAULT_CALLS.store(0, Ordering::Release);
@@ -737,13 +747,13 @@ pub fn arm_http3_response_send_data_fault(stage: u8) -> bool {
 }
 
 /// Returns the consumed response-frame fault stage and clears the hook.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_response_send_data_fault() -> u8 {
     HTTP3_RESPONSE_SEND_DATA_FAULT_STAGE.swap(0, Ordering::AcqRel)
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_response_send_data_fault() -> bool {
     let stage = HTTP3_RESPONSE_SEND_DATA_FAULT_STAGE.load(Ordering::Acquire);
     if stage == 0 {
@@ -766,7 +776,7 @@ pub(crate) fn take_http3_response_send_data_fault() -> bool {
 }
 
 /// Arms a coverage-only pending-write state before the next HTTP/3 DATA write.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_send_data_pending_fault() -> bool {
     HTTP3_SEND_DATA_PENDING_FAULT
@@ -775,13 +785,13 @@ pub fn arm_http3_send_data_pending_fault() -> bool {
 }
 
 /// Finishes the coverage-only pending-write state fault.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_send_data_pending_fault() -> bool {
     HTTP3_SEND_DATA_PENDING_FAULT.swap(0, Ordering::AcqRel) == 2
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_send_data_pending_fault() -> bool {
     HTTP3_SEND_DATA_PENDING_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
@@ -794,7 +804,7 @@ pub(crate) fn take_http3_send_data_pending_fault() -> bool {
 /// ended but trailers are not ready. This coverage-only scheduling seam checks
 /// that the body adapter remains pending and resumes without changing the
 /// externally observed request body or response.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_request_body_trailers_pending_fault() -> bool {
     HTTP3_REQUEST_BODY_TRAILERS_PENDING_FAULT
@@ -803,13 +813,13 @@ pub fn arm_http3_request_body_trailers_pending_fault() -> bool {
 }
 
 /// Finishes the one-shot HTTP/3 request-trailer pending-state contract.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_request_body_trailers_pending_fault() -> bool {
     HTTP3_REQUEST_BODY_TRAILERS_PENDING_FAULT.swap(0, Ordering::AcqRel) == 2
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_request_body_trailers_pending_fault() -> bool {
     HTTP3_REQUEST_BODY_TRAILERS_PENDING_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
@@ -817,7 +827,7 @@ pub(crate) fn take_http3_request_body_trailers_pending_fault() -> bool {
 }
 
 /// Arms an out-of-range stream ID at the next accepted HTTP/3 server stream.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_invalid_stream_id_fault() -> bool {
     HTTP3_INVALID_STREAM_ID_FAULT
@@ -826,27 +836,27 @@ pub fn arm_http3_invalid_stream_id_fault() -> bool {
 }
 
 /// Finishes the coverage-only invalid stream ID fault.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_invalid_stream_id_fault() -> bool {
     HTTP3_INVALID_STREAM_ID_FAULT.swap(0, Ordering::AcqRel) == 3
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_invalid_stream_id_fault() -> bool {
     HTTP3_INVALID_STREAM_ID_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn observe_http3_invalid_stream_id_fault() {
     let _ =
         HTTP3_INVALID_STREAM_ID_FAULT.compare_exchange(2, 3, Ordering::AcqRel, Ordering::Acquire);
 }
 
 /// Arms a coverage-only error when finishing the next HTTP/3 response.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_response_finish_fault() -> bool {
     HTTP3_RESPONSE_FINISH_FAULT
@@ -855,13 +865,13 @@ pub fn arm_http3_response_finish_fault() -> bool {
 }
 
 /// Finishes the coverage-only HTTP/3 response finish fault.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_response_finish_fault() -> bool {
     HTTP3_RESPONSE_FINISH_FAULT.swap(0, Ordering::AcqRel) == 2
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_response_finish_fault() -> bool {
     HTTP3_RESPONSE_FINISH_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
@@ -869,7 +879,7 @@ pub(crate) fn take_http3_response_finish_fault() -> bool {
 }
 
 /// Arms a coverage-only reset immediately before finishing the observer fallback response.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn arm_http3_response_fallback_finish_fault() -> bool {
     HTTP3_RESPONSE_FALLBACK_FINISH_FAULT
@@ -878,20 +888,20 @@ pub fn arm_http3_response_fallback_finish_fault() -> bool {
 }
 
 /// Finishes the coverage-only observer fallback response fault.
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 #[doc(hidden)]
 pub fn finish_http3_response_fallback_finish_fault() -> bool {
     HTTP3_RESPONSE_FALLBACK_FINISH_FAULT.swap(0, Ordering::AcqRel) == 2
 }
 
-#[cfg(coverage)]
+#[cfg(all(coverage, feature = "http3"))]
 pub(crate) fn take_http3_response_fallback_finish_fault() -> bool {
     HTTP3_RESPONSE_FALLBACK_FINISH_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
 }
 
-/// Arms the coverage-only TCP listener accept fault.
+/// Arms the coverage-only TCP or Unix listener accept fault.
 ///
 /// This hook is compiled only for instrumented coverage builds and is absent
 /// from normal library builds.
@@ -903,7 +913,7 @@ pub fn arm_listener_accept_fault() -> bool {
         .is_ok()
 }
 
-/// Finishes the coverage-only TCP listener accept fault.
+/// Finishes the coverage-only listener accept fault.
 ///
 /// Returns whether the armed fault reached the public server error path. This
 /// hook is compiled only for instrumented coverage builds.
@@ -995,7 +1005,12 @@ fn take_graceful_shutdown_deadline_overflow_fault() -> bool {
         .is_ok()
 }
 
-pub use http3::{serve_http3, Http3RequestBody};
+#[cfg(feature = "http3")]
+pub use http3::{Http3RequestBody, h3, h3_quinn, serve_http3};
+pub use websocket::{
+    WebSocketCloseCode, WebSocketCloseFrame, WebSocketError, WebSocketMessage, WebSocketSession,
+    WebSocketUpgrade, WebSocketUpgradeError,
+};
 #[cfg(coverage)]
 #[doc(hidden)]
 pub use websocket::{
@@ -1003,10 +1018,6 @@ pub use websocket::{
     arm_derived_accept_key_header_value_fault, finish_close_reply_flush_cancellation_fault,
     finish_close_reply_flush_fault, finish_derived_accept_key_header_value_fault,
     wait_for_close_reply_flush_cancellation_fault,
-};
-pub use websocket::{
-    WebSocketCloseCode, WebSocketCloseFrame, WebSocketError, WebSocketMessage, WebSocketSession,
-    WebSocketUpgrade, WebSocketUpgradeError,
 };
 
 /// An observer for errors handled by the Rust server boundary.
@@ -1164,6 +1175,11 @@ pub struct ServerConfig {
     /// `None` leaves the connection open until the peer or server closes it.
     /// This setting does not affect HTTP/2 or HTTP/3 connections.
     pub http1_keep_alive_timeout: Option<Duration>,
+    /// Maximum HTTP/1 connection read buffer in bytes.
+    ///
+    /// `None` retains the server's default limit. Values smaller than the
+    /// Hyper HTTP/1 parser minimum are rejected before serving starts.
+    pub http1_max_buffer_size: Option<usize>,
     /// Whether TCP connections accept HTTP/2, including prior-knowledge h2c.
     /// TLS callers must configure their acceptor's ALPN list consistently.
     pub http2_enabled: bool,
@@ -1210,6 +1226,7 @@ impl fmt::Debug for ServerConfig {
             )
             .field("graceful_shutdown_timeout", &self.graceful_shutdown_timeout)
             .field("http1_keep_alive_timeout", &self.http1_keep_alive_timeout)
+            .field("http1_max_buffer_size", &self.http1_max_buffer_size)
             .field("http2_enabled", &self.http2_enabled)
             .field(
                 "application_startup_timeout",
@@ -1816,6 +1833,7 @@ impl Default for ServerConfig {
             default_headers: Vec::new(),
             graceful_shutdown_timeout: Some(Duration::from_secs(30)),
             http1_keep_alive_timeout: None,
+            http1_max_buffer_size: None,
             http2_enabled: true,
             application_startup_timeout: Duration::from_secs(30),
             application_shutdown_timeout: Duration::from_secs(30),
@@ -1859,6 +1877,8 @@ pub enum ServeError {
     ConnectionAdmissionClosed(tokio::sync::AcquireError),
     /// The graceful-shutdown deadline could not be represented by the runtime clock.
     InvalidGracefulShutdownTimeout,
+    /// The configured HTTP/1 read buffer is smaller than Hyper's minimum.
+    InvalidHttp1MaxBufferSize,
     /// A lifecycle timeout could not be represented by the runtime clock.
     InvalidApplicationLifecycleTimeout,
     /// An application lifecycle hook returned its typed error.
@@ -1907,6 +1927,9 @@ impl fmt::Display for ServeError {
             Self::InvalidGracefulShutdownTimeout => {
                 formatter.write_str("graceful shutdown timeout exceeds the runtime clock range")
             }
+            Self::InvalidHttp1MaxBufferSize => {
+                formatter.write_str("HTTP/1 max buffer size must be at least 8192 bytes")
+            }
             Self::InvalidApplicationLifecycleTimeout => {
                 formatter.write_str("application lifecycle timeout exceeds the runtime clock range")
             }
@@ -1941,7 +1964,7 @@ impl fmt::Display for ServeError {
                 formatter,
                 "server stopped with {server}; {application} also failed",
             ),
-            Self::Accept(error) => write!(formatter, "could not accept a TCP connection: {error}"),
+            Self::Accept(error) => write!(formatter, "could not accept a connection: {error}"),
             Self::GracefulShutdownTimedOut => {
                 formatter.write_str("active connections exceeded the graceful-shutdown deadline")
             }
@@ -1960,6 +1983,7 @@ impl Error for ServeError {
             | Self::InvalidConnectionLimit
             | Self::ConnectionLimitTooLarge
             | Self::InvalidGracefulShutdownTimeout
+            | Self::InvalidHttp1MaxBufferSize
             | Self::InvalidApplicationLifecycleTimeout
             | Self::ApplicationLifecyclePanicked { .. }
             | Self::ApplicationLifecycleTimedOut { .. }
@@ -1990,6 +2014,12 @@ fn validate_server_config(config: &ServerConfig) -> Result<(), ServeError> {
     }
     if config.max_connections > Semaphore::MAX_PERMITS {
         return Err(ServeError::ConnectionLimitTooLarge);
+    }
+    if config
+        .http1_max_buffer_size
+        .is_some_and(|size| size < 8 * 1024)
+    {
+        return Err(ServeError::InvalidHttp1MaxBufferSize);
     }
     let now = Instant::now();
     if config
@@ -2230,9 +2260,8 @@ where
     let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
     if listeners.len() == 1 {
         let mut listeners = listeners;
-        let Some((listener, service)) = listeners.pop() else {
-            return Err(ServeError::EmptyListenerSet);
-        };
+        // The empty case was rejected above and this branch requires one item.
+        let (listener, service) = listeners.remove(0);
         let serving_config = config.clone();
         return run_with_application_lifecycle(config, async move {
             let admission = tcp_listener_admission(&serving_config);
@@ -2352,9 +2381,8 @@ where
     let shutdown: BoxedShutdownFuture<'_> = Box::pin(shutdown);
     if listeners.len() == 1 {
         let mut listeners = listeners;
-        let Some((listener, service)) = listeners.pop() else {
-            return Err(ServeError::EmptyListenerSet);
-        };
+        // The empty case was rejected above and this branch requires one item.
+        let (listener, service) = listeners.remove(0);
         let serving_config = config.clone();
         return run_with_application_lifecycle(config, async move {
             let admission = tcp_listener_admission(&serving_config);
@@ -2500,6 +2528,7 @@ where
         .limit_concurrency
         .map(|limit| Arc::new(RequestConcurrency::new(limit)));
     let default_headers = Arc::new(config.default_headers.clone());
+    let http1_max_buffer_size = config.http1_max_buffer_size;
     #[cfg(coverage)]
     if take_listener_admission_closed_fault() {
         connection_slots.close();
@@ -2569,6 +2598,7 @@ where
                                     service_error_policy,
                                     date_header,
                                     http1_keep_alive_timeout,
+                                    http1_max_buffer_size,
                                     http2_enabled,
                                     request_concurrency: request_concurrency.clone(),
                                     default_headers: Arc::clone(&default_headers),
@@ -2602,6 +2632,7 @@ where
                                 service_error_policy,
                                 date_header,
                                 http1_keep_alive_timeout,
+                                http1_max_buffer_size,
                                 http2_enabled,
                                 request_concurrency,
                                 default_headers,
@@ -2692,6 +2723,7 @@ async fn next_unix_listener_event(
 ) -> Result<UnixListenerEvent, ServeError> {
     loop {
         let slot = tokio::select! {
+            biased;
             _ = shutdown.as_mut() => return Ok(UnixListenerEvent::Shutdown),
             joined = connections.join_next(), if !connections.is_empty() => {
                 joined.into_iter().for_each(observe_connection);
@@ -2704,11 +2736,18 @@ async fn next_unix_listener_event(
 
         loop {
             tokio::select! {
+                biased;
                 _ = shutdown.as_mut() => return Ok(UnixListenerEvent::Shutdown),
                 joined = connections.join_next(), if !connections.is_empty() => {
                     joined.into_iter().for_each(observe_connection);
                 }
-                accepted = listener.accept() => {
+                accepted = async {
+                    #[cfg(coverage)]
+                    if take_listener_accept_fault() {
+                        return Err(io::Error::other("injected listener accept failure"));
+                    }
+                    listener.accept().await
+                } => {
                     let (stream, _peer) = accepted.map_err(ServeError::Accept)?;
                     return Ok(UnixListenerEvent::Accepted { stream, slot });
                 }
@@ -2828,6 +2867,7 @@ where
     let connection_slots = Arc::clone(&admission.connection_slots);
     let request_concurrency = admission.request_concurrency.clone();
     let default_headers = Arc::clone(&admission.default_headers);
+    let http1_max_buffer_size = config.http1_max_buffer_size;
     #[cfg(coverage)]
     if take_listener_admission_closed_fault() {
         connection_slots.close();
@@ -2922,6 +2962,7 @@ where
                                     service_error_policy,
                                     date_header,
                                     http1_keep_alive_timeout,
+                                    http1_max_buffer_size,
                                     http2_enabled,
                                     request_concurrency: request_concurrency.clone(),
                                     default_headers: Arc::clone(&default_headers),
@@ -2955,6 +2996,7 @@ where
                                 service_error_policy,
                                 date_header,
                                 http1_keep_alive_timeout,
+                                http1_max_buffer_size,
                                 http2_enabled,
                                 request_concurrency,
                                 default_headers,
@@ -3075,7 +3117,7 @@ async fn next_listener_event(
                 accepted = async {
                     #[cfg(coverage)]
                     if take_listener_accept_fault() {
-                        return Err(io::Error::other("injected TCP listener accept failure"));
+                        return Err(io::Error::other("injected listener accept failure"));
                     }
                     listener.accept().await
                 } => {
@@ -3135,6 +3177,7 @@ struct ConnectionOptions<'a> {
     service_error_policy: ServiceErrorPolicy,
     date_header: bool,
     http1_keep_alive_timeout: Option<Duration>,
+    http1_max_buffer_size: Option<usize>,
     http2_enabled: bool,
     request_concurrency: Option<Arc<RequestConcurrency>>,
     default_headers: Arc<Vec<(HeaderName, HeaderValue)>>,
@@ -3246,6 +3289,7 @@ where
         service_error_policy,
         date_header,
         http1_keep_alive_timeout,
+        http1_max_buffer_size,
         http2_enabled,
         request_concurrency,
         default_headers,
@@ -3278,7 +3322,7 @@ where
         .http1()
         .auto_date_header(date_header)
         .half_close(true)
-        .max_buf_size(64 * 1024);
+        .max_buf_size(http1_max_buffer_size.unwrap_or(64 * 1024));
     if http2_enabled {
         builder.http2().auto_date_header(date_header);
     }
@@ -3801,8 +3845,10 @@ where
                     self.peer_addr,
                     &request,
                 );
-                let close_connection =
-                    matches!(request.version(), Version::HTTP_10 | Version::HTTP_11);
+                let close_connection = match request.version() {
+                    Version::HTTP_10 | Version::HTTP_11 => true,
+                    _ => false,
+                };
                 return FutureEither::Right(ready(Ok(service_unavailable(
                     self.default_headers.as_slice(),
                     close_connection,

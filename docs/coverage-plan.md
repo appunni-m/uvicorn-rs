@@ -348,7 +348,7 @@ separate gates.
 
 The JSON below is a historical schema sketch, not the current report schema.
 The current runner, evidence checker, and Coverage-MCP receipt attacher use
-`uvicorn-rs-coverage/unified@9`. Region attribution uses the exact source span
+`uvicorn-rs-coverage/unified@10`. Region attribution uses the exact source span
 across Rust monomorphizations, so an input that executes a region in one
 generic instantiation is not reported as a gap merely because another
 instantiation is LLVM's maximum-summary representative. Physical line totals
@@ -360,6 +360,15 @@ file and aggregate summaries remain in `coverage.source_files[].llvm_summary`
 and `coverage.llvm_summary`; raw LLVM function-instantiation counters remain
 in the function rows. `coverage.line_validation` records the per-file counts
 used to confirm the line/span match.
+
+The v10 source inventory also classifies vendored Rust separately from
+first-party production and coverage-support code. Every vendored HTTP/3 source
+is explicitly listed and included in the source hash, so adding or changing a
+vendor file changes the report identity. These upstream `h3` and `h3-quinn`
+files are not included in the first-party region/line denominator; the report
+makes no 100% per-branch coverage claim for their internals. The authored
+HTTP/3 server and Quinn transport integration remain in the executable
+first-party denominator.
 
 The per-case index includes every selected input, including CLI and Python API
 probes that exit before loading the Rust extension. Those rows use
@@ -453,7 +462,7 @@ merging stale hit maps.
 
 The current implementation keeps one manifest-backed case model but uses
 protocol-specific input objects and adapters. It declares `manifest@2`,
-`input@9`, `result@4`, and one unified coverage extension. Cases identify a
+`input@34`, `result@5`, and one unified coverage extension. Cases identify a
 profile and operation; fault-contract rows also name an allow-listed fault and
 an observable invariant. The current runner does not yet implement a generic
 multi-action `scenario`/`stimulus` envelope. The following JSON is a future
@@ -854,7 +863,7 @@ uncovered region and its exact case attribution.
 
 ## Maintenance after completion
 
-1. Keep the `input@9`/`result@4` workflow contract and one authoritative report. The generic `scenario`/`stimulus` envelope above remains a proposal, not another implemented test family.
+1. Keep the `input@34`/`result@5` workflow contract and one authoritative report. The generic `scenario`/`stimulus` envelope above remains a proposal, not another implemented test family.
 2. Add ordinary live parity inputs for reachable behavior; add a single named fault contract for deterministic internal failures. Retain meaningful regression cases even when they add no regions.
 3. Use Coverage-MCP incremental comparisons only with fixed Rust source, instrumentation, and region inventory. A changed build requires a new full measurement.
 4. After source or input changes, pass every attribution case and three complete repeats. Require zero missing regions/lines, exact profile-union attribution, and attached matching MCP receipts.

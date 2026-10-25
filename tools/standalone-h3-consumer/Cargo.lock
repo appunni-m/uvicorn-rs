@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "asgi-lifespan-protocol-rs"
+version = "0.2.0"
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -446,10 +450,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "native-app-contract"
-version = "0.1.0"
-
-[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -843,6 +843,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "libc",
  "pin-project-lite",
  "tokio",
@@ -921,50 +922,27 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "uvicorn-rs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
+ "asgi-lifespan-protocol-rs",
  "bytes",
  "data-encoding",
+ "fastrand",
+ "futures",
  "futures-util",
  "http",
  "http-body",
  "http-body-util",
  "hyper",
  "hyper-util",
- "native-app-contract",
  "pin-project-lite",
  "quinn",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
+ "tokio-util",
  "tower-service",
  "tracing",
- "uvicorn-rs-h3",
- "uvicorn-rs-h3-quinn",
-]
-
-[[package]]
-name = "uvicorn-rs-h3"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "fastrand",
- "futures-util",
- "http",
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
-name = "uvicorn-rs-h3-quinn"
-version = "0.1.0"
-dependencies = [
- "bytes",
- "futures",
- "quinn",
- "tokio",
- "tokio-util",
- "uvicorn-rs-h3",
 ]
 
 [[package]]
@@ -974,7 +952,6 @@ dependencies = [
  "bytes",
  "http",
  "http-body-util",
- "quinn",
  "rustls",
  "rustls-pemfile",
  "tokio",

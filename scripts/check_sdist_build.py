@@ -24,6 +24,8 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--consumer-python", type=Path,
                         help="Python used for the isolated wheel consumer (defaults to the build interpreter)")
+    parser.add_argument("--cargo-target-dir", type=Path,
+                        help="Reuse a Cargo target cache; the default builds in a fresh directory under output-dir")
     args = parser.parse_args()
     archive_path = args.sdist.resolve()
     output = args.output_dir.resolve()
@@ -44,7 +46,8 @@ def main() -> None:
     required = ["Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "README.md", "src/lib.rs",
                 "python/uvicorn_rs/__init__.py", "python/uvicorn_rs/server.py",
                 "python/uvicorn_rs/cli.py", "python/uvicorn_rs/_bridge.py", "python/uvicorn_rs/__main__.py",
-                "python/uvicorn/__init__.py", "python/uvicorn/main.py",
+                "python/uvicorn/__init__.py", "python/uvicorn/main.py", "python/uvicorn/_types.py",
+                "python/uvicorn/importer.py",
                 "python/uvicorn/__main__.py", "python/uvicorn/py.typed",
                 "LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT"]
     for name in required:
@@ -61,7 +64,11 @@ def main() -> None:
                 or key in {"LLVM_PROFILE_FILE", "RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS"}):
             environment.pop(key)
     environment.update(RUSTC_WRAPPER="", RUSTC_WORKSPACE_WRAPPER="",
-                       CARGO_TARGET_DIR=str(output / "cargo-target"))
+                       CARGO_TARGET_DIR=str(
+                           args.cargo_target_dir.resolve()
+                           if args.cargo_target_dir is not None
+                           else output / "cargo-target"
+                       ))
     wheels = output / "wheels"
     command = ["maturin", "build", "--release", "--locked", "--interpreter", sys.executable,
                "--out", str(wheels)]

@@ -1,0 +1,26 @@
+[package]
+name = "asgi-lifespan-protocol-rs"
+version = "0.2.1"
+edition = "2024"
+rust-version = "1.85"
+license = "BSD-3-Clause OR MIT"
+description = "Runtime-neutral contracts for Rust-native web applications"
+repository = "https://github.com/appunni-m/uvicorn-rs"
+documentation = "https://docs.rs/asgi-lifespan-protocol-rs"
+readme = "README.md"
+
+[lib]
+name = "asgi_lifespan_protocol_rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -2 }
+correctness = { level = "deny", priority = -1 }
+panic = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+print_stderr = "deny"
+print_stdout = "deny"

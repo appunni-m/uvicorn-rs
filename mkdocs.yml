@@ -71,6 +71,7 @@ nav:
           - Native service contract: adr/0003-rust-native-service-contract.md
           - Uvicorn public compatibility contract: adr/0005-uvicorn-public-compatibility-contract.md
           - WebSocket lifecycle contract: adr/0004-native-websocket-lifecycle-contract.md
+          - Single native server crate: adr/0006-single-native-server-crate.md
       - Compatibility evidence:
           - Input-only parity matrix: parity.md
           - Case inventory: asgi-case-inventory.md

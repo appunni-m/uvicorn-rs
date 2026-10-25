@@ -76,7 +76,7 @@ def main():
         ]
         if unexpected_requirements:
             raise ValueError(
-                "uvicorn-rs-py declares framework runtime dependencies: "
+                "uvicorn-rs declares framework runtime dependencies: "
                 + ", ".join(unexpected_requirements)
             )
     if upstream_identity["uvicorn_rs_bundle_has_framework"] is not False:

@@ -63,33 +63,198 @@ across different field names insignificant while preserving value order for a
 repeated name. HTTP/1.1 and HTTP/3 observations keep their declared comparison
 fields.
 
-The manifest currently defines 29 CLI process cases across `python -m uvicorn`
+The current input index defines 53 CLI process cases across `python -m uvicorn`
 and the installed `uvicorn` command. They cover help and version output,
-selected argument errors and environment precedence, current-directory
-console-script import resolution, app loading with
-`--app-dir` and `--factory`, environment-file loading, HTTP and WebSocket
-selector acceptance, `--ws-max-queue` with the SansIO selector,
-unknown-option rejection, and limited single-process worker settings. A local
-source-correct aggregate passed all 29 CLI process cases against isolated
-Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Two focused cases verify
+selected argument errors including an invalid inherited descriptor, environment
+precedence, current-directory console-script import resolution, app loading
+with `--app-dir` and `--factory`,
+environment-file loading, custom JSON log-config diagnostics, explicit default
+runtime options, HTTP and WebSocket selector acceptance, `--ws-max-queue` with
+the SansIO selector, unknown-option rejection, limited single-process worker
+settings, and startup with `--ws-ping-interval 0` followed by
+`--limit-max-requests 0`. A historical 38-case snapshot had passing evidence
+for source digest
+`b34d2cb7e272fa3cb293b6012aaef66f4035da47df0a81cb1677e689feda2a67` and
+`cli.json` SHA-256
+`bf57f4d6a9ed84490237593e9d719d278ab4eb8bebd751c6d74df23f3ca41b46`: 36
+passed in grouped run `294c58a8ab11427995865dc68926cc18` (report
+`target/kata-progress/cli-remainder-20261024.json`, SHA-256
+`2f0f4f1fd90cd35f13a724025af3fe29b0d1dbf16fc3450fc169d1e912e6d86e`), and
+two other cases reused receipts for those same historical digests. The current
+`cli.json` is schema `uvicorn-rs-parity/input@36` (54 cases; SHA-256
+`d3325c338f3b8153e1757bd5bb4cb22d5660207415f8495136d005e18da3423a`). This
+expanded inventory has not had a full grouped run. The new
+`cli.explicit-host-over-invalid-env-starts-server` case passed 1/1 against
+Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 (run
+`e65639c480814a329520c7a59a4acd81`; receipt
+`target/kata-progress/9kbx-explicit-host-env-20261025.json`, SHA-256
+`8ba7b4b25abca16131e99716fff8aaf98cf0f3d36d0d80d7d770f684136bb3fc`; dirty
+source SHA-256
+`99fb03f9b2c03933eab493f3f5f1cdd2596a2f2058f1ef6ed9c408da06390113`). It
+verifies explicit `--host 127.0.0.1` takes precedence over malformed
+`UVICORN_HOST` through listener startup. This is one selected case, not a full
+CLI profile. The new
+`cli.uds-startup-and-clean-exit` case passed 1/1 against Uvicorn 0.54.0 on
+macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1 (run
+`71ea692cb1b2432c8235cfe18a2d2ed2`, receipt
+`target/kata-progress/9kbx-uds-20261025.json`, SHA-256
+`473734af0cffd2d63223c69a2481e12767ab03b8138ed9d7902e54cc65611eea`, source
+digest `99fb03f9b2c03933eab493f3f5f1cdd2596a2f2058f1ef6ed9c408da06390113`,
+CLI input SHA-256
+`9bfd77f7f332c584df2441e9c7024cb29a44c8cc42960da29c705a7a8b1a690c`). Both
+processes bound the Unix socket, exited 0, and removed the socket; this checks
+startup and cleanup without making a request. Separate Python API cases check
+UDS requests through the module CLI and `Config`/`Server`. The new
+`cli.invalid-file-descriptor-is-rejected` case passed 1/1 against Uvicorn 0.54.0
+on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1 (run
+`b252f4db99c042d7a941e6ffb84c7c48`, receipt
+`target/kata-progress/9kbx-invalid-fd-20261025.json`, SHA-256
+`3b062594123016d030b947fc4120fc49c0e005d49e6852ce6687760483f166eb`, source
+digest `99fb03f9b2c03933eab493f3f5f1cdd2596a2f2058f1ef6ed9c408da06390113`,
+native extension SHA-256
+`1666dd0b1e40d046f9ee6d4f011ae940cec6dfa007efcc7f0c7d81c68d865d34`). Both
+processes exited 1 with the same bad-file-descriptor outcome. That receipt is
+bound to the previous 52-case input digest `897b6b4a4842e8e051c5bcf8985eac33159af4ac183c861038197971f62c691e`; it does not bind the new current matrix. Both are selected dirty-source results and do not establish clean release readiness. The case
+`cli.invalid-limit-concurrency-env-is-rejected` passed 1/1 against Uvicorn
+0.54.0 on macOS ARM64 / CPython 3.12.13 (run
+`2c2fee8ea606497f9fbad3dfc8c0005b`, receipt
+`target/kata-progress/cli-invalid-limit-concurrency-env-20261024.json`, SHA-256
+`df3c7746ab0bee5c66accf3a9f42a9a86977ada25aadd0d0879a3c33d1d1804c`, source
+digest `b34d2cb7e272fa3cb293b6012aaef66f4035da47df0a81cb1677e689feda2a67`,
+then-current `cli.json` SHA-256
+`331eaa5f201437d6b3903afa2ccdf96fd94a9953720bcae0ca5a30cd9b6ed9a4`). This
+local run used Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. The
+`cli.invalid-log-level-is-rejected` case passed 1/1 against Uvicorn 0.54.0
+on macOS ARM64 / CPython 3.12.13 (run
+`6da47f92baba4d709168f3ed5b953587`, receipt
+`target/kata-progress/9kbx-invalid-log-level-20261024.json`, SHA-256
+`30a0ecc9ca03f1179b36c801ca6830b12634006e8b29b463fdc80d5080940ae3`, source
+digest `52149ee124968d443ccc0372c7c5212199b7feac628abab6cfabf7b21f135dac`,
+CLI input SHA-256
+`4017f07a931c806ca11870a6d4aa329053b90d19fb7a6a3eb3c6b4f59f53b981`). Both
+servers exited 2 and emitted identical validation diagnostics. Four additional
+inputs cover invalid `--interface`, `--lifespan`, `--http`, and `--ws` values.
+The interface and lifespan cases passed in run
+`3fa98416e997426388c6cc53ee0cb364`; its HTTP and WebSocket cases exposed an
+early native-runtime guard mismatch. After routing unknown protocol selectors
+through Uvicorn-style import resolution, only those two affected cases were
+rerun; both passed in run `d7efd11bd64d4caabba720ff8e180202` (receipt
+`target/kata-progress/9kbx-invalid-selectors-20261024-after-fix.json`,
+SHA-256 `183c6c72b874a5b31eb07ea1b76fe2838708f766a228916f1a9ff4d33541fb98`,
+source digest `5cfb5665aad28e09f3dd1e1bf1b4331b579c5aea9cd4936822a5e51d5bd97b1e`,
+CLI input SHA-256
+`f2db8bdafe0b296f6197780f7288da2739f3f37e38acef92f20a1672c2eec806`). No
+unchanged case was replayed. A new `cli.explicit-port-over-invalid-env-starts-server`
+input passes 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13:
+both CLI processes accept explicit `--port 0` despite malformed
+`UVICORN_PORT`, then exit 0 after `--limit-max-requests 0` triggers startup
+shutdown. Run `188a09864fa34689bd4d65008b9b9cff`; receipt
+`target/kata-progress/9kbx-explicit-port-over-invalid-env-starts-server-20261024.json`,
+SHA-256 `af93265d6d50c55d9a351295e7fa08127f7307f404b822f85b8db6938e909fbf`,
+runtime source digest
+`57ed2f030ad86d3088dde78277cfbef472aa1f04a72d544465a57e3ce4d35197`, native
+extension SHA-256
+`c0e18852813e9f3755466e6cc6a3bebbe2f67d74a73e9846736e617f9aef2d45`, and
+CLI input SHA-256
+`34b092559c9919b6dd3f0e0ce6702f47f372477f5e3832a39e5af1d2acb9550b`. The
+new `cli.env-file-value-reaches-application-factory` case removes the process
+sentinel and confirms that the value from the configured env file reaches the
+factory. It passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython
+3.12.13; both processes exited 3 with identical output showing
+`loaded-from-env-file` (run `6c2e18e456194eceb8aa897b2d354f3d`, receipt
+`target/kata-progress/9kbx-envfile-value-reaches-application-factory-20261024.json`,
+SHA-256 `94fee7a0e75237444da4f71e9e9f0c2d5a2087dbd0ef3ee9530168b3fab77035`,
+source digest `57ed2f030ad86d3088dde78277cfbef472aa1f04a72d544465a57e3ce4d35197`,
+native extension SHA-256
+`c0e18852813e9f3755466e6cc6a3bebbe2f67d74a73e9846736e617f9aef2d45`). The
+existing `cli.explicit-default-runtime-options-are-accepted` case now also passes
+`--http h11 --h11-max-incomplete-event-size 131072`. This modified case alone
+passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13;
+both module processes exited 0 with empty output (run
+`232ddb70e3bf4ac8a55196fe6a11116c`, receipt
+`target/kata-progress/9kbx-h11-cli-selected-20261025.json`, SHA-256
+`5399dab777be38eefd8d161722912b6ab5cbfc13b29e9771645f1163bef39855`, source
+digest `4f2e7f1cf45e9aa3f7a08514abe0f47c074e40f865cccc6d21734eeb7d0f6dd3`,
+native extension SHA-256
+`389d2349f493a628f5b336b89ca80ee450c27a87f5ca9be44bf1dd1afbe36ff3`, CLI
+input SHA-256
+`38f88cd81cbf74b0f54358f3c29355b3c22734ea7165e95eb13d8e6775d4e12e`). This
+confirms CLI acceptance of the configured h11 size; the separate HTTP/1 case
+`http1.h11-max-incomplete-event-size-allows-expanded-header` checks its parser
+effect. The target was dirty at base revision
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`; this selected case is not clean
+release evidence. The new `cli.console-h11-and-tls-settings-start-server` case
+exercises the installed console entry point with the h11 size option, an
+encrypted PKCS#8 key, required client authentication and CA roots, and the
+selected TLS cipher suite. The modified case passed 1/1 against Uvicorn 0.54.0
+on macOS 15.7.7 ARM64 / CPython 3.12.13; both processes exited 0 with empty
+output (run `fa70ab489c4b49568303a0ee9b02ae9a`, receipt
+`target/kata-progress/9kbx-console-h11-client-auth-selected-20261025.json`,
+SHA-256 `781e03a4a9fcfc26d8b16aeb705d3e41063f051ffa43d49981a19cf6b139b79b`,
+source digest `4f2e7f1cf45e9aa3f7a08514abe0f47c074e40f865cccc6d21734eeb7d0f6dd3`,
+native extension SHA-256
+`389d2349f493a628f5b336b89ca80ee450c27a87f5ca9be44bf1dd1afbe36ff3`, CLI
+input SHA-256
+`214b141779bc5672e10cac893be047c18d8749999006bb1a3cbe34b8025709b2`). These
+selected cases are not clean release evidence. The
+input-only
+evidence covers listed cases only; it does not establish every CLI
+setting or full worker supervision. The zero-interval case checks option
+acceptance and startup shutdown; it does not open a WebSocket or verify ping
+suppression on an active session. Two focused cases verify
 two-worker module-CLI request and
 SIGINT shutdown behavior through explicit worker count and `WEB_CONCURRENCY`;
-this does not establish full multi-worker supervision. One separate Python API
-input starts `python -m uvicorn --reload`, edits a watched Python module,
+this does not establish full multi-worker supervision. A separate current-draft
+case, `python-api.module-cli-worker-crash-restarts`, forces one worker to exit;
+both implementations replace it, serve HTTP 200, and exit cleanly after SIGINT.
+It passed 1/1 on macOS 15.7.7 ARM64 / CPython 3.12.13 (run
+`1a1342f6938a4a329085587ea9acaf3b`; receipt
+`target/kata-progress/dhfq-worker-crash-current-20261025.json`, SHA-256
+`f353fd6441f5545614e5918affa24fe3777a22b88f8cf5e1873a30533e90a58d`; source
+SHA-256
+`99fb03f9b2c03933eab493f3f5f1cdd2596a2f2058f1ef6ed9c408da06390113`). This
+single path does not establish restart policy or supervisor-signal parity. One
+current-draft case, `python-api.module-cli-two-workers-restart-on-sighup`, sends
+SIGHUP to the two-worker parent, and compares the restart events. It passed 1/1
+against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 (run
+`38f51c8865a5457d836acee3f32820ea`; receipt
+`target/kata-progress/dhfq-sighup-restart-current-20261025.json`, SHA-256
+`64bfdd665259d95b19060b814ba825de7f24ffb133003288480d4bf8bd2095b1`; source
+SHA-256
+`99fb03f9b2c03933eab493f3f5f1cdd2596a2f2058f1ef6ed9c408da06390113`). Both
+servers returned HTTP 200, exited 0, and did not time out. This is one
+POSIX-specific signal path, not full worker or supervisor parity. One separate
+Python API input starts `python -m uvicorn --reload`, edits a watched Python module,
 verifies the replacement body, and shuts down with SIGINT; it passes locally
 against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13 with `--workers 2` set.
 It passes both without `watchfiles` (candidate `StatReload` fallback, oracle
 watchfiles) and with `watchfiles==1.3.0` installed for both. It also compares
 Uvicorn's warning that reload ignores the worker count. Reload filters and
-other platforms remain unverified. Inherited-listener support beyond the focused IPv4 cases below,
-IPv6, Windows, TLS, HTTP/2 or HTTP/3 over inherited sockets, execution of every
+other platforms remain unverified. Inherited-listener support beyond the focused
+IPv4 and IPv6 module-CLI cases below, Windows, TLS, HTTP/2 or HTTP/3 over
+inherited sockets, execution of every
 listed option, and full CLI and Python API parity remain unverified. Five
+Direct `Config.load()` behavior is covered by two new invalid protocol
+import-string cases plus the existing HTTP/2-with-auto-backend case; all three
+passed in one selected Python API run against Uvicorn 0.54.0 on macOS ARM64 /
+CPython 3.12.13 (run `d6d68906ebe64c8e997ee9bc4b3b40b3`, receipt
+`target/kata-progress/gjpr-config-load-invalid-protocols-20261024.json`,
+SHA-256 `1ac9057188a4a673a69a83bd87e8c14a4ffdca5a5e752b1c806ef00acc629b8c`,
+source digest `e7d3f0ca2c6d82c31eb675e3090d6ba8a16797a498689077c881b427b6683ecf`,
+Python API input SHA-256
+`b45b07718600e3d228d7b663cdbf5c4721de632ce73cfec02e3189a4a8d536f8`). The
+full Python API profile was not rerun.
+Five
 inherited TCP-listener inputs pass individually against Uvicorn 0.54.0 on
 macOS ARM64 / CPython 3.12.13: module
 CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and
 `Server.run(sockets=[...])` with one and two listeners. The two-listener case
 requires successful HTTP responses from both sockets and graceful SIGINT exit.
-IPv6, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets remain
+Two additional module-CLI cases pass for inherited IPv6 listeners with one and
+two workers on macOS ARM64 / CPython 3.12.13 (run
+`bc282b37f69a46a38e8353a94197e2a7`, report SHA-256
+`f55d9d1f8227452b0513446e2b96241fc63277c1f359ca761fb570a0ea94ca0f`). Other
+IPv6 API paths, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets remain
 unverified.
 
 This follows the fixture-matrix approach used by `image-slash-star`/Pillow-RS,
@@ -290,7 +455,7 @@ Run the normal oracle set with the default runner, then run attribution and
 three complete matrix repeats with the unified coverage runner:
 
 ```sh
-uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs-py
+uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs
 UV_PROJECT_ENVIRONMENT=target/parity-oracle uv sync --python 3.12 --locked \
   --only-group benchmark --only-group uvicorn-oracle --no-install-project
 uv run --group benchmark python scripts/run_parity.py \
@@ -386,7 +551,7 @@ support matrix.
 The parity runner starts the reference server and `uvicorn-rs` as separate
 processes, imports the same ASGI app in each, sends the same input workflows,
 and compares their live public observations. It does not contain golden
-responses. The Uvicorn oracle needs its own environment because `uvicorn-rs-py`
+responses. The Uvicorn oracle needs its own environment because `uvicorn-rs`
 installs the same `uvicorn` import namespace as upstream Uvicorn. The runner
 checks that the isolated interpreter imports both the pinned distribution and
 module at version 0.54.0 before starting a case. This is a version-pinned,
@@ -399,7 +564,7 @@ Build the local extension, sync candidate dependencies, and create the
 Uvicorn-only oracle environment before running the live parity input set:
 
 ```sh
-uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs-py
+uv sync --python 3.12 --locked --group benchmark --reinstall-package uvicorn-rs
 UV_PROJECT_ENVIRONMENT=target/parity-oracle uv sync --python 3.12 --locked \
   --only-group benchmark --only-group uvicorn-oracle --no-install-project
 uv run --group benchmark python scripts/run_parity.py \
@@ -415,6 +580,19 @@ uv run --python 3.12 --group benchmark python scripts/build_coverage_extension.p
 uv run --python 3.12 --group benchmark python scripts/run_parity.py \
   --oracle-python target/parity-oracle/bin/python --fault-contracts
 ```
+
+For development, select one or more profile groups with repeatable
+`--profile` options, or select individual cases with repeatable `--case-id`
+options. For example, `--profile http3` runs only the HTTP/3 parity inputs;
+`--case-id http3.response-stream-order --case-id http3.scope-query-header-and-body`
+runs only those two cases. Combining the options narrows the case IDs to the
+selected profiles. These filters do not change the full acceptance matrix.
+
+Choose the smallest relevant selection after a change: named cases for an
+isolated behavior and the containing profile when a shared path affects
+multiple cases. Reuse a receipt when the source, case manifest, runner, and
+environment are unchanged. Run the complete matrix when an acceptance gate
+needs full current-source evidence.
 
 Fault contracts use the same workflow schema, server process, observations,
 and coverage report. Their result records `verification: fault-contract`,
@@ -467,21 +645,40 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 
 | Profile group | Cases | Reference | Why |
 |---|---:|---|---|
-| HTTP/1.1, including TLS | 112 | Uvicorn 0.54.0, uvloop 0.23.0; httptools 0.8.0 by default, h11 0.16.0 for one case | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, concurrency-limit rejection, trusted, disabled, excluded-peer, wildcard, IPv4-CIDR, malformed/empty forwarded-client, all-trusted-chain, duplicate forwarding-field, and unsupported-proto proxy cases, WebSocket-upgrade validation, repeated CLI response headers with disabled Server/Date defaults, and one h11-selected POST scope/body comparison. |
-| WebSocket, including TLS | 52 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, shutdown, configured message limits, and proxy-derived `ws`/`wss` scope schemes. |
+| HTTP/1.1, including TLS | 121 | Uvicorn 0.54.0, uvloop 0.23.0; httptools 0.8.0 by default, h11 0.16.0 for one case | Same protocol and measured fast Uvicorn stack; includes HTTP parsing, ASGI events, streaming, disconnect, concurrency-limit rejection, TLS 1.2 cipher selection, trusted, disabled, excluded-peer, wildcard, IPv4-CIDR, malformed/empty forwarded-client, all-trusted-chain, duplicate forwarding-field, and unsupported-proto proxy cases, WebSocket-upgrade validation, repeated CLI response headers with disabled Server/Date defaults, and one h11-selected POST scope/body comparison. |
+| WebSocket, including TLS | 56 | Uvicorn 0.54.0, uvloop 0.23.0, websockets 17.1 | Same HTTP/1.1 upgrade path, message flow, rejection, disconnect, shutdown, configured message limits, and proxy-derived `ws`/`wss` scope schemes. |
 | Startup configuration | 9 | Uvicorn 0.54.0 and the public `uvicorn_rs.Server` API | Same invalid-host and TLS startup configurations on both implementations. |
 | Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
 | HTTP/2 | 27 | Uvicorn 0.54.0, zttp 0.0.34, TLS ALPN, explicit ASGI mode | Experimental Uvicorn HTTP/2 is selected with `--http zttp --http2`. A local aggregate run passed all 27 cases with the source adapter. Hosted release evidence and the HTTP/2 category benchmark remain pending. Prior Hypercorn receipts are historical. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
-| CLI and environment | 29 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, and process outcomes, including `--http h11` acceptance. |
-| Python API | 69 | Uvicorn 0.54.0 | Compares imports/signatures, selected `run` and `Server` lifecycle behavior, configuration error ordering, selected Python event-loop behavior, headers, environment files and `FORWARDED_ALLOW_IPS` precedence, ASGI2 and focused WSGI selection, trusted proxy headers, non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks, successful application-factory serving through the programmatic API and module CLI, WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path, concurrency-limit responses, warning-level filtering, `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it, access-log suppression, both CLI color switches, forced ANSI colors through `uvicorn.run()`, custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI, and inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one or two listeners. WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other WSGI behavior, log levels and precedence combinations, and exact traceback frame formatting remain unverified. |
+| CLI and environment | 49 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, process outcomes, `--http h11` acceptance, and zero WebSocket ping interval startup acceptance. |
+| Python API | 113 | Uvicorn 0.54.0 | Compares documented imports/signatures, including logging formatters, deprecated `ServerState` paths and the `Server.run()`/`Server.serve()` methods; selected `run` and `Server` lifecycle behavior; configuration error ordering; selected Python event-loop behavior; headers, environment files and `FORWARDED_ALLOW_IPS` precedence; ASGI2 and focused WSGI selection; trusted proxy headers; non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks; HTTPS over a Unix-domain socket; successful application-factory serving through the programmatic API and module CLI; WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path; concurrency-limit responses; warning-level filtering; `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it; access-log suppression; both CLI color switches; forced ANSI colors through `uvicorn.run()`; custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI; and inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one or two listeners. Password-protected PKCS#8 TLS key loading is also compared through `Config`/`Server` and the module CLI using one fixture. WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. Other WSGI behavior, log levels and precedence combinations, and exact traceback frame formatting remain unverified. |
 
-These eight groups account for all 369 declared oracle-parity cases. The other
-291 cases are target-only fault/support contracts, for 660 total cases. Five
+These eight groups account for all 446 declared oracle-parity cases in the
+current `input@36` inventory. The other 317 ASGI cases are target-only
+fault/support contracts, and 232 native-core contract cases bring the current
+input inventory to 995 (763 ASGI and 232 native). Five
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
 runtime or support contract.
+
+## TLS 1.2 cipher selection
+
+`http1-tls.ssl-ciphers-restricts-negotiated-suite` configures both servers with
+`ssl_ciphers="ECDHE-RSA-AES256-GCM-SHA384"` and TLS 1.2, then observes the
+negotiated cipher through the client TLS socket. It passed 1/1 against Uvicorn
+0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. Both sides negotiated
+`ECDHE-RSA-AES256-GCM-SHA384`. Run ID
+`8507182448554fce8571e5bd18ea874c`; receipt
+`target/kata-progress/ssl-ciphers-negotiated-suite-verified-20261025.json`,
+SHA-256 `b3f481298b7214662c27250490bbd0f005c0d1e21179efe20fac45dc186b26b2`;
+dirty-source digest
+`2d8ba10bd17fdc1cf48b35fa9ee26b42355c78b136662612873ff70c7fd97434`;
+TLS input SHA-256
+`caaf7b25cd81c45b54a1f4b90bde153c0df7f1bbb47732e063091895404cc145`.
+This is one local compatibility case, not full TLS or CLI compatibility
+evidence.
 
 `http1.limit-concurrency-returns-503-at-connection-limit` starts both servers
 with `--limit-concurrency 1` and sends the same bodyless GET. The selected
@@ -518,6 +715,9 @@ exception class/message. Normalization removes ANSI escapes, replaces process
 IDs and ephemeral ports, and omits traceback source paths and line numbers;
 the raw logs remain available for review. The focused `Config`/`Server.run()`
 and `uvicorn.run()` cases cover default startup, access, and shutdown logging.
+Python API calls also retain warnings emitted during each input-selected call
+as category and message. The current selected import/signature case compares
+the deprecation warning from `uvicorn.main.ServerState` with Uvicorn 0.54.0.
 The `python-api.run-applies-numeric-warning-log-level` case emits DEBUG through
 CRITICAL application log events and verifies that numeric level 30 keeps
 WARNING, ERROR, and CRITICAL while suppressing DEBUG and INFO. The module CLI
@@ -543,10 +743,16 @@ in the package's `[standard]` extra for users. The separate
 loads the configured file from `UVICORN_LOG_CONFIG`.
 
 The active manifest and input schema are `uvicorn-rs-parity/manifest@2` and
-`uvicorn-rs-parity/input@29`; live artifacts use
-`uvicorn-rs-parity/result@4`. This result revision records the Rust source digest
-alongside the imported native digest; earlier archived reports retain their
-original schema and identities.
+`uvicorn-rs-parity/input@36`; live artifacts use
+`uvicorn-rs-parity/result@5`. Each result records a per-file inventory of the
+Rust server and adapter sources, Python `uvicorn` and `uvicorn_rs` modules,
+workspace manifests and lockfiles, plus the imported native extension digest.
+The harness receipt also fingerprints the runner, source-identity helper,
+fixture app, and Python API probe. Earlier archived reports retain their
+original schema and identities. Input schema @35 added TLS cipher selection
+and negotiated-cipher observation. Input schema @36 adds a Python API TLS-key
+password input; `scripts/migrate_parity_input_v35_to_v36.py` advances the
+maintained inputs without changing their existing cases.
 
 See the [ASGI behavior inventory](asgi-case-inventory.md) for the declared
 surface mapped to concrete public case IDs and explicit gaps.
@@ -557,12 +763,14 @@ contain CLI invocation mode, arguments, environment overrides, working
 directory and timeout; network inputs contain request methods, paths, headers,
 body bytes, WebSocket messages, disconnect workflows, and shutdown workflows.
 They do not contain expected responses or previously captured server output.
-The 29 indexed CLI cases compare module and installed-console invocations,
+The current 54 indexed CLI cases compare module and installed-console invocations,
 selected parsing and environment-precedence behavior, current-directory app
-import resolution, app loading and environment files, protocol-selector
-(including `--http h11`) and SansIO
-WebSocket queue-option acceptance, unknown-option rejection, and single-process
-worker settings.
+import resolution, app loading, environment files, JSON log-config diagnostics,
+explicit default runtime options, protocol-selector (including `--http h11`)
+and SansIO WebSocket size/queue-option acceptance, unknown-option rejection,
+limited single-process worker settings, `--limit-max-requests 0` startup
+shutdown, and `--ws-ping-interval 0` startup acceptance. The zero-interval case
+does not open a WebSocket or verify active-session Ping suppression.
 Selector cases check argument handling;
 they do not prove that every option is executed or establish full multi-worker
 supervision. One separate reload input changes a watched Python module and
@@ -570,11 +778,25 @@ verifies the new response plus graceful SIGINT exit on local macOS ARM64 /
 CPython 3.12.13 with `--workers 2`, both without `watchfiles` and with
 `watchfiles==1.3.0`. It also compares the warning that reload ignores the
 worker count. The candidate's `StatReload` fallback and `WatchFilesReload`
-paths both pass; reload filters remain unverified. Five
+paths both pass. The selected
+`python-api.module-cli-reload-respects-include-exclude-globs` case also passes
+1/1 with `WatchFilesReload`: changing `ignored.txt` leaves the app response
+unchanged, while changing the included `included.txt` reloads the app and
+updates the response. Receipt `target/kata-progress/dhfq-reload-filters-20261024.json`
+(run ID `35c7bac2545c47968ee1aaa715806fef`, SHA-256
+`135b3c57f486b99815027e3ca7bbfe8b336c331e303d489e305f3fefa647f064`)
+binds this case to dirty-source SHA-256
+`e7d3f0ca2c6d82c31eb675e3090d6ba8a16797a498689077c881b427b6683ecf` on macOS
+ARM64 / CPython 3.12.13. It does not qualify other filter patterns or
+platforms. Five
 inherited-listener cases verify IPv4 TCP listeners on macOS through the module
 CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with
-`Server.run()`, and `Server.run(sockets=[...])` with one and two sockets.
-IPv6, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets remain
+`Server.run()`, and `Server.run(sockets=[...])` with one and two sockets. Two
+additional module-CLI cases verify inherited IPv6 listeners with one and two
+workers on macOS ARM64 / CPython 3.12.13 (run
+`bc282b37f69a46a38e8353a94197e2a7`, report SHA-256
+`f55d9d1f8227452b0513446e2b96241fc63277c1f359ca761fb570a0ea94ca0f`). Other
+IPv6 API paths, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets remain
 unverified. Focused Python API inputs cover plain HTTP/1.1 over UDS
 through the module CLI and `Config`/`Server`; they do not establish UDS behavior
 over other protocols or TLS. The fixture app is
@@ -586,16 +808,17 @@ contract. The profile split keeps protocol-specific stimulus easy to review;
 the runner also checks the indexed-file set against the files on disk.
 
 The `http.response-headers` operation records ordered wire fields but compares
-duplicate values in order within each header name. The Rust `http::HeaderMap`
-representation and current HTTP serializers do not retain interleaving between
-different header names. The focused live result shows that H1/H2 target wire
-order differs from Uvicorn, while same-name value order matches. RFC 9110 §5.3
-states that order across different field names is not significant to HTTP
-semantics; the ASGI HTTP 2.5 response-start contract is stricter and requires
-preserving the application order. The current behavior is therefore an
-explicit ASGI response-order limitation, not an HTTP semantic mismatch. H3's
-client observation passes through `http::HeaderMap` and does not prove raw wire
-order. See [RFC 9110 §5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3),
+duplicate values in order within each header name. The separate
+`http.response-headers-ordered` operation compares the complete observed field
+sequence. Two focused H1 inputs now pass that strict operation using the local
+Hyper `HeaderOrder` extension: one with custom headers and disabled Server/Date
+defaults, and one with the defaults enabled. These are separate, source-bound
+dirty-draft receipts, not a full H1 response-header matrix. Other H1 cases
+still use the normalized operation; the focused H2 observation still differs
+from Uvicorn, and H3's client observation passes through `http::HeaderMap` and
+does not prove raw wire order. RFC 9110 §5.3 states that order across different field names is not
+significant to HTTP semantics; the ASGI HTTP 2.5 response-start contract is
+stricter and requires preserving the application order. See [RFC 9110 §5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3),
 the [ASGI HTTP specification](https://asgi.readthedocs.io/en/latest/specs/www.html),
 and the [support matrix](support-matrix.md#supported-behaviors). The per-run
 receipt is a local ignored artifact.

@@ -1,0 +1,61 @@
+{
+  "schema": "uvicorn-rs-parity/input@36",
+  "cases": [
+    {
+      "case_id": "websocket.websockets-text-and-binary-round-trip",
+      "profile": "websocket-websockets",
+      "operation": "websocket.message-exchange",
+      "covers": [
+        "websocket.message-exchange"
+      ],
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [
+          "other",
+          "parity"
+        ],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "rust-python-boundary"
+          },
+          {
+            "kind": "binary_base64",
+            "value": "AAEC/3BhcnR5"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "websocket.websockets-bounded-queue-drains-burst",
+      "profile": "websocket-websockets",
+      "operation": "websocket.message-exchange-and-close",
+      "covers": [
+        "websocket.message-exchange-and-close"
+      ],
+      "server_options": {
+        "ws_max_queue": 1
+      },
+      "websocket": {
+        "path": "/ws-queue-delayed-reader",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "queued-one"
+          },
+          {
+            "kind": "binary_base64",
+            "value": "AAEC/3BhcnR5"
+          },
+          {
+            "kind": "text",
+            "value": "queued-three"
+          }
+        ],
+        "send_only": true,
+        "expect_close": true
+      }
+    }
+  ]
+}

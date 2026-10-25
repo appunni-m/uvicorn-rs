@@ -34,6 +34,10 @@
           "version": "17.1"
         },
         {
+          "id": "wsproto",
+          "version": "1.3.2"
+        },
+        {
           "id": "zttp",
           "version": "0.0.34"
         }
@@ -194,6 +198,26 @@
       ]
     },
     {
+      "id": "websocket-websockets",
+      "oracle": "uvicorn",
+      "protocol": "websocket",
+      "oracle_config": [
+        "uvloop",
+        "websockets 17.1 selected with --ws websockets",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
+      "id": "websocket-wsproto",
+      "oracle": "uvicorn",
+      "protocol": "websocket",
+      "oracle_config": [
+        "uvloop",
+        "wsproto 1.3.2 selected with --ws wsproto",
+        "interface asgi3 for the synchronous callable returning an awaitable"
+      ]
+    },
+    {
       "id": "startup-partial-tls-api",
       "oracle": "uvicorn",
       "protocol": "http/1.1 + lifespan",
@@ -281,6 +305,56 @@
         "uvicorn.Server public API",
         "uvicorn-rs.Server public API",
         "certificate and valid private key do not match"
+      ]
+    },
+    {
+      "id": "startup-encrypted-private-key-wrong-password",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "encrypted PKCS#8 private key supplied with a wrong password"
+      ]
+    },
+    {
+      "id": "startup-encrypted-private-key-invalid-utf8",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "non-UTF-8 private-key bytes with a key password"
+      ]
+    },
+    {
+      "id": "startup-encrypted-private-key-malformed-pem",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "malformed private-key PEM with a key password"
+      ]
+    },
+    {
+      "id": "startup-encrypted-private-key-wrong-label",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "private-key PEM with an unsupported label and a key password"
+      ]
+    },
+    {
+      "id": "startup-encrypted-private-key-invalid-der",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "encrypted private-key PEM with malformed DER and a key password"
       ]
     },
     {
@@ -805,7 +879,7 @@
       "oracle_config": [
         "uvloop",
         "httptools",
-        "target-only injected server.listener.accept-error and server.listener.local-addr-error fault contracts"
+        "target-only injected TCP listener accept, local-address, address-lookup, socket-creation, reuse-address, and listen fault contracts"
       ]
     },
     {
@@ -862,6 +936,36 @@
       ]
     },
     {
+      "id": "tls.client-auth-required",
+      "kind": "protocol_operation",
+      "observe": [
+        "client_certificate_rejected"
+      ],
+      "required_observations": {
+        "client_certificate_rejected": true
+      }
+    },
+    {
+      "id": "tls.protocol-version",
+      "kind": "protocol_operation",
+      "observe": [
+        "negotiated_tls_version"
+      ],
+      "required_observations": {
+        "negotiated_tls_version": "TLSv1.2"
+      }
+    },
+    {
+      "id": "tls.negotiated-cipher",
+      "kind": "protocol_operation",
+      "observe": [
+        "negotiated_tls_cipher"
+      ],
+      "required_observations": {
+        "negotiated_tls_cipher": "ECDHE-RSA-AES256-GCM-SHA384"
+      }
+    },
+    {
       "id": "http.response-headers",
       "kind": "protocol_operation",
       "observe": [
@@ -876,6 +980,28 @@
       "compare": [
         "status",
         "content_type",
+        "response_header_values_by_name",
+        "server_header_values",
+        "date_header_present",
+        "body_bytes"
+      ]
+    },
+    {
+      "id": "http.response-headers-ordered",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "ordered_response_headers",
+        "response_header_values_by_name",
+        "server_header_values",
+        "date_header_present",
+        "body_bytes"
+      ],
+      "compare": [
+        "status",
+        "content_type",
+        "ordered_response_headers",
         "response_header_values_by_name",
         "server_header_values",
         "date_header_present",
@@ -1154,6 +1280,16 @@
       ]
     },
     {
+      "id": "websocket.message-exchange-and-close",
+      "kind": "protocol_operation",
+      "observe": [
+        "subprotocol",
+        "ordered_messages",
+        "close_code",
+        "close_reason"
+      ]
+    },
+    {
       "id": "websocket.scope-and-messages",
       "kind": "protocol_operation",
       "observe": [
@@ -1268,6 +1404,7 @@
       "observe": [
         "handshake_status",
         "handshake_accept_valid",
+        "subprotocol",
         "frame_sent",
         "disconnect_event",
         "disconnect_code",
@@ -2053,7 +2190,8 @@
         "shutdown_signal_sent",
         "process_exit_code",
         "process_timed_out",
-        "server_log_events"
+        "server_log_events",
+        "worker_replacement_observed"
       ],
       "compare": [
         "exit_code",
@@ -2066,12 +2204,60 @@
         "shutdown_signal_sent",
         "process_exit_code",
         "process_timed_out",
-        "server_log_events"
+        "server_log_events",
+        "worker_replacement_observed"
       ],
       "required_observations": {
         "response_received": true,
         "response_status": 200,
         "shutdown_signal_sent": true,
+        "process_timed_out": false
+      }
+    },
+    {
+      "id": "python.api.run-http-bind-conflict",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "response_received",
+        "process_exit_code",
+        "process_timed_out",
+        "bind_error_logged"
+      ],
+      "compare": [
+        "exit_code",
+        "response_received",
+        "process_exit_code",
+        "process_timed_out",
+        "bind_error_logged"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "response_received": false,
+        "process_exit_code": 3,
+        "process_timed_out": false,
+        "bind_error_logged": true
+      }
+    },
+    {
+      "id": "python.api.run-http-uds-bind-conflict",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "response_received",
+        "process_exit_code",
+        "process_timed_out"
+      ],
+      "compare": [
+        "exit_code",
+        "response_received",
+        "process_exit_code",
+        "process_timed_out"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "response_received": false,
+        "process_exit_code": 1,
         "process_timed_out": false
       }
     },
@@ -2108,6 +2294,45 @@
         "process_exit_code": 0,
         "process_timed_out": false,
         "workers_ignored_warning": true
+      }
+    },
+    {
+      "id": "python.api.run-http-reload-filters",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "first_response_body_base64",
+        "second_response_body_base64",
+        "reload_observed",
+        "excluded_change_reloaded",
+        "included_change_reloaded",
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "process_stdout_base64",
+        "process_stderr_base64"
+      ],
+      "compare": [
+        "exit_code",
+        "first_response_body_base64",
+        "second_response_body_base64",
+        "reload_observed",
+        "excluded_change_reloaded",
+        "included_change_reloaded",
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "first_response_body_base64": "YmVmb3JlLWluY2x1ZGVkOmJlZm9yZS1leGNsdWRlZA==",
+        "second_response_body_base64": "YWZ0ZXItaW5jbHVkZWQ6YWZ0ZXItZXhjbHVkZWQ=",
+        "reload_observed": true,
+        "excluded_change_reloaded": false,
+        "included_change_reloaded": true,
+        "shutdown_signal_sent": true,
+        "process_exit_code": 0,
+        "process_timed_out": false
       }
     },
     {
@@ -2210,6 +2435,7 @@
         "handshake_status",
         "close_code",
         "message_received",
+        "scope_observation",
         "process_exit_code"
       ],
       "compare": [
@@ -2219,17 +2445,240 @@
         "handshake_status",
         "close_code",
         "message_received",
+        "scope_observation",
         "process_exit_code"
       ],
       "required_observations": {
         "handshake_status": 101,
-        "close_code": 1009,
+        "process_exit_code": 0
+      }
+    },
+    {
+      "id": "python.api.run-websocket-keepalive-no-timeout",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "process_exit_code": 0
+      }
+    },
+    {
+      "id": "python.api.run-websocket-keepalive-unbounded-timeout",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "process_exit_code": 0
+      }
+    },
+    {
+      "id": "python.api.run-websocket-keepalive-infinite-interval",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "process_exit_code": 0
+      }
+    },
+    {
+      "id": "python.api.run-websocket-keepalive-nan-interval",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "process_exit_code": 0
+      }
+    },
+    {
+      "id": "python.api.run-websocket-keepalive-nan-timeout",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "process_exit_code": 0
+      }
+    },
+    {
+      "id": "python.api.run-websocket-keepalive-disabled",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "process_exit_code": 0
+      }
+    },
+    {
+      "id": "python.api.run-websocket-keepalive-negative-timeout",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "handshake_status",
+        "close_code",
+        "message_received",
+        "scope_observation",
+        "process_exit_code"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1011,
         "message_received": false,
         "process_exit_code": 0
       }
     },
     {
       "id": "python.api.server-readiness",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ],
+      "compare": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64"
+      ]
+    },
+    {
+      "id": "python.api.server-callback-notify",
       "kind": "command_operation",
       "observe": [
         "exit_code",
@@ -2286,6 +2735,68 @@
       }
     },
     {
+      "id": "python.api.server-lifespan-auto-fallback",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "server_started_before_shutdown",
+        "serve_task_finished_before_shutdown",
+        "serve_raised",
+        "serve_timed_out",
+        "server_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stderr_base64",
+        "server_started_before_shutdown",
+        "serve_task_finished_before_shutdown",
+        "serve_raised",
+        "serve_timed_out",
+        "server_exit_code"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "server_started_before_shutdown": true,
+        "serve_task_finished_before_shutdown": false,
+        "serve_raised": false,
+        "serve_timed_out": true,
+        "server_exit_code": null
+      }
+    },
+    {
+      "id": "python.api.server-lifespan-early-return",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "server_started_before_shutdown",
+        "serve_task_finished_before_shutdown",
+        "serve_raised",
+        "serve_timed_out",
+        "server_exit_code"
+      ],
+      "compare": [
+        "exit_code",
+        "stderr_base64",
+        "server_started_before_shutdown",
+        "serve_task_finished_before_shutdown",
+        "serve_raised",
+        "serve_timed_out",
+        "server_exit_code"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "server_started_before_shutdown": true,
+        "serve_task_finished_before_shutdown": false,
+        "serve_raised": false,
+        "serve_timed_out": true,
+        "server_exit_code": null
+      }
+    },
+    {
       "id": "python.api.module-cli-lifespan-startup",
       "kind": "command_operation",
       "observe": [
@@ -2321,6 +2832,8 @@
     "inputs/http3.json",
     "inputs/websocket.json",
     "inputs/websocket-tls.json",
+    "inputs/websocket-websockets.json",
+    "inputs/websocket-wsproto.json",
     "inputs/startup-partial-tls-api.json",
     "inputs/startup-missing-certificate.json",
     "inputs/startup-invalid-host.json",
@@ -2330,6 +2843,11 @@
     "inputs/startup-empty-private-key.json",
     "inputs/startup-invalid-private-key-pem.json",
     "inputs/startup-mismatched-private-key.json",
+    "inputs/startup-encrypted-private-key-wrong-password.json",
+    "inputs/startup-encrypted-private-key-invalid-utf8.json",
+    "inputs/startup-encrypted-private-key-malformed-pem.json",
+    "inputs/startup-encrypted-private-key-wrong-label.json",
+    "inputs/startup-encrypted-private-key-invalid-der.json",
     "inputs/lifecycle.json",
     "inputs/lifespan-fault-shutdown-cancel.json",
     "inputs/lifecycle-server-api.json",
@@ -2386,7 +2904,7 @@
     "inputs/lifespan-state-copy-rehash.json",
     "inputs/lifecycle-owned-loop-eager.json"
   ],
-  "result_schema": "uvicorn-rs-parity/result@4",
+  "result_schema": "uvicorn-rs-parity/result@5",
   "normalization": {
     "http_headers": "Observe only the application content-type header. Date and server-identification headers are deliberately outside this parity slice.",
     "body": "Compare response bytes exactly; byte lengths or hashes do not replace byte comparison.",

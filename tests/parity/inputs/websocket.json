@@ -1,6 +1,22 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@36",
   "cases": [
+    {
+      "case_id": "websocket.none-selector-dispatches-upgrade-as-http",
+      "profile": "websocket",
+      "operation": "websocket.handshake-rejected",
+      "covers": [
+        "websocket.handshake-rejected"
+      ],
+      "server_options": {
+        "ws": "none"
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": []
+      }
+    },
     {
       "case_id": "websocket.client-drop-during-pending-upgrade",
       "profile": "websocket",
@@ -556,6 +572,25 @@
       }
     },
     {
+      "case_id": "websocket.duplicate-key-handshake-rejected",
+      "profile": "websocket",
+      "operation": "websocket.handshake-rejected",
+      "covers": [
+        "websocket.handshake-rejected"
+      ],
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Key",
+            "dGhlIHNhbXBsZSBub25jZQ=="
+          ]
+        ]
+      }
+    },
+    {
       "case_id": "websocket.accepted-default-close",
       "profile": "websocket",
       "operation": "websocket.server-close",
@@ -676,6 +711,23 @@
         "messages": [],
         "raw_frame_base64": "g4ABAgME",
         "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.unoffered-subprotocol-selection",
+      "profile": "websocket",
+      "operation": "websocket.raw-frame-disconnect",
+      "covers": [
+        "websocket.raw-frame-disconnect"
+      ],
+      "websocket": {
+        "path": "/ws-unoffered-subprotocol",
+        "subprotocols": [
+          "client-v1"
+        ],
+        "messages": [],
+        "raw_frame_base64": "g4ABAgME",
+        "followup_path": "/state"
       }
     },
     {
@@ -1867,6 +1919,25 @@
       "verification": "fault-contract",
       "fault": {
         "point": "websocket.native-upgrade.missing",
+        "contract": "websocket-handshake-error-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [],
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.native-upgrade-extension-removed-after-dispatch-returns-500",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.native-upgrade.extension-removed-after-dispatch",
         "contract": "websocket-handshake-error-followup-200"
       },
       "websocket": {

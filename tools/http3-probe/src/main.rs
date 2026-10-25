@@ -6,6 +6,7 @@ use std::sync::Arc;
 use bytes::Buf;
 use h3_quinn::quinn::{self, rustls};
 use http::Request;
+use uvicorn_rs::{h3, h3_quinn};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

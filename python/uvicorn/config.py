@@ -18,9 +18,22 @@ import ssl
 import sys
 from configparser import RawConfigParser
 from pathlib import Path
-from typing import Any, Awaitable, Callable, IO
+from typing import Any, Awaitable, Callable, IO, Literal
 
 from uvicorn._ansi import style
+from uvicorn._types import ASGIApplication
+from uvicorn.importer import ImportFromStringError, import_from_string
+
+
+HTTPProtocolType = Literal["auto", "h11", "httptools", "zttp"]
+WSProtocolType = Literal[
+    "auto", "none", "websockets", "websockets-sansio", "wsproto"
+]
+LifespanType = Literal["auto", "on", "off"]
+LoopFactoryType = Literal["none", "auto", "asyncio", "uvloop", "zuvloop"]
+InterfaceType = Literal["auto", "asgi3", "asgi2", "wsgi"]
+
+SSL_PROTOCOL_VERSION: int = ssl.PROTOCOL_TLS_SERVER
 
 
 LOGGING_CONFIG: dict[str, Any] = {
@@ -174,7 +187,7 @@ class Config:
     The constructor accepts the Uvicorn 0.54.0 public settings. The current
     native runtime implements the single-process ASGI 3 TCP and Unix-domain
     socket paths; unsupported
-    settings are rejected by :meth:`validate_native_runtime` before binding.
+    settings are rejected by :meth:`_validate_native_runtime` before binding.
     """
 
     def __init__(
@@ -223,7 +236,7 @@ class Config:
         ssl_keyfile: str | os.PathLike[str] | None = None,
         ssl_certfile: str | os.PathLike[str] | None = None,
         ssl_keyfile_password: str | None = None,
-        ssl_version: int = ssl.PROTOCOL_TLS_SERVER,
+        ssl_version: int = SSL_PROTOCOL_VERSION,
         ssl_cert_reqs: int = ssl.CERT_NONE,
         ssl_ca_certs: str | os.PathLike[str] | None = None,
         ssl_ciphers: str | None = None,
@@ -374,7 +387,7 @@ class Config:
                 + " (Press CTRL+C to quit)"
             )
         elif self.fd is not None:
-            sock = socket.fromfd(self.fd, socket.AF_UNIX, socket.SOCK_STREAM)
+            sock = socket.socket(fileno=os.dup(self.fd))
             message = "Uvicorn running on socket %s (Press CTRL+C to quit)"
             logger_args = (sock.getsockname(),)
             color_message = (
@@ -409,28 +422,51 @@ class Config:
         sock.set_inheritable(True)
         return sock
 
-    def get_loop_factory(self):
+    def get_loop_factory(self) -> Callable[[], asyncio.AbstractEventLoop] | None:
         """Return the event-loop factory selected by ``loop``."""
+        if self.loop == "none":
+            # Uvicorn's ``none`` selector leaves asyncio's default factory in
+            # control. ``asyncio.Runner(loop_factory=None)`` has that behavior.
+            return None
         if self.loop in {"auto", "uvloop"}:
             try:
                 import uvloop
             except ImportError:
                 if self.loop == "uvloop":
                     raise
-                return None
+                return self._asyncio_loop_factory()
             return uvloop.new_event_loop
         if self.loop == "asyncio":
-            return asyncio.new_event_loop
-        raise NotImplementedError(f"uvicorn-rs does not support loop={self.loop!r}")
+            return self._asyncio_loop_factory()
+        if self.loop == "zuvloop":
+            import zuvloop
 
-    def load_app(self):
-        """Import an application target, exiting with Uvicorn's load status."""
-        if not isinstance(self.app, str):
-            return self.app
-        from uvicorn_rs.cli import ImportFromStringError, _load_app
-
+            return zuvloop.new_event_loop
         try:
-            return _load_app(self.app)
+            return import_from_string(self.loop)
+        except ImportFromStringError as exc:
+            logging.getLogger("uvicorn.error").error(
+                "Error loading custom loop setup function. %s" % exc
+            )
+            raise SystemExit(STARTUP_FAILURE) from exc
+
+    def _asyncio_loop_factory(self):
+        if sys.platform == "win32" and not self.use_subprocess:
+            return asyncio.ProactorEventLoop
+        return asyncio.SelectorEventLoop
+
+    def setup_event_loop(self) -> None:
+        """Keep Uvicorn's retired method diagnostic for API compatibility."""
+        raise AttributeError(
+            "The `setup_event_loop` method was replaced by `get_loop_factory` in uvicorn 0.36.0.\n"
+            "None of those methods are supposed to be used directly. If you are doing it, please let me know here: "
+            "https://github.com/Kludex/uvicorn/discussions/2706. Thank you, and sorry for the inconvenience."
+        )
+
+    def load_app(self) -> Any:
+        """Import an application target, exiting with Uvicorn's load status."""
+        try:
+            return import_from_string(self.app)
         except ImportFromStringError as exc:
             logging.getLogger("uvicorn.error").error(
                 "Error loading ASGI app. %s" % exc
@@ -441,6 +477,7 @@ class Config:
         """Resolve the import target and optional no-argument app factory."""
         if self.loaded:
             raise AssertionError("Config is already loaded")
+        self._validate_native_runtime()
         _validate_http2_backend(self.http, self.http2)
         self.loaded_app = self.load_app()
         try:
@@ -477,12 +514,34 @@ class Config:
         )
         self.loaded = True
 
-    def validate_native_runtime(self) -> None:
+    def _validate_native_runtime(self) -> None:
         """Reject settings whose semantics are not implemented by this runtime."""
         unsupported = []
-        # The supported `auto` WebSocket path matches Uvicorn 0.54.0's default
-        # SansIO backend, which does not consume ws_max_queue. Leave that value
-        # on Config without treating it as a native queue-size control.
+        supported_ssl_versions = {ssl.PROTOCOL_TLS, ssl.PROTOCOL_TLS_SERVER}
+        tls12_protocol = getattr(ssl, "PROTOCOL_TLSv1_2", None)
+        if tls12_protocol is not None:
+            supported_ssl_versions.add(tls12_protocol)
+        # Uvicorn treats unknown HTTP and WebSocket selector strings as import
+        # paths. Resolve those before rejecting custom implementations so an
+        # invalid selector keeps the pinned CLI/API import diagnostic.
+        if isinstance(self.http, str) and self.http not in {
+            "auto",
+            "h11",
+            "httptools",
+            "zttp",
+        }:
+            import_from_string(self.http)
+        if isinstance(self.ws, str) and self.ws not in {
+            "auto",
+            "none",
+            "websockets",
+            "websockets-sansio",
+            "wsproto",
+        }:
+            import_from_string(self.ws)
+        # These Uvicorn selectors route to the Rust engine's native WebSocket
+        # implementation. Only the legacy websockets selector applies its
+        # configured receive queue; the other backends do not consume it.
         checks = (
             (self.uds is not None and os.name == "nt", "uds"),
             (self.fd is not None and os.name == "nt", "fd"),
@@ -490,10 +549,12 @@ class Config:
             # WEB_CONCURRENCY=0 reaches Config without the explicit-value
             # normalization and is still a single-process configuration.
             (self.workers not in (0, 1) and not self.should_reload, "workers"),
-            (self.loop not in {"auto", "asyncio", "uvloop"}, "loop"),
             (self.http not in {"auto", "h11", "httptools", "zttp"}, "http"),
-            (self.ws != "auto", "ws"),
-            (self.ws_per_message_deflate is not True, "ws_per_message_deflate"),
+            (
+                self.ws
+                not in {"auto", "none", "websockets", "websockets-sansio", "wsproto"},
+                "ws",
+            ),
             (self.lifespan not in {"auto", "on", "off"}, "lifespan"),
             (self.interface not in {"auto", "asgi2", "asgi3", "wsgi"}, "interface"),
             (
@@ -505,16 +566,18 @@ class Config:
                 ),
                 "log_level",
             ),
-            (self.timeout_notify != 30, "timeout_notify"),
-            (self.callback_notify is not None, "callback_notify"),
             (self.ssl_context_factory is not None, "ssl_context_factory"),
-            (self.ssl_keyfile_password is not None, "ssl_keyfile_password"),
-            (self.ssl_ca_certs is not None, "ssl_ca_certs"),
-            (self.ssl_ciphers is not None, "ssl_ciphers"),
-            (self.ssl_version != ssl.PROTOCOL_TLS_SERVER, "ssl_version"),
-            (self.ssl_cert_reqs != ssl.CERT_NONE, "ssl_cert_reqs"),
-            (self.h11_max_incomplete_event_size is not None, "h11_max_incomplete_event_size"),
+            (self.ssl_version not in supported_ssl_versions, "ssl_version"),
         )
+        if (
+            self.http == "h11"
+            and self.h11_max_incomplete_event_size is not None
+            and self.h11_max_incomplete_event_size < 8 * 1024
+        ):
+            raise ValueError(
+                "h11_max_incomplete_event_size must be at least 8192 bytes "
+                "for the native HTTP/1 parser"
+            )
         unsupported.extend(name for enabled, name in checks if enabled)
         if unsupported:
             names = ", ".join(unsupported)
@@ -523,6 +586,49 @@ class Config:
             )
 
     @property
+    def _native_tls_version(self) -> str:
+        """Map supported Python SSL protocol selectors to Rustls versions."""
+        if self.ssl_version == getattr(ssl, "PROTOCOL_TLSv1_2", None):
+            return "tls12"
+        return "default"
+
+    @property
+    def _native_tls_cipher_suites(self) -> list[int] | None:
+        """Resolve Uvicorn's cipher expression to TLS 1.2 suite identifiers."""
+        if self.ssl_certfile is None or self.ssl_ciphers is None:
+            return None
+
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.set_ciphers(self.ssl_ciphers)
+        return list(
+            dict.fromkeys(
+                cipher["id"] & 0xFFFF
+                for cipher in context.get_ciphers()
+                if cipher["protocol"] != "TLSv1.3"
+            )
+        )
+
+    @property
+    def asgi_version(self) -> Literal["2.0", "3.0"]:
+        """Return the ASGI version associated with the selected interface."""
+        mapping: dict[str, Literal["2.0", "3.0"]] = {
+            "asgi2": "2.0",
+            "asgi3": "3.0",
+            "wsgi": "3.0",
+        }
+        return mapping[self.interface]
+
+    @property
+    def is_ssl(self) -> bool:
+        """Whether the configuration enables TLS through any supported input."""
+        return bool(self.ssl_keyfile or self.ssl_certfile or self.ssl_context_factory)
+
+    @property
     def should_reload(self) -> bool:
         """Whether an import-string app is supervised by the reload process."""
         return isinstance(self.app, str) and self.reload
+
+    @property
+    def use_subprocess(self) -> bool:
+        """Whether this configuration starts a reload or worker subprocess."""
+        return bool(self.reload or self.workers > 1)

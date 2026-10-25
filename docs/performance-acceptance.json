@@ -3,7 +3,7 @@
   "decision": "scope_revised",
   "rationale": "The exact-commit normal-build FastAPI comparison on Linux x86-64 qualified five matched asyncio repetitions and four matched uvloop repetitions. Rust delivered 0.652x and 0.726x of Uvicorn throughput while using 1.96x and 1.75x server CPU per request. The broader three-system category evidence also shows repeated HTTP/1.1 and WebSocket regressions. The Python ASGI compatibility path therefore does not meet the original faster-than-Uvicorn objective. Retain compatibility and correctness gates for Python ASGI; target the performance claim at the Python-free Rust-native application path. The release verifier must still validate a complete exact-commit matrix before accepting a candidate.",
   "scope": {
-    "comparison": "stock FastAPI and Starlette under uvicorn-rs-py versus Uvicorn",
+    "comparison": "stock FastAPI and Starlette under the uvicorn-rs PyPI distribution versus Uvicorn",
     "category": "http1",
     "systems": [
       "linux-x86_64",
@@ -44,7 +44,7 @@
   "claims": [],
   "scope_revision": {
     "document": "docs/benchmark-status.md",
-    "statement": "Treat uvicorn-rs-py as the optional Python ASGI compatibility server, without a performance superiority claim over Uvicorn. Target server performance claims at Python-free Rust-native application composition; keep Python ASGI parity and benchmark results as compatibility and regression evidence.",
+    "statement": "Treat the uvicorn-rs PyPI distribution, implemented by the optional uvicorn-rs-py Cargo/PyO3 adapter, as the Python ASGI compatibility server without a performance superiority claim over Uvicorn. Target server performance claims at Python-free Rust-native application composition; keep Python ASGI parity and benchmark results as compatibility and regression evidence.",
     "rationale": "The normal-build validated-route run used a bodyless GET, so request-body copying cannot explain its measured regression. Instrumented stage data points to extra Python ASGI wall time and task scheduling but does not establish a causal function-level attribution. Further Python-boundary work should be justified by a correctness-preserving before/after measurement rather than the original general speed objective.",
     "measured_pairs": [
       {

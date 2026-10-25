@@ -3,6 +3,7 @@
 import array
 import asyncio
 import contextvars
+import os
 import socket
 import sys
 import time
@@ -22,10 +23,15 @@ def send_listener_fds(path, listeners):
     if not listeners:
         raise ValueError("at least one pre-bound TCP listener is required")
     for listener in listeners:
-        if listener.family not in (socket.AF_INET, socket.AF_INET6):
-            raise ValueError("only pre-bound IPv4 and IPv6 TCP listeners are supported")
-        if listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM:
-            raise ValueError("the inherited socket must be a TCP stream listener")
+        # Uvicorn wraps --fd listeners as AF_UNIX even when the descriptor is
+        # an IPv4 or IPv6 socket. Detect the underlying descriptor's family so
+        # worker mode validates the same TCP listener that single-worker mode
+        # passes to the native server.
+        with socket.socket(fileno=os.dup(listener.fileno())) as actual_listener:
+            if actual_listener.family not in (socket.AF_INET, socket.AF_INET6):
+                raise ValueError("only pre-bound IPv4 and IPv6 TCP listeners are supported")
+            if actual_listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM:
+                raise ValueError("the inherited socket must be a TCP stream listener")
     for listener in listeners:
         listener.setblocking(False)
     deadline = time.monotonic() + 5.0

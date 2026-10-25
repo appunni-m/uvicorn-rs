@@ -26,11 +26,12 @@ from typing import Any
 
 from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
+from parity_identity import runtime_source_digest, runtime_source_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests/parity/manifest.json"
-UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@9"
+UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@10"
 PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
     "crates/uvicorn-rs/src/lib.rs",
@@ -38,7 +39,7 @@ PRODUCTION_SOURCE_SET = (
     "crates/uvicorn-rs/src/http3/transport.rs",
     "crates/uvicorn-rs/src/websocket.rs",
     "crates/uvicorn-rs/src/peer_read.rs",
-    "crates/native-app-contract/src/lib.rs",
+    "crates/asgi-lifespan-protocol-rs/src/lib.rs",
 )
 EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
 NO_COUNTER_SOURCE_SET = (PRODUCTION_SOURCE_SET[-1],)
@@ -46,14 +47,77 @@ COVERAGE_SUPPORT_SOURCE_SET = (
     "crates/uvicorn-rs/src/coverage.rs",
     "crates/uvicorn-rs/src/http3/coverage.rs",
 )
+THIRD_PARTY_SOURCE_SET = (
+    "crates/uvicorn-rs/src/http3/h3/buf.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/config.rs",
+    "crates/uvicorn-rs/src/http3/h3/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/codes.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/connection_error_creators.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/internal_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/ext.rs",
+    "crates/uvicorn-rs/src/http3/h3/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/coding.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/headers.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/push.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/varint.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/block.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/decoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/dynamic.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/encoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/field.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/parse_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_int.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/bitwin.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/decode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/encode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/static_.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/tests.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/vas.rs",
+    "crates/uvicorn-rs/src/http3/h3/quic.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/request.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/shared_state.rs",
+    "crates/uvicorn-rs/src/http3/h3/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/session_id.rs",
+    "crates/uvicorn-rs/src/http3/h3_quinn.rs",
+)
 NATIVE_FAULT_CONTRACTS = {
     "http1.upgrade.receiver-closed": {
-        "operation": "native-http1-upgrade-session",
-        "scenario": "receiver-closed",
+        "contracts": [
+            {
+                "operation": "native-http1-upgrade-session",
+                "scenario": "receiver-closed",
+            },
+            {
+                "operation": "native-https-upgrade-session-error",
+                "scenario": "receiver-closed",
+            },
+        ],
     },
     "http1.peer-read.receiver-closed": {
         "operation": "native-http1-peer-read-receiver-closed",
         "scenario": "receiver-closed",
+    },
+    "http1.unix-peer-read.on-read-error": {
+        "operation": "native-http1-unix-peer-read-on-read-error",
+        "scenario": "on-read-error",
     },
     "http1.peer-read.failure-after-data": {
         "operation": "native-http1-peer-read-error-response-cancel",
@@ -140,8 +204,16 @@ NATIVE_FAULT_CONTRACTS = {
         "scenario": "deadline-overflow",
     },
     "server.listener.accept-error": {
-        "operation": "native-server-listener-accept-error",
-        "scenario": "accept-error",
+        "contracts": [
+            {
+                "operation": "native-server-listener-accept-error",
+                "scenario": "accept-error",
+            },
+            {
+                "operation": "native-tcp-multi-listener-accept-error",
+                "scenario": "multi-listener-accept-error",
+            },
+        ],
     },
     "server.listener.admission-closed": {
         "operation": "native-server-listener-admission-closed",
@@ -463,21 +535,38 @@ def validate_parity(
     require(run["inputs"] == [{"path": str(path.relative_to(ROOT)), "schema": input_schema, "sha256": sha256(path)}
                                for path in input_paths], "parity input identities differ from checkout")
     target = run["target"]
-    exact_keys(target, {"source_sha256", "cargo_lock_sha256", "revision", "dirty", "native_extension"}, "parity target")
+    exact_keys(target, {"source_sha256", "source_files", "cargo_lock_sha256", "revision", "dirty", "native_extension"}, "parity target")
     exact_keys(target["native_extension"], {"path", "sha256"}, "parity native")
-    require(target.get("source_sha256") == sha256(ROOT / "src/lib.rs"), "parity native source identity differs from checkout")
+    current_source_files = runtime_source_hashes(ROOT)
+    require(target.get("source_files") == current_source_files, "parity runtime source inventory differs from checkout")
+    require(target.get("source_sha256") == runtime_source_digest(current_source_files), "parity runtime source identity differs from checkout")
     require(target.get("cargo_lock_sha256") == sha256(ROOT / "Cargo.lock"), "parity Cargo.lock identity differs")
     require(target.get("revision") == (_current_revision or git_commit()), "parity commit differs from checkout")
     require(type(target.get("dirty")) is bool, "parity has no explicit source-state flag")
     harness = run["harness"]
-    exact_keys(harness, {"runner", "runner_sha256", "fixture_app", "fixture_app_sha256", "http3_client"}, "parity harness")
+    exact_keys(
+        harness,
+        {
+            "runner", "runner_sha256", "identity_helper", "fixture_app", "fixture_app_sha256",
+            "python_api_probe", "http3_client",
+        },
+        "parity harness",
+    )
+    exact_keys(harness["identity_helper"], {"path", "sha256"}, "parity source identity helper")
+    exact_keys(harness["python_api_probe"], {"path", "sha256"}, "Python API probe")
     if harness["http3_client"] is not None:
         exact_keys(harness["http3_client"], {"path", "sha256"}, "HTTP/3 client")
         valid_digest(harness["http3_client"]["sha256"], "HTTP/3 client")
     require(harness.get("runner") == "scripts/run_parity.py" and
             harness.get("runner_sha256") == sha256(ROOT / "scripts/run_parity.py"), "parity runner identity differs")
+    require(harness["identity_helper"].get("path") == "scripts/parity_identity.py" and
+            harness["identity_helper"].get("sha256") == sha256(ROOT / "scripts/parity_identity.py"),
+            "parity source identity helper differs")
     require(harness.get("fixture_app") == "tests/parity/app.py" and
             harness.get("fixture_app_sha256") == sha256(ROOT / "tests/parity/app.py"), "parity application identity differs")
+    require(harness["python_api_probe"].get("path") == "tests/parity/python_api_probe.py" and
+            harness["python_api_probe"].get("sha256") == sha256(ROOT / "tests/parity/python_api_probe.py"),
+            "parity Python API probe identity differs")
     exact_keys(run["environment"], {"python", "platform", "machine", "rustc", "dependencies"}, "parity environment")
     dependencies = run["environment"]["dependencies"]
     require(isinstance(dependencies, dict), "parity dependency identity is invalid")
@@ -747,6 +836,7 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
             and tuple(source_constant(coverage_runner, "EXECUTABLE_SOURCE_SET")) == EXECUTABLE_SOURCE_SET
             and tuple(source_constant(coverage_runner, "NO_COUNTER_SOURCE_SET")) == NO_COUNTER_SOURCE_SET
             and tuple(source_constant(coverage_runner, "COVERAGE_SUPPORT_SOURCE_SET")) == COVERAGE_SUPPORT_SOURCE_SET
+            and tuple(source_constant(coverage_runner, "THIRD_PARTY_SOURCE_SET")) == THIRD_PARTY_SOURCE_SET
             and tuple(source_constant(coverage_runner, "PYTHON_SOURCE_SET")) == PYTHON_SOURCE_SET,
             "coverage runner production-source classification differs from validator contract")
     selected: dict[str, str] = {}
@@ -759,10 +849,11 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
             selected[relative] = sha256(path)
     discovered = {
         str(item.relative_to(ROOT))
-        for directory in (ROOT / "src", ROOT / "crates/uvicorn-rs/src", ROOT / "crates/native-app-contract/src")
+        for directory in (ROOT / "src", ROOT / "crates/uvicorn-rs/src", ROOT / "crates/asgi-lifespan-protocol-rs/src")
         for item in directory.rglob("*.rs")
     }
-    require(discovered == set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET),
+    require(discovered == (set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET)
+                           | set(THIRD_PARTY_SOURCE_SET)),
             "Rust source inventory is incomplete or unclassified")
     python_sources = {
         str(item.relative_to(ROOT)) for item in (ROOT / "python/uvicorn_rs").rglob("*.py")
@@ -826,8 +917,13 @@ def validate_coverage(
             require(isinstance(fault, dict) and set(fault) == {"point"}
                     and isinstance(fault.get("point"), str)
                     and fault.get("point") in NATIVE_FAULT_CONTRACTS
-                    and case.get("operation") == NATIVE_FAULT_CONTRACTS[fault["point"]]["operation"]
-                    and case.get("scenario") == NATIVE_FAULT_CONTRACTS[fault["point"]]["scenario"],
+                    and any(
+                        case.get("operation") == contract["operation"]
+                        and case.get("scenario") == contract["scenario"]
+                        for contract in NATIVE_FAULT_CONTRACTS[fault["point"]].get(
+                            "contracts", [NATIVE_FAULT_CONTRACTS[fault["point"]]]
+                        )
+                    ),
                     f"invalid native fault contract: {case['id']}")
         else:
             require(fault is None, f"native target contract cannot declare a fault: {case['id']}")
@@ -927,11 +1023,13 @@ def validate_coverage(
 
     coverage = ext["coverage"]
     exact_keys(coverage, {"gate", "source_set", "executable_source_set", "coverage_support_source_set",
+                         "third_party_source_set",
                          "source_files", "llvm_normalization", "line_validation", "summary", "llvm_summary",
                          "regions", "uncovered_regions", "attribution", "coverage_mcp"}, "coverage")
     require(tuple(coverage.get("source_set", [])) == PRODUCTION_SOURCE_SET
             and tuple(coverage.get("executable_source_set", [])) == EXECUTABLE_SOURCE_SET
-            and tuple(coverage.get("coverage_support_source_set", [])) == COVERAGE_SUPPORT_SOURCE_SET,
+            and tuple(coverage.get("coverage_support_source_set", [])) == COVERAGE_SUPPORT_SOURCE_SET
+            and tuple(coverage.get("third_party_source_set", [])) == THIRD_PARTY_SOURCE_SET,
             "coverage source inventory differs from the declared production sources")
     source_rows = coverage.get("source_files")
     require(isinstance(source_rows, list) and len(source_rows) == len(PRODUCTION_SOURCE_SET),

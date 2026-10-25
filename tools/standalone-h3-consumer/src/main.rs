@@ -11,10 +11,10 @@ use std::{
 use bytes::Bytes;
 use http::{Request, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
-use quinn::crypto::rustls::QuicServerConfig;
-use rustls::{pki_types::CertificateDer, ServerConfig};
+use rustls::{ServerConfig, pki_types::CertificateDer};
 use tower_service::Service;
-use uvicorn_rs::{serve_http3, Http3RequestBody, ServerConfig as UvicornConfig};
+use uvicorn_rs::{Http3RequestBody, ServerConfig as UvicornConfig, h3_quinn, serve_http3};
+use h3_quinn::quinn::{self, crypto::rustls::QuicServerConfig};
 
 type ResponseFuture =
     Pin<Box<dyn Future<Output = Result<Response<Full<Bytes>>, io::Error>> + Send>>;

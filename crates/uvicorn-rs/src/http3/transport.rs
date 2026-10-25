@@ -8,11 +8,12 @@ use std::io;
 use std::{
     collections::HashMap,
     future::Future,
-    pin::{pin, Pin},
+    pin::{Pin, pin},
     sync::{Arc, Mutex},
-    task::{ready, Context, Poll},
+    task::{Context, Poll, ready},
 };
 
+use super::{h3, h3_quinn};
 use bytes::{Buf, Bytes};
 use h3::{
     error::Code,

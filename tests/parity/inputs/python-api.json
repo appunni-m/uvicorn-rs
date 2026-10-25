@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@36",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -12,9 +12,18 @@
           "uvicorn.Config",
           "uvicorn.Server",
           "uvicorn.run",
+          "uvicorn.main",
           "uvicorn.config.Config",
           "uvicorn.server.Server",
-          "uvicorn.main.run"
+          "uvicorn.main.run",
+          "uvicorn.workers.UvicornWorker",
+          "uvicorn.workers.UvicornH11Worker",
+          "uvicorn.importer.ImportFromStringError",
+          "uvicorn.importer.import_from_string",
+          "uvicorn.logging.DefaultFormatter",
+          "uvicorn.logging.AccessFormatter",
+          "uvicorn.server.ServerState",
+          "uvicorn.main.ServerState"
         ],
         "signatures": [
           "uvicorn.Config",
@@ -22,7 +31,57 @@
           "uvicorn.run",
           "uvicorn.config.Config",
           "uvicorn.server.Server",
-          "uvicorn.main.run"
+          "uvicorn.main.run",
+          "uvicorn.workers.UvicornWorker",
+          "uvicorn.workers.UvicornH11Worker",
+          "uvicorn.importer.import_from_string",
+          "uvicorn.logging.DefaultFormatter",
+          "uvicorn.logging.AccessFormatter",
+          "uvicorn.server.ServerState",
+          "uvicorn.main.ServerState",
+          "uvicorn:Server.run",
+          "uvicorn:Server.serve",
+          "uvicorn:Config.get_loop_factory",
+          "uvicorn:Config.load_app",
+          "uvicorn:Config.setup_event_loop",
+          "uvicorn:Server.handle_exit"
+        ],
+        "calls": [
+          {
+            "target": "uvicorn.main.ServerState",
+            "arguments": [],
+            "keyword_arguments": {}
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "python-api.config-properties-and-retired-loop-hook",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Config"],
+        "signatures": ["uvicorn.Config"],
+        "config_probes": [
+          {
+            "app": "tests.parity.app:app",
+            "options": {"interface": "asgi2"},
+            "properties": ["asgi_version", "is_ssl"],
+            "methods": ["setup_event_loop"]
+          },
+          {
+            "app": "tests.parity.app:app",
+            "options": {"interface": "asgi3", "ssl_certfile": "cert.pem"},
+            "properties": ["asgi_version", "is_ssl"],
+            "methods": []
+          },
+          {
+            "app": "tests.parity.app:app",
+            "options": {"interface": "wsgi", "ssl_keyfile": "key.pem"},
+            "properties": ["asgi_version", "is_ssl"],
+            "methods": []
+          }
         ]
       }
     },
@@ -100,6 +159,46 @@
                 "arguments": [],
                 "keyword_arguments": {}
               }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "python-api.config-load-rejects-invalid-http-import-string",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Config"],
+        "signatures": ["uvicorn.Config"],
+        "calls": [
+          {
+            "target": "uvicorn.Config",
+            "arguments": ["tests.parity.app:app"],
+            "keyword_arguments": {"http": "invalid"},
+            "method_calls": [
+              {"method": "load", "arguments": [], "keyword_arguments": {}}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "python-api.config-load-rejects-invalid-websocket-import-string",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Config"],
+        "signatures": ["uvicorn.Config"],
+        "calls": [
+          {
+            "target": "uvicorn.Config",
+            "arguments": ["tests.parity.app:app"],
+            "keyword_arguments": {"ws": "invalid"},
+            "method_calls": [
+              {"method": "load", "arguments": [], "keyword_arguments": {}}
             ]
           }
         ]
@@ -440,6 +539,24 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-two-workers-stop-on-sigterm",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-two-workers-sigterm",
+          "shutdown_signal": "SIGTERM",
+          "timeout_seconds": 12,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "workers": 2
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-web-concurrency-two-workers-serve-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -455,6 +572,102 @@
           "root_path": "",
           "environment": {
             "WEB_CONCURRENCY": "2"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-explicit-workers-overrides-web-concurrency",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-explicit-workers-overrides-web-concurrency",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 15,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "workers": 2,
+          "environment": {
+            "WEB_CONCURRENCY": "3"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-worker-crash-restarts",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-worker-restart",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 20,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "workers": 2,
+          "environment": {
+            "ASGI_PARITY_WORKER_CRASH_ONCE": "1"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-worker-restarts-after-two-crashes",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-worker-restart",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 20,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "workers": 2,
+          "environment": {
+            "ASGI_PARITY_WORKER_CRASH_COUNT": "2"
+          },
+          "required_observations": {
+            "response_received": true,
+            "response_status": 200,
+            "process_timed_out": false,
+            "worker_replacement_observed": true
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-posix-unresponsive-worker-healthcheck-restarts",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-worker-healthcheck-expiry",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 20,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "workers": 2,
+          "timeout_worker_healthcheck": 2,
+          "environment": {
+            "ASGI_PARITY_WORKER_STALL_ONCE": "1"
+          },
+          "required_observations": {
+            "worker_replacement_observed": true
           }
         }
       }
@@ -651,6 +864,24 @@
       }
     },
     {
+      "case_id": "python-api.run-http-binds-ipv6-loopback",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-ipv6-loopback",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "host": "::1"
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-http-asgi-raw-path-preserves-unicode-root-path",
       "profile": "python-api",
       "operation": "python.api.run-http-asgi-scope-contract",
@@ -749,6 +980,56 @@
           "root_path": "",
           "headers": [["X-Python-API-Default", "from-run"]],
           "observe_headers": ["x-python-api-default"]
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-rejects-invalid-default-header-name",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-invalid-default-header-name",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "headers": [["Invalid Header", "value"]],
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": true,
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-rejects-invalid-default-header-value",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-invalid-default-header-value",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "headers": [["X-Python-API-Invalid", "bad\u0001value"]],
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": true,
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
         }
       }
     },
@@ -888,6 +1169,78 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-applies-trusted-proxy-headers",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-proxy-headers",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "request_headers": [
+            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
+            ["x-forwarded-proto", "https"]
+          ],
+          "proxy_headers": true,
+          "forwarded_allow_ips": "127.0.0.1,::1",
+          "environment": {
+            "FORWARDED_ALLOW_IPS": "192.0.2.1"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-uses-forwarded-allow-ips-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-proxy-headers",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "request_headers": [
+            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
+            ["x-forwarded-proto", "https"]
+          ],
+          "environment": {
+            "FORWARDED_ALLOW_IPS": "127.0.0.1,::1"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-disables-proxy-headers",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-proxy-headers-disabled",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "request_headers": [
+            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
+            ["x-forwarded-proto", "https"]
+          ],
+          "proxy_headers": false
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-auto-detects-asgi2-callable",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -979,12 +1332,226 @@
       }
     },
     {
+      "case_id": "python-api.run-websocket-over-unix-domain-socket",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "unix-websocket",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "timeout_seconds": 5,
+          "uds": true,
+          "observe_scope": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-with-ping-timeout-disabled",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket-keepalive-no-timeout",
+      "covers": ["python.api.run-websocket-keepalive-no-timeout"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "keepalive-remains-open",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "ws_ping_interval": 0.1,
+          "ws_ping_timeout": null,
+          "keepalive_idle_seconds": 0.35,
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-with-unbounded-ping-timeout",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket-keepalive-unbounded-timeout",
+      "covers": ["python.api.run-websocket-keepalive-unbounded-timeout"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "large-timeout-remains-open",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "ws_ping_interval": 0.1,
+          "ws_ping_timeout": 1e300,
+          "keepalive_idle_seconds": 0.35,
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-with-infinite-ping-interval",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket-keepalive-infinite-interval",
+      "covers": ["python.api.run-websocket-keepalive-infinite-interval"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "infinite-interval-remains-open",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "ws_ping_interval": 1e9999,
+          "ws_ping_timeout": 0.3,
+          "keepalive_idle_seconds": 0.35,
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-with-nan-ping-interval",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket-keepalive-nan-interval",
+      "covers": ["python.api.run-websocket-keepalive-nan-interval"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "nan-interval-remains-open",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "ws_ping_interval": {"$float": "nan"},
+          "ws_ping_timeout": 0.3,
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-with-nan-ping-timeout",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket-keepalive-nan-timeout",
+      "covers": ["python.api.run-websocket-keepalive-nan-timeout"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "nan-timeout-closes-before-message",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "ws_ping_interval": 0.1,
+          "ws_ping_timeout": {"$float": "nan"},
+          "keepalive_idle_seconds": 0.35,
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-with-keepalive-disabled",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket-keepalive-disabled",
+      "covers": ["python.api.run-websocket-keepalive-disabled"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "keepalive-disabled",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "ws_ping_interval": null,
+          "ws_ping_timeout": null,
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-zero-ping-interval-disables-keepalive",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "zero-interval-remains-open",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "ws_ping_interval": 0,
+          "ws_ping_timeout": 0.3,
+          "keepalive_idle_seconds": 0.35,
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-negative-ping-timeout-closes-1011",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket-keepalive-negative-timeout",
+      "covers": ["python.api.run-websocket-keepalive-negative-timeout"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "negative-timeout-closes-before-message",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "ws_ping_interval": 0.1,
+          "ws_ping_timeout": -0.1,
+          "keepalive_idle_seconds": 0.35,
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-default-per-message-deflate",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate",
+          "ws_max_size": 16777216,
+          "timeout_seconds": 5,
+          "observe_compression": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-disabled-per-message-deflate",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate-uvicorn-rs-per-message-deflate",
+          "ws_max_size": 16777216,
+          "ws_per_message_deflate": false,
+          "timeout_seconds": 5,
+          "observe_compression": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-websocket-compressed-message-size-limit",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "ws_max_size": 32,
+          "timeout_seconds": 5,
+          "observe_compression": true
+        }
+      }
+    },
+    {
       "case_id": "python-api.server-started-follows-lifespan-readiness",
       "profile": "python-api",
       "operation": "python.api.server-readiness",
       "covers": ["python.api.server-readiness"],
       "api": {
         "server_readiness": true
+      }
+    },
+    {
+      "case_id": "python-api.server-callback-notify-stops-server",
+      "profile": "python-api",
+      "operation": "python.api.server-callback-notify",
+      "covers": ["python.api.server-callback-notify"],
+      "api": {
+        "server_callback_notify": true
       }
     },
     {
@@ -1006,6 +1573,71 @@
           "lifespan": "on",
           "app_lifespan": "raises-before-startup",
           "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-on-rejects-unexpected-lifespan-startup-event",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-startup",
+      "covers": ["python.api.server-lifespan-startup"],
+      "api": {
+        "server_lifespan_startup": {
+          "lifespan": "on",
+          "app_lifespan": "unexpected-startup-event",
+          "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-auto-falls-back-on-unexpected-lifespan-startup-event",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-auto-fallback",
+      "covers": ["python.api.server-lifespan-auto-fallback"],
+      "api": {
+        "server_lifespan_startup": {
+          "lifespan": "auto",
+          "app_lifespan": "unexpected-startup-event",
+          "timeout_seconds": 3
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-auto-falls-back-on-lifespan-app-exception",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-auto-fallback",
+      "covers": ["python.api.server-lifespan-auto-fallback"],
+      "api": {
+        "server_lifespan_startup": {
+          "lifespan": "auto",
+          "app_lifespan": "raises-before-startup",
+          "timeout_seconds": 3
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-auto-starts-after-lifespan-callable-returns",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-early-return",
+      "covers": ["python.api.server-lifespan-early-return"],
+      "api": {
+        "server_lifespan_startup": {
+          "lifespan": "auto",
+          "app_lifespan": "returns-before-startup-event",
+          "timeout_seconds": 3
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-on-starts-after-lifespan-callable-returns",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-early-return",
+      "covers": ["python.api.server-lifespan-early-return"],
+      "api": {
+        "server_lifespan_startup": {
+          "lifespan": "on",
+          "app_lifespan": "returns-before-startup-event",
+          "timeout_seconds": 3
         }
       }
     },
@@ -1180,6 +1812,25 @@
       }
     },
     {
+      "case_id": "python-api.run-applies-concurrency-limit-unix-socket",
+      "profile": "python-api",
+      "operation": "python.api.run-http-concurrency",
+      "covers": ["python.api.run-http-concurrency"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-concurrency-limit",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "uds": true,
+          "limit_concurrency": 1
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-serves-unix-domain-socket-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -1218,6 +1869,26 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-serves-tls-over-unix-domain-socket",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-unix-socket",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "uds": true,
+          "tls": true,
+          "observe_unix_scope": true
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-serves-request-on-inherited-fd",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -1232,6 +1903,83 @@
           "invocation": "module-cli",
           "root_path": "",
           "fd": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-serves-request-on-inherited-ipv6-fd",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-inherited-ipv6-fd",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 10,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "host": "::1",
+          "fd": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-inherited-ipv6-fd-workers",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 20,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "host": "::1",
+          "workers": 2,
+          "fd": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-two-workers-serves-inherited-fd-request",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-inherited-fd-workers",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 20,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "workers": 2,
+          "fd": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-sockets-serves-request-on-multiple-inherited-fds",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-inherited-fd-multiple",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "server-sockets",
+          "root_path": "",
+          "fd": true,
+          "prebound_socket_count": 2
         }
       }
     },
@@ -1268,6 +2016,44 @@
           "invocation": "api",
           "root_path": "",
           "fd": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-http-reports-occupied-port",
+      "profile": "python-api",
+      "operation": "python.api.run-http-bind-conflict",
+      "covers": ["python.api.run-http-bind-conflict"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/bind-conflict",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "api",
+          "root_path": "",
+          "host": "127.0.0.1",
+          "bind_conflict": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-http-reports-occupied-unix-socket-path",
+      "profile": "python-api",
+      "operation": "python.api.run-http-uds-bind-conflict",
+      "covers": ["python.api.run-http-uds-bind-conflict"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/uds-bind-conflict",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "api",
+          "root_path": "",
+          "uds": true,
+          "bind_conflict": true
         }
       }
     },
@@ -1309,6 +2095,64 @@
       }
     },
     {
+      "case_id": "python-api.server-serves-request-on-multiple-prebound-tls-sockets",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-multiple-prebound-tls-sockets",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "server-sockets",
+          "root_path": "",
+          "fd": true,
+          "tls": true,
+          "prebound_socket_count": 2
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-uses-pkcs8-keyfile-password",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-encrypted-pkcs8-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-uses-pkcs8-keyfile-password",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-encrypted-pkcs8-key-cli",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key"
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-reload-restarts-after-watched-module-change",
       "profile": "python-api",
       "operation": "python.api.run-http-reload",
@@ -1318,6 +2162,21 @@
           "timeout_seconds": 20,
           "reload_delay": 0.1,
           "workers": 2
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-reload-respects-include-exclude-globs",
+      "profile": "python-api",
+      "operation": "python.api.run-http-reload-filters",
+      "covers": ["python.api.run-http-reload-filters"],
+      "api": {
+        "run_http_reload": {
+          "timeout_seconds": 20,
+          "reload_delay": 0.1,
+          "workers": 1,
+          "reload_include": ["*.txt"],
+          "reload_exclude": ["ignored.txt"]
         }
       }
     },
@@ -1336,6 +2195,152 @@
           "invocation": "api",
           "root_path": "",
           "reset_contextvars": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-two-workers-scale-with-ttin-ttou",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-two-workers",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 15,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "workers": 2,
+          "environment": {
+            "ASGI_PARITY_WORKER_CONTROL_SIGNALS": "SIGTTIN,SIGTTOU"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-two-workers-restart-on-sighup",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-two-workers",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 25,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "workers": 2,
+          "environment": {
+            "ASGI_PARITY_WORKER_CONTROL_SIGNALS": "SIGHUP"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-sighup-keeps-workers-after-replacement-startup-failure",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-two-workers",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 25,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "workers": 2,
+          "environment": {
+            "ASGI_PARITY_WORKER_CONTROL_SIGNALS": "SIGHUP",
+            "ASGI_PARITY_WORKER_CONTROL_FAIL_RESTART_STARTUP": "1"
+          },
+          "required_observations": {
+            "response_received": true,
+            "response_status": 200,
+            "shutdown_signal_sent": true,
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-on-tick-updates-headers-callback-and-request-limit",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Server"],
+        "signatures": ["uvicorn:Server.main_loop", "uvicorn:Server.on_tick"],
+        "server_on_tick": {
+          "options": {
+            "date_header": true,
+            "headers": [["x-kata-test", "present"]],
+            "limit_max_requests": 3,
+            "limit_max_requests_jitter": 0
+          },
+          "counter": 0,
+          "total_requests": 3,
+          "callback_notify": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-startup-main-loop-shutdown",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Server"],
+        "signatures": [
+          "uvicorn:Server.main_loop",
+          "uvicorn:Server.shutdown",
+          "uvicorn:Server.startup"
+        ],
+        "server_lifecycle": {
+          "stop_phase": "after_startup"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-startup-honors-preexisting-exit-request",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Server"],
+        "signatures": [
+          "uvicorn:Server.main_loop",
+          "uvicorn:Server.shutdown",
+          "uvicorn:Server.startup"
+        ],
+        "server_lifecycle": {
+          "stop_phase": "before_startup"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-handle-exit-signal-escalation",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Server"],
+        "signatures": [
+          "uvicorn:Server.capture_signals",
+          "uvicorn:Server.handle_exit"
+        ],
+        "server_signals": {
+          "sequences": [
+            ["SIGINT"],
+            ["SIGINT", "SIGINT"],
+            ["SIGTERM", "SIGTERM"]
+          ]
         }
       }
     }

@@ -6,29 +6,29 @@ the library accepts connections, drives HTTP, streams bodies under transport
 backpressure, and drains connections during shutdown.
 
 This crate is a library, not a standalone executable. It does not load
-`module:app` or run Python ASGI applications. Use the separately distributed
-[`uvicorn-rs-py`](https://github.com/appunni-m/uvicorn-rs) client for Python
-ASGI applications. That client still crosses the Python ASGI boundary.
+`module:app` or run Python ASGI applications. Use the optional Python client
+from the [`uvicorn-rs` PyPI distribution](https://pypi.org/project/uvicorn-rs/)
+for Python ASGI applications. Its root Cargo integration package and optional
+extra console script remain named `uvicorn-rs-py`. The client still crosses the
+Python ASGI boundary.
 
 ## Requirements
 
 - Rust 1.85 or newer
-- Edition 2021
+- Rust 2024 edition
 - Tokio runtime supplied by the application
-- No optional Cargo features are defined in this release
+- HTTP/3 is enabled with the optional `http3` feature
 
 ## Install
 
-Version 0.1.0 is published on
-[crates.io](https://crates.io/crates/uvicorn-rs/0.1.0). These dependency
+Version 0.2.0 is prepared for the next release. These dependency
 requirements are Cargo semver ranges, not exact patch pins. Cargo resolves the
 newest compatible versions; commit `Cargo.lock` in applications to keep a
 deployment's exact dependency selection reproducible.
 
-HTTP/3 is included in this release and is not behind a Cargo feature. The
-published `uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` crates are transitive
-implementation dependencies; applications should depend directly on
-`uvicorn-rs` only.
+HTTP/3 protocol and Quinn transport implementation are part of this crate and
+are compiled only when the `http3` feature is enabled. The optional feature
+also exposes the HTTP/3 integration types used by the Python adapter.
 
 ```toml
 [dependencies]
@@ -38,8 +38,10 @@ http-body-util = "0.1"
 hyper = { version = "1", features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt", "signal", "sync"] }
 tower-service = "0.3"
-uvicorn-rs = "0.1"
+uvicorn-rs = "0.2"
 ```
+
+To enable HTTP/3, use `uvicorn-rs = { version = "0.2", features = ["http3"] }`.
 
 ## Minimal server
 
@@ -60,6 +62,7 @@ Then request `http://127.0.0.1:8080/health`.
 
 - Cleartext TCP and TLS over TCP support HTTP/1.1 and HTTP/2.
 - HTTP/3 is experimental and uses a caller-configured Quinn endpoint.
+- HTTP/3 implementation code is contained in this crate and gated by `http3`.
 - The native WebSocket API currently supports HTTP/1.1 only.
 - `ApplicationLifecycle` provides native Rust startup and shutdown hooks; it
   is not the ASGI lifespan protocol.
@@ -101,4 +104,5 @@ HTTP protocol compatibility.
 ## License
 
 Licensed under either BSD-3-Clause or MIT, at your option. The crate archive
-includes both license texts and the required attribution notices.
+includes both project license texts and the MIT attribution and source notice
+for the vendored HTTP/3 implementation.

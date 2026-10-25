@@ -1,7 +1,7 @@
 [package]
 name = "uvicorn-rs-py"
-version = "0.1.0"
-edition = "2021"
+version = "0.2.1"
+edition = "2024"
 rust-version = "1.85"
 publish = false
 license = "BSD-3-Clause OR MIT"
@@ -11,23 +11,22 @@ readme = "README.md"
 
 [workspace]
 members = [
-    "crates/native-app-contract",
+    "crates/asgi-lifespan-protocol-rs",
     "crates/uvicorn-rs",
-    "crates/uvicorn-rs-h3",
-    "crates/uvicorn-rs-h3-quinn",
     "tools/http3-probe",
 ]
 default-members = [".", "crates/uvicorn-rs"]
-resolver = "2"
+resolver = "3"
+
+[patch.crates-io]
+hyper = { path = "crates/uvicorn-rs/third-party/hyper" }
 
 [lib]
 name = "uvicorn_rs"
 crate-type = ["cdylib"]
 
 [features]
-default = ["native-tcp"]
 runtime-diagnostics = []
-native-tcp = []
 
 [dependencies]
 bytes = "1"
@@ -37,20 +36,17 @@ http = "1"
 http-body = "1"
 http-body-util = "0.1"
 httpdate = "1"
-h3 = { package = "uvicorn-rs-h3", version = "0.1.0", path = "crates/uvicorn-rs-h3" }
-h3-quinn = { package = "uvicorn-rs-h3-quinn", version = "0.1.0", path = "crates/uvicorn-rs-h3-quinn" }
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["http1", "http2", "server", "server-auto", "tokio"] }
 percent-encoding = "2"
 pyo3 = { version = "0.29", features = ["abi3-py39", "bytes", "extension-module"] }
 pyo3-async-runtimes = { version = "0.29", features = ["tokio-runtime"] }
-quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+pkcs8 = { version = "0.11", features = ["encryption", "pem", "sha1-insecure", "std"] }
 rustls-pemfile = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
-tokio-tungstenite = { version = "0.29", default-features = false, features = ["handshake"] }
 tokio-util = { version = "0.7", features = ["rt"] }
-uvicorn-rs = { version = "0.1.0", path = "crates/uvicorn-rs" }
+uvicorn-rs = { version = "0.2.1", path = "crates/uvicorn-rs", features = ["http3"] }
 tower-service = "0.3"
 
 [target.'cfg(unix)'.dependencies]

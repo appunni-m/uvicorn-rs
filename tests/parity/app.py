@@ -9,6 +9,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import signal
 from urllib.parse import parse_qs
 
 
@@ -25,6 +26,11 @@ _state_copy_source = None
 _state_copy_shared = None
 _request_context = ContextVar("asgi_parity_request_context", default="empty")
 _request_context.set("inherited")
+
+
+def custom_loop_factory():
+    """Return a deterministic event loop for Uvicorn import-path parity."""
+    return asyncio.new_event_loop()
 
 
 def _header_capacity_headers(query_string):
@@ -525,6 +531,12 @@ async def _app_impl(scope, receive, send):
             if message["type"] == "websocket.disconnect":
                 _record(f"websocket.disconnect:{message['code']}:{message['reason']}")
             return
+        if scope["path"] == "/ws-unoffered-subprotocol":
+            await send({"type": "websocket.accept", "subprotocol": "server-v1"})
+            message = await receive()
+            if message["type"] == "websocket.disconnect":
+                _record(f"websocket.disconnect:{message['code']}:{message['reason']}")
+            return
         if scope["path"] == "/ws-custom-accept-header":
             offered = scope.get("subprotocols", [])
             await send({
@@ -648,6 +660,15 @@ async def _app_impl(scope, receive, send):
             return
         if scope["path"] == "/ws-send-and-return":
             await send({"type": "websocket.send", "text": "queued final frame"})
+            return
+        if scope["path"] == "/ws-queue-delayed-reader":
+            await asyncio.sleep(0.1)
+            for _ in range(3):
+                message = await receive()
+                if message["type"] == "websocket.disconnect":
+                    return
+            _record("websocket.queue-reader-received-3")
+            await send({"type": "websocket.close", "code": 1000, "reason": "queue drained"})
             return
         if scope["path"] == "/ws-final-frame-drain":
             await send({"type": "websocket.send", "text": "drain-first"})
@@ -1589,6 +1610,15 @@ async def lifespan_probe_app(scope, receive, send):
         while True:
             message = await receive()
             if message["type"] == "lifespan.startup":
+                restart_failure_marker = os.environ.get(
+                    "ASGI_PARITY_WORKER_CONTROL_FAIL_RESTART_STARTUP_FILE"
+                )
+                if restart_failure_marker and Path(restart_failure_marker).exists():
+                    await send({
+                        "type": "lifespan.startup.failed",
+                        "message": "parity worker restart startup failure",
+                    })
+                    return
                 _lifespan_probe_started = True
                 await send({"type": "lifespan.startup.complete"})
             elif message["type"] == "lifespan.shutdown":
@@ -1598,6 +1628,57 @@ async def lifespan_probe_app(scope, receive, send):
                 return
     elif scope["type"] == "http":
         await receive()
+        if scope["path"] == "/python-api-worker-restart":
+            marker_path = os.environ.get("ASGI_PARITY_WORKER_CRASH_ONCE_FILE")
+            if marker_path is not None:
+                crash_count = int(
+                    os.environ.get("ASGI_PARITY_WORKER_CRASH_COUNT", "1")
+                )
+                for attempt in range(crash_count):
+                    try:
+                        marker_fd = os.open(
+                            f"{marker_path}-{attempt}",
+                            os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                            0o600,
+                        )
+                    except FileExistsError:
+                        continue
+                    os.close(marker_fd)
+                    os._exit(73)
+                # Keep the surviving worker busy long enough for the parent
+                # supervisor to notice and replace its peer after each crash.
+                await asyncio.sleep(1.25)
+                await _respond(
+                    send, b"python-api-worker-restarted", content_type=b"text/plain"
+                )
+                return
+        if scope["path"] == "/python-api-worker-healthcheck-expiry":
+            marker_path = os.environ.get("ASGI_PARITY_WORKER_STALL_ONCE_FILE")
+            if marker_path is None:
+                raise RuntimeError("worker health-check input is missing its marker path")
+            try:
+                marker_fd = os.open(
+                    marker_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600
+                )
+            except FileExistsError:
+                # Keep a responsive peer occupied while the parent times out
+                # and replaces the worker that stopped answering health checks.
+                await asyncio.sleep(4.0)
+                await _respond(
+                    send,
+                    b"python-api-worker-healthcheck-restarted",
+                    content_type=b"text/plain",
+                )
+            else:
+                os.write(marker_fd, str(os.getpid()).encode("ascii"))
+                os.close(marker_fd)
+                os.kill(os.getpid(), signal.SIGSTOP)
+                await _respond(
+                    send,
+                    b"python-api-worker-healthcheck-resumed-without-replacement",
+                    content_type=b"text/plain",
+                )
+            return
         for name, value in scope.get("headers", []):
             if name.lower() == b"x-parity-lifespan-shutdown-delay":
                 _lifespan_probe_shutdown_delay = float(value.decode("ascii"))
@@ -1623,6 +1704,29 @@ async def lifespan_probe_app(scope, receive, send):
                 b"asgi-scope-contract-passed"
                 if root_path_matches and path_matches and raw_path_matches
                 else b"asgi-scope-contract-failed"
+            )
+            await _respond(send, body, content_type=b"text/plain")
+            return
+        if scope["path"] == "/module-cli-proxy-headers":
+            client = scope.get("client") or ("", 0)
+            client_host, client_port = client
+            body = b"|".join(
+                (
+                    b"scheme=" + scope["scheme"].encode("ascii"),
+                    b"client=" + str(client_host).encode("ascii"),
+                    str(client_port).encode("ascii"),
+                )
+            )
+            await _respond(send, body, content_type=b"text/plain")
+            return
+        if scope["path"] == "/module-cli-proxy-headers-disabled":
+            client = scope.get("client") or ("", 0)
+            client_host = client[0]
+            body = b"|".join(
+                (
+                    b"scheme=" + scope["scheme"].encode("ascii"),
+                    b"client=" + str(client_host).encode("ascii"),
+                )
             )
             await _respond(send, body, content_type=b"text/plain")
             return
@@ -1677,6 +1781,7 @@ async def python_api_uds_probe_app(scope, receive, send):
         and server[1] is None
     )
     body = (
+        f"scheme={scope['scheme']}|"
         f"client-is-none={str(client_is_none).lower()}|"
         f"server-has-unix-shape={str(server_has_unix_shape).lower()}"
     ).encode("ascii")

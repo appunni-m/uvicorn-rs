@@ -2,9 +2,85 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+<a id="current-unified-coverage-status-2026-10-22"></a>
+
+## Current unified coverage status (2026-10-22)
+
+The latest exact-main CI run
+[39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
+is bound to clean commit
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its unified matrix completed
+884/884 selected cases with no case failures or infrastructure retries, but
+the required 100% coverage gate failed: **10,962/11,375 source-span regions**
+and **8,130/8,438 executable lines**. The remaining gaps are 413 regions and
+308 lines. The retained `uvicorn-rs-unified-coverage` artifact is ID
+`12390496561` (archive SHA-256
+`6bab44ea1c32e91c67f7e71651902d480ff9a3fb58d373568df537eda67158e1`); its
+report SHA-256 is
+`9d58a1e169b6e751efbe35f4492528fc368d7c31ea02aee2bd35d06c5669a51c`.
+
+Independent Coverage-MCP review is **not complete**. The local consolidation
+draft has a measured report, but its coverage gate failed and there is no
+accepted zero-gap receipt. The exact-main CI result still describes the old
+committed package graph. Candidate package and Python-floor jobs were skipped
+after the coverage gate failed. See the [release guide](releases.md) and
+[benchmark status](benchmark-status.md) for the other open release gates.
+
+### Local consolidation draft (2026-10-22)
+
+The one-pass local report `target/asgi-coverage/draft-after-uds-tls/coverage-report.json`
+(run `a8015f34fe39456580851f22c11aa284`) uses the dirty consolidation draft based on commit
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its source SHA-256 is
+`2438ea5aff732a5ea692571c41efee9349288be0945a23e1e3d5de39805c8d03`; its
+instrumented extension SHA-256 is
+`5bda85c3abfe3cf2d0e414c4c4e6d1b47d8a4b1d68fd0ad35acc1e93f0ae68fd`.
+The 893-case inventory (671 ASGI and 222 native) recorded 891 passed, one
+parity failure, and one oracle-side infrastructure failure. It measured
+11,126/11,375 regions and 8,278/8,442 lines, leaving 249 regions and 164 lines
+uncovered. No full verification repeats were run (0/3).
+
+Coverage-MCP reports `source=matches_receipt` and `tests=failed` for that exact
+report. The regions query returned only page 1 of 821 function groups; region
+and line results have not been fully paginated, and no accepted review receipt
+exists.
+
+At that point, the input inventory had grown to 894 cases with
+`cli.websocket-ping-interval-zero-disables-keepalive-and-exits`. Its isolated
+oracle parity passed 1/1, and selected coverage report
+`target/asgi-coverage/cli-ws-ping-zero/coverage-report.json` (source SHA-256
+`324eee016deccef3c317cbb4104ccdf0509858c09ee81977e20e055ee59b01b3`)
+recorded one passing case with the same instrumented extension. This selected
+run is not a full-matrix refresh or a coverage-gate pass; that 894-case
+inventory had no complete report or three-repeat evidence. The case checks
+startup with a zero ping interval and immediate request-limit shutdown; it does
+not exchange WebSocket frames or prove active-session ping suppression. These
+`target/` reports are local ignored artifacts, not published documentation
+attachments.
+
+The current 2026-10-24 working-tree inventory contains 983 cases: 751 ASGI
+inputs (435 oracle-parity and 316 target-only fault/support cases) plus 232
+native-core contracts. It has no complete coverage report or three-repeat
+evidence. Existing reports remain bound to their earlier source and input
+identities and do not certify this expanded inventory.
+
+A later selected case, `python-api.run-websocket-zero-ping-interval-disables-keepalive`,
+opens a WebSocket through the Python API with a zero interval, waits 0.35
+seconds, then exchanges an application message and closes normally. It passed
+1/1 against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13 and its instrumented
+profile reaches the non-positive interval branch. This does not observe
+Ping-frame emission. The result and hash are recorded in the
+[Uvicorn contract evidence](maintainers/uvicorn-0.54.0-contract.md); it does not
+refresh the full coverage report or satisfy the 100% gate.
+
+The selected input `python-api.run-websocket-negative-ping-timeout-closes-1011`
+also passed 1/1 against Uvicorn 0.54.0. It exercises the negative timeout
+conversion and immediate 1011 close path; its receipt is recorded alongside the
+zero-interval result. These selected cases do not replace a fresh full-matrix
+coverage run or the independent zero-gap Coverage-MCP review.
+
 <a id="current-unified-coverage-status-2026-10-19"></a>
 
-## Current unified coverage status (2026-10-19)
+### Previous hosted coverage status (2026-10-19)
 
 Hosted exact-source CI run
 [39205955886](https://github.com/appunni-m/uvicorn-rs/actions/runs/39205955886)
@@ -183,8 +259,10 @@ checker both passed.
 | `crates/uvicorn-rs/src/peer_read.rs` | 197/197 | 151/151 |
 | **Total executable source** | **8,651/8,651** | **6,523/6,523** |
 
-`crates/native-app-contract/src/lib.rs` is in the declared source set and has
-no executable LLVM counters. The coverage-only helper
+At this historical source revision, the lifecycle crate was named
+`native-app-contract`; it has since been renamed to
+`asgi-lifespan-protocol-rs`. The historical source has no executable LLVM
+counters. The coverage-only helper
 `crates/uvicorn-rs/src/http3/coverage.rs` is reported separately from the
 production executable-source denominator.
 
@@ -1508,10 +1586,10 @@ is not the clean result summarized above. The final no-retry runs isolate the
 TLS WebSocket close case at a fresh server boundary; the diagnostic record is
 `tls-websocket-isolation-diagnostics.json` (`benchmarks/results/2026-10-07/asgi-inventory-485/tls-websocket-isolation-diagnostics.json`).
 
-The case inventory is a focused black-box map, not full ASGI conformance. The
-known cross-name response-header ordering deviation and unsupported extensions
-are listed in the [support matrix](support-matrix.md) and [ASGI case
-inventory](asgi-case-inventory.md).
+The case inventory is a focused black-box map, not full ASGI conformance. One
+strict H1 response-order case now passes on the local draft; H2/H3 order remains
+unverified or mismatched, and optional extensions are unsupported. See the
+[support matrix](support-matrix.md) and [ASGI case inventory](asgi-case-inventory.md).
 
 ## Historical full verification (473 cases; October 6 source inventory)
 
@@ -2493,43 +2571,58 @@ query is pending; it does not satisfy the strict acceptance gate.
 ## Complete the release Coverage-MCP handoff
 
 The release candidate needs a Coverage-MCP receipt for the exact successful
-main CI run. The handoff preserves the original artifact, attaches a derived
-reviewed report, and checks both offline before the candidate is accepted.
+main CI run. The handoff preserves the raw artifact byte for byte, creates a
+deterministic compact projection containing every canonical source span and
+uncovered span, and binds that projection and its receipt to the raw report,
+CI run, source hashes, build, and passing full test matrix. The candidate
+rebuilds and validates the projection and receipt offline.
 
 1. Wait for the complete main CI run to succeed. Record its run ID, attempt,
    and commit. Download `uvicorn-rs-unified-coverage` into
    `target/asgi-coverage/` and confirm `ci-run.json` has the same run ID,
-   attempt, and commit. The report path used by Coverage-MCP must be exactly
-   `target/asgi-coverage/coverage-report.json`.
-2. Query `coverage_gaps` for that report with `metric: "regions"`, then
-   `metric: "lines"`; use `limit: 15`, no filters, and follow each
-   `next_offset` through its terminal page. Save every request with the exact
-   structured response in one JSON array.
+   attempt, and commit. Leave `coverage-report.json` and its context unchanged.
+2. Create the review projection:
+
+   ```sh
+   python scripts/coverage_mcp_handoff.py project \
+     --report target/asgi-coverage/coverage-report.json \
+     --output target/asgi-coverage-review/coverage-mcp-projection.json
+   ```
+
+   Query `coverage_gaps` for
+   `target/asgi-coverage-review/coverage-mcp-projection.json` with
+   `metric: "regions"`, then `metric: "lines"`; use `limit: 15`, no filters,
+   and follow each `next_offset` through its terminal page. Save every request
+   with the exact structured response in one JSON array.
 3. Open **Actions → Coverage MCP handoff → Run workflow**. Select `main` at
    the same commit as the CI run, provide its run ID and attempt, and provide a
    single-line gzip+base64 encoding of the compact JSON array as
    `receipt_gzip_base64`. For example, save the JSON array to a local file and
    run `gzip -c receipt.json | base64 | tr -d '\n'`. Dispatch it once for that
    CI attempt. The handoff decodes the receipt with a 32 MiB output limit and
-   writes the page array into the ignored coverage directory.
+   writes the page array into the ignored review directory.
 
 The handoff rejects stale or mismatched CI runs and artifacts, incomplete page
-chains, source/build mismatches, failed tests, and any missing region or line.
-It leaves the raw CI artifact unchanged and uploads a digest-checkable reviewed
-artifact. The release candidate selects exactly one successful handoff for its
-commit and CI attempt, checks the raw file hashes against the original CI
-artifact, and runs the strict coverage validator again. If `main` moves before
-the handoff is dispatched, use a successful CI run for the new commit and query
-its report; do not reuse pages from the previous source.
+chains, altered projections, source/build mismatches, failed tests, and any
+missing region or line. It leaves the raw CI artifact unchanged and uploads
+the projection, derived reviewed report, page receipt, and digest manifest.
+The release candidate selects exactly one successful handoff for its commit
+and CI attempt, checks the raw file hashes against the original CI artifact,
+rebuilds the projection from that report, and validates both metric page
+chains offline. If `main` moves before the handoff is dispatched, use a
+successful CI run for the new commit and query its projection; do not reuse
+pages from the previous source.
 
 The handoff artifact contains generated reports, profiles, and logs. Keep them
 in the Actions artifact; do not commit them to the repository.
 
-## Measure an incremental case
+## Measure an incremental case or profile
 
 Add an input-only case to the indexed manifest, validate it with the parity
-contract loader, and run only that case against the existing instrumented
-source/build:
+contract loader, and select the changed case or its profile against the
+existing instrumented source/build. `--case-id` and `--profile` are repeatable;
+profiles scope ASGI cases, while native contracts are selected with
+`--case-id native:<id>`:
 
 ```sh
 UV_PROJECT_ENVIRONMENT=target/coverage-oracle uv sync --python 3.12 --locked \
@@ -2538,8 +2631,16 @@ uv run --python 3.12 --locked --group benchmark python scripts/run_unified_cover
   --oracle-python target/coverage-oracle/bin/python \
   --output build/asgi-coverage/incremental/coverage-report.json \
   --artifacts-dir build/asgi-coverage/incremental/artifacts \
-  --case-id CASE_ID --matrix-repeats 0
+  --profile http3 --matrix-repeats 0
 ```
+
+Use `--case-id CASE_ID --matrix-repeats 0` for a single case, or repeat
+`--case-id` to select a small batch. Use `--profile http1`, `http2`, `http3`,
+`cli`, or `python-api` to select a profile group. Add `--skip-build` only when
+the installed instrumented extension was built from the same source state.
+Use this incremental path after a related source or input change, and reuse
+the same-source measurement when those inputs and the build have not changed.
+Full acceptance still requires a complete exact-source matrix.
 
 Then call Coverage-MCP `coverage_compare` with the fixed full report as
 `baseline`, the selected report as `measurement`, and `scope: "incremental"`.

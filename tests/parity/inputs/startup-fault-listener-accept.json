@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@36",
   "cases": [
     {
       "case_id": "fault.http1.server-listener-accept-error",
@@ -32,6 +32,268 @@
       "startup_failure": {
         "expect_failed": true
       }
+    },
+    {
+      "case_id": "fault.http1.tcp-address-lookup-empty",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.tcp-address-lookup.empty",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.http1.tcp-socket-create-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.tcp-socket.create-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.http1.ipv6-tcp-socket-create-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "server_options": {
+        "host": "::1"
+      },
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.tcp-socket.create-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.http1.tcp-socket-reuseaddr-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.tcp-socket.reuseaddr-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.http1.tcp-socket-listen-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.tcp-socket.listen-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.http1.tcp-socket-bind-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "server_options": {
+        "host": "127.0.0.1"
+      },
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.tcp-socket.bind-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.bind-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.bind-error", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.accept-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.accept-error", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.read-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.read-error", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.recv-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.recv-error", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.missing-marker",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.missing-marker", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.unexpected-ancillary",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.unexpected-ancillary", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.control-truncated",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.control-truncated", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.get-descriptor-flags-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.get-descriptor-flags-error", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.set-descriptor-flags-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.set-descriptor-flags-error", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.listen-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.listen-error", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.nonblocking-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.nonblocking-error", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.tcp-listener-conversion-error",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.tcp-listener-conversion-error", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.no-listener",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.no-listener", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.listener-marker-invalid-count",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.listener-marker-invalid-count", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.end-marker-has-descriptor",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.end-marker-has-descriptor", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.http1.prebound-transfer.invalid-marker",
+      "profile": "startup-fault-listener-accept",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {"point": "server.prebound-transfer.invalid-marker", "contract": "server-startup-failure"},
+      "startup_failure": {"expect_failed": true}
     }
   ]
 }

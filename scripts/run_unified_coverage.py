@@ -37,16 +37,16 @@ run_parity = importlib.import_module("run_parity")
 
 RUNNER = ROOT / "scripts" / "run_parity.py"
 BUILD_SCRIPT = ROOT / "scripts" / "build_coverage_extension.py"
-RESULT_SCHEMA = "uvicorn-rs-coverage/unified@9"
+RESULT_SCHEMA = "uvicorn-rs-coverage/unified@10"
 LLVM_EXTENSION_KEY = "uvicorn_rs_unified"
 SOURCE_PATHS = (
     "src",
     "crates/uvicorn-rs/src",
-    "crates/native-app-contract/src",
+    "crates/asgi-lifespan-protocol-rs/src",
     "Cargo.toml",
     "Cargo.lock",
     "crates/uvicorn-rs/Cargo.toml",
-    "crates/native-app-contract/Cargo.toml",
+    "crates/asgi-lifespan-protocol-rs/Cargo.toml",
 )
 PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
@@ -55,15 +55,69 @@ PRODUCTION_SOURCE_SET = (
     "crates/uvicorn-rs/src/http3/transport.rs",
     "crates/uvicorn-rs/src/websocket.rs",
     "crates/uvicorn-rs/src/peer_read.rs",
-    "crates/native-app-contract/src/lib.rs",
+    "crates/asgi-lifespan-protocol-rs/src/lib.rs",
 )
 # Sources compiled only to drive coverage contracts, not production code.
 COVERAGE_SUPPORT_SOURCE_SET = (
     "crates/uvicorn-rs/src/coverage.rs",
     "crates/uvicorn-rs/src/http3/coverage.rs",
 )
+# Vendored upstream HTTP/3 protocol and Quinn adapter sources are bound into
+# the source identity and checked as an explicit inventory, but the unified
+# first-party coverage gate does not attribute these third-party files.
+THIRD_PARTY_SOURCE_SET = (
+    "crates/uvicorn-rs/src/http3/h3/buf.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/config.rs",
+    "crates/uvicorn-rs/src/http3/h3/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/codes.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/connection_error_creators.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/internal_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/ext.rs",
+    "crates/uvicorn-rs/src/http3/h3/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/coding.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/headers.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/push.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/varint.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/block.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/decoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/dynamic.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/encoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/field.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/parse_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_int.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/bitwin.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/decode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/encode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/static_.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/tests.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/vas.rs",
+    "crates/uvicorn-rs/src/http3/h3/quic.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/request.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/shared_state.rs",
+    "crates/uvicorn-rs/src/http3/h3/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/session_id.rs",
+    "crates/uvicorn-rs/src/http3/h3_quinn.rs",
+)
 EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
-NO_COUNTER_SOURCE_SET = ("crates/native-app-contract/src/lib.rs",)
+NO_COUNTER_SOURCE_SET = ("crates/asgi-lifespan-protocol-rs/src/lib.rs",)
 PYTHON_SOURCE_SET = (
     "python/uvicorn_rs/__init__.py",
     "python/uvicorn_rs/__main__.py",
@@ -72,19 +126,40 @@ PYTHON_SOURCE_SET = (
     "python/uvicorn_rs/server.py",
 )
 NATIVE_MANIFEST = ROOT / "tests" / "native-core" / "manifest.json"
-NATIVE_RUNNER = ROOT / "target" / "asgi-native-coverage" / "release" / "examples" / "native_core_contracts"
+COVERAGE_TARGET_ROOT = Path(
+    os.environ.get("UVICORN_RS_COVERAGE_TARGET_ROOT", ROOT / "target")
+).resolve()
+NATIVE_RUNNER = (
+    COVERAGE_TARGET_ROOT
+    / "asgi-native-coverage"
+    / "release"
+    / "examples"
+    / "native_core_contracts"
+)
 NATIVE_FAULT_CONTRACTS = {
     "native.request-lifetime.body-missing-guard": {
         "operation": "native-request-lifetime-body-missing-guard",
         "scenario": "guard-missing",
     },
     "http1.upgrade.receiver-closed": {
-        "operation": "native-http1-upgrade-session",
-        "scenario": "receiver-closed",
+        "contracts": [
+            {
+                "operation": "native-http1-upgrade-session",
+                "scenario": "receiver-closed",
+            },
+            {
+                "operation": "native-https-upgrade-session-error",
+                "scenario": "receiver-closed",
+            },
+        ],
     },
     "http1.peer-read.receiver-closed": {
         "operation": "native-http1-peer-read-receiver-closed",
         "scenario": "receiver-closed",
+    },
+    "http1.unix-peer-read.on-read-error": {
+        "operation": "native-http1-unix-peer-read-on-read-error",
+        "scenario": "on-read-error",
     },
     "http1.peer-read.failure-after-data": {
         "operation": "native-http1-peer-read-error-response-cancel",
@@ -167,12 +242,32 @@ NATIVE_FAULT_CONTRACTS = {
         "scenario": "deadline-overflow",
     },
     "server.listener.accept-error": {
-        "operation": "native-server-listener-accept-error",
-        "scenario": "accept-error",
+        "contracts": [
+            {
+                "operation": "native-server-listener-accept-error",
+                "scenario": "accept-error",
+            },
+            {
+                "operation": "native-tcp-multi-listener-accept-error",
+                "scenario": "multi-listener-accept-error",
+            },
+            {
+                "operation": "native-server-listener-accept-error",
+                "scenario": "unix-accept-error",
+            },
+        ],
     },
     "server.listener.admission-closed": {
-        "operation": "native-server-listener-admission-closed",
-        "scenario": "admission-closed",
+        "contracts": [
+            {
+                "operation": "native-server-listener-admission-closed",
+                "scenario": "admission-closed",
+            },
+            {
+                "operation": "native-unix-listener-admission-closed",
+                "scenario": "unix-admission-closed",
+            },
+        ],
     },
     "server.http3.admission-closed": {
         "operation": "native-server-http3-admission-closed",
@@ -324,8 +419,13 @@ def load_native_contract() -> tuple[dict[str, Any], list[dict[str, Any]]]:
                 or set(fault) != {"point"}
                 or not isinstance(fault.get("point"), str)
                 or fault.get("point") not in NATIVE_FAULT_CONTRACTS
-                or case.get("operation") != NATIVE_FAULT_CONTRACTS[fault["point"]]["operation"]
-                or case.get("scenario") != NATIVE_FAULT_CONTRACTS[fault["point"]]["scenario"]
+                or not any(
+                    case.get("operation") == contract["operation"]
+                    and case.get("scenario") == contract["scenario"]
+                    for contract in NATIVE_FAULT_CONTRACTS[fault["point"]].get(
+                        "contracts", [NATIVE_FAULT_CONTRACTS[fault["point"]]]
+                    )
+                )
             ):
                 raise CoverageError(f"native-core case {case['id']} has an invalid fault contract")
         elif fault is not None:
@@ -338,10 +438,14 @@ def source_identity(
 ) -> dict[str, Any]:
     discovered_sources = {
         str(source.relative_to(ROOT))
-        for directory in (ROOT / "src", ROOT / "crates" / "uvicorn-rs" / "src", ROOT / "crates" / "native-app-contract" / "src")
+        for directory in (ROOT / "src", ROOT / "crates" / "uvicorn-rs" / "src", ROOT / "crates" / "asgi-lifespan-protocol-rs" / "src")
         for source in directory.rglob("*.rs")
     }
-    expected_rust_sources = set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET)
+    expected_rust_sources = (
+        set(PRODUCTION_SOURCE_SET)
+        | set(COVERAGE_SUPPORT_SOURCE_SET)
+        | set(THIRD_PARTY_SOURCE_SET)
+    )
     if discovered_sources != expected_rust_sources:
         raise CoverageError(
             "Rust source inventory changed: "
@@ -975,6 +1079,11 @@ def main() -> int:
         action="append",
         help="attribute a case ID; use native:<id> for native contracts, asgi:<id> for parity cases, or an unprefixed ASGI ID",
     )
+    parser.add_argument(
+        "--profile",
+        action="append",
+        help="select ASGI parity cases by manifest profile; repeat to select multiple profiles",
+    )
     parser.add_argument("--matrix-repeats", type=int, default=3, help="complete matrix repeats; use 0 to skip")
     parser.add_argument(
         "--matrix-infra-retries",
@@ -1000,48 +1109,14 @@ def main() -> int:
     run_parity.ORACLE_PYTHON = oracle_python
     if args.matrix_repeats not in {0, 3}:
         parser.error("--matrix-repeats must be 0 for a selected subset or exactly 3 for full matrices")
+    if (args.case_id or args.profile) and args.matrix_repeats:
+        parser.error("selected cases or profiles require --matrix-repeats 0")
     if args.case_timeout < 30:
         parser.error("--case-timeout must be at least 30 seconds")
     if args.case_infra_retries < 0:
         parser.error("--case-infra-retries cannot be negative")
     if args.matrix_infra_retries < 0:
         parser.error("--matrix-infra-retries cannot be negative")
-
-    started_at = utc_now()
-    run_id = uuid.uuid4().hex
-    output = args.output.resolve()
-    artifacts_root = args.artifacts_dir.resolve() / run_id
-    case_results_root = artifacts_root / "cases"
-    profile_root = artifacts_root / "profiles"
-    repeat_root = artifacts_root / "matrix-runs"
-    native_case_results_root = artifacts_root / "native-cases"
-    native_profile_root = artifacts_root / "native-profiles"
-    native_input_root = artifacts_root / "native-inputs"
-    native_repeat_root = artifacts_root / "native-matrix-runs"
-    for path in (
-        case_results_root,
-        profile_root,
-        repeat_root,
-        native_case_results_root,
-        native_profile_root,
-        native_input_root,
-        native_repeat_root,
-    ):
-        path.mkdir(parents=True, exist_ok=False)
-
-    if not args.skip_build:
-        build_log = artifacts_root / "instrumented-build.log"
-        build = subprocess.run(
-            [sys.executable, str(BUILD_SCRIPT)],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=900,
-            check=False,
-        )
-        build_log.write_text(build.stdout + build.stderr, encoding="utf-8")
-        if build.returncode:
-            raise CoverageError(f"instrumented build failed; see {build_log}")
 
     manifest, input_document, input_paths = run_parity.load_contract()
     all_cases = input_document["cases"]
@@ -1086,12 +1161,59 @@ def main() -> int:
         cases = [case for case in all_cases if case["case_id"] in requested_asgi]
         native_cases = [case for case in all_native_cases if case["id"] in requested_native]
     else:
-        cases = all_cases
-        native_cases = all_native_cases
+        cases = list(all_cases)
+        native_cases = list(all_native_cases)
+    if args.profile:
+        known_profiles = {profile["id"] for profile in manifest["profiles"]}
+        unknown_profiles = sorted(set(args.profile) - known_profiles)
+        if unknown_profiles:
+            parser.error(f"unknown profile(s): {', '.join(unknown_profiles)}")
+        selected_profiles = set(args.profile)
+        cases = [case for case in cases if case["profile"] in selected_profiles]
+        if not cases:
+            parser.error("the selected profile and case filters matched no ASGI cases")
+        if not args.case_id:
+            # A profile is an ASGI parity group. Native contracts are selected
+            # explicitly by --case-id native:<id> so a profile run stays scoped.
+            native_cases = []
     if not cases and not native_cases:
         parser.error("at least one case must be selected")
-    if args.case_id and args.matrix_repeats:
-        parser.error("--matrix-repeats requires both complete input matrices; set it to 0 for selected cases")
+
+    started_at = utc_now()
+    run_id = uuid.uuid4().hex
+    output = args.output.resolve()
+    artifacts_root = args.artifacts_dir.resolve() / run_id
+    case_results_root = artifacts_root / "cases"
+    profile_root = artifacts_root / "profiles"
+    repeat_root = artifacts_root / "matrix-runs"
+    native_case_results_root = artifacts_root / "native-cases"
+    native_profile_root = artifacts_root / "native-profiles"
+    native_input_root = artifacts_root / "native-inputs"
+    native_repeat_root = artifacts_root / "native-matrix-runs"
+    for path in (
+        case_results_root,
+        profile_root,
+        repeat_root,
+        native_case_results_root,
+        native_profile_root,
+        native_input_root,
+        native_repeat_root,
+    ):
+        path.mkdir(parents=True, exist_ok=False)
+
+    if not args.skip_build:
+        build_log = artifacts_root / "instrumented-build.log"
+        build = subprocess.run(
+            [sys.executable, str(BUILD_SCRIPT)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=900,
+            check=False,
+        )
+        build_log.write_text(build.stdout + build.stderr, encoding="utf-8")
+        if build.returncode:
+            raise CoverageError(f"instrumented build failed; see {build_log}")
 
     source = source_identity(manifest, input_paths, native_manifest)
     llvm_cov, llvm_profdata, tool_versions = llvm_tools()
@@ -2120,6 +2242,7 @@ def main() -> int:
             "source_set": all_source_paths,
             "executable_source_set": list(EXECUTABLE_SOURCE_SET),
             "coverage_support_source_set": list(COVERAGE_SUPPORT_SOURCE_SET),
+            "third_party_source_set": list(THIRD_PARTY_SOURCE_SET),
             "source_files": source_file_rows,
             "llvm_normalization": {
                 "regions": "source-span union across Rust function instantiations",

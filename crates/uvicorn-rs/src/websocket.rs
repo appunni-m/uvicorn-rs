@@ -2,44 +2,53 @@
 //!
 //! The server owns the upgraded session until it finishes or the configured
 //! connection-drain deadline expires. This module provides an initial RFC 6455
-//! handshake and framed session over HTTP/1.1. It does not implement WebSockets
-//! over HTTP/2 or HTTP/3, or negotiate WebSocket extensions.
+//! handshake and framed session over HTTP/1.1, including optional
+//! `permessage-deflate` negotiation. It does not implement WebSockets over
+//! HTTP/2 or HTTP/3.
 
 #[cfg(coverage)]
 use std::sync::{
-    atomic::{AtomicU8, Ordering},
     OnceLock,
+    atomic::{AtomicU8, Ordering},
 };
 use std::{error::Error, fmt, future::Future};
 
+use bytes::Bytes;
 use data_encoding::BASE64;
 use futures_util::{SinkExt, StreamExt};
 use http::{
+    Extensions, HeaderMap, HeaderName, HeaderValue, Method, Request, Response, StatusCode, Version,
     header::{
         CONNECTION, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY,
         SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION, UPGRADE,
     },
-    Extensions, HeaderMap, HeaderName, HeaderValue, Method, Request, Response, StatusCode, Version,
 };
 use hyper::upgrade::{self, OnUpgrade, Upgraded};
 use hyper_util::rt::TokioIo;
 #[cfg(coverage)]
 use tokio::sync::Notify;
 use tokio_tungstenite::{
+    WebSocketStream,
     tungstenite::{
+        Error as TungsteniteError,
         handshake::derive_accept_key,
         protocol::{Role, WebSocketConfig},
-        Error as TungsteniteError,
     },
-    WebSocketStream,
+};
+use yawc::{
+    CompressionLevel as YawcCompressionLevel, HttpStream as YawcHttpStream,
+    HttpWebSocket as YawcWebSocket, Options as YawcOptions, Role as YawcRole,
+    WebSocket as YawcHandshake,
+    close::CloseCode as YawcCloseCode,
+    frame::{Frame as YawcFrame, OpCode as YawcOpCode},
 };
 
 use crate::{ConnectionUpgrade, ConnectionUpgradeClosed};
 
 /// WebSocket messages, close frames, and close-code values used by a session.
 pub use tokio_tungstenite::tungstenite::protocol::{
-    frame::coding::CloseCode as WebSocketCloseCode, CloseFrame as WebSocketCloseFrame,
-    Message as WebSocketMessage,
+    CloseFrame as WebSocketCloseFrame, Message as WebSocketMessage,
+    frame::coding::CloseCode as WebSocketCloseCode,
 };
 
 /// A validated HTTP/1.1 WebSocket upgrade request.
@@ -52,15 +61,17 @@ pub use tokio_tungstenite::tungstenite::protocol::{
 pub struct WebSocketUpgrade {
     on_upgrade: OnUpgrade,
     connection_upgrade: ConnectionUpgrade,
-    accept_key: HeaderValue,
+    accept_key: String,
+    negotiated_extensions: Option<HeaderValue>,
     offered_subprotocols: Vec<Vec<u8>>,
     selected_subprotocol: Option<HeaderValue>,
     response_headers: HeaderMap,
+    max_message_size: Option<usize>,
 }
 
 struct ValidatedWebSocketHandshake {
     connection_upgrade: ConnectionUpgrade,
-    accept_key: HeaderValue,
+    accept_key: String,
     offered_subprotocols: Vec<Vec<u8>>,
 }
 
@@ -108,18 +119,7 @@ fn validate_websocket_handshake(
             "Sec-WebSocket-Key must decode to 16 bytes",
         ));
     }
-    let derived_accept_key = derive_accept_key(key.as_bytes());
-    #[cfg(coverage)]
-    let accept_key_source: &str = if take_derived_accept_key_header_value_fault() {
-        "\r\n"
-    } else {
-        &derived_accept_key
-    };
-    #[cfg(not(coverage))]
-    let accept_key_source: &str = &derived_accept_key;
-    let accept_key = HeaderValue::from_str(accept_key_source).map_err(|_| {
-        WebSocketUpgradeError::InvalidHandshake("the derived accept key is invalid")
-    })?;
+    let accept_key = derive_accept_key(key.as_bytes());
 
     let offered_subprotocols = parse_subprotocols(headers)?;
 
@@ -128,6 +128,21 @@ fn validate_websocket_handshake(
         accept_key,
         offered_subprotocols,
     })
+}
+
+fn yawc_options(max_message_size: usize) -> YawcOptions {
+    // Yawc treats these limits as exclusive; Uvicorn accepts a message whose
+    // size is exactly the configured value.
+    let exclusive_limit = max_message_size.saturating_add(1);
+    YawcOptions::default()
+        .with_max_payload_read(exclusive_limit)
+        .with_max_read_buffer(exclusive_limit)
+        .with_utf8()
+        .with_compression_level(YawcCompressionLevel::default())
+}
+
+fn yawc_error(error: yawc::WebSocketError) -> WebSocketError {
+    WebSocketError(TungsteniteError::Io(std::io::Error::other(error)))
 }
 
 impl WebSocketUpgrade {
@@ -140,21 +155,66 @@ impl WebSocketUpgrade {
     /// returns [`WebSocketUpgradeError::InvalidHandshake`] for malformed or
     /// incomplete handshake headers.
     pub fn from_request<B>(request: &mut Request<B>) -> Result<Self, WebSocketUpgradeError> {
+        Self::from_request_with_per_message_deflate(request, true)
+    }
+
+    /// Validates an RFC 6455 HTTP/1.1 request and optionally negotiates
+    /// `permessage-deflate` before obtaining its upgrade handle.
+    ///
+    /// The default matches Uvicorn 0.54.0, which enables per-message deflate.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WebSocketUpgradeError::UnsupportedTransport`] for requests
+    /// outside HTTP/1.1 or without the native HTTP/1 upgrade capability. It
+    /// returns [`WebSocketUpgradeError::InvalidHandshake`] for malformed or
+    /// incomplete handshake headers or an invalid compression offer.
+    pub fn from_request_with_per_message_deflate<B>(
+        request: &mut Request<B>,
+        enabled: bool,
+    ) -> Result<Self, WebSocketUpgradeError> {
         let handshake = validate_websocket_handshake(
             request.version(),
             request.method(),
             request.extensions(),
             request.headers(),
         )?;
+
+        let negotiated_extensions = if enabled {
+            let mut negotiation_request = Request::new(());
+            *negotiation_request.method_mut() = request.method().clone();
+            *negotiation_request.uri_mut() = request.uri().clone();
+            *negotiation_request.version_mut() = request.version();
+            *negotiation_request.headers_mut() = request.headers().clone();
+            let (response, unused_upgrade) = YawcHandshake::upgrade_with_options(
+                &mut negotiation_request,
+                yawc_options(
+                    WebSocketConfig::default()
+                        .max_message_size
+                        .unwrap_or(usize::MAX),
+                ),
+            )
+            .map_err(|_| {
+                WebSocketUpgradeError::InvalidHandshake(
+                    "the Sec-WebSocket-Extensions offer could not be negotiated",
+                )
+            })?;
+            drop(unused_upgrade);
+            response.headers().get(&SEC_WEBSOCKET_EXTENSIONS).cloned()
+        } else {
+            None
+        };
         let on_upgrade = upgrade::on(request);
 
         Ok(Self {
             on_upgrade,
             connection_upgrade: handshake.connection_upgrade,
             accept_key: handshake.accept_key,
+            negotiated_extensions,
             offered_subprotocols: handshake.offered_subprotocols,
             selected_subprotocol: None,
             response_headers: HeaderMap::new(),
+            max_message_size: WebSocketConfig::default().max_message_size,
         })
     }
 
@@ -170,17 +230,45 @@ impl WebSocketUpgrade {
     /// is not an HTTP token or was not offered by the client. Returns
     /// [`WebSocketUpgradeError::SubprotocolAlreadySelected`] if one was
     /// selected earlier.
-    pub fn with_subprotocol(mut self, protocol: &str) -> Result<Self, WebSocketUpgradeError> {
+    pub fn with_subprotocol(self, protocol: &str) -> Result<Self, WebSocketUpgradeError> {
+        self.with_selected_subprotocol(protocol, true)
+    }
+
+    /// Selects the subprotocol supplied by an ASGI application.
+    ///
+    /// This keeps Uvicorn's ASGI behavior: a valid application-selected token
+    /// is returned even when the client did not offer it. Native callers that
+    /// require offer validation should use [`Self::with_subprotocol`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WebSocketUpgradeError::InvalidSubprotocol`] for a value that
+    /// is not an HTTP token. Returns
+    /// [`WebSocketUpgradeError::SubprotocolAlreadySelected`] if one was
+    /// selected earlier.
+    pub fn with_application_subprotocol(
+        self,
+        protocol: &str,
+    ) -> Result<Self, WebSocketUpgradeError> {
+        self.with_selected_subprotocol(protocol, false)
+    }
+
+    fn with_selected_subprotocol(
+        mut self,
+        protocol: &str,
+        require_client_offer: bool,
+    ) -> Result<Self, WebSocketUpgradeError> {
         if self.selected_subprotocol.is_some() {
             return Err(WebSocketUpgradeError::SubprotocolAlreadySelected);
         }
         let header_value = HeaderValue::from_str(protocol)
             .map_err(|_| WebSocketUpgradeError::InvalidSubprotocol)?;
         if !is_http_token(protocol.as_bytes())
-            || !self
-                .offered_subprotocols
-                .iter()
-                .any(|offered| offered.as_slice() == protocol.as_bytes())
+            || (require_client_offer
+                && !self
+                    .offered_subprotocols
+                    .iter()
+                    .any(|offered| offered.as_slice() == protocol.as_bytes()))
         {
             return Err(WebSocketUpgradeError::InvalidSubprotocol);
         }
@@ -213,6 +301,15 @@ impl WebSocketUpgrade {
         Ok(self)
     }
 
+    /// Sets the maximum size, in bytes, of an incoming message.
+    ///
+    /// The same limit is applied to an individual frame. The default matches
+    /// the underlying WebSocket implementation's default configuration.
+    pub fn with_max_message_size(mut self, max_message_size: usize) -> Self {
+        self.max_message_size = Some(max_message_size);
+        self
+    }
+
     /// Accepts the request, registers the session, and returns the 101 response.
     ///
     /// `handler` owns the session for its lifetime. It can receive and send
@@ -243,10 +340,23 @@ impl WebSocketUpgrade {
             on_upgrade,
             connection_upgrade,
             accept_key,
+            negotiated_extensions,
             selected_subprotocol,
             response_headers,
             offered_subprotocols: _,
+            max_message_size,
         } = self;
+
+        #[cfg(coverage)]
+        let accept_key_source = if take_derived_accept_key_header_value_fault() {
+            "\r\n"
+        } else {
+            accept_key.as_str()
+        };
+        #[cfg(not(coverage))]
+        let accept_key_source = accept_key.as_str();
+        let accept_key = HeaderValue::from_str(accept_key_source)
+            .map_err(|_| WebSocketUpgradeError::InvalidAcceptKeyHeaderValue)?;
 
         let mut response = Response::new(body);
         *response.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
@@ -254,6 +364,9 @@ impl WebSocketUpgrade {
         headers.insert(CONNECTION, HeaderValue::from_static("upgrade"));
         headers.insert(UPGRADE, HeaderValue::from_static("websocket"));
         headers.insert(SEC_WEBSOCKET_ACCEPT, accept_key);
+        if let Some(extensions) = negotiated_extensions.as_ref() {
+            headers.insert(SEC_WEBSOCKET_EXTENSIONS, extensions.clone());
+        }
         if let Some(protocol) = selected_subprotocol {
             headers.insert(SEC_WEBSOCKET_PROTOCOL, protocol);
         }
@@ -266,18 +379,29 @@ impl WebSocketUpgrade {
         let session_shutdown = connection_upgrade.clone();
         connection_upgrade
             .register(on_upgrade, move |stream| async move {
-                let session =
-                    WebSocketSession::from_accepted_upgrade(stream, session_shutdown).await;
-                handler(session).await
+                let session = WebSocketSession::from_accepted_upgrade_with_options(
+                    stream,
+                    session_shutdown,
+                    max_message_size.unwrap_or(usize::MAX),
+                    negotiated_extensions,
+                )
+                .await
+                .map_err(std::io::Error::other)?;
+                handler(session).await.map_err(std::io::Error::other)
             })
             .map_err(|ConnectionUpgradeClosed| WebSocketUpgradeError::ConnectionClosed)?;
         Ok(response)
     }
 }
 
+enum WebSocketStreamKind {
+    Tungstenite(WebSocketStream<TokioIo<Upgraded>>),
+    Yawc(YawcWebSocket),
+}
+
 /// A framed WebSocket session owned by the native HTTP/1.1 connection.
 pub struct WebSocketSession {
-    stream: WebSocketStream<TokioIo<hyper::upgrade::Upgraded>>,
+    stream: WebSocketStreamKind,
     connection_upgrade: ConnectionUpgrade,
     // Some(None) retains a peer close frame without a code or reason.
     pending_close: Option<Option<WebSocketCloseFrame>>,
@@ -296,7 +420,9 @@ impl WebSocketSession {
         connection_upgrade: ConnectionUpgrade,
     ) -> Self {
         Self {
-            stream: WebSocketStream::from_raw_socket(stream, Role::Server, None).await,
+            stream: WebSocketStreamKind::Tungstenite(
+                WebSocketStream::from_raw_socket(stream, Role::Server, None).await,
+            ),
             connection_upgrade,
             pending_close: None,
         }
@@ -315,10 +441,52 @@ impl WebSocketSession {
         config.max_message_size = Some(max_message_size);
         config.max_frame_size = Some(max_message_size);
         Self {
-            stream: WebSocketStream::from_raw_socket(stream, Role::Server, Some(config)).await,
+            stream: WebSocketStreamKind::Tungstenite(
+                WebSocketStream::from_raw_socket(stream, Role::Server, Some(config)).await,
+            ),
             connection_upgrade,
             pending_close: None,
         }
+    }
+
+    async fn from_accepted_upgrade_with_options(
+        stream: TokioIo<Upgraded>,
+        connection_upgrade: ConnectionUpgrade,
+        max_message_size: usize,
+        negotiated_extensions: Option<HeaderValue>,
+    ) -> Result<Self, WebSocketError> {
+        let stream = match negotiated_extensions {
+            Some(extensions) => {
+                let extensions = extensions.to_str().map_err(|error| {
+                    WebSocketError(TungsteniteError::Io(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        error,
+                    )))
+                })?;
+                WebSocketStreamKind::Yawc(
+                    YawcWebSocket::from_stream_with_extensions(
+                        YawcHttpStream::from(stream),
+                        YawcRole::Server,
+                        Some(extensions),
+                        yawc_options(max_message_size),
+                    )
+                    .map_err(yawc_error)?,
+                )
+            }
+            None => {
+                let mut config = WebSocketConfig::default();
+                config.max_message_size = Some(max_message_size);
+                config.max_frame_size = Some(max_message_size);
+                WebSocketStreamKind::Tungstenite(
+                    WebSocketStream::from_raw_socket(stream, Role::Server, Some(config)).await,
+                )
+            }
+        };
+        Ok(Self {
+            stream,
+            connection_upgrade,
+            pending_close: None,
+        })
     }
 
     /// Receives the next WebSocket message, including a peer close frame, or
@@ -333,18 +501,7 @@ impl WebSocketSession {
     /// Returns [`WebSocketError`] for malformed frames or transport failure.
     pub async fn receive(&mut self) -> Result<Option<WebSocketMessage>, WebSocketError> {
         if self.pending_close.is_none() {
-            let message = match self.stream.next().await.transpose() {
-                Ok(message) => message,
-                Err(error @ TungsteniteError::Capacity(_)) => {
-                    let close = WebSocketCloseFrame {
-                        code: WebSocketCloseCode::Size,
-                        reason: "message too big".into(),
-                    };
-                    let _ = self.stream.close(Some(close)).await;
-                    return Err(WebSocketError(error));
-                }
-                Err(error) => return Err(WebSocketError(error)),
-            };
+            let message = self.receive_from_stream().await?;
             match message {
                 Some(WebSocketMessage::Close(frame)) => self.pending_close = Some(frame),
                 message => return Ok(message),
@@ -360,18 +517,78 @@ impl WebSocketSession {
         // retaining the frame in the session if this receive is canceled.
         #[cfg(coverage)]
         let flush_result = if take_close_reply_flush_fault() {
-            Err(TungsteniteError::Io(std::io::Error::new(
+            Err(WebSocketError(TungsteniteError::Io(std::io::Error::new(
                 std::io::ErrorKind::BrokenPipe,
                 "coverage-injected WebSocket close-reply flush failure",
-            )))
+            ))))
         } else {
-            self.stream.flush().await
+            self.flush_stream().await
         };
         #[cfg(not(coverage))]
-        let flush_result = self.stream.flush().await;
+        let flush_result = self.flush_stream().await;
         let frame = self.pending_close.take();
-        flush_result.map_err(WebSocketError)?;
+        flush_result?;
         Ok(frame.map(WebSocketMessage::Close))
+    }
+
+    async fn receive_from_stream(&mut self) -> Result<Option<WebSocketMessage>, WebSocketError> {
+        match &mut self.stream {
+            WebSocketStreamKind::Tungstenite(stream) => match stream.next().await.transpose() {
+                Ok(message) => Ok(message),
+                Err(error @ TungsteniteError::Capacity(_)) => {
+                    let close = WebSocketCloseFrame {
+                        code: WebSocketCloseCode::Size,
+                        reason: "message too big".into(),
+                    };
+                    let _ = stream.close(Some(close)).await;
+                    Err(WebSocketError(error))
+                }
+                Err(error) => Err(WebSocketError(error)),
+            },
+            WebSocketStreamKind::Yawc(stream) => {
+                match stream.next_frame().await {
+                    Ok(frame) => yawc_frame_to_message(frame).map(Some),
+                    Err(error @ yawc::WebSocketError::FrameTooLarge) => {
+                        // Yawc queues the 1009 close frame when it detects an
+                        // oversized (possibly decompressed) message. Its read
+                        // path flushes that queued frame on the next poll.
+                        // Give a cooperative peer a bounded chance to reply so
+                        // the close is flushed before the session is dropped.
+                        let _ = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                            loop {
+                                match stream.next_frame().await {
+                                    Ok(frame) if frame.opcode() == YawcOpCode::Close => break,
+                                    Ok(_) => continue,
+                                    Err(_) => break,
+                                }
+                            }
+                        })
+                        .await;
+                        Err(yawc_error(error))
+                    }
+                    Err(error) => Err(yawc_error(error)),
+                }
+            }
+        }
+    }
+
+    async fn flush_stream(&mut self) -> Result<(), WebSocketError> {
+        match &mut self.stream {
+            WebSocketStreamKind::Tungstenite(stream) => {
+                stream.flush().await.map_err(WebSocketError)
+            }
+            WebSocketStreamKind::Yawc(stream) => match stream.next_frame().await {
+                // Yawc queues the close reply when it reads the peer's close
+                // frame, then flushes that reply while observing the closed
+                // read state on the next read.
+                Err(yawc::WebSocketError::ConnectionClosed) => Ok(()),
+                Err(error) => Err(yawc_error(error)),
+                Ok(_) => Err(WebSocketError(TungsteniteError::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "received a WebSocket frame after the close frame",
+                )))),
+            },
+        }
     }
 
     /// Sends a WebSocket data or control message with transport backpressure.
@@ -381,7 +598,15 @@ impl WebSocketSession {
     /// Returns [`WebSocketError`] if the peer has closed or the transport
     /// fails while writing the frame.
     pub async fn send(&mut self, message: WebSocketMessage) -> Result<(), WebSocketError> {
-        self.stream.send(message).await.map_err(WebSocketError)
+        match &mut self.stream {
+            WebSocketStreamKind::Tungstenite(stream) => {
+                stream.send(message).await.map_err(WebSocketError)
+            }
+            WebSocketStreamKind::Yawc(stream) => stream
+                .send(yawc_message_to_frame(message)?)
+                .await
+                .map_err(yawc_error),
+        }
     }
 
     /// Sends a WebSocket close frame and flushes queued frames.
@@ -399,12 +624,80 @@ impl WebSocketSession {
         &mut self,
         frame: Option<WebSocketCloseFrame>,
     ) -> Result<(), WebSocketError> {
-        self.stream.close(frame).await.map_err(WebSocketError)
+        match &mut self.stream {
+            WebSocketStreamKind::Tungstenite(stream) => {
+                stream.close(frame).await.map_err(WebSocketError)
+            }
+            WebSocketStreamKind::Yawc(stream) => stream
+                .send(yawc_message_to_frame(WebSocketMessage::Close(frame))?)
+                .await
+                .map_err(yawc_error),
+        }
     }
 
     /// Waits until the server starts graceful shutdown for this connection.
     pub async fn wait_for_shutdown(&mut self) {
         self.connection_upgrade.wait_for_shutdown().await;
+    }
+}
+
+fn yawc_frame_to_message(frame: YawcFrame) -> Result<WebSocketMessage, WebSocketError> {
+    let payload = frame.payload().clone();
+    match frame.opcode() {
+        YawcOpCode::Text => String::from_utf8(payload.to_vec())
+            .map(|text| WebSocketMessage::Text(text.into()))
+            .map_err(|error| {
+                WebSocketError(TungsteniteError::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    error,
+                )))
+            }),
+        YawcOpCode::Binary => Ok(WebSocketMessage::Binary(payload)),
+        YawcOpCode::Ping => Ok(WebSocketMessage::Ping(payload)),
+        YawcOpCode::Pong => Ok(WebSocketMessage::Pong(payload)),
+        YawcOpCode::Close => {
+            let Some(code) = frame.close_code() else {
+                return Ok(WebSocketMessage::Close(None));
+            };
+            let reason = frame
+                .close_reason()
+                .map_err(yawc_error)?
+                .unwrap_or_default();
+            Ok(WebSocketMessage::Close(Some(WebSocketCloseFrame {
+                code: WebSocketCloseCode::from(u16::from(code)),
+                reason: reason.into(),
+            })))
+        }
+        YawcOpCode::Continuation => Err(WebSocketError(TungsteniteError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "WebSocket engine returned an incomplete continuation frame",
+        )))),
+    }
+}
+
+fn yawc_message_to_frame(message: WebSocketMessage) -> Result<YawcFrame, WebSocketError> {
+    match message {
+        WebSocketMessage::Text(text) => {
+            Ok(YawcFrame::text(Bytes::copy_from_slice(text.as_bytes())))
+        }
+        WebSocketMessage::Binary(payload) => Ok(YawcFrame::binary(payload)),
+        WebSocketMessage::Ping(payload) => Ok(YawcFrame::ping(payload)),
+        WebSocketMessage::Pong(payload) => Ok(YawcFrame::pong(payload)),
+        WebSocketMessage::Close(Some(frame)) => Ok(YawcFrame::close(
+            YawcCloseCode::from(u16::from(frame.code)),
+            frame.reason.as_bytes(),
+        )),
+        WebSocketMessage::Close(None) => {
+            let mut frame = YawcFrame::close(YawcCloseCode::Status, b"");
+            *frame.payload_mut() = Bytes::new();
+            Ok(frame)
+        }
+        WebSocketMessage::Frame(_) => {
+            Err(WebSocketError(TungsteniteError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "raw WebSocket frames cannot be sent on a compressed session",
+            ))))
+        }
     }
 }
 
@@ -523,6 +816,8 @@ pub enum WebSocketUpgradeError {
     ReservedResponseHeader,
     /// The HTTP header map reached its finite capacity.
     HeaderCapacity,
+    /// The derived `Sec-WebSocket-Accept` value could not become a header.
+    InvalidAcceptKeyHeaderValue,
     /// The HTTP connection ended before the session could be registered.
     ConnectionClosed,
 }
@@ -547,6 +842,9 @@ impl fmt::Display for WebSocketUpgradeError {
             }
             Self::HeaderCapacity => {
                 formatter.write_str("WebSocket response header capacity exceeded")
+            }
+            Self::InvalidAcceptKeyHeaderValue => {
+                formatter.write_str("failed to parse header value")
             }
             Self::ConnectionClosed => {
                 formatter.write_str("HTTP connection ended before upgrade registration")

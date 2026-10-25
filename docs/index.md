@@ -1,19 +1,22 @@
 # uvicorn-rs
 
-Start with the task you want to complete. The current server is experimental and is not yet a replacement for Uvicorn.
+The PyPI distribution is named `uvicorn-rs` and provides the familiar
+`uvicorn` command and import namespace. It has not been released yet, and the
+current source does not match Uvicorn's full public contract. If you need
+verified drop-in behavior today, keep using upstream Uvicorn.
 
-## Start or configure a server
+## Choose what you want to do
 
-- [Run a Python ASGI app](quickstart.md)
-- [Configure the current prototype](configuration.md)
-- [Deploy and integrate](deployment.md)
+- **Check before replacing Uvicorn:** [compatibility status, future install
+  steps, and rollback instructions](uvicorn-compatibility.md).
+- **Try a Python app from a checkout:** [quickstart](quickstart.md). This does
+  not install a released distribution or prove full compatibility.
+- **Configure or deploy an evaluation:** [configuration](configuration.md)
+  and [deployment guidance](deployment.md).
+- **Check protocol and ASGI behavior:** [support matrix](support-matrix.md).
 
-## Check compatibility
-
-- [Can I replace Uvicorn?](uvicorn-compatibility.md) — availability, current gaps, and future migration and rollback steps.
-- [ASGI support matrix](support-matrix.md) — live-tested protocol, event, and lifecycle behavior.
-
-The Rust server and Python adapter are experimental and have not been published. The Python adapter is not a drop-in Uvicorn replacement. The distribution will be named `uvicorn-rs-py` and provide the `uvicorn` command and import namespace; the checkout exposes those names, but not Uvicorn's full behavior yet.
+The Rust library is Python-free. The `uvicorn-rs-py` name refers to the
+internal Cargo/PyO3 adapter, not the PyPI distribution.
 
 ## Project information
 

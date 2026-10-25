@@ -1,0 +1,12 @@
+{
+  "schema": "uvicorn-rs-parity/input@36",
+  "cases": [
+    {
+      "case_id": "startup-encrypted-private-key-invalid-der.rejects-key",
+      "profile": "startup-encrypted-private-key-invalid-der",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "startup_failure": {"expect_failed": true}
+    }
+  ]
+}

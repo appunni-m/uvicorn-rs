@@ -22,29 +22,31 @@ one that reached the response-wait stage. The extra fields appear only on a
 failed libcurl transfer, so successful benchmark rows keep their existing
 shape. Byte counts are `-1` when the installed libcurl does not expose them.
 
-The latest completed full FastAPI comparison is the
+The older full FastAPI comparison is the
 FastAPI five-category report (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md`):
 520 correctness rows passed across H1, H2, WebSockets, and lifecycle, with 32
 qualified workload/loop pairs. H3 at concurrency 64 stopped on Hypercorn
 reference timeouts. The maintained full-suite runner now gives H3 its own
 recorded concurrency setting, defaulting to 1, while the other categories keep
 their requested concurrency (64 by default). This permits a matched low-load
-H3 comparison; it does not claim high-concurrency H3 capacity. The run uses one
-configured Tokio async worker and no FastAPI-RS or Starlette-RS.
+H3 comparison; it does not claim high-concurrency H3 capacity. The report is
+historical comparison data, not the latest release evidence.
 
-The latest full hosted matrix,
-[run 38995794146](https://github.com/appunni-m/uvicorn-rs/actions/runs/38995794146),
-did not complete across all three systems. Linux x86-64 stopped at the exact
-wheel's HTTP/3 duplicate-header parity case; macOS ARM64 stopped on an HTTP/2
-client-driver shutdown timeout. Linux ARM64 completed its selected categories.
-Within HTTP/2, uvicorn-rs reached 2.342×/2.982× Hypercorn throughput on the
-small `protocol-scope` workload, but only 0.092×/0.084× on
-`many-response-chunks` (asyncio/uvloop respectively). A focused macOS rerun
-passed correctness and shutdown but all timing samples were invalidated by host
-load. The mixed workload results do not qualify a multi-system performance
-gain; see [benchmark status](benchmark-status.md) for artifacts, per-system
-details, and evidence boundaries. The earlier FastAPI report remains
-historical comparison data only.
+The latest hosted three-system attempt,
+[run 39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939),
+used exact `main` commit
+[`86e72e181d00feca1b4db7f30377d5d9d4345b83`](https://github.com/appunni-m/uvicorn-rs/commit/86e72e181d00feca1b4db7f30377d5d9d4345b83).
+Linux x86-64 and macOS ARM64 category jobs passed. Linux ARM64 passed public
+parity and its FastAPI comparison, then Hypercorn 0.18.0 asyncio failed the
+HTTP/3 `slow-reader-backpressure` correctness gate in repetition 4 with
+`KeyError: 52`; the client completed 28/40 requests and timed out twice waiting
+for response headers. The aggregate job retained a partial report, but the
+matrix is incomplete and no result from the failed cell is rankable. The
+source-backed late `DataReceived` after `StreamClosed` explanation remains
+unconfirmed because no per-stream trace was retained. Hypercorn HTTP/3 upload
+also remains excluded after its separate timeout. There is no qualified
+three-system performance claim; see [benchmark status](benchmark-status.md)
+for the retained artifacts and current evidence limits.
 
 **Timing qualification:** the category runners now explicitly match access-log,
 server-header, and date-header settings between uvicorn-rs and its reference.
@@ -85,8 +87,8 @@ shuffles server configuration order within a repetition using the supplied seed.
 | Category | Candidate and baseline | Correctness gate |
 |---|---|---|
 | HTTP/1.1 | Upstream FastAPI on the Rust server with asyncio and uvloop; Uvicorn with httptools under both loops. The maintained matrix covers 15 FastAPI workloads across routes, request bodies, and response streams. | Every response status and complete body is checked against the workload oracle. |
-| HTTP/2 | The currently recorded category comparison uses the same upstream FastAPI app on the Rust server and Hypercorn, each with asyncio and uvloop. | TLS ALPN must select H2; status and full response body are checked. Uvicorn 0.54.0 has since added experimental H2 via zttp; migrating this benchmark baseline is tracked separately and has not yet been validated. |
-| HTTP/3 | The same upstream FastAPI app on the Rust server and Hypercorn, each with asyncio and uvloop. The full-suite runner defaults H3 to concurrency 1, recorded separately from the other categories. A Hypercorn consumed-request case has failed under load; that attempt must stay visible and cannot yield a ratio. | QUIC/TLS, status, and full response body are checked. |
+| HTTP/2 | Protocol-focused ASGI cases use the same upstream FastAPI app on the Rust server and Hypercorn, each with asyncio and uvloop. The stock-FastAPI comparison also records validated-route and Python-CPU cases, alongside the shared upload, large-response, chunked-response, and slow-reader routes. | TLS ALPN must select H2; status and full response body are checked. Uvicorn 0.54.0 has since added experimental H2 via zttp; migrating this benchmark baseline is tracked separately and has not yet been validated. |
+| HTTP/3 | Protocol-focused ASGI cases use the same upstream FastAPI app on the Rust server and Hypercorn, each with asyncio and uvloop. The stock-FastAPI comparison records validated-route and Python-CPU cases, alongside the shared upload, large-response, chunked-response, and slow-reader routes. The full-suite runner records H3 concurrency separately. Hypercorn upload exclusions and the Linux ARM64 slow-reader failure remain unqualified cells. | QUIC/TLS, status, and full response body are checked. Failed or missing cells remain visible and cannot yield a ratio. |
 | WebSockets | The upstream FastAPI `/echo` route on the Rust server and Uvicorn, each with asyncio or uvloop. | Handshake/subprotocol and complete text or binary payload equality are checked. |
 | Lifespan/shutdown | A FastAPI app with shared state and a held request on the Rust server and Uvicorn, each with asyncio or uvloop. | Lifespan state, graceful lifespan completion, and cancellation of an active request are required. |
 
@@ -94,6 +96,10 @@ Each comparison matches event loops: asyncio with asyncio and uvloop with
 uvloop. Uvicorn uses `httptools` for both H1 pairs so the asyncio comparison
 does not also change the HTTP parser. The analyzer reports these pairs
 separately and does not combine loop profiles into one rate or latency ratio.
+The aggregate keeps protocol-focused ASGI rows in the category tables and
+collects six ordinary FastAPI workloads in a separate stock-FastAPI table.
+This labels the app layer and the negotiated protocol independently; it does
+not turn an incomplete H2/H3 reference cell into a passing FastAPI result.
 
 Uvicorn has no H2 or H3 server baseline, so those rows compare with Hypercorn
 only. HTTP/3 upload has Rust-only rows because the tested Hypercorn version did
@@ -146,6 +152,15 @@ contention monitor and correctness, process-cleanup, and identity gates remain
 active. Invalid observations are retained and excluded from ratios. If a host
 is noisy, the report shows the missing qualified pairs; rerun the workflow to
 collect a fresh sample set rather than relaxing the gate.
+
+The full HTTP/2 and HTTP/3 category runs also use the ordinary FastAPI app for
+their workloads. The generated **Stock FastAPI comparison** table selects the
+validated-route, Python-CPU, request-upload, large-response, chunked-response,
+and slow-reader cases from those protocol runs; protocol-scope rows remain in
+the separate category table. HTTP/3 request-upload is explicitly unpaired
+because the Hypercorn reference has timed out after a complete request body;
+the analyzer retains that row as unqualified rather than treating a Rust-only
+result as a FastAPI comparison.
 
 The aggregate validates that all three systems used the same source, harness,
 Python version, and dependency versions. It never averages or ranks rates across
@@ -301,6 +316,30 @@ valid matched repetitions for any release performance claim. In particular,
 do not raise client timeouts or exclude an H3 workload based only on one
 passing focused run.
 
+To inspect the Hypercorn HTTP/3 slow-reader `KeyError(52)` event ordering on
+Linux ARM64, first prepare the benchmark virtualenv and `target/release/bench`
+client, then run exactly one bounded trace cell:
+
+```sh
+.venv/bin/python scripts/run_h3_category_bench.py \
+  --workloads slow-reader-backpressure \
+  --servers hypercorn-asyncio \
+  --repetitions 1 \
+  --trace-hypercorn-h3-events \
+  --output target/kata-progress/hypercorn-h3-stream-linux-arm64.json
+```
+
+Trace mode captures eight 0.25-second host-preflight intervals before it starts
+Hypercorn or the client. A rejected preflight stops the run and keeps its
+receipt. A passing receipt is included in the report; the server log contains
+the bounded H3 event trace, including each raw QUIC stream event before H3
+decoding, aioquic and Hypercorn stream-map presence, stream-map removal, and
+the missing-stream lookup. This makes the capture distinguish an H3 decoding
+failure from `DataReceived` reaching Hypercorn after `StreamClosed` removes its
+stream entry. The event order remains unconfirmed until a trace is captured.
+The trace deliberately marks its timing invalid and is diagnostic evidence
+only. Use a fresh output path for each attempt.
+
 To recheck the intermittent Hypercorn response-header timeout seen on macOS
 ARM64, use this push selector for one matched asyncio workload:
 `[focused-h3] [h3-system=macos-arm64] [h3-server=asyncio-pair] [h3-workload=large-response]`.
@@ -340,18 +379,18 @@ extension before collecting samples:
 
 ```sh
 uv lock --check
-uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs-py
+uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
 UV_PROJECT_ENVIRONMENT=target/uvicorn-oracle uv sync --python 3.12 --locked \
   --only-group benchmark --only-group uvicorn-oracle --only-group fastapi-benchmark --no-install-project
 uv run --no-sync python -c 'import uvicorn_rs; print(uvicorn_rs.__file__)'
 ```
 
-The project `.venv` is the candidate environment: it contains `uvicorn-rs-py`
+The project `.venv` is the candidate environment: it contains the `uvicorn-rs`
 and must not contain upstream Uvicorn. Both distributions own the `uvicorn`
 import namespace, so installing them together can make results depend on file
 installation order. `target/uvicorn-oracle` is a separate environment built
 from the locked `uvicorn-oracle` group; it must contain stock Uvicorn 0.54.0,
-not `uvicorn-rs-py`. The runners check the version, Python version, package
+not `uvicorn-rs`. The runners check the version, Python version, package
 location, and installed Uvicorn `RECORD` hashes before using it. The
 `fastapi-benchmark` group pins upstream FastAPI 0.142.4; the candidate and
 oracle use the same locked FastAPI, Starlette, and Pydantic versions. The full
@@ -370,7 +409,7 @@ both rows; uvloop controls only the Python app event loop.
 
 ```sh
 uv lock --check
-uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs-py
+uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
 cargo build --release --locked --manifest-path tools/http3-probe/Cargo.toml --bins
 .venv/bin/python scripts/run_benchmark_categories.py \
   --uvicorn-python target/uvicorn-oracle/bin/python \
@@ -1135,7 +1174,7 @@ uv run --no-sync python scripts/run_http_category_bench.py \
   --duration 3 --warmup 1 --concurrency 32 --repetitions 3 --seed 20261008 \
   --require-runtime-diagnostics \
   --output "benchmarks/results/bridge-diagnostics-${RUN_ID}.json"
-uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs-py
+uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
 ```
 
 The H1 runner stores a `runtime_diagnostics` object on each Rust row and fails
@@ -1162,7 +1201,7 @@ RUN_ID="$(date -u +%Y-%m-%dT%H%M%SZ)-$(uuidgen)"
 .venv/bin/python scripts/profile_fastapi_protocols.py \
   --protocol http3 --duration 2 --warmup 0 --concurrency 1 --repetitions 3 \
   --output "benchmarks/results/fastapi-stage-${RUN_ID}-http3.json"
-uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs-py
+uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
 ```
 
 The H3 adapter covers fixed, large-response, many-response-chunks, and
@@ -1208,7 +1247,7 @@ uv run --no-sync python scripts/run_http_category_bench.py \
   --duration 2 --warmup 0 --concurrency 64 --repetitions 3 --seed 20261008 \
   --require-runtime-diagnostics --asgi-stage-diagnostics \
   --output "benchmarks/results/bridge-stage-attribution-${RUN_ID}.json"
-uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs-py
+uv sync --python 3.12 --locked --group benchmark --group fastapi-benchmark --reinstall-package uvicorn-rs
 ```
 
 See the current-source protocol-stage report (`benchmarks/results/2026-10-10/fastapi-current-protocol-stages-20261010/README.md`)

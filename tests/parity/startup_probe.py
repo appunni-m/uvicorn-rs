@@ -58,6 +58,28 @@ def identity_for(
             timeout=30,
         )
         return certificate, str(mismatched)
+    malformed_encrypted_key_documents = {
+        "startup-encrypted-private-key-invalid-utf8": b"\xff\xfe\n",
+        "startup-encrypted-private-key-malformed-pem": b"not a PEM document\n",
+        "startup-encrypted-private-key-wrong-label": (
+            b"-----BEGIN NOT A PRIVATE KEY-----\nMAA=\n"
+            b"-----END NOT A PRIVATE KEY-----\n"
+        ),
+        "startup-encrypted-private-key-invalid-der": (
+            b"-----BEGIN ENCRYPTED PRIVATE KEY-----\nMAA=\n"
+            b"-----END ENCRYPTED PRIVATE KEY-----\n"
+        ),
+    }
+    if scenario in malformed_encrypted_key_documents:
+        invalid = temporary / "invalid-encrypted-key.pem"
+        invalid.write_bytes(malformed_encrypted_key_documents[scenario])
+        return certificate, str(invalid)
+    if scenario == "startup-encrypted-private-key-wrong-password":
+        fixture_directory = ROOT / "tests" / "native-core" / "tls"
+        return (
+            str(fixture_directory / "localhost-cert.pem"),
+            str(fixture_directory / "localhost-key-pkcs8-encrypted.pem"),
+        )
     raise ValueError(f"unknown startup scenario: {scenario}")
 
 
@@ -65,32 +87,41 @@ def main() -> None:
     server_id, scenario, certificate, key = sys.argv[1:]
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-startup-parity-") as directory:
         certfile, keyfile = identity_for(scenario, certificate, key, Path(directory))
+        key_password = (
+            "not-the-parity-key-password"
+            if scenario.startswith("startup-encrypted-private-key-")
+            else None
+        )
         host = "does-not-exist.invalid" if scenario == "startup-invalid-host" else "127.0.0.1"
         try:
             if server_id == "uvicorn-rs":
                 from uvicorn_rs import Server
 
-                server = Server(
-                    app,
-                    host=host,
-                    port=0,
-                    certfile=certfile,
-                    keyfile=keyfile,
-                )
+                options = {
+                    "host": host,
+                    "port": 0,
+                    "certfile": certfile,
+                    "keyfile": keyfile,
+                }
+                if key_password is not None:
+                    options["ssl_keyfile_password"] = key_password
+                server = Server(app, **options)
                 asyncio.run(server.serve())
                 return
 
             if server_id == "uvicorn":
                 import uvicorn
 
-                config = uvicorn.Config(
-                    app,
-                    host=host,
-                    port=0,
-                    loop="uvloop",
-                    ssl_certfile=certfile,
-                    ssl_keyfile=keyfile,
-                )
+                options = {
+                    "host": host,
+                    "port": 0,
+                    "loop": "uvloop",
+                    "ssl_certfile": certfile,
+                    "ssl_keyfile": keyfile,
+                }
+                if key_password is not None:
+                    options["ssl_keyfile_password"] = key_password
+                config = uvicorn.Config(app, **options)
                 asyncio.run(uvicorn.Server(config).serve())
                 return
 

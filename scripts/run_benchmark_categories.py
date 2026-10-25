@@ -236,7 +236,7 @@ def capture_identity(root, python, evidence_class):
     clients = [root / "target/release" / name for name in PROBE_NAMES]
     for path in clients:
         normal_binary(path)
-    extra_dependencies = {"uvicorn-rs-py": ["uvicorn_rs", "uvicorn"]}
+    extra_dependencies = {"uvicorn-rs": ["uvicorn_rs", "uvicorn"]}
     try:
         importlib.metadata.distribution("fastapi")
     except importlib.metadata.PackageNotFoundError:
@@ -251,12 +251,12 @@ def capture_identity(root, python, evidence_class):
                                   artifacts_dir=Path(directory),
                                   extra_dependencies=extra_dependencies)
         dependencies = evidence.dependencies_before
-        required = {"hypercorn", "h11", "h2", "aioquic", "uvloop", "httptools", "websockets", "uvicorn-rs-py"}
+        required = {"hypercorn", "h11", "h2", "aioquic", "uvloop", "httptools", "websockets", "uvicorn-rs"}
         if fastapi_selected:
             required.update(FASTAPI_BENCHMARK_DISTRIBUTIONS)
         if missing := sorted(required - dependencies.keys()):
             raise RuntimeError(f"frozen benchmark dependencies are missing: {missing}")
-        modified = [name for name, value in dependencies.items() if name != "uvicorn-rs-py" and
+        modified = [name for name, value in dependencies.items() if name != "uvicorn-rs" and
                     (value["record_content_mismatches"] or value["unrecorded_source_files"] or
                      (value["direct_url"] and value["direct_url"].get("dir_info", {}).get("editable")))]
         if modified:

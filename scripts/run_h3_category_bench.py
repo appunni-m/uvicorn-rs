@@ -55,6 +55,25 @@ WORKLOADS = {
         "app": FASTAPI_APP,
         "client": {"mode": "fixed", "path": "/protocol", "expected_body": "http_version=3"},
     },
+    "fastapi-validated-route": {
+        "app": FASTAPI_APP,
+        "client": {
+            "mode": "fixed",
+            "path": "/items/7?repeat=3",
+            "expected_body": (
+                '{"item_id":21,"name":"item-7","active":true,'
+                '"labels":["python","asgi"]}'
+            ),
+        },
+    },
+    "fastapi-python-cpu": {
+        "app": FASTAPI_APP,
+        "client": {
+            "mode": "fixed",
+            "path": "/cpu/20000",
+            "expected_body": '{"iterations":20000,"checksum":499563}',
+        },
+    },
     "fixed": {
         "app": FASTAPI_APP,
         "client": {"mode": "fixed", "path": "/fixed"},
@@ -116,7 +135,13 @@ def free_port() -> int:
 
 
 def server_command(
-    server: dict, app: str, port: int, cert: Path, key: Path, hypercorn_config: Path
+    server: dict,
+    app: str,
+    port: int,
+    cert: Path,
+    key: Path,
+    hypercorn_config: Path,
+    trace_hypercorn_h3_events: bool = False,
 ) -> list[str]:
     if server["kind"] == "rust":
         return [
@@ -125,12 +150,49 @@ def server_command(
             "--lifespan", "auto", "--interface", "asgi3", "--no-access-log",
             "--no-server-header", "--no-date-header", "--log-level", "error",
         ]
-    return [
+    command = [
         str(PYTHON), "-m", "hypercorn", app, "--bind", f"127.0.0.1:{port}",
         "--quic-bind", f"127.0.0.1:{port}", "--certfile", str(cert), "--keyfile", str(key),
         "--worker-class", server["loop"], "--log-level", "error",
         "--config", str(hypercorn_config),
     ]
+    if trace_hypercorn_h3_events:
+        return [str(PYTHON), str(ROOT / "scripts" / "trace_hypercorn_h3.py"), *command[3:]]
+    return command
+
+
+def require_clean_trace_host(output: Path) -> dict:
+    """Capture a fresh host receipt and refuse to trace under unrelated load."""
+    result = subprocess.run(
+        [
+            str(PYTHON),
+            str(ROOT / "scripts" / "benchmark_host_preflight.py"),
+            "--output",
+            str(output.resolve()),
+            "--intervals",
+            "8",
+            "--interval-seconds",
+            "0.25",
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        receipt = json.loads(output.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(
+            "could not capture the HTTP/3 trace host-preflight receipt: "
+            f"{error}; {result.stderr.strip()}"
+        ) from error
+    if result.returncode != 0 or receipt.get("decision") != "accept":
+        reasons = ", ".join(receipt.get("reject_reasons", [])) or "preflight did not pass"
+        raise SystemExit(
+            "refusing to start the HTTP/3 trace because the host preflight rejected: "
+            f"{reasons}; receipt: {output}"
+        )
+    return receipt
 
 
 def wait_ready(process: subprocess.Popen, port: int, log, cert: Path) -> None:
@@ -186,13 +248,23 @@ def sample(
     ca_certificate: Path,
     hypercorn_config: Path,
     evidence: BenchmarkEvidence,
+    trace_hypercorn_h3_events: bool = False,
 ) -> dict:
     identity_before = evidence.before_sample()
     definition = WORKLOADS[workload]
     port = free_port()
     log = evidence.open_server_log()
     process = owned_process(
-        server_command(server, definition["app"], port, cert, key, hypercorn_config), cwd=ROOT,
+        server_command(
+            server,
+            definition["app"],
+            port,
+            cert,
+            key,
+            hypercorn_config,
+            trace_hypercorn_h3_events,
+        ),
+        cwd=ROOT,
         stdout=log, stderr=log, text=True,
     )
     case = definition["client"]
@@ -243,9 +315,17 @@ def sample(
 
 def source_digest() -> str:
     files = {
-        "scripts/run_h3_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/bench.rs",
-        "scripts/benchmark_evidence.py", "src/lib.rs", "python/uvicorn_rs/server.py", "examples/bench_fastapi.py",
-        "pyproject.toml", "uv.lock",
+        "scripts/run_h3_category_bench.py",
+        "scripts/benchmark_certificates.py",
+        "scripts/benchmark_host_preflight.py",
+        "tools/http3-probe/src/bin/bench.rs",
+        "scripts/trace_hypercorn_h3.py",
+        "scripts/benchmark_evidence.py",
+        "src/lib.rs",
+        "python/uvicorn_rs/server.py",
+        "examples/bench_fastapi.py",
+        "pyproject.toml",
+        "uv.lock",
     }
     files.update(workspace_rust_source_paths(ROOT))
     digest = hashlib.sha256()
@@ -266,9 +346,26 @@ def main() -> None:
     parser.add_argument("--concurrency", type=int, default=1,
                         help="HTTP/3 comparison concurrency; increase explicitly for a load-capacity experiment")
     parser.add_argument("--repetitions", type=int, default=3)
+    parser.add_argument(
+        "--trace-hypercorn-h3-events",
+        action="store_true",
+        help=(
+            "emit a bounded Hypercorn H3 stream lifecycle trace for one diagnostic cell; "
+            "timing is invalid and a fresh passing host preflight is required"
+        ),
+    )
     parser.add_argument("--seed", type=int, default=20261002)
     parser.add_argument("--output", type=Path, default=ROOT / "benchmarks" / "results" / "http3-categories-2026-10-02.json")
     args = parser.parse_args()
+    if args.trace_hypercorn_h3_events and (
+        args.workloads != ["slow-reader-backpressure"]
+        or args.servers != ["hypercorn-asyncio"]
+        or args.repetitions != 1
+    ):
+        parser.error(
+            "--trace-hypercorn-h3-events requires exactly --workloads slow-reader-backpressure "
+            "--servers hypercorn-asyncio --repetitions 1"
+        )
     assert_clean_coverage_environment()
     selected_servers = {name: SERVERS[name] for name in args.servers}
     for workload in args.workloads:
@@ -288,11 +385,32 @@ def main() -> None:
     if not CLIENT.exists():
         raise SystemExit(f"prebuild the HTTP/3 benchmark client before identity capture: {CLIENT}")
 
+    host_preflight = None
+    if args.trace_hypercorn_h3_events:
+        host_preflight_path = args.output.with_suffix(".host-preflight.json")
+        if host_preflight_path.exists():
+            raise SystemExit(
+                "refusing to overwrite the HTTP/3 trace host-preflight receipt: "
+                f"{host_preflight_path}"
+            )
+        host_preflight = require_clean_trace_host(host_preflight_path)
+
     evidence = BenchmarkEvidence(
         ROOT, PYTHON,
-        ["scripts/run_h3_category_bench.py", "scripts/benchmark_certificates.py", "tools/http3-probe/src/bin/bench.rs",
-         "tools/http3-probe/Cargo.toml", "Cargo.lock", "examples/bench_fastapi.py"],
+        [
+            "scripts/run_h3_category_bench.py",
+            "scripts/benchmark_certificates.py",
+            "scripts/benchmark_host_preflight.py",
+            "scripts/trace_hypercorn_h3.py",
+            "tools/http3-probe/src/bin/bench.rs",
+            "tools/http3-probe/Cargo.toml",
+            "Cargo.lock",
+            "examples/bench_fastapi.py",
+        ],
         [CLIENT],
+        # The trace-only mode starts Hypercorn and never loads the Rust
+        # extension; keep its unrelated coverage marker out of this diagnostic.
+        validate_native_extension=not args.trace_hypercorn_h3_events,
         artifacts_dir=args.output.with_suffix(".artifacts"),
         extra_dependencies=FASTAPI_BENCHMARK_DISTRIBUTIONS,
     )
@@ -319,6 +437,7 @@ def main() -> None:
                         metrics = sample(
                             selected_servers[name], workload, args.duration, args.warmup,
                             args.concurrency, cert, key, ca_certificate, hypercorn_config, evidence,
+                            args.trace_hypercorn_h3_events,
                         )
                     except Exception as error:
                         raise RuntimeError(
@@ -326,6 +445,11 @@ def main() -> None:
                             f"repetition={repetition}: {error}"
                         ) from error
                     row = {"workload": workload, "server": name, "repetition": repetition, **metrics}
+                    if args.trace_hypercorn_h3_events:
+                        row["timing_valid"] = False
+                        row.setdefault("timing_invalid_reasons", []).append(
+                            "diagnostic H3 stream tracing adds overhead"
+                        )
                     rows.append(row)
                     print(json.dumps(row), flush=True)
                     checkpoint_file.write(json.dumps(row) + "\n")
@@ -391,6 +515,11 @@ def main() -> None:
                 for name in args.workloads
             },
             "source_sha256": source_digest(), "workloads": args.workloads, "servers": selected_servers,
+            "hypercorn_h3_event_trace": {
+                "enabled": args.trace_hypercorn_h3_events,
+                "max_events": 512 if args.trace_hypercorn_h3_events else 0,
+                "host_preflight": host_preflight,
+            },
             "excluded_servers_by_workload": {
                 name: WORKLOADS[name].get("excluded_servers", {})
                 for name in args.workloads if WORKLOADS[name].get("excluded_servers")

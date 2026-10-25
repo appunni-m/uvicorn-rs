@@ -17,6 +17,7 @@ import io
 import json
 import os
 import re
+import signal
 import stat
 import struct
 import subprocess
@@ -31,6 +32,7 @@ from pathlib import Path, PurePosixPath
 
 import tomllib
 from check_release_version import project_versions
+from build_input_identity import build_input_hashes
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = {
@@ -41,30 +43,23 @@ PLATFORMS = {
 LICENSES = ("LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT")
 LICENSE_EXPRESSION = "BSD-3-Clause OR MIT"
 CRATE_DIRS = {
-    "native-app-contract": ROOT / "crates/native-app-contract",
+    "asgi-lifespan-protocol-rs": ROOT / "crates/asgi-lifespan-protocol-rs",
     "uvicorn-rs": ROOT / "crates/uvicorn-rs",
-    "uvicorn-rs-h3": ROOT / "crates/uvicorn-rs-h3",
-    "uvicorn-rs-h3-quinn": ROOT / "crates/uvicorn-rs-h3-quinn",
 }
 CRATE_EXCLUDES = {
-    "native-app-contract": set(),
+    "asgi-lifespan-protocol-rs": set(),
     "uvicorn-rs": {"examples/native_core_contracts.rs"},
-    "uvicorn-rs-h3": {"src/tests/**", "UPSTREAM-README.md"},
-    "uvicorn-rs-h3-quinn": {"UPSTREAM-README.md"},
 }
 CRATE_LICENSE_EXPRESSIONS = {
-    "native-app-contract": LICENSE_EXPRESSION,
+    "asgi-lifespan-protocol-rs": LICENSE_EXPRESSION,
     "uvicorn-rs": LICENSE_EXPRESSION,
-    "uvicorn-rs-h3": "MIT",
-    "uvicorn-rs-h3-quinn": "MIT",
 }
 CRATE_LICENSE_FILES = {
-    "native-app-contract": LICENSES,
-    "uvicorn-rs": LICENSES,
-    "uvicorn-rs-h3": ("LICENSE",),
-    "uvicorn-rs-h3-quinn": ("LICENSE",),
+    "asgi-lifespan-protocol-rs": LICENSES,
+    "uvicorn-rs": (*LICENSES, "third-party/h3/LICENSE", "third-party/h3-quinn/LICENSE"),
 }
-LEGACY_FEATURE_ONLY_FAULT_POINTS = frozenset({
+SDIST_EXCLUDED_WORKSPACE_MEMBERS = frozenset({"tools/http3-probe"})
+LEGACY_TRANSPORT_ONLY_FAULT_POINTS = frozenset({
     "server.connection-io.eof-recheck.pause",
     "server.connection-task.join-await-error",
     "server.connection-task.join-error",
@@ -79,15 +74,19 @@ REQUIRED = (
     # Bind the LF checkout policy into otherwise byte-sensitive source receipts.
     ".gitattributes",
     "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "README.md", "src/lib.rs", *LICENSES,
-    "crates/native-app-contract/Cargo.toml", "crates/native-app-contract/README.md",
-    *(f"crates/native-app-contract/{name}" for name in LICENSES),
+    "crates/asgi-lifespan-protocol-rs/Cargo.toml", "crates/asgi-lifespan-protocol-rs/README.md",
+    *(f"crates/asgi-lifespan-protocol-rs/{name}" for name in LICENSES),
     "crates/uvicorn-rs/Cargo.toml", "crates/uvicorn-rs/README.md",
     *(f"crates/uvicorn-rs/{name}" for name in LICENSES),
-    "crates/uvicorn-rs-h3/Cargo.toml", "crates/uvicorn-rs-h3/README.md",
-    "crates/uvicorn-rs-h3/LICENSE",
-    "crates/uvicorn-rs-h3-quinn/Cargo.toml", "crates/uvicorn-rs-h3-quinn/README.md",
-    "crates/uvicorn-rs-h3-quinn/LICENSE",
+    "crates/uvicorn-rs/THIRD_PARTY_NOTICES.md",
+    "crates/uvicorn-rs/third-party/h3/LICENSE",
+    "crates/uvicorn-rs/third-party/h3/UPSTREAM-README.md",
+    "crates/uvicorn-rs/third-party/h3-quinn/LICENSE",
+    "crates/uvicorn-rs/third-party/h3-quinn/UPSTREAM-README.md",
+    "crates/uvicorn-rs/third-party/hyper/Cargo.toml",
+    "crates/uvicorn-rs/third-party/hyper/LICENSE",
     "python/uvicorn/__init__.py", "python/uvicorn/__main__.py", "python/uvicorn/main.py",
+    "python/uvicorn/_types.py", "python/uvicorn/importer.py",
     "python/uvicorn/py.typed",
 )
 FORBIDDEN_DIRS = {
@@ -136,8 +135,11 @@ def source_hashes() -> dict[str, str]:
     paths.update((ROOT / "src").rglob("*.rs"))
     for directory in CRATE_DIRS.values():
         paths.update(directory.rglob("*.rs"))
-    paths.update((ROOT / "python" / "uvicorn_rs").glob("*.py"))
-    paths.update(path for path in (ROOT / "python" / "uvicorn").iterdir() if path.is_file())
+    for package in ("uvicorn_rs", "uvicorn"):
+        paths.update(
+            path for path in (ROOT / "python" / package).rglob("*")
+            if path.is_file() and (path.suffix == ".py" or path.name == "py.typed")
+        )
     for optional in ("build.rs", ".gitignore"):
         if (ROOT / optional).exists():
             paths.add(ROOT / optional)
@@ -156,23 +158,43 @@ def validate_sdist_source_contents(contents: dict[str, bytes], root: Path = ROOT
         packaged_manifest = tomllib.loads(contents["Cargo.toml"].decode("utf-8"))
     except (KeyError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise ValueError("source archive has no valid Cargo.toml") from error
-    if packaged_manifest != original_manifest:
-        raise ValueError("source archive Cargo.toml differs from the reviewed checkout")
-    workspace = packaged_manifest.get("workspace", {})
-    members = workspace.get("members", []) if isinstance(workspace, dict) else []
-    if not isinstance(members, list) or any(not isinstance(member, str) for member in members):
+    original_workspace = original_manifest.get("workspace", {})
+    packaged_workspace = packaged_manifest.get("workspace", {})
+    original_members = original_workspace.get("members", []) if isinstance(original_workspace, dict) else []
+    members = packaged_workspace.get("members", []) if isinstance(packaged_workspace, dict) else []
+    if (not isinstance(original_members, list) or any(not isinstance(member, str) for member in original_members)
+            or not isinstance(members, list) or any(not isinstance(member, str) for member in members)):
         raise ValueError("workspace members must be an explicit string list for sdist verification")
-    missing_members = [member for member in members
+    omitted_members = [member for member in original_members
                        if (PurePosixPath(member) / "Cargo.toml").as_posix() not in contents]
-    if missing_members:
-        raise ValueError(f"source archive omits Cargo workspace members: {missing_members}")
+    if set(omitted_members) - SDIST_EXCLUDED_WORKSPACE_MEMBERS:
+        raise ValueError(f"source archive omits Cargo workspace members: {omitted_members}")
+    expected_manifest = dict(original_manifest)
+    expected_workspace = dict(original_workspace)
+    expected_workspace["members"] = [member for member in original_members if member not in omitted_members]
+    expected_workspace.pop("default-members", None)
+    expected_manifest["workspace"] = expected_workspace
+    if packaged_manifest != expected_manifest:
+        raise ValueError("source archive Cargo.toml differs beyond Cargo package normalization")
+    if members != expected_workspace["members"]:
+        raise ValueError("source archive Cargo workspace members differ from packaged manifests")
+
+    for package in ("uvicorn_rs", "uvicorn"):
+        package_path = root / "python" / package
+        for source in package_path.rglob("*"):
+            if source.is_symlink():
+                raise ValueError(f"source archive input must not be a symlink: {source}")
+            if source.is_file() and (source.suffix == ".py" or source.name == "py.typed"):
+                relative = source.relative_to(root).as_posix()
+                if relative not in contents:
+                    raise ValueError(f"source archive omits Python package source: {relative}")
 
     hashes = {}
     for name, data in contents.items():
         if name == "PKG-INFO":
             continue
         source = root / name
-        if not source.is_file() or source.read_bytes() != data:
+        if name != "Cargo.toml" and (not source.is_file() or source.read_bytes() != data):
             raise ValueError(f"source archive differs from reviewed checkout: {name}")
         hashes[name] = sha256(data)
     return dict(sorted(hashes.items()))
@@ -202,8 +224,8 @@ def license_contract() -> None:
             local = directory / name
             if not local.is_file() or not local.read_bytes().strip():
                 raise ValueError(f"{crate_name} is missing its declared license file: {name}")
-            if crate_name in {"native-app-contract", "uvicorn-rs"}:
-                if local.read_bytes() != (ROOT / name).read_bytes():
+            if crate_name in {"asgi-lifespan-protocol-rs", "uvicorn-rs"}:
+                if local.read_bytes() != (CRATE_DIRS[crate_name] / name).read_bytes():
                     raise ValueError(f"{crate_name} license copy differs from the repository: {name}")
 
 
@@ -251,7 +273,7 @@ def fault_points() -> list[str]:
         preceding_arm = block.rfind(",", 0, arm.start())
         attributes = block[preceding_arm + 1 : arm.start()]
         if re.search(
-            r'#\[cfg\(\s*not\(\s*feature\s*=\s*"native-tcp"\s*\)\s*\)\]',
+            r'#\[cfg\(\s*not\(\s*uvicorn_rs_native_transport\s*\)\s*\)\]',
             attributes,
         ):
             legacy_points.add(point)
@@ -263,11 +285,11 @@ def fault_points() -> list[str]:
         r'const\s+POINT:\s*&str\s*=\s*"([a-z][a-z0-9.-]+)"', native_source
     ))
     legacy_only = legacy_points - native_points
-    if legacy_only != LEGACY_FEATURE_ONLY_FAULT_POINTS:
+    if legacy_only != LEGACY_TRANSPORT_ONLY_FAULT_POINTS:
         raise ValueError(
-            "legacy feature fault-point inventory changed: "
-            f"source-only={sorted(legacy_only - LEGACY_FEATURE_ONLY_FAULT_POINTS)}, "
-            f"removed={sorted(LEGACY_FEATURE_ONLY_FAULT_POINTS - legacy_only)}"
+            "legacy transport fault-point inventory changed: "
+            f"source-only={sorted(legacy_only - LEGACY_TRANSPORT_ONLY_FAULT_POINTS)}, "
+            f"removed={sorted(LEGACY_TRANSPORT_ONLY_FAULT_POINTS - legacy_only)}"
         )
 
     points = sorted(default_points | native_points)
@@ -326,7 +348,7 @@ def wheel_platform(tag: str) -> str:
 
 def package_metadata(data: bytes, version: str) -> object:
     metadata = BytesParser(policy=policy.default).parsebytes(data)
-    for key, expected in (("Name", "uvicorn-rs-py"), ("Version", version),
+    for key, expected in (("Name", "uvicorn-rs"), ("Version", version),
                           ("License-Expression", LICENSE_EXPRESSION), ("Requires-Python", ">=3.9")):
         if metadata.get_all(key) != [expected]:
             raise ValueError(f"package metadata {key} must be exactly {expected!r}")
@@ -355,13 +377,13 @@ def package_metadata(data: bytes, version: str) -> object:
 
 
 def inspect_wheel(path: Path, version: str, expected_platform: str | None = None) -> dict:
-    match = re.fullmatch(r"uvicorn_rs_py-([0-9.]+)-cp39-abi3-(.+)\.whl", path.name)
+    match = re.fullmatch(r"uvicorn_rs-([0-9.]+)-cp39-abi3-(.+)\.whl", path.name)
     if match is None or match[1] != version:
         raise ValueError(f"unexpected wheel name/version/ABI floor: {path.name}")
     platform_name = wheel_platform(match[2])
     if expected_platform is not None and platform_name != expected_platform:
         raise ValueError(f"wheel platform differs from requested producer: {path.name}")
-    prefix = f"uvicorn_rs_py-{version}.dist-info"
+    prefix = f"uvicorn_rs-{version}.dist-info"
     with zipfile.ZipFile(path) as archive:
         entries = archive.infolist()
         names = [safe_member(entry.filename) for entry in entries]
@@ -411,17 +433,13 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
     python_sources = {}
     for package in ("uvicorn_rs", "uvicorn"):
         package_path = Path("python") / package
-        tracked = subprocess.run(
-            ["git", "ls-files", "-z", "--", package_path.as_posix()],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-        ).stdout
-        for item in sorted(path for path in tracked.split(b"\0") if path):
-            relative = Path(os.fsdecode(item))
+        for source in sorted((ROOT / package_path).rglob("*")):
+            if source.is_symlink():
+                raise ValueError(f"Python package source must not be a symlink: {source}")
+            if not source.is_file() or not (source.suffix == ".py" or source.name == "py.typed"):
+                continue
+            relative = source.relative_to(ROOT)
             source = ROOT / relative
-            if not source.is_file():
-                raise ValueError(f"tracked Python package source is missing: {relative}")
             name = f"{package}/{relative.relative_to(package_path).as_posix()}"
             python_sources[name] = source.read_bytes()
             if contents.get(name) != python_sources[name]:
@@ -443,9 +461,9 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
 
 
 def inspect_sdist(path: Path, version: str) -> dict:
-    if path.name != f"uvicorn_rs_py-{version}.tar.gz":
+    if path.name != f"uvicorn_rs-{version}.tar.gz":
         raise ValueError(f"unexpected source archive name: {path.name}")
-    prefix = f"uvicorn_rs_py-{version}/"
+    prefix = f"uvicorn_rs-{version}/"
     contents = {}
     seen = set()
     with tarfile.open(path, "r:gz") as archive:
@@ -542,12 +560,7 @@ def inspect_rust_crate(
     if len(locked) != 1:
         raise ValueError(f"Cargo archive lockfile does not identify {package_name} {version}")
     expected_dependencies = {
-        "uvicorn-rs-h3-quinn": {"h3": "uvicorn-rs-h3"},
-        "uvicorn-rs": {
-            "native-app-contract": "native-app-contract",
-            "h3": "uvicorn-rs-h3",
-            "h3-quinn": "uvicorn-rs-h3-quinn",
-        },
+        "uvicorn-rs": {"asgi-lifespan-protocol-rs": "asgi-lifespan-protocol-rs"},
     }.get(package_name, {})
     dependencies = manifest.get("dependencies", {})
     for alias, dependency_name in expected_dependencies.items():
@@ -626,17 +639,18 @@ def candidate_publication_blockers(dirty: bool) -> list[str]:
     """Report known reasons a candidate artifact cannot be consumed safely."""
     blockers = ["dirty source checkout"] if dirty else []
     workspace = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))
-    patches = workspace.get("patch", {}).get("crates-io", {})
-    if "h3" in patches:
-        blockers.append(
-            "standalone uvicorn-rs crate archive cannot inherit the workspace-only h3 patch"
-        )
-    dependencies = workspace.get("dependencies", {})
-    expected = {"h3": "uvicorn-rs-h3", "h3-quinn": "uvicorn-rs-h3-quinn"}
-    for alias, package in expected.items():
-        dependency = dependencies.get(alias, {})
-        if dependency.get("package") != package:
-            blockers.append(f"standalone uvicorn-rs-py must use the maintained {package} package")
+    native = tomllib.loads((ROOT / "crates/uvicorn-rs/Cargo.toml").read_text(encoding="utf-8"))
+    dependencies = native.get("dependencies", {})
+    lifecycle = dependencies.get("asgi-lifespan-protocol-rs", {})
+    if lifecycle.get("version") != tomllib.loads(
+        (ROOT / "crates/asgi-lifespan-protocol-rs/Cargo.toml").read_text(encoding="utf-8")
+    )["package"]["version"]:
+        blockers.append("uvicorn-rs must depend on the released asgi-lifespan-protocol-rs version")
+    features = native.get("features", {})
+    if "http3" not in features or not {"dep:quinn", "dep:futures", "dep:fastrand"} <= set(features["http3"]):
+        blockers.append("uvicorn-rs must gate the bundled HTTP/3 runtime behind its http3 feature")
+    if any(name in dependencies for name in ("h3", "h3-quinn")):
+        blockers.append("uvicorn-rs must bundle HTTP/3 source instead of depending on separate H3 packages")
     return blockers
 
 
@@ -647,12 +661,7 @@ def verify_rust_crate_archives(
     require_clean: bool,
 ) -> dict:
     """Build all packaged Rust crates from extracted archives in isolation."""
-    packages = (
-        "native-app-contract",
-        "uvicorn-rs-h3",
-        "uvicorn-rs-h3-quinn",
-        "uvicorn-rs",
-    )
+    packages = ("asgi-lifespan-protocol-rs", "uvicorn-rs")
     inspected = {
         package: inspect_rust_crate(
             directory / f"{package}-{version}.crate",
@@ -683,15 +692,11 @@ def verify_rust_crate_archives(
         for name in environment:
             if name.startswith("CARGO_TARGET_") and name.endswith("_RUSTFLAGS"):
                 environment[name] = ""
+        lifecycle_patch = f'patch.crates-io.asgi-lifespan-protocol-rs.path="{extracted["asgi-lifespan-protocol-rs"].as_posix()}"'
         commands = (
-            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["native-app-contract"] / "Cargo.toml")],
-            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs-h3"] / "Cargo.toml")],
-            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs-h3-quinn"] / "Cargo.toml"),
-             "--config", f'patch.crates-io.uvicorn-rs-h3.path="{extracted["uvicorn-rs-h3"].as_posix()}"'],
-            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"),
-             "--config", f'patch.crates-io.native-app-contract.path="{extracted["native-app-contract"].as_posix()}"',
-             "--config", f'patch.crates-io.uvicorn-rs-h3.path="{extracted["uvicorn-rs-h3"].as_posix()}"',
-             "--config", f'patch.crates-io.uvicorn-rs-h3-quinn.path="{extracted["uvicorn-rs-h3-quinn"].as_posix()}"'],
+            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["asgi-lifespan-protocol-rs"] / "Cargo.toml")],
+            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"), "--config", lifecycle_patch],
+            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"), "--features", "http3", "--config", lifecycle_patch],
         )
         for command in commands:
             result = subprocess.run(
@@ -717,10 +722,9 @@ def verify_rust_crate_archives(
             value["filename"]: value["sha256"] for value in inspected.values()
         },
         "commands": [
-            "cargo check --offline --locked --manifest-path <native-app-contract>/Cargo.toml",
-            "cargo check --offline --locked --manifest-path <uvicorn-rs-h3>/Cargo.toml",
-            "cargo check --offline --locked --manifest-path <uvicorn-rs-h3-quinn>/Cargo.toml --config patch.crates-io.uvicorn-rs-h3.path=<uvicorn-rs-h3>",
-            "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patches for native-app-contract, uvicorn-rs-h3 and uvicorn-rs-h3-quinn",
+            "cargo check --offline --locked --manifest-path <asgi-lifespan-protocol-rs>/Cargo.toml",
+            "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
+            "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --features http3 --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
         ],
     }
 
@@ -733,6 +737,8 @@ def validate_consumer(value: dict, version: str, wheel_sha: str, native_sha: str
             or SHA256.fullmatch(str(value.get("native_sha256", ""))) is None
             or SHA256.fullmatch(str(value.get("consumer_probe_sha256", ""))) is None):
         raise ValueError("installed-wheel consumer identity/CLI evidence mismatch")
+    if value.get("build_inputs_sha256") != build_input_hashes(ROOT):
+        raise ValueError("installed-wheel consumer build inputs differ from the reviewed checkout")
     if native_sha is not None and value["native_sha256"] != native_sha:
         raise ValueError("consumer imported a different native module")
     deployment = value.get("cli_tls_and_shutdown", {})
@@ -756,7 +762,8 @@ def validate_consumer(value: dict, version: str, wheel_sha: str, native_sha: str
         or deployment.get("held_request_cancelled") is not True
         or deployment.get("lifespan_shutdown_completed") is not True
         or deployment.get("signal") != "SIGTERM"
-        or deployment.get("exit_code") != 0
+        or type(deployment.get("exit_code")) is not int
+        or deployment.get("exit_code") not in {0, -signal.SIGTERM}
         or deployment.get("shutdown_bound_seconds") != 5
         or not isinstance(deployment.get("shutdown_elapsed_seconds"), (int, float))
         or deployment["shutdown_elapsed_seconds"] > 5
@@ -814,10 +821,10 @@ def record(args: argparse.Namespace) -> None:
     packages = {wheel["filename"]: wheel}
     if args.platform == "linux-x86_64":
         expected |= {
-            f"uvicorn_rs_py-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json",
+            f"uvicorn_rs-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json",
             *(f"{package}-{version}.crate" for package in CRATE_DIRS),
         }
-        sdist = inspect_sdist(directory / f"uvicorn_rs_py-{version}.tar.gz", version)
+        sdist = inspect_sdist(directory / f"uvicorn_rs-{version}.tar.gz", version)
         packages[sdist["filename"]] = sdist
         validate_source_consumer(load_json(directory / "consumer-sdist.json"), version, sdist)
         validate_packaged_parity(directory / "parity-linux-x86_64.json", wheel["native"]["sha256"])
@@ -849,10 +856,8 @@ def record(args: argparse.Namespace) -> None:
              "environment": {name: "" for name in sorted(flag_names)}}
     if args.platform == "linux-x86_64":
         build["native_crate_commands"] = [
-            "cargo package -p native-app-contract --no-verify --locked --offline",
-            "cargo package -p uvicorn-rs-h3 --no-verify --locked --offline",
-            "cargo package -p uvicorn-rs-h3-quinn --no-verify --locked --offline --config 'patch.crates-io.uvicorn-rs-h3.path=\"crates/uvicorn-rs-h3\"'",
-            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.native-app-contract.path=\"crates/native-app-contract\"' --config 'patch.crates-io.uvicorn-rs-h3.path=\"crates/uvicorn-rs-h3\"' --config 'patch.crates-io.uvicorn-rs-h3-quinn.path=\"crates/uvicorn-rs-h3-quinn\"'",
+            "cargo package -p asgi-lifespan-protocol-rs --no-verify --locked --offline",
+            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.asgi-lifespan-protocol-rs.path=\"crates/asgi-lifespan-protocol-rs\"'",
             "copy target/native-package/package/*.crate to dist/",
         ]
         build["native_crate_consumer_check"] = crate_consumer_check

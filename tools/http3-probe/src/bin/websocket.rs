@@ -1,16 +1,16 @@
 use std::error::Error;
 use std::io::Write;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
-use futures_util::{future::join_all, SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt, future::join_all};
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::tungstenite::http::header::SEC_WEBSOCKET_PROTOCOL;
-use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::http::HeaderValue;
+use tokio_tungstenite::tungstenite::http::header::SEC_WEBSOCKET_PROTOCOL;
 
 type BenchError = Box<dyn Error + Send + Sync>;
 
@@ -262,7 +262,9 @@ fn report(
         percentile(&latencies, 0.95),
         percentile(&latencies, 0.99),
         failures.len(),
-        first_failure.map(|value| value.to_string()).unwrap_or_else(|| "null".to_string()),
+        first_failure
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "null".to_string()),
     )?;
     if !failures.is_empty() || requests == 0 {
         return Err("WebSocket benchmark correctness gate failed".into());

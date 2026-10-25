@@ -11,12 +11,22 @@ import os
 import platform
 import ssl
 import sys
+import warnings
 from typing import Any, get_args
 
 import click
 
 from uvicorn import __version__
-from uvicorn.config import LOGGING_CONFIG
+from uvicorn._types import ASGIApplication
+from uvicorn.config import (
+    HTTPProtocolType,
+    InterfaceType,
+    LifespanType,
+    LOGGING_CONFIG,
+    LoopFactoryType,
+    SSL_PROTOCOL_VERSION,
+    WSProtocolType,
+)
 
 
 LEVEL_CHOICES = click.Choice(["critical", "error", "warning", "info", "debug", "trace"])
@@ -96,7 +106,7 @@ def print_version(ctx: click.Context, param: click.Parameter, value: bool) -> No
 @click.option(
     "--loop",
     type=str,
-    metavar="[auto|asyncio|uvloop|zuvloop]",
+    metavar=_metavar_from_type(LoopFactoryType),
     default="auto",
     help="Event loop factory implementation.",
     show_default=True,
@@ -104,7 +114,7 @@ def print_version(ctx: click.Context, param: click.Parameter, value: bool) -> No
 @click.option(
     "--http",
     type=str,
-    metavar="[auto|h11|httptools|zttp]",
+    metavar=_metavar_from_type(HTTPProtocolType),
     default="auto",
     help="HTTP protocol implementation.",
     show_default=True,
@@ -119,7 +129,7 @@ def print_version(ctx: click.Context, param: click.Parameter, value: bool) -> No
 @click.option(
     "--ws",
     type=str,
-    metavar="[auto|websockets|websockets-sansio|wsproto]",
+    metavar=_metavar_from_type(WSProtocolType),
     default="auto",
     help="WebSocket protocol implementation.",
     show_default=True,
@@ -238,7 +248,7 @@ def print_version(ctx: click.Context, param: click.Parameter, value: bool) -> No
 @click.option(
     "--ssl-version",
     type=int,
-    default=int(ssl.PROTOCOL_TLS_SERVER),
+    default=int(SSL_PROTOCOL_VERSION),
     help="SSL version to use (see stdlib ssl module's)",
     show_default=True,
 )
@@ -298,15 +308,18 @@ def print_version(ctx: click.Context, param: click.Parameter, value: bool) -> No
 def main(ctx: click.Context, app: str, **options: Any) -> None:
     supported = {
         "host", "port", "uds", "fd", "loop", "ssl_certfile", "ssl_keyfile",
+        "ssl_keyfile_password",
         "timeout_graceful_shutdown", "app_dir", "factory", "lifespan", "root_path",
         "env_file", "http2",
         "headers", "server_header", "date_header", "interface",
-        "ws_max_size", "ws_ping_interval", "ws_ping_timeout",
+        "ws_max_size", "ws_max_queue", "ws_ping_interval", "ws_ping_timeout",
+        "ws_per_message_deflate", "ssl_version", "ssl_cert_reqs", "ssl_ca_certs", "ssl_ciphers",
         "proxy_headers", "forwarded_allow_ips",
         "limit_concurrency", "limit_max_requests", "limit_max_requests_jitter",
         "timeout_keep_alive",
         "log_config", "log_level", "access_log",
         "use_colors", "backlog", "reset_contextvars",
+        "h11_max_incomplete_event_size",
     }
     supported.update(
         {
@@ -322,14 +335,20 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
     # Uvicorn parser selectors route to the Rust HTTP engine. HTTP/2 remains
     # opt-in through the same zttp/http2 settings as upstream Uvicorn; the
     # Rust engine supplies the protocol implementation without importing zttp.
-    if options["http"] in {"auto", "h11", "httptools", "zttp"}:
-        supported.add("http")
-    # With the pinned Uvicorn dependency, auto selects this same SansIO
-    # protocol class. That implementation does not read ws_max_queue; the
-    # legacy websockets backend does, but it is not selected by auto. The Rust
-    # engine has one native WebSocket implementation.
-    if options["ws"] in {"auto", "websockets-sansio"}:
+    # Let custom or invalid selectors reach Config's Uvicorn-style import
+    # resolution. Known but unsupported implementations are still rejected by
+    # _validate_native_runtime after that resolution, matching Uvicorn's error
+    # for an unknown import string.
+    supported.add("http")
+    # The Rust engine provides one native WebSocket implementation for the
+    # selectors with verified ASGI behavior. The legacy websockets path uses
+    # ws_max_queue to bound pending ASGI receive messages; the other paths do
+    # not consume that backend-specific setting.
+    if options["ws"] in {"auto", "none", "websockets-sansio", "wsproto", "websockets"}:
         supported.update({"ws", "ws_max_queue"})
+    elif options["ws"] not in {"none", "websockets", "wsproto"}:
+        # Preserve Uvicorn's import-string diagnostics for unknown selectors.
+        supported.add("ws")
     unsupported = [
         parameter.name
         for parameter in ctx.command.params
@@ -345,11 +364,6 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         raise click.ClickException(
             "uvicorn-rs supports auto, ASGI 2, ASGI 3, and WSGI application interfaces"
         )
-    if options["loop"] not in {"auto", "asyncio", "uvloop"}:
-        raise click.ClickException(
-            f"uvicorn-rs does not support loop={options['loop']!r}"
-        )
-
     # Forward the parsed settings directly to run() so both CLI entry points
     # use the same configuration path.
     headers = [tuple(header.split(":", 1)) for header in options["headers"]]
@@ -362,7 +376,7 @@ def main(ctx: click.Context, app: str, **options: Any) -> None:
         loop=options["loop"],
         http=options["http"],
         http2=options["http2"],
-        ws="auto",
+        ws=options["ws"],
         ws_max_size=options["ws_max_size"],
         ws_max_queue=options["ws_max_queue"],
         ws_ping_interval=options["ws_ping_interval"],
@@ -455,7 +469,7 @@ def run(
     ssl_keyfile: str | os.PathLike[str] | None = None,
     ssl_certfile: str | os.PathLike[str] | None = None,
     ssl_keyfile_password: str | None = None,
-    ssl_version: int = ssl.PROTOCOL_TLS_SERVER,
+    ssl_version: int = SSL_PROTOCOL_VERSION,
     ssl_cert_reqs: int = ssl.CERT_NONE,
     ssl_ca_certs: str | os.PathLike[str] | None = None,
     ssl_ciphers: str | None = None,
@@ -527,6 +541,8 @@ def run(
         h11_max_incomplete_event_size=h11_max_incomplete_event_size,
         reset_contextvars=reset_contextvars,
     )
+
+
     # Reload and workers are supervised by a parent process. The app must be
     # imported in each child so a changed module is loaded on every restart.
     if config.reload or config.workers > 1:
@@ -568,3 +584,15 @@ def run(
     finally:
         if config.uds and os.path.exists(config.uds):
             os.remove(config.uds)
+
+
+def __getattr__(name: str) -> Any:
+    if name == "ServerState":
+        warnings.warn(
+            "uvicorn.main.ServerState is deprecated, use uvicorn.server.ServerState instead.",
+            DeprecationWarning,
+        )
+        from uvicorn.server import ServerState
+
+        return ServerState
+    raise AttributeError(f"module {__name__} has no attribute {name}")

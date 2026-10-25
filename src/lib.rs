@@ -20,7 +20,7 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::future::Future;
 use std::net::SocketAddr;
-#[cfg(all(unix, feature = "native-tcp"))]
+#[cfg(all(unix, uvicorn_rs_native_transport))]
 use std::os::unix::fs::PermissionsExt;
 use std::pin::Pin;
 #[cfg(feature = "runtime-diagnostics")]
@@ -29,36 +29,38 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::task::{Context, Poll};
 
-#[cfg(any(not(feature = "native-tcp"), coverage))]
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 use bytes::Buf;
 use bytes::Bytes;
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 use futures_util::task::AtomicWaker;
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 use futures_util::{SinkExt, StreamExt};
-use http::header::{HeaderName, HeaderValue, DATE};
+use h3_quinn::quinn::{self, crypto::rustls::QuicServerConfig};
+use http::header::{DATE, HeaderName, HeaderValue};
 use http::{HeaderMap, Request, Response, StatusCode, Version};
 use http_body::{Body, Frame, SizeHint};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
-#[cfg(not(feature = "native-tcp"))]
+use hyper::ext::HeaderOrder;
+#[cfg(not(uvicorn_rs_native_transport))]
 use hyper::service::service_fn;
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 use hyper_util::rt::TokioExecutor;
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 use hyper_util::rt::TokioIo;
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 use hyper_util::server::conn::auto;
 #[cfg(coverage)]
 use pyo3::exceptions::PyMemoryError;
 use pyo3::exceptions::{PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyList, PyString};
+use pyo3::types::{PyBytes, PyDict, PyList, PyModule, PyString};
 use pyo3_async_runtimes::TaskLocals;
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 use tokio::io::{AsyncRead, AsyncWrite};
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 use tokio::net::TcpStream;
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -67,25 +69,18 @@ use tokio::sync::mpsc::{
     self,
     error::{TryRecvError, TrySendError},
 };
-use tokio::sync::{oneshot, watch, Mutex};
-use tokio_rustls::{rustls, TlsAcceptor};
-use tokio_tungstenite::tungstenite::handshake::derive_accept_key;
-#[cfg(not(feature = "native-tcp"))]
-use tokio_tungstenite::{
-    tungstenite::{
-        protocol::{Role, WebSocketConfig},
-        Error as TungsteniteError,
-    },
-    WebSocketStream,
-};
+use tokio::sync::{Mutex, oneshot, watch};
+use tokio_rustls::{TlsAcceptor, rustls};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use uvicorn_rs::WebSocketUpgrade;
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
+use uvicorn_rs::h3;
+use uvicorn_rs::h3_quinn;
 use uvicorn_rs::{
     WebSocketCloseCode as CloseCode, WebSocketCloseFrame as CloseFrame,
     WebSocketMessage as Message, WebSocketSession,
 };
-
-use h3_quinn::quinn::{self, crypto::rustls::QuicServerConfig};
 
 // Simulate a dependency task unwinding only in the instrumented fault runner.
 // Production builds do not contain this function or its callers.
@@ -126,7 +121,7 @@ enum CoverageFaultPoint {
     HttpBodyPumpShutdownCompleteTaskBeforeAbort,
     HttpRequestBodySegmentLengthOverflow,
     HttpRequestBodySegmentOutOfBounds,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ConnectionIoEofRecheckPause,
     PythonAsgiReceiveBorrowConflict,
     ServerControlShutdownBorrowConflict,
@@ -240,23 +235,23 @@ enum CoverageFaultPoint {
     ServerConnectionLifetimeMissing,
     ServerPeerReadHalfClosedMissing,
     ServerPeerReadFailedMissing,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ServerConnectionTaskJoinError,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ServerConnectionTaskServiceAwaitError,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ServerConnectionTaskJoinAwaitError,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ServerConnectionTaskServiceSelectResult,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ServerConnectionTaskJoinSelectResult,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ServerConnectionTaskServiceErrorDuringShutdown,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ServerConnectionTaskJoinErrorDuringShutdown,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ServerConnectionTaskShutdownHang,
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     ServerConnectionIoPollWriteError,
     HttpAsgiIoAllocate,
     HttpAppInvokeCall,
@@ -303,6 +298,22 @@ enum CoverageFaultPoint {
     Http3BodyPumpSendError,
     ServerListenerAcceptError,
     ServerListenerLocalAddrError,
+    ServerPreboundBindError,
+    ServerPreboundAcceptError,
+    ServerPreboundReadError,
+    ServerPreboundRecvError,
+    ServerPreboundMissingMarker,
+    ServerPreboundUnexpectedAncillary,
+    ServerPreboundControlTruncated,
+    ServerPreboundGetDescriptorFlagsError,
+    ServerPreboundSetDescriptorFlagsError,
+    ServerPreboundListenError,
+    ServerPreboundNonblockingError,
+    ServerPreboundTcpListenerConversionError,
+    ServerPreboundNoListener,
+    ServerPreboundListenerMarkerInvalidCount,
+    ServerPreboundEndMarkerHasDescriptor,
+    ServerPreboundInvalidMarker,
     ServerHttp3EndpointBindError,
     ServerHttp3TaskShutdownHang,
     ServerWebSocketTaskShutdownHang,
@@ -313,6 +324,10 @@ enum CoverageFaultPoint {
     LifespanScopeStateSetItem,
     LifespanIoAllocate,
     LifespanAppInvokeCall,
+    LifespanInfoLoggerImport,
+    LifespanInfoLoggerGetLogger,
+    LifespanInfoLoggerCallGetLogger,
+    LifespanInfoLoggerCallInfo,
     LifespanReceiveStartupTypeSetItem,
     LifespanReceiveShutdownTypeSetItem,
     LifespanReceiveChannelClosed,
@@ -341,6 +356,7 @@ enum CoverageFaultPoint {
     WebSocketIoAllocate,
     WebSocketAppInvokeCall,
     WebSocketNativeUpgradeMissing,
+    WebSocketNativeUpgradeExtensionRemovedAfterDispatch,
     WebSocketNativeUpgradeRegisterClosed,
     WebSocketReceiveConnectTypeSetItem,
     WebSocketReceiveTextTypeSetItem,
@@ -366,6 +382,11 @@ enum CoverageFaultPoint {
     WebSocketPeerReadFailureWatchFallback,
     WebSocketDriverSendError,
     WebSocketDriverDrainSendError,
+    ServerTcpAddressLookupEmpty,
+    ServerTcpSocketCreateError,
+    ServerTcpSocketReuseAddrError,
+    ServerTcpSocketBindError,
+    ServerTcpSocketListenError,
 }
 
 #[cfg(coverage)]
@@ -418,7 +439,7 @@ impl CoverageFaultPoint {
                 "http.request.body-segment.length-overflow"
             }
             Self::HttpRequestBodySegmentOutOfBounds => "http.request.body-segment.out-of-bounds",
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ConnectionIoEofRecheckPause => "server.connection-io.eof-recheck.pause",
             Self::PythonAsgiReceiveBorrowConflict => "python.asgi-receive.borrow-conflict",
             Self::ServerControlShutdownBorrowConflict => "server.control.shutdown.borrow-conflict",
@@ -565,33 +586,33 @@ impl CoverageFaultPoint {
             Self::ServerConnectionLifetimeMissing => "server.connection-lifetime.missing",
             Self::ServerPeerReadHalfClosedMissing => "server.peer-read-half-closed.missing",
             Self::ServerPeerReadFailedMissing => "server.peer-read-failed.missing",
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ServerConnectionTaskJoinError => "server.connection-task.join-error",
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ServerConnectionTaskServiceAwaitError => {
                 "server.connection-task.service-await-error"
             }
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ServerConnectionTaskJoinAwaitError => "server.connection-task.join-await-error",
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ServerConnectionTaskServiceSelectResult => {
                 "server.connection-task.service-select-result"
             }
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ServerConnectionTaskJoinSelectResult => {
                 "server.connection-task.join-select-result"
             }
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ServerConnectionTaskServiceErrorDuringShutdown => {
                 "server.connection-task.service-error-during-shutdown"
             }
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ServerConnectionTaskJoinErrorDuringShutdown => {
                 "server.connection-task.join-error-during-shutdown"
             }
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ServerConnectionTaskShutdownHang => "server.connection-task.shutdown-hang",
-            #[cfg(not(feature = "native-tcp"))]
+            #[cfg(not(uvicorn_rs_native_transport))]
             Self::ServerConnectionIoPollWriteError => "server.connection-io.poll-write-error",
             Self::HttpAsgiIoAllocate => "http.asgi-io.allocate",
             Self::HttpAppInvokeCall => "http.asgi.app-invoke",
@@ -656,6 +677,39 @@ impl CoverageFaultPoint {
             Self::Http3BodyPumpSendError => "http3.body-pump.send-error",
             Self::ServerListenerAcceptError => "server.listener.accept-error",
             Self::ServerListenerLocalAddrError => "server.listener.local-addr-error",
+            Self::ServerPreboundBindError => "server.prebound-transfer.bind-error",
+            Self::ServerPreboundAcceptError => "server.prebound-transfer.accept-error",
+            Self::ServerPreboundReadError => "server.prebound-transfer.read-error",
+            Self::ServerPreboundRecvError => "server.prebound-transfer.recv-error",
+            Self::ServerPreboundMissingMarker => "server.prebound-transfer.missing-marker",
+            Self::ServerPreboundUnexpectedAncillary => {
+                "server.prebound-transfer.unexpected-ancillary"
+            }
+            Self::ServerPreboundControlTruncated => "server.prebound-transfer.control-truncated",
+            Self::ServerPreboundGetDescriptorFlagsError => {
+                "server.prebound-transfer.get-descriptor-flags-error"
+            }
+            Self::ServerPreboundSetDescriptorFlagsError => {
+                "server.prebound-transfer.set-descriptor-flags-error"
+            }
+            Self::ServerPreboundListenError => "server.prebound-transfer.listen-error",
+            Self::ServerPreboundNonblockingError => "server.prebound-transfer.nonblocking-error",
+            Self::ServerPreboundTcpListenerConversionError => {
+                "server.prebound-transfer.tcp-listener-conversion-error"
+            }
+            Self::ServerPreboundNoListener => "server.prebound-transfer.no-listener",
+            Self::ServerPreboundListenerMarkerInvalidCount => {
+                "server.prebound-transfer.listener-marker-invalid-count"
+            }
+            Self::ServerPreboundEndMarkerHasDescriptor => {
+                "server.prebound-transfer.end-marker-has-descriptor"
+            }
+            Self::ServerPreboundInvalidMarker => "server.prebound-transfer.invalid-marker",
+            Self::ServerTcpAddressLookupEmpty => "server.tcp-address-lookup.empty",
+            Self::ServerTcpSocketCreateError => "server.tcp-socket.create-error",
+            Self::ServerTcpSocketReuseAddrError => "server.tcp-socket.reuseaddr-error",
+            Self::ServerTcpSocketBindError => "server.tcp-socket.bind-error",
+            Self::ServerTcpSocketListenError => "server.tcp-socket.listen-error",
             Self::ServerHttp3EndpointBindError => "server.http3-endpoint.bind-error",
             Self::ServerHttp3TaskShutdownHang => "server.http3-task.shutdown-hang",
             Self::ServerWebSocketTaskShutdownHang => "server.websocket-task.shutdown-hang",
@@ -668,6 +722,10 @@ impl CoverageFaultPoint {
             Self::LifespanScopeStateSetItem => "lifespan.scope.state.set-item",
             Self::LifespanIoAllocate => "lifespan.io.allocate",
             Self::LifespanAppInvokeCall => "lifespan.app-invoke",
+            Self::LifespanInfoLoggerImport => "lifespan.log-info.import-logging",
+            Self::LifespanInfoLoggerGetLogger => "lifespan.log-info.get-logger",
+            Self::LifespanInfoLoggerCallGetLogger => "lifespan.log-info.call-get-logger",
+            Self::LifespanInfoLoggerCallInfo => "lifespan.log-info.call-info",
             Self::LifespanReceiveStartupTypeSetItem => "lifespan.receive.startup.type.set-item",
             Self::LifespanReceiveShutdownTypeSetItem => "lifespan.receive.shutdown.type.set-item",
             Self::LifespanReceiveChannelClosed => "lifespan.receive.channel-closed",
@@ -700,6 +758,9 @@ impl CoverageFaultPoint {
             Self::WebSocketIoAllocate => "websocket.io.allocate",
             Self::WebSocketAppInvokeCall => "websocket.app-invoke",
             Self::WebSocketNativeUpgradeMissing => "websocket.native-upgrade.missing",
+            Self::WebSocketNativeUpgradeExtensionRemovedAfterDispatch => {
+                "websocket.native-upgrade.extension-removed-after-dispatch"
+            }
             Self::WebSocketNativeUpgradeRegisterClosed => {
                 "websocket.native-upgrade.register-closed"
             }
@@ -772,7 +833,7 @@ fn coverage_fault_take(point: CoverageFaultPoint) -> bool {
 }
 
 macro_rules! coverage_try {
-    ($fault_point:ident, $operation:expr) => {{
+    ($fault_point:ident, $operation:expr_2021) => {{
         #[cfg(coverage)]
         let result = if coverage_fault_is_armed(CoverageFaultPoint::$fault_point) {
             Err(PyMemoryError::new_err(concat!(
@@ -789,7 +850,7 @@ macro_rules! coverage_try {
 }
 
 macro_rules! coverage_value {
-    ($fault_point:ident, $operation:expr) => {{
+    ($fault_point:ident, $operation:expr_2021) => {{
         #[cfg(coverage)]
         let result = if coverage_fault_is_armed(CoverageFaultPoint::$fault_point) {
             Err(PyMemoryError::new_err(concat!(
@@ -808,7 +869,7 @@ macro_rules! coverage_value {
 // Exercise PyO3's real borrow error at the receive boundary, using a valid
 // native object and no raw pointers. The guard is released before propagation.
 macro_rules! coverage_receive_borrow_conflict {
-    ($io:expr, $py:expr) => {{
+    ($io:expr_2021, $py:expr_2021) => {{
         #[cfg(coverage)]
         {
             let result = if coverage_fault_take(CoverageFaultPoint::PythonAsgiReceiveBorrowConflict)
@@ -826,7 +887,7 @@ macro_rules! coverage_receive_borrow_conflict {
 // Feed injected runtime failures through the same conversion and propagation
 // as the real operation. Returning early from a probe would bypass cleanup.
 macro_rules! coverage_runtime_result {
-    ($fault_point:ident, $operation:expr) => {{
+    ($fault_point:ident, $operation:expr_2021) => {{
         #[cfg(coverage)]
         let result = if coverage_fault_take(CoverageFaultPoint::$fault_point) {
             Err(BoxError::from(std::io::Error::other(concat!(
@@ -849,9 +910,64 @@ fn log_error(message: fmt::Arguments<'_>) {
     // or broken stderr must not turn error reporting into a server panic.
     let _ = std::io::Write::write_fmt(&mut std::io::stderr().lock(), format_args!("{message}\n"));
 }
+
+fn log_lifespan_info(message: &str) {
+    let _ = Python::attach(|py| -> PyResult<()> {
+        macro_rules! logging_call {
+            ($fault_point:ident, $operation:expr_2021, $injected_error:expr_2021) => {{
+                #[cfg(coverage)]
+                let result = if coverage_fault_take(CoverageFaultPoint::$fault_point) {
+                    $injected_error
+                } else {
+                    $operation
+                };
+                #[cfg(not(coverage))]
+                let result = $operation;
+                result
+            }};
+        }
+
+        logging_call!(
+            LifespanInfoLoggerImport,
+            PyModule::import(py, "logging"),
+            PyModule::import(py, "uvicorn_rs_coverage_missing_logging_module")
+        )
+        .and_then(|logging| {
+            logging_call!(
+                LifespanInfoLoggerGetLogger,
+                logging.getattr("getLogger"),
+                logging.getattr("uvicorn_rs_coverage_missing_get_logger")
+            )
+        })
+        .and_then(|get_logger| {
+            logging_call!(
+                LifespanInfoLoggerCallGetLogger,
+                get_logger.call1(("uvicorn.error",)),
+                py.None().into_bound(py).call1(("uvicorn.error",))
+            )
+        })
+        .and_then(|logger| {
+            logging_call!(
+                LifespanInfoLoggerCallInfo,
+                logger.call_method1("info", (message,)),
+                logger.call_method1("uvicorn_rs_coverage_missing_info", (message,))
+            )
+        })
+        .map(drop)
+    });
+}
+
+fn log_lifespan_error(message: &str) {
+    let _ = Python::attach(|py| -> PyResult<()> {
+        PyModule::import(py, "logging")
+            .and_then(|logging| logging.getattr("getLogger"))
+            .and_then(|get_logger| get_logger.call1(("uvicorn.error",)))
+            .and_then(|logger| logger.call_method1("error", (message,)))
+            .map(drop)
+    });
+}
+
 type ResponseBody = UnsyncBoxBody<Bytes, BoxError>;
-#[cfg(not(feature = "native-tcp"))]
-type WebSocketTasks = Arc<Mutex<tokio::task::JoinSet<()>>>;
 type RequestBodyTasks = Arc<Mutex<tokio::task::JoinSet<()>>>;
 // Keep a bounded burst ahead of the HTTP body consumer. Sends fit into
 // available slots synchronously; a full queue returns an awaitable so Tokio
@@ -1236,7 +1352,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     fn tcp_io_poll_started(&self) -> Option<std::time::Instant> {
         #[cfg(feature = "runtime-diagnostics")]
         return Some(std::time::Instant::now());
@@ -1245,7 +1361,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     fn tcp_read_poll_finished(
         &self,
         bytes: usize,
@@ -1283,7 +1399,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     fn tcp_write_poll_finished(
         &self,
         bytes: usize,
@@ -1321,7 +1437,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     fn tcp_flush_poll_finished(&self, started: Option<std::time::Instant>) {
         #[cfg(feature = "runtime-diagnostics")]
         {
@@ -1340,7 +1456,7 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     fn tcp_shutdown_poll_finished(&self, started: Option<std::time::Instant>) {
         #[cfg(feature = "runtime-diagnostics")]
         {
@@ -1628,20 +1744,24 @@ struct ServeOptions {
     fd_transfer_path: Option<String>,
     backlog: i32,
     timeout_keep_alive: std::time::Duration,
+    http1_max_buffer_size: Option<usize>,
     root_path: String,
     tcp_tls: Option<TlsAcceptor>,
     quic_config: Option<quinn::ServerConfig>,
     graceful_timeout: Option<std::time::Duration>,
     lifespan_mode: LifespanMode,
-    default_headers: Vec<(HeaderName, HeaderValue)>,
+    default_headers: Vec<(Bytes, Bytes)>,
     date_header: bool,
     http2_enabled: bool,
     ws_max_size: usize,
+    ws_max_queue: Option<usize>,
+    websocket_enabled: bool,
+    ws_per_message_deflate: bool,
     websocket_keepalive: WebSocketKeepaliveConfig,
     concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
     limit_max_requests: Option<usize>,
     limit_max_requests_jitter: usize,
-    #[cfg(feature = "native-tcp")]
+    #[cfg(uvicorn_rs_native_transport)]
     limit_concurrency: Option<usize>,
 }
 
@@ -1653,19 +1773,20 @@ struct ServerContext {
     uds: Option<String>,
     root_path: String,
     tcp_tls: Option<TlsAcceptor>,
-    default_headers: Vec<(HeaderName, HeaderValue)>,
+    default_headers: Vec<(Bytes, Bytes)>,
     date_header: bool,
     http2_enabled: bool,
     ws_max_size: usize,
+    ws_max_queue: Option<usize>,
+    websocket_enabled: bool,
+    ws_per_message_deflate: bool,
     websocket_keepalive: WebSocketKeepaliveConfig,
     concurrency_limit_observer: Option<uvicorn_rs::ConcurrencyLimitObserver>,
     limit_max_requests: Option<usize>,
     completed_http_requests: AtomicUsize,
-    #[cfg(feature = "native-tcp")]
+    #[cfg(uvicorn_rs_native_transport)]
     limit_concurrency: Option<usize>,
-    state: Option<Arc<Py<PyDict>>>,
-    #[cfg(not(feature = "native-tcp"))]
-    websocket_tasks: WebSocketTasks,
+    state: Arc<Py<PyDict>>,
     request_body_tasks: RequestBodyTasks,
     #[cfg(coverage)]
     completed_request_body_pumps: Arc<AtomicUsize>,
@@ -1677,10 +1798,7 @@ struct ServerContext {
 }
 
 impl ServerContext {
-    fn record_completed_http_request(&self) {
-        let Some(limit) = self.limit_max_requests else {
-            return;
-        };
+    fn record_completed_http_request(&self, limit: usize) {
         let completed = self
             .completed_http_requests
             .fetch_add(1, Ordering::AcqRel)
@@ -1694,6 +1812,7 @@ impl ServerContext {
 struct RequestLimitBody {
     inner: ResponseBody,
     server: Arc<ServerContext>,
+    limit: usize,
     completed: bool,
 }
 
@@ -1709,7 +1828,7 @@ impl Body for RequestLimitBody {
         let frame = Pin::new(&mut this.inner).poll_frame(cx);
         if matches!(&frame, Poll::Ready(None)) && !this.completed {
             this.completed = true;
-            this.server.record_completed_http_request();
+            this.server.record_completed_http_request(this.limit);
         }
         frame
     }
@@ -1729,20 +1848,21 @@ fn apply_request_limit(
     server: &Arc<ServerContext>,
     response: Response<ResponseBody>,
 ) -> Response<ResponseBody> {
-    if server.limit_max_requests.is_none() {
+    let Some(limit) = server.limit_max_requests else {
         return response;
-    }
+    };
     response.map(|inner| {
         RequestLimitBody {
             inner,
             server: Arc::clone(server),
+            limit,
             completed: false,
         }
         .boxed_unsync()
     })
 }
 
-#[cfg(feature = "native-tcp")]
+#[cfg(uvicorn_rs_native_transport)]
 enum BoundListener {
     Tcp(Vec<TcpListener>),
     #[cfg(unix)]
@@ -1766,28 +1886,25 @@ impl WebSocketKeepaliveConfig {
     fn from_seconds(interval: Option<f64>, timeout: Option<f64>) -> PyResult<Self> {
         let interval = match interval {
             Some(seconds) if seconds <= 0.0 => None,
-            Some(seconds) => Some(Self::duration_from_seconds(seconds, "ws_ping_interval")?),
+            Some(seconds) => Self::duration_from_seconds(seconds),
             None => None,
         };
         let timeout = match timeout {
             Some(seconds) if seconds < 0.0 => Some(std::time::Duration::ZERO),
-            Some(seconds) => Some(Self::duration_from_seconds(seconds, "ws_ping_timeout")?),
+            Some(seconds) => Self::duration_from_seconds(seconds),
             None => None,
         };
         Ok(Self { interval, timeout })
     }
 
-    fn duration_from_seconds(seconds: f64, setting: &str) -> PyResult<std::time::Duration> {
-        if !seconds.is_finite() {
-            return Err(PyValueError::new_err(format!(
-                "{setting} must be a finite number of seconds"
-            )));
+    fn duration_from_seconds(seconds: f64) -> Option<std::time::Duration> {
+        if seconds.is_nan() {
+            return None;
         }
-        std::time::Duration::try_from_secs_f64(seconds).map_err(|_| {
-            PyValueError::new_err(format!(
-                "{setting} exceeds the supported monotonic deadline range"
-            ))
-        })
+        if !seconds.is_finite() {
+            return None;
+        }
+        std::time::Duration::try_from_secs_f64(seconds).ok()
     }
 }
 
@@ -1902,11 +2019,11 @@ fn classify_asgi_event_type(py: Python<'_>, value: Bound<'_, PyAny>) -> PyResult
 
 #[derive(Clone)]
 enum ConnectionClosed {
-    #[cfg(any(not(feature = "native-tcp"), coverage))]
+    #[cfg(any(not(uvicorn_rs_native_transport), coverage))]
     Watch(watch::Receiver<bool>),
-    #[cfg(feature = "native-tcp")]
+    #[cfg(uvicorn_rs_native_transport)]
     Lifetime(uvicorn_rs::ConnectionLifetime),
-    #[cfg(feature = "native-tcp")]
+    #[cfg(uvicorn_rs_native_transport)]
     Native {
         lifetime: uvicorn_rs::ConnectionLifetime,
         peer_read_half_closed: uvicorn_rs::PeerReadHalfClosed,
@@ -1917,11 +2034,11 @@ enum ConnectionClosed {
 impl ConnectionClosed {
     fn is_closed(&self) -> bool {
         match self {
-            #[cfg(any(not(feature = "native-tcp"), coverage))]
+            #[cfg(any(not(uvicorn_rs_native_transport), coverage))]
             Self::Watch(closed) => *closed.borrow(),
-            #[cfg(feature = "native-tcp")]
+            #[cfg(uvicorn_rs_native_transport)]
             Self::Lifetime(lifetime) => lifetime.is_closed(),
-            #[cfg(feature = "native-tcp")]
+            #[cfg(uvicorn_rs_native_transport)]
             Self::Native {
                 lifetime,
                 peer_read_half_closed,
@@ -1941,13 +2058,13 @@ impl ConnectionClosed {
         #[cfg(not(coverage))]
         let _ = allow_lifetime_completion_fault;
         match self {
-            #[cfg(any(not(feature = "native-tcp"), coverage))]
+            #[cfg(any(not(uvicorn_rs_native_transport), coverage))]
             Self::Watch(closed) => {
                 let _ = closed.wait_for(|is_closed| *is_closed).await;
             }
-            #[cfg(feature = "native-tcp")]
+            #[cfg(uvicorn_rs_native_transport)]
             Self::Lifetime(lifetime) => lifetime.wait_until_closed().await,
-            #[cfg(feature = "native-tcp")]
+            #[cfg(uvicorn_rs_native_transport)]
             Self::Native {
                 lifetime,
                 peer_read_half_closed,
@@ -1984,7 +2101,7 @@ impl ConnectionClosed {
             let (_closed_sender, closed_receiver) = watch::channel(false);
             *self = Self::Watch(closed_receiver);
         }
-        #[cfg(feature = "native-tcp")]
+        #[cfg(uvicorn_rs_native_transport)]
         if let Self::Native {
             peer_read_failed, ..
         } = self
@@ -2013,13 +2130,13 @@ impl ConnectionClosed {
 
     async fn wait_until_body_pump_stops(&mut self) {
         match self {
-            #[cfg(any(not(feature = "native-tcp"), coverage))]
+            #[cfg(any(not(uvicorn_rs_native_transport), coverage))]
             Self::Watch(closed) => {
                 let _ = closed.wait_for(|is_closed| *is_closed).await;
             }
-            #[cfg(feature = "native-tcp")]
+            #[cfg(uvicorn_rs_native_transport)]
             Self::Lifetime(lifetime) => lifetime.wait_until_closed().await,
-            #[cfg(feature = "native-tcp")]
+            #[cfg(uvicorn_rs_native_transport)]
             Self::Native {
                 lifetime,
                 peer_read_half_closed,
@@ -2041,18 +2158,18 @@ struct ConnectionContext {
     server_addr: SocketAddr,
     transport_scheme: &'static str,
     connection_closed: ConnectionClosed,
-    #[cfg(feature = "native-tcp")]
+    #[cfg(uvicorn_rs_native_transport)]
     native_upgrade: Option<uvicorn_rs::ConnectionUpgrade>,
 }
 
-#[cfg(feature = "native-tcp")]
+#[cfg(uvicorn_rs_native_transport)]
 #[derive(Clone)]
 struct NativeAsgiService {
     server: Arc<ServerContext>,
     server_addr: SocketAddr,
 }
 
-#[cfg(feature = "native-tcp")]
+#[cfg(uvicorn_rs_native_transport)]
 impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
     type Response = Response<ResponseBody>;
     type Error = std::io::Error;
@@ -2173,7 +2290,8 @@ impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
         };
         let server = Arc::clone(&context.server);
         Box::pin(async move {
-            let websocket_upgrade = is_websocket_upgrade(&request);
+            let websocket_upgrade =
+                context.server.websocket_enabled && is_websocket_upgrade(&request);
             let response = if websocket_upgrade {
                 Ok(handle_websocket_request(request, context).await)
             } else {
@@ -2189,13 +2307,13 @@ impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
     }
 }
 
-#[cfg(feature = "native-tcp")]
+#[cfg(uvicorn_rs_native_transport)]
 #[derive(Clone)]
 struct NativeHttp3AsgiService {
     server: Arc<ServerContext>,
 }
 
-#[cfg(feature = "native-tcp")]
+#[cfg(uvicorn_rs_native_transport)]
 impl tower_service::Service<Request<uvicorn_rs::Http3RequestBody>> for NativeHttp3AsgiService {
     type Response = Response<ResponseBody>;
     type Error = std::io::Error;
@@ -2260,13 +2378,13 @@ impl tower_service::Service<Request<uvicorn_rs::Http3RequestBody>> for NativeHtt
     }
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 struct ActiveHttpRequest {
     active_http_requests: Arc<AtomicUsize>,
     read_eof_waker: Arc<AtomicWaker>,
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 impl ActiveHttpRequest {
     fn new(active_http_requests: Arc<AtomicUsize>, read_eof_waker: Arc<AtomicWaker>) -> Self {
         active_http_requests.fetch_add(1, Ordering::AcqRel);
@@ -2277,7 +2395,7 @@ impl ActiveHttpRequest {
     }
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 impl Drop for ActiveHttpRequest {
     fn drop(&mut self) {
         if self.active_http_requests.fetch_sub(1, Ordering::AcqRel) == 1 {
@@ -2368,6 +2486,7 @@ impl Drop for RequestCancellationGuard {
 struct ResponseStart {
     status: StatusCode,
     headers: HeaderMap,
+    header_order: Vec<HeaderName>,
 }
 
 #[derive(Debug)]
@@ -2380,6 +2499,51 @@ impl fmt::Display for InvalidAsgiResponseStart {
 }
 
 impl StdError for InvalidAsgiResponseStart {}
+
+enum InvalidDefaultHeader {
+    Name,
+    Value,
+}
+
+impl fmt::Debug for InvalidDefaultHeader {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("InvalidDefaultHeader")
+    }
+}
+
+impl fmt::Display for InvalidDefaultHeader {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Name => formatter.write_str("Invalid HTTP header name."),
+            Self::Value => formatter.write_str("Invalid HTTP header value."),
+        }
+    }
+}
+
+impl StdError for InvalidDefaultHeader {}
+
+fn contains_invalid_default_header_error(error: &(dyn StdError + 'static)) -> bool {
+    if format!("{error:?}").contains("InvalidDefaultHeader") {
+        return true;
+    }
+    let mut source = Some(error);
+    while let Some(error) = source {
+        if error.is::<InvalidDefaultHeader>() {
+            return true;
+        }
+        source = error.source();
+    }
+    false
+}
+
+fn invalid_default_header_error(error: InvalidDefaultHeader) -> std::io::Error {
+    // Uvicorn validates these headers while sending each response. Preserve
+    // that failure point and its user-visible server log even though the
+    // native transport represents it as a service error.
+    log_error(format_args!("Exception in ASGI application"));
+    log_error(format_args!("RuntimeError: {error}"));
+    std::io::Error::other(error)
+}
 
 #[derive(Debug)]
 struct WebSocketHandshakeError {
@@ -2494,29 +2658,32 @@ fn make_http_request_message(
     diagnostics: &RuntimeDiagnostics,
 ) -> PyResult<Py<PyAny>> {
     let message = PyDict::new(py);
-    if let Some(request) = request.filter(|request| !request.disconnected) {
-        diagnostics.http_request_python_bytes_copied(request.body.len());
-        coverage_try!(
-            HttpRequestTypeSetItem,
-            message.set_item("type", "http.request")
-        );
-        let body_materialization_started =
-            diagnostics.http_request_python_bytes_materialization_started();
-        let body = request.body.into_py_bytes(py);
-        diagnostics
-            .http_request_python_bytes_materialization_finished(body_materialization_started);
-        let body = body?;
-        coverage_try!(HttpRequestBodySetItem, message.set_item("body", body));
-        coverage_try!(
-            HttpRequestMoreBodySetItem,
-            message.set_item("more_body", request.more_body)
-        );
-    } else {
-        request_disconnected.store(true, Ordering::Release);
-        coverage_try!(
-            HttpRequestDisconnectTypeSetItem,
-            message.set_item("type", "http.disconnect")
-        );
+    match request.filter(|request| !request.disconnected) {
+        Some(request) => {
+            diagnostics.http_request_python_bytes_copied(request.body.len());
+            coverage_try!(
+                HttpRequestTypeSetItem,
+                message.set_item("type", "http.request")
+            );
+            let body_materialization_started =
+                diagnostics.http_request_python_bytes_materialization_started();
+            let body = request.body.into_py_bytes(py);
+            diagnostics
+                .http_request_python_bytes_materialization_finished(body_materialization_started);
+            let body = body?;
+            coverage_try!(HttpRequestBodySetItem, message.set_item("body", body));
+            coverage_try!(
+                HttpRequestMoreBodySetItem,
+                message.set_item("more_body", request.more_body)
+            );
+        }
+        _ => {
+            request_disconnected.store(true, Ordering::Release);
+            coverage_try!(
+                HttpRequestDisconnectTypeSetItem,
+                message.set_item("type", "http.disconnect")
+            );
+        }
     }
     Ok(message.into_any().unbind())
 }
@@ -2714,20 +2881,23 @@ impl PythonTaskStarter {
                 if coverage_fault_is_armed(CoverageFaultPoint::PythonTaskStarterTaskSenderMissing) {
                     self.task_sender.take();
                 }
-                if let Some(sender) = self.task_sender.take() {
-                    if let Err(task) = sender.send(task.unbind()) {
-                        let _ = task.bind(py).call_method0("cancel");
+                match self.task_sender.take() {
+                    Some(sender) => {
+                        if let Err(task) = sender.send(task.unbind()) {
+                            let _ = task.bind(py).call_method0("cancel");
+                            track_python_task_completion(
+                                &self.cancellation_tracker,
+                                &self.completion_signal,
+                            );
+                        }
+                    }
+                    _ => {
+                        let _ = task.call_method0("cancel");
                         track_python_task_completion(
                             &self.cancellation_tracker,
                             &self.completion_signal,
                         );
                     }
-                } else {
-                    let _ = task.call_method0("cancel");
-                    track_python_task_completion(
-                        &self.cancellation_tracker,
-                        &self.completion_signal,
-                    );
                 }
                 Ok(())
             })();
@@ -3054,8 +3224,7 @@ fn python_task_future(
 }
 
 enum WebSocketIncoming {
-    Text(tokio_tungstenite::tungstenite::Utf8Bytes),
-    Bytes(Bytes),
+    Data(Message),
     Disconnect { code: u16, reason: String },
 }
 
@@ -3290,11 +3459,13 @@ impl AsgiIo {
                     extract_headers(headers_value)
                 )?;
                 let mut headers = HeaderMap::new();
+                let mut header_order = Vec::with_capacity(header_values.len());
                 for (name, value) in header_values {
                     let name = HeaderName::from_bytes(&name)
                         .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header name."))?;
                     let value = HeaderValue::from_bytes(&value)
                         .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header value."))?;
+                    header_order.push(name.clone());
                     headers.try_append(name, value).map_err(|error| {
                         PyRuntimeError::new_err(format!("HTTP response headers: {error}"))
                     })?;
@@ -3316,12 +3487,24 @@ impl AsgiIo {
                 let start_send_result = if coverage_fault_is_armed(
                     CoverageFaultPoint::HttpResponseStartChannelClosed,
                 ) {
-                    Err(TrySendError::Closed(ResponseStart { status, headers }))
+                    Err(TrySendError::Closed(ResponseStart {
+                        status,
+                        headers,
+                        header_order,
+                    }))
                 } else {
-                    slf.start.try_send(ResponseStart { status, headers })
+                    slf.start.try_send(ResponseStart {
+                        status,
+                        headers,
+                        header_order,
+                    })
                 };
                 #[cfg(not(coverage))]
-                let start_send_result = slf.start.try_send(ResponseStart { status, headers });
+                let start_send_result = slf.start.try_send(ResponseStart {
+                    status,
+                    headers,
+                    header_order,
+                });
                 if let Err(error) = start_send_result {
                     slf.response_started.store(false, Ordering::Release);
                     return Err(PyOSError::new_err(format!(
@@ -3493,7 +3676,7 @@ impl WebSocketIo {
             Python::attach(|py| -> PyResult<Py<PyAny>> {
                 let message = PyDict::new(py);
                 match incoming_message {
-                    Some(WebSocketIncoming::Text(text)) => {
+                    Some(WebSocketIncoming::Data(Message::Text(text))) => {
                         coverage_try!(
                             WebSocketReceiveTextTypeSetItem,
                             message.set_item("type", "websocket.receive")
@@ -3503,7 +3686,7 @@ impl WebSocketIo {
                             message.set_item("text", text.as_str())
                         );
                     }
-                    Some(WebSocketIncoming::Bytes(data)) => {
+                    Some(WebSocketIncoming::Data(Message::Binary(data))) => {
                         coverage_try!(
                             WebSocketReceiveBinaryTypeSetItem,
                             message.set_item("type", "websocket.receive")
@@ -3526,6 +3709,11 @@ impl WebSocketIo {
                             WebSocketReceiveDisconnectReasonSetItem,
                             message.set_item("reason", reason)
                         );
+                    }
+                    Some(WebSocketIncoming::Data(_)) => {
+                        return Err(PyRuntimeError::new_err(
+                            "WebSocket transport delivered a non-data message to ASGI",
+                        ));
                     }
                     None => {
                         state.store(3, Ordering::Release);
@@ -3901,7 +4089,7 @@ struct LifespanRuntime {
     // Abort before channel fields drop during emergency teardown. Normal
     // shutdown consumes the guarded handle after observing its result once.
     app_task: Option<AbortOnDrop<PyResult<Py<PyAny>>>>,
-    state: Option<Arc<Py<PyDict>>>,
+    state: Arc<Py<PyDict>>,
     requests: Option<mpsc::Sender<LifespanMessage>>,
     events: Option<mpsc::Receiver<LifespanEvent>>,
 }
@@ -3990,7 +4178,7 @@ impl LifespanRuntime {
                 event_rx.recv().await
             } => match event {
                 Some(LifespanEvent::StartupComplete) => Ok(Some(Self {
-                    state: Some(Arc::new(state)),
+                    state: Arc::new(state),
                     requests: Some(request_tx),
                     events: Some(event_rx),
                     app_task: Some(app_task),
@@ -3999,9 +4187,9 @@ impl LifespanRuntime {
                     app_task.as_mut().abort();
                     let _ = app_task.into_handle().await;
                     if !message.is_empty() {
-                        log_error(format_args!("{message}"));
+                        log_lifespan_error(&message);
                     }
-                    log_error(format_args!("Application startup failed. Exiting."));
+                    log_lifespan_error("Application startup failed. Exiting.");
                     Ok(None)
                 }
                 Some(_) => {
@@ -4011,9 +4199,9 @@ impl LifespanRuntime {
                         log_error(format_args!("Application startup failed. Exiting."));
                         return Ok(None);
                     }
-                    log_error(format_args!("uvicorn-rs: ASGI app does not support lifespan"));
+                    log_lifespan_info("ASGI 'lifespan' protocol appears unsupported.");
                     Ok(Some(Self {
-                        state: Some(Arc::new(state)),
+                        state: Arc::new(state),
                         requests: None,
                         events: None,
                         app_task: None,
@@ -4039,14 +4227,16 @@ impl LifespanRuntime {
         state: Py<PyDict>,
         mode: LifespanMode,
     ) -> PyResult<Option<Self>> {
+        let mut unsupported = false;
         match result {
             Ok(Ok(_)) => {}
             Ok(Err(error)) => {
-                Python::attach(|py| error.print(py));
                 if mode == LifespanMode::On {
+                    Python::attach(|py| error.print(py));
                     log_error(format_args!("Application startup failed. Exiting."));
                     return Ok(None);
                 }
+                unsupported = true;
             }
             Err(error) => {
                 return Err(PyRuntimeError::new_err(format!(
@@ -4054,13 +4244,11 @@ impl LifespanRuntime {
                 )));
             }
         }
-        if mode == LifespanMode::Auto {
-            log_error(format_args!(
-                "uvicorn-rs: ASGI app does not support lifespan"
-            ));
+        if mode == LifespanMode::Auto && unsupported {
+            log_lifespan_info("ASGI 'lifespan' protocol appears unsupported.");
         }
         Ok(Some(Self {
-            state: Some(Arc::new(state)),
+            state: Arc::new(state),
             requests: None,
             events: None,
             app_task: None,
@@ -4194,21 +4382,31 @@ impl Drop for ServerStartupSignal {
 struct ServerControl {
     cancellation: CancellationToken,
     startup: watch::Sender<ServerStartupState>,
+    startup_acknowledgement: Option<watch::Sender<bool>>,
 }
 
 #[pymethods]
 impl ServerControl {
     #[new]
-    fn new() -> Self {
+    #[pyo3(signature = (defer_acceptance=false))]
+    fn new(defer_acceptance: bool) -> Self {
         let (startup, _) = watch::channel(ServerStartupState::Starting);
+        let startup_acknowledgement = defer_acceptance.then(|| watch::channel(false).0);
         Self {
             cancellation: CancellationToken::new(),
             startup,
+            startup_acknowledgement,
         }
     }
 
     fn shutdown(&self) {
         self.cancellation.cancel();
+    }
+
+    fn acknowledge_startup(&self) {
+        if let Some(acknowledgement) = &self.startup_acknowledgement {
+            acknowledgement.send_replace(true);
+        }
     }
 
     fn wait_started<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
@@ -4284,7 +4482,7 @@ impl Drop for AsgiBody {
     }
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 struct ConnectionIo<I> {
     io: I,
     diagnostics: RuntimeDiagnostics,
@@ -4741,7 +4939,7 @@ async fn wait_for_connection_close(
         .await;
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 impl<I: AsyncRead + Unpin> AsyncRead for ConnectionIo<I> {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -4790,7 +4988,7 @@ impl<I: AsyncRead + Unpin> AsyncRead for ConnectionIo<I> {
     }
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 impl<I> ConnectionIo<I> {
     fn poll_read_after_eof(&mut self, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         #[cfg(coverage)]
@@ -4822,13 +5020,13 @@ impl<I> ConnectionIo<I> {
     }
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 enum WriteBuffers<'a> {
     Scalar(&'a [u8]),
     Vectored(&'a [std::io::IoSlice<'a>]),
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 impl<I: AsyncWrite + Unpin> ConnectionIo<I> {
     #[inline]
     fn poll_write_buffers(
@@ -4888,7 +5086,7 @@ impl<I: AsyncWrite + Unpin> ConnectionIo<I> {
     }
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 impl<I: AsyncWrite + Unpin> AsyncWrite for ConnectionIo<I> {
     fn poll_write(
         self: Pin<&mut Self>,
@@ -5095,7 +5293,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, http2_enabled, ws_max_size, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback))]
+#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, http2_enabled, ws_max_size, ws_per_message_deflate, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback, http1_max_buffer_size=None, ssl_ca_certs=None, ssl_cert_reqs=0, tls_version="default", ssl_cipher_suites=None, ssl_keyfile_password=None, ws_max_queue=None, websocket_enabled=true))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5119,6 +5317,7 @@ fn serve<'py>(
     date_header: bool,
     http2_enabled: bool,
     ws_max_size: usize,
+    ws_per_message_deflate: bool,
     ws_ping_interval: Option<f64>,
     ws_ping_timeout: Option<f64>,
     limit_concurrency: Option<usize>,
@@ -5126,29 +5325,25 @@ fn serve<'py>(
     limit_max_requests_jitter: usize,
     control: Py<ServerControl>,
     concurrency_limit_callback: Py<PyAny>,
+    http1_max_buffer_size: Option<usize>,
+    ssl_ca_certs: Option<String>,
+    ssl_cert_reqs: i32,
+    tls_version: &str,
+    ssl_cipher_suites: Option<Vec<u16>>,
+    ssl_keyfile_password: Option<String>,
+    ws_max_queue: Option<usize>,
+    websocket_enabled: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let lifespan_mode = LifespanMode::from_python(&lifespan)?;
     let websocket_keepalive =
         WebSocketKeepaliveConfig::from_seconds(ws_ping_interval, ws_ping_timeout)?;
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     if limit_concurrency.is_some() {
         return Err(PyValueError::new_err(
             "limit_concurrency requires the native-tcp feature",
         ));
     }
 
-    let default_headers = default_headers
-        .into_iter()
-        .map(|(name, value)| {
-            let name = HeaderName::from_bytes(&name).map_err(|error| {
-                PyValueError::new_err(format!("invalid default HTTP header name: {error}"))
-            })?;
-            let value = HeaderValue::from_bytes(&value).map_err(|error| {
-                PyValueError::new_err(format!("invalid default HTTP header value: {error}"))
-            })?;
-            Ok((name, value))
-        })
-        .collect::<PyResult<Vec<_>>>()?;
     let graceful_timeout = graceful_timeout.map(std::time::Duration::from_secs);
     let timeout_keep_alive = std::time::Duration::from_secs(timeout_keep_alive.max(0) as u64);
     #[cfg(coverage)]
@@ -5181,7 +5376,16 @@ fn serve<'py>(
     let (tcp_tls, quic_config) = match (certfile, keyfile) {
         (None, None) => (None, None),
         (Some(certfile), Some(keyfile)) => {
-            let (tcp_tls, quic_config) = load_tls_configs(&certfile, &keyfile, http2_enabled)?;
+            let (tcp_tls, quic_config) = load_tls_configs(
+                &certfile,
+                &keyfile,
+                http2_enabled,
+                ssl_ca_certs.as_deref(),
+                ssl_cert_reqs,
+                tls_version,
+                ssl_cipher_suites.as_deref(),
+                ssl_keyfile_password.as_deref(),
+            )?;
             (Some(tcp_tls), Some(quic_config))
         }
         _ => {
@@ -5200,6 +5404,11 @@ fn serve<'py>(
             .then(|| control.borrow_mut(py));
     let cancellation = control.try_borrow(py)?.cancellation.clone();
     let startup_signal = ServerStartupSignal::new(control.try_borrow(py)?.startup.clone());
+    let startup_acknowledgement = control
+        .try_borrow(py)?
+        .startup_acknowledgement
+        .as_ref()
+        .map(watch::Sender::subscribe);
     #[cfg(coverage)]
     drop(serve_control_borrow);
     let cancel_on_drop = CancelOnDrop(cancellation.clone());
@@ -5245,6 +5454,7 @@ fn serve<'py>(
             fd_transfer_path,
             backlog,
             timeout_keep_alive,
+            http1_max_buffer_size,
             root_path,
             tcp_tls,
             quic_config,
@@ -5254,11 +5464,14 @@ fn serve<'py>(
             date_header,
             http2_enabled,
             ws_max_size,
+            ws_max_queue,
+            websocket_enabled,
+            ws_per_message_deflate,
             websocket_keepalive,
             concurrency_limit_observer: Some(concurrency_limit_observer),
             limit_max_requests,
             limit_max_requests_jitter,
-            #[cfg(feature = "native-tcp")]
+            #[cfg(uvicorn_rs_native_transport)]
             limit_concurrency,
         };
         let result = serve_forever(
@@ -5267,6 +5480,7 @@ fn serve<'py>(
             locals,
             cancellation,
             startup_signal,
+            startup_acknowledgement,
             options,
             diagnostics.clone(),
         )
@@ -5276,10 +5490,152 @@ fn serve<'py>(
     })
 }
 
+#[derive(Debug)]
+struct EmptyRootsClientCertVerifier {
+    mandatory: bool,
+    supported_algs: rustls::crypto::WebPkiSupportedAlgorithms,
+}
+
+impl rustls::server::danger::ClientCertVerifier for EmptyRootsClientCertVerifier {
+    fn offer_client_auth(&self) -> bool {
+        true
+    }
+
+    fn client_auth_mandatory(&self) -> bool {
+        self.mandatory
+    }
+
+    fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
+        &[]
+    }
+
+    fn verify_client_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::server::danger::ClientCertVerified, rustls::Error> {
+        Err(rustls::Error::InvalidCertificate(
+            rustls::CertificateError::UnknownIssuer,
+        ))
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.supported_algs)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.supported_algs)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.supported_algs.supported_schemes()
+    }
+}
+
+fn load_client_cert_verifier(
+    ca_certs: Option<&str>,
+    cert_reqs: i32,
+) -> PyResult<Arc<dyn rustls::server::danger::ClientCertVerifier>> {
+    if !matches!(cert_reqs, 0..=2) {
+        return Err(PyValueError::new_err(
+            "ssl_cert_reqs must be ssl.CERT_NONE, ssl.CERT_OPTIONAL, or ssl.CERT_REQUIRED",
+        ));
+    }
+
+    let mut roots = rustls::RootCertStore::empty();
+    if let Some(path) = ca_certs {
+        let file = std::fs::File::open(path).map_err(|error| {
+            PyOSError::new_err(format!("could not read CA certificates {path}: {error}"))
+        })?;
+        let certificates = rustls_pemfile::certs(&mut std::io::BufReader::new(file))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| {
+                PyValueError::new_err(format!("invalid CA certificate PEM: {error}"))
+            })?;
+        if certificates.is_empty() {
+            return Err(PyValueError::new_err(
+                "CA certificates file contains no certificates",
+            ));
+        }
+        for certificate in certificates {
+            roots.add(certificate).map_err(|error| {
+                PyValueError::new_err(format!("invalid CA certificate: {error}"))
+            })?;
+        }
+    }
+
+    if cert_reqs == 0 {
+        return Ok(Arc::new(rustls::server::NoClientAuth));
+    }
+
+    if roots.is_empty() {
+        let supported_algs = rustls::crypto::CryptoProvider::get_default()
+            .map(|provider| provider.signature_verification_algorithms)
+            .unwrap_or_else(|| {
+                rustls::crypto::ring::default_provider().signature_verification_algorithms
+            });
+        return Ok(Arc::new(EmptyRootsClientCertVerifier {
+            mandatory: cert_reqs == 2,
+            supported_algs,
+        }));
+    }
+
+    let mut builder = rustls::server::WebPkiClientVerifier::builder(Arc::new(roots));
+    if cert_reqs == 1 {
+        builder = builder.allow_unauthenticated();
+    }
+    builder
+        .build()
+        .map_err(|error| PyValueError::new_err(format!("invalid client CA configuration: {error}")))
+}
+
+fn decrypt_pkcs8_private_key(
+    pem_bytes: &[u8],
+    password: &str,
+) -> PyResult<rustls::pki_types::PrivateKeyDer<'static>> {
+    let pem = std::str::from_utf8(pem_bytes).map_err(|error| {
+        PyValueError::new_err(format!("invalid encrypted private-key PEM: {error}"))
+    })?;
+    let (label, encrypted_document) = pkcs8::SecretDocument::from_pem(pem).map_err(|error| {
+        PyValueError::new_err(format!("invalid encrypted private-key PEM: {error}"))
+    })?;
+    if label != "ENCRYPTED PRIVATE KEY" {
+        return Err(PyValueError::new_err(
+            "ssl_keyfile_password requires a PKCS#8 ENCRYPTED PRIVATE KEY PEM",
+        ));
+    }
+    let encrypted_key = pkcs8::EncryptedPrivateKeyInfoRef::try_from(encrypted_document.as_bytes())
+        .map_err(|error| {
+            PyValueError::new_err(format!("invalid encrypted private-key PEM: {error}"))
+        })?;
+    let decrypted_key = encrypted_key
+        .decrypt(password.as_bytes())
+        .map_err(|error| {
+            PyValueError::new_err(format!("could not decrypt private key: {error}"))
+        })?;
+    Ok(rustls::pki_types::PrivatePkcs8KeyDer::from(decrypted_key.as_bytes().to_vec()).into())
+}
+
 fn load_tls_configs(
     certfile: &str,
     keyfile: &str,
     http2_enabled: bool,
+    ca_certs: Option<&str>,
+    cert_reqs: i32,
+    tls_version: &str,
+    cipher_suites: Option<&[u16]>,
+    key_password: Option<&str>,
 ) -> PyResult<(TlsAcceptor, quinn::ServerConfig)> {
     let cert_file = std::fs::File::open(certfile).map_err(|error| {
         PyOSError::new_err(format!("could not read certificate {certfile}: {error}"))
@@ -5293,16 +5649,73 @@ fn load_tls_configs(
         ));
     }
 
-    let key_file = std::fs::File::open(keyfile).map_err(|error| {
+    let key_bytes = std::fs::read(keyfile).map_err(|error| {
         PyOSError::new_err(format!("could not read private key {keyfile}: {error}"))
     })?;
-    let key = rustls_pemfile::private_key(&mut std::io::BufReader::new(key_file))
-        .map_err(|error| PyValueError::new_err(format!("invalid private-key PEM: {error}")))?
-        .ok_or_else(|| PyValueError::new_err("private-key file contains no supported key"))?;
+    let key = match rustls_pemfile::private_key(&mut std::io::BufReader::new(key_bytes.as_slice()))
+    {
+        Ok(Some(key)) => key,
+        Ok(None) => match key_password {
+            Some(password) => decrypt_pkcs8_private_key(&key_bytes, password)?,
+            None => {
+                return Err(PyValueError::new_err(
+                    "private-key file contains no supported key",
+                ));
+            }
+        },
+        Err(error) => match key_password {
+            Some(password) => decrypt_pkcs8_private_key(&key_bytes, password)?,
+            None => {
+                return Err(PyValueError::new_err(format!(
+                    "invalid private-key PEM: {error}"
+                )));
+            }
+        },
+    };
 
-    let mut tcp_tls = rustls::ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(cert_chain, key)
+    let client_cert_verifier = load_client_cert_verifier(ca_certs, cert_reqs)?;
+    let tcp_builder = if let Some(cipher_suites) = cipher_suites {
+        let provider = rustls::crypto::CryptoProvider::get_default()
+            .cloned()
+            .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()));
+        let mut provider = (*provider).clone();
+        provider.cipher_suites.retain(|suite| {
+            suite.tls13().is_some() || cipher_suites.contains(&u16::from(suite.suite()))
+        });
+        let provider = Arc::new(provider);
+        match tls_version {
+            "default" => rustls::ServerConfig::builder_with_provider(provider)
+                .with_safe_default_protocol_versions()
+                .map_err(|error| {
+                    PyValueError::new_err(format!("invalid TLS cipher selection: {error}"))
+                })?,
+            "tls12" => rustls::ServerConfig::builder_with_provider(provider)
+                .with_protocol_versions(&[&rustls::version::TLS12])
+                .map_err(|error| {
+                    PyValueError::new_err(format!("invalid TLS cipher selection: {error}"))
+                })?,
+            _ => {
+                return Err(PyValueError::new_err(
+                    "tls_version must be 'default' or 'tls12'",
+                ));
+            }
+        }
+    } else {
+        match tls_version {
+            "default" => rustls::ServerConfig::builder(),
+            "tls12" => {
+                rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS12])
+            }
+            _ => {
+                return Err(PyValueError::new_err(
+                    "tls_version must be 'default' or 'tls12'",
+                ));
+            }
+        }
+    };
+    let mut tcp_tls = tcp_builder
+        .with_client_cert_verifier(Arc::clone(&client_cert_verifier))
+        .with_single_cert(cert_chain.clone(), key.clone_key())
         .map_err(|error| PyValueError::new_err(format!("invalid TLS identity: {error}")))?;
     tcp_tls.alpn_protocols = if http2_enabled {
         vec![b"h2".to_vec(), b"http/1.1".to_vec()]
@@ -5310,7 +5723,14 @@ fn load_tls_configs(
         vec![b"http/1.1".to_vec()]
     };
 
-    let mut quic_tls = tcp_tls.clone();
+    // QUIC requires TLS 1.3 regardless of the selected TCP SSL protocol.
+    let mut quic_tls =
+        rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
+            .with_client_cert_verifier(client_cert_verifier)
+            .with_single_cert(cert_chain, key)
+            .map_err(|error| {
+                PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}"))
+            })?;
     quic_tls.alpn_protocols = vec![b"h3".to_vec()];
     quic_tls.max_early_data_size = 0;
     let quic_config = quinn::ServerConfig::with_crypto(Arc::new(
@@ -5326,13 +5746,43 @@ fn load_tls_configs(
 
 async fn bind_tcp_listener(host: &str, port: u16, backlog: i32) -> std::io::Result<TcpListener> {
     let addresses = tokio::net::lookup_host((host, port)).await?;
+    #[cfg(coverage)]
+    let addresses = if coverage_fault_take(CoverageFaultPoint::ServerTcpAddressLookupEmpty) {
+        Vec::new()
+    } else {
+        addresses.collect::<Vec<_>>()
+    };
+    #[cfg(not(coverage))]
+    let addresses = addresses.collect::<Vec<_>>();
     let mut last_error = None;
 
     for address in addresses {
         let socket = if address.is_ipv4() {
-            TcpSocket::new_v4()
+            #[cfg(coverage)]
+            if coverage_fault_take(CoverageFaultPoint::ServerTcpSocketCreateError) {
+                Err(std::io::Error::other(
+                    "coverage-injected TCP socket creation failure",
+                ))
+            } else {
+                TcpSocket::new_v4()
+            }
+            #[cfg(not(coverage))]
+            {
+                TcpSocket::new_v4()
+            }
         } else {
-            TcpSocket::new_v6()
+            #[cfg(coverage)]
+            if coverage_fault_take(CoverageFaultPoint::ServerTcpSocketCreateError) {
+                Err(std::io::Error::other(
+                    "coverage-injected TCP socket creation failure",
+                ))
+            } else {
+                TcpSocket::new_v6()
+            }
+            #[cfg(not(coverage))]
+            {
+                TcpSocket::new_v6()
+            }
         };
         let socket = match socket {
             Ok(socket) => socket,
@@ -5343,17 +5793,60 @@ async fn bind_tcp_listener(host: &str, port: u16, backlog: i32) -> std::io::Resu
         };
 
         #[cfg(not(windows))]
-        if let Err(error) = socket.set_reuseaddr(true) {
+        let reuseaddr_result = {
+            #[cfg(coverage)]
+            if coverage_fault_take(CoverageFaultPoint::ServerTcpSocketReuseAddrError) {
+                Err(std::io::Error::other(
+                    "coverage-injected TCP SO_REUSEADDR failure",
+                ))
+            } else {
+                socket.set_reuseaddr(true)
+            }
+            #[cfg(not(coverage))]
+            {
+                socket.set_reuseaddr(true)
+            }
+        };
+        #[cfg(not(windows))]
+        if let Err(error) = reuseaddr_result {
             last_error = Some(error);
             continue;
         }
 
-        if let Err(error) = socket.bind(address) {
+        let bind_result = {
+            #[cfg(coverage)]
+            if coverage_fault_take(CoverageFaultPoint::ServerTcpSocketBindError) {
+                Err(std::io::Error::other(
+                    "coverage-injected TCP bind failure",
+                ))
+            } else {
+                socket.bind(address)
+            }
+            #[cfg(not(coverage))]
+            {
+                socket.bind(address)
+            }
+        };
+        if let Err(error) = bind_result {
             last_error = Some(error);
             continue;
         }
 
-        match socket.listen(backlog.max(0) as u32) {
+        let listen_result = {
+            #[cfg(coverage)]
+            if coverage_fault_take(CoverageFaultPoint::ServerTcpSocketListenError) {
+                Err(std::io::Error::other(
+                    "coverage-injected TCP listen failure",
+                ))
+            } else {
+                socket.listen(backlog.max(0) as u32)
+            }
+            #[cfg(not(coverage))]
+            {
+                socket.listen(backlog.max(0) as u32)
+            }
+        };
+        match listen_result {
             Ok(listener) => return Ok(listener),
             Err(error) => last_error = Some(error),
         }
@@ -5367,7 +5860,7 @@ async fn bind_tcp_listener(host: &str, port: u16, backlog: i32) -> std::io::Resu
     }))
 }
 
-#[cfg(all(unix, feature = "native-tcp"))]
+#[cfg(all(unix, uvicorn_rs_native_transport))]
 fn bind_unix_listener(path: &str) -> std::io::Result<UnixListener> {
     let listener = UnixListener::bind(path)?;
     // Match Uvicorn's AF_UNIX bind path, which applies 0666 permissions after
@@ -5381,27 +5874,82 @@ fn bind_unix_listener(path: &str) -> std::io::Result<UnixListener> {
 /// The Python adapter owns socket setup and sends the descriptor only during
 /// startup. `SCM_RIGHTS` gives this runtime an owned descriptor without
 /// converting an integer raw fd in Rust.
+struct ReceivedTcpListeners {
+    first: TcpListener,
+    remaining: Vec<TcpListener>,
+}
+
 #[cfg(unix)]
 async fn receive_prebound_tcp_listeners(
     path: &str,
     backlog: i32,
-) -> std::io::Result<Vec<TcpListener>> {
-    use rustix::net::{recvmsg, RecvAncillaryBuffer, RecvAncillaryMessage, RecvFlags, ReturnFlags};
+) -> std::io::Result<ReceivedTcpListeners> {
+    use rustix::net::{RecvAncillaryBuffer, RecvAncillaryMessage, RecvFlags, ReturnFlags, recvmsg};
     use std::io::{Error, ErrorKind, IoSliceMut};
     use std::mem::MaybeUninit;
     use std::os::fd::AsFd;
     use tokio::io::Interest;
 
-    let control_listener = UnixListener::bind(path)?;
-    let (control_stream, _) = control_listener.accept().await?;
-    let mut listeners = Vec::new();
-    loop {
+    macro_rules! prebound_io_result {
+        ($fault:ident, $kind:expr, $message:literal, $operation:expr) => {{
+            #[cfg(coverage)]
+            let result = if coverage_fault_take(CoverageFaultPoint::$fault) {
+                Err(Error::new($kind, $message))
+            } else {
+                $operation
+            };
+            #[cfg(not(coverage))]
+            let result = $operation;
+            result
+        }};
+    }
+    macro_rules! prebound_async_io_result {
+        ($fault:ident, $kind:expr, $message:literal, $operation:expr) => {{
+            #[cfg(coverage)]
+            let result = if coverage_fault_take(CoverageFaultPoint::$fault) {
+                Err(Error::new($kind, $message))
+            } else {
+                $operation.await
+            };
+            #[cfg(not(coverage))]
+            let result = $operation.await;
+            result
+        }};
+    }
+
+    let control_listener = prebound_io_result!(
+        ServerPreboundBindError,
+        ErrorKind::AddrInUse,
+        "coverage-injected prebound listener control bind error",
+        UnixListener::bind(path)
+    )?;
+    let (control_stream, _) = prebound_async_io_result!(
+        ServerPreboundAcceptError,
+        ErrorKind::ConnectionAborted,
+        "coverage-injected prebound listener control accept error",
+        control_listener.accept()
+    )?;
+    let mut first_listener = None;
+    let mut remaining_listeners = Vec::new();
+    let received = loop {
         let (marker, mut descriptors) = loop {
-            control_stream.readable().await?;
+            prebound_async_io_result!(
+                ServerPreboundReadError,
+                ErrorKind::ConnectionAborted,
+                "coverage-injected prebound listener control read error",
+                control_stream.readable()
+            )?;
             let received = control_stream.try_io(Interest::READABLE, || {
                 let mut payload = [0_u8; 1];
                 let mut control_space = [MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(1))];
                 let mut ancillary = RecvAncillaryBuffer::new(&mut control_space);
+                #[cfg(coverage)]
+                if coverage_fault_take(CoverageFaultPoint::ServerPreboundRecvError) {
+                    return Err(Error::new(
+                        ErrorKind::ConnectionReset,
+                        "coverage-injected prebound listener recvmsg error",
+                    ));
+                }
                 let message = {
                     let mut payload_slices = [IoSliceMut::new(&mut payload)];
                     recvmsg(
@@ -5411,16 +5959,28 @@ async fn receive_prebound_tcp_listeners(
                         RecvFlags::empty(),
                     )?
                 };
-                if message.bytes != 1 {
+                #[cfg(coverage)]
+                let force_missing_marker =
+                    coverage_fault_take(CoverageFaultPoint::ServerPreboundMissingMarker);
+                #[cfg(not(coverage))]
+                let force_missing_marker = false;
+                if message.bytes != 1 || force_missing_marker {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
                         "inherited listener transfer omitted its marker",
                     ));
                 }
+                #[cfg(coverage)]
+                let force_unexpected_ancillary =
+                    coverage_fault_take(CoverageFaultPoint::ServerPreboundUnexpectedAncillary);
+                #[cfg(not(coverage))]
+                let force_unexpected_ancillary = false;
                 let mut descriptors = Vec::new();
                 for control_message in ancillary.drain() {
                     match control_message {
-                        RecvAncillaryMessage::ScmRights(received) => {
+                        RecvAncillaryMessage::ScmRights(received)
+                            if !force_unexpected_ancillary =>
+                        {
                             descriptors.extend(received);
                         }
                         _ => {
@@ -5431,7 +5991,12 @@ async fn receive_prebound_tcp_listeners(
                         }
                     }
                 }
-                if message.flags.contains(ReturnFlags::CTRUNC) {
+                #[cfg(coverage)]
+                let control_truncated = message.flags.contains(ReturnFlags::CTRUNC)
+                    || coverage_fault_take(CoverageFaultPoint::ServerPreboundControlTruncated);
+                #[cfg(not(coverage))]
+                let control_truncated = message.flags.contains(ReturnFlags::CTRUNC);
+                if control_truncated {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
                         "inherited listener transfer contained too many descriptors",
@@ -5446,33 +6011,121 @@ async fn receive_prebound_tcp_listeners(
             }
         };
 
+        #[cfg(coverage)]
+        let marker = if coverage_fault_take(CoverageFaultPoint::ServerPreboundInvalidMarker) {
+            b'?'
+        } else {
+            marker
+        };
+        #[cfg(coverage)]
+        let force_listener_marker_invalid = marker == b'L'
+            && coverage_fault_take(CoverageFaultPoint::ServerPreboundListenerMarkerInvalidCount);
+        #[cfg(not(coverage))]
+        let force_listener_marker_invalid = false;
+        #[cfg(coverage)]
+        let force_end_marker_has_descriptor = marker == b'E'
+            && descriptors.is_empty()
+            && coverage_fault_take(CoverageFaultPoint::ServerPreboundEndMarkerHasDescriptor);
+        #[cfg(not(coverage))]
+        let force_end_marker_has_descriptor = false;
+        #[cfg(coverage)]
+        if marker == b'E'
+            && descriptors.is_empty()
+            && coverage_fault_take(CoverageFaultPoint::ServerPreboundNoListener)
+        {
+            first_listener = None;
+        }
         match marker {
-            b'L' if descriptors.len() == 1 => {
-                let descriptor = descriptors.pop().ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidData,
-                        "inherited listener transfer omitted its descriptor",
+            b'L' if descriptors.len() == 1 && !force_listener_marker_invalid => {
+                // The marker arm guarantees exactly one received descriptor.
+                let descriptor = descriptors.remove(0);
+                let descriptor_flags = {
+                    #[cfg(coverage)]
+                    let result = if coverage_fault_take(
+                        CoverageFaultPoint::ServerPreboundGetDescriptorFlagsError,
+                    ) {
+                        Err(Error::new(
+                            ErrorKind::PermissionDenied,
+                            "coverage-injected prebound descriptor getfd error",
+                        ))
+                    } else {
+                        rustix::io::fcntl_getfd(&descriptor).map_err(Error::from)
+                    };
+                    #[cfg(not(coverage))]
+                    let result = rustix::io::fcntl_getfd(&descriptor).map_err(Error::from);
+                    result?
+                };
+                {
+                    #[cfg(coverage)]
+                    let result = if coverage_fault_take(
+                        CoverageFaultPoint::ServerPreboundSetDescriptorFlagsError,
+                    ) {
+                        Err(Error::new(
+                            ErrorKind::PermissionDenied,
+                            "coverage-injected prebound descriptor setfd error",
+                        ))
+                    } else {
+                        rustix::io::fcntl_setfd(
+                            &descriptor,
+                            descriptor_flags | rustix::io::FdFlags::CLOEXEC,
+                        )
+                        .map_err(Error::from)
+                    };
+                    #[cfg(not(coverage))]
+                    let result = rustix::io::fcntl_setfd(
+                        &descriptor,
+                        descriptor_flags | rustix::io::FdFlags::CLOEXEC,
                     )
-                })?;
-                let descriptor_flags = rustix::io::fcntl_getfd(&descriptor)?;
-                rustix::io::fcntl_setfd(
-                    &descriptor,
-                    descriptor_flags | rustix::io::FdFlags::CLOEXEC,
-                )?;
-                rustix::net::listen(&descriptor, backlog.max(0))?;
+                    .map_err(Error::from);
+                    result?;
+                }
+                {
+                    #[cfg(coverage)]
+                    let result =
+                        if coverage_fault_take(CoverageFaultPoint::ServerPreboundListenError) {
+                            Err(Error::new(
+                                ErrorKind::PermissionDenied,
+                                "coverage-injected prebound descriptor listen error",
+                            ))
+                        } else {
+                            rustix::net::listen(&descriptor, backlog.max(0)).map_err(Error::from)
+                        };
+                    #[cfg(not(coverage))]
+                    let result =
+                        rustix::net::listen(&descriptor, backlog.max(0)).map_err(Error::from);
+                    result?;
+                }
 
                 let standard_listener = std::net::TcpListener::from(descriptor);
-                standard_listener.set_nonblocking(true)?;
-                listeners.push(TcpListener::from_std(standard_listener)?);
+                prebound_io_result!(
+                    ServerPreboundNonblockingError,
+                    ErrorKind::PermissionDenied,
+                    "coverage-injected prebound listener nonblocking error",
+                    standard_listener.set_nonblocking(true)
+                )?;
+                let listener = prebound_io_result!(
+                    ServerPreboundTcpListenerConversionError,
+                    ErrorKind::InvalidInput,
+                    "coverage-injected prebound TCP listener conversion error",
+                    TcpListener::from_std(standard_listener)
+                )?;
+                if first_listener.is_none() {
+                    first_listener = Some(listener);
+                } else {
+                    remaining_listeners.push(listener);
+                }
             }
-            b'E' if descriptors.is_empty() => {
-                if listeners.is_empty() {
+            b'E' if descriptors.is_empty() && !force_end_marker_has_descriptor => {
+                let Some(first) = first_listener.take() else {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
                         "inherited listener transfer contained no listeners",
                     ));
-                }
-                break;
+                };
+                break ReceivedTcpListeners {
+                    first,
+                    remaining: remaining_listeners,
+                };
             }
             b'L' => {
                 return Err(Error::new(
@@ -5493,15 +6146,15 @@ async fn receive_prebound_tcp_listeners(
                 ));
             }
         }
-    }
-    Ok(listeners)
+    };
+    Ok(received)
 }
 
 #[cfg(not(unix))]
 async fn receive_prebound_tcp_listeners(
     _path: &str,
     _backlog: i32,
-) -> std::io::Result<Vec<TcpListener>> {
+) -> std::io::Result<ReceivedTcpListeners> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "inherited TCP listeners are not supported on this platform",
@@ -5514,12 +6167,13 @@ async fn serve_forever(
     locals: TaskLocals,
     cancellation: CancellationToken,
     mut startup_signal: ServerStartupSignal,
+    mut startup_acknowledgement: Option<watch::Receiver<bool>>,
     options: ServeOptions,
     diagnostics: RuntimeDiagnostics,
 ) -> PyResult<()> {
-    #[cfg(feature = "native-tcp")]
+    #[cfg(uvicorn_rs_native_transport)]
     let (listener, server_addr) = if let Some(path) = options.fd_transfer_path.as_deref() {
-        let listeners = tokio::select! {
+        let received = tokio::select! {
             _ = cancellation.cancelled() => return Ok(()),
             result = receive_prebound_tcp_listeners(path, options.backlog) => result.map_err(
                 |error| {
@@ -5527,15 +6181,13 @@ async fn serve_forever(
                 },
             )?,
         };
-        let server_addr = listeners
-            .first()
-            .ok_or_else(|| {
-                PyValueError::new_err("at least one inherited TCP listener is required")
-            })?
-            .local_addr()
-            .map_err(|error| {
-                PyOSError::new_err(format!("could not inspect inherited TCP listener: {error}"))
-            })?;
+        let ReceivedTcpListeners { first, remaining } = received;
+        let server_addr = first.local_addr().map_err(|error| {
+            PyOSError::new_err(format!("could not inspect inherited TCP listener: {error}"))
+        })?;
+        let mut listeners = Vec::with_capacity(remaining.len() + 1);
+        listeners.push(first);
+        listeners.extend(remaining);
         (BoundListener::Tcp(listeners), server_addr)
     } else if let Some(path) = options.uds.as_deref() {
         #[cfg(unix)]
@@ -5556,14 +6208,16 @@ async fn serve_forever(
             ));
         }
     } else {
-        let listener = bind_tcp_listener(&options.host, options.port, options.backlog)
-            .await
-            .map_err(|error| {
-                PyOSError::new_err(format!(
+        let listener = match bind_tcp_listener(&options.host, options.port, options.backlog).await {
+            Ok(listener) => listener,
+            Err(error) => {
+                startup_signal.mark_failed();
+                return Err(PyOSError::new_err(format!(
                     "could not bind {}:{}: {error}",
                     options.host, options.port
-                ))
-            })?;
+                )));
+            }
+        };
         let local_addr = {
             #[cfg(coverage)]
             if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
@@ -5583,13 +6237,13 @@ async fn serve_forever(
         })?;
         (BoundListener::Tcp(vec![listener]), server_addr)
     };
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     let listener = if options.fd_transfer_path.is_some() {
         let path = options
             .fd_transfer_path
             .as_deref()
             .ok_or_else(|| PyValueError::new_err("inherited TCP listener path is missing"))?;
-        let mut listeners = tokio::select! {
+        let received = tokio::select! {
             _ = cancellation.cancelled() => return Ok(()),
             result = receive_prebound_tcp_listeners(path, options.backlog) => result.map_err(
                 |error| {
@@ -5597,29 +6251,29 @@ async fn serve_forever(
                 },
             )?,
         };
-        if listeners.len() != 1 {
+        if !received.remaining.is_empty() {
             return Err(PyValueError::new_err(
                 "multiple inherited TCP listeners require the native-tcp feature",
             ));
         }
-        listeners.pop().ok_or_else(|| {
-            PyValueError::new_err("at least one inherited TCP listener is required")
-        })?
+        received.first
     } else if options.uds.is_some() {
         return Err(PyValueError::new_err(
             "Unix domain sockets require the native-tcp feature",
         ));
     } else {
-        bind_tcp_listener(&options.host, options.port, options.backlog)
-            .await
-            .map_err(|error| {
-                PyOSError::new_err(format!(
+        match bind_tcp_listener(&options.host, options.port, options.backlog).await {
+            Ok(listener) => listener,
+            Err(error) => {
+                startup_signal.mark_failed();
+                return Err(PyOSError::new_err(format!(
                     "could not bind {}:{}: {error}",
                     options.host, options.port
-                ))
-            })?
+                )));
+            }
+        }
     };
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     let server_addr = {
         let local_addr = {
             #[cfg(coverage)]
@@ -5641,7 +6295,7 @@ async fn serve_forever(
     };
     let app = Arc::new(app);
     let invoke = Arc::new(invoke);
-    #[cfg(feature = "native-tcp")]
+    #[cfg(uvicorn_rs_native_transport)]
     let endpoint = if matches!(&listener, BoundListener::Tcp(_)) {
         if let Some(quic_config) = options.quic_config {
             let endpoint = {
@@ -5667,7 +6321,7 @@ async fn serve_forever(
     } else {
         None
     };
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     let endpoint = if let Some(quic_config) = options.quic_config {
         let endpoint = {
             #[cfg(coverage)]
@@ -5718,13 +6372,13 @@ async fn serve_forever(
     } else {
         None
     };
-    let state = if options.lifespan_mode.enabled() {
-        lifespan.as_ref().and_then(|runtime| runtime.state.clone())
-    } else {
-        Some(Arc::new(Python::attach(|py| PyDict::new(py).unbind())))
-    };
-    #[cfg(not(feature = "native-tcp"))]
-    let websocket_tasks: WebSocketTasks = Arc::new(Mutex::new(tokio::task::JoinSet::new()));
+    // A server that reaches request handling always has lifecycle state when
+    // lifespan ran, or an empty state dictionary when lifespan was disabled.
+    // Startup failures return above before constructing ServerContext.
+    let state = lifespan.as_ref().map_or_else(
+        || Arc::new(Python::attach(|py| PyDict::new(py).unbind())),
+        |runtime| Arc::clone(&runtime.state),
+    );
     let request_body_tasks: RequestBodyTasks = Arc::new(Mutex::new(tokio::task::JoinSet::new()));
     // Track each network-side ASGI task together with its Python cancellation
     // cleanup. An aborted Tokio task can register that cleanup only when its
@@ -5751,15 +6405,16 @@ async fn serve_forever(
         date_header: options.date_header,
         http2_enabled: options.http2_enabled,
         ws_max_size: options.ws_max_size,
+        ws_max_queue: options.ws_max_queue,
+        websocket_enabled: options.websocket_enabled,
+        ws_per_message_deflate: options.ws_per_message_deflate,
         websocket_keepalive: options.websocket_keepalive,
         concurrency_limit_observer: options.concurrency_limit_observer,
         limit_max_requests,
         completed_http_requests: AtomicUsize::new(0),
-        #[cfg(feature = "native-tcp")]
+        #[cfg(uvicorn_rs_native_transport)]
         limit_concurrency: options.limit_concurrency,
         state,
-        #[cfg(not(feature = "native-tcp"))]
-        websocket_tasks,
         request_body_tasks,
         #[cfg(coverage)]
         completed_request_body_pumps: Arc::new(AtomicUsize::new(0)),
@@ -5769,9 +6424,34 @@ async fn serve_forever(
         pending_python_tasks,
         force_application_shutdown: CancellationToken::new(),
     });
-    #[cfg(feature = "native-tcp")]
+    // `started` means lifespan startup completed and the bound listeners are
+    // ready to accept application traffic. Notify the Python compatibility
+    // facade only after all fallible startup work has completed, then hold
+    // transport admission until it has emitted Uvicorn's started message.
+    if server.limit_max_requests == Some(0) {
+        server.cancellation.cancel();
+    }
+    startup_signal.mark_started();
+
+    if let Some(acknowledgement) = startup_acknowledgement.as_mut() {
+        while !*acknowledgement.borrow_and_update() {
+            tokio::select! {
+                _ = cancellation.cancelled() => break,
+                changed = acknowledgement.changed() => {
+                    if changed.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Start HTTP/3 admission behind the same compatibility startup gate as
+    // TCP. Binding the endpoint is part of startup; accepting QUIC traffic is
+    // deferred until the facade has logged that the server is running.
+    #[cfg(uvicorn_rs_native_transport)]
     let http3_task = endpoint.map(|endpoint| spawn_native_http3(endpoint, Arc::clone(&server)));
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     let http3_task = endpoint.map(|endpoint| {
         let server = Arc::clone(&server);
         tokio::spawn(async move {
@@ -5781,19 +6461,11 @@ async fn serve_forever(
         })
     });
 
-    // `started` means lifespan startup completed and the bound listeners are
-    // ready to accept application traffic. Notify the Python compatibility
-    // facade only after all fallible startup work has completed.
-    if server.limit_max_requests == Some(0) {
-        server.cancellation.cancel();
-    }
-    startup_signal.mark_started();
-
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     let mut connection_tasks: tokio::task::JoinSet<Result<(), BoxError>> =
         tokio::task::JoinSet::new();
     let mut accept_error = None;
-    #[cfg(feature = "native-tcp")]
+    #[cfg(uvicorn_rs_native_transport)]
     {
         #[cfg(coverage)]
         if coverage_fault_take(CoverageFaultPoint::ServerListenerAcceptError) {
@@ -5812,16 +6484,19 @@ async fn serve_forever(
         let config = uvicorn_rs::ServerConfig {
             graceful_shutdown_timeout: options.graceful_timeout,
             http1_keep_alive_timeout: Some(options.timeout_keep_alive),
+            http1_max_buffer_size: options.http1_max_buffer_size,
             http2_enabled: server.http2_enabled,
             limit_concurrency: server.limit_concurrency,
-            default_headers: server.default_headers.clone(),
+            default_headers: validated_default_headers(&server.default_headers),
             // Let an invalid HTTP/1 ASGI response start reach the transport,
             // which closes the connection as Uvicorn does. Ordinary ASGI app
             // exceptions are converted to 500 responses in `handle_request`.
             service_error_policy: uvicorn_rs::ServiceErrorPolicy::Propagate,
             peer_read_half_close,
             error_observer: Some(Arc::new(|event| {
-                if event.phase() == uvicorn_rs::ServerErrorPhase::Connection {
+                if event.phase() == uvicorn_rs::ServerErrorPhase::Connection
+                    && !contains_invalid_default_header_error(event.error())
+                {
                     log_error(format_args!(
                         "uvicorn-rs: HTTP connection from {:?} failed: {} ({:?})",
                         event.peer_addr(),
@@ -5850,25 +6525,28 @@ async fn serve_forever(
                         },
                     ));
                 }
-                if let Some(acceptor) = server.tcp_tls.clone() {
-                    let shutdown = cancellation.clone();
-                    uvicorn_rs::serve_tls_listeners_with_date_header(
-                        listener_services,
-                        acceptor,
-                        async move { shutdown.cancelled().await },
-                        config,
-                        server.date_header,
-                    )
-                    .await
-                } else {
-                    let shutdown = cancellation.clone();
-                    uvicorn_rs::serve_tcp_listeners_with_date_header(
-                        listener_services,
-                        async move { shutdown.cancelled().await },
-                        config,
-                        server.date_header,
-                    )
-                    .await
+                match server.tcp_tls.clone() {
+                    Some(acceptor) => {
+                        let shutdown = cancellation.clone();
+                        uvicorn_rs::serve_tls_listeners_with_date_header(
+                            listener_services,
+                            acceptor,
+                            async move { shutdown.cancelled().await },
+                            config,
+                            server.date_header,
+                        )
+                        .await
+                    }
+                    _ => {
+                        let shutdown = cancellation.clone();
+                        uvicorn_rs::serve_tcp_listeners_with_date_header(
+                            listener_services,
+                            async move { shutdown.cancelled().await },
+                            config,
+                            server.date_header,
+                        )
+                        .await
+                    }
                 }
             }
             #[cfg(unix)]
@@ -5878,25 +6556,28 @@ async fn serve_forever(
                     server_addr,
                 };
                 let shutdown = cancellation.clone();
-                if let Some(acceptor) = server.tcp_tls.clone() {
-                    uvicorn_rs::serve_unix_tls_with_date_header(
-                        listener,
-                        acceptor,
-                        service,
-                        async move { shutdown.cancelled().await },
-                        config,
-                        server.date_header,
-                    )
-                    .await
-                } else {
-                    uvicorn_rs::serve_unix_with_date_header(
-                        listener,
-                        service,
-                        async move { shutdown.cancelled().await },
-                        config,
-                        server.date_header,
-                    )
-                    .await
+                match server.tcp_tls.clone() {
+                    Some(acceptor) => {
+                        uvicorn_rs::serve_unix_tls_with_date_header(
+                            listener,
+                            acceptor,
+                            service,
+                            async move { shutdown.cancelled().await },
+                            config,
+                            server.date_header,
+                        )
+                        .await
+                    }
+                    _ => {
+                        uvicorn_rs::serve_unix_with_date_header(
+                            listener,
+                            service,
+                            async move { shutdown.cancelled().await },
+                            config,
+                            server.date_header,
+                        )
+                        .await
+                    }
                 }
             }
         };
@@ -5913,7 +6594,7 @@ async fn serve_forever(
             }
         }
     }
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     loop {
         tokio::select! {
             biased;
@@ -6038,7 +6719,7 @@ async fn serve_forever(
     }
 
     // Stop transport admission before waiting for active responses to drain.
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     drop(listener);
     cancellation.cancel();
     let shutdown_started = tokio::time::Instant::now();
@@ -6057,7 +6738,7 @@ async fn serve_forever(
             let _ = http3_task.await;
         }
     }
-    #[cfg(not(feature = "native-tcp"))]
+    #[cfg(not(uvicorn_rs_native_transport))]
     if timeout_optional(
         remaining_graceful_timeout(options.graceful_timeout, shutdown_started),
         async {
@@ -6134,29 +6815,6 @@ async fn serve_forever(
                 "uvicorn-rs: request-body pumps joined: {completed}"
             ));
         }
-    }
-    #[cfg(not(feature = "native-tcp"))]
-    {
-        let mut websocket_tasks = server.websocket_tasks.lock().await;
-        if timeout_optional(
-            remaining_graceful_timeout(options.graceful_timeout, shutdown_started),
-            async {
-                while let Some(result) = websocket_tasks.join_next().await {
-                    if let Err(error) = result {
-                        log_error(format_args!(
-                            "uvicorn-rs: WebSocket task failed during shutdown: {error}"
-                        ));
-                    }
-                }
-            },
-        )
-        .await
-        .is_err()
-        {
-            websocket_tasks.abort_all();
-            while websocket_tasks.join_next().await.is_some() {}
-        }
-        drop(websocket_tasks);
     }
     server.pending_python_tasks.close();
     if timeout_optional(options.graceful_timeout, server.pending_python_tasks.wait())
@@ -6253,7 +6911,7 @@ fn remaining_graceful_timeout(
     timeout.map(|timeout| timeout.saturating_sub(started.elapsed()))
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 async fn serve_connection(
     stream: TcpStream,
     peer_addr: SocketAddr,
@@ -6288,7 +6946,7 @@ async fn serve_connection(
         server_addr,
         transport_scheme,
         connection_closed: ConnectionClosed::Watch(closed_rx),
-        #[cfg(feature = "native-tcp")]
+        #[cfg(uvicorn_rs_native_transport)]
         native_upgrade: None,
     };
     let result = if let Some(tls) = server.tcp_tls.as_ref() {
@@ -6316,7 +6974,7 @@ async fn serve_connection(
     result
 }
 
-#[cfg(not(feature = "native-tcp"))]
+#[cfg(not(uvicorn_rs_native_transport))]
 async fn serve_hyper_connection<I>(
     io: I,
     context: ConnectionContext,
@@ -6340,7 +6998,8 @@ where
         let read_eof_waker = Arc::clone(&service_read_eof_waker);
         async move {
             let _active_request = ActiveHttpRequest::new(active_http_requests, read_eof_waker);
-            let websocket_upgrade = is_websocket_upgrade(&request);
+            let websocket_upgrade =
+                context.server.websocket_enabled && is_websocket_upgrade(&request);
             let response = if websocket_upgrade {
                 Ok::<_, std::io::Error>(handle_websocket_request(request, context).await)
             } else {
@@ -6384,7 +7043,7 @@ where
     Ok(())
 }
 
-#[cfg(feature = "native-tcp")]
+#[cfg(uvicorn_rs_native_transport)]
 fn spawn_native_http3(
     endpoint: quinn::Endpoint,
     server: Arc<ServerContext>,
@@ -6419,7 +7078,7 @@ fn spawn_native_http3(
     })
 }
 
-#[cfg(all(feature = "native-tcp", coverage))]
+#[cfg(all(uvicorn_rs_native_transport, coverage))]
 fn coverage_legacy_http3_fault_is_armed() -> bool {
     // This coverage-only selector lets a real peer-close input exercise the
     // retained legacy HTTP/3 path without injecting a runtime failure.
@@ -6461,7 +7120,7 @@ fn coverage_legacy_http3_fault_is_armed() -> bool {
     .any(coverage_fault_is_armed)
 }
 
-#[cfg(any(not(feature = "native-tcp"), coverage))]
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 async fn serve_legacy_http3(
     endpoint: quinn::Endpoint,
     server: Arc<ServerContext>,
@@ -6568,7 +7227,7 @@ async fn serve_legacy_http3(
     Ok(())
 }
 
-#[cfg(any(not(feature = "native-tcp"), coverage))]
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 async fn serve_http3_connection(
     connection: quinn::Connection,
     server: Arc<ServerContext>,
@@ -6648,7 +7307,7 @@ async fn serve_http3_connection(
             server_addr: server.server_addr,
             transport_scheme: "https",
             connection_closed: ConnectionClosed::Watch(closed_rx.clone()),
-            #[cfg(feature = "native-tcp")]
+            #[cfg(uvicorn_rs_native_transport)]
             native_upgrade: None,
         };
         requests.spawn(async move {
@@ -6679,7 +7338,7 @@ async fn serve_http3_connection(
     connection_result
 }
 
-#[cfg(any(not(feature = "native-tcp"), coverage))]
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 fn is_http3_peer_close_ignorable(
     error: &(dyn StdError + 'static),
     connection: &quinn::Connection,
@@ -6724,7 +7383,7 @@ fn is_http3_peer_close_ignorable(
     !matches!(close.error_code.into(), 0x33 | 0x100..=0x110 | 0x200..=0x202)
 }
 
-#[cfg(any(not(feature = "native-tcp"), coverage))]
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 fn observe_http3_request_task(result: Result<(), tokio::task::JoinError>) {
     if let Err(error) = result {
         log_error(format_args!(
@@ -6733,7 +7392,7 @@ fn observe_http3_request_task(result: Result<(), tokio::task::JoinError>) {
     }
 }
 
-#[cfg(feature = "native-tcp")]
+#[cfg(uvicorn_rs_native_transport)]
 async fn handle_http3_asgi_request(
     request: Request<uvicorn_rs::Http3RequestBody>,
     context: ConnectionContext,
@@ -6793,7 +7452,7 @@ async fn handle_http3_asgi_request(
     }
 }
 
-#[cfg(feature = "native-tcp")]
+#[cfg(uvicorn_rs_native_transport)]
 async fn pump_native_http3_request_body(
     mut body: uvicorn_rs::Http3RequestBody,
     sender: mpsc::Sender<RequestMessage>,
@@ -6988,7 +7647,7 @@ async fn send_native_http3_disconnect(
     }
 }
 
-#[cfg(any(not(feature = "native-tcp"), coverage))]
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 async fn handle_http3_request(
     resolver: h3::server::RequestResolver<h3_quinn::Connection, Bytes>,
     context: ConnectionContext,
@@ -7113,7 +7772,7 @@ async fn handle_http3_request(
     Ok(())
 }
 
-#[cfg(any(not(feature = "native-tcp"), coverage))]
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 async fn pump_h3_request_body(
     mut body: h3::server::RequestStream<h3_quinn::RecvStream, Bytes>,
     sender: mpsc::Sender<RequestMessage>,
@@ -7411,7 +8070,7 @@ async fn handle_request_parts(
                 uds: context.server.uds.as_deref(),
                 transport_scheme: context.transport_scheme,
                 root_path: &context.server.root_path,
-                state: context.server.state.as_ref(),
+                state: &context.server.state,
             };
             let scope = build_scope(py, &parts, &scope_context)?;
             let awaitable = coverage_value!(
@@ -7512,7 +8171,11 @@ async fn handle_request_parts(
         receiver_pending_pause_active: false,
     }
     .boxed_unsync();
-    Ok(response(start.status, body, start.headers))
+    let mut response = response(start.status, body, start.headers);
+    response
+        .extensions_mut()
+        .insert(HeaderOrder::new(start.header_order));
+    Ok(response)
 }
 
 fn is_websocket_upgrade(request: &Request<Incoming>) -> bool {
@@ -7642,10 +8305,37 @@ async fn handle_websocket_request_inner(
         };
         return Err(Box::new(WebSocketHandshakeError { response_body }));
     }
-    let request_key = request_key.to_vec();
-    let on_upgrade = hyper::upgrade::on(&mut request);
+    let native_websocket_upgrade = if context.native_upgrade.is_some() {
+        #[cfg(coverage)]
+        if coverage_fault_take(
+            CoverageFaultPoint::WebSocketNativeUpgradeExtensionRemovedAfterDispatch,
+        ) {
+            let _ = request
+                .extensions_mut()
+                .remove::<uvicorn_rs::ConnectionUpgrade>();
+        }
+        Some(
+            WebSocketUpgrade::from_request_with_per_message_deflate(
+                &mut request,
+                context.server.ws_per_message_deflate,
+            )
+            .map_err(|error| match error {
+                uvicorn_rs::WebSocketUpgradeError::InvalidHandshake(reason) => {
+                    Box::new(WebSocketHandshakeError {
+                        response_body: format!(
+                            "Failed to open a WebSocket connection: invalid handshake: {reason}.\n"
+                        ),
+                    }) as BoxError
+                }
+                error => Box::new(error) as BoxError,
+            })?,
+        )
+    } else {
+        None
+    };
     let parts = request.into_parts().0;
-    let (incoming_tx, incoming_rx) = mpsc::channel(8);
+    let incoming_capacity = context.server.ws_max_queue.map_or(8, |limit| limit.max(1));
+    let (incoming_tx, incoming_rx) = mpsc::channel(incoming_capacity);
     let (outgoing_tx, outgoing_rx) = mpsc::channel(8);
     let (handshake_tx, mut handshake_rx) = oneshot::channel();
     let state = Arc::new(AtomicU8::new(0));
@@ -7681,7 +8371,7 @@ async fn handle_websocket_request_inner(
                 uds: app_context.server.uds.as_deref(),
                 transport_scheme: app_context.transport_scheme,
                 root_path: &app_context.server.root_path,
-                state: app_context.server.state.as_ref(),
+                state: &app_context.server.state,
             };
             let scope = build_websocket_scope(py, &parts, &scope_context)?;
             let awaitable = coverage_value!(
@@ -7744,70 +8434,52 @@ async fn handle_websocket_request_inner(
         ));
     };
 
-    let accept_key = derive_accept_key(&request_key);
-    #[cfg(coverage)]
-    let accept_key = if coverage_fault_take(CoverageFaultPoint::WebSocketAcceptKeyHeaderValueError)
-    {
-        "\n".to_string()
-    } else {
-        accept_key
-    };
-    let mut handshake_response = Response::new(full_body(Bytes::new()));
-    *handshake_response.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
-    handshake_response.headers_mut().insert(
-        http::header::CONNECTION,
-        HeaderValue::from_static("upgrade"),
-    );
-    handshake_response
-        .headers_mut()
-        .insert(http::header::UPGRADE, HeaderValue::from_static("websocket"));
-    handshake_response.headers_mut().insert(
-        http::header::SEC_WEBSOCKET_ACCEPT,
-        HeaderValue::from_str(&accept_key)?,
-    );
-    if let Some(subprotocol) = subprotocol {
-        handshake_response.headers_mut().insert(
-            http::header::SEC_WEBSOCKET_PROTOCOL,
-            HeaderValue::from_str(&subprotocol)?,
-        );
-    }
-    for (name, value) in headers {
-        let name = HeaderName::from_bytes(&name)?;
-        if name == http::header::CONNECTION
-            || name == http::header::UPGRADE
-            || name == http::header::SEC_WEBSOCKET_ACCEPT
-            || name == http::header::SEC_WEBSOCKET_PROTOCOL
-        {
-            return Err(std::io::Error::other(
-                "ASGI websocket.accept headers cannot override handshake headers",
-            )
-            .into());
-        }
-        handshake_response
-            .headers_mut()
-            .try_append(name, HeaderValue::from_bytes(&value)?)?;
-    }
-
-    #[cfg(feature = "native-tcp")]
-    let native_upgrade = context.native_upgrade.ok_or_else(|| {
-        std::io::Error::other("native TCP transport omitted the HTTP/1 WebSocket upgrade session")
-    })?;
-    #[cfg(not(feature = "native-tcp"))]
-    let app_task = app_task.into_handle();
     let server = Arc::clone(&context.server);
     let session_cancellation = server.cancellation.clone();
     let connection_closed = context.connection_closed;
-    #[cfg(feature = "native-tcp")]
-    {
-        let upgrade_shutdown = native_upgrade.clone();
-        #[cfg(coverage)]
-        let inject_shutdown_panic =
-            coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownPanic);
-        #[cfg(coverage)]
-        let inject_shutdown_hang =
-            coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownHang);
-        let session_cancellation = session_cancellation.clone();
-        let session_handler = move |upgraded| async move {
+    let Some(mut native_websocket_upgrade) = native_websocket_upgrade else {
+        return Err(std::io::Error::other(
+            "native TCP transport omitted the HTTP/1 WebSocket upgrade session",
+        )
+        .into());
+    };
+    if let Some(subprotocol) = subprotocol {
+        native_websocket_upgrade = native_websocket_upgrade
+            .with_application_subprotocol(&subprotocol)
+            .map_err(|error| Box::new(error) as BoxError)?;
+    }
+    for (name, value) in headers {
+        let name = HeaderName::from_bytes(&name)?;
+        let value = HeaderValue::from_bytes(&value)?;
+        native_websocket_upgrade = native_websocket_upgrade
+            .with_header(name, value)
+            .map_err(|error| Box::new(error) as BoxError)?;
+    }
+    let native_websocket_upgrade =
+        native_websocket_upgrade.with_max_message_size(server.ws_max_size);
+    #[cfg(coverage)]
+    let inject_shutdown_panic =
+        coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownPanic);
+    #[cfg(coverage)]
+    let inject_shutdown_hang =
+        coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownHang);
+    #[cfg(coverage)]
+    let inject_accept_key_header_value_error =
+        coverage_fault_take(CoverageFaultPoint::WebSocketAcceptKeyHeaderValueError);
+    #[cfg(coverage)]
+    if inject_accept_key_header_value_error {
+        let _ = uvicorn_rs::arm_derived_accept_key_header_value_fault();
+    }
+    #[cfg(coverage)]
+    if coverage_fault_take(CoverageFaultPoint::WebSocketNativeUpgradeRegisterClosed) {
+        return Err(Box::new(
+            uvicorn_rs::WebSocketUpgradeError::ConnectionClosed,
+        ));
+    }
+    let acceptance =
+        native_websocket_upgrade.accept(full_body(Bytes::new()), move |socket| async move {
+            #[cfg(coverage)]
+            let mut socket = socket;
             // Keep cancellation ownership until registration has succeeded.
             // If the connection is already closed, dropping the rejected
             // session handler must cancel the Python ASGI task instead of
@@ -7815,24 +8487,18 @@ async fn handle_websocket_request_inner(
             let app_task = app_task.into_handle();
             #[cfg(coverage)]
             if inject_shutdown_panic {
-                upgrade_shutdown.wait_for_shutdown().await;
+                socket.wait_for_shutdown().await;
                 app_task.abort();
                 let _ = app_task.await;
                 coverage_panic("coverage-injected WebSocket session task panic during shutdown");
             }
             #[cfg(coverage)]
             if inject_shutdown_hang {
-                upgrade_shutdown.wait_for_shutdown().await;
+                socket.wait_for_shutdown().await;
                 app_task.abort();
                 let _ = app_task.await;
                 return std::future::pending::<Result<(), std::io::Error>>().await;
             }
-            let socket = WebSocketSession::from_accepted_upgrade_with_max_message_size(
-                upgraded,
-                upgrade_shutdown,
-                server.ws_max_size,
-            )
-            .await;
             if let Err(error) = drive_websocket(
                 socket,
                 incoming_tx,
@@ -7852,79 +8518,12 @@ async fn handle_websocket_request_inner(
                 ));
             }
             Ok::<(), std::io::Error>(())
-        };
-        #[cfg(coverage)]
-        let registration =
-            if coverage_fault_take(CoverageFaultPoint::WebSocketNativeUpgradeRegisterClosed) {
-                Err(uvicorn_rs::ConnectionUpgradeClosed)
-            } else {
-                native_upgrade.register(on_upgrade, session_handler)
-            };
-        #[cfg(not(coverage))]
-        let registration = native_upgrade.register(on_upgrade, session_handler);
-        registration.map_err(|error| Box::new(error) as BoxError)?;
-        Ok(handshake_response)
-    }
-    #[cfg(not(feature = "native-tcp"))]
-    {
-        let upgrade_cancellation = session_cancellation.clone();
-        let websocket_tasks = Arc::clone(&server.websocket_tasks);
-        websocket_tasks.lock().await.spawn(async move {
-        #[cfg(coverage)]
-        if coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownPanic) {
-            upgrade_cancellation.cancelled().await;
-            app_task.abort();
-            let _ = app_task.await;
-            coverage_panic("coverage-injected WebSocket session task panic during shutdown");
-        }
-        #[cfg(coverage)]
-        if coverage_fault_take(CoverageFaultPoint::ServerWebSocketTaskShutdownHang) {
-            upgrade_cancellation.cancelled().await;
-            std::future::pending::<()>().await;
-        }
-        tokio::select! {
-            biased;
-            _ = upgrade_cancellation.cancelled() => {
-                state.store(3, Ordering::Release);
-                app_task.abort();
-                let _ = app_task.await;
-            }
-            result = on_upgrade => match result {
-                Ok(upgraded) => {
-                    let mut websocket_config = WebSocketConfig::default();
-                    websocket_config.max_message_size = Some(server.ws_max_size);
-                    websocket_config.max_frame_size = Some(server.ws_max_size);
-                    let socket = WebSocketStream::from_raw_socket(
-                        TokioIo::new(upgraded),
-                        Role::Server,
-                        Some(websocket_config),
-                    ).await;
-                    if let Err(error) = drive_websocket(
-                        socket,
-                        incoming_tx,
-                        outgoing_rx,
-                        app_task,
-                        WebSocketDriverContext {
-                            state,
-                            connection_closed,
-                            cancellation: session_cancellation,
-                            keepalive: server.websocket_keepalive,
-                        },
-                    ).await {
-                        log_error(format_args!("uvicorn-rs: WebSocket session failed: {error}"));
-                    }
-                }
-                Err(error) => {
-                    state.store(3, Ordering::Release);
-                    app_task.abort();
-                    let _ = app_task.await;
-                    log_error(format_args!("uvicorn-rs: WebSocket upgrade failed: {error}"));
-                }
-            }
-        }
         });
+    #[cfg(coverage)]
+    if inject_accept_key_header_value_error {
+        let _ = uvicorn_rs::finish_derived_accept_key_header_value_fault();
     }
-    #[cfg(not(feature = "native-tcp"))]
+    let handshake_response = acceptance.map_err(|error| Box::new(error) as BoxError)?;
     Ok(handshake_response)
 }
 
@@ -7988,33 +8587,6 @@ impl WebSocketTransport for WebSocketSession {
     }
 }
 
-#[cfg(not(feature = "native-tcp"))]
-impl<I> WebSocketTransport for WebSocketStream<I>
-where
-    I: AsyncRead + AsyncWrite + Unpin,
-{
-    async fn send_message(&mut self, message: Message) -> Result<(), BoxError> {
-        self.send(message)
-            .await
-            .map_err(|error| Box::new(error) as BoxError)
-    }
-
-    async fn receive_message(&mut self) -> Result<Option<Message>, BoxError> {
-        match self.next().await.transpose() {
-            Ok(message) => Ok(message),
-            Err(error @ TungsteniteError::Capacity(_)) => {
-                let close = Message::Close(Some(CloseFrame {
-                    code: CloseCode::Size,
-                    reason: "message too big".into(),
-                }));
-                let _ = self.send(close).await;
-                Err(Box::new(error))
-            }
-            Err(error) => Err(Box::new(error)),
-        }
-    }
-}
-
 async fn send_websocket_message<S>(socket: &mut S, message: Message) -> Result<(), BoxError>
 where
     S: WebSocketTransport,
@@ -8026,6 +8598,40 @@ where
         )));
     }
     socket.send_message(message).await
+}
+
+async fn close_websocket_after_ping_timeout<S: WebSocketTransport>(
+    socket: &mut S,
+    incoming: &mpsc::Sender<WebSocketIncoming>,
+    app_task: &mut tokio::task::JoinHandle<PyResult<Py<PyAny>>>,
+    state: &AtomicU8,
+    driver_error: &mut Option<BoxError>,
+) -> bool {
+    state.store(2, Ordering::Release);
+    match tokio::time::timeout(
+        std::time::Duration::from_millis(100),
+        socket.send_message(Message::Close(Some(CloseFrame {
+            code: CloseCode::from(1011),
+            reason: "keepalive ping timeout".into(),
+        }))),
+    )
+    .await
+    {
+        Ok(Ok(())) | Err(_) => {}
+        Ok(Err(error)) => *driver_error = Some(error),
+    }
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        incoming.send(WebSocketIncoming::Disconnect {
+            code: 1005,
+            reason: String::new(),
+        }),
+    )
+    .await;
+    state.store(3, Ordering::Release);
+    tokio::time::timeout(std::time::Duration::from_secs(1), app_task)
+        .await
+        .is_ok()
 }
 
 async fn drive_websocket<S>(
@@ -8132,34 +8738,14 @@ where
                     })
                     .is_some_and(|deadline| deadline <= now);
                 if ping_timed_out {
-                    state.store(2, Ordering::Release);
-                    match tokio::time::timeout(
-                        std::time::Duration::from_millis(100),
-                        socket.send_message(Message::Close(Some(CloseFrame {
-                            code: CloseCode::from(1011),
-                            reason: "keepalive ping timeout".into(),
-                        }))),
-                    )
-                    .await
-                    {
-                        Ok(Ok(())) | Err(_) => {}
-                        Ok(Err(error)) => driver_error = Some(error),
-                    }
-                    let _ = tokio::time::timeout(
-                        std::time::Duration::from_secs(1),
-                        incoming.send(WebSocketIncoming::Disconnect {
-                            code: 1005,
-                            reason: String::new(),
-                        }),
+                    app_task_completed = close_websocket_after_ping_timeout(
+                        &mut socket,
+                        &incoming,
+                        &mut app_task,
+                        &state,
+                        &mut driver_error,
                     )
                     .await;
-                    state.store(3, Ordering::Release);
-                    app_task_completed = tokio::time::timeout(
-                        std::time::Duration::from_secs(1),
-                        &mut app_task,
-                    )
-                    .await
-                    .is_ok();
                     break;
                 }
 
@@ -8175,6 +8761,17 @@ where
                         break 'driver;
                     }
                     pending_ping = Some((payload, now));
+                    if keepalive.timeout.is_some_and(|timeout| timeout.is_zero()) {
+                        app_task_completed = close_websocket_after_ping_timeout(
+                            &mut socket,
+                            &incoming,
+                            &mut app_task,
+                            &state,
+                            &mut driver_error,
+                        )
+                        .await;
+                        break 'driver;
+                    }
                     if keepalive.timeout.is_none() {
                         next_ping = keepalive.interval.and_then(|interval| {
                             now.checked_add(interval.saturating_sub(last_ping_rtt))
@@ -8215,24 +8812,24 @@ where
                 socket.receive_message().await
             } => {
                 match message {
-                    Ok(Some(Message::Text(text))) => {
+                    Ok(Some(message @ Message::Text(_))) => {
                         #[cfg(coverage)]
                         let send_failed = coverage_fault_is_armed(
                             CoverageFaultPoint::WebSocketDriverIncomingTextReceiverClosed,
-                        ) || incoming.send(WebSocketIncoming::Text(text)).await.is_err();
+                        ) || incoming.send(WebSocketIncoming::Data(message)).await.is_err();
                         #[cfg(not(coverage))]
-                        let send_failed = incoming.send(WebSocketIncoming::Text(text)).await.is_err();
+                        let send_failed = incoming.send(WebSocketIncoming::Data(message)).await.is_err();
                         if send_failed {
                             break;
                         }
                     }
-                    Ok(Some(Message::Binary(data))) => {
+                    Ok(Some(message @ Message::Binary(_))) => {
                         #[cfg(coverage)]
                         let send_failed = coverage_fault_is_armed(
                             CoverageFaultPoint::WebSocketDriverIncomingBinaryReceiverClosed,
-                        ) || incoming.send(WebSocketIncoming::Bytes(data)).await.is_err();
+                        ) || incoming.send(WebSocketIncoming::Data(message)).await.is_err();
                         #[cfg(not(coverage))]
-                        let send_failed = incoming.send(WebSocketIncoming::Bytes(data)).await.is_err();
+                        let send_failed = incoming.send(WebSocketIncoming::Data(message)).await.is_err();
                         if send_failed {
                             break;
                         }
@@ -8336,7 +8933,7 @@ struct AsgiRequestScopeContext<'a> {
     uds: Option<&'a str>,
     transport_scheme: &'a str,
     root_path: &'a str,
-    state: Option<&'a Arc<Py<PyDict>>>,
+    state: &'a Arc<Py<PyDict>>,
 }
 
 fn build_websocket_scope<'py>(
@@ -8646,17 +9243,15 @@ fn build_scope<'py>(
 fn set_scope_state(
     py: Python<'_>,
     scope: &Bound<'_, PyDict>,
-    state: Option<&Arc<Py<PyDict>>>,
+    state: &Arc<Py<PyDict>>,
 ) -> PyResult<()> {
-    if let Some(state) = state {
-        // Python's shallow copy preserves cached key hashes and shared values;
-        // re-inserting keys can invoke user __hash__ and mutate the source.
-        let request_state = coverage_value!(HttpScopeStateCopy, state.bind(py).copy())?;
-        coverage_try!(
-            HttpScopeStateSetItem,
-            scope.set_item("state", request_state)
-        );
-    }
+    // Python's shallow copy preserves cached key hashes and shared values;
+    // re-inserting keys can invoke user __hash__ and mutate the source.
+    let request_state = coverage_value!(HttpScopeStateCopy, state.bind(py).copy())?;
+    coverage_try!(
+        HttpScopeStateSetItem,
+        scope.set_item("state", request_state)
+    );
     Ok(())
 }
 
@@ -8666,24 +9261,53 @@ fn full_body(body: Bytes) -> ResponseBody {
         .boxed_unsync()
 }
 
+fn validated_default_headers(headers: &[(Bytes, Bytes)]) -> Vec<(HeaderName, HeaderValue)> {
+    headers
+        .iter()
+        .filter_map(|(name, value)| {
+            Some((
+                HeaderName::from_bytes(name).ok()?,
+                HeaderValue::from_bytes(value).ok()?,
+            ))
+        })
+        .collect()
+}
+
 fn apply_default_response_headers(
     server: &ServerContext,
     response: Response<ResponseBody>,
 ) -> Result<Response<ResponseBody>, std::io::Error> {
     let (mut parts, body) = response.into_parts();
+    let mut header_order_prefix = parts.extensions.get::<HeaderOrder>().map(|_| Vec::new());
     let mut headers = HeaderMap::new();
     if server.date_header {
         let date = httpdate::fmt_http_date(std::time::SystemTime::now());
         let value = HeaderValue::from_bytes(date.as_bytes()).map_err(std::io::Error::other)?;
         headers.append(DATE, value);
+        if let Some(prefix) = &mut header_order_prefix {
+            prefix.push(DATE);
+        }
     }
     for (name, value) in &server.default_headers {
-        headers.append(name.clone(), value.clone());
+        let name = HeaderName::from_bytes(name)
+            .map_err(|_| invalid_default_header_error(InvalidDefaultHeader::Name))?;
+        let value = HeaderValue::from_bytes(value)
+            .map_err(|_| invalid_default_header_error(InvalidDefaultHeader::Value))?;
+        if let Some(prefix) = &mut header_order_prefix {
+            prefix.push(name.clone());
+        }
+        headers.append(name, value);
     }
     for (name, value) in &parts.headers {
         headers.append(name.clone(), value.clone());
     }
     parts.headers = headers;
+    if let (Some(order), Some(prefix)) = (
+        parts.extensions.get_mut::<HeaderOrder>(),
+        header_order_prefix,
+    ) {
+        order.prepend(prefix);
+    }
     Ok(Response::from_parts(parts, body))
 }
 

@@ -40,6 +40,16 @@ class Server:
         limit_max_requests_jitter=0,
         http2=True,
         _reset_contextvars=False,
+        _defer_startup_acceptance=False,
+        ws_per_message_deflate=True,
+        _http1_max_buffer_size=None,
+        ssl_ca_certs=None,
+        ssl_cert_reqs=0,
+        _tls_version="default",
+        _tls_cipher_suites=None,
+        ssl_keyfile_password=None,
+        ws_max_queue=None,
+        websocket_enabled=True,
     ):
         """Store the application and listener options for a server run.
 
@@ -59,6 +69,13 @@ class Server:
             certfile: Optional PEM certificate chain. Pair with ``keyfile`` to
                 enable HTTPS and HTTP/3.
             keyfile: Optional PEM private key paired with ``certfile``.
+            ssl_keyfile_password: Optional password for a PKCS#8 encrypted PEM
+                private key.
+            ssl_ca_certs: Optional PEM CA bundle used to verify TLS client certificates.
+            ssl_cert_reqs: Client certificate policy: 0 disables requests, 1
+                requests and validates when present, and 2 requires a trusted certificate.
+            _tls_version: Internal protocol selector, either ``"default"`` or
+                ``"tls12"``. The Uvicorn compatibility layer supplies this value.
             graceful_timeout: Non-negative shutdown grace period in seconds;
                 ``None`` waits for shutdown to finish without a deadline.
             lifespan: A boolean enabling automatic lifespan detection, or one
@@ -73,9 +90,17 @@ class Server:
             date_header: Whether to add the standard HTTP ``Date`` header.
             http2: Whether TCP listeners accept HTTP/2 and prior-knowledge h2c.
             ws_ping_interval: Seconds between server-initiated WebSocket pings;
-                ``None`` or a non-positive value disables keepalive pings.
+                ``None`` or a non-positive value disables keepalive pings. An
+                infinite positive interval or one beyond Rust's ``Duration``
+                range is treated as never firing. NaN is treated as unset.
             ws_ping_timeout: Seconds to wait for the matching pong before
                 closing with code 1011; ``None`` disables the pong deadline.
+                Positive infinity or a finite value beyond Rust's ``Duration``
+                range is unbounded. NaN is treated as unbounded.
+            ws_max_queue: Optional bound for pending incoming WebSocket messages.
+                ``None`` preserves the native adapter's default capacity.
+            websocket_enabled: Whether HTTP/1.1 WebSocket upgrade requests are
+                dispatched to the ASGI WebSocket interface.
             limit_concurrency: Maximum active connections or request tasks
                 before the Rust runtime returns HTTP 503.
             limit_max_requests: Maximum number of completed HTTP responses
@@ -96,6 +121,13 @@ class Server:
         self.timeout_keep_alive = timeout_keep_alive
         self.certfile = certfile
         self.keyfile = keyfile
+        self.ssl_keyfile_password = ssl_keyfile_password
+        self.ws_max_queue = ws_max_queue
+        self.websocket_enabled = websocket_enabled
+        self.ssl_ca_certs = ssl_ca_certs
+        self.ssl_cert_reqs = ssl_cert_reqs
+        self._tls_version = _tls_version
+        self._tls_cipher_suites = _tls_cipher_suites
         self.graceful_timeout = graceful_timeout
         self.lifespan = lifespan
         self.root_path = root_path
@@ -105,6 +137,8 @@ class Server:
         self.date_header = date_header
         self.http2 = http2
         self.ws_max_size = ws_max_size
+        self.ws_per_message_deflate = ws_per_message_deflate
+        self.http1_max_buffer_size = _http1_max_buffer_size
         self.limit_concurrency = limit_concurrency
         self.ws_ping_interval = ws_ping_interval
         self.ws_ping_timeout = ws_ping_timeout
@@ -112,6 +146,7 @@ class Server:
         self.limit_max_requests_jitter = limit_max_requests_jitter
         self._defer_startup_failure = _defer_startup_failure
         self._reset_contextvars = _reset_contextvars
+        self._defer_startup_acceptance = _defer_startup_acceptance
         self.startup_failed = False
         self._control = None
 
@@ -138,6 +173,12 @@ class Server:
             return self.startup_failed
         return await control.wait_startup_failed()
 
+    def _acknowledge_startup(self):
+        """Allow request acceptance after the compatibility facade is ready."""
+        control = self._control
+        if control is not None:
+            control.acknowledge_startup()
+
     async def serve(self):
         """Run the server until shutdown or task cancellation.
 
@@ -156,7 +197,7 @@ class Server:
                 prefix="uvrs-", dir="/tmp" if os.path.isdir("/tmp") else None
             )
             transfer_path = os.path.join(transfer_directory.name, "listener.sock")
-        control = _native.ServerControl()
+        control = _native.ServerControl(self._defer_startup_acceptance)
         self._control = control
         limit_concurrency = self.limit_concurrency
         if limit_concurrency is not None:
@@ -195,6 +236,7 @@ class Server:
                     self.date_header,
                     self.http2,
                     self.ws_max_size,
+                    self.ws_per_message_deflate,
                     self.ws_ping_interval,
                     self.ws_ping_timeout,
                     limit_concurrency,
@@ -202,6 +244,16 @@ class Server:
                     limit_max_requests_jitter,
                     control,
                     _bridge.log_concurrency_limit_rejection,
+                    self.http1_max_buffer_size,
+                    os.fspath(self.ssl_ca_certs)
+                    if self.ssl_ca_certs is not None
+                    else None,
+                    int(self.ssl_cert_reqs),
+                    self._tls_version,
+                    self._tls_cipher_suites,
+                    self.ssl_keyfile_password,
+                    self.ws_max_queue,
+                    self.websocket_enabled,
                 )
             )
             if transfer_path is not None:

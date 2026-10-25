@@ -44,7 +44,8 @@ CATEGORIES = {
             {"loop": "uvloop", "reference": "hypercorn-uvloop", "candidate": "uvicorn-rs-uvloop"},
         ],
         "workloads": [
-            "protocol-scope", "fixed", "large-response", "many-response-chunks",
+            "protocol-scope", "fastapi-validated-route", "fastapi-python-cpu",
+            "fixed", "large-response", "many-response-chunks",
             "request-upload", "request-upload-small-chunks", "slow-reader-backpressure",
         ],
     },
@@ -54,7 +55,9 @@ CATEGORIES = {
             {"loop": "uvloop", "reference": "hypercorn-uvloop", "candidate": "uvicorn-rs-uvloop"},
         ],
         "workloads": [
-            "protocol-scope-consumed-request", "protocol-scope", "fixed", "large-response", "many-response-chunks",
+            "protocol-scope-consumed-request", "protocol-scope",
+            "fastapi-validated-route", "fastapi-python-cpu",
+            "fixed", "large-response", "many-response-chunks",
             "request-upload", "slow-reader-backpressure",
         ],
     },

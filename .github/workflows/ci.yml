@@ -20,9 +20,10 @@ env:
   PYTHON_VERSION: "3.12.13"
   WHEEL_PYTHON_VERSION: "3.12.10"
   UV_VERSION: "0.11.29"
+  GUNICORN_VERSION: "23.0.0"
   MATURIN_VERSION: "1.14.1"
   STARLETTE_RS_REVISION: "738c43362938896c268ca29b9a9a2a5942df510c"
-  NATIVE_FASTAPI_RS_REVISION: "e5a6e91cb02b3229f9fbdfce1b00171c6913ccfe"
+  NATIVE_FASTAPI_RS_REVISION: "0afccce9f35447f38ebb5e94d0e67fd338ea7ea4"
   NATIVE_STARLETTE_RS_REVISION: "4139a72449bf5751e8902fb1c7175ee7f191d338"
   RUSTC_WRAPPER: ""
   RUSTC_WORKSPACE_WRAPPER: ""
@@ -61,13 +62,14 @@ jobs:
       - name: Check formatting and lints
         run: |
           cargo fmt --all -- --check
-          # Keep strict Clippy on project-owned Rust crates. The maintained H3
-          # forks retain upstream code with an existing Clippy baseline; Cargo
-          # still compiles them as dependencies, and their protocol behavior is
-          # checked by the focused black-box parity cases.
-          cargo clippy --workspace --exclude uvicorn-rs-h3 --exclude uvicorn-rs-h3-quinn --no-deps --lib --all-features --locked -- -D warnings
+          # Keep project-written Rust under strict Clippy. The vendored H3
+          # protocol follows the upstream lint baseline; its feature-on build
+          # is compiled separately below.
+          cargo clippy -p asgi-lifespan-protocol-rs --lib --locked -- -D warnings
+          cargo clippy -p uvicorn-rs --lib --no-default-features --locked -- -D warnings
+          cargo clippy -p uvicorn-rs-py --lib --no-deps --all-features --locked -- -D warnings
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
-            cargo clippy -p uvicorn-rs --no-deps --all-targets --all-features --locked -- -D warnings
+            cargo clippy -p uvicorn-rs --no-deps --all-targets --no-default-features --locked -- -D warnings
           cargo fmt --manifest-path tools/http3-probe/Cargo.toml --all -- --check
           cargo clippy --manifest-path tools/http3-probe/Cargo.toml --no-deps --all-targets --all-features --locked -- -D warnings
       - name: Compile feature modes (behavior is checked through live ASGI cases)
@@ -75,8 +77,8 @@ jobs:
           cargo check --lib --locked
           cargo check --lib --no-default-features --locked
           cargo check --lib --all-features --locked
-          cargo check -p uvicorn-rs-h3 --lib --all-features --locked
-          cargo check -p uvicorn-rs-h3-quinn --lib --all-features --locked
+          cargo check -p uvicorn-rs --lib --no-default-features --locked
+          cargo check -p uvicorn-rs --lib --features http3 --locked
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
             cargo check -p uvicorn-rs --all-targets --locked
           cargo check --manifest-path tools/http3-probe/Cargo.toml --bins --locked
@@ -232,10 +234,12 @@ jobs:
           wheels=(target/normal-wheels/*.whl)
           test "${#wheels[@]}" -eq 1
           uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
+          uv pip install --python .venv/bin/python "gunicorn==$GUNICORN_VERSION"
           .venv/bin/python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output target/asgi-parity/wheel-consumer.json
           oracle_environment="$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle"
           UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
             --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
+          uv pip install --python "$oracle_environment/bin/python" "gunicorn==$GUNICORN_VERSION"
       - name: Compare the installed wheel with Uvicorn on upstream Starlette
         shell: bash
         run: |
@@ -413,12 +417,14 @@ jobs:
       - name: Install locked references and pinned coverage tools
         run: |
           uv sync --python "$PYTHON_VERSION" --group benchmark --frozen
+          uv pip install --python .venv/bin/python "gunicorn==$GUNICORN_VERSION"
           cargo install cargo-llvm-cov --version 0.8.7 --locked
       - name: Prepare the isolated stock Uvicorn oracle
         run: |
           oracle_environment="$RUNNER_TEMP/uvicorn-rs-coverage-oracle"
           UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
             --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
+          uv pip install --python "$oracle_environment/bin/python" "gunicorn==$GUNICORN_VERSION"
       - name: Attribute every indexed case and repeat the complete matrix three times
         shell: bash
         run: |
@@ -543,6 +549,24 @@ jobs:
             exit "$status"
           fi
           cat "$log"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        if: runner.os == 'Windows'
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Run focused Windows worker lifecycle parity
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-windows-worker-oracle"
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync \
+            --python "$WHEEL_PYTHON_VERSION" \
+            --only-group uvicorn-oracle --no-install-project --frozen
+          python scripts/run_parity.py \
+            --oracle-python "$oracle_environment/Scripts/python.exe" \
+            --installed-candidate \
+            --case-id python-api.module-cli-two-workers-serve-request \
+            --output dist/parity-windows-worker-lifecycle.json
       - name: Build source distribution
         if: runner.os == 'Linux'
         run: maturin sdist --out dist
@@ -559,22 +583,17 @@ jobs:
           test "${#sdists[@]}" -eq 1
           python scripts/check_sdist_build.py --sdist "${sdists[0]}" --output-dir target/sdist-consumer
           cp target/sdist-consumer/result.json dist/consumer-sdist.json
-      - name: Package the Python-free server, shared lifecycle, and HTTP/3 crates
+      - name: Package the Python-free server and shared lifecycle contract
         if: runner.os == 'Linux'
         env:
           CARGO_TARGET_DIR: target/native-package
         run: |
           set -euo pipefail
-          cargo package -p native-app-contract --no-verify --locked --offline
-          cargo package -p uvicorn-rs-h3 --no-verify --locked --offline
-          cargo package -p uvicorn-rs-h3-quinn --no-verify --locked --offline \
-            --config 'patch.crates-io.uvicorn-rs-h3.path="crates/uvicorn-rs-h3"'
+          cargo package -p asgi-lifespan-protocol-rs --no-verify --locked --offline
           cargo package -p uvicorn-rs --no-verify --locked --offline \
-            --config 'patch.crates-io.native-app-contract.path="crates/native-app-contract"' \
-            --config 'patch.crates-io.uvicorn-rs-h3.path="crates/uvicorn-rs-h3"' \
-            --config 'patch.crates-io.uvicorn-rs-h3-quinn.path="crates/uvicorn-rs-h3-quinn"'
+            --config 'patch.crates-io.asgi-lifespan-protocol-rs.path="crates/asgi-lifespan-protocol-rs"'
           packages=(target/native-package/package/*.crate)
-          test "${#packages[@]}" -eq 4
+          test "${#packages[@]}" -eq 2
           cp "${packages[@]}" dist/
       - name: Run complete public parity on the exact Linux candidate wheel
         if: runner.os == 'Linux'
@@ -585,9 +604,11 @@ jobs:
           wheels=(dist/*.whl)
           test "${#wheels[@]}" -eq 1
           uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
+          uv pip install --python .venv/bin/python "gunicorn==$GUNICORN_VERSION"
           oracle_environment="$RUNNER_TEMP/uvicorn-rs-release-oracle"
           UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$WHEEL_PYTHON_VERSION" \
             --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
+          uv pip install --python "$oracle_environment/bin/python" "gunicorn==$GUNICORN_VERSION"
           .venv/bin/python scripts/run_parity.py \
             --oracle-python "$oracle_environment/bin/python" \
             --installed-candidate \

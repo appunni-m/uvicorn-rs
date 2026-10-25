@@ -74,6 +74,15 @@ on:
           - fastapi-slow-reader-backpressure
           - fastapi-scope-32-headers
           - fastapi-contextvars
+      fastapi_stage_repetitions:
+        description: Repetitions per server for the instrumented FastAPI stage diagnostic
+        default: "1"
+        required: true
+        type: choice
+        options:
+          - "1"
+          - "3"
+          - "5"
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -100,6 +109,8 @@ on:
         type: choice
         options:
           - protocol-scope
+          - fastapi-validated-route
+          - fastapi-python-cpu
           - fixed
           - large-response
           - many-response-chunks
@@ -140,11 +151,18 @@ on:
         options:
           - protocol-scope-consumed-request
           - protocol-scope
+          - fastapi-validated-route
+          - fastapi-python-cpu
           - fixed
           - large-response
           - many-response-chunks
           - request-upload
           - slow-reader-backpressure
+      h3_trace_hypercorn_events:
+        description: Trace H3 stream event/removal ordering; timing is invalid and this requires Linux ARM64, Hypercorn asyncio, slow-reader-backpressure, and one repetition
+        default: false
+        required: true
+        type: boolean
       duration:
         description: Seconds of sustained load per sample
         default: "5"
@@ -545,17 +563,11 @@ jobs:
           uname -a > target/benchmark-preparation/uname.txt
       - name: Build Rust runtime diagnostics extension
         shell: bash
-        env:
-          FASTAPI_STAGE_NO_NATIVE_TCP: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-no-native-tcp]') }}
         run: |
           set -euo pipefail
-          if [[ "$FASTAPI_STAGE_NO_NATIVE_TCP" == "true" ]]; then
-            uv run --with maturin==1.14.1 --no-sync maturin develop --release \
-              --no-default-features --features runtime-diagnostics
-          else
-            uv run --with maturin==1.14.1 --no-sync maturin develop --release \
-              --features runtime-diagnostics
-          fi 2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
+          uv run --with maturin==1.14.1 --no-sync maturin develop --release \
+            --features runtime-diagnostics \
+            2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
       - name: Capture read-only host preflight
         shell: bash
         run: |
@@ -574,7 +586,8 @@ jobs:
             --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
             --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
               uvicorn-rs-uvloop uvicorn-uvloop-httptools \
-            --duration 5 --warmup 1 --concurrency 64 --repetitions 10 --seed 20261019 \
+            --duration 5 --warmup 1 --concurrency 64 \
+            --repetitions "${{ inputs.fastapi_stage_repetitions || '1' }}" --seed 20261019 \
             --require-runtime-diagnostics --asgi-stage-diagnostics \
             --output "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
             2>&1 | tee "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.log"
@@ -897,6 +910,7 @@ jobs:
           BENCHMARK_H3_CONCURRENCY: ${{ inputs.h3_concurrency || '1' }}
           BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
           BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
+          BENCHMARK_H3_TRACE: ${{ inputs.h3_trace_hypercorn_events || false }}
           BENCHMARK_H3_SERVERS: ${{ (inputs.h3_server == 'asyncio-pair' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=asyncio-pair]'))) && 'hypercorn-asyncio uvicorn-rs-asyncio' || (inputs.h3_server == 'uvloop-pair' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvloop-pair]'))) && 'hypercorn-uvloop uvicorn-rs-uvloop' || inputs.h3_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-asyncio]') && 'uvicorn-rs-asyncio') || 'hypercorn-asyncio' }}
           BENCHMARK_H3_WORKLOAD: ${{ inputs.h3_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope-consumed-request]') && 'protocol-scope-consumed-request') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope]') && 'protocol-scope') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=fixed]') && 'fixed') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=request-upload]') && 'request-upload') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=slow-reader-backpressure]') && 'slow-reader-backpressure') || 'large-response' }}
           RUST_BACKTRACE: "1"
@@ -904,6 +918,17 @@ jobs:
         run: |
           set -euo pipefail
           read -r -a h3_servers <<<"$BENCHMARK_H3_SERVERS"
+          trace_args=()
+          if [[ "$BENCHMARK_H3_TRACE" == "true" ]]; then
+            if [[ "$RUNNER_OS" != "Linux" || "$RUNNER_ARCH" != "ARM64" \
+              || "${#h3_servers[@]}" != "1" || "${h3_servers[0]}" != "hypercorn-asyncio" \
+              || "$BENCHMARK_H3_WORKLOAD" != "slow-reader-backpressure" \
+              || "$BENCHMARK_REPETITIONS" != "1" ]]; then
+              echo "H3 event tracing requires Linux ARM64, Hypercorn asyncio, slow-reader-backpressure, and one repetition" >&2
+              exit 2
+            fi
+            trace_args+=(--trace-hypercorn-h3-events)
+          fi
           .venv/bin/python scripts/run_h3_category_bench.py \
             --servers "${h3_servers[@]}" \
             --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
@@ -911,6 +936,7 @@ jobs:
             --workloads "$BENCHMARK_H3_WORKLOAD" \
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
             --concurrency "$BENCHMARK_H3_CONCURRENCY" \
+            "${trace_args[@]}" \
             2>&1 | tee target/benchmark-preparation/h3-focused-driver.log
       - name: Retain focused diagnostic evidence
         if: always()

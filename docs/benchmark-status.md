@@ -3,16 +3,52 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [39543497367 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39543497367)
-- Commit: [`f09ce956a7c030660c2d822f8abb1987aa5f1e0f`](https://github.com/appunni-m/uvicorn-rs/commit/f09ce956a7c030660c2d822f8abb1987aa5f1e0f)
-- Recorded: 2026-10-21T05:20:44Z
+- Run: [39689988939 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
+- Commit: [`86e72e181d00feca1b4db7f30377d5d9d4345b83`](https://github.com/appunni-m/uvicorn-rs/commit/86e72e181d00feca1b4db7f30377d5d9d4345b83)
+- Recorded: 2026-10-22T00:42:21Z
 - Category matrix job: `failure`
-- Aggregate job: `failure`
+- Aggregate job: `success`
 
-This attempt did not produce a validated three-system aggregate. No performance result was generated or substituted. The [previous complete report](benchmark-results.md) remains the latest measured result; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/39543497367) for this attempt.
+The three system artifacts were validated and the partial report, hashed receipts, and raw system bundles are retained in this run's GitHub Actions artifacts for 90 days. Generated logs and per-run files are not committed. The [previous complete report](benchmark-results.md) remains unchanged.
 <!-- END GENERATED LATEST ATTEMPT -->
 
-## Diagnosis of the latest failed attempt
+## Latest run diagnosis (2026-10-22)
+
+Performance run [39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
+measured exact `main` commit
+[`86e72e181d00feca1b4db7f30377d5d9d4345b83`](https://github.com/appunni-m/uvicorn-rs/commit/86e72e181d00feca1b4db7f30377d5d9d4345b83).
+The Linux x86-64 and macOS ARM64 category jobs passed. Linux ARM64 passed
+public parity and the FastAPI comparison, then its category job failed in
+HTTP/3 `slow-reader-backpressure`: Hypercorn 0.18.0 asyncio raised
+`KeyError: 52` while indexing `self.streams[event.stream_id]` in repetition 4.
+The client completed 28/40 requests and recorded two response-header timeouts.
+See the [Linux ARM64 category artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939/artifacts/12392116838)
+and [aggregate artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939/artifacts/12392708725).
+
+The aggregate job succeeded in validating and retaining partial evidence, but
+the matrix job failed and the run did not produce a complete validated
+three-system comparison. The failed Hypercorn cell is correctness-invalid and
+must not be ranked. Passing cells remain in the per-system artifacts and may be
+assessed individually when their own response and timing gates pass; they do
+not repair the failed cell or complete the release matrix. The retained artifact
+has no per-stream event trace, so
+the suspected late `DataReceived` after `StreamClosed` ordering remains a
+source-supported hypothesis, not a confirmed root cause. HTTP/3 upload remains
+excluded for Hypercorn after its separate response-header timeout. Treat the
+HTTP/3 matrix as incomplete and make no release performance claim from this
+run. This run describes the committed package graph; it does not validate the
+uncommitted single-crate consolidation draft.
+
+The Linux ARM64 HTTP/1 artifact separately records six FastAPI upload
+workloads across four server configurations and five repetitions: 120 rows in
+total, all timing-valid with zero failures, including all 20 rows for
+`fastapi-upload-1m-write-1k`. This later run did not reproduce the HTTP/1 upload
+timeouts from [run 39036702600](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600).
+It does not explain that earlier failure; its available logs show the client
+timeout before Starlette `ClientDisconnect` without an earlier server fault.
+The separate HTTP/3 failure still leaves the three-system run incomplete.
+
+## Earlier parity-gate failure (run 39508168315)
 
 Run `39508168315` used commit
 [`87b888b5`](https://github.com/appunni-m/uvicorn-rs/commit/87b888b5c364d087dc389076846d7474ba3a15e9), before the HTTP/3 shutdown-parity correction in
@@ -29,7 +65,9 @@ Current `main` compares HTTP/3 peer-close termination and protocol outcome witho
 - `http3.peer-close-unknown-above-base-range`
 - `http3.peer-close-unknown-maximum-u62`
 
-This identifies the hosted failure as an outdated comparison rule, not a reproduced HTTP/3 runtime mismatch. The hosted attempt remains failed and produced no timing data; the full parity gate and benchmark still need a new run from current `main`.
+This identifies that earlier hosted failure as an outdated comparison rule,
+not a reproduced HTTP/3 runtime mismatch. That attempt produced no timing data;
+it is separate from the later HTTP/3 reference failure described above.
 
 > **Evidence path note:** Paths under `benchmarks/results/` and ignored `target/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 

@@ -2,21 +2,51 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-This document describes the PyO3/ASGI implementation distributed as
-`uvicorn-rs-py` and the Python-free `uvicorn-rs` server crate. With the default
-`native-tcp` feature, the Python server delegates HTTP/1.1, HTTP/2 over
-TCP/TLS, and HTTP/3 over Quinn to the native crate through Rust services.
-Python app loading, the caller-owned event loop, ASGI scope/messages, context,
-and app exceptions remain on the Python side. Builds without `native-tcp`
-retain the older protocol implementation; coverage builds also compile a
-limited legacy HTTP/3 path for fault contracts.
-Hosted CI on clean commit
+This document describes the PyO3/ASGI source implementation intended for the
+not-yet-published `uvicorn-rs` PyPI distribution and the Python-free
+`uvicorn-rs` server crate. Its root Cargo integration package and optional
+extra console script are named `uvicorn-rs-py`.
+Every Cargo feature configuration of the Python adapter delegates HTTP/1.1,
+HTTP/2 over TCP/TLS, and HTTP/3 over Quinn to the native crate through Rust
+services. Feature selection no longer switches to a second protocol stack.
+The `uvicorn-rs` crate includes the H3 protocol and Quinn adapter source; Rust
+applications enable them with its optional `http3` Cargo feature. The Python
+adapter enables that feature for Python ASGI applications. Python app loading,
+the caller-owned event loop, ASGI scope/messages, context, and app exceptions
+remain on the Python side. Coverage builds still compile limited legacy H3
+helpers for fault-contract attribution; ordinary builds do not use that path.
+Historical hosted CI on clean commit
 [`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5)
-passed the unified 761-case coverage matrix. Independent Coverage-MCP review
-and a complete three-system performance result remain pending. See the
-[current coverage record](coverage.md#current-unified-coverage-status-2026-10-19)
-and [benchmark status](benchmark-status.md). The previous root Python
-distribution and CLI names are not compatibility requirements.
+passed the unified 761-case coverage matrix; that run is not current-main
+release evidence. The latest exact-main run, CI run
+[39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
+on `86e72e181d00feca1b4db7f30377d5d9d4345b83`, completed its matrix but failed
+the 100% gate at 10,962/11,375 regions and 8,130/8,438 lines. Independent
+Coverage-MCP review and complete three-system performance evidence remain
+pending. See the
+[current coverage record](coverage.md#current-unified-coverage-status-2026-10-22)
+and [benchmark status](benchmark-status.md). The PyPI distribution is
+named `uvicorn-rs`; the source provides the `uvicorn` import namespace and
+primary `uvicorn` and `python -m uvicorn` commands. The root Cargo/PyO3
+integration package remains `uvicorn-rs-py`; it also retains an optional
+`uvicorn-rs-py` console alias. The PyPI distribution has not had its first
+release.
+Earlier local candidate builds used `uvicorn-rs-py` as their distribution
+metadata name, but that name was never published to PyPI and is not the current
+distribution name.
+
+The Rust package graph has two native crates: `asgi-lifespan-protocol-rs`
+defines runtime-neutral lifecycle hooks, and `uvicorn-rs` contains the server
+and its optional HTTP/3 implementation. The historical bootstrap audit records
+the old `uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` 0.1.0 uploads. On 2026-10-25,
+crates.io API lookups for those names and the removed `uvicorn-rs` 0.1.0 name
+returned HTTP 404; retain the checksums as history and recheck name availability
+before a future release. New server builds do not depend on separate H3 crates.
+`uvicorn-rs-py` enables the core's `http3` feature for Python ASGI hosting,
+while Rust-native applications choose whether to enable it. The currently
+visible `asgi-lifespan-protocol-rs` 0.2.0 archive records a dirty source tree;
+its release provenance and checksum are documented in the
+[release guide](releases.md#distribution-boundaries).
 
 The native crate exposes an opt-in proactive TCP EOF observer through
 [`PeerReadHalfCloseMode`](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs/src/lib.rs). The Python ASGI
@@ -33,8 +63,9 @@ An earlier local report for the native TCP/TLS integration covered 747 cases:
 lines. Its fully paginated Coverage-MCP receipt matched that report's source
 and build, but the report was tied to a dirty worktree and did not establish
 clean hosted release evidence. No normal-build parity run was included in that
-instrumented report. The latest clean hosted coverage status is the 761-case
-report recorded in [coverage evidence](coverage.md#current-unified-coverage-status-2026-10-19).
+instrumented report. The current exact-main coverage result and its package
+graph limitations are recorded in
+[coverage evidence](coverage.md#current-unified-coverage-status-2026-10-22).
 See the [coverage history](coverage.md) and the candidate-wheel smoke
 (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 Older 506-, 494-, 485-, 451-, and 448-case results below are historical and do not
@@ -58,10 +89,10 @@ flowchart LR
 ```
 
 The `uvicorn-rs-py` CLI imports `module:attribute`, selects asyncio or optional
-uvloop, and starts the Rust server from that event loop. With the default
-`native-tcp` feature, the Python adapter creates Rust services for HTTP/1.1,
-HTTP/2 over TCP/TLS, and HTTP/3 over Quinn; the native crate owns network I/O,
-protocol state, transport flow control, and connection draining. PyO3's
+uvloop, and starts the Rust server from that event loop. The Python adapter
+creates Rust services for HTTP/1.1, HTTP/2 over TCP/TLS, and HTTP/3 over Quinn
+in both default and no-default-feature builds; the native crate owns network
+I/O, protocol state, transport flow control, and connection draining. PyO3's
 asyncio integration dispatches ASGI calls back to the captured Python loop.
 Application code never runs on Tokio workers. The bridge constructs the ASGI
 scope and wraps Rust-backed `receive()` and `send()` operations in the callable
@@ -346,9 +377,18 @@ The H3 adapter forwards response-side peer stop to a pending ASGI `receive()`
 as `http.disconnect`; a target-only public input contract checks same-connection
 recovery because the pinned Hypercorn oracle did not complete this case.
 The native core tracks HTTP/1.1 upgrade sessions through `ConnectionUpgrade`.
-The Python ASGI adapter maps the supported HTTP/1.1 WebSocket path to ASGI
-connect, receive, send, and disconnect events. Protocol coverage limits are
-listed in the [support matrix](support-matrix.md#supported-behaviors).
+Its `WebSocketUpgrade` API validates the RFC 6455 request, constructs the
+handshake response, registers a `WebSocketSession`, and applies the configured
+message-size limit. The Python ASGI adapter uses that same API for WebSocket
+acceptance and session ownership; Python still owns ASGI scope/event conversion
+and application calls. Native Rust services select only a client-offered
+subprotocol with `with_subprotocol`; the ASGI adapter uses
+`with_application_subprotocol` to preserve Uvicorn 0.54.0 behavior for a valid
+application-selected token that was not offered. The focused
+`websocket.unoffered-subprotocol-selection` parity case verifies this one
+behavior. HTTP/2 and HTTP/3 WebSocket handshakes are not implemented. Protocol
+coverage limits are listed in the
+[support matrix](support-matrix.md#supported-behaviors).
 H3 stream errors and closed receivers end the request pump in the PyO3 path.
 The server joins all remaining pumps within the unused transport grace period.
 If that deadline expires, it logs the timeout, aborts the pumps, and drains

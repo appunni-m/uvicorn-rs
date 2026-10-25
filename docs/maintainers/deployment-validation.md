@@ -3,25 +3,31 @@
 The [deployment guide](../deployment.md) is the operator-facing entry point. This page preserves validation procedures, framework comparison setup, and run-specific evidence for maintainers.
 
 
-`uvicorn-rs-py` is an experimental Python ASGI adapter with an initial
-two-worker module-CLI path. Its
+The Python compatibility distribution is named `uvicorn-rs` on PyPI; it has
+not had its first upload. The root Cargo/PyO3 integration package is named
+`uvicorn-rs-py` internally, and is not the distribution name. The package
+provides the `uvicorn` import namespace and command, plus the project-specific
+`uvicorn-rs-py` console command. The implementation has an initial two-worker
+module-CLI path. Its
 module CLI supports no-argument application factories through `--factory`, and
 `uvicorn.run()` supports them through `factory=True`; both have focused parity
 cases. The installed-wheel procedure below loads a direct module:attribute app
 and does not exercise factories, worker supervision, or reload. Separate
 source parity cases cover two-worker HTTP request and SIGINT shutdown using
-explicit worker count and `WEB_CONCURRENCY`; worker restart, health-check,
-dynamic worker controls, and reload remain
-incomplete. Proxy-header behavior has only the focused
+explicit worker count and `WEB_CONCURRENCY`, one forced worker exit and
+replacement, and one POSIX health-check expiry and replacement with a
+non-default timeout. Repeated restart/failure behavior, dynamic worker
+controls, and reload filters remain incomplete. Proxy-header behavior has only the focused
 CLI and `uvicorn.run()` coverage listed in the [support matrix](../support-matrix.md).
-The Rust crates are published on crates.io at `0.1.0`; the `uvicorn-rs-py`
-Python distribution remains unpublished on PyPI. Build and install a wheel into
-the same environment as the application and its Python dependencies.
+The old Cargo `0.1.0` releases are historical. `asgi-lifespan-protocol-rs`
+0.2.0 is registry-visible; the consolidated `uvicorn-rs` crate and the
+`uvicorn-rs` PyPI distribution remain unpublished. Build and install a wheel
+into the same environment as the application and its Python dependencies.
 
 ## Start an application
 
 ```sh
-uv run uvicorn-rs-py myapp.asgi:app --host 127.0.0.1 --port 8000
+uv run uvicorn myapp.asgi:app --host 127.0.0.1 --port 8000
 ```
 
 Run the command from a directory where myapp.asgi is importable. For a
@@ -45,7 +51,7 @@ The persistent unit below is an example; CI does not install it into a host.
 
 ```ini
 [Unit]
-Description=Python ASGI application served by uvicorn-rs-py
+Description=Python ASGI application served by uvicorn-rs
 After=network.target
 
 [Service]
@@ -98,9 +104,12 @@ The persistent unit example, launchd, container orchestration, and Windows
 service-manager behavior are not directly tested.
 
 Applications should provide their own readiness and health routes. There is no
-built-in health endpoint, worker supervisor, restart policy, or log collector.
-Use the service manager for process restart and log capture; configure TLS
-certificate renewal outside the server.
+built-in health endpoint or log collector. The CLI supervisor has focused
+evidence for replacing a crashed worker and a POSIX worker that stops answering
+health checks. Repeated failure policy, external health integration, and other
+platform-specific process controls remain unverified. Use the service manager
+for whole-process restart and log capture; configure TLS certificate renewal
+outside the server.
 
 ## Test Starlette integrations
 
@@ -115,9 +124,9 @@ and shutdown outcomes.
 Use separate candidate environments for upstream Starlette and starlette-rs-py.
 Both distributions install a top-level `starlette` package; installing them
 together can make the selected framework ambiguous. Keep the stock Uvicorn
-oracle in a third environment: `uvicorn-rs-py` and `uvicorn` both install the
+oracle in a third environment: `uvicorn-rs` and `uvicorn` both install the
 `uvicorn` import namespace, so they must not share an environment. Neither
-framework distribution is a runtime dependency of `uvicorn-rs-py`.
+framework distribution is a runtime dependency of `uvicorn-rs`.
 
 Build the candidate and the pinned framework wheel:
 
@@ -128,7 +137,7 @@ mkdir -p "$WORK/wheels"
 
 uvx --from maturin==1.14.1 maturin build --release --locked \
   --interpreter .venv/bin/python --out "$WORK/wheels"
-SERVER_WHEEL=$(find "$WORK/wheels" -maxdepth 1 -name 'uvicorn_rs_py-*.whl' -print -quit)
+SERVER_WHEEL=$(find "$WORK/wheels" -maxdepth 1 -name 'uvicorn_rs-*.whl' -print -quit)
 
 git init "$WORK/starlette-rs"
 git -C "$WORK/starlette-rs" remote add origin https://github.com/appunni-m/starlette-rs.git

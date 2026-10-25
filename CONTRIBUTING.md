@@ -4,14 +4,13 @@ Thanks for taking an interest in `uvicorn-rs`. The project is an experimental
 ASGI server; contributions should preserve the support matrix and avoid
 promoting a targeted probe result into a general compatibility claim.
 
-The HTTP/3 task-reaping source passes 451/451 instrumented attribution cases
-and three complete 451-case repeats with zero failures, infrastructure errors,
-retries or cases not run. The matrix declares 214 public oracle comparisons and
-237 target-only contracts across 70 input files and 63 operations. All 4,778
-native regions and 3,371 lines are covered with zero unfiltered MCP gaps.
-The restored normal build passes 214/214 public comparisons and all 15
-exclusion checks with three selected live cases; see
-[the current evidence status](docs/coverage.md#current-evidence-status).
+The 451-case HTTP/3 task-reaping result is historical evidence for its
+October 5 source snapshot; it does not establish current coverage. The latest
+exact-main run completed 884/884 cases but failed the 100% coverage gate at
+10,962/11,375 regions and 8,130/8,438 lines, and it has no accepted independent
+Coverage-MCP review. See the [current unified coverage status](docs/coverage.md#current-unified-coverage-status-2026-10-22)
+for exact run and artifact identities, and the historical report for its
+original scope.
 
 ## Development setup
 
@@ -40,8 +39,23 @@ oracle for H1/WebSockets/lifespan and Hypercorn for H2/H3, and for the current
 case scope. The latest local evidence is linked from the [support
 matrix](docs/support-matrix.md); record a new result under a fresh filename.
 Live oracle comparisons and target-only contracts have separate denominators.
-Every native source/build change requires fresh source-matched coverage and
-normal-build exclusion evidence; earlier profiles cannot certify the new build.
+For local iteration, select only the affected profile or case instead of
+repeating an unchanged matrix. The selectors are repeatable:
+
+```sh
+uv run --group benchmark python scripts/run_parity.py --profile http3
+uv run --group benchmark python scripts/run_parity.py \
+  --case-id http3.response-stream-order \
+  --case-id http3.scope-query-header-and-body
+```
+
+Reuse a receipt when the relevant runtime source, input manifest, runner,
+oracle, environment, and build identity still match. For focused coverage, use
+the same `--case-id` or `--profile` selection with
+`scripts/run_unified_coverage.py` and `--matrix-repeats 0`; see the [incremental
+coverage instructions](docs/coverage.md#measure-an-incremental-case-or-profile).
+The exact-source release gate still requires a fresh complete coverage report
+and normal-build exclusion evidence for its final source/build identity.
 The held-response accept-error workflow uses the existing native fault point,
 actual body and remote-close observations, cancellation diagnostics and
 application cleanup. Keep its first-chunk barrier before fault arming and

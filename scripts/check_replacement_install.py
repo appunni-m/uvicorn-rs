@@ -34,14 +34,14 @@ if mode == "upstream":
     assert importlib.metadata.version("uvicorn") == upstream_version
     assert uvicorn.__version__ == upstream_version
     try:
-        importlib.metadata.version("uvicorn-rs-py")
+        importlib.metadata.version("uvicorn-rs")
     except importlib.metadata.PackageNotFoundError:
         pass
     else:
         raise AssertionError("replacement distribution remains after rollback")
 else:
-    distribution = importlib.metadata.distribution("uvicorn-rs-py")
-    assert distribution.metadata["Name"] == "uvicorn-rs-py"
+    distribution = importlib.metadata.distribution("uvicorn-rs")
+    assert distribution.metadata["Name"] == "uvicorn-rs"
     assert uvicorn.__version__ == upstream_version
     try:
         importlib.metadata.version("uvicorn")
@@ -96,7 +96,7 @@ def main() -> int:
         _run([str(replacement_python), "-m", "pip", "uninstall", "--disable-pip-version-check", "--yes", "uvicorn"], cwd=root)
         _run([str(replacement_python), "-m", "pip", "install", "--disable-pip-version-check", "--no-input", str(wheel)], cwd=root)
         _probe(replacement_python, "replacement", args.upstream_version, root)
-        _run([str(replacement_python), "-m", "pip", "uninstall", "--disable-pip-version-check", "--yes", "uvicorn-rs-py"], cwd=root)
+        _run([str(replacement_python), "-m", "pip", "uninstall", "--disable-pip-version-check", "--yes", "uvicorn-rs"], cwd=root)
         _run([str(replacement_python), "-m", "pip", "install", "--disable-pip-version-check", "--no-input",
               f"uvicorn=={args.upstream_version}"], cwd=root)
         _probe(replacement_python, "upstream", args.upstream_version, root)

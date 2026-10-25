@@ -1,8 +1,8 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@36",
   "cases": [
     {
-      "case_id": "lifespan.public-server-api-cancels-and-shuts-down",
+      "case_id": "lifespan.public-server-api-requests-shutdown-and-shuts-down",
       "profile": "lifecycle-server-api",
       "operation": "lifespan.shutdown-cancellation",
       "covers": [

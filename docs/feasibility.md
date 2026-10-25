@@ -10,9 +10,12 @@ This scope revision follows the benchmark objective: stop after the prototype wh
 
 ## Focused exact-main FastAPI upload measurement (Linux x86-64, 2026-10-19)
 
-The clean `32eb14cc711d5cc3c1da2f2e7889dba35fd86ebc` source built a normal
-`uvicorn-rs-py` release wheel on an AMD Ryzen 5 2600X host with 12 logical
-CPUs. The comparison used CPython 3.12.13, FastAPI 0.142.4, Starlette 1.7.0,
+The clean `32eb14cc711d5cc3c1da2f2e7889dba35fd86ebc` source built an
+unpublished local release wheel whose earlier metadata name was
+`uvicorn-rs-py`; the confirmed PyPI distribution name for the new package
+layout is `uvicorn-rs`. This historical wheel does not validate the new
+distribution metadata. The measurement ran on an AMD Ryzen 5 2600X host with
+12 logical CPUs, using CPython 3.12.13, FastAPI 0.142.4, Starlette 1.7.0,
 Pydantic 2.13.5, Uvicorn 0.54.0, uvloop 0.23.0, and httptools 0.8.0. It ran
 the maintained `fastapi-upload-1m-write-1k` input: 1 MiB request bodies sent
 in 1 KiB client chunks, concurrency 8, five-second samples, one-second warmup,

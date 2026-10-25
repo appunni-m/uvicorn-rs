@@ -3,8 +3,8 @@ requires = ["maturin>=1.14,<2"]
 build-backend = "maturin"
 
 [project]
-name = "uvicorn-rs-py"
-version = "0.1.0"
+name = "uvicorn-rs"
+version = "0.2.1"
 license = "BSD-3-Clause OR MIT"
 license-files = ["LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT"]
 description = "Python ASGI client for the Rust-native Uvicorn-RS server"
@@ -68,14 +68,18 @@ uvicorn-oracle = [
 fastapi-benchmark = ["fastapi==0.142.4; python_version >= '3.10'"]
 
 [tool.maturin]
-sdist-generator = "git"
+sdist-generator = "cargo"
 module-name = "uvicorn_rs._native"
 python-source = "python"
 python-packages = ["uvicorn_rs", "uvicorn"]
 features = ["pyo3/extension-module"]
+include = [
+    { path = "crates/uvicorn-rs/third-party/hyper/Cargo.toml", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/hyper/LICENSE", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/hyper/src/**/*", format = "sdist" },
+]
 exclude = [
     ".kata.toml", "benchmarks/**", ".coverage-mcp/**", "build/**", "target/**",
     "tests/**", "scripts/**", "examples/**", ".github/**", ".venv/**",
-    "crates/uvicorn-rs-h3/src/tests/**",
     "**/__pycache__/**", "**/*.profraw", "**/*.profdata", "**/*.pem", "**/*.key",
 ]

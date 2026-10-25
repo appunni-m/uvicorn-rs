@@ -1,5 +1,14 @@
 //! HTTP/3 serving over a caller-configured Quinn endpoint.
 
+// These modules are vendored MIT-licensed sources. Keep their upstream
+// implementation intact while retaining Clippy's correctness checks and the
+// crate-wide unsafe-code prohibition.
+#[allow(clippy::all, clippy::panic, clippy::unwrap_used, clippy::expect_used)]
+#[deny(clippy::correctness)]
+pub mod h3;
+#[allow(clippy::all, clippy::panic, clippy::unwrap_used, clippy::expect_used)]
+#[deny(clippy::correctness)]
+pub mod h3_quinn;
 mod transport;
 
 #[cfg(coverage)]
@@ -7,8 +16,8 @@ pub(crate) mod coverage;
 
 #[cfg(coverage)]
 pub(crate) use coverage::{
-    coverage_accept_bidi_error, coverage_exercise_client_adapter_methods,
-    coverage_finish_after_reset, coverage_open_bidi_application_close_code, CoverageClient,
+    CoverageClient, coverage_accept_bidi_error, coverage_exercise_client_adapter_methods,
+    coverage_finish_after_reset, coverage_open_bidi_application_close_code,
 };
 
 use std::{
@@ -23,24 +32,23 @@ use std::{
     time::Duration,
 };
 
+use self::{h3::error::Code, h3_quinn::quinn};
 use bytes::{Buf, Bytes};
 use futures_util::FutureExt;
-use h3::error::Code;
-use h3_quinn::quinn;
 use http::{Request, Response, StatusCode, Version};
 use http_body::{Body, Frame, SizeHint};
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 use tokio::{
-    sync::{watch, Semaphore},
+    sync::{Semaphore, watch},
     task::JoinSet,
 };
 use tower_service::Service;
 
 use crate::{
-    observe_error, ConcurrencyLimitObserver, ConnectionInfo, ConnectionInfoService, ServeError,
-    ServerConfig, ServerErrorObserver, ServerErrorPhase, ServiceErrorPolicy, ServiceErrorResponse,
-    TlsInfo, TransportKind,
+    ConcurrencyLimitObserver, ConnectionInfo, ConnectionInfoService, ServeError, ServerConfig,
+    ServerErrorObserver, ServerErrorPhase, ServiceErrorPolicy, ServiceErrorResponse, TlsInfo,
+    TransportKind, observe_error,
 };
 
 /// Error returned when reading an HTTP/3 request body.
@@ -78,7 +86,7 @@ impl Http3RequestBody {
     /// handler retires without observing a peer stop. Adapters can use this
     /// notification to deliver their protocol-level disconnect event while
     /// preserving the request body stream API.
-    pub fn peer_stop_notification(&self) -> impl Future<Output = bool> + Send + 'static {
+    pub fn peer_stop_notification(&self) -> impl Future<Output = bool> + Send + 'static + use<> {
         let mut peer_stopped = self.peer_stopped.clone();
         async move { peer_stopped.wait_for(|stopped| *stopped).await.is_ok() }
     }

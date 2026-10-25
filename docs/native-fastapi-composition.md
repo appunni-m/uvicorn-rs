@@ -1,5 +1,101 @@
 # Native FastAPI-RS composition evidence
 
+## Current mainline source check (2026-10-25)
+
+The public FastAPI-RS `main` ref resolved to
+`0afccce9f35447f38ebb5e94d0e67fd338ea7ea4`. That commit's
+`fastapi-rs/Cargo.toml` pins Starlette-RS at
+`4139a72449bf5751e8902fb1c7175ee7f191d338`; the Starlette-RS `main` ref is
+`8b15c62e8a836a622f426d52bd5a4429b45936d5`, but the composition correctly
+uses FastAPI-RS's exact metadata pin. The native composition CI pin now targets
+FastAPI-RS `0afccce` and Starlette-RS `4139a72`.
+
+Using clean detached Git checkouts at those two exact revisions, the selected
+real-socket input
+`http1.request-stream-progress-before-upload-complete` passed once on the
+Uvicorn-RS draft based on `86e72e181d00feca1b4db7f30377d5d9d4345b83`.
+`cargo run --locked` accepted the existing example lockfile, and the locked
+normal/build dependency graph contained no PyO3. The local receipt is
+`target/kata-progress/native-composition-current-main-20261025/receipt.json`
+(SHA-256
+`3d565ab167a70ae81cfd0d7d52f63b0d7acfbcc5963a37297f8ec66dd2028219`).
+
+The remaining 16 manifest inputs then passed together against the same source
+snapshot and dependency pair. Before running them, all 2,280 files in the
+snapshot manifest were verified to match the current Uvicorn-RS worktree. The
+batch excluded the already-passed upload-progress input, so the two local runs
+cover 17/17 distinct H1/H2 inputs once each for FastAPI-RS `0afccce` and its
+pinned Starlette-RS `4139a72`. The outcome record is
+`target/kata-progress/native-composition-current-main-20261025/remaining-16-cases-receipt.json`
+(SHA-256
+`514bae0bdad8a5f80063a43b1bde71ded0923916a58297f4725a3dc02620d2cf`). Its
+test summary is based on the captured command output; the raw stdout log was
+not retained.
+
+This is local evidence on an uncommitted Uvicorn-RS draft. Hosted exact-source
+acceptance remains required. The 17 H1/H2 inputs do not establish full
+framework compatibility, HTTP/3, TLS, WebSocket, lifespan, cross-platform, or
+performance behavior.
+
+## Previous current-main check (2026-10-24; superseded by the newer pin above)
+
+On the dirty Uvicorn-RS draft based on `86e72e181d00feca1b4db7f30377d5d9d4345b83`,
+the selected real-socket input
+`http1.request-stream-progress-before-upload-complete` passed once through the
+native FastAPI-RS → Starlette-RS → Uvicorn-RS stack. The isolated sibling
+checkouts were clean at FastAPI-RS `e5a6e91cb02b3229f9fbdfce1b00171c6913ccfe`
+and Starlette-RS `4139a72449bf5751e8902fb1c7175ee7f191d338`. The locked
+normal/build dependency graph contains no PyO3 package.
+
+A second selected case, `http2.path-query-routing`, passed on the same dirty
+Uvicorn-RS base revision with current FastAPI-RS `main`
+`2756140f0a5fad750d11120b668e3bf5899fa102` and its pinned Starlette-RS
+revision `4139a72449bf5751e8902fb1c7175ee7f191d338`. It exercises H2 prior
+knowledge for `GET /items/7?tag=blue` and checks the 200 JSON route result.
+The runner used isolated clean sibling checkouts; FastAPI-RS's build identity
+guard confirmed the Starlette-RS pin. The locked normal/build dependency graph
+for this revision pair contains no PyO3.
+
+A third selected case, `http1.path-query-routing`, also passed once on that
+same current dependency pair and Uvicorn-RS draft. It sends
+`GET /items/42?tag=green` over HTTP/1.1 and checks the 200 JSON route result.
+Its local receipt is
+`target/kata-progress/native-composition-h2-isolated/h1-path-query-routing-receipt.json`
+(evidence ID `92ee11356e4d4217bb416e26`; receipt SHA-256
+`f6232b730071886d116f2a2dad7e291ae8b5968180e08e848475d9d5f2de138e`).
+
+The example lockfile was regenerated against those pinned source revisions;
+`cargo tree --locked --offline` now resolves without changing it. Its SHA-256
+is `993e3418e08d559457c43e3955f48f9cdb87e686e4c42502e77dfa39d15b7c8d`, and
+the input manifest SHA-256 is
+`5224e4c3e5a88e3699eb71490651ffc7f2ea6a41edf302b4884d3133be392bcd`.
+
+The worktree source manifest and local receipt are retained under
+`target/kata-progress/native-composition-current-20261024/`. The receipt SHA-256
+is `de5b7560f22310ce15bd22d88a3e9297a8fc00b9d2a094a8c51844c3ecb23353`;
+its Uvicorn worktree content digest is
+`194270638e8805107fedd57c4112da419e97134344f58b075285e909cd8d23dc`.
+
+The H2 receipt is retained at
+`target/kata-progress/native-composition-h2-isolated/receipt.json` (evidence ID
+`11069fe5432772500248d62d`; receipt SHA-256
+`14f0e0620074b80e805fdaa7ef0a1bca5f1de4aee429a4079f1100f96e1be7e8`; Uvicorn
+source-tree SHA-256
+`170649c2ae25c8080c1c8790176567eae9870bd642bb80cb555d95925d2121b5`; manifest
+SHA-256 `5224e4c3e5a88e3699eb71490651ffc7f2ea6a41edf302b4884d3133be392bcd`).
+The earlier H1 request-stream-progress run used FastAPI-RS `e5a6e91`; the
+remaining-input batch below includes a fresh run of that case against current
+`main`. Together, the two path/query cases above and the remaining 15 inputs
+cover all 17 manifest cases once on the current FastAPI-RS/Starlette-RS pair.
+The remaining-15 receipt is
+`target/kata-progress/native-composition-h2-isolated/remaining-15-cases-receipt.json`
+(evidence ID `fd9a40b9335a42e081c785de`; receipt SHA-256
+`0eebcccdd1c00093916cd2f7452cd670d07cf3b9bf46086ef090321a2f43874a`; log
+SHA-256 `dc61737c83fa6421a778c132b1b2f1a9d41dd15a683bfe2239d0f6452a2757e5`).
+This is one local pass per input on a dirty Uvicorn-RS draft, not hosted CI,
+repeated acceptance, or full Python FastAPI semantics. No H3, TLS, WebSocket,
+lifespan, cross-platform, or performance claim follows from these cases.
+
 **Hosted exact-source result (2026-10-19):** 17/17 real-socket H1/H2 inputs
 passed in the dedicated composition job in exact-source CI run
 [39185987997](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987997/job/117848420888).
@@ -17,7 +113,7 @@ The composition result is limited evidence, not a full FastAPI
 contract, Python parity result, release candidate, repeated result, or
 performance measurement.
 
-## Current mainline source verification (2026-10-21)
+## Earlier mainline source verification (2026-10-21; superseded)
 
 Uvicorn-RS `main` is `40b296ecd48cda884bd5b76a020c017c76ac8189`. FastAPI-RS
 `main` is `e5a6e91cb02b3229f9fbdfce1b00171c6913ccfe`; it exports

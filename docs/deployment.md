@@ -1,9 +1,10 @@
 # Deployment guidance
 
-The current `uvicorn-rs-py` server is an unpublished prototype, not a
-supported Uvicorn replacement. Keep upstream Uvicorn for deployments that
-need its full CLI, worker, reload, proxy, or process-management behavior. This
-guide is for evaluating the current checkout in a controlled environment.
+The current Python ASGI client is an unpublished `uvicorn-rs` PyPI distribution
+prototype, not a supported Uvicorn replacement. Keep upstream Uvicorn for
+deployments that need its full CLI, worker, reload, proxy, or process-management
+behavior. This guide is for evaluating the current checkout in a controlled
+environment.
 
 ## Bind and run
 
@@ -24,9 +25,19 @@ only the options listed in the [configuration guide](configuration.md).
 For experiments, run the server under a process manager so it can capture
 logs, restart the process, and request shutdown. Run it as a dedicated
 unprivileged user and set the working directory and `PYTHONPATH` explicitly.
-The server does not provide a health endpoint, worker supervisor, or restart
-policy; add health and readiness routes in the application and configure the
-process manager separately.
+
+The Python CLI has a multi-process supervisor when `--workers` is greater than
+one. Selected parity cases on macOS ARM64 verify two-worker startup, request
+serving, SIGINT shutdown, replacement after one worker exits, and replacement
+after a POSIX worker stops answering health checks. The health-check case uses
+a 2-second timeout and confirms both Uvicorn and this checkout log a worker
+replacement, serve a request, and shut down cleanly. The server does not
+provide a health endpoint. Repeated restart policy, worker-count signals,
+reload filters, startup-failure handling, and broader platform and socket
+combinations remain unverified. See the
+[support matrix](support-matrix.md) before relying on multi-process behavior.
+Use upstream Uvicorn when your deployment depends on unverified worker or
+reload behavior.
 
 The current prototype handles Ctrl-C and SIGTERM and has a configurable
 `--timeout-graceful-shutdown`. Allow additional process-manager shutdown time for

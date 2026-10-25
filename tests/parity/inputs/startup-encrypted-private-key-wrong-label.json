@@ -1,0 +1,12 @@
+{
+  "schema": "uvicorn-rs-parity/input@36",
+  "cases": [
+    {
+      "case_id": "startup-encrypted-private-key-wrong-label.rejects-key",
+      "profile": "startup-encrypted-private-key-wrong-label",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "startup_failure": {"expect_failed": true}
+    }
+  ]
+}

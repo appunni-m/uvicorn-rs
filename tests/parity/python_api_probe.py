@@ -10,10 +10,13 @@ import os
 import signal
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+import warnings
 from pathlib import Path
 
 _startup_failure_server = None
@@ -23,14 +26,17 @@ _lifespan_startup_task = None
 
 
 def subprocess_environment() -> dict[str, str]:
-    """Build an isolated child environment, retaining the coverage shim only."""
+    """Keep the runner-selected package path and coverage shim for the child."""
 
     environment = os.environ.copy()
-    for name in ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP"):
+    for name in ("PYTHONHOME", "PYTHONSTARTUP"):
         environment.pop(name, None)
     environment["PYTHONNOUSERSITE"] = "1"
     if environment.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1":
-        environment["PYTHONPATH"] = str(Path(__file__).parent / "coverage_site")
+        coverage_site = str(Path(__file__).parent / "coverage_site")
+        environment["PYTHONPATH"] = os.pathsep.join(
+            path for path in (coverage_site, environment.get("PYTHONPATH")) if path
+        )
     return environment
 
 
@@ -79,15 +85,65 @@ class UnixHTTPConnection(http.client.HTTPConnection):
         self.sock = connection
 
 
+class UnixHTTPSConnection(http.client.HTTPSConnection):
+    """HTTPSConnection that wraps a Unix-domain socket with TLS."""
+
+    def __init__(self, socket_path: str, timeout: float, context: ssl.SSLContext):
+        super().__init__("localhost", timeout=timeout, context=context)
+        self.socket_path = socket_path
+        self.tls_context = context
+
+    def connect(self):
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        connection.settimeout(self.timeout)
+        try:
+            connection.connect(self.socket_path)
+            self.sock = self.tls_context.wrap_socket(
+                connection, server_hostname=self.host
+            )
+        except BaseException:
+            connection.close()
+            raise
+
+
 def run_http_reload_observation(request: dict) -> dict:
-    """Change one watched Python module and observe the replacement process."""
+    """Change watched files and observe whether the supervisor replaces its child."""
 
     timeout_seconds = request["timeout_seconds"]
     fixture_directory = Path(__file__).parent / "fixtures"
+    reload_filters = "reload_include" in request or "reload_exclude" in request
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-reload-") as directory:
         app_directory = Path(directory)
-        shutil.copyfile(fixture_directory / "reload_app.py", app_directory / "reload_app.py")
-        shutil.copyfile(fixture_directory / "reload_state.py", app_directory / "reload_state.py")
+        if reload_filters:
+            (app_directory / "included.txt").write_bytes(b"before-included")
+            (app_directory / "ignored.txt").write_bytes(b"before-excluded")
+            (app_directory / "reload_filter_app.py").write_text(
+                '''from pathlib import Path
+
+base = Path(__file__).parent
+body = base.joinpath("included.txt").read_bytes() + b":" + base.joinpath("ignored.txt").read_bytes()
+
+async def app(scope, receive, send):
+    if scope["type"] == "lifespan":
+        while True:
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                await send({"type": "lifespan.startup.complete"})
+            elif message["type"] == "lifespan.shutdown":
+                await send({"type": "lifespan.shutdown.complete"})
+                return
+    elif scope["type"] == "http":
+        await receive()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": body})
+''',
+                encoding="utf-8",
+            )
+            app_module = "reload_filter_app:app"
+        else:
+            shutil.copyfile(fixture_directory / "reload_app.py", app_directory / "reload_app.py")
+            shutil.copyfile(fixture_directory / "reload_state.py", app_directory / "reload_state.py")
+            app_module = "reload_app:app"
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
             reservation.bind(("127.0.0.1", 0))
             port = reservation.getsockname()[1]
@@ -96,7 +152,7 @@ def run_http_reload_observation(request: dict) -> dict:
             sys.executable,
             "-m",
             "uvicorn",
-            "reload_app:app",
+            app_module,
             "--host",
             "127.0.0.1",
             "--port",
@@ -113,6 +169,10 @@ def run_http_reload_observation(request: dict) -> dict:
             "--app-dir",
             str(app_directory),
         ]
+        for pattern in request.get("reload_include", []):
+            command.extend(["--reload-include", pattern])
+        for pattern in request.get("reload_exclude", []):
+            command.extend(["--reload-exclude", pattern])
         environment = subprocess_environment()
         creationflags = (
             subprocess.CREATE_NEW_PROCESS_GROUP
@@ -154,6 +214,8 @@ def run_http_reload_observation(request: dict) -> dict:
             time.sleep(0.05)
 
         reload_observed = False
+        excluded_change_reloaded = None
+        included_change_reloaded = None
         second_status = None
         second_body = None
         if first_status == 200:
@@ -162,18 +224,52 @@ def run_http_reload_observation(request: dict) -> dict:
             # interval elapse before changing the module so the case measures
             # reload behavior rather than racing watcher startup.
             time.sleep(max(0.3, request["reload_delay"] * 3))
-            (app_directory / "reload_state.py").write_text(
-                'BODY = b"after"\n', encoding="utf-8"
-            )
-            deadline = time.monotonic() + timeout_seconds
-            while time.monotonic() < deadline:
-                if process.poll() is not None:
-                    break
-                second_status, second_body = request_body()
-                if second_status == 200 and second_body == b"after":
-                    reload_observed = True
-                    break
-                time.sleep(0.2)
+            if reload_filters:
+                initial_body = b"before-included:before-excluded"
+                excluded_only_body = b"before-included:after-excluded"
+                final_body = b"after-included:after-excluded"
+                (app_directory / "ignored.txt").write_bytes(b"after-excluded")
+                excluded_change_reloaded = False
+                deadline = time.monotonic() + max(
+                    2.0, request["reload_delay"] * 20
+                )
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        break
+                    status, body = request_body()
+                    if status == 200:
+                        second_status, second_body = status, body
+                        if body == excluded_only_body:
+                            excluded_change_reloaded = True
+                    time.sleep(0.05)
+
+                (app_directory / "included.txt").write_bytes(b"after-included")
+                included_change_reloaded = False
+                deadline = time.monotonic() + timeout_seconds
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        break
+                    second_status, second_body = request_body()
+                    if second_status == 200 and second_body == final_body:
+                        reload_observed = True
+                        included_change_reloaded = True
+                        break
+                    time.sleep(0.1)
+                if first_body != initial_body:
+                    raise RuntimeError("reload filter probe started with an unexpected response")
+            else:
+                (app_directory / "reload_state.py").write_text(
+                    'BODY = b"after"\n', encoding="utf-8"
+                )
+                deadline = time.monotonic() + timeout_seconds
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        break
+                    second_status, second_body = request_body()
+                    if second_status == 200 and second_body == b"after":
+                        reload_observed = True
+                        break
+                    time.sleep(0.2)
 
         shutdown_signal_sent = False
         if process.poll() is None:
@@ -201,6 +297,8 @@ def run_http_reload_observation(request: dict) -> dict:
                 second_body or b""
             ).decode("ascii"),
             "reload_observed": reload_observed,
+            "excluded_change_reloaded": excluded_change_reloaded,
+            "included_change_reloaded": included_change_reloaded,
             "shutdown_signal_sent": shutdown_signal_sent,
             "process_exit_code": process.returncode,
             "process_timed_out": process_timed_out,
@@ -273,17 +371,25 @@ async def asgi3_app(scope, receive, send):
         state_status = b"scope-state-populated"
     scope_headers = dict(scope.get("headers", []))
     expected_root_path = scope_headers.get(b"x-asgi-expected-root-path-base64")
+    expected_path = scope_headers.get(b"x-asgi-expected-path-base64")
     expected_raw_path = scope_headers.get(b"x-asgi-expected-raw-path-base64")
-    if expected_root_path is not None and expected_raw_path is not None:
+    if (
+        expected_root_path is not None
+        and expected_path is not None
+        and expected_raw_path is not None
+    ):
         root_path_matches = scope["root_path"] == base64.b64decode(
             expected_root_path, validate=True
+        ).decode("utf-8")
+        path_matches = scope["path"] == base64.b64decode(
+            expected_path, validate=True
         ).decode("utf-8")
         raw_path_matches = scope["raw_path"] == base64.b64decode(
             expected_raw_path, validate=True
         )
         body = (
             b"asgi-scope-contract-passed"
-            if root_path_matches and raw_path_matches
+            if root_path_matches and path_matches and raw_path_matches
             else b"asgi-scope-contract-failed"
         )
         await send({
@@ -381,6 +487,10 @@ observe_unix_scope = sys.argv[25] == "1"
 fd = int(sys.argv[26]) if sys.argv[26] else None
 listener_fds = json.loads(sys.argv[27])
 reset_contextvars = sys.argv[28] == "1"
+ssl_certfile = sys.argv[29] or None
+ssl_keyfile = sys.argv[30] or None
+host = sys.argv[31]
+ssl_keyfile_password = json.loads(sys.argv[32])
 proxy_headers = sys.argv[9] == "1"
 forwarded_allow_ips = json.loads(sys.argv[10])
 limit_concurrency = json.loads(sys.argv[11])
@@ -403,7 +513,7 @@ app = app_factory if factory else (
 )
 
 options = {
-    "host": "127.0.0.1",
+    "host": host,
     "port": int(sys.argv[1]),
     "lifespan": sys.argv[2],
     "root_path": sys.argv[3],
@@ -427,6 +537,11 @@ options = {
 }
 if uds_path is not None:
     options["uds"] = uds_path
+if ssl_certfile is not None:
+    options["ssl_certfile"] = ssl_certfile
+    options["ssl_keyfile"] = ssl_keyfile
+    if ssl_keyfile_password is not None:
+        options["ssl_keyfile_password"] = ssl_keyfile_password
 try:
     if invocation in {"config-server", "server-sockets"}:
         if invocation == "server-sockets":
@@ -445,14 +560,25 @@ except KeyboardInterrupt:
 '''
     uds_directory = None
     uds_path = None
+    bind_conflict_listener = None
     inherited_listeners = []
+    tls_directory = Path(__file__).resolve().parents[1] / "native-core" / "tls"
+    tls_certificate = tls_directory / "localhost-cert.pem" if request.get("tls") else None
+    key_filename = (
+        "localhost-key-pkcs8-encrypted.pem"
+        if request.get("ssl_keyfile_password") is not None
+        else "localhost-key.pem"
+    )
+    tls_key = tls_directory / key_filename if request.get("tls") else None
+    host = request.get("host", "127.0.0.1")
+    address_family = socket.AF_INET6 if ":" in host else socket.AF_INET
     if request.get("fd", False):
         if os.name == "nt":
             raise ValueError("inherited descriptor parity input requires Unix")
         listener_count = request.get("prebound_socket_count", 1)
         for _ in range(listener_count):
-            inherited_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            inherited_listener.bind(("127.0.0.1", 0))
+            inherited_listener = socket.socket(address_family, socket.SOCK_STREAM)
+            inherited_listener.bind((host, 0))
             inherited_listener.listen()
             inherited_listener.set_inheritable(True)
             inherited_listeners.append(inherited_listener)
@@ -462,10 +588,17 @@ except KeyboardInterrupt:
             prefix="uvrs-", dir="/tmp" if os.path.isdir("/tmp") else None
         )
         uds_path = os.path.join(uds_directory.name, "u.sock")
+        if request.get("bind_conflict", False):
+            Path(uds_path).touch()
         port = 0
+    elif request.get("bind_conflict", False):
+        bind_conflict_listener = socket.socket(address_family, socket.SOCK_STREAM)
+        bind_conflict_listener.bind((host, 0))
+        bind_conflict_listener.listen()
+        port = bind_conflict_listener.getsockname()[1]
     else:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
-            reservation.bind(("127.0.0.1", 0))
+        with socket.socket(address_family, socket.SOCK_STREAM) as reservation:
+            reservation.bind((host, 0))
             port = reservation.getsockname()[1]
 
     if request["invocation"] == "module-cli":
@@ -487,7 +620,7 @@ except KeyboardInterrupt:
             "uvicorn",
             app_target,
             "--host",
-            "127.0.0.1",
+            host,
             "--port",
             str(port),
             "--root-path",
@@ -497,6 +630,12 @@ except KeyboardInterrupt:
         ]
         if uds_path is not None:
             command.extend(("--uds", uds_path))
+        if tls_certificate is not None and tls_key is not None:
+            command.extend(
+                ("--ssl-certfile", str(tls_certificate), "--ssl-keyfile", str(tls_key))
+            )
+            if request.get("ssl_keyfile_password") is not None:
+                command.extend(("--ssl-keyfile-password", request["ssl_keyfile_password"]))
         if inherited_listeners:
             command.extend(("--fd", str(inherited_listeners[0].fileno())))
         if request.get("factory"):
@@ -505,8 +644,12 @@ except KeyboardInterrupt:
             command.extend(("--interface", request["interface"]))
         for name, value in request.get("headers", []):
             command.extend(("--header", f"{name}:{value}"))
-        if request.get("proxy_headers") is False:
-            command.append("--no-proxy-headers")
+        if request.get("proxy_headers") is not None:
+            command.append(
+                "--proxy-headers"
+                if request["proxy_headers"]
+                else "--no-proxy-headers"
+            )
         if request.get("forwarded_allow_ips") is not None:
             command.extend(("--forwarded-allow-ips", request["forwarded_allow_ips"]))
         if request.get("limit_concurrency") is not None:
@@ -564,15 +707,134 @@ except KeyboardInterrupt:
             str(inherited_listeners[0].fileno()) if inherited_listeners else "",
             json.dumps([listener.fileno() for listener in inherited_listeners]),
             "1" if request.get("reset_contextvars", False) else "0",
+            str(tls_certificate) if tls_certificate is not None else "",
+            str(tls_key) if tls_key is not None else "",
+            host,
+            json.dumps(request.get("ssl_keyfile_password")),
         ]
 
     environment = subprocess_environment()
+    worker_crash_directory = None
+    worker_crash_count_value = os.environ.get("ASGI_PARITY_WORKER_CRASH_COUNT")
+    if worker_crash_count_value is None:
+        worker_crash_count_value = (
+            "1" if os.environ.get("ASGI_PARITY_WORKER_CRASH_ONCE") == "1" else "0"
+        )
+    try:
+        worker_crash_count = int(worker_crash_count_value)
+    except ValueError as error:
+        raise RuntimeError("worker crash count must be an integer") from error
+    if not 0 <= worker_crash_count <= 8:
+        raise RuntimeError("worker crash count must be between 0 and 8")
+    if worker_crash_count > 0:
+        worker_crash_directory = tempfile.TemporaryDirectory(
+            prefix="uvrs-worker-restart-"
+        )
+        environment["ASGI_PARITY_WORKER_CRASH_ONCE_FILE"] = str(
+            Path(worker_crash_directory.name) / "worker-crashed"
+        )
+        environment["ASGI_PARITY_WORKER_CRASH_COUNT"] = str(worker_crash_count)
+    worker_control_signal_value = os.environ.get(
+        "ASGI_PARITY_WORKER_CONTROL_SIGNALS", ""
+    )
+    worker_control_signal_names = (
+        worker_control_signal_value.split(",") if worker_control_signal_value else []
+    )
+    if worker_control_signal_names and (
+        os.name == "nt"
+        or request["invocation"] != "module-cli"
+        or type(request.get("workers")) is not int
+        or request["workers"] < 2
+        or any(
+            name not in {"SIGHUP", "SIGTTIN", "SIGTTOU"}
+            or not hasattr(signal, name)
+            for name in worker_control_signal_names
+        )
+    ):
+        raise RuntimeError(
+            "worker-count signals require a POSIX module-CLI request with at least two workers"
+        )
+    fail_restart_startup = (
+        os.environ.get("ASGI_PARITY_WORKER_CONTROL_FAIL_RESTART_STARTUP") == "1"
+    )
+    if fail_restart_startup and (
+        "SIGHUP" not in worker_control_signal_names
+        or request.get("uds")
+        or request.get("tls")
+        or request.get("fd")
+        or request.get("prebound_socket_count")
+    ):
+        raise RuntimeError(
+            "restart-startup failure requires the module-CLI SIGHUP worker-control input"
+        )
+    worker_control_startup_failure_directory = None
+    worker_control_startup_failure_marker = None
+    if fail_restart_startup:
+        worker_control_startup_failure_directory = tempfile.TemporaryDirectory(
+            prefix="uvrs-worker-restart-startup-failure-"
+        )
+        worker_control_startup_failure_marker = (
+            Path(worker_control_startup_failure_directory.name) / "fail-restart-startup"
+        )
+        environment[
+            "ASGI_PARITY_WORKER_CONTROL_FAIL_RESTART_STARTUP_FILE"
+        ] = str(worker_control_startup_failure_marker)
+    worker_stall_directory = None
+    worker_stall_marker = None
+    worker_stall_resumer_stop = threading.Event()
+    worker_stall_resumer = None
+    if os.environ.get("ASGI_PARITY_WORKER_STALL_ONCE") == "1":
+        if os.name == "nt" or not hasattr(signal, "SIGSTOP"):
+            raise RuntimeError(
+                "worker health-check expiry input requires POSIX SIGSTOP/SIGCONT"
+            )
+        worker_stall_directory = tempfile.TemporaryDirectory(
+            prefix="uvrs-worker-healthcheck-"
+        )
+        worker_stall_marker = Path(worker_stall_directory.name) / "stalled-worker-pid"
+        environment["ASGI_PARITY_WORKER_STALL_ONCE_FILE"] = str(worker_stall_marker)
+
+        def resume_stalled_worker_if_needed() -> None:
+            while not worker_stall_resumer_stop.is_set():
+                try:
+                    worker_pid = int(worker_stall_marker.read_text(encoding="ascii"))
+                except (OSError, ValueError):
+                    if worker_stall_resumer_stop.wait(0.025):
+                        return
+                    continue
+                resume_delay = max(
+                    6.0,
+                    float(request.get("timeout_worker_healthcheck", 5)) + 4.0,
+                )
+                if worker_stall_resumer_stop.wait(resume_delay):
+                    return
+                try:
+                    os.kill(worker_pid, signal.SIGCONT)
+                except OSError:
+                    pass
+                return
+
+        worker_stall_resumer = threading.Thread(
+            target=resume_stalled_worker_if_needed,
+            name="uvicorn-rs-parity-stalled-worker-resumer",
+            daemon=True,
+        )
+        worker_stall_resumer.start()
     process_options = {}
+    shutdown_signal_name = request.get("shutdown_signal", "SIGINT")
+    if shutdown_signal_name not in {"SIGINT", "SIGTERM"}:
+        raise ValueError("run_http shutdown_signal must be SIGINT or SIGTERM")
     if os.name == "nt":
         process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        stop_signal = signal.CTRL_BREAK_EVENT
+        stop_signal = (
+            signal.CTRL_BREAK_EVENT
+            if shutdown_signal_name == "SIGINT"
+            else signal.SIGTERM
+        )
     else:
-        stop_signal = signal.SIGINT
+        stop_signal = getattr(signal, shutdown_signal_name)
+        if worker_stall_directory is not None or worker_control_signal_names:
+            process_options["start_new_session"] = True
     if inherited_listeners:
         process_options["pass_fds"] = tuple(
             listener.fileno() for listener in inherited_listeners
@@ -591,9 +853,49 @@ except KeyboardInterrupt:
     except BaseException:
         for inherited_listener in inherited_listeners:
             inherited_listener.close()
+        if bind_conflict_listener is not None:
+            bind_conflict_listener.close()
         if uds_directory is not None:
             uds_directory.cleanup()
+        if worker_crash_directory is not None:
+            worker_crash_directory.cleanup()
+        if worker_control_startup_failure_directory is not None:
+            worker_control_startup_failure_directory.cleanup()
+        worker_stall_resumer_stop.set()
+        if worker_stall_resumer is not None:
+            worker_stall_resumer.join(timeout=1.0)
+        if worker_stall_directory is not None:
+            worker_stall_directory.cleanup()
         raise
+
+    def kill_server_process_group() -> None:
+        if process_options.get("start_new_session"):
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+                return
+            except OSError:
+                pass
+        if process.poll() is None:
+            process.kill()
+
+    def exited_after_worker_signal(signal_name: str) -> RuntimeError:
+        return_code = process.poll()
+        kill_server_process_group()
+        try:
+            server_stdout, server_stderr = process.communicate(timeout=1.0)
+        except subprocess.TimeoutExpired as error:
+            server_stdout = error.output or b""
+            server_stderr = error.stderr or b""
+
+        def tail(output: bytes) -> str:
+            return output.decode("utf-8", errors="replace")[-2048:]
+
+        return RuntimeError(
+            f"worker supervisor exited after receiving {signal_name}; "
+            f"exit_code={return_code}; stdout_tail={tail(server_stdout)!r}; "
+            f"stderr_tail={tail(server_stderr)!r}"
+        )
+
     response = None
     probe_ports = (
         [listener.getsockname()[1] for listener in inherited_listeners]
@@ -603,6 +905,12 @@ except KeyboardInterrupt:
     listener_responses = [None] * len(probe_ports)
     response_count = 0
     idle_connection_closed = None
+    connection_timeout = (
+        5.0
+        if worker_crash_count > 0
+        or os.environ.get("ASGI_PARITY_WORKER_STALL_ONCE") == "1"
+        else 0.5
+    )
     request_limit = None
     request_limit_jitter = 0
     limit_environment = request.get("environment", {})
@@ -618,18 +926,34 @@ except KeyboardInterrupt:
         request_limit_jitter = 0
     deadline = time.monotonic() + request["timeout_seconds"]
     try:
-        while time.monotonic() < deadline and process.poll() is None:
+        while (
+            not request.get("bind_conflict", False)
+            and time.monotonic() < deadline
+            and process.poll() is None
+        ):
             made_progress = False
             for listener_index, listener_port in enumerate(probe_ports):
                 if listener_responses[listener_index] is not None:
                     continue
-                connection = (
-                    UnixHTTPConnection(uds_path, timeout=0.5)
-                    if uds_path is not None
-                    else http.client.HTTPConnection(
-                        "127.0.0.1", listener_port, timeout=0.5
+                if uds_path is not None and request.get("tls"):
+                    tls_context = ssl.create_default_context(cafile=str(tls_certificate))
+                    connection = UnixHTTPSConnection(
+                        uds_path, timeout=connection_timeout, context=tls_context
                     )
-                )
+                elif uds_path is not None:
+                    connection = UnixHTTPConnection(uds_path, timeout=connection_timeout)
+                elif request.get("tls"):
+                    tls_context = ssl.create_default_context(cafile=str(tls_certificate))
+                    connection = http.client.HTTPSConnection(
+                        host,
+                        listener_port,
+                        timeout=connection_timeout,
+                        context=tls_context,
+                    )
+                else:
+                    connection = http.client.HTTPConnection(
+                        host, listener_port, timeout=connection_timeout
+                    )
                 try:
                     keep_alive_probe_delay = request.get("keep_alive_probe_delay_seconds")
                     connection.request(
@@ -681,6 +1005,12 @@ except KeyboardInterrupt:
             if not made_progress:
                 time.sleep(0.025)
 
+        if request.get("bind_conflict", False) and process.poll() is None:
+            try:
+                process.wait(timeout=min(1.0, request["timeout_seconds"]))
+            except subprocess.TimeoutExpired:
+                pass
+
         if response is not None and request_limit is not None and request_limit > 0:
             if request_limit_jitter > 0:
                 max_requests = request_limit + request_limit_jitter
@@ -688,7 +1018,7 @@ except KeyboardInterrupt:
                     if process.poll() is not None:
                         break
                     connection = http.client.HTTPConnection(
-                        "127.0.0.1", port, timeout=0.5
+                        host, port, timeout=0.5
                     )
                     try:
                         connection.request(
@@ -717,6 +1047,53 @@ except KeyboardInterrupt:
                 except subprocess.TimeoutExpired:
                     pass
 
+        for signal_name in worker_control_signal_names:
+            if process.poll() is not None:
+                raise RuntimeError(
+                    f"worker supervisor exited before {signal_name} could be sent"
+                )
+            if (
+                signal_name == "SIGHUP"
+                and worker_control_startup_failure_marker is not None
+            ):
+                worker_control_startup_failure_marker.touch()
+            process.send_signal(getattr(signal, signal_name))
+            time.sleep(3.0 if signal_name == "SIGHUP" else 1.25)
+            if process.poll() is not None:
+                raise exited_after_worker_signal(signal_name)
+
+        if worker_control_startup_failure_marker is not None:
+            connection = http.client.HTTPConnection(
+                host, port, timeout=connection_timeout
+            )
+            try:
+                connection.request(
+                    request["method"],
+                    request["path"],
+                    headers={
+                        "Connection": "close",
+                        **dict(request.get("request_headers", [])),
+                    },
+                )
+                followup = connection.getresponse()
+                followup_body = followup.read()
+                response = {
+                    "status": followup.status,
+                    "content_type": followup.getheader("content-type"),
+                    "body_base64": base64.b64encode(followup_body).decode("ascii"),
+                    "observed_headers": {
+                        name.lower(): followup.headers.get_all(name, [])
+                        for name in request.get("observe_headers", [])
+                    },
+                }
+                listener_responses[0] = response
+                response_count += 1
+            except (OSError, http.client.HTTPException, TimeoutError):
+                response = None
+                listener_responses[0] = None
+            finally:
+                connection.close()
+
         shutdown_signal_sent = False
         if process.poll() is None:
             try:
@@ -733,7 +1110,7 @@ except KeyboardInterrupt:
             process_timed_out = False
         except subprocess.TimeoutExpired:
             process_timed_out = True
-            process.kill()
+            kill_server_process_group()
             server_stdout, server_stderr = process.communicate()
         request_limit_range_satisfied = None
         if request_limit is not None and request_limit > 0 and request_limit_jitter >= 0:
@@ -761,13 +1138,24 @@ except KeyboardInterrupt:
         }
         return observation
     finally:
-        if process.poll() is None:
-            process.kill()
+        if process.poll() is None or process_options.get("start_new_session"):
+            kill_server_process_group()
             process.communicate()
+        worker_stall_resumer_stop.set()
+        if worker_stall_resumer is not None:
+            worker_stall_resumer.join(timeout=1.0)
         if uds_directory is not None:
             uds_directory.cleanup()
+        if worker_crash_directory is not None:
+            worker_crash_directory.cleanup()
+        if worker_control_startup_failure_directory is not None:
+            worker_control_startup_failure_directory.cleanup()
+        if worker_stall_directory is not None:
+            worker_stall_directory.cleanup()
         for inherited_listener in inherited_listeners:
             inherited_listener.close()
+        if bind_conflict_listener is not None:
+            bind_conflict_listener.close()
 
 
 def run_websocket_observation(request: dict) -> dict:
@@ -775,10 +1163,21 @@ def run_websocket_observation(request: dict) -> dict:
 
     from websockets.exceptions import ConnectionClosed, InvalidStatus
     from websockets.sync.client import connect as websocket_connect
+    from websockets.sync.client import unix_connect
 
     child_code = r'''
+import json
 import sys
 import uvicorn
+
+uds_path = sys.argv[2] or None
+observe_scope = sys.argv[5] == "1"
+
+def decode_setting(raw):
+    value = json.loads(raw)
+    if value == {"$float": "nan"}:
+        return float("nan")
+    return value
 
 async def app(scope, receive, send):
     if scope["type"] != "websocket":
@@ -787,6 +1186,20 @@ async def app(scope, receive, send):
     if message["type"] != "websocket.connect":
         return
     await send({"type": "websocket.accept"})
+    if observe_scope:
+        server = scope["server"]
+        await send({
+            "type": "websocket.send",
+            "text": json.dumps({
+                "client_is_none": scope["client"] is None,
+                "path": scope["path"],
+                "scheme": scope["scheme"],
+                "server_path_matches": (
+                    server is not None and server[0] == uds_path
+                ),
+                "server_port_is_none": server is not None and server[1] is None,
+            }, sort_keys=True),
+        })
     while True:
         message = await receive()
         if message["type"] == "websocket.disconnect":
@@ -804,13 +1217,26 @@ uvicorn.run(
     host="127.0.0.1",
     port=int(sys.argv[1]),
     lifespan="off",
-    ws_max_size=int(sys.argv[2]),
-    ws_max_queue=int(sys.argv[3]),
+    uds=uds_path,
+    ws_max_size=int(sys.argv[3]),
+    ws_max_queue=int(sys.argv[4]),
+    ws_ping_interval=decode_setting(sys.argv[6]),
+    ws_ping_timeout=decode_setting(sys.argv[7]),
+    ws_per_message_deflate=sys.argv[8] == "1",
 )
 '''
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
-        reservation.bind(("127.0.0.1", 0))
-        port = reservation.getsockname()[1]
+    uds_directory = None
+    uds_path = None
+    if request.get("uds", False):
+        uds_directory = tempfile.TemporaryDirectory(
+            prefix="uvrs-ws-", dir="/tmp" if os.path.isdir("/tmp") else None
+        )
+        uds_path = os.path.join(uds_directory.name, "u.sock")
+        port = 0
+    else:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            port = reservation.getsockname()[1]
 
     environment = subprocess_environment()
     process_options = {}
@@ -826,8 +1252,13 @@ uvicorn.run(
             "-c",
             child_code,
             str(port),
+            uds_path or "",
             str(request["ws_max_size"]),
             str(request.get("ws_max_queue", 32)),
+            "1" if request.get("observe_scope", False) else "0",
+            json.dumps(request.get("ws_ping_interval", 20)),
+            json.dumps(request.get("ws_ping_timeout", 20)),
+            "0" if request.get("ws_per_message_deflate") is False else "1",
         ],
         cwd=os.getcwd(),
         env=environment,
@@ -841,17 +1272,22 @@ uvicorn.run(
     handshake_status = None
     close_code = None
     message_received = False
+    scope_observation = None
+    compression_negotiated = None
     try:
         uri = f"ws://127.0.0.1:{port}{request['path']}"
         while time.monotonic() < deadline and process.poll() is None:
             try:
-                connection = websocket_connect(
-                    uri,
-                    open_timeout=min(0.5, max(deadline - time.monotonic(), 0.01)),
-                    close_timeout=0.5,
-                    max_size=None,
-                    legacy=True,
-                )
+                connect_options = {
+                    "open_timeout": min(0.5, max(deadline - time.monotonic(), 0.01)),
+                    "close_timeout": 0.5,
+                    "max_size": None,
+                    "legacy": True,
+                }
+                if uds_path is not None:
+                    connection = unix_connect(uds_path, uri, **connect_options)
+                else:
+                    connection = websocket_connect(uri, **connect_options)
                 handshake_status = 101
                 break
             except InvalidStatus as error:
@@ -862,10 +1298,27 @@ uvicorn.run(
 
         if connection is not None:
             try:
-                connection.send(request["message"])
+                if request.get("observe_compression"):
+                    compression_negotiated = any(
+                        type(extension).__name__ == "PerMessageDeflate"
+                        for extension in connection.protocol.extensions
+                    )
+                if request.get("observe_scope"):
+                    scope_observation = json.loads(
+                        connection.recv(
+                            timeout=max(deadline - time.monotonic(), 0.01)
+                        )
+                    )
+                if request.get("keepalive_idle_seconds"):
+                    time.sleep(request["keepalive_idle_seconds"])
                 try:
-                    connection.recv(timeout=max(deadline - time.monotonic(), 0.01))
-                    message_received = True
+                    connection.send(request["message"])
+                    try:
+                        connection.recv(timeout=max(deadline - time.monotonic(), 0.01))
+                        message_received = True
+                    except ConnectionClosed as error:
+                        if error.rcvd is not None:
+                            close_code = error.rcvd.code
                 except ConnectionClosed as error:
                     if error.rcvd is not None:
                         close_code = error.rcvd.code
@@ -900,18 +1353,21 @@ uvicorn.run(
             "handshake_status": handshake_status,
             "close_code": close_code,
             "message_received": message_received,
+            "scope_observation": scope_observation,
             "shutdown_signal_sent": shutdown_signal_sent,
             "process_exit_code": process.returncode,
             "process_timed_out": process_timed_out,
         }
         if (
             handshake_status != 101
-            or close_code != 1009
+            or close_code is None
             or process.returncode != 0
             or process_timed_out
         ):
             observation["server_stdout_base64"] = base64.b64encode(server_stdout).decode("ascii")
             observation["server_stderr_base64"] = base64.b64encode(server_stderr).decode("ascii")
+        if request.get("observe_compression"):
+            observation["compression_negotiated"] = compression_negotiated
         return observation
     finally:
         if connection is not None:
@@ -919,13 +1375,21 @@ uvicorn.run(
         if process.poll() is None:
             process.kill()
             process.communicate()
+        if uds_directory is not None:
+            uds_directory.cleanup()
 
 
-async def server_readiness_observation() -> dict[str, bool]:
+async def server_readiness_observation() -> dict[str, object]:
     import uvicorn
 
     startup_received = asyncio.Event()
     allow_startup = asyncio.Event()
+    http_received = asyncio.Event()
+    allow_http_response = asyncio.Event()
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+        reservation.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
 
     async def app(scope, receive, send):
         if scope["type"] == "lifespan":
@@ -939,13 +1403,19 @@ async def server_readiness_observation() -> dict[str, bool]:
                     await send({"type": "lifespan.shutdown.complete"})
                     return
         elif scope["type"] == "http":
-            await send({"type": "http.response.start", "status": 204, "headers": []})
-            await send({"type": "http.response.body", "body": b""})
+            http_received.set()
+            await allow_http_response.wait()
+            if scope["path"] == "/no-content":
+                await send({"type": "http.response.start", "status": 204, "headers": []})
+                await send({"type": "http.response.body", "body": b""})
+            else:
+                await send({"type": "http.response.start", "status": 200, "headers": []})
+                await send({"type": "http.response.body", "body": b"ready"})
 
     config = uvicorn.Config(
         app,
         host="127.0.0.1",
-        port=0,
+        port=port,
         loop="asyncio",
         http="httptools",
         lifespan="on",
@@ -953,7 +1423,37 @@ async def server_readiness_observation() -> dict[str, bool]:
         access_log=False,
     )
     server = uvicorn.Server(config)
+    jittered_server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            limit_max_requests=3,
+            limit_max_requests_jitter=2,
+            log_config=None,
+            access_log=False,
+        )
+    )
+    selected_request_limit = jittered_server.limit_max_requests
+    request_limit_observation = {
+        "none_stays_none": server.limit_max_requests is None,
+        "jitter_is_in_range": selected_request_limit is not None
+        and 3 <= selected_request_limit <= 5,
+        "jitter_is_cached": selected_request_limit
+        == jittered_server.limit_max_requests,
+    }
+    state = server.server_state
+    initial_server_state = {
+        "present": isinstance(state, uvicorn.server.ServerState),
+        "total_requests": state.total_requests,
+        "connection_count": len(state.connections),
+        "task_count": len(state.tasks),
+        "default_headers": state.default_headers,
+        "last_notified": server.last_notified,
+    }
+    response_received = threading.Event()
+    release_client = threading.Event()
+    request_outcome: dict[str, int] = {}
     task = asyncio.create_task(server.serve())
+    request_task = None
     try:
         await asyncio.wait_for(startup_received.wait(), timeout=5)
         started_before_lifespan_complete = bool(server.started)
@@ -965,19 +1465,272 @@ async def server_readiness_observation() -> dict[str, bool]:
         if task.done():
             await task
         started_after_lifespan_complete = bool(server.started)
+
+        def request(
+            path: str,
+            response_received: threading.Event,
+            release_client: threading.Event,
+            outcome: dict[str, int],
+        ) -> int:
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            try:
+                connection.request("GET", path)
+                response = connection.getresponse()
+                response.read()
+                outcome["status"] = response.status
+                response_received.set()
+                release_client.wait(timeout=5)
+                return outcome["status"]
+            finally:
+                connection.close()
+
+        request_task = asyncio.create_task(
+            asyncio.to_thread(request, "/", response_received, release_client, request_outcome)
+        )
+        await asyncio.wait_for(http_received.wait(), timeout=5)
+        in_flight_state = {
+            "total_requests": state.total_requests,
+            "task_count": len(state.tasks),
+        }
+        allow_http_response.set()
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 5
+        while not response_received.is_set() and not request_task.done() and loop.time() < deadline:
+            await asyncio.sleep(0.001)
+        if not response_received.is_set():
+            raise TimeoutError("HTTP client did not receive the response")
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 5
+        while state.tasks and loop.time() < deadline:
+            await asyncio.sleep(0)
+        completed_request_state = {
+            "total_requests": state.total_requests,
+            "task_count": len(state.tasks),
+        }
+        default_header_names = [name.decode("ascii") for name, _ in state.default_headers]
+        response_status = request_outcome["status"]
+        release_client.set()
+        await asyncio.wait_for(request_task, timeout=5)
+
+        no_content_received = threading.Event()
+        release_no_content_client = threading.Event()
+        no_content_outcome: dict[str, int] = {}
+        no_content_task = asyncio.create_task(
+            asyncio.to_thread(
+                request,
+                "/no-content",
+                no_content_received,
+                release_no_content_client,
+                no_content_outcome,
+            )
+        )
+        deadline = loop.time() + 5
+        while not no_content_received.is_set() and not no_content_task.done() and loop.time() < deadline:
+            await asyncio.sleep(0.001)
+        if not no_content_received.is_set():
+            raise TimeoutError("HTTP client did not receive the bodyless response")
+        deadline = loop.time() + 5
+        while (state.total_requests < 2 or state.tasks) and loop.time() < deadline:
+            await asyncio.sleep(0)
+        bodyless_request_state = {
+            "total_requests": state.total_requests,
+            "task_count": len(state.tasks),
+        }
+        release_no_content_client.set()
+        await asyncio.wait_for(no_content_task, timeout=5)
+
         server.should_exit = True
         await asyncio.wait_for(task, timeout=5)
         started_after_serve_return = bool(server.started)
         return {
+            "initial_server_state": initial_server_state,
+            "request_limit": request_limit_observation,
+            "in_flight_state": in_flight_state,
+            "completed_request_state": completed_request_state,
+            "bodyless_request_state": bodyless_request_state,
+            "default_header_names_after_startup": default_header_names,
+            "response_status": response_status,
             "started_before_lifespan_complete": started_before_lifespan_complete,
             "started_after_lifespan_complete": started_after_lifespan_complete,
             "started_after_serve_return": started_after_serve_return,
         }
     finally:
         allow_startup.set()
+        allow_http_response.set()
+        release_client.set()
+        if "release_no_content_client" in locals():
+            release_no_content_client.set()
+        if "no_content_task" in locals() and not no_content_task.done():
+            await asyncio.gather(no_content_task, return_exceptions=True)
+        if request_task is not None and not request_task.done():
+            await asyncio.gather(request_task, return_exceptions=True)
         if not task.done():
             server.should_exit = True
             await asyncio.gather(task, return_exceptions=True)
+
+
+async def server_callback_notify_observation() -> dict[str, int | bool]:
+    import uvicorn
+
+    callback_count = 0
+    server = None
+
+    async def app(scope, receive, send):
+        if scope["type"] == "http":
+            await send({"type": "http.response.start", "status": 204, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+    async def callback_notify():
+        nonlocal callback_count
+        callback_count += 1
+        server.should_exit = True
+
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=0,
+        loop="asyncio",
+        http="httptools",
+        lifespan="off",
+        log_config=None,
+        access_log=False,
+        timeout_notify=0,
+        callback_notify=callback_notify,
+    )
+    server = uvicorn.Server(config)
+    task = asyncio.create_task(server.serve())
+    serve_timed_out = False
+    try:
+        try:
+            await asyncio.wait_for(task, timeout=5)
+        except asyncio.TimeoutError:
+            serve_timed_out = True
+            server.should_exit = True
+            await asyncio.gather(task, return_exceptions=True)
+        return {
+            "callback_count": callback_count,
+            "server_started": bool(server.started),
+            "serve_timed_out": serve_timed_out,
+        }
+    finally:
+        if not task.done():
+            server.should_exit = True
+            await asyncio.gather(task, return_exceptions=True)
+
+
+async def server_on_tick_observation(request: dict) -> dict:
+    import uvicorn
+
+    callback_count = 0
+
+    async def app(scope, receive, send):
+        return None
+
+    async def callback_notify():
+        nonlocal callback_count
+        callback_count += 1
+
+    config = uvicorn.Config(app, **request["options"])
+    config.load()
+    if request.get("callback_notify"):
+        config.callback_notify = callback_notify
+        config.timeout_notify = -1
+
+    server = uvicorn.Server(config)
+    server.server_state.total_requests = request["total_requests"]
+    should_exit = await server.on_tick(request["counter"])
+    default_headers = []
+    for name, value in server.server_state.default_headers:
+        if name == b"date":
+            value = b"<date>"
+        default_headers.append([name.decode(), value.decode()])
+
+    return {
+        "callback_count": callback_count,
+        "default_headers": default_headers,
+        "limit_max_requests": server.limit_max_requests,
+        "notification_sent": server.last_notified > 0,
+        "server_main_loop_signature": signature(uvicorn.Server.main_loop),
+        "server_on_tick_signature": signature(uvicorn.Server.on_tick),
+        "should_exit": should_exit,
+    }
+
+
+async def server_lifecycle_observation(request: dict) -> dict:
+    import uvicorn
+
+    async def app(scope, receive, send):
+        return None
+
+    config = uvicorn.Config(
+        app,
+        host="127.0.0.1",
+        port=0,
+        loop="asyncio",
+        lifespan="off",
+        log_level="warning",
+    )
+    config.load()
+    server = uvicorn.Server(config)
+    # Uvicorn initializes its lifespan object in _serve before calling the
+    # public startup method. The adapter's native lifecycle owns that setup.
+    if hasattr(config, "lifespan_class") and not hasattr(server, "lifespan"):
+        server.lifespan = config.lifespan_class(config)
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    try:
+        if request["stop_phase"] == "before_startup":
+            server.should_exit = True
+        await server.startup(sockets=[listener])
+        started_after_startup = bool(server.started)
+        listener_open_after_startup = listener.fileno() >= 0
+        if request["stop_phase"] == "after_startup":
+            server.should_exit = True
+        await server.main_loop()
+        await server.shutdown(sockets=[listener])
+        return {
+            "listener_closed_after_shutdown": listener.fileno() == -1,
+            "listener_open_after_startup": listener_open_after_startup,
+            "server_main_loop_signature": signature(uvicorn.Server.main_loop),
+            "server_shutdown_signature": signature(uvicorn.Server.shutdown),
+            "server_started_after_shutdown": bool(server.started),
+            "server_startup_signature": signature(uvicorn.Server.startup),
+            "started_after_startup": started_after_startup,
+        }
+    finally:
+        if listener.fileno() >= 0:
+            listener.close()
+
+
+def server_signal_handling_observation(request: dict) -> dict:
+    import signal
+    import uvicorn
+
+    async def app(scope, receive, send):
+        return None
+
+    sequences = []
+    for signal_names in request["sequences"]:
+        server = uvicorn.Server(uvicorn.Config(app))
+        states = []
+        for signal_name in signal_names:
+            server.handle_exit(getattr(signal, signal_name), None)
+            states.append(
+                {
+                    "force_exit": server.force_exit,
+                    "should_exit": server.should_exit,
+                }
+            )
+        sequences.append(states)
+
+    return {
+        "server_capture_signals_signature": signature(uvicorn.Server.capture_signals),
+        "server_handle_exit_signature": signature(uvicorn.Server.handle_exit),
+        "sequences": sequences,
+    }
 
 
 async def server_startup_failure_observation() -> dict[str, bool]:
@@ -993,7 +1746,7 @@ async def server_startup_failure_observation() -> dict[str, bool]:
     server = uvicorn.Server(
         uvicorn.Config(
             app,
-            host="does-not-exist.invalid",
+            host="256.256.256.256",
             port=0,
             loop="asyncio",
             http="httptools",
@@ -1039,6 +1792,10 @@ async def server_lifespan_startup_observation(request: dict) -> dict[str, object
         if scope["type"] == "lifespan":
             if request["app_lifespan"] == "raises-before-startup":
                 raise RuntimeError("parity lifespan startup exception")
+            if request["app_lifespan"] == "unexpected-startup-event":
+                startup = await receive()
+                if startup["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.shutdown.complete"})
         elif scope["type"] == "http":
             await send({"type": "http.response.start", "status": 204, "headers": []})
             await send({"type": "http.response.body", "body": b""})
@@ -1153,9 +1910,41 @@ def main() -> None:
         }
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
         return
+    if "server_on_tick" in request:
+        observations = {
+            "server_on_tick": asyncio.run(
+                server_on_tick_observation(request["server_on_tick"])
+            ),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_lifecycle" in request:
+        observations = {
+            "server_lifecycle": asyncio.run(
+                server_lifecycle_observation(request["server_lifecycle"])
+            ),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_signals" in request:
+        observations = {
+            "server_signals": server_signal_handling_observation(
+                request["server_signals"]
+            ),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
     if "server_readiness" in request:
         observations = {
             "server_readiness": asyncio.run(server_readiness_observation()),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_callback_notify" in request:
+        observations = {
+            "server_callback_notify": asyncio.run(
+                server_callback_notify_observation()
+            ),
         }
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
         return
@@ -1236,27 +2025,66 @@ def main() -> None:
                 "error_type": f"{type(error).__module__}.{type(error).__qualname__}",
                 "error": str(error),
             }
+    if "config_probes" in request:
+        from uvicorn.config import Config
+
+        observations["config_probes"] = []
+        for probe in request["config_probes"]:
+            config = Config(probe["app"], **probe["options"])
+            properties = {}
+            for name in probe["properties"]:
+                try:
+                    properties[name] = getattr(config, name)
+                except BaseException as error:
+                    properties[name] = {
+                        "error_type": f"{type(error).__module__}.{type(error).__qualname__}",
+                        "error": str(error),
+                    }
+            methods = []
+            for name in probe["methods"]:
+                try:
+                    getattr(config, name)()
+                    result = {"returned": True}
+                except BaseException as error:
+                    result = {
+                        "returned": False,
+                        "error_type": f"{type(error).__module__}.{type(error).__qualname__}",
+                        "error": str(error),
+                    }
+                methods.append({"method": name, **result})
+            observations["config_probes"].append(
+                {"properties": properties, "methods": methods}
+            )
     if "calls" in request:
         observations["calls"] = []
         for call in request["calls"]:
-            try:
-                value = resolve(call["target"])(
-                    *call["arguments"], **call["keyword_arguments"]
-                )
-                for method_call in call.get("method_calls", []):
-                    value = getattr(value, method_call["method"])(
-                        *method_call["arguments"],
-                        **method_call["keyword_arguments"],
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                try:
+                    value = resolve(call["target"])(
+                        *call["arguments"], **call["keyword_arguments"]
                     )
-                result = {"returned": True}
-            except SystemExit as error:
-                result = {"returned": False, "exit_code": error.code}
-            except BaseException as error:
-                result = {
-                    "returned": False,
-                    "error_type": f"{type(error).__module__}.{type(error).__qualname__}",
-                    "error": str(error),
+                    for method_call in call.get("method_calls", []):
+                        value = getattr(value, method_call["method"])(
+                            *method_call["arguments"],
+                            **method_call["keyword_arguments"],
+                        )
+                    result = {"returned": True}
+                except SystemExit as error:
+                    result = {"returned": False, "exit_code": error.code}
+                except BaseException as error:
+                    result = {
+                        "returned": False,
+                        "error_type": f"{type(error).__module__}.{type(error).__qualname__}",
+                        "error": str(error),
+                    }
+            result["warnings"] = [
+                {
+                    "category": f"{warning.category.__module__}.{warning.category.__qualname__}",
+                    "message": str(warning.message),
                 }
+                for warning in caught
+            ]
             observations["calls"].append({"target": call["target"], **result})
     print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
 
