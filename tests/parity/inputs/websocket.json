@@ -864,6 +864,99 @@
       }
     },
     {
+      "case_id": "fault.websocket.yawc-unexpected-continuation-frame",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.unexpected-continuation-frame",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.yawc-invalid-text-frame",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.invalid-text-frame",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.yawc-invalid-close-reason",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.invalid-close-reason",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
       "case_id": "fault.websocket.driver-connection-closed",
       "profile": "websocket",
       "operation": "websocket.fault-contract",

@@ -340,6 +340,9 @@ FAULT_POINTS = {
     "websocket.receive.closed-reason.set-item",
     "websocket.receive.channel-closed",
     "websocket.receive.connection-closed",
+    "websocket.yawc.unexpected-continuation-frame",
+    "websocket.yawc.invalid-text-frame",
+    "websocket.yawc.invalid-close-reason",
     "websocket.driver.connection-closed",
     "websocket.peer-read-failed.wait-complete",
     "websocket.peer-read-failed.unavailable",
@@ -530,6 +533,9 @@ WEBSOCKET_FAULT_POINTS = {
     "websocket.send.bytes.extract",
     "websocket.receive.channel-closed",
     "websocket.receive.connection-closed",
+    "websocket.yawc.unexpected-continuation-frame",
+    "websocket.yawc.invalid-text-frame",
+    "websocket.yawc.invalid-close-reason",
     "websocket.driver.connection-closed",
     "websocket.peer-read-failed.unavailable",
     "websocket.peer-read-failed.watch-fallback",
@@ -10818,6 +10824,12 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
         )
+        if fault["point"] in {
+            "websocket.yawc.unexpected-continuation-frame",
+            "websocket.yawc.invalid-text-frame",
+            "websocket.yawc.invalid-close-reason",
+        }:
+            return healthy_followup and observation.get("fault_consumed") is True
         expected_disconnect = {
             "websocket.receive.channel-closed": "websocket.disconnect:1005:",
             "websocket.receive.connection-closed": "websocket.disconnect:1005:",
@@ -12101,6 +12113,9 @@ def execute_profile(
                             and case["fault"]["point"] in {
                                 "websocket.peer-read-failed.unavailable",
                                 "websocket.peer-read-failed.watch-fallback",
+                                "websocket.yawc.unexpected-continuation-frame",
+                                "websocket.yawc.invalid-text-frame",
+                                "websocket.yawc.invalid-close-reason",
                             }
                         ):
                             fault_observation = {
@@ -12559,6 +12574,11 @@ def main() -> int:
         help="run only the named input case; repeat to select a batch",
     )
     parser.add_argument(
+        "--exclude-case-id",
+        action="append",
+        help="exclude the named input case from a selected batch; repeat to exclude multiple cases",
+    )
+    parser.add_argument(
         "--profile",
         action="append",
         help="run only cases in the named manifest profile; repeat to select multiple profiles",
@@ -12618,6 +12638,22 @@ def main() -> int:
         ]
         if not selected_cases:
             parser.error("the selected profile and case filters matched no cases")
+    if args.exclude_case_id:
+        excluded = set(args.exclude_case_id)
+        known = {case["case_id"] for case in inputs["cases"]}
+        unknown = sorted(excluded - known)
+        if unknown:
+            parser.error(f"unknown excluded case ID(s): {', '.join(unknown)}")
+        selected_ids = {case["case_id"] for case in selected_cases}
+        outside_selection = sorted(excluded - selected_ids)
+        if outside_selection:
+            parser.error(
+                "excluded case ID(s) are outside the selected case/profile batch: "
+                + ", ".join(outside_selection)
+            )
+        selected_cases = [
+            case for case in selected_cases if case["case_id"] not in excluded
+        ]
     fault_cases = [case for case in selected_cases if case.get("verification") == "fault-contract"]
     if fault_cases and not args.fault_contracts:
         if args.case_id:

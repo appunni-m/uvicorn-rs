@@ -167,6 +167,9 @@ enum CoverageFaultPoint {
     WebSocketHandshakeMutexPoison,
     WebSocketHandshakeAlreadyCompleted,
     WebSocketAcceptKeyHeaderValueError,
+    WebSocketYawcUnexpectedContinuationFrame,
+    WebSocketYawcInvalidTextFrame,
+    WebSocketYawcInvalidCloseReason,
     WebSocketHandshakeSendClosed,
     WebSocketOutgoingChannelClosedOnSend,
     WebSocketOutgoingQueueReceiverClosed,
@@ -495,6 +498,11 @@ impl CoverageFaultPoint {
             Self::WebSocketHandshakeMutexPoison => "websocket.handshake.mutex.poison",
             Self::WebSocketHandshakeAlreadyCompleted => "websocket.handshake.already-completed",
             Self::WebSocketAcceptKeyHeaderValueError => "websocket.accept-key.header-value-error",
+            Self::WebSocketYawcUnexpectedContinuationFrame => {
+                "websocket.yawc.unexpected-continuation-frame"
+            }
+            Self::WebSocketYawcInvalidTextFrame => "websocket.yawc.invalid-text-frame",
+            Self::WebSocketYawcInvalidCloseReason => "websocket.yawc.invalid-close-reason",
             Self::WebSocketHandshakeSendClosed => "websocket.handshake.send-closed",
             Self::WebSocketOutgoingChannelClosedOnSend => {
                 "websocket.outgoing.channel-closed-on-send"
@@ -8480,6 +8488,15 @@ async fn handle_websocket_request_inner(
     let inject_accept_key_header_value_error =
         coverage_fault_take(CoverageFaultPoint::WebSocketAcceptKeyHeaderValueError);
     #[cfg(coverage)]
+    let inject_yawc_unexpected_continuation_frame =
+        coverage_fault_is_armed(CoverageFaultPoint::WebSocketYawcUnexpectedContinuationFrame);
+    #[cfg(coverage)]
+    let inject_yawc_invalid_text_frame =
+        coverage_fault_is_armed(CoverageFaultPoint::WebSocketYawcInvalidTextFrame);
+    #[cfg(coverage)]
+    let inject_yawc_invalid_close_reason =
+        coverage_fault_is_armed(CoverageFaultPoint::WebSocketYawcInvalidCloseReason);
+    #[cfg(coverage)]
     if inject_accept_key_header_value_error {
         let _ = uvicorn_rs::arm_derived_accept_key_header_value_fault();
     }
@@ -8493,6 +8510,18 @@ async fn handle_websocket_request_inner(
         native_websocket_upgrade.accept(full_body(Bytes::new()), move |socket| async move {
             #[cfg(coverage)]
             let mut socket = socket;
+            #[cfg(coverage)]
+            if inject_yawc_unexpected_continuation_frame {
+                let _ = uvicorn_rs::arm_yawc_unexpected_continuation_frame_fault();
+            }
+            #[cfg(coverage)]
+            if inject_yawc_invalid_text_frame {
+                let _ = uvicorn_rs::arm_yawc_invalid_text_frame_fault();
+            }
+            #[cfg(coverage)]
+            if inject_yawc_invalid_close_reason {
+                let _ = uvicorn_rs::arm_yawc_invalid_close_reason_fault();
+            }
             // Keep cancellation ownership until registration has succeeded.
             // If the connection is already closed, dropping the rejected
             // session handler must cancel the Python ASGI task instead of
@@ -8529,6 +8558,25 @@ async fn handle_websocket_request_inner(
                 log_error(format_args!(
                     "uvicorn-rs: WebSocket session failed: {error}"
                 ));
+            }
+            #[cfg(coverage)]
+            if inject_yawc_unexpected_continuation_frame
+                && uvicorn_rs::finish_yawc_unexpected_continuation_frame_fault()
+            {
+                let _ = coverage_fault_take(
+                    CoverageFaultPoint::WebSocketYawcUnexpectedContinuationFrame,
+                );
+            }
+            #[cfg(coverage)]
+            if inject_yawc_invalid_text_frame && uvicorn_rs::finish_yawc_invalid_text_frame_fault()
+            {
+                let _ = coverage_fault_take(CoverageFaultPoint::WebSocketYawcInvalidTextFrame);
+            }
+            #[cfg(coverage)]
+            if inject_yawc_invalid_close_reason
+                && uvicorn_rs::finish_yawc_invalid_close_reason_fault()
+            {
+                let _ = coverage_fault_take(CoverageFaultPoint::WebSocketYawcInvalidCloseReason);
             }
             Ok::<(), std::io::Error>(())
         });

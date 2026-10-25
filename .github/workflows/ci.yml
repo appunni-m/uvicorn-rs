@@ -550,23 +550,60 @@ jobs:
           fi
           cat "$log"
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        if: runner.os == 'Windows'
+        if: runner.os != 'Linux'
         with:
           version: ${{ env.UV_VERSION }}
-      - name: Run focused Windows worker lifecycle parity
-        if: runner.os == 'Windows'
+      - name: Run CLI and platform-applicable Python API parity on the ${{ matrix.platform }} candidate wheel
+        if: runner.os != 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          oracle_environment="$RUNNER_TEMP/uvicorn-rs-windows-worker-oracle"
+          candidate_environment="$RUNNER_TEMP/uvicorn-rs-candidate-parity"
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-upstream-oracle"
+          UV_PROJECT_ENVIRONMENT="$candidate_environment" uv sync \
+            --python "$WHEEL_PYTHON_VERSION" \
+            --group benchmark --extra standard --no-install-project --frozen
           UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync \
             --python "$WHEEL_PYTHON_VERSION" \
-            --only-group uvicorn-oracle --no-install-project --frozen
-          python scripts/run_parity.py \
-            --oracle-python "$oracle_environment/Scripts/python.exe" \
+            --only-group benchmark --only-group uvicorn-oracle \
+            --no-install-project --frozen
+          wheels=(dist/*.whl)
+          test "${#wheels[@]}" -eq 1
+          if [ "$RUNNER_OS" = 'Windows' ]; then
+            candidate_python="$candidate_environment/Scripts/python.exe"
+            oracle_python="$oracle_environment/Scripts/python.exe"
+          else
+            candidate_python="$candidate_environment/bin/python"
+            oracle_python="$oracle_environment/bin/python"
+            uv pip install --python "$candidate_python" "gunicorn==$GUNICORN_VERSION"
+            uv pip install --python "$oracle_python" "gunicorn==$GUNICORN_VERSION"
+          fi
+          uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
+          parity_args=(--profile cli --profile python-api)
+          if [ "$RUNNER_OS" = 'Windows' ]; then
+            # These inputs require inherited POSIX descriptors or POSIX-only worker signals.
+            parity_args+=(
+              --exclude-case-id python-api.module-cli-posix-unresponsive-worker-healthcheck-restarts
+              --exclude-case-id python-api.module-cli-serves-request-on-inherited-fd
+              --exclude-case-id python-api.module-cli-serves-request-on-inherited-ipv6-fd
+              --exclude-case-id python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request
+              --exclude-case-id python-api.module-cli-two-workers-serves-inherited-fd-request
+              --exclude-case-id python-api.server-sockets-serves-request-on-multiple-inherited-fds
+              --exclude-case-id python-api.config-server-serves-request-on-inherited-fd
+              --exclude-case-id python-api.run-serves-request-on-inherited-fd
+              --exclude-case-id python-api.server-serves-request-on-prebound-socket
+              --exclude-case-id python-api.server-serves-request-on-multiple-prebound-sockets
+              --exclude-case-id python-api.server-serves-request-on-multiple-prebound-tls-sockets
+              --exclude-case-id python-api.module-cli-two-workers-scale-with-ttin-ttou
+              --exclude-case-id python-api.module-cli-two-workers-restart-on-sighup
+              --exclude-case-id python-api.module-cli-sighup-keeps-workers-after-replacement-startup-failure
+            )
+          fi
+          "$candidate_python" scripts/run_parity.py \
+            --oracle-python "$oracle_python" \
             --installed-candidate \
-            --case-id python-api.module-cli-two-workers-serve-request \
-            --output dist/parity-windows-worker-lifecycle.json
+            "${parity_args[@]}" \
+            --output "dist/parity-cli-api-${{ matrix.platform }}.json"
       - name: Build source distribution
         if: runner.os == 'Linux'
         run: maturin sdist --out dist

@@ -57,11 +57,23 @@ not exchange WebSocket frames or prove active-session ping suppression. These
 `target/` reports are local ignored artifacts, not published documentation
 attachments.
 
-The current 2026-10-24 working-tree inventory contains 983 cases: 751 ASGI
-inputs (435 oracle-parity and 316 target-only fault/support cases) plus 232
-native-core contracts. It has no complete coverage report or three-repeat
-evidence. Existing reports remain bound to their earlier source and input
-identities and do not certify this expanded inventory.
+The current 2026-10-25 working-tree inventory contains 1,030 cases: 791
+indexed ASGI inputs (470 oracle-parity and 321 target-only fault-contract
+cases) plus 239 native-core contracts. The three new Yawc adapter fault cases
+passed 1/1 each in a selected local coverage batch on macOS ARM64 / CPython
+3.12.13. Its report is
+`target/kata-progress/coverage-yawc-adapter-faults-775489526/coverage-report.json`
+(SHA-256
+`6242f3b1a9e9d17e4cfb3987ac0a0cac67c21708a89ddc545528db2cfb65a0e2`; build ID
+`5c5da52e017315a2d58616df9c4356882a0b2f532cf3b7cf9de41fd3be4e5c26`). The
+source receipt hashes match the current Rust source files. Case attribution
+confirms the invalid-text conversion, invalid close-reason conversion, and
+unexpected-continuation error regions were reached. This is selected-case
+evidence only: the report is incomplete, with 8,011 uncovered regions and
+5,984 uncovered lines across its full instrumented source set. There is still
+no complete coverage report or three-repeat evidence for this source/input
+set. Earlier reports remain bound to earlier source and input identities and
+do not certify this expanded inventory.
 
 A later selected case, `python-api.run-websocket-zero-ping-interval-disables-keepalive`,
 opens a WebSocket through the Python API with a zero interval, waits 0.35

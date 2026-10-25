@@ -551,7 +551,19 @@ impl WebSocketSession {
                 Err(error) => Err(WebSocketError(error)),
             },
             WebSocketStreamKind::Yawc(stream) => {
-                match stream.next_frame().await {
+                #[cfg(coverage)]
+                let next_frame = if take_yawc_unexpected_continuation_frame_fault() {
+                    Ok(YawcFrame::continuation(Bytes::new()))
+                } else if take_yawc_invalid_text_frame_fault() {
+                    Ok(YawcFrame::text(Bytes::from_static(&[0xff])))
+                } else if take_yawc_invalid_close_reason_fault() {
+                    Ok(YawcFrame::close(YawcCloseCode::Normal, [0xff]))
+                } else {
+                    stream.next_frame().await
+                };
+                #[cfg(not(coverage))]
+                let next_frame = stream.next_frame().await;
+                match next_frame {
                     Ok(frame) => yawc_frame_to_message(frame).map(Some),
                     Err(error @ yawc::WebSocketError::FrameTooLarge) => {
                         // Yawc queues the 1009 close frame when it detects an
@@ -714,6 +726,81 @@ static CLOSE_REPLY_FLUSH_CANCELLATION_STATE: AtomicU8 = AtomicU8::new(0);
 static CLOSE_REPLY_FLUSH_CANCELLATION_REACHED: OnceLock<Notify> = OnceLock::new();
 #[cfg(coverage)]
 static DERIVED_ACCEPT_KEY_HEADER_VALUE_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static YAWC_UNEXPECTED_CONTINUATION_FRAME_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static YAWC_INVALID_TEXT_FRAME_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static YAWC_INVALID_CLOSE_REASON_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+
+/// Arms the coverage-only Yawc continuation-frame adapter fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_yawc_unexpected_continuation_frame_fault() -> bool {
+    YAWC_UNEXPECTED_CONTINUATION_FRAME_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only Yawc continuation-frame adapter fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_yawc_unexpected_continuation_frame_fault() -> bool {
+    YAWC_UNEXPECTED_CONTINUATION_FRAME_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_yawc_unexpected_continuation_frame_fault() -> bool {
+    YAWC_UNEXPECTED_CONTINUATION_FRAME_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms the coverage-only invalid-text-frame conversion fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_yawc_invalid_text_frame_fault() -> bool {
+    YAWC_INVALID_TEXT_FRAME_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only invalid-text-frame conversion fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_yawc_invalid_text_frame_fault() -> bool {
+    YAWC_INVALID_TEXT_FRAME_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_yawc_invalid_text_frame_fault() -> bool {
+    YAWC_INVALID_TEXT_FRAME_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms the coverage-only invalid-close-reason conversion fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_yawc_invalid_close_reason_fault() -> bool {
+    YAWC_INVALID_CLOSE_REASON_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only invalid-close-reason conversion fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_yawc_invalid_close_reason_fault() -> bool {
+    YAWC_INVALID_CLOSE_REASON_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_yawc_invalid_close_reason_fault() -> bool {
+    YAWC_INVALID_CLOSE_REASON_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
 
 /// Arms the coverage-only derived WebSocket accept-key header conversion fault.
 ///
