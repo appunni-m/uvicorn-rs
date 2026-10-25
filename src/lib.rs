@@ -5376,16 +5376,16 @@ fn serve<'py>(
     let (tcp_tls, quic_config) = match (certfile, keyfile) {
         (None, None) => (None, None),
         (Some(certfile), Some(keyfile)) => {
-            let (tcp_tls, quic_config) = load_tls_configs(
-                &certfile,
-                &keyfile,
+            let (tcp_tls, quic_config) = load_tls_configs(ServerTlsOptions {
+                certfile: &certfile,
+                keyfile: &keyfile,
                 http2_enabled,
-                ssl_ca_certs.as_deref(),
-                ssl_cert_reqs,
+                ca_certs: ssl_ca_certs.as_deref(),
+                cert_reqs: ssl_cert_reqs,
                 tls_version,
-                ssl_cipher_suites.as_deref(),
-                ssl_keyfile_password.as_deref(),
-            )?;
+                cipher_suites: ssl_cipher_suites.as_deref(),
+                key_password: ssl_keyfile_password.as_deref(),
+            })?;
             (Some(tcp_tls), Some(quic_config))
         }
         _ => {
@@ -5474,7 +5474,7 @@ fn serve<'py>(
             #[cfg(uvicorn_rs_native_transport)]
             limit_concurrency,
         };
-        let result = serve_forever(
+        let result = serve_forever(ServeContext {
             app,
             invoke,
             locals,
@@ -5482,8 +5482,8 @@ fn serve<'py>(
             startup_signal,
             startup_acknowledgement,
             options,
-            diagnostics.clone(),
-        )
+            diagnostics: diagnostics.clone(),
+        })
         .await;
         diagnostics.report();
         result
@@ -5627,16 +5627,28 @@ fn decrypt_pkcs8_private_key(
     Ok(rustls::pki_types::PrivatePkcs8KeyDer::from(decrypted_key.as_bytes().to_vec()).into())
 }
 
-fn load_tls_configs(
-    certfile: &str,
-    keyfile: &str,
+struct ServerTlsOptions<'a> {
+    certfile: &'a str,
+    keyfile: &'a str,
     http2_enabled: bool,
-    ca_certs: Option<&str>,
+    ca_certs: Option<&'a str>,
     cert_reqs: i32,
-    tls_version: &str,
-    cipher_suites: Option<&[u16]>,
-    key_password: Option<&str>,
-) -> PyResult<(TlsAcceptor, quinn::ServerConfig)> {
+    tls_version: &'a str,
+    cipher_suites: Option<&'a [u16]>,
+    key_password: Option<&'a str>,
+}
+
+fn load_tls_configs(options: ServerTlsOptions<'_>) -> PyResult<(TlsAcceptor, quinn::ServerConfig)> {
+    let ServerTlsOptions {
+        certfile,
+        keyfile,
+        http2_enabled,
+        ca_certs,
+        cert_reqs,
+        tls_version,
+        cipher_suites,
+        key_password,
+    } = options;
     let cert_file = std::fs::File::open(certfile).map_err(|error| {
         PyOSError::new_err(format!("could not read certificate {certfile}: {error}"))
     })?;
@@ -6159,16 +6171,28 @@ async fn receive_prebound_tcp_listeners(
     ))
 }
 
-async fn serve_forever(
+struct ServeContext {
     app: Py<PyAny>,
     invoke: Py<PyAny>,
     locals: TaskLocals,
     cancellation: CancellationToken,
-    mut startup_signal: ServerStartupSignal,
-    mut startup_acknowledgement: Option<watch::Receiver<bool>>,
+    startup_signal: ServerStartupSignal,
+    startup_acknowledgement: Option<watch::Receiver<bool>>,
     options: ServeOptions,
     diagnostics: RuntimeDiagnostics,
-) -> PyResult<()> {
+}
+
+async fn serve_forever(context: ServeContext) -> PyResult<()> {
+    let ServeContext {
+        app,
+        invoke,
+        locals,
+        cancellation,
+        mut startup_signal,
+        mut startup_acknowledgement,
+        options,
+        diagnostics,
+    } = context;
     #[cfg(uvicorn_rs_native_transport)]
     let (listener, server_addr) = if let Some(path) = options.fd_transfer_path.as_deref() {
         let received = tokio::select! {
