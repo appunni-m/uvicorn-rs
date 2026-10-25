@@ -769,16 +769,24 @@ except KeyboardInterrupt:
         )
     worker_control_startup_failure_directory = None
     worker_control_startup_failure_marker = None
+    worker_control_startup_ready_directory = None
     if fail_restart_startup:
         worker_control_startup_failure_directory = tempfile.TemporaryDirectory(
             prefix="uvrs-worker-restart-startup-failure-"
         )
+        worker_control_startup_ready_directory = (
+            Path(worker_control_startup_failure_directory.name) / "startup-ready"
+        )
+        worker_control_startup_ready_directory.mkdir()
         worker_control_startup_failure_marker = (
             Path(worker_control_startup_failure_directory.name) / "fail-restart-startup"
         )
         environment[
             "ASGI_PARITY_WORKER_CONTROL_FAIL_RESTART_STARTUP_FILE"
         ] = str(worker_control_startup_failure_marker)
+        environment["ASGI_PARITY_WORKER_CONTROL_STARTUP_READY_DIR"] = str(
+            worker_control_startup_ready_directory
+        )
     worker_stall_directory = None
     worker_stall_marker = None
     worker_stall_resumer_stop = threading.Event()
@@ -1056,6 +1064,27 @@ except KeyboardInterrupt:
                 signal_name == "SIGHUP"
                 and worker_control_startup_failure_marker is not None
             ):
+                ready_deadline = time.monotonic() + request["timeout_seconds"]
+                ready_workers = set()
+                while (
+                    len(ready_workers) < request["workers"]
+                    and process.poll() is None
+                    and time.monotonic() < ready_deadline
+                ):
+                    ready_workers = set(
+                        worker_control_startup_ready_directory.glob("*.ready")
+                    )
+                    if len(ready_workers) < request["workers"]:
+                        time.sleep(0.025)
+                if len(ready_workers) < request["workers"]:
+                    raise RuntimeError(
+                        "initial workers did not complete startup before the "
+                        "replacement failure was armed; "
+                        f"observed={len(ready_workers)} expected={request['workers']}"
+                    )
+                # Let each worker's supervisor observe the ASGI startup-complete
+                # message before the next replacement is deliberately failed.
+                time.sleep(0.05)
                 worker_control_startup_failure_marker.touch()
             process.send_signal(getattr(signal, signal_name))
             time.sleep(3.0 if signal_name == "SIGHUP" else 1.25)

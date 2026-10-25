@@ -201,7 +201,7 @@ class Server:
                     else None
                 ),
                 ssl_cert_reqs=int(self.config.ssl_cert_reqs),
-                _tls_version=self.config._native_tls_version,
+                _tls12_only=self.config._native_tls12_only,
                 _tls_cipher_suites=self.config._native_tls_cipher_suites,
                 graceful_timeout=self.config.timeout_graceful_shutdown,
                 lifespan="off" if wsgi_auto_lifespan else self.config.lifespan,

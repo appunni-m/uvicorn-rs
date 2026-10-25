@@ -1621,6 +1621,11 @@ async def lifespan_probe_app(scope, receive, send):
                     return
                 _lifespan_probe_started = True
                 await send({"type": "lifespan.startup.complete"})
+                startup_ready_directory = os.environ.get(
+                    "ASGI_PARITY_WORKER_CONTROL_STARTUP_READY_DIR"
+                )
+                if startup_ready_directory:
+                    Path(startup_ready_directory, f"{os.getpid()}.ready").touch()
             elif message["type"] == "lifespan.shutdown":
                 if _lifespan_probe_shutdown_delay:
                     await asyncio.sleep(_lifespan_probe_shutdown_delay)

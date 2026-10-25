@@ -45,7 +45,7 @@ class Server:
         _http1_max_buffer_size=None,
         ssl_ca_certs=None,
         ssl_cert_reqs=0,
-        _tls_version="default",
+        _tls12_only=False,
         _tls_cipher_suites=None,
         ssl_keyfile_password=None,
         ws_max_queue=None,
@@ -74,8 +74,8 @@ class Server:
             ssl_ca_certs: Optional PEM CA bundle used to verify TLS client certificates.
             ssl_cert_reqs: Client certificate policy: 0 disables requests, 1
                 requests and validates when present, and 2 requires a trusted certificate.
-            _tls_version: Internal protocol selector, either ``"default"`` or
-                ``"tls12"``. The Uvicorn compatibility layer supplies this value.
+            _tls12_only: Internal flag selecting TLS 1.2 only. The Uvicorn
+                compatibility layer supplies this from validated SSL settings.
             graceful_timeout: Non-negative shutdown grace period in seconds;
                 ``None`` waits for shutdown to finish without a deadline.
             lifespan: A boolean enabling automatic lifespan detection, or one
@@ -126,7 +126,7 @@ class Server:
         self.websocket_enabled = websocket_enabled
         self.ssl_ca_certs = ssl_ca_certs
         self.ssl_cert_reqs = ssl_cert_reqs
-        self._tls_version = _tls_version
+        self._tls12_only = _tls12_only
         self._tls_cipher_suites = _tls_cipher_suites
         self.graceful_timeout = graceful_timeout
         self.lifespan = lifespan
@@ -249,7 +249,7 @@ class Server:
                     if self.ssl_ca_certs is not None
                     else None,
                     int(self.ssl_cert_reqs),
-                    self._tls_version,
+                    self._tls12_only,
                     self._tls_cipher_suites,
                     self.ssl_keyfile_password,
                     self.ws_max_queue,

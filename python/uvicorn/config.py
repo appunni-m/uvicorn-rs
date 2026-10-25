@@ -586,11 +586,9 @@ class Config:
             )
 
     @property
-    def _native_tls_version(self) -> str:
-        """Map supported Python SSL protocol selectors to Rustls versions."""
-        if self.ssl_version == getattr(ssl, "PROTOCOL_TLSv1_2", None):
-            return "tls12"
-        return "default"
+    def _native_tls12_only(self) -> bool:
+        """Whether the validated Python SSL selector restricts Rustls to TLS 1.2."""
+        return self.ssl_version == getattr(ssl, "PROTOCOL_TLSv1_2", None)
 
     @property
     def _native_tls_cipher_suites(self) -> list[int] | None:

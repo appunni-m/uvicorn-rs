@@ -5293,7 +5293,7 @@ impl Body for AsgiBody {
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, http2_enabled, ws_max_size, ws_per_message_deflate, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback, http1_max_buffer_size=None, ssl_ca_certs=None, ssl_cert_reqs=0, tls_version="default", ssl_cipher_suites=None, ssl_keyfile_password=None, ws_max_queue=None, websocket_enabled=true))]
+#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, http2_enabled, ws_max_size, ws_per_message_deflate, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback, http1_max_buffer_size=None, ssl_ca_certs=None, ssl_cert_reqs=0, tls12_only=false, ssl_cipher_suites=None, ssl_keyfile_password=None, ws_max_queue=None, websocket_enabled=true))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5328,7 +5328,7 @@ fn serve<'py>(
     http1_max_buffer_size: Option<usize>,
     ssl_ca_certs: Option<String>,
     ssl_cert_reqs: i32,
-    tls_version: &str,
+    tls12_only: bool,
     ssl_cipher_suites: Option<Vec<u16>>,
     ssl_keyfile_password: Option<String>,
     ws_max_queue: Option<usize>,
@@ -5382,7 +5382,7 @@ fn serve<'py>(
                 http2_enabled,
                 ca_certs: ssl_ca_certs.as_deref(),
                 cert_reqs: ssl_cert_reqs,
-                tls_version,
+                tls12_only,
                 cipher_suites: ssl_cipher_suites.as_deref(),
                 key_password: ssl_keyfile_password.as_deref(),
             })?;
@@ -5633,7 +5633,7 @@ struct ServerTlsOptions<'a> {
     http2_enabled: bool,
     ca_certs: Option<&'a str>,
     cert_reqs: i32,
-    tls_version: &'a str,
+    tls12_only: bool,
     cipher_suites: Option<&'a [u16]>,
     key_password: Option<&'a str>,
 }
@@ -5645,7 +5645,7 @@ fn load_tls_configs(options: ServerTlsOptions<'_>) -> PyResult<(TlsAcceptor, qui
         http2_enabled,
         ca_certs,
         cert_reqs,
-        tls_version,
+        tls12_only,
         cipher_suites,
         key_password,
     } = options;
@@ -5695,34 +5695,25 @@ fn load_tls_configs(options: ServerTlsOptions<'_>) -> PyResult<(TlsAcceptor, qui
             suite.tls13().is_some() || cipher_suites.contains(&u16::from(suite.suite()))
         });
         let provider = Arc::new(provider);
-        match tls_version {
-            "default" => rustls::ServerConfig::builder_with_provider(provider)
-                .with_safe_default_protocol_versions()
-                .map_err(|error| {
-                    PyValueError::new_err(format!("invalid TLS cipher selection: {error}"))
-                })?,
-            "tls12" => rustls::ServerConfig::builder_with_provider(provider)
+        let builder = rustls::ServerConfig::builder_with_provider(provider);
+        if tls12_only {
+            builder
                 .with_protocol_versions(&[&rustls::version::TLS12])
                 .map_err(|error| {
                     PyValueError::new_err(format!("invalid TLS cipher selection: {error}"))
-                })?,
-            _ => {
-                return Err(PyValueError::new_err(
-                    "tls_version must be 'default' or 'tls12'",
-                ));
-            }
+                })?
+        } else {
+            builder
+                .with_safe_default_protocol_versions()
+                .map_err(|error| {
+                    PyValueError::new_err(format!("invalid TLS cipher selection: {error}"))
+                })?
         }
     } else {
-        match tls_version {
-            "default" => rustls::ServerConfig::builder(),
-            "tls12" => {
-                rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS12])
-            }
-            _ => {
-                return Err(PyValueError::new_err(
-                    "tls_version must be 'default' or 'tls12'",
-                ));
-            }
+        if tls12_only {
+            rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS12])
+        } else {
+            rustls::ServerConfig::builder()
         }
     };
     let mut tcp_tls = tcp_builder
