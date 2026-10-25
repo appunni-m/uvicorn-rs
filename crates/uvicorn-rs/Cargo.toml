@@ -13,6 +13,10 @@ exclude = ["examples/native_core_contracts.rs"]
 [lib]
 name = "uvicorn_rs"
 
+[[example]]
+name = "native_core_contracts"
+required-features = ["http3"]
+
 [features]
 default = []
 http3 = ["dep:fastrand", "dep:futures", "dep:quinn", "dep:tokio-util", "futures-util/io"]

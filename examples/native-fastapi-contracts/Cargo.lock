@@ -10,7 +10,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
 name = "asgi-lifespan-protocol-rs"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "atomic-waker"
@@ -1353,7 +1353,7 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uvicorn-rs"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "asgi-lifespan-protocol-rs",
  "bytes",

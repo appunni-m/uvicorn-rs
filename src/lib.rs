@@ -5816,9 +5816,7 @@ async fn bind_tcp_listener(host: &str, port: u16, backlog: i32) -> std::io::Resu
         let bind_result = {
             #[cfg(coverage)]
             if coverage_fault_take(CoverageFaultPoint::ServerTcpSocketBindError) {
-                Err(std::io::Error::other(
-                    "coverage-injected TCP bind failure",
-                ))
+                Err(std::io::Error::other("coverage-injected TCP bind failure"))
             } else {
                 socket.bind(address)
             }

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "codex/**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -80,7 +80,7 @@ jobs:
           cargo check -p uvicorn-rs --lib --no-default-features --locked
           cargo check -p uvicorn-rs --lib --features http3 --locked
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
-            cargo check -p uvicorn-rs --all-targets --locked
+            cargo check -p uvicorn-rs --all-targets --features http3 --locked
           cargo check --manifest-path tools/http3-probe/Cargo.toml --bins --locked
       - name: Build Rust API documentation
         env:
@@ -110,7 +110,7 @@ jobs:
           mkdir -p target/native-contracts
           python3 scripts/select_native_contracts.py
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
-            cargo run -p uvicorn-rs --example native_core_contracts --locked -- \
+            cargo run -p uvicorn-rs --example native_core_contracts --features http3 --locked -- \
             target/native-contracts/normal-inputs.json 2>&1 | tee target/native-contracts/normal-run.log
       - name: Retain native normal-lane inputs, selection and outcomes
         if: always()
@@ -207,7 +207,7 @@ jobs:
           cargo check --lib --no-default-features --locked
           cargo check --lib --all-features --locked
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
-            cargo check -p uvicorn-rs --all-targets --locked
+            cargo check -p uvicorn-rs --all-targets --features http3 --locked
 
   python-package:
     name: Complete public parity on the installed normal wheel
