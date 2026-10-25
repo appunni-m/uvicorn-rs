@@ -462,6 +462,22 @@ def normalize_operation_comparison_observation(
     return normalized
 
 
+def required_observations_for_case(
+    case: dict[str, Any], operation: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply an input case's declared run_http requirements over operation defaults.
+
+    Keep offline evidence validation aligned with the live parity runner. Some
+    run_http inputs intentionally expect no response (for example, an invalid
+    default header), so the operation-wide success defaults do not apply to
+    those cases.
+    """
+    run_http = case.get("api", {}).get("run_http", {})
+    return run_http.get(
+        "required_observations", operation.get("required_observations", {})
+    )
+
+
 def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any]) -> None:
     exact_keys(row, {"case_id", "profile", "operation", "requirements", "verification", "fault", "status",
                      "oracle_observation", "target_observation", "server_exit_codes", "difference"},
@@ -494,7 +510,7 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
         )
         require(target_comparison == oracle_comparison,
                 f"live observations differ on declared comparison fields: {case['case_id']}")
-        for field, expected in operation.get("required_observations", {}).items():
+        for field, expected in required_observations_for_case(case, operation).items():
             require(target.get(field) == expected, f"required observation differs: {case['case_id']} ({field})")
         for field, expected in operation.get("target_requirements", {}).items():
             require(target.get(field) == expected, f"target requirement differs: {case['case_id']} ({field})")
