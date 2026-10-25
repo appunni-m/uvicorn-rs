@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@36",
+  "schema": "uvicorn-rs-parity/input@37",
   "cases": [
     {
       "case_id": "startup-empty-certificate.empty-certificate-startup-error",

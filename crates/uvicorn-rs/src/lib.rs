@@ -1151,6 +1151,16 @@ impl ServerErrorEvent<'_> {
     pub fn error(&self) -> &(dyn Error + Send + Sync + 'static) {
         self.error
     }
+
+    /// Returns whether the connection failed during TLS negotiation before
+    /// the HTTP protocol handler ran.
+    #[must_use]
+    pub fn is_tls_handshake_failure(&self) -> bool {
+        matches!(
+            self.error.downcast_ref::<ConnectionError>(),
+            Some(ConnectionError::Tls(_))
+        )
+    }
 }
 
 /// Server-level limits and optional lifecycle hooks for the HTTP service prototype.

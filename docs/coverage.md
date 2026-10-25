@@ -57,16 +57,31 @@ not exchange WebSocket frames or prove active-session ping suppression. These
 `target/` reports are local ignored artifacts, not published documentation
 attachments.
 
-The current 2026-10-25 working-tree inventory contains 1,030 cases: 791
-indexed ASGI inputs (470 oracle-parity and 321 target-only fault-contract
+The current 2026-10-26 working-tree inventory contains 1,040 cases: 801
+indexed ASGI inputs (480 oracle-parity and 321 target-only fault-contract
 cases) plus 239 native-core contracts. The three new Yawc adapter fault cases
 passed 1/1 each in a selected local coverage batch on macOS ARM64 / CPython
-3.12.13. Its report is
+3.12.13. Two additional Python API parity inputs compare successful loading of
+a traditional AES-256-CBC encrypted RSA key and the wrong-password failure;
+both passed against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. The parity
+receipt is `target/kata-progress/parity-traditional-key-current.json` (run
+`d8d3680a7144445891702d5694d2f08c`, 2/2, report SHA-256
+`5ac2a8d0051609964f20a4281c3498eb505e3f42e27489ac2a9448a85600e04b`, dirty
+source digest `e81ab997f0b1f8405bba9400028366681d8f73c977c7823783d71c5cc7fb3af4`).
+This selected parity receipt is not a coverage-gate result. The five selected
+TLS-key inputs also passed an updated local coverage batch after the
+traditional PEM end-marker fix: 3,672/12,680 regions and 2,685/9,401 lines
+covered. Its report is `target/kata-progress/coverage-encrypted-key-formats-fixed.json`
+(SHA-256 `7e38dadb2a0bb9eea00e86da5961a10e0bddfb64649c93c07d4324823233f1d5`,
+source SHA-256
+`6e611ec3893ec3ef8ef2c5f71f7e3ccf0e43d3562038b1c2f31bd865c73961e9`). This is
+selected-subset evidence and does not establish the full coverage gate. The
+separate Yawc coverage report is
 `target/kata-progress/coverage-yawc-adapter-faults-775489526/coverage-report.json`
 (SHA-256
 `6242f3b1a9e9d17e4cfb3987ac0a0cac67c21708a89ddc545528db2cfb65a0e2`; build ID
 `5c5da52e017315a2d58616df9c4356882a0b2f532cf3b7cf9de41fd3be4e5c26`). The
-source receipt hashes match the current Rust source files. Case attribution
+source receipt hashes match the Rust source files recorded by that report. Case attribution
 confirms the invalid-text conversion, invalid close-reason conversion, and
 unexpected-continuation error regions were reached. This is selected-case
 evidence only: the report is incomplete, with 8,011 uncovered regions and
@@ -74,6 +89,51 @@ evidence only: the report is incomplete, with 8,011 uncovered regions and
 no complete coverage report or three-repeat evidence for this source/input
 set. Earlier reports remain bound to earlier source and input identities and
 do not certify this expanded inventory.
+
+An earlier two-case client-auth run exercised only CA-backed required and
+optional authentication. It passed 2/2 and covered 44 of 75 regions in the
+then-current verifier; its report and Coverage-MCP query are historical. The
+statement that rootless client authentication was unexercised is superseded by
+the focused adapter batch below.
+
+The five-case batch covers a trusted client certificate with default TLS
+negotiation and forced TLS 1.2, optional anonymous clients with and without
+configured roots, and rejection of a presented client certificate when no
+trust roots are configured. All five passed against Uvicorn 0.54.0 on macOS
+15.7.7 ARM64 / CPython 3.12.13, with complete per-case attribution and zero
+case or infrastructure failures. The focused report is
+`target/kata-progress/coverage-mtls-verifier-adapter-20261026.json` (run
+`b3823fe0aff14ae8bd3e30f7921afc14`, report SHA-256
+`96251e88d25194fe527747b93d711451983208db3773f7ef767186cefe7ecb80`). Its
+selected-source coverage is 3,480/12,712 regions and 2,607/9,415 normalized
+lines; the coverage gate is incomplete. The instrumented export records one
+hit each for `ClientCertVerifierAdapter::verify_tls12_signature` and
+`ClientCertVerifierAdapter::verify_tls13_signature`. The report binds to dirty
+revision `489e65674f03c3a226c49387318a99be83c32936`, source digest
+`c994a889f9429f7a6b3014321cb6c8863d6c99d309ccce5f715d3da6d405b7c3`, and
+extension digest
+`a43a714a0af88181e8517ce530889ae92df0473430c58e8f4191d5ff8271343e`; it
+binds the pre-rustfmt working-tree source and input schema @36, before the
+format-only Rust change and input-schema marker migration to @37. It is selected
+evidence only, not a full coverage report, three-repeat result, or full
+Coverage-MCP review.
+
+A separate selected case exercises trusted client authentication through the
+module CLI with TLS 1.2 pinned. Its first attempt exposed a missing
+`ssl_version` local in the parity probe's CLI argument assembly; after fixing
+the probe, the case passed 1/1 with complete attribution and no infrastructure
+failure. The report is
+`target/kata-progress/coverage-mtls-tls12-module-cli-retry-20261026.json`
+(run `9d3c0e9a9e5f4fe4a442b7c53fce7f80`, report SHA-256
+`4f1b5c53ecdd71c62fcadf98209fa984388655f588d05e0007a805849a13705e`). It
+measured 3,458/12,711 regions and 2,578/9,415 lines, so the full gate remains
+incomplete. It binds to dirty revision
+`489e65674f03c3a226c49387318a99be83c32936`, source digest
+`bdc1b9ddf654172e2a226b463d165b74bb060cc56c75bd23bb4e898f49aa8c26`, and
+extension digest
+`c74c89acb61d6d8abd0f7803d55dc9a724d30839ecb4138a70b67d2f7e2b7b32`.
+This remains one selected case, not a full coverage report, three-repeat
+result, or full Coverage-MCP review.
 
 A later selected case, `python-api.run-websocket-zero-ping-interval-disables-keepalive`,
 opens a WebSocket through the Python API with a zero interval, waits 0.35

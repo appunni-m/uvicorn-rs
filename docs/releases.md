@@ -23,7 +23,7 @@ Use these state labels precisely:
 | PyPI | uvicorn-rs | Optional Python compatibility client for standard Python ASGI applications. It is not required by the Python-free Rust library. |
 | Documentation | README, MkDocs site, and docs.rs | Repository docs deploy through GitHub Pages; crate API docs are generated from published Cargo archives. |
 
-The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py` internally; that is not the PyPI distribution name. The package also retains its `uvicorn-rs-py` console alias. The exact compatibility scope is recorded in the [support matrix](support-matrix.md); these names do not imply full Uvicorn parity. The coordinated clean candidate version is 0.2.1: lifecycle version 0.2.0 is already occupied by a dirty-source archive, while the consolidated server crate and PyPI distribution have no published 0.2.1 version. A local Cargo-only 0.2.1 candidate now exists at clean commit `7754895262c7b1d7baa2e9595277a81607634d38`; its archives were reproduced with Cargo 1.85.0 and are recorded below. The candidate is not the exact-main workflow bundle. No PyPI wheel or sdist has been assembled, and neither 0.2.1 crate is published.
+The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py` internally; that is not the PyPI distribution name. The package also retains its `uvicorn-rs-py` console alias. The exact compatibility scope is recorded in the [support matrix](support-matrix.md); these names do not imply full Uvicorn parity. The coordinated candidate version is 0.2.1: lifecycle version 0.2.0 is already occupied by a dirty-source archive, while the consolidated server crate and PyPI distribution have no published 0.2.1 version. Local 0.2.1 Cargo archives were built from clean commit `7754895262c7b1d7baa2e9595277a81607634d38`; their hashes and limits are recorded below. These are not the exact-main workflow bundle. As of 2026-10-26, neither 0.2.1 crate nor the PyPI distribution is published.
 
 The historical 0.1.0 Cargo bootstrap is recorded below. The maintainer has removed the old `uvicorn-rs` release and is removing the standalone `uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` identities. A crates.io API check on 2026-10-25 returned HTTP 404 for all three names; this confirms they are not currently registry-resolvable, but does not establish that a new `uvicorn-rs` publication will be accepted. Recheck availability immediately before any Cargo release. The new `uvicorn-rs` package vendors the H3 protocol and Quinn adapter source behind `http3`; it does not depend on separate project-owned H3 crates. `asgi-lifespan-protocol-rs` is the current lifecycle-contract package. The Python adapter depends on `uvicorn-rs`; Rust-native frameworks can depend on `uvicorn-rs` without Python.
 
@@ -95,31 +95,90 @@ the current dirty worktree. That commit has no hosted candidate workflow
 result.
 The local `cargo publish` attempt for `asgi-lifespan-protocol-rs 0.2.1` was
 rejected with HTTP 403 because the configured token lacks publish permission;
-the version remains absent and no upload occurred. Do not retry until local
-Cargo credentials are refreshed. The PyPI wheel and sdist have not been built.
+the version remains absent and no upload occurred. On 2026-10-26, the maintainer
+reported that a replacement short-lived token is available. Cargo authentication
+had not been rechecked with that token, and no retry had occurred. At that
+update, the PyPI wheel and sdist had not been built; the later local build is
+recorded below.
 
-GitHub release-control audit (2026-10-25): the repository has an active
+### Current candidate state (2026-10-26)
+
+The checkout is on branch `codex/uvicorn-rs-consolidation` at commit
+`7811b2392b60cd8eadc8a951c1eff47d57ace2d6`. The checkout is dirty, has no
+release tag at `HEAD`, and is not the exact-main candidate bundle required by
+`release.yml`. The release audit therefore reports `dirty_worktree` as a
+blocking error. The local Cargo
+0.2.1 archives recorded above remain bound to commit
+`7754895262c7b1d7baa2e9595277a81607634d38` and do not represent this checkout.
+
+Local PyPI artifact check (2026-10-26): `uv build
+--out-dir target/kata-progress/release-candidate-20261026` built the sdist
+`uvicorn_rs-0.2.1.tar.gz` and the macOS ARM64 abi3 wheel
+`uvicorn_rs-0.2.1-cp39-abi3-macosx_11_0_arm64.whl` from the generated sdist.
+Both artifacts declare PyPI name `uvicorn-rs` and version 0.2.1. A fresh Python
+3.12 environment installed the wheel; `import uvicorn, uvicorn_rs._native` and
+the `uvicorn --version` command succeeded. SHA-256: sdist
+`15e3a43976a6e2035ba5901cecfd1dd87939a9da49ccb48103c35324b305a975`; macOS
+ARM64 wheel `410ba24bec274eb818fb4b49664a1334b78fc0df42291e732d3e4b92c51c517a`.
+These local artifacts were built from the dirty checkout and do not replace the
+exact-main, multi-platform candidate bundle or its clean-consumer receipts.
+
+Cargo packaging check (2026-10-26): `asgi-lifespan-protocol-rs 0.2.1` archived
+9 files from the local checkout. Packaging dependent `uvicorn-rs 0.2.1` stopped
+because the crates.io index still exposed only lifecycle version 0.2.0. Publish
+the lifecycle crate before packaging and publishing the server crate. Cargo's
+configured token has not been refreshed with the replacement `publish-new`
+token, so there has been no retry or upload.
+
+At the time of this update, hosted benchmark run
+[`40228012455`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455)
+was incomplete. Linux x86-64 and Linux ARM64 had passed the installed-binary
+parity gate and were running the category workloads. macOS ARM64 stopped before
+timing after an oracle-side timeout in
+`websocket-tls.text-round-trip-with-query-and-subprotocol` (468 cases passed,
+one infrastructure failure, one not run). The same selected case passed once
+locally on macOS, but this does not establish the hosted failure's cause or
+provide three-system benchmark evidence. On `main` commit
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`, unified coverage run
+[`39689988928`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
+reported 10,962/11,375 regions and 8,130/8,438 lines, below the 100% gate. No
+accepted independent Coverage-MCP receipt is bound to that exact source. No
+clean candidate artifact or consumer receipt is bound to the current branch
+commit. No Cargo or PyPI upload has occurred.
+
+Registry check (2026-10-26): crates.io returns HTTP 404 for `uvicorn-rs` and
+`uvicorn-rs 0.2.1`, and for `asgi-lifespan-protocol-rs 0.2.1`; PyPI returns
+HTTP 404 for `uvicorn-rs 0.2.1`. The lifecycle crate itself remains registry
+visible from its earlier release. A 404 does not prove that crates.io will
+accept a new package identity. Recheck the exact candidate version and package
+name immediately before publication.
+
+GitHub release-control audit (2026-10-26): the repository has an active
 [`Protect main` ruleset](https://github.com/appunni-m/uvicorn-rs/rules/25771026)
 (ID `25771026`) scoped to `refs/heads/main`. It blocks branch deletion and
 force-pushes, requires pull requests and ten named status checks, and grants no
 bypass. The ruleset requires zero approving reviews and does not require the
 branch to be up to date with its base, so those additional review/freshness
-protections are not enabled. No tag ruleset was found, and the classic
-protected-tags page had no entries; release-tag protection remains unverified.
+protections are not enabled. The active
+[`Protect version tags` ruleset](https://github.com/appunni-m/uvicorn-rs/settings/rules/25819488)
+(ID `25819488`) targets `refs/tags/v*`. It allows creating matching tags while
+blocking updates, deletion, and force-pushes; its bypass list is empty. GitHub
+Settings currently reports zero matching tags.
+The classic protected-tags page has no entries.
 
-GitHub's `pypi` environment was inspected in repository Settings on
-2026-10-25. Deployments are restricted to `main`; Required reviewers is enabled
-with `appunni-m` as the sole reviewer; Prevent self-review is disabled so the
-sole maintainer can approve a deployment; and the environment has no secrets
-or variables. Add a distinct eligible reviewer when another maintainer joins.
-The maintainer reports the pending PyPI Trusted Publisher tuple as project
+The `crates-io` and `pypi` GitHub environments were inspected in repository
+Settings on 2026-10-26. Both require `appunni-m` as reviewer, allow the sole
+maintainer to approve by disabling Prevent self-review, and restrict deployments
+to `main`. Administrator bypass is disabled, and neither environment has
+secrets or variables. Add a distinct eligible reviewer when another maintainer
+joins. The maintainer reports the PyPI Trusted Publisher tuple as project
 `uvicorn-rs`, repository `appunni-m/uvicorn-rs`, workflow `release.yml`, and
-environment `pypi`. These observations confirm configuration only. The local
+environment `pypi`; the pending publisher record has not been verified through
+a publication. crates.io Trusted Publishing setup remains unverified. The local
 Cargo archive hashes and standalone H3 archive consumer are verified, but the
 exact-main candidate workflow bundle, PyPI distributions, registry visibility
-and consumer checks, crates.io publisher setup, and the remaining release
-acceptance gates are outstanding. No release tag or PyPI package has been
-published.
+and consumer checks, and the remaining release acceptance gates are
+outstanding. No release tag or package publication has occurred.
 Registry check (2026-10-25): `asgi-lifespan-protocol-rs` 0.2.0 is visible with
 the checksum and dirty-source provenance recorded above. API lookups for
 `uvicorn-rs`, `uvicorn-rs-h3`, and `uvicorn-rs-h3-quinn` return HTTP 404. The

@@ -29,6 +29,10 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::task::{Context, Poll};
 
+use aes::cipher::{BlockModeDecrypt, KeyIvInit, block_padding::Pkcs7};
+use aes::{Aes128, Aes192, Aes256};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 #[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 use bytes::Buf;
 use bytes::Bytes;
@@ -52,6 +56,7 @@ use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 #[cfg(not(uvicorn_rs_native_transport))]
 use hyper_util::server::conn::auto;
+use md5::{Digest, Md5};
 #[cfg(coverage)]
 use pyo3::exceptions::PyMemoryError;
 use pyo3::exceptions::{PyOSError, PyRuntimeError, PyValueError};
@@ -81,6 +86,7 @@ use uvicorn_rs::{
     WebSocketCloseCode as CloseCode, WebSocketCloseFrame as CloseFrame,
     WebSocketMessage as Message, WebSocketSession,
 };
+use zeroize::{Zeroize, Zeroizing};
 
 // Simulate a dependency task unwinding only in the instrumented fault runner.
 // Production builds do not contain this function or its callers.
@@ -5384,16 +5390,19 @@ fn serve<'py>(
     let (tcp_tls, quic_config) = match (certfile, keyfile) {
         (None, None) => (None, None),
         (Some(certfile), Some(keyfile)) => {
-            let (tcp_tls, quic_config) = load_tls_configs(ServerTlsOptions {
-                certfile: &certfile,
-                keyfile: &keyfile,
-                http2_enabled,
-                ca_certs: ssl_ca_certs.as_deref(),
-                cert_reqs: ssl_cert_reqs,
-                tls12_only,
-                cipher_suites: ssl_cipher_suites.as_deref(),
-                key_password: ssl_keyfile_password.as_deref(),
-            })?;
+            let (tcp_tls, quic_config) = load_tls_configs(
+                py,
+                ServerTlsOptions {
+                    certfile: &certfile,
+                    keyfile: &keyfile,
+                    http2_enabled,
+                    ca_certs: ssl_ca_certs.as_deref(),
+                    cert_reqs: ssl_cert_reqs,
+                    tls12_only,
+                    cipher_suites: ssl_cipher_suites.as_deref(),
+                    key_password: ssl_keyfile_password.as_deref(),
+                },
+            )?;
             (Some(tcp_tls), Some(quic_config))
         }
         _ => {
@@ -5499,33 +5508,43 @@ fn serve<'py>(
 }
 
 #[derive(Debug)]
-struct EmptyRootsClientCertVerifier {
+struct ClientCertVerifierAdapter {
+    trusted_verifier: Option<Arc<dyn rustls::server::danger::ClientCertVerifier>>,
     mandatory: bool,
     supported_algs: rustls::crypto::WebPkiSupportedAlgorithms,
 }
 
-impl rustls::server::danger::ClientCertVerifier for EmptyRootsClientCertVerifier {
+impl rustls::server::danger::ClientCertVerifier for ClientCertVerifierAdapter {
     fn offer_client_auth(&self) -> bool {
-        true
+        self.trusted_verifier
+            .as_ref()
+            .is_none_or(|verifier| verifier.offer_client_auth())
     }
 
     fn client_auth_mandatory(&self) -> bool {
-        self.mandatory
+        self.trusted_verifier
+            .as_ref()
+            .map_or(self.mandatory, |verifier| verifier.client_auth_mandatory())
     }
 
     fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
-        &[]
+        self.trusted_verifier
+            .as_ref()
+            .map_or(&[], |verifier| verifier.root_hint_subjects())
     }
 
     fn verify_client_cert(
         &self,
-        _end_entity: &rustls::pki_types::CertificateDer<'_>,
-        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
-        _now: rustls::pki_types::UnixTime,
+        end_entity: &rustls::pki_types::CertificateDer<'_>,
+        intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        now: rustls::pki_types::UnixTime,
     ) -> Result<rustls::server::danger::ClientCertVerified, rustls::Error> {
-        Err(rustls::Error::InvalidCertificate(
-            rustls::CertificateError::UnknownIssuer,
-        ))
+        match &self.trusted_verifier {
+            Some(verifier) => verifier.verify_client_cert(end_entity, intermediates, now),
+            None => Err(rustls::Error::InvalidCertificate(
+                rustls::CertificateError::UnknownIssuer,
+            )),
+        }
     }
 
     fn verify_tls12_signature(
@@ -5587,25 +5606,27 @@ fn load_client_cert_verifier(
         return Ok(Arc::new(rustls::server::NoClientAuth));
     }
 
-    if roots.is_empty() {
-        let supported_algs = rustls::crypto::CryptoProvider::get_default()
-            .map(|provider| provider.signature_verification_algorithms)
-            .unwrap_or_else(|| {
-                rustls::crypto::ring::default_provider().signature_verification_algorithms
-            });
-        return Ok(Arc::new(EmptyRootsClientCertVerifier {
-            mandatory: cert_reqs == 2,
-            supported_algs,
-        }));
-    }
-
-    let mut builder = rustls::server::WebPkiClientVerifier::builder(Arc::new(roots));
-    if cert_reqs == 1 {
-        builder = builder.allow_unauthenticated();
-    }
-    builder
-        .build()
-        .map_err(|error| PyValueError::new_err(format!("invalid client CA configuration: {error}")))
+    let supported_algs = rustls::crypto::CryptoProvider::get_default()
+        .map(|provider| provider.signature_verification_algorithms)
+        .unwrap_or_else(|| {
+            rustls::crypto::ring::default_provider().signature_verification_algorithms
+        });
+    let trusted_verifier = if roots.is_empty() {
+        None
+    } else {
+        let mut builder = rustls::server::WebPkiClientVerifier::builder(Arc::new(roots));
+        if cert_reqs == 1 {
+            builder = builder.allow_unauthenticated();
+        }
+        Some(builder.build().map_err(|error| {
+            PyValueError::new_err(format!("invalid client CA configuration: {error}"))
+        })?)
+    };
+    Ok(Arc::new(ClientCertVerifierAdapter {
+        trusted_verifier,
+        mandatory: cert_reqs == 2,
+        supported_algs,
+    }))
 }
 
 fn decrypt_pkcs8_private_key(
@@ -5635,6 +5656,231 @@ fn decrypt_pkcs8_private_key(
     Ok(rustls::pki_types::PrivatePkcs8KeyDer::from(decrypted_key.as_bytes().to_vec()).into())
 }
 
+fn decrypt_encrypted_private_key(
+    pem_bytes: &[u8],
+    password: &str,
+) -> PyResult<rustls::pki_types::PrivateKeyDer<'static>> {
+    if let Some(key) = decrypt_traditional_encrypted_private_key(pem_bytes, password)? {
+        return Ok(key);
+    }
+    decrypt_pkcs8_private_key(pem_bytes, password)
+}
+
+fn decrypt_traditional_encrypted_private_key(
+    pem_bytes: &[u8],
+    password: &str,
+) -> PyResult<Option<rustls::pki_types::PrivateKeyDer<'static>>> {
+    let Ok(pem) = std::str::from_utf8(pem_bytes) else {
+        return Ok(None);
+    };
+    let mut lines = pem.lines();
+    let Some(begin_line) = lines.next().map(str::trim_end) else {
+        return Ok(None);
+    };
+    let Some(label) = begin_line
+        .strip_prefix("-----BEGIN ")
+        .and_then(|line| line.strip_suffix("-----"))
+    else {
+        return Ok(None);
+    };
+    let key_kind = match label {
+        "RSA PRIVATE KEY" => TraditionalPrivateKeyKind::Rsa,
+        "EC PRIVATE KEY" => TraditionalPrivateKeyKind::Ec,
+        _ => return Ok(None),
+    };
+
+    let mut encrypted = false;
+    let mut dek_info = None;
+    let mut in_body = false;
+    let end_marker = format!("-----END {label}-----");
+    let mut found_end_marker = false;
+    let mut encoded_body = Vec::with_capacity(pem_bytes.len());
+    for line in lines {
+        let line = line.trim_end_matches('\r');
+        if line.trim_end() == end_marker {
+            found_end_marker = true;
+            break;
+        }
+        if !in_body {
+            if line.is_empty() {
+                in_body = true;
+            } else if let Some(value) = line.strip_prefix("Proc-Type:") {
+                encrypted = value.trim() == "4,ENCRYPTED";
+                if !encrypted {
+                    return Err(PyValueError::new_err(
+                        "invalid traditional private-key PEM encryption header",
+                    ));
+                }
+            } else if let Some(value) = line.strip_prefix("DEK-Info:") {
+                dek_info = Some(value.trim());
+            }
+            continue;
+        }
+        for byte in line.bytes().filter(|byte| !byte.is_ascii_whitespace()) {
+            encoded_body.push(byte);
+        }
+    }
+    if !encrypted {
+        return Ok(None);
+    }
+    if !in_body {
+        return Err(PyValueError::new_err(
+            "traditional private-key PEM has no encrypted body",
+        ));
+    }
+    if !found_end_marker {
+        return Err(PyValueError::new_err(
+            "traditional private-key PEM has no matching end marker",
+        ));
+    }
+
+    let dek_info = dek_info.ok_or_else(|| {
+        PyValueError::new_err("traditional private-key PEM has no DEK-Info header")
+    })?;
+    let (cipher_name, encoded_iv) = dek_info
+        .split_once(',')
+        .ok_or_else(|| PyValueError::new_err("traditional private-key PEM has invalid DEK-Info"))?;
+    let iv = decode_hex(encoded_iv.as_bytes())?;
+    let (key_len, block_len) = match cipher_name {
+        "AES-128-CBC" => (16, 16),
+        "AES-192-CBC" => (24, 16),
+        "AES-256-CBC" => (32, 16),
+        _ => {
+            return Err(PyValueError::new_err(format!(
+                "unsupported traditional private-key PEM cipher {cipher_name}"
+            )));
+        }
+    };
+    if iv.len() != block_len {
+        return Err(PyValueError::new_err(
+            "traditional private-key PEM has an invalid IV length",
+        ));
+    }
+    let mut ciphertext = BASE64.decode(&encoded_body).map_err(|error| {
+        PyValueError::new_err(format!(
+            "invalid traditional encrypted private-key body: {error}"
+        ))
+    })?;
+    if ciphertext.is_empty() || ciphertext.len() % block_len != 0 {
+        return Err(PyValueError::new_err(
+            "traditional encrypted private-key body has an invalid length",
+        ));
+    }
+
+    // OpenSSL's legacy PEM format derives its AES key with EVP_BytesToKey
+    // using MD5 and the first eight IV bytes. Keep this compatibility-only
+    // derivation scoped to decrypting existing PEM keys.
+    let key = Zeroizing::new(legacy_pem_key(password.as_bytes(), &iv[..8], key_len));
+    let plaintext_len = match cipher_name {
+        "AES-128-CBC" => cbc::Decryptor::<Aes128>::new_from_slices(&key, &iv)
+            .map_err(|_| PyValueError::new_err("invalid AES key or IV length"))?
+            .decrypt_padded::<Pkcs7>(&mut ciphertext)
+            .map(|plaintext| plaintext.len())
+            .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
+        "AES-192-CBC" => cbc::Decryptor::<Aes192>::new_from_slices(&key, &iv)
+            .map_err(|_| PyValueError::new_err("invalid AES key or IV length"))?
+            .decrypt_padded::<Pkcs7>(&mut ciphertext)
+            .map(|plaintext| plaintext.len())
+            .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
+        "AES-256-CBC" => cbc::Decryptor::<Aes256>::new_from_slices(&key, &iv)
+            .map_err(|_| PyValueError::new_err("invalid AES key or IV length"))?
+            .decrypt_padded::<Pkcs7>(&mut ciphertext)
+            .map(|plaintext| plaintext.len())
+            .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
+        _ => {
+            return Err(PyValueError::new_err(format!(
+                "unsupported traditional private-key PEM cipher {cipher_name}"
+            )));
+        }
+    };
+    let private_key_der = ciphertext[..plaintext_len].to_vec();
+    ciphertext.zeroize();
+
+    let key = match key_kind {
+        TraditionalPrivateKeyKind::Rsa => rustls::pki_types::PrivateKeyDer::Pkcs1(
+            rustls::pki_types::PrivatePkcs1KeyDer::from(private_key_der),
+        ),
+        TraditionalPrivateKeyKind::Ec => rustls::pki_types::PrivateKeyDer::Sec1(
+            rustls::pki_types::PrivateSec1KeyDer::from(private_key_der),
+        ),
+    };
+    Ok(Some(key))
+}
+
+#[derive(Clone, Copy)]
+enum TraditionalPrivateKeyKind {
+    Rsa,
+    Ec,
+}
+
+fn legacy_pem_key(password: &[u8], salt: &[u8], key_len: usize) -> Vec<u8> {
+    let mut key = Vec::with_capacity(key_len);
+    let mut previous = Vec::new();
+    while key.len() < key_len {
+        let mut digest = Md5::new();
+        digest.update(&previous);
+        digest.update(password);
+        digest.update(salt);
+        let block = digest.finalize();
+        previous.clear();
+        previous.extend_from_slice(&block);
+        key.extend_from_slice(&block);
+    }
+    previous.zeroize();
+    key.truncate(key_len);
+    key
+}
+
+fn decode_hex(encoded: &[u8]) -> PyResult<Vec<u8>> {
+    if encoded.len() % 2 != 0 {
+        return Err(PyValueError::new_err("hexadecimal value has an odd length"));
+    }
+    let mut decoded = Vec::with_capacity(encoded.len() / 2);
+    for pair in encoded.chunks_exact(2) {
+        let high = hex_nibble(pair[0]).ok_or_else(|| {
+            PyValueError::new_err("hexadecimal value contains a non-hexadecimal byte")
+        })?;
+        let low = hex_nibble(pair[1]).ok_or_else(|| {
+            PyValueError::new_err("hexadecimal value contains a non-hexadecimal byte")
+        })?;
+        decoded.push((high << 4) | low);
+    }
+    Ok(decoded)
+}
+
+fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn python_ssl_keyfile_error(
+    py: Python<'_>,
+    certfile: &str,
+    keyfile: &str,
+    password: &str,
+    fallback: PyErr,
+) -> PyErr {
+    // Uvicorn delegates encrypted-key failures to CPython's ssl module. Reuse
+    // that failure only on the Rust decryption error path to preserve its
+    // public SSLError type and OpenSSL message; successful TLS setup stays in Rust.
+    let result = (|| -> PyResult<()> {
+        let ssl = PyModule::import(py, "ssl")?;
+        let protocol = ssl.getattr("PROTOCOL_TLS_SERVER")?;
+        let context = ssl.getattr("SSLContext")?.call1((protocol,))?;
+        context
+            .call_method1("load_cert_chain", (certfile, keyfile, password))
+            .map(drop)
+    })();
+    match result {
+        Err(error) => error,
+        Ok(()) => fallback,
+    }
+}
+
 struct ServerTlsOptions<'a> {
     certfile: &'a str,
     keyfile: &'a str,
@@ -5646,7 +5892,10 @@ struct ServerTlsOptions<'a> {
     key_password: Option<&'a str>,
 }
 
-fn load_tls_configs(options: ServerTlsOptions<'_>) -> PyResult<(TlsAcceptor, quinn::ServerConfig)> {
+fn load_tls_configs(
+    py: Python<'_>,
+    options: ServerTlsOptions<'_>,
+) -> PyResult<(TlsAcceptor, quinn::ServerConfig)> {
     let ServerTlsOptions {
         certfile,
         keyfile,
@@ -5676,7 +5925,11 @@ fn load_tls_configs(options: ServerTlsOptions<'_>) -> PyResult<(TlsAcceptor, qui
     {
         Ok(Some(key)) => key,
         Ok(None) => match key_password {
-            Some(password) => decrypt_pkcs8_private_key(&key_bytes, password)?,
+            Some(password) => {
+                decrypt_encrypted_private_key(&key_bytes, password).map_err(|error| {
+                    python_ssl_keyfile_error(py, certfile, keyfile, password, error)
+                })?
+            }
             None => {
                 return Err(PyValueError::new_err(
                     "private-key file contains no supported key",
@@ -5684,7 +5937,11 @@ fn load_tls_configs(options: ServerTlsOptions<'_>) -> PyResult<(TlsAcceptor, qui
             }
         },
         Err(error) => match key_password {
-            Some(password) => decrypt_pkcs8_private_key(&key_bytes, password)?,
+            Some(password) => {
+                decrypt_encrypted_private_key(&key_bytes, password).map_err(|error| {
+                    python_ssl_keyfile_error(py, certfile, keyfile, password, error)
+                })?
+            }
             None => {
                 return Err(PyValueError::new_err(format!(
                     "invalid private-key PEM: {error}"
@@ -6516,6 +6773,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             peer_read_half_close,
             error_observer: Some(Arc::new(|event| {
                 if event.phase() == uvicorn_rs::ServerErrorPhase::Connection
+                    && !event.is_tls_handshake_failure()
                     && !contains_invalid_default_header_error(event.error())
                 {
                     log_error(format_args!(

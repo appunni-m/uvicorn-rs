@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@36"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@37"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -2386,6 +2386,11 @@ def load_contract(
                     "uds",
                     "tls",
                     "ssl_keyfile_password",
+                    "ssl_keyfile_format",
+                    "ssl_ca_certs",
+                    "ssl_cert_reqs",
+                    "ssl_version",
+                    "client_tls",
                     "observe_unix_scope",
                     "host",
                     "fd",
@@ -2477,6 +2482,48 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}.api.run_http.ssl_keyfile_password must be a non-empty string and requires tls=true"
+                    )
+                if "ssl_keyfile_format" in run_http and (
+                    run_http["ssl_keyfile_format"] != "traditional-rsa-aes256"
+                    or not run_http.get("tls")
+                    or not run_http.get("ssl_keyfile_password")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_keyfile_format must be traditional-rsa-aes256 and requires tls=true with a password"
+                    )
+                if "ssl_ca_certs" in run_http and (
+                    run_http["ssl_ca_certs"] != "generated-ca"
+                    or not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca and requires tls=true"
+                    )
+                if "ssl_cert_reqs" in run_http and (
+                    type(run_http["ssl_cert_reqs"]) is not int
+                    or run_http["ssl_cert_reqs"] not in {0, 1, 2}
+                    or not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_cert_reqs must be 0, 1, or 2 and requires tls=true"
+                    )
+                if "ssl_version" in run_http and (
+                    type(run_http["ssl_version"]) is not int
+                    or run_http["ssl_version"] != ssl.PROTOCOL_TLSv1_2
+                    or not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_version must select TLS 1.2 and requires tls=true"
+                    )
+                if "client_tls" in run_http and type(run_http["client_tls"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.client_tls must be a boolean"
+                    )
+                if run_http.get("client_tls") and (
+                    not run_http.get("tls")
+                    or run_http.get("ssl_cert_reqs") not in {1, 2}
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.client_tls requires TLS and ssl_cert_reqs 1 or 2"
                     )
                 if "host" in run_http and (
                     not isinstance(run_http["host"], str)
@@ -11327,7 +11374,32 @@ def run_python_api_probe(
         environment["PYTHONPATH"] = os.pathsep.join(
             path for path in (coverage_site, target_source_path) if path
         )
+    probe_api = dict(case["api"])
     run_http = case["api"].get("run_http", {})
+    probe_run_http = dict(run_http)
+    temporary_tls_assets = None
+    if run_http.get("ssl_ca_certs") == "generated-ca" or run_http.get("client_tls"):
+        temporary_tls_assets = tempfile.TemporaryDirectory(
+            prefix="uvicorn-rs-python-api-tls-"
+        )
+        tls_directory = Path(temporary_tls_assets.name)
+        certificate, key, ca_certificate = make_certificate(tls_directory)
+        tls_assets = {
+            "server_certificate": str(certificate),
+            "server_key": str(key),
+            "ca_certificate": str(ca_certificate),
+        }
+        if run_http.get("client_tls"):
+            client_certificate, client_key = make_client_certificate(tls_directory)
+            tls_assets.update(
+                {
+                    "client_certificate": str(client_certificate),
+                    "client_key": str(client_key),
+                }
+            )
+        probe_run_http["_tls_assets"] = tls_assets
+    if "run_http" in probe_api:
+        probe_api["run_http"] = probe_run_http
     run_http_reload = case["api"].get("run_http_reload")
     for name, value in run_http.get("environment", {}).items():
         if name == "PYTHONPATH" and target_source_path is not None:
@@ -11360,7 +11432,7 @@ def run_python_api_probe(
     command = [
         str(python),
         str(ROOT / "tests/parity/python_api_probe.py"),
-        json.dumps(case["api"], sort_keys=True, separators=(",", ":")),
+        json.dumps(probe_api, sort_keys=True, separators=(",", ":")),
     ]
     probe_timeout = max(
         10,
@@ -11370,14 +11442,18 @@ def run_python_api_probe(
         if run_http_reload is not None
         else 10,
     )
-    completed = subprocess.run(
-        command,
-        cwd=ROOT,
-        env=environment,
-        capture_output=True,
-        timeout=probe_timeout,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            timeout=probe_timeout,
+            check=False,
+        )
+    finally:
+        if temporary_tls_assets is not None:
+            temporary_tls_assets.cleanup()
     if len(completed.stdout) > 4 * 1024 * 1024 or len(completed.stderr) > 4 * 1024 * 1024:
         raise ParityError(f"{case['case_id']}: Python API probe output exceeded the 4 MiB evidence bound")
     observation = {

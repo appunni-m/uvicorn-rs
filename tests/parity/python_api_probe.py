@@ -491,6 +491,9 @@ ssl_certfile = sys.argv[29] or None
 ssl_keyfile = sys.argv[30] or None
 host = sys.argv[31]
 ssl_keyfile_password = json.loads(sys.argv[32])
+ssl_ca_certs = sys.argv[33] or None
+ssl_cert_reqs = int(sys.argv[34])
+ssl_version = json.loads(sys.argv[35])
 proxy_headers = sys.argv[9] == "1"
 forwarded_allow_ips = json.loads(sys.argv[10])
 limit_concurrency = json.loads(sys.argv[11])
@@ -542,6 +545,12 @@ if ssl_certfile is not None:
     options["ssl_keyfile"] = ssl_keyfile
     if ssl_keyfile_password is not None:
         options["ssl_keyfile_password"] = ssl_keyfile_password
+if ssl_ca_certs is not None:
+    options["ssl_ca_certs"] = ssl_ca_certs
+if ssl_cert_reqs != 0:
+    options["ssl_cert_reqs"] = ssl_cert_reqs
+if ssl_version is not None:
+    options["ssl_version"] = ssl_version
 try:
     if invocation in {"config-server", "server-sockets"}:
         if invocation == "server-sockets":
@@ -563,13 +572,35 @@ except KeyboardInterrupt:
     bind_conflict_listener = None
     inherited_listeners = []
     tls_directory = Path(__file__).resolve().parents[1] / "native-core" / "tls"
-    tls_certificate = tls_directory / "localhost-cert.pem" if request.get("tls") else None
+    tls_assets = request.get("_tls_assets", {})
+    tls_certificate = (
+        Path(tls_assets["server_certificate"])
+        if request.get("tls") and "server_certificate" in tls_assets
+        else tls_directory / "localhost-cert.pem"
+        if request.get("tls")
+        else None
+    )
     key_filename = (
-        "localhost-key-pkcs8-encrypted.pem"
+        "localhost-key-rsa-aes256-encrypted.pem"
+        if request.get("ssl_keyfile_format") == "traditional-rsa-aes256"
+        else "localhost-key-pkcs8-encrypted.pem"
         if request.get("ssl_keyfile_password") is not None
         else "localhost-key.pem"
     )
-    tls_key = tls_directory / key_filename if request.get("tls") else None
+    tls_key = (
+        Path(tls_assets["server_key"])
+        if request.get("tls") and "server_key" in tls_assets
+        else tls_directory / key_filename
+        if request.get("tls")
+        else None
+    )
+    ssl_ca_certs = (
+        tls_assets.get("ca_certificate")
+        if request.get("ssl_ca_certs") == "generated-ca"
+        else request.get("ssl_ca_certs")
+    )
+    ssl_cert_reqs = request.get("ssl_cert_reqs", 0)
+    ssl_version = request.get("ssl_version")
     host = request.get("host", "127.0.0.1")
     address_family = socket.AF_INET6 if ":" in host else socket.AF_INET
     if request.get("fd", False):
@@ -636,6 +667,12 @@ except KeyboardInterrupt:
             )
             if request.get("ssl_keyfile_password") is not None:
                 command.extend(("--ssl-keyfile-password", request["ssl_keyfile_password"]))
+        if ssl_ca_certs is not None:
+            command.extend(("--ssl-ca-certs", str(ssl_ca_certs)))
+        if "ssl_cert_reqs" in request:
+            command.extend(("--ssl-cert-reqs", str(ssl_cert_reqs)))
+        if "ssl_version" in request:
+            command.extend(("--ssl-version", str(ssl_version)))
         if inherited_listeners:
             command.extend(("--fd", str(inherited_listeners[0].fileno())))
         if request.get("factory"):
@@ -711,6 +748,9 @@ except KeyboardInterrupt:
             str(tls_key) if tls_key is not None else "",
             host,
             json.dumps(request.get("ssl_keyfile_password")),
+            str(ssl_ca_certs) if ssl_ca_certs is not None else "",
+            str(ssl_cert_reqs),
+            json.dumps(request.get("ssl_version")),
         ]
 
     environment = subprocess_environment()
@@ -919,6 +959,28 @@ except KeyboardInterrupt:
         or os.environ.get("ASGI_PARITY_WORKER_STALL_ONCE") == "1"
         else 0.5
     )
+
+    def make_client_tls_context() -> ssl.SSLContext:
+        trust_anchor = ssl_ca_certs or tls_certificate
+        if trust_anchor is None:
+            raise RuntimeError("TLS client context is missing its trust anchor")
+        context = ssl.create_default_context(cafile=str(trust_anchor))
+        if request.get("ssl_version") == ssl.PROTOCOL_TLSv1_2:
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.maximum_version = ssl.TLSVersion.TLSv1_2
+        if request.get("client_tls"):
+            client_certificate = tls_assets.get("client_certificate")
+            client_key = tls_assets.get("client_key")
+            if client_certificate is None or client_key is None:
+                raise RuntimeError(
+                    "TLS client certificate input has no generated identity"
+                )
+            context.load_cert_chain(
+                certfile=client_certificate,
+                keyfile=client_key,
+            )
+        return context
+
     request_limit = None
     request_limit_jitter = 0
     limit_environment = request.get("environment", {})
@@ -944,14 +1006,14 @@ except KeyboardInterrupt:
                 if listener_responses[listener_index] is not None:
                     continue
                 if uds_path is not None and request.get("tls"):
-                    tls_context = ssl.create_default_context(cafile=str(tls_certificate))
+                    tls_context = make_client_tls_context()
                     connection = UnixHTTPSConnection(
                         uds_path, timeout=connection_timeout, context=tls_context
                     )
                 elif uds_path is not None:
                     connection = UnixHTTPConnection(uds_path, timeout=connection_timeout)
                 elif request.get("tls"):
-                    tls_context = ssl.create_default_context(cafile=str(tls_certificate))
+                    tls_context = make_client_tls_context()
                     connection = http.client.HTTPSConnection(
                         host,
                         listener_port,

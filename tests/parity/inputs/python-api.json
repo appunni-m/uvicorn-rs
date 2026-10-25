@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@36",
+  "schema": "uvicorn-rs-parity/input@37",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -1048,6 +1048,24 @@
           "invocation": "api",
           "root_path": "",
           "limit_concurrency": 1
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-zero-concurrency-rejects-request",
+      "profile": "python-api",
+      "operation": "python.api.run-http-concurrency",
+      "covers": ["python.api.run-http-concurrency"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-concurrency-zero?reason=limit",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "limit_concurrency": 0
         }
       }
     },
@@ -2149,6 +2167,233 @@
           "root_path": "",
           "tls": true,
           "ssl_keyfile_password": "uvicorn-rs-parity-key"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-uses-traditional-encrypted-rsa-key",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-wrong-traditional-rsa-key-password",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-wrong-password",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "incorrect-traditional-parity-password",
+          "ssl_keyfile_format": "traditional-rsa-aes256",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-wrong-pkcs8-keyfile-password",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-encrypted-pkcs8-key-wrong-password",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "incorrect-parity-password",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-requires-trusted-client-certificate",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-mtls-required-client",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "generated-ca",
+          "ssl_cert_reqs": 2,
+          "client_tls": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-requires-trusted-client-certificate-tls12",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-mtls-required-client-tls12",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "generated-ca",
+          "ssl_cert_reqs": 2,
+          "ssl_version": 5,
+          "client_tls": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-requires-trusted-client-certificate-tls12",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-mtls-module-cli-client-tls12",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "generated-ca",
+          "ssl_cert_reqs": 2,
+          "ssl_version": 5,
+          "client_tls": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-allows-anonymous-optional-client-certificate",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-mtls-optional-client",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "generated-ca",
+          "ssl_cert_reqs": 1,
+          "client_tls": false
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-allows-trusted-optional-client-certificate",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-mtls-optional-trusted-client",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "generated-ca",
+          "ssl_cert_reqs": 1,
+          "client_tls": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-allows-anonymous-optional-client-certificate-with-empty-roots",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-mtls-optional-empty-roots-anonymous",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_cert_reqs": 1,
+          "client_tls": false
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-untrusted-client-certificate-with-empty-roots",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-mtls-empty-roots-untrusted-client",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_cert_reqs": 2,
+          "client_tls": true,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": true,
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
         }
       }
     },

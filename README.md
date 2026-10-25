@@ -5,7 +5,7 @@ A Rust-first server for ASGI applications and Rust services.
 ## Project status
 
 The next coordinated candidate is version 0.2.1. Registry state checked on
-2026-10-25 is mixed. `asgi-lifespan-protocol-rs`
+2026-10-26 is mixed. `asgi-lifespan-protocol-rs`
 0.2.0 is visible on crates.io, but its archive records `dirty: true` for source
 commit `86e72e181d00feca1b4db7f30377d5d9d4345b83`, so it is not clean-source
 release evidence. Crates.io currently returns 404 for `uvicorn-rs` and the old
