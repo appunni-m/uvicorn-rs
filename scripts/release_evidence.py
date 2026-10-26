@@ -857,7 +857,7 @@ def record(args: argparse.Namespace) -> None:
     if args.platform == "linux-x86_64":
         build["native_crate_commands"] = [
             "cargo package -p asgi-lifespan-protocol-rs --no-verify --locked --offline",
-            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.asgi-lifespan-protocol-rs.path=\"crates/asgi-lifespan-protocol-rs\"'",
+            "cargo package -p uvicorn-rs --no-verify --locked",
             "copy target/native-package/package/*.crate to dist/",
         ]
         build["native_crate_consumer_check"] = crate_consumer_check

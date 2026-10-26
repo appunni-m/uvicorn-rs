@@ -481,8 +481,7 @@ jobs:
           cd target/release-candidate
           sha256sum --check --strict SHA256SUMS
           cd ../..
-          cargo package -p uvicorn-rs --no-verify --locked \
-            --config 'patch.crates-io.asgi-lifespan-protocol-rs.path="crates/asgi-lifespan-protocol-rs"'
+          cargo package -p uvicorn-rs --no-verify --locked
           cmp "target/package/uvicorn-rs-$RELEASE_VERSION.crate" \
             "target/release-candidate/packages/uvicorn-rs-$RELEASE_VERSION.crate"
       - name: Wait for the exact lifecycle crate in the crates.io index
@@ -554,9 +553,7 @@ jobs:
         # Candidate CI checked the packaged archive in a clean consumer. This
         # job repacks it and compares exact bytes before requesting OIDC; skip
         # repeating that build after the short-lived credential is available.
-        run: >-
-          cargo publish -p uvicorn-rs --no-verify --locked
-          --config 'patch.crates-io.asgi-lifespan-protocol-rs.path="crates/asgi-lifespan-protocol-rs"'
+        run: cargo publish -p uvicorn-rs --no-verify --locked
 
   publish-pypi:
     name: Publish uvicorn-rs to PyPI
