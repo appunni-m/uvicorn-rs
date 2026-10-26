@@ -5016,8 +5016,9 @@ def start_server(
                 ["--server", "uvicorn" if server_id == "uvicorn" else "uvicorn-rs"]
             )
             if server_id == "uvicorn-rs":
+                # Use Server.should_exit on both sides for this lifecycle case;
+                # task-cancellation behavior has separate programmatic cases.
                 command.append("--uvicorn-compat-api")
-                command.append("--cancel-serve-task")
         if profile_id in {"lifecycle-owned-loop", "lifecycle-owned-loop-eager"}:
             api_snapshot_path = events_path.with_suffix(".server-api-snapshot.json")
             api_snapshot_path.unlink(missing_ok=True)

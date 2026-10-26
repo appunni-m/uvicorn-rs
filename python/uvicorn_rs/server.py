@@ -2,8 +2,9 @@
 
 import asyncio
 import os
-import tempfile
 import sys
+import tempfile
+import threading
 
 from . import _bridge, _native
 
@@ -173,7 +174,7 @@ class Server:
         return await control.wait_started()
 
     async def wait_startup_failed(self):
-        """Wait for startup to finish and report a fatal lifespan failure."""
+        """Wait for startup to finish and report a Uvicorn startup-status failure."""
         control = self._control
         if control is None:
             return self.startup_failed
@@ -203,6 +204,9 @@ class Server:
                 prefix="uvrs-", dir="/tmp" if os.path.isdir("/tmp") else None
             )
             transfer_path = os.path.join(transfer_directory.name, "listener.sock")
+        listener_transfer_stopped = (
+            threading.Event() if transfer_path is not None else None
+        )
         control = _native.ServerControl(self._defer_startup_acceptance)
         self._control = control
         limit_concurrency = self.limit_concurrency
@@ -262,12 +266,21 @@ class Server:
                     self.websocket_enabled,
                 )
             )
+            if listener_transfer_stopped is not None:
+                native_task.add_done_callback(
+                    lambda _: listener_transfer_stopped.set()
+                )
             if transfer_path is not None:
                 await asyncio.to_thread(
-                    _bridge.send_listener_fds, transfer_path, self.sockets
+                    _bridge.send_listener_fds,
+                    transfer_path,
+                    self.sockets,
+                    listener_transfer_stopped,
                 )
             await asyncio.shield(native_task)
         except asyncio.CancelledError:
+            if listener_transfer_stopped is not None:
+                listener_transfer_stopped.set()
             control.shutdown()
             if native_task is not None:
                 await asyncio.shield(native_task)

@@ -15,8 +15,8 @@ error_logger = logging.getLogger("uvicorn.error")
 access_logger = logging.getLogger("uvicorn.access")
 
 
-def send_listener_fds(path, listeners):
-    """Transfer pre-bound TCP listeners to Rust during server startup."""
+def send_listener_fds(path, listeners, stop_event=None):
+    """Transfer pre-bound TCP listeners, stopping if Rust exits before bind."""
     if not hasattr(socket, "SCM_RIGHTS"):
         raise NotImplementedError("inherited TCP listeners require Unix descriptor passing")
     listeners = list(listeners)
@@ -40,6 +40,8 @@ def send_listener_fds(path, listeners):
             try:
                 control.connect(path)
             except (FileNotFoundError, ConnectionRefusedError):
+                if stop_event is not None and stop_event.is_set():
+                    return
                 if time.monotonic() >= deadline:
                     raise
                 time.sleep(0.01)

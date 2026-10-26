@@ -168,7 +168,11 @@ def main() -> None:
                 }
                 if key_password is not None:
                     options["ssl_keyfile_password"] = key_password
-                config = uvicorn.Config(app, **options)
+                # The native uvicorn_rs.Server API consumes ASGI3 callables
+                # directly. Pin the oracle to the same interface so this
+                # startup case measures listener failure rather than auto
+                # detection of the shared synchronous test wrapper.
+                config = uvicorn.Config(app, interface="asgi3", **options)
                 asyncio.run(uvicorn.Server(config).serve())
                 return
 

@@ -6776,7 +6776,15 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             return Ok(());
         }
         Err(error) => {
-            startup_signal.mark_failed();
+            // Uvicorn maps host/port bind failures to its startup exit status,
+            // but errors from an explicitly supplied listener or UDS escape
+            // as ordinary OSErrors. Keep those paths out of the fatal-startup
+            // signal so the Python compatibility layer preserves that split.
+            if options.fd_transfer_path.is_some() || options.uds.is_some() {
+                startup_signal.mark_stopped();
+            } else {
+                startup_signal.mark_failed();
+            }
             if let Some(lifespan) = lifespan.as_mut() {
                 if let Err(shutdown_error) = lifespan.shutdown().await {
                     log_error(format_args!(
