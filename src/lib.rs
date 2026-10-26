@@ -138,6 +138,14 @@ enum CoverageFaultPoint {
     HttpEmptyRequestChannelClosed,
     WebSocketAppTaskPanicBeforeHandshake,
     ServerQuicTlsConfigError,
+    PythonSslCaVerifierImport,
+    PythonSslCaVerifierProtocol,
+    PythonSslCaVerifierContext,
+    PythonSslCaVerifierCreateContext,
+    PythonSslCaVerifierVerifyMode,
+    PythonSslCaVerifierCreateVerifyMode,
+    PythonSslCaVerifierSetVerifyMode,
+    PythonSslCaVerifierRustParseError,
     NativeModuleWrapServeFunction,
     NativeRuntimeBuildError,
     ServerWebSocketTaskShutdownPanic,
@@ -461,6 +469,16 @@ impl CoverageFaultPoint {
                 "websocket.app-task.panic-before-handshake"
             }
             Self::ServerQuicTlsConfigError => "server.quic-tls.config-error",
+            Self::PythonSslCaVerifierImport => "python.ssl.ca-verifier.import",
+            Self::PythonSslCaVerifierProtocol => "python.ssl.ca-verifier.protocol",
+            Self::PythonSslCaVerifierContext => "python.ssl.ca-verifier.context",
+            Self::PythonSslCaVerifierCreateContext => "python.ssl.ca-verifier.create-context",
+            Self::PythonSslCaVerifierVerifyMode => "python.ssl.ca-verifier.verify-mode",
+            Self::PythonSslCaVerifierCreateVerifyMode => {
+                "python.ssl.ca-verifier.create-verify-mode"
+            }
+            Self::PythonSslCaVerifierSetVerifyMode => "python.ssl.ca-verifier.set-verify-mode",
+            Self::PythonSslCaVerifierRustParseError => "python.ssl.ca-verifier.rust-parse-error",
             Self::NativeModuleWrapServeFunction => "native.module.wrap-function.serve",
             Self::NativeRuntimeBuildError => "native.runtime.build.error",
             Self::ServerWebSocketTaskShutdownPanic => "server.websocket-task.shutdown-panic",
@@ -5660,14 +5678,51 @@ fn load_client_cert_verifier(
 
     let mut roots = rustls::RootCertStore::empty();
     if let Some(path) = ca_certs {
-        let file = std::fs::File::open(path).map_err(|error| {
-            PyOSError::new_err(format!("could not read CA certificates {path}: {error}"))
+        let ca_pem = std::fs::read(path).map_err(|error| {
+            let fallback =
+                PyOSError::new_err(format!("could not read CA certificates {path}: {error}"));
+            python_ssl_ca_certificates_error(py, path, cert_reqs, fallback)
         })?;
-        let certificates = rustls_pemfile::certs(&mut std::io::BufReader::new(file))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| {
-                PyValueError::new_err(format!("invalid CA certificate PEM: {error}"))
-            })?;
+        // OpenSSL accepts TRUSTED CERTIFICATE blocks when they contain a
+        // certificate without auxiliary trust data. Rustls uses the same DER
+        // certificate as a root, so normalize only the PEM labels before
+        // parsing; any auxiliary bytes remain subject to rustls validation.
+        let ca_pem = match std::str::from_utf8(&ca_pem) {
+            Ok(pem) => pem
+                .replace(
+                    "-----BEGIN TRUSTED CERTIFICATE-----",
+                    "-----BEGIN CERTIFICATE-----",
+                )
+                .replace(
+                    "-----END TRUSTED CERTIFICATE-----",
+                    "-----END CERTIFICATE-----",
+                )
+                .into_bytes(),
+            Err(_) => ca_pem,
+        };
+        let certificates = {
+            #[cfg(coverage)]
+            let result =
+                if coverage_fault_take(CoverageFaultPoint::PythonSslCaVerifierRustParseError) {
+                    Err(std::io::Error::other(
+                        "coverage-injected Rust CA parser failure",
+                    ))
+                } else {
+                    rustls_pemfile::certs(&mut std::io::BufReader::new(ca_pem.as_slice()))
+                        .collect::<Result<Vec<_>, _>>()
+                };
+            #[cfg(not(coverage))]
+            let result = rustls_pemfile::certs(&mut std::io::BufReader::new(ca_pem.as_slice()))
+                .collect::<Result<Vec<_>, _>>();
+            result.map_err(|error| {
+                python_ssl_ca_certificates_error(
+                    py,
+                    path,
+                    cert_reqs,
+                    PyValueError::new_err(format!("invalid CA certificate PEM: {error}")),
+                )
+            })?
+        };
         if certificates.is_empty() {
             return Err(python_ssl_ca_certificates_error(
                 py,
@@ -5971,11 +6026,44 @@ fn python_ssl_ca_certificates_error(
     // Uvicorn delegates CA-file validation to CPython's ssl module. Keep valid
     // CA loading in Rust, but reproduce its public error for invalid CA files.
     let result = (|| -> PyResult<()> {
-        let ssl = PyModule::import(py, "ssl")?;
-        let protocol = ssl.getattr("PROTOCOL_TLS_SERVER")?;
-        let context = ssl.getattr("SSLContext")?.call1((protocol,))?;
-        let verify_mode = ssl.getattr("VerifyMode")?.call1((cert_reqs,))?;
-        context.setattr("verify_mode", verify_mode)?;
+        macro_rules! coverage_ssl_result {
+            ($fault:ident, $operation:expr_2021) => {{
+                #[cfg(coverage)]
+                let result = if coverage_fault_take(CoverageFaultPoint::$fault) {
+                    Err(PyRuntimeError::new_err(format!(
+                        "coverage-injected Python SSL helper failure at {}",
+                        CoverageFaultPoint::$fault.as_str()
+                    )))
+                } else {
+                    $operation
+                };
+                #[cfg(not(coverage))]
+                let result = $operation;
+                result
+            }};
+        }
+
+        let ssl = coverage_ssl_result!(PythonSslCaVerifierImport, PyModule::import(py, "ssl"))?;
+        let protocol = coverage_ssl_result!(
+            PythonSslCaVerifierProtocol,
+            ssl.getattr("PROTOCOL_TLS_SERVER")
+        )?;
+        let context_type =
+            coverage_ssl_result!(PythonSslCaVerifierContext, ssl.getattr("SSLContext"))?;
+        let context = coverage_ssl_result!(
+            PythonSslCaVerifierCreateContext,
+            context_type.call1((protocol,))
+        )?;
+        let verify_mode_type =
+            coverage_ssl_result!(PythonSslCaVerifierVerifyMode, ssl.getattr("VerifyMode"))?;
+        let verify_mode = coverage_ssl_result!(
+            PythonSslCaVerifierCreateVerifyMode,
+            verify_mode_type.call1((cert_reqs,))
+        )?;
+        coverage_ssl_result!(
+            PythonSslCaVerifierSetVerifyMode,
+            context.setattr("verify_mode", verify_mode)
+        )?;
         context
             .call_method1("load_verify_locations", (ca_certs,))
             .map(drop)

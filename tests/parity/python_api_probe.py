@@ -624,8 +624,16 @@ except KeyboardInterrupt:
     ssl_ca_certs = (
         tls_assets.get("ca_certificate")
         if request.get("ssl_ca_certs") == "generated-ca"
+        else tls_assets.get("trusted_ca_certificate")
+        if request.get("ssl_ca_certs") == "trusted-ca"
         else tls_assets.get("empty_ca_certificate")
         if request.get("ssl_ca_certs") == "empty-ca"
+        else tls_assets["missing_ca_certificate"]
+        if request.get("ssl_ca_certs") == "missing-ca"
+        else tls_assets.get("directory_ca")
+        if request.get("ssl_ca_certs") == "directory-ca"
+        else tls_assets.get("malformed_ca_certificate")
+        if request.get("ssl_ca_certs") == "malformed-ca"
         else request.get("ssl_ca_certs")
     )
     ssl_cert_reqs = request.get("ssl_cert_reqs", 0)
@@ -990,12 +998,13 @@ except KeyboardInterrupt:
     )
 
     def make_client_tls_context() -> ssl.SSLContext:
-        # An empty CA file is an input for server-side startup rejection. Keep
-        # the probe's own TLS trust valid so a slow startup failure cannot be
-        # misreported as an error in the client context setup.
+        # Empty and missing CA files are inputs for server-side startup
+        # rejection. Keep the probe's own TLS trust valid so those startup
+        # failures cannot be misreported as client context setup errors.
         trust_anchor = (
             tls_certificate
-            if request.get("ssl_ca_certs") == "empty-ca"
+            if request.get("ssl_ca_certs")
+            in {"empty-ca", "missing-ca", "directory-ca", "malformed-ca"}
             else ssl_ca_certs or tls_certificate
         )
         if trust_anchor is None:

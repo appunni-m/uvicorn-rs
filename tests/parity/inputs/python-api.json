@@ -2484,6 +2484,364 @@
       }
     },
     {
+      "case_id": "python-api.config-server-rejects-missing-client-ca-file",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-missing-client-ca-file",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "missing-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-client-ca-directory",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-client-ca-directory",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "directory-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-malformed-client-ca-file",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-malformed-client-ca-file",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "malformed-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-accepts-trusted-client-ca-file",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-trusted-client-ca-file",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "trusted-ca",
+          "ssl_cert_reqs": 2,
+          "client_tls": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.ca-verifier-import-error-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.ca-verifier.import",
+        "contract": "python-ssl-ca-verifier-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-ca-verifier-import-error",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "malformed-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.ca-verifier-protocol-error-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.ca-verifier.protocol",
+        "contract": "python-ssl-ca-verifier-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-ca-verifier-protocol-error",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "malformed-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.ca-verifier-context-error-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.ca-verifier.context",
+        "contract": "python-ssl-ca-verifier-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-ca-verifier-context-error",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "malformed-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.ca-verifier-create-context-error-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.ca-verifier.create-context",
+        "contract": "python-ssl-ca-verifier-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-ca-verifier-create-context-error",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "malformed-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.ca-verifier-verify-mode-error-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.ca-verifier.verify-mode",
+        "contract": "python-ssl-ca-verifier-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-ca-verifier-verify-mode-error",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "malformed-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.ca-verifier-create-verify-mode-error-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.ca-verifier.create-verify-mode",
+        "contract": "python-ssl-ca-verifier-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-ca-verifier-create-verify-mode-error",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "malformed-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.ca-verifier-set-verify-mode-error-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.ca-verifier.set-verify-mode",
+        "contract": "python-ssl-ca-verifier-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-ca-verifier-set-verify-mode-error",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "malformed-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.ca-verifier-python-success-fallback-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.ca-verifier.rust-parse-error",
+        "contract": "python-ssl-ca-verifier-success-fallback-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-ca-verifier-python-success-fallback",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "generated-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
       "case_id": "python-api.config-server-ignores-empty-client-ca-path",
       "profile": "python-api",
       "operation": "python.api.run-http",

@@ -105,7 +105,7 @@ def identity_for(
         "startup-traditional-encrypted-private-key-invalid-body-base64": (
             b"-----BEGIN RSA PRIVATE KEY-----\n"
             b"Proc-Type: 4,ENCRYPTED\n"
-            b"DEK-Info: AES-256-CBC,0123456789ABCDEF0123456789ABCDEF\n\n"
+            b"DEK-Info: AES-256-CBC,0123456789abcdef0123456789abcdef\n\n"
             b"not-base64!\n"
             b"-----END RSA PRIVATE KEY-----\n"
         ),

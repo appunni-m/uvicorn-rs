@@ -99,6 +99,14 @@ THIRD_PARTY_SOURCE_SET = (
     "crates/uvicorn-rs/src/http3/h3_quinn.rs",
 )
 NATIVE_FAULT_CONTRACTS = {
+    "http1.keep-alive.active-request-drain": {
+        "operation": "native-http1-keepalive-active-request-drain",
+        "scenario": "two-active-requests",
+    },
+    "http1.keep-alive.deadline-channel-closed": {
+        "operation": "native-http1-keepalive-deadline-channel-closed",
+        "scenario": "deadline-channel-closed",
+    },
     "http1.upgrade.receiver-closed": {
         "contracts": [
             {
@@ -214,6 +222,10 @@ NATIVE_FAULT_CONTRACTS = {
                 "scenario": "multi-listener-accept-error",
             },
         ],
+    },
+    "server.listener.unexpected-clean-exit": {
+        "operation": "native-tcp-multi-listener-clean-exit",
+        "scenario": "unexpected-clean-exit",
     },
     "server.listener.admission-closed": {
         "operation": "native-server-listener-admission-closed",

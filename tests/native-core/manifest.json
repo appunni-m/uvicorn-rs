@@ -131,6 +131,34 @@
       ]
     },
     {
+      "id": "fault.unix.http1.peer-read-error-completes-connection",
+      "protocol": "native-core",
+      "operation": "native-http1-peer-read-error-response-cancel",
+      "scenario": "failure-after-data",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http1.peer-read.failure-after-data"
+      },
+      "transport": "unix",
+      "method": "POST",
+      "path": "/upload-cancel",
+      "partial_body": "partial",
+      "declared_content_length": 1048576,
+      "expected_received_bytes": 7,
+      "expected_body_errors": 1,
+      "expected_dropped_tasks": 1,
+      "injected_peer_read_failure": true,
+      "expected_error_response_status": 500,
+      "expected_error_response_body": "",
+      "state_path": "/upload-cancel-state",
+      "recovery_path": "/ready",
+      "recovery_status": 200,
+      "recovery_body": "ready\n",
+      "covers": [
+        "http.request-upload"
+      ]
+    },
+    {
       "id": "fault.http1.peer-read-activity-watch-outcomes",
       "protocol": "native-core",
       "operation": "native-http1-peer-read-activity-watch-outcomes",
@@ -498,6 +526,35 @@
       "refresh_after_ms": 40
     },
     {
+      "id": "http1.first-request-after-idle-longer-than-keep-alive-timeout",
+      "protocol": "native-core",
+      "operation": "native-http1-connection-slot-reuse",
+      "path": "/ready",
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "blocked_ms": 50,
+      "reconnect_requests": 1,
+      "http1_keep_alive_timeout_ms": 300,
+      "initial_idle_ms": 350,
+      "covers": [
+        "http.keepalive-sequence"
+      ]
+    },
+    {
+      "id": "http1.max-connections-one-releases-slot-after-unrefreshed-keep-alive-timeout",
+      "protocol": "native-core",
+      "operation": "native-http1-connection-slot-reuse",
+      "path": "/ready",
+      "expected_status": 200,
+      "expected_body": "ready\n",
+      "blocked_ms": 50,
+      "reconnect_requests": 1,
+      "http1_keep_alive_timeout_ms": 300,
+      "covers": [
+        "http.keepalive-sequence"
+      ]
+    },
+    {
       "id": "http1.completed-connection-reaped-while-sibling-request-is-held",
       "protocol": "native-core",
       "operation": "native-http1-connection-task-reaping",
@@ -579,6 +636,18 @@
       "server_wait_ms": 1000
     },
     {
+      "id": "http1.upgrade-registration-without-upgrade-expires-idle-connection",
+      "protocol": "native-core",
+      "operation": "native-http1-upgrade-session",
+      "scenario": "keep-alive-expiry",
+      "path": "/upgrade-session-not-accepted",
+      "expected_status": 200,
+      "expected_response_body": "upgrade was not accepted\n",
+      "expected_session_error": "no upgrade available",
+      "http1_keep_alive_timeout_ms": 500,
+      "server_wait_ms": 2000
+    },
+    {
       "id": "http1.upgrade-session-handler-error-is-observed",
       "protocol": "native-core",
       "operation": "native-http1-upgrade-session",
@@ -633,6 +702,26 @@
       "expected_response_body": "registration deferred\n",
       "expected_registration_error": "HTTP connection ended before upgrade registration",
       "server_wait_ms": 1000
+    },
+    {
+      "id": "fault.http1.keep-alive.deadline-channel-closed",
+      "protocol": "native-core",
+      "operation": "native-http1-keepalive-deadline-channel-closed",
+      "scenario": "deadline-channel-closed",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http1.keep-alive.deadline-channel-closed"
+      }
+    },
+    {
+      "id": "fault.http1.keep-alive.active-request-drain",
+      "protocol": "native-core",
+      "operation": "native-http1-keepalive-active-request-drain",
+      "scenario": "two-active-requests",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http1.keep-alive.active-request-drain"
+      }
     },
     {
       "id": "fault.http1.upgrade-receiver-closed-keeps-service-healthy",
@@ -2632,6 +2721,16 @@
         "point": "server.listener.accept-error"
       },
       "expected_error": "could not accept a connection: injected listener accept failure"
+    },
+    {
+      "id": "fault.server.multi-listener.unexpected-clean-exit",
+      "protocol": "native-core",
+      "operation": "native-tcp-multi-listener-clean-exit",
+      "scenario": "unexpected-clean-exit",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.listener.unexpected-clean-exit"
+      }
     },
     {
       "id": "fault.server.unix-listener.accept-error",

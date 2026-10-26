@@ -3015,8 +3015,11 @@ async fn main() -> ProbeResult<()> {
                 | "http3-graceful-timeout-abort"
                 | "native-server-graceful-deadline-overflow"
                 | "native-http1-concurrency-limit-observer-panic"
+                | "native-http1-keepalive-deadline-channel-closed"
+                | "native-http1-keepalive-active-request-drain"
                 | "native-server-listener-accept-error"
                 | "native-tcp-multi-listener-accept-error"
+                | "native-tcp-multi-listener-clean-exit"
                 | "native-server-listener-admission-closed"
                 | "native-server-http3-admission-closed"
                 | "native-tcp-multi-listener-drain"
@@ -3087,12 +3090,18 @@ async fn main() -> ProbeResult<()> {
                 run_request_lifetime_body_missing_guard_case(case).await?;
             } else if operation == "native-http1-concurrency-limit-observer-panic" {
                 run_isolated_http1_concurrency_limit_observer_panic_case(case).await?;
+            } else if operation == "native-http1-keepalive-deadline-channel-closed" {
+                run_isolated_http1_keepalive_deadline_channel_closed_case(case).await?;
+            } else if operation == "native-http1-keepalive-active-request-drain" {
+                run_isolated_http1_keepalive_active_request_drain_case(case).await?;
             } else if operation == "native-server-graceful-deadline-overflow" {
                 run_isolated_graceful_deadline_overflow_case(case).await?;
             } else if operation == "native-server-listener-accept-error" {
                 run_isolated_listener_accept_error_case(case).await?;
             } else if operation == "native-tcp-multi-listener-accept-error" {
                 run_isolated_multi_listener_accept_error_case(case).await?;
+            } else if operation == "native-tcp-multi-listener-clean-exit" {
+                run_isolated_multi_listener_clean_exit_case(case).await?;
             } else if operation == "native-server-listener-admission-closed" {
                 run_isolated_listener_admission_closed_case(case).await?;
             } else if operation == "native-server-http3-admission-closed" {
@@ -3195,7 +3204,17 @@ async fn main() -> ProbeResult<()> {
                 "native-http1-proactive-upload-reset"
                     | "native-http1-peer-read-error-response-cancel"
             ) {
-                run_isolated_proactive_upload_reset_case(case).await?;
+                if case.get("transport").and_then(Value::as_str) == Some("unix") {
+                    #[cfg(all(coverage, unix))]
+                    run_isolated_unix_peer_read_error_case(case).await?;
+                    #[cfg(not(all(coverage, unix)))]
+                    return Err(io::Error::other(
+                        "Unix peer-read failure contract requires a Unix coverage build",
+                    )
+                    .into());
+                } else {
+                    run_isolated_proactive_upload_reset_case(case).await?;
+                }
             } else if operation == "native-http1-peer-read-activity-watch-outcomes" {
                 #[cfg(coverage)]
                 {
@@ -3561,6 +3580,23 @@ async fn run_isolated_http1_connection_slot_reuse_case(case: &Value) -> ProbeRes
     let workflow = async {
         let path = required_str(case, "path")?;
         let mut first = TcpStream::connect(address).await?;
+        if let Some(initial_idle_ms) = case.get("initial_idle_ms") {
+            let initial_idle_ms = initial_idle_ms.as_u64().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "initial_idle_ms must be an unsigned integer",
+                )
+            })?;
+            let initial_idle = Duration::from_millis(initial_idle_ms);
+            if http1_keep_alive_timeout.is_some_and(|timeout| initial_idle <= timeout) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "initial_idle_ms must exceed the keep-alive timeout",
+                )
+                .into());
+            }
+            tokio::time::sleep(initial_idle).await;
+        }
         let first_request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n");
         first.write_all(first_request.as_bytes()).await?;
 
@@ -3592,46 +3628,48 @@ async fn run_isolated_http1_connection_slot_reuse_case(case: &Value) -> ProbeRes
         }
 
         if let Some(idle_timeout) = http1_keep_alive_timeout {
-            let refresh_after_ms = case["refresh_after_ms"].as_u64().ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidData, "refresh_after_ms is missing")
-            })?;
-            let refresh_after = Duration::from_millis(refresh_after_ms);
-            if refresh_after >= idle_timeout {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "refresh_after_ms must be shorter than the keep-alive timeout",
-                )
-                .into());
-            }
-            tokio::time::sleep(refresh_after).await;
+            if case.get("refresh_after_ms").is_some() {
+                let refresh_after_ms = case["refresh_after_ms"].as_u64().ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "refresh_after_ms must be an unsigned integer")
+                })?;
+                let refresh_after = Duration::from_millis(refresh_after_ms);
+                if refresh_after >= idle_timeout {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "refresh_after_ms must be shorter than the keep-alive timeout",
+                    )
+                    .into());
+                }
+                tokio::time::sleep(refresh_after).await;
 
-            let refreshed_request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n");
-            first.write_all(refreshed_request.as_bytes()).await?;
-            let (refreshed_status, refreshed_headers) = tokio::time::timeout(
-                Duration::from_secs(2),
-                read_response_head(&mut first),
-            )
-            .await
-            .map_err(|_| {
-                io::Error::new(io::ErrorKind::TimedOut, "refreshed keep-alive response timed out")
-            })??;
-            let (refreshed_body, refreshed_complete) = tokio::time::timeout(
-                Duration::from_secs(2),
-                read_response_body(&mut first, &refreshed_headers),
-            )
-            .await
-            .map_err(|_| {
-                io::Error::new(io::ErrorKind::TimedOut, "refreshed keep-alive body timed out")
-            })??;
-            if refreshed_status != expected_status
-                || refreshed_body != expected_body.as_bytes()
-                || !refreshed_complete
-            {
-                return Err(io::Error::other(format!(
-                    "{}: keep-alive timeout refresh returned an unexpected response",
-                    required_str(case, "id")?
-                ))
-                .into());
+                let refreshed_request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                first.write_all(refreshed_request.as_bytes()).await?;
+                let (refreshed_status, refreshed_headers) = tokio::time::timeout(
+                    Duration::from_secs(2),
+                    read_response_head(&mut first),
+                )
+                .await
+                .map_err(|_| {
+                    io::Error::new(io::ErrorKind::TimedOut, "refreshed keep-alive response timed out")
+                })??;
+                let (refreshed_body, refreshed_complete) = tokio::time::timeout(
+                    Duration::from_secs(2),
+                    read_response_body(&mut first, &refreshed_headers),
+                )
+                .await
+                .map_err(|_| {
+                    io::Error::new(io::ErrorKind::TimedOut, "refreshed keep-alive body timed out")
+                })??;
+                if refreshed_status != expected_status
+                    || refreshed_body != expected_body.as_bytes()
+                    || !refreshed_complete
+                {
+                    return Err(io::Error::other(format!(
+                        "{}: keep-alive timeout refresh returned an unexpected response",
+                        required_str(case, "id")?
+                    ))
+                    .into());
+                }
             }
         }
 
@@ -4412,6 +4450,17 @@ async fn run_isolated_http1_service_panic_recovery_case(case: &Value) -> ProbeRe
 
 async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()> {
     let scenario = required_str(case, "scenario")?;
+    let http1_keep_alive_timeout = case
+        .get("http1_keep_alive_timeout_ms")
+        .map(|value| {
+            value.as_u64().map(Duration::from_millis).ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "http1_keep_alive_timeout_ms must be an unsigned integer",
+                )
+            })
+        })
+        .transpose()?;
     let fault_point = case
         .get("fault")
         .and_then(|fault| fault.get("point"))
@@ -4479,6 +4528,7 @@ async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()
     });
     let mut server_config = uvicorn_rs::ServerConfig {
         graceful_shutdown_timeout: Some(Duration::from_millis(500)),
+        http1_keep_alive_timeout,
         ..uvicorn_rs::ServerConfig::default()
     };
     server_config.error_observer = Some(error_observer);
@@ -4501,6 +4551,9 @@ async fn run_isolated_http1_upgrade_session_case(case: &Value) -> ProbeResult<()
             "session-handler-panic" => run_http1_upgrade_panic_case(address, case).await,
             "upgrade-not-available" => {
                 run_http1_upgrade_error_case(address, case, &observed_errors, false).await
+            }
+            "keep-alive-expiry" => {
+                run_http1_keep_alive_timeout_upgrade_case(address, case, &observed_errors).await
             }
             "registration-after-close" => {
                 run_http1_upgrade_registration_after_close_case(
@@ -4767,6 +4820,106 @@ async fn run_http1_upgrade_error_case(
             ))
             .into());
         }
+    }
+
+    verify_http1_upgrade_listener_recovers(address, case).await
+}
+
+async fn run_http1_keep_alive_timeout_upgrade_case(
+    address: SocketAddr,
+    case: &Value,
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+) -> ProbeResult<()> {
+    let keep_alive_timeout_ms = case["http1_keep_alive_timeout_ms"]
+        .as_u64()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "http1_keep_alive_timeout_ms is required for keep-alive expiry",
+            )
+        })?;
+    let mut client =
+        tokio::time::timeout(Duration::from_secs(2), TcpStream::connect(address)).await??;
+    let request = format!(
+        "GET {} HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n",
+        required_str(case, "path")?
+    );
+    client.write_all(request.as_bytes()).await?;
+    let (status, headers) =
+        tokio::time::timeout(Duration::from_secs(2), read_response_head(&mut client)).await??;
+    let expected_status = required_status(case, "expected_status")?;
+    if status != expected_status {
+        return Err(io::Error::other(format!(
+            "{}: expected status {expected_status}, got {status}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+    let (body, complete) = tokio::time::timeout(
+        Duration::from_secs(2),
+        read_response_body(&mut client, &headers),
+    )
+    .await??;
+    if !complete || body != required_str(case, "expected_response_body")?.as_bytes() {
+        return Err(io::Error::other(format!(
+            "{}: non-upgrade response body differed before keep-alive expiry",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    let mut probe = [0_u8; 1];
+    match tokio::time::timeout(
+        Duration::from_millis((keep_alive_timeout_ms / 4).max(1)),
+        client.read(&mut probe),
+    )
+    .await
+    {
+        Err(_) => {}
+        Ok(Ok(0)) => {
+            return Err(io::Error::other(
+                "HTTP/1 keep-alive connection closed before its configured timeout",
+            )
+            .into());
+        }
+        Ok(Ok(_)) => {
+            return Err(io::Error::other(
+                "HTTP/1 keep-alive connection produced unexpected bytes while idle",
+            )
+            .into());
+        }
+        Ok(Err(error)) => return Err(error.into()),
+    }
+
+    let mut trailing = Vec::new();
+    tokio::time::timeout(
+        Duration::from_millis(keep_alive_timeout_ms.saturating_add(2000)),
+        client.read_to_end(&mut trailing),
+    )
+    .await
+    .map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::TimedOut,
+            "keep-alive expiry did not close the connection",
+        )
+    })??;
+    if !trailing.is_empty() {
+        return Err(io::Error::other(format!(
+            "{}: server wrote unexpected bytes after the response: {:?}",
+            required_str(case, "id")?,
+            String::from_utf8_lossy(&trailing)
+        ))
+        .into());
+    }
+
+    let expected_error = required_str(case, "expected_session_error")?;
+    let observation = wait_for_http1_upgrade_error(observed_errors, expected_error).await?;
+    if observation.phase != ServerErrorPhase::Connection || observation.peer_addr.is_none() {
+        return Err(io::Error::other(format!(
+            "{}: expected a connection-phase upgrade error after keep-alive expiry, got {observation:?}",
+            required_str(case, "id")?
+        ))
+        .into());
     }
 
     verify_http1_upgrade_listener_recovers(address, case).await
@@ -8791,8 +8944,11 @@ async fn run_cases(
                 | "http3-graceful-timeout-abort"
                 | "native-server-graceful-deadline-overflow"
                 | "native-http1-concurrency-limit-observer-panic"
+                | "native-http1-keepalive-deadline-channel-closed"
+                | "native-http1-keepalive-active-request-drain"
                 | "native-server-listener-accept-error"
                 | "native-tcp-multi-listener-accept-error"
+                | "native-tcp-multi-listener-clean-exit"
                 | "native-server-listener-admission-closed"
                 | "native-server-http3-admission-closed"
                 | "native-tcp-multi-listener-drain"
@@ -12533,6 +12689,25 @@ async fn read_http1_case_response(
     Ok((status, body, complete))
 }
 
+#[cfg(all(coverage, unix))]
+async fn unix_http1_case_response(
+    socket_path: &std::path::Path,
+    method: &str,
+    path: &str,
+    body: &[u8],
+) -> ProbeResult<(u16, Vec<u8>, bool)> {
+    use tokio::net::UnixStream;
+
+    let mut stream = UnixStream::connect(socket_path).await?;
+    stream
+        .write_all(&http1_request_bytes(method, path, body, true))
+        .await?;
+    stream.flush().await?;
+    let (status, headers) = read_response_head(&mut stream).await?;
+    let (body, complete) = read_response_body(&mut stream, &headers).await?;
+    Ok((status, body, complete))
+}
+
 async fn run_http1_peer_read_half_close_case(
     address: SocketAddr,
     connector: Option<&TlsConnector>,
@@ -14687,6 +14862,172 @@ async fn run_isolated_proactive_upload_reset_case(case: &Value) -> ProbeResult<(
     }
 }
 
+#[cfg(all(coverage, unix))]
+async fn run_isolated_unix_peer_read_error_case(case: &Value) -> ProbeResult<()> {
+    use tokio::net::{UnixListener, UnixStream};
+
+    const FAULT_POINT: &str = "http1.peer-read.failure-after-data";
+    if required_str(case, "scenario")? != "failure-after-data"
+        || case
+            .get("fault")
+            .and_then(|fault| fault.get("point"))
+            .and_then(Value::as_str)
+            != Some(FAULT_POINT)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Unix peer-read failure fault metadata differs from its scenario",
+        )
+        .into());
+    }
+    if !uvicorn_rs::arm_http1_peer_read_failure_after_data_fault() {
+        return Err(io::Error::other("Unix peer-read failure fault did not arm").into());
+    }
+
+    static NEXT_SOCKET_ID: AtomicUsize = AtomicUsize::new(0);
+    let socket_path = std::env::temp_dir().join(format!(
+        "uvrs-peer-read-error-{}-{}.sock",
+        std::process::id(),
+        NEXT_SOCKET_ID.fetch_add(1, Ordering::Relaxed)
+    ));
+    match std::fs::remove_file(&socket_path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    let listener = UnixListener::bind(&socket_path)?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let server = tokio::spawn(uvicorn_rs::serve_unix(
+        listener,
+        contract_app(shutdown_sender.clone()),
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig {
+            peer_read_half_close: uvicorn_rs::PeerReadHalfCloseMode::Proactive,
+            graceful_shutdown_timeout: Some(Duration::from_secs(1)),
+            ..uvicorn_rs::ServerConfig::default()
+        },
+    ));
+
+    let workflow: ProbeResult<()> = async {
+        let mut upload = timeout(Duration::from_secs(2), UnixStream::connect(&socket_path))
+            .await??;
+        let partial_body = required_str(case, "partial_body")?.as_bytes();
+        let declared_length = required_u64(case, "declared_content_length")?;
+        if partial_body.is_empty() || partial_body.len() as u64 >= declared_length {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Unix peer-read failure requires a nonempty partial request body",
+            )
+            .into());
+        }
+        let headers = format!(
+            "{} {} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: {declared_length}\r\n\r\n",
+            required_str(case, "method")?,
+            required_str(case, "path")?
+        );
+        upload.write_all(headers.as_bytes()).await?;
+        upload.write_all(partial_body).await?;
+        upload.flush().await?;
+
+        let (status, headers) = timeout(Duration::from_secs(3), read_response_head(&mut upload))
+            .await??;
+        let (body, complete) = timeout(
+            Duration::from_secs(3),
+            read_response_body(&mut upload, &headers),
+        )
+        .await??;
+        if status != required_status(case, "expected_error_response_status")?
+            || body != required_str(case, "expected_error_response_body")?.as_bytes()
+            || !complete
+        {
+            return Err(io::Error::other(format!(
+                "{}: Unix upload error response differed (status={status}, complete={complete}, body={body:?})",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        drop(upload);
+
+        let (state_status, state, state_complete) = timeout(
+            Duration::from_secs(3),
+            unix_http1_case_response(
+                &socket_path,
+                "GET",
+                required_str(case, "state_path")?,
+                b"",
+            ),
+        )
+        .await??;
+        let expected_state = format!(
+            "bytes={};errors={};dropped={}\n",
+            required_u64(case, "expected_received_bytes")?,
+            required_u64(case, "expected_body_errors")?,
+            required_u64(case, "expected_dropped_tasks")?
+        );
+        if state_status != StatusCode::OK.as_u16()
+            || state != expected_state.as_bytes()
+            || !state_complete
+        {
+            return Err(io::Error::other(format!(
+                "{}: Unix peer-read state differed (status={state_status}, complete={state_complete}, state={:?})",
+                required_str(case, "id")?,
+                String::from_utf8_lossy(&state)
+            ))
+            .into());
+        }
+
+        let (status, body, complete) = timeout(
+            Duration::from_secs(3),
+            unix_http1_case_response(
+                &socket_path,
+                "GET",
+                required_str(case, "recovery_path")?,
+                b"",
+            ),
+        )
+        .await??;
+        if status != required_status(case, "recovery_status")?
+            || body != required_str(case, "recovery_body")?.as_bytes()
+            || !complete
+        {
+            return Err(io::Error::other(format!(
+                "{}: Unix listener did not recover after peer-read failure",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+        Ok(())
+    }
+    .await;
+
+    shutdown_sender.send_replace(true);
+    let server_result = timeout(Duration::from_secs(3), server).await;
+    let fault_consumed = uvicorn_rs::finish_http1_peer_read_failure_after_data_fault();
+    let _ = std::fs::remove_file(&socket_path);
+    if fault_consumed {
+        let mut output = io::stdout().lock();
+        writeln!(output, "FAULT_CONSUMED {FAULT_POINT}")?;
+        output.flush()?;
+    }
+    workflow?;
+    if !fault_consumed {
+        return Err(io::Error::other(format!(
+            "{FAULT_POINT} was not consumed by the Unix peer-read pump"
+        ))
+        .into());
+    }
+    match server_result {
+        Ok(Ok(Ok(()))) => Ok(()),
+        Ok(Ok(Err(error))) => Err(error.into()),
+        Ok(Err(error)) => Err(error.into()),
+        Err(_) => Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "isolated Unix peer-read failure server did not stop",
+        )
+        .into()),
+    }
+}
+
 fn verify_server_error_observation(
     case: &Value,
     observed_errors: &Mutex<Vec<ObservedServerError>>,
@@ -16728,6 +17069,71 @@ async fn run_isolated_http1_concurrency_limit_observer_panic_case(case: &Value) 
     run_http1_concurrency_limit_observer_variant(case, &default_header, false).await
 }
 
+async fn run_isolated_http1_keepalive_deadline_channel_closed_case(
+    case: &Value,
+) -> ProbeResult<()> {
+    const FAULT_POINT: &str = "http1.keep-alive.deadline-channel-closed";
+    if required_str(case, "scenario")? != "deadline-channel-closed"
+        || case
+            .get("fault")
+            .and_then(|fault| fault.get("point"))
+            .and_then(Value::as_str)
+            != Some(FAULT_POINT)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "keep-alive deadline channel fault metadata differs from its scenario",
+        )
+        .into());
+    }
+    #[cfg(coverage)]
+    let completed = uvicorn_rs::coverage_http1_keep_alive_timeout_closed_channel_completes().await;
+    #[cfg(not(coverage))]
+    let completed = false;
+    if !completed {
+        return Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "closed keep-alive deadline channels did not finish both timeout waiters",
+        )
+        .into());
+    }
+    let mut output = io::stdout().lock();
+    writeln!(output, "FAULT_CONSUMED {FAULT_POINT}")?;
+    output.flush()?;
+    Ok(())
+}
+
+async fn run_isolated_http1_keepalive_active_request_drain_case(case: &Value) -> ProbeResult<()> {
+    const FAULT_POINT: &str = "http1.keep-alive.active-request-drain";
+    if required_str(case, "scenario")? != "two-active-requests"
+        || case
+            .get("fault")
+            .and_then(|fault| fault.get("point"))
+            .and_then(Value::as_str)
+            != Some(FAULT_POINT)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "keep-alive active-request fault metadata differs from its scenario",
+        )
+        .into());
+    }
+    #[cfg(coverage)]
+    let safe = uvicorn_rs::coverage_http1_keep_alive_active_request_drain_is_safe();
+    #[cfg(not(coverage))]
+    let safe = false;
+    if !safe {
+        return Err(io::Error::other(
+            "keep-alive idle deadline changed before the last active request ended",
+        )
+        .into());
+    }
+    let mut output = io::stdout().lock();
+    writeln!(output, "FAULT_CONSUMED {FAULT_POINT}")?;
+    output.flush()?;
+    Ok(())
+}
+
 async fn run_http1_concurrency_limit_observer_variant(
     case: &Value,
     default_header: &(HeaderName, HeaderValue),
@@ -17031,6 +17437,93 @@ async fn run_isolated_multi_listener_accept_error_case(case: &Value) -> ProbeRes
     #[cfg(coverage)]
     if !uvicorn_rs::finish_listener_accept_fault() {
         return Err(io::Error::other("TCP listener accept fault was not consumed").into());
+    }
+    for address in [first_address, second_address] {
+        match tokio::time::timeout(Duration::from_millis(100), TcpStream::connect(address)).await {
+            Ok(Err(_)) => {}
+            Ok(Ok(stream)) => {
+                drop(stream);
+                return Err(io::Error::other(format!(
+                    "listener {address} still accepted connections after sibling shutdown"
+                ))
+                .into());
+            }
+            Err(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("listener {address} did not close after sibling shutdown"),
+                )
+                .into());
+            }
+        }
+    }
+    let mut output = io::stdout().lock();
+    writeln!(output, "FAULT_CONSUMED {FAULT_POINT}")?;
+    output.flush()?;
+    Ok(())
+}
+
+async fn run_isolated_multi_listener_clean_exit_case(case: &Value) -> ProbeResult<()> {
+    const FAULT_POINT: &str = "server.listener.unexpected-clean-exit";
+    if required_str(case, "scenario")? != "unexpected-clean-exit"
+        || case
+            .get("fault")
+            .and_then(|fault| fault.get("point"))
+            .and_then(Value::as_str)
+            != Some(FAULT_POINT)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "multi-listener clean-exit fault metadata differs from its scenario",
+        )
+        .into());
+    }
+    #[cfg(coverage)]
+    let fault_armed = uvicorn_rs::arm_listener_clean_exit_fault();
+    #[cfg(not(coverage))]
+    let fault_armed = false;
+    if !fault_armed {
+        return Err(io::Error::other(
+            "multi-listener clean-exit fault requires an instrumented coverage build",
+        )
+        .into());
+    }
+
+    let first_listener = TcpListener::bind("127.0.0.1:0").await?;
+    let first_address = first_listener.local_addr()?;
+    let second_listener = TcpListener::bind("127.0.0.1:0").await?;
+    let second_address = second_listener.local_addr()?;
+    let (shutdown_sender, shutdown_receiver) = watch::channel(false);
+    let application = contract_app(shutdown_sender.clone());
+    let server = tokio::spawn(uvicorn_rs::serve_tcp_listeners_with_date_header(
+        vec![
+            (first_listener, application.clone()),
+            (second_listener, application),
+        ],
+        shutdown_on_change(shutdown_receiver),
+        uvicorn_rs::ServerConfig::default(),
+        true,
+    ));
+    let result = tokio::time::timeout(Duration::from_secs(2), server)
+        .await
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::TimedOut,
+                "multi-listener server did not stop after a listener exited cleanly",
+            )
+        })??;
+    match result {
+        Ok(()) => {}
+        Err(error) => {
+            return Err(io::Error::other(format!(
+                "multi-listener clean-exit fault returned {error:?}"
+            ))
+            .into());
+        }
+    }
+    #[cfg(coverage)]
+    if !uvicorn_rs::finish_listener_clean_exit_fault() {
+        return Err(io::Error::other("TCP listener clean-exit fault was not consumed").into());
     }
     for address in [first_address, second_address] {
         match tokio::time::timeout(Duration::from_millis(100), TcpStream::connect(address)).await {

@@ -75,6 +75,42 @@ struct ValidatedWebSocketHandshake {
     offered_subprotocols: Vec<Vec<u8>>,
 }
 
+fn has_invalid_deflate_window_offer(headers: &HeaderMap) -> bool {
+    headers
+        .get_all(&SEC_WEBSOCKET_EXTENSIONS)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(','))
+        .any(|extension| {
+            let mut parameters = extension.split(';');
+            if !parameters
+                .next()
+                .is_some_and(|name| name.trim().eq_ignore_ascii_case("permessage-deflate"))
+            {
+                return false;
+            }
+
+            parameters.any(|parameter| {
+                let parameter = parameter.trim();
+                let (name, value) = parameter
+                    .split_once('=')
+                    .map_or((parameter, None), |(name, value)| {
+                        (name.trim(), Some(value.trim()))
+                    });
+                let is_client_window = name.eq_ignore_ascii_case("client_max_window_bits");
+                let is_server_window = name.eq_ignore_ascii_case("server_max_window_bits");
+                if !is_client_window && !is_server_window {
+                    return false;
+                }
+
+                match value {
+                    Some(value) => !matches!(value.parse::<u8>(), Ok(8..=15)),
+                    None => is_server_window,
+                }
+            })
+        })
+}
+
 fn validate_websocket_handshake(
     version: Version,
     method: &Method,
@@ -180,30 +216,31 @@ impl WebSocketUpgrade {
             request.headers(),
         )?;
 
-        let negotiated_extensions = if enabled {
-            let mut negotiation_request = Request::new(());
-            *negotiation_request.method_mut() = request.method().clone();
-            *negotiation_request.uri_mut() = request.uri().clone();
-            *negotiation_request.version_mut() = request.version();
-            *negotiation_request.headers_mut() = request.headers().clone();
-            let (response, unused_upgrade) = YawcHandshake::upgrade_with_options(
-                &mut negotiation_request,
-                yawc_options(
-                    WebSocketConfig::default()
-                        .max_message_size
-                        .unwrap_or(usize::MAX),
-                ),
-            )
-            .map_err(|_| {
-                WebSocketUpgradeError::InvalidHandshake(
-                    "the Sec-WebSocket-Extensions offer could not be negotiated",
+        let negotiated_extensions =
+            if enabled && !has_invalid_deflate_window_offer(request.headers()) {
+                let mut negotiation_request = Request::new(());
+                *negotiation_request.method_mut() = request.method().clone();
+                *negotiation_request.uri_mut() = request.uri().clone();
+                *negotiation_request.version_mut() = request.version();
+                *negotiation_request.headers_mut() = request.headers().clone();
+                let (response, unused_upgrade) = YawcHandshake::upgrade_with_options(
+                    &mut negotiation_request,
+                    yawc_options(
+                        WebSocketConfig::default()
+                            .max_message_size
+                            .unwrap_or(usize::MAX),
+                    ),
                 )
-            })?;
-            drop(unused_upgrade);
-            response.headers().get(&SEC_WEBSOCKET_EXTENSIONS).cloned()
-        } else {
-            None
-        };
+                .map_err(|_| {
+                    WebSocketUpgradeError::InvalidHandshake(
+                        "the Sec-WebSocket-Extensions offer could not be negotiated",
+                    )
+                })?;
+                drop(unused_upgrade);
+                response.headers().get(&SEC_WEBSOCKET_EXTENSIONS).cloned()
+            } else {
+                None
+            };
         let on_upgrade = upgrade::on(request);
 
         Ok(Self {
@@ -540,13 +577,13 @@ impl WebSocketSession {
         match &mut self.stream {
             WebSocketStreamKind::Tungstenite(stream) => match stream.next().await.transpose() {
                 Ok(message) => Ok(message),
-                Err(error @ TungsteniteError::Capacity(_)) => {
+                Err(TungsteniteError::Capacity(_)) => {
                     let close = WebSocketCloseFrame {
                         code: WebSocketCloseCode::Size,
                         reason: "message too big".into(),
                     };
-                    let _ = stream.close(Some(close)).await;
-                    Err(WebSocketError(error))
+                    let _ = stream.close(Some(close.clone())).await;
+                    Ok(Some(WebSocketMessage::Close(Some(close))))
                 }
                 Err(error) => Err(WebSocketError(error)),
             },
@@ -565,23 +602,15 @@ impl WebSocketSession {
                 let next_frame = stream.next_frame().await;
                 match next_frame {
                     Ok(frame) => yawc_frame_to_message(frame).map(Some),
-                    Err(error @ yawc::WebSocketError::FrameTooLarge) => {
-                        // Yawc queues the 1009 close frame when it detects an
-                        // oversized (possibly decompressed) message. Its read
-                        // path flushes that queued frame on the next poll.
-                        // Give a cooperative peer a bounded chance to reply so
-                        // the close is flushed before the session is dropped.
-                        let _ = tokio::time::timeout(std::time::Duration::from_secs(10), async {
-                            loop {
-                                match stream.next_frame().await {
-                                    Ok(frame) if frame.opcode() == YawcOpCode::Close => break,
-                                    Ok(_) => continue,
-                                    Err(_) => break,
-                                }
-                            }
-                        })
-                        .await;
-                        Err(yawc_error(error))
+                    Err(yawc::WebSocketError::FrameTooLarge) => {
+                        // Yawc queues a 1009 close and closes its read half;
+                        // one poll flushes the queued close before returning
+                        // ConnectionClosed. Preserve 1009 at the ASGI boundary.
+                        let _ = stream.next_frame().await;
+                        Ok(Some(WebSocketMessage::Close(Some(WebSocketCloseFrame {
+                            code: WebSocketCloseCode::Size,
+                            reason: "message too big".into(),
+                        }))))
                     }
                     Err(error) => Err(yawc_error(error)),
                 }

@@ -96,6 +96,33 @@
       }
     },
     {
+      "case_id": "websocket.compressed-size-limit-drains-peer-data-and-close",
+      "profile": "websocket",
+      "operation": "websocket.message-size-limit",
+      "covers": [
+        "websocket.message-size-limit"
+      ],
+      "server_options": {
+        "ws_max_size": 4
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          {
+            "kind": "text",
+            "value": "after-overflow"
+          }
+        ],
+        "send_only": true,
+        "expect_close": true
+      }
+    },
+    {
       "case_id": "websocket.scope-headers-path-query-and-subprotocols",
       "profile": "websocket",
       "operation": "websocket.scope-and-messages",
@@ -591,6 +618,26 @@
       }
     },
     {
+      "case_id": "websocket.invalid-permessage-deflate-offer-parity",
+      "profile": "websocket",
+      "operation": "websocket.invalid-extension-offer",
+      "covers": [
+        "websocket.invalid-extension-offer"
+      ],
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "disable_compression": true,
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate; client_max_window_bits=99"
+          ]
+        ]
+      }
+    },
+    {
       "case_id": "websocket.accepted-default-close",
       "profile": "websocket",
       "operation": "websocket.server-close",
@@ -748,6 +795,48 @@
           ]
         ],
         "raw_frame_base64": "gIABAgME",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.raw-oversize-message-reports-size-close",
+      "profile": "websocket",
+      "operation": "websocket.raw-size-limit-close",
+      "covers": [
+        "websocket.raw-size-limit-close"
+      ],
+      "server_options": {
+        "ws_max_size": 4
+      },
+      "websocket": {
+        "path": "/ws-wait-for-disconnect",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "raw_frame_base64": "gYYBAgMEMDAwMDQ0",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.raw-oversize-message-without-compression-reports-size-close",
+      "profile": "websocket",
+      "operation": "websocket.raw-size-limit-close-uncompressed",
+      "covers": [
+        "websocket.raw-size-limit-close-uncompressed"
+      ],
+      "server_options": {
+        "ws_max_size": 4
+      },
+      "websocket": {
+        "path": "/ws-wait-for-disconnect",
+        "subprotocols": [],
+        "messages": [],
+        "raw_frame_base64": "gYYBAgMEMDAwMDQ0",
         "followup_path": "/scope"
       }
     },

@@ -435,6 +435,8 @@ static GRACEFUL_SHUTDOWN_DEADLINE_OVERFLOW_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static LISTENER_ACCEPT_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
+static LISTENER_CLEAN_EXIT_FAULT: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
 static LISTENER_ADMISSION_CLOSED_FAULT: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static HTTP1_UPGRADE_RECEIVER_CLOSED_FAULT: AtomicU8 = AtomicU8::new(0);
@@ -926,6 +928,34 @@ pub fn finish_listener_accept_fault() -> bool {
 #[cfg(coverage)]
 fn take_listener_accept_fault() -> bool {
     LISTENER_ACCEPT_FAULT
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms a coverage-only fault that makes one TCP listener task exit cleanly.
+///
+/// This hook is compiled only for instrumented coverage builds and is absent
+/// from normal library builds.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_listener_clean_exit_fault() -> bool {
+    LISTENER_CLEAN_EXIT_FAULT
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only listener clean-exit fault.
+///
+/// Returns whether the armed fault made a listener task return successfully.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_listener_clean_exit_fault() -> bool {
+    LISTENER_CLEAN_EXIT_FAULT.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_listener_clean_exit_fault() -> bool {
+    LISTENER_CLEAN_EXIT_FAULT
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
 }
@@ -2830,7 +2860,7 @@ where
 
     let mut stop_requested = false;
     let mut first_error = None;
-    while !listener_tasks.is_empty() {
+    loop {
         tokio::select! {
             biased;
             _ = shutdown.as_mut(), if !stop_requested => {
@@ -2877,6 +2907,11 @@ where
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
+    #[cfg(coverage)]
+    if take_listener_clean_exit_fault() {
+        return Ok(());
+    }
+
     let connection_slots = Arc::clone(&admission.connection_slots);
     let request_concurrency = admission.request_concurrency.clone();
     let default_headers = Arc::clone(&admission.default_headers);
@@ -3279,6 +3314,63 @@ async fn wait_for_http1_keep_alive_timeout(deadline: &mut watch::Receiver<Option
     }
 }
 
+/// Verifies that keep-alive deadline waiters finish when their signal sender
+/// closes, whether no deadline is scheduled or one is active.
+///
+/// This helper is available only to instrumented coverage builds.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub async fn coverage_http1_keep_alive_timeout_closed_channel_completes() -> bool {
+    let (idle_sender, mut idle_deadline) = watch::channel(None);
+    drop(idle_sender);
+    if tokio::time::timeout(
+        Duration::from_millis(100),
+        wait_for_http1_keep_alive_timeout(&mut idle_deadline),
+    )
+    .await
+    .is_err()
+    {
+        return false;
+    }
+
+    let (scheduled_sender, mut scheduled_deadline) =
+        watch::channel(Some(Instant::now() + Duration::from_secs(10)));
+    drop(scheduled_sender);
+    tokio::time::timeout(
+        Duration::from_millis(100),
+        wait_for_http1_keep_alive_timeout(&mut scheduled_deadline),
+    )
+    .await
+    .is_ok()
+}
+
+/// Verifies that an idle deadline starts only after the last active request
+/// guard is dropped.
+///
+/// This helper is available only to instrumented coverage builds.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn coverage_http1_keep_alive_active_request_drain_is_safe() -> bool {
+    let (deadline, mut deadline_receiver) = watch::channel(None);
+    let active_requests = Arc::new(AtomicUsize::new(0));
+    let keep_alive = Arc::new(Http1KeepAlive {
+        deadline,
+        active_requests: Arc::clone(&active_requests),
+        timeout: Duration::from_secs(30),
+    });
+    let first = keep_alive.request_started();
+    let second = keep_alive.request_started();
+
+    drop(first);
+    let deadline_stays_unset = active_requests.load(Ordering::Acquire) == 1
+        && deadline_receiver.borrow_and_update().is_none();
+    drop(second);
+    let deadline_starts_after_last_request = active_requests.load(Ordering::Acquire) == 0
+        && deadline_receiver.borrow_and_update().is_some();
+
+    deadline_stays_unset && deadline_starts_after_last_request
+}
+
 async fn serve_connection<I, S, B>(
     stream: I,
     service: S,
@@ -3386,6 +3478,14 @@ where
         }
 
         tokio::select! {
+            biased;
+            _ = shutdown.changed(), if !shutdown_started => {
+                shutdown_started = true;
+                upgrade_shutdown_sender.send_replace(true);
+                if connection_result.is_none() {
+                    connection.as_mut().graceful_shutdown();
+                }
+            }
             result = &mut connection, if connection_result.is_none() => {
                 connection_result = Some(result.map_err(ConnectionError::Http));
                 upgrade_receiver.close();
@@ -3394,16 +3494,6 @@ where
                 }
                 upgrade_receiver_open = false;
             }
-            session = upgrade_receiver.recv(), if upgrade_receiver_open => match session {
-                Some(session) => {
-                    upgrade_sessions.spawn(session);
-                }
-                None => {
-                    #[cfg(coverage)]
-                    observe_http1_upgrade_receiver_closed_fault();
-                    upgrade_receiver_open = false;
-                }
-            },
             _ = wait_for_http1_keep_alive_timeout(&mut keep_alive_deadline_receiver), if keep_alive_timeout_enabled && connection_result.is_none() => {
                 connection_result = Some(Ok(()));
                 upgrade_receiver.close();
@@ -3425,13 +3515,16 @@ where
                     }
                 }
             }
-            _ = shutdown.changed(), if !shutdown_started => {
-                shutdown_started = true;
-                upgrade_shutdown_sender.send_replace(true);
-                if connection_result.is_none() {
-                    connection.as_mut().graceful_shutdown();
+            session = upgrade_receiver.recv(), if upgrade_receiver_open => match session {
+                Some(session) => {
+                    upgrade_sessions.spawn(session);
                 }
-            }
+                None => {
+                    #[cfg(coverage)]
+                    observe_http1_upgrade_receiver_closed_fault();
+                    upgrade_receiver_open = false;
+                }
+            },
         }
     }
 

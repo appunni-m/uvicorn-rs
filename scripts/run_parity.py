@@ -113,6 +113,14 @@ FAULT_POINTS = {
     "websocket.app-task.panic-before-handshake",
     "websocket.native-upgrade.extension-removed-after-dispatch",
     "server.quic-tls.config-error",
+    "python.ssl.ca-verifier.import",
+    "python.ssl.ca-verifier.protocol",
+    "python.ssl.ca-verifier.context",
+    "python.ssl.ca-verifier.create-context",
+    "python.ssl.ca-verifier.verify-mode",
+    "python.ssl.ca-verifier.create-verify-mode",
+    "python.ssl.ca-verifier.set-verify-mode",
+    "python.ssl.ca-verifier.rust-parse-error",
     "native.module.wrap-function.serve",
     "native.runtime.build.error",
     "server.websocket-task.shutdown-panic",
@@ -432,6 +440,8 @@ EAGER_REGISTRATION_CLEANUP_CONTRACTS = (
 )
 FAULT_CONTRACTS = {
     "asgi-spec-version-2.5",
+    "python-ssl-ca-verifier-error-propagates",
+    "python-ssl-ca-verifier-success-fallback-propagates",
     "http3-request-trailers-drained-as-body-only",
     "http-response-reset-cancels-deferred-task",
     "server-cancellation-schedule-error-bounded-shutdown",
@@ -520,6 +530,18 @@ FAULT_CONTRACTS = {
     "websocket-handshake-error-followup-200",
     "websocket-teardown-and-followup-200",
 }
+PYTHON_SSL_CA_VERIFIER_FAULT_POINTS = {
+    "python.ssl.ca-verifier.import",
+    "python.ssl.ca-verifier.protocol",
+    "python.ssl.ca-verifier.context",
+    "python.ssl.ca-verifier.create-context",
+    "python.ssl.ca-verifier.verify-mode",
+    "python.ssl.ca-verifier.create-verify-mode",
+    "python.ssl.ca-verifier.set-verify-mode",
+}
+PYTHON_SSL_CA_VERIFIER_RUST_PARSE_FAULT_POINT = (
+    "python.ssl.ca-verifier.rust-parse-error"
+)
 WEBSOCKET_FAULT_POINTS = {
     "asgi.event-type.websocket-send.eq",
     "asgi.event-type.websocket-close.eq",
@@ -2149,6 +2171,35 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: native connection write faults require a held response during graceful shutdown"
                     )
+            elif fault["contract"] == "python-ssl-ca-verifier-error-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"] not in PYTHON_SSL_CA_VERIFIER_FAULT_POINTS
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_ca_certs") != "malformed-ca"
+                    or run_http.get("ssl_cert_reqs") != 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: Python SSL CA helper faults require malformed-CA Config/Server startup"
+                    )
+            elif fault["contract"] == "python-ssl-ca-verifier-success-fallback-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"]
+                    != PYTHON_SSL_CA_VERIFIER_RUST_PARSE_FAULT_POINT
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_ca_certs") != "generated-ca"
+                    or run_http.get("ssl_cert_reqs") != 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: Rust CA parser faults require a generated-CA Config/Server startup case"
+                    )
             elif fault["contract"] == "websocket-server-shutdown-force-abort":
                 if (
                     case.get("profile") != "websocket"
@@ -2295,7 +2346,37 @@ def load_contract(
             if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 60:
                 raise ParityError(f"{case_id}: process timeout must be between 1 and 60 seconds")
         elif kind == "python-api" and "api" in case:
-            exact_case_keys(case, {"case_id", "profile", "operation", "covers", "api"}, case_id)
+            python_api_case_keys = {
+                "case_id", "profile", "operation", "covers", "api"
+            }
+            if case.get("verification") == "fault-contract":
+                python_api_case_keys.update({"verification", "fault"})
+            exact_case_keys(case, python_api_case_keys, case_id)
+            if case.get("verification") == "fault-contract":
+                fault = case["fault"]
+                run_http = case.get("api", {}).get("run_http", {})
+                helper_error_case = (
+                    fault["contract"] == "python-ssl-ca-verifier-error-propagates"
+                    and fault["point"] in PYTHON_SSL_CA_VERIFIER_FAULT_POINTS
+                    and run_http.get("ssl_ca_certs") == "malformed-ca"
+                )
+                fallback_error_case = (
+                    fault["contract"]
+                    == "python-ssl-ca-verifier-success-fallback-propagates"
+                    and fault["point"]
+                    == PYTHON_SSL_CA_VERIFIER_RUST_PARSE_FAULT_POINT
+                    and run_http.get("ssl_ca_certs") == "generated-ca"
+                )
+                if (
+                    case["operation"] != "python.api.run-http"
+                    or not (helper_error_case or fallback_error_case)
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_cert_reqs") != 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: Python SSL CA verifier faults require a malformed-CA Config/Server startup case"
+                    )
             readiness_operations = {
                 "python.api.server-readiness": "server_readiness",
                 "python.api.server-callback-notify": "server_callback_notify",
@@ -2503,11 +2584,20 @@ def load_contract(
                         f"{case_id}.api.run_http.ssl_keyfile_format must select a supported encrypted traditional private key and requires tls=true with a password"
                     )
                 if "ssl_ca_certs" in run_http and (
-                    run_http["ssl_ca_certs"] not in {"generated-ca", "empty-ca", ""}
+                    run_http["ssl_ca_certs"]
+                    not in {
+                        "generated-ca",
+                        "trusted-ca",
+                        "empty-ca",
+                        "missing-ca",
+                        "directory-ca",
+                        "malformed-ca",
+                        "",
+                    }
                     or not run_http.get("tls")
                 ):
                     raise ParityError(
-                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca, empty-ca, or an empty path and requires tls=true"
+                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca, trusted-ca, empty-ca, missing-ca, directory-ca, malformed-ca, or an empty path and requires tls=true"
                     )
                 if "ssl_cert_reqs" in run_http and (
                     type(run_http["ssl_cert_reqs"]) is not int
@@ -4204,7 +4294,11 @@ def load_contract(
             exact_case_keys(case, case_keys, case_id)
             websocket = case["websocket"]
             websocket_keys = {"path", "subprotocols", "messages"}
-            if case["operation"] == "websocket.raw-frame-disconnect":
+            if case["operation"] in {
+                "websocket.raw-frame-disconnect",
+                "websocket.raw-size-limit-close",
+                "websocket.raw-size-limit-close-uncompressed",
+            }:
                 websocket_keys.add("raw_frame_base64")
                 if (
                     case["profile"] != "websocket"
@@ -4223,7 +4317,7 @@ def load_contract(
                     raise ParityError(f"{case_id}: raw WebSocket frame must not be empty")
             elif "raw_frame_base64" in websocket:
                 raise ParityError(
-                    f"{case_id}: raw_frame_base64 requires websocket.raw-frame-disconnect"
+                    f"{case_id}: raw_frame_base64 requires a raw WebSocket frame operation"
                 )
             if case.get("operation") == "websocket.concurrent-session-load":
                 if websocket.get("path") != "/ws/load" or websocket.get("messages") != []:
@@ -4287,6 +4381,10 @@ def load_contract(
                     for header in websocket["headers"]
                 ):
                     raise ParityError(f"{case_id}: WebSocket headers must be pairs of strings")
+            if "disable_compression" in websocket:
+                websocket_keys.add("disable_compression")
+                if websocket["disable_compression"] is not True:
+                    raise ParityError(f"{case_id}: disable_compression must be true when present")
             if "followup_path" in websocket:
                 websocket_keys.add("followup_path")
                 if not isinstance(websocket["followup_path"], str) or not websocket["followup_path"].startswith("/"):
@@ -7996,6 +8094,7 @@ def websocket_raw_frame_observation(
     client.settimeout(10)
     handshake_status: int | None = None
     handshake_accept_valid = False
+    compression_negotiated = False
     frame_sent = False
     application_events: list[str] = []
     raw_key = "dGhlIHNhbXBsZSBub25jZQ=="
@@ -8057,6 +8156,9 @@ def websocket_raw_frame_observation(
             handshake_accept_valid = (
                 response_headers.get(b"sec-websocket-accept") == expected_accept.encode("ascii")
             )
+            compression_negotiated = b"permessage-deflate" in response_headers.get(
+                b"sec-websocket-extensions", b""
+            ).lower()
             selected_subprotocol = response_headers.get(b"sec-websocket-protocol")
         else:
             selected_subprotocol = None
@@ -8099,6 +8201,7 @@ def websocket_raw_frame_observation(
     return {
         "handshake_status": handshake_status,
         "handshake_accept_valid": handshake_accept_valid,
+        "compression_negotiated": compression_negotiated,
         "subprotocol": (
             selected_subprotocol.decode("ascii") if selected_subprotocol is not None else None
         ),
@@ -8245,6 +8348,7 @@ def websocket_observation(
     fault_control_path: Path | None = None,
     fault_point: str | None = None,
 ) -> dict[str, Any]:
+    compression_negotiated = False
     scheme = "wss" if trust_anchor is not None else "ws"
     uri = f"{scheme}://127.0.0.1:{server['port']}{specification['path']}"
     subprotocols = websocket_client_subprotocols(specification)
@@ -8335,6 +8439,7 @@ def websocket_observation(
     def add_fault_followup(
         observation: dict[str, Any], *, wait_for_events: bool = True
     ) -> dict[str, Any]:
+        observation.setdefault("compression_negotiated", compression_negotiated)
         public_contract = fault_point in PUBLIC_INPUT_CONTRACT_POINTS
         if fault_control_path is None and not public_contract:
             return observation
@@ -8445,6 +8550,7 @@ def websocket_observation(
             uri,
             sock=client_socket,
             subprotocols=subprotocols,
+            compression=None if specification.get("disable_compression", False) else "deflate",
             additional_headers=specification.get("headers", []),
             ssl=ssl_context,
             proxy=None,
@@ -8454,6 +8560,10 @@ def websocket_observation(
             max_size=16 * 1024 * 1024 if "wait_for_app_event" in specification else 1024 * 1024,
             logger=client_logger,
         ) as websocket:
+            compression_negotiated = any(
+                type(extension).__name__ == "PerMessageDeflate"
+                for extension in websocket.protocol.extensions
+            )
             if specification.get("abrupt_disconnect", False):
                 wait_for_app_event = specification.get("wait_for_app_event")
                 if wait_for_app_event is not None:
@@ -8511,7 +8621,17 @@ def websocket_observation(
                     raise ParityError(
                         f"WebSocket app did not reach deferred-read event {wait_for_app_event!r}"
                     )
-            observation = {"handshake_status": 101, "subprotocol": websocket.subprotocol, "messages": echoes}
+            compression_negotiated = any(
+                type(extension).__name__ == "PerMessageDeflate"
+                for extension in websocket.protocol.extensions
+            )
+            observation = {
+                "handshake_established": True,
+                "handshake_status": 101,
+                "subprotocol": websocket.subprotocol,
+                "messages": echoes,
+                "compression_negotiated": compression_negotiated,
+            }
             if pong_received is not None:
                 observation["pong_received"] = pong_received
             if specification.get("expect_close", False):
@@ -8577,6 +8697,7 @@ def websocket_observation(
         close = error.rcvd
         return add_fault_followup(
             {
+                "handshake_established": True,
                 "handshake_status": 101,
                 "close_code": close.code if close is not None else None,
                 "close_reason": close.reason if close is not None else None,
@@ -8584,7 +8705,11 @@ def websocket_observation(
             wait_for_events=False,
         )
     except InvalidStatus as error:
-        observation = {"handshake_established": False, "handshake_status": error.response.status_code}
+        observation = {
+            "handshake_established": False,
+            "handshake_status": error.response.status_code,
+            "compression_negotiated": compression_negotiated,
+        }
         return add_fault_followup(observation, wait_for_events=False)
     except InvalidHandshake:
         # Malformed application handshake headers have no stable response
@@ -8651,6 +8776,7 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "timeout_close_code": "timeout_close_code",
         "timeout_close_reason": "timeout_close_reason",
         "subprotocol": "subprotocol",
+        "compression_negotiated": "compression_negotiated",
         "ordered_messages": "messages",
         "ordered_message_payload_bytes": "message_payload_bytes",
         "last_ordered_message": "last_message",
@@ -9317,7 +9443,11 @@ def execute_case(
             return run_websocket_load_case(
                 server, profile, case, trust_anchor, h3_client
             )
-        if case.get("operation") == "websocket.raw-frame-disconnect":
+        if case.get("operation") in {
+            "websocket.raw-frame-disconnect",
+            "websocket.raw-size-limit-close",
+            "websocket.raw-size-limit-close-uncompressed",
+        }:
             log_offset = len(read_server_log(server))
             observation = websocket_raw_frame_observation(server, case["websocket"])
             observation["server_log"] = read_server_log(server)[log_offset:]
@@ -9975,6 +10105,26 @@ def execute_case(
 def fault_contract_matches(
     fault: dict[str, Any], observation: dict[str, Any], case: dict[str, Any]
 ) -> bool:
+    if fault["contract"] == "python-ssl-ca-verifier-error-propagates":
+        expected_message = (
+            "coverage-injected Python SSL helper failure at " + fault["point"]
+        )
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and expected_message in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-ssl-ca-verifier-success-fallback-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and "invalid CA certificate PEM: coverage-injected Rust CA parser failure"
+            in observation.get("fault_server_stderr", "")
+        )
     if fault["contract"] == "asgi-spec-version-2.5":
         payload = None
         body = observation.get("body_bytes")
@@ -11392,11 +11542,25 @@ def run_python_api_probe(
     case: dict[str, Any],
     server_id: str,
     coverage_profile_dir: Path | None = None,
+    fault_point: str | None = None,
 ) -> dict[str, Any]:
     """Run one input-selected Python public-surface probe on each interpreter."""
 
     python = ORACLE_PYTHON if server_id == "uvicorn" else Path(sys.executable)
     environment = os.environ.copy()
+    environment.pop("UVICORN_RS_COVERAGE_FAULT_FILE", None)
+    fault_control_directory = None
+    fault_control_path = None
+    fault_consumed = None
+    if fault_point is not None:
+        if server_id != "uvicorn-rs":
+            raise ParityError("Python API fault contracts run only against uvicorn-rs")
+        fault_control_directory = tempfile.TemporaryDirectory(
+            prefix="uvicorn-rs-python-api-fault-"
+        )
+        fault_control_path = Path(fault_control_directory.name) / "coverage-fault.txt"
+        fault_control_path.write_text(fault_point, encoding="utf-8")
+        environment["UVICORN_RS_COVERAGE_FAULT_FILE"] = str(fault_control_path)
     coverage_capture_shutdown = (
         os.environ.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1"
     )
@@ -11425,7 +11589,14 @@ def run_python_api_probe(
     run_http = case["api"].get("run_http", {})
     probe_run_http = dict(run_http)
     temporary_tls_assets = None
-    if run_http.get("ssl_ca_certs") in {"generated-ca", "empty-ca"} or run_http.get("client_tls"):
+    if run_http.get("ssl_ca_certs") in {
+        "generated-ca",
+        "trusted-ca",
+        "empty-ca",
+        "missing-ca",
+        "directory-ca",
+        "malformed-ca",
+    } or run_http.get("client_tls"):
         temporary_tls_assets = tempfile.TemporaryDirectory(
             prefix="uvicorn-rs-python-api-tls-"
         )
@@ -11436,10 +11607,37 @@ def run_python_api_probe(
             "server_key": str(key),
             "ca_certificate": str(ca_certificate),
         }
+        if run_http.get("ssl_ca_certs") == "trusted-ca":
+            trusted_ca_certificate = tls_directory / "trusted-ca.pem"
+            trusted_ca_certificate.write_bytes(
+                Path(ca_certificate)
+                .read_bytes()
+                .replace(
+                    b"-----BEGIN CERTIFICATE-----",
+                    b"-----BEGIN TRUSTED CERTIFICATE-----",
+                )
+                .replace(
+                    b"-----END CERTIFICATE-----",
+                    b"-----END TRUSTED CERTIFICATE-----",
+                )
+            )
+            tls_assets["trusted_ca_certificate"] = str(trusted_ca_certificate)
         if run_http.get("ssl_ca_certs") == "empty-ca":
             empty_ca_certificate = tls_directory / "empty-ca.pem"
             empty_ca_certificate.write_bytes(b"")
             tls_assets["empty_ca_certificate"] = str(empty_ca_certificate)
+        if run_http.get("ssl_ca_certs") == "missing-ca":
+            tls_assets["missing_ca_certificate"] = str(tls_directory / "missing-ca.pem")
+        if run_http.get("ssl_ca_certs") == "directory-ca":
+            directory_ca = tls_directory / "directory-ca"
+            directory_ca.mkdir()
+            tls_assets["directory_ca"] = str(directory_ca)
+        if run_http.get("ssl_ca_certs") == "malformed-ca":
+            malformed_ca_certificate = tls_directory / "malformed-ca.pem"
+            malformed_ca_certificate.write_bytes(
+                b"-----BEGIN CERTIFICATE-----\nnot-base64!\n-----END CERTIFICATE-----\n"
+            )
+            tls_assets["malformed_ca_certificate"] = str(malformed_ca_certificate)
         if run_http.get("client_tls"):
             client_certificate, client_key = make_client_certificate(tls_directory)
             tls_assets.update(
@@ -11502,9 +11700,15 @@ def run_python_api_probe(
             timeout=probe_timeout,
             check=False,
         )
+        if fault_control_path is not None:
+            fault_consumed = (
+                fault_control_path.read_text(encoding="utf-8").strip() == ""
+            )
     finally:
         if temporary_tls_assets is not None:
             temporary_tls_assets.cleanup()
+        if fault_control_directory is not None:
+            fault_control_directory.cleanup()
     if len(completed.stdout) > 4 * 1024 * 1024 or len(completed.stderr) > 4 * 1024 * 1024:
         raise ParityError(f"{case['case_id']}: Python API probe output exceeded the 4 MiB evidence bound")
     observation = {
@@ -11610,6 +11814,16 @@ def run_python_api_probe(
                 )
             }
         )
+        if fault_point is not None:
+            encoded_stderr = run_http_observation.get("server_stderr_base64", "")
+            try:
+                fault_server_stderr = base64.b64decode(
+                    encoded_stderr, validate=True
+                ).decode("utf-8", errors="replace")
+            except (ValueError, TypeError):
+                fault_server_stderr = ""
+            observation["fault_consumed"] = fault_consumed
+            observation["fault_server_stderr"] = fault_server_stderr
         server_log_events = _python_api_server_log_events(run_http_observation)
         observation["server_log_events"] = server_log_events
         stderr_events = server_log_events["stderr"]
@@ -11768,6 +11982,65 @@ def execute_python_api_profile(
     for case in cases:
         operation = operations[case["operation"]]
         try:
+            if case.get("verification") == "fault-contract":
+                fault = case["fault"]
+                target_raw = run_python_api_probe(
+                    case,
+                    "uvicorn-rs",
+                    coverage_profile_dir / "target"
+                    if coverage_profile_dir is not None
+                    else None,
+                    fault_point=fault["point"],
+                )
+                raise_if_llvm_profile_write_failed(target_raw, case["case_id"])
+                target = {name: target_raw[name] for name in operation["observe"]}
+                required = required_observations_for_case(case, operation)
+                matches = all(
+                    target.get(field) == value
+                    for field, value in required.items()
+                )
+                target_requirements = operation.get("target_requirements", {})
+                matches = matches and all(
+                    target.get(field) == value
+                    for field, value in target_requirements.items()
+                )
+                fault_observation = {
+                    "fault_consumed": target_raw.get("fault_consumed"),
+                    "fault_server_stderr": target_raw.get(
+                        "fault_server_stderr", ""
+                    ),
+                    **target,
+                }
+                contract_matches = fault_contract_matches(
+                    fault, fault_observation, case
+                )
+                matches = matches and contract_matches
+                difference = (
+                    None
+                    if matches
+                    else f"fault contract {fault['contract']!r} did not hold"
+                )
+                outcomes.append(
+                    {
+                        "case_id": case["case_id"],
+                        "profile": profile["id"],
+                        "operation": case["operation"],
+                        "requirements": case["covers"],
+                        "status": "passed" if matches else "failed",
+                        "oracle_observation": None,
+                        "target_observation": target,
+                        "server_exit_codes": {
+                            "oracle": None,
+                            "target": target.get("exit_code")
+                        },
+                        "difference": difference,
+                    }
+                )
+                print(
+                    f"{'PASS' if matches else 'FAIL'} {profile['id']}: {case['case_id']}",
+                    flush=True,
+                )
+                continue
             oracle_raw = run_python_api_probe(case, "uvicorn")
             target_raw = run_python_api_probe(
                 case,

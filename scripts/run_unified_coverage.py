@@ -137,6 +137,14 @@ NATIVE_RUNNER = (
     / "native_core_contracts"
 )
 NATIVE_FAULT_CONTRACTS = {
+    "http1.keep-alive.active-request-drain": {
+        "operation": "native-http1-keepalive-active-request-drain",
+        "scenario": "two-active-requests",
+    },
+    "http1.keep-alive.deadline-channel-closed": {
+        "operation": "native-http1-keepalive-deadline-channel-closed",
+        "scenario": "deadline-channel-closed",
+    },
     "native.request-lifetime.body-missing-guard": {
         "operation": "native-request-lifetime-body-missing-guard",
         "scenario": "guard-missing",
@@ -256,6 +264,10 @@ NATIVE_FAULT_CONTRACTS = {
                 "scenario": "unix-accept-error",
             },
         ],
+    },
+    "server.listener.unexpected-clean-exit": {
+        "operation": "native-tcp-multi-listener-clean-exit",
+        "scenario": "unexpected-clean-exit",
     },
     "server.listener.admission-closed": {
         "contracts": [

@@ -27,12 +27,14 @@ resolution after removing the workspace path patch from candidate packaging.
 The PyPI distribution `uvicorn-rs` 0.2.1 has not been uploaded.
 
 This is a Cargo publication, not a completed project release. PR #19 remains a
-draft; its current full coverage job is still running on the PR branch. The
-exact-main coverage gate, independent Coverage-MCP receipt, complete three-
-system benchmarks, compatibility gates, exact-main candidate bundle, and clean
-downstream consumers remain open. `release.yml` only publishes from `main`
-after it verifies the tagged candidate and all attached evidence. Do not call
-the local Cargo publication a verified PyPI release candidate.
+draft. CI run [`40267125476`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40267125476)
+completed with the coverage gate failing at 12,676/12,879 regions and
+9,418/9,539 lines; its 1,061 attributed cases passed. The exact-main coverage
+gate, independent Coverage-MCP receipt, complete three-system benchmarks,
+compatibility gates, exact-main candidate bundle, and clean downstream
+consumers remain open. `release.yml` only publishes from `main` after it
+verifies the tagged candidate and all attached evidence. Do not call the local
+Cargo publication a verified PyPI release candidate.
 
 ## Distribution boundaries
 
@@ -118,15 +120,19 @@ the current status above; this supersedes the earlier failed attempt.
 ### Current candidate state (2026-10-26)
 
 The local branch is `codex/uvicorn-rs-consolidation` at
-`9b6b766bf07349556a0226b5ea5cd06af1437893`; it is one local commit ahead of
-the pushed PR head `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`. `origin/main` is
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. PR #19 is open and draft, and no
-version tag exists. The local commit removes the Cargo workspace path patch
-from release packaging so the archive can match registry bytes. CI run
-[`40267125476`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40267125476)
-is running on the pushed PR head: Rust quality, native FastAPI composition,
-installed-wheel parity (500/500), release-contract, and MSRV jobs passed; the
-complete three-repeat coverage job is still in progress. This PR run does not
+`dcfb66dcbe73217af730fbec08723cf38499106`, two local commits ahead of the
+pushed PR head `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`; the worktree is
+dirty. `origin/main` is `86e72e181d00feca1b4db7f30377d5d9d4345b83`. PR #19 is
+open and draft, and no version tag exists. A local commit removes the Cargo
+workspace path patch from release packaging so the archive can match registry
+bytes. CI run [`40267125476`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40267125476)
+completed: Rust quality, native FastAPI composition, installed-wheel parity
+(500/500), release-contract, and MSRV passed; coverage failed. Its report
+records merge revision `a8bb19f9333ced7a6cbd65b0aeaefb340eee0d77`, while the
+artifact is associated with PR head `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`;
+the seven measured Rust source-file hashes match that head. The current dirty
+worktree changes `src/lib.rs` and `crates/uvicorn-rs/src/websocket.rs`, so the
+hosted report does not cover the current local source. This PR run does not
 meet the release workflow's requirement for a tagged exact-main candidate.
 
 Latest local PyPI artifact check (2026-10-26): `uv build
@@ -184,10 +190,18 @@ synthetic-merge source revision as an independent receipt for the exact local
 checkout. The focused cases added since that run are not a replacement for a
 new complete coverage run.
 
-The newer PR run [`40267125476`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40267125476)
-is still executing its full three-repeat coverage job on commit
-`d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`; its report and independent
-Coverage-MCP handoff are not yet available.
+The retained coverage artifact for PR run
+[`40267125476`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40267125476)
+has report SHA-256
+`75e3f167b3735a630848c739ad350afc47c49d63986cbf223fbf3982c47a084f` and build
+ID `64316cd3913dd0ef86ee149e98bf9abdf8d13ecba4f0df8a88dd379af675f5ff`. It
+reports 12,676/12,879 regions and 9,418/9,539 lines across 57 uncovered
+function groups; the source-hash-verified PR head has 203 regions and 121 lines
+to cover. All 1,061 attributed cases passed, with three verification runs
+recorded. Coverage-MCP remains `awaiting_query`; its exact-main report query
+timed out after 60 seconds, so there is no independent receipt. The local
+selected WebSocket and Python API coverage reports cover only their selected
+cases and do not replace a full report for the current dirty source.
 
 Registry state (2026-10-26): both Cargo 0.2.1 crates are published and their
 registry checksums match the values recorded above. PyPI returns HTTP 404 for
