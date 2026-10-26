@@ -3,14 +3,88 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [39689988939 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
-- Commit: [`86e72e181d00feca1b4db7f30377d5d9d4345b83`](https://github.com/appunni-m/uvicorn-rs/commit/86e72e181d00feca1b4db7f30377d5d9d4345b83)
-- Recorded: 2026-10-22T00:42:21Z
+- Run: [40228012455 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455)
+- Commit: [`7811b2392b60cd8eadc8a951c1eff47d57ace2d6`](https://github.com/appunni-m/uvicorn-rs/commit/7811b2392b60cd8eadc8a951c1eff47d57ace2d6)
+- Recorded: 2026-10-25T23:51:23Z
 - Category matrix job: `failure`
-- Aggregate job: `success`
+- Aggregate job: `failure`
 
-The three system artifacts were validated and the partial report, hashed receipts, and raw system bundles are retained in this run's GitHub Actions artifacts for 90 days. Generated logs and per-run files are not committed. The [previous complete report](benchmark-results.md) remains unchanged.
+This attempt did not produce a validated three-system aggregate or a complete performance report. Partial per-system measurements remain in this run's artifacts. The [previous complete report](benchmark-results.md) remains the latest complete measurement; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455) for this attempt.
 <!-- END GENERATED LATEST ATTEMPT -->
+
+## Focused HTTP/3 diagnostic (2026-10-26)
+
+Focused trace run
+[40255991178](https://github.com/appunni-m/uvicorn-rs/actions/runs/40255991178)
+used current branch commit
+[`35e548f08d1a4248488fc1351ed8850e7c80f23c`](https://github.com/appunni-m/uvicorn-rs/commit/35e548f08d1a4248488fc1351ed8850e7c80f23c)
+on Linux ARM64 with Hypercorn asyncio, `slow-reader-backpressure`, and one
+repetition. It completed 40 requests and 40 MiB of response data with no client
+failures. The workload overrides the workflow's top-level concurrency input:
+its effective concurrency was 2. Diagnostic tracing invalidates timing. The
+[retained trace artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/40255991178/artifacts/12622154441)
+contains no `stream_lookup_missing` or `h3_decode_error` event. It records
+normal stream removal followed by later close notifications after removal.
+
+This does not reproduce or explain the earlier
+[main-commit failure](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939):
+Hypercorn raised `KeyError(52)` in slow-reader repetition 4, after which the
+client recorded two response-header timeouts. The retained failure log lacks
+event ordering, and the focused trace uses a different source commit. The
+ordering and cause therefore remain unconfirmed; neither run supplies complete
+three-system performance evidence.
+
+The local optimization host preflight on 2026-10-26 also rejected timing
+because unrelated CPU exceeded 100% aggregate and a process exceeded 25% for
+two consecutive intervals. No timing workload started. Its receipt is
+`target/kata-progress/v7a1-host-preflight-goal-resume-20261026.json` in the
+maintainer checkout.
+
+## Latest run diagnosis (2026-10-25)
+
+Performance run [40228012455](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455)
+used branch commit
+[`7811b2392b60cd8eadc8a951c1eff47d57ace2d6`](https://github.com/appunni-m/uvicorn-rs/commit/7811b2392b60cd8eadc8a951c1eff47d57ace2d6),
+which predates the current dirty checkout. Linux x86-64 passed its exact-binary
+parity and category job. macOS ARM64 failed before timing when the Uvicorn
+oracle timed out in
+`websocket-tls.text-round-trip-with-query-and-subprotocol` (468 cases passed,
+one infrastructure failure, one not run). Linux ARM64 passed parity and the
+FastAPI comparison, then failed the HTTP/3 correctness gate during
+`large-response` against Hypercorn asyncio in repetition 2: the client received
+904,262 bytes where the response declared and required 1,048,576 bytes. The
+retained checkpoint has no completed HTTP/3 report, so no HTTP/3 performance
+result can be ranked. See the [macOS ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455/artifacts/12612492171),
+[Linux ARM64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455/artifacts/12614726014),
+and [Linux x86-64 artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455/artifacts/12615290088).
+
+The Linux ARM64 HTTP/1 category includes 20 rows for
+`fastapi-upload-1m-write-1k` at concurrency 8 across four server configurations
+and five repetitions. All 20 rows were timing-valid with zero failures, so this
+run did not reproduce the earlier HTTP/1 upload timeout. It does not identify
+that timeout's cause. The macOS parity failure and Linux ARM64 HTTP/3 failure
+mean this attempt is incomplete three-system evidence; make no release
+performance claim from it.
+
+Offline trace of the retained Linux ARM64 artifact narrows the HTTP/3 failure
+to a Hypercorn stream-close race. The failed client request is request 86 in
+`large-response`; stream IDs for client-initiated bidirectional requests advance
+by four, giving stream ID 340. Hypercorn 0.18.0 raised `KeyError(340)` at
+`H3Protocol.handle` while indexing `self.streams[event.stream_id]` for a
+`DataReceived` event. Its H3 adapter removes entries on `StreamClosed` and
+does not guard that later lookup. The workload is a GET with no request body;
+the H3 probe calls `finish()` after sending its headers. In the pinned aioquic
+1.3.0 source, a bare FIN can produce an empty `DataReceived` event. These
+observations establish that Hypercorn handled `DataReceived` after the stream
+mapping had been removed. The archive does not record the event payload or its
+timestamp, so identifying it as the empty FIN and attributing the truncated
+response to the UDP task crash remain supported inferences. Hypercorn has an
+open upstream change for this exact late-`DataReceived` case in
+[PR 334](https://github.com/pgjones/hypercorn/pull/334); the pinned 0.18.0
+changelog records the preceding stream-removal change
+([changelog](https://github.com/pgjones/hypercorn/blob/main/CHANGELOG.rst)).
+This remains a correctness failure in the reference cell, so no HTTP/3 timing
+from the incomplete run can be ranked.
 
 ## Latest run diagnosis (2026-10-22)
 

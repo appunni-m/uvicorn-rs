@@ -452,6 +452,13 @@
       "expected_error_display": "graceful shutdown timeout exceeds the runtime clock range"
     },
     {
+      "id": "api.server-config-http1-max-buffer-too-small-error",
+      "operation": "server-config-validation",
+      "invalid_configuration": "http1-max-buffer-too-small",
+      "expected_error": "invalid-http1-max-buffer-size",
+      "expected_error_display": "HTTP/1 max buffer size must be at least 8192 bytes"
+    },
+    {
       "id": "api.server-config-lifecycle-timeout-overflow-error",
       "operation": "server-config-validation",
       "invalid_configuration": "lifecycle-timeout-overflow",

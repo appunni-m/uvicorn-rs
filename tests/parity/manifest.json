@@ -358,6 +358,76 @@
       ]
     },
     {
+      "id": "startup-traditional-encrypted-private-key-unsupported-cipher",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "traditional encrypted RSA key PEM with an unsupported cipher and a key password"
+      ]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-missing-dek-info",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "traditional encrypted RSA key PEM without a DEK-Info header"
+      ]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-invalid-dek-info",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "traditional encrypted RSA key PEM with a malformed DEK-Info header"
+      ]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-invalid-proc-type",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "traditional encrypted RSA key PEM with an invalid Proc-Type header"
+      ]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-missing-body",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "traditional encrypted RSA key PEM with encryption metadata but no body separator or ciphertext"
+      ]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-invalid-body-base64",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "traditional encrypted RSA key PEM with a framed body that is not valid base64"
+      ]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-missing-end-marker",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "uvicorn.Server public API",
+        "uvicorn-rs.Server public API",
+        "traditional encrypted RSA key PEM without a matching end marker"
+      ]
+    },
+    {
       "id": "lifecycle",
       "oracle": "uvicorn",
       "protocol": "http/1.1 + lifespan",
@@ -2705,6 +2775,31 @@
       ]
     },
     {
+      "id": "python.api.server-serve-cancellation",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "lifespan_startup_entered_before_cancel",
+        "server_started_before_cancel",
+        "serve_cancelled",
+        "serve_task_finished",
+        "listener_accepting_after_cancel"
+      ],
+      "compare": [
+        "exit_code",
+        "lifespan_startup_entered_before_cancel",
+        "server_started_before_cancel",
+        "serve_cancelled",
+        "serve_task_finished",
+        "listener_accepting_after_cancel"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "serve_cancelled": true,
+        "serve_task_finished": true
+      }
+    },
+    {
       "id": "python.api.server-lifespan-startup",
       "kind": "command_operation",
       "observe": [
@@ -2848,6 +2943,13 @@
     "inputs/startup-encrypted-private-key-malformed-pem.json",
     "inputs/startup-encrypted-private-key-wrong-label.json",
     "inputs/startup-encrypted-private-key-invalid-der.json",
+    "inputs/startup-traditional-encrypted-private-key-unsupported-cipher.json",
+    "inputs/startup-traditional-encrypted-private-key-missing-dek-info.json",
+    "inputs/startup-traditional-encrypted-private-key-invalid-dek-info.json",
+    "inputs/startup-traditional-encrypted-private-key-invalid-proc-type.json",
+    "inputs/startup-traditional-encrypted-private-key-missing-body.json",
+    "inputs/startup-traditional-encrypted-private-key-invalid-body-base64.json",
+    "inputs/startup-traditional-encrypted-private-key-missing-end-marker.json",
     "inputs/lifecycle.json",
     "inputs/lifespan-fault-shutdown-cancel.json",
     "inputs/lifecycle-server-api.json",

@@ -159,6 +159,12 @@ class Server:
         if control is not None:
             control.shutdown()
 
+    def cancel_startup(self):
+        """Prevent listener startup when the public serve task is cancelled."""
+        control = self._control
+        if control is not None:
+            control.cancel_startup()
+
     async def wait_started(self):
         """Wait until bind and lifespan startup finish, or startup terminates."""
         control = self._control

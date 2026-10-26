@@ -4358,36 +4358,92 @@ enum ServerStartupState {
     Stopped,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum ServerStartupGate {
+    Starting = 0,
+    Cancelled = 1,
+    Started = 2,
+    Failed = 3,
+    Stopped = 4,
+}
+
 struct ServerStartupSignal {
     sender: watch::Sender<ServerStartupState>,
+    gate: Arc<AtomicU8>,
     started: bool,
     failed: bool,
 }
 
 impl ServerStartupSignal {
-    fn new(sender: watch::Sender<ServerStartupState>) -> Self {
+    fn new(sender: watch::Sender<ServerStartupState>, gate: Arc<AtomicU8>) -> Self {
         Self {
             sender,
+            gate,
             started: false,
             failed: false,
         }
     }
 
-    fn mark_started(&mut self) {
+    fn mark_started(&mut self) -> bool {
+        if self
+            .gate
+            .compare_exchange(
+                ServerStartupGate::Starting as u8,
+                ServerStartupGate::Started as u8,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_err()
+        {
+            return false;
+        }
         self.started = true;
         self.sender.send_replace(ServerStartupState::Started);
+        true
     }
 
     fn mark_failed(&mut self) {
+        if self
+            .gate
+            .compare_exchange(
+                ServerStartupGate::Starting as u8,
+                ServerStartupGate::Failed as u8,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_err()
+        {
+            return;
+        }
         self.failed = true;
         self.sender.send_replace(ServerStartupState::Failed);
+    }
+
+    fn mark_stopped(&mut self) {
+        if self
+            .gate
+            .compare_exchange(
+                ServerStartupGate::Starting as u8,
+                ServerStartupGate::Stopped as u8,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+        {
+            self.sender.send_replace(ServerStartupState::Stopped);
+        }
+    }
+
+    fn was_cancelled(&self) -> bool {
+        self.gate.load(Ordering::Acquire) == ServerStartupGate::Cancelled as u8
     }
 }
 
 impl Drop for ServerStartupSignal {
     fn drop(&mut self) {
         if !self.started && !self.failed {
-            self.sender.send_replace(ServerStartupState::Stopped);
+            self.mark_stopped();
         }
     }
 }
@@ -4396,6 +4452,7 @@ impl Drop for ServerStartupSignal {
 struct ServerControl {
     cancellation: CancellationToken,
     startup: watch::Sender<ServerStartupState>,
+    startup_gate: Arc<AtomicU8>,
     startup_acknowledgement: Option<watch::Sender<bool>>,
 }
 
@@ -4409,12 +4466,30 @@ impl ServerControl {
         Self {
             cancellation: CancellationToken::new(),
             startup,
+            startup_gate: Arc::new(AtomicU8::new(ServerStartupGate::Starting as u8)),
             startup_acknowledgement,
         }
     }
 
     fn shutdown(&self) {
         self.cancellation.cancel();
+    }
+
+    fn cancel_startup(&self) {
+        match self.startup_gate.compare_exchange(
+            ServerStartupGate::Starting as u8,
+            ServerStartupGate::Cancelled as u8,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => {
+                self.startup.send_replace(ServerStartupState::Stopped);
+            }
+            Err(state) if state == ServerStartupGate::Started as u8 => {
+                self.cancellation.cancel();
+            }
+            Err(_) => {}
+        }
     }
 
     fn acknowledge_startup(&self) {
@@ -5420,7 +5495,9 @@ fn serve<'py>(
         coverage_fault_take(CoverageFaultPoint::ServerServeControlBorrowConflict)
             .then(|| control.borrow_mut(py));
     let cancellation = control.try_borrow(py)?.cancellation.clone();
-    let startup_signal = ServerStartupSignal::new(control.try_borrow(py)?.startup.clone());
+    let startup_gate = control.try_borrow(py)?.startup_gate.clone();
+    let startup_signal =
+        ServerStartupSignal::new(control.try_borrow(py)?.startup.clone(), startup_gate);
     let startup_acknowledgement = control
         .try_borrow(py)?
         .startup_acknowledgement
@@ -5571,13 +5648,14 @@ impl rustls::server::danger::ClientCertVerifier for ClientCertVerifierAdapter {
 }
 
 fn load_client_cert_verifier(
+    py: Python<'_>,
     ca_certs: Option<&str>,
     cert_reqs: i32,
 ) -> PyResult<Arc<dyn rustls::server::danger::ClientCertVerifier>> {
     if !matches!(cert_reqs, 0..=2) {
-        return Err(PyValueError::new_err(
-            "ssl_cert_reqs must be ssl.CERT_NONE, ssl.CERT_OPTIONAL, or ssl.CERT_REQUIRED",
-        ));
+        return Err(PyValueError::new_err(format!(
+            "{cert_reqs} is not a valid VerifyMode"
+        )));
     }
 
     let mut roots = rustls::RootCertStore::empty();
@@ -5591,8 +5669,11 @@ fn load_client_cert_verifier(
                 PyValueError::new_err(format!("invalid CA certificate PEM: {error}"))
             })?;
         if certificates.is_empty() {
-            return Err(PyValueError::new_err(
-                "CA certificates file contains no certificates",
+            return Err(python_ssl_ca_certificates_error(
+                py,
+                path,
+                cert_reqs,
+                PyValueError::new_err("CA certificates file contains no certificates"),
             ));
         }
         for certificate in certificates {
@@ -5881,6 +5962,30 @@ fn python_ssl_keyfile_error(
     }
 }
 
+fn python_ssl_ca_certificates_error(
+    py: Python<'_>,
+    ca_certs: &str,
+    cert_reqs: i32,
+    fallback: PyErr,
+) -> PyErr {
+    // Uvicorn delegates CA-file validation to CPython's ssl module. Keep valid
+    // CA loading in Rust, but reproduce its public error for invalid CA files.
+    let result = (|| -> PyResult<()> {
+        let ssl = PyModule::import(py, "ssl")?;
+        let protocol = ssl.getattr("PROTOCOL_TLS_SERVER")?;
+        let context = ssl.getattr("SSLContext")?.call1((protocol,))?;
+        let verify_mode = ssl.getattr("VerifyMode")?.call1((cert_reqs,))?;
+        context.setattr("verify_mode", verify_mode)?;
+        context
+            .call_method1("load_verify_locations", (ca_certs,))
+            .map(drop)
+    })();
+    match result {
+        Err(error) => error,
+        Ok(()) => fallback,
+    }
+}
+
 struct ServerTlsOptions<'a> {
     certfile: &'a str,
     keyfile: &'a str,
@@ -5950,7 +6055,7 @@ fn load_tls_configs(
         },
     };
 
-    let client_cert_verifier = load_client_cert_verifier(ca_certs, cert_reqs)?;
+    let client_cert_verifier = load_client_cert_verifier(py, ca_certs, cert_reqs)?;
     let tcp_builder = if let Some(cipher_suites) = cipher_suites {
         let provider = rustls::crypto::CryptoProvider::get_default()
             .cloned()
@@ -6446,182 +6551,11 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         cancellation,
         mut startup_signal,
         mut startup_acknowledgement,
-        options,
+        mut options,
         diagnostics,
     } = context;
-    #[cfg(uvicorn_rs_native_transport)]
-    let (listener, server_addr) = if let Some(path) = options.fd_transfer_path.as_deref() {
-        let received = tokio::select! {
-            _ = cancellation.cancelled() => return Ok(()),
-            result = receive_prebound_tcp_listeners(path, options.backlog) => result.map_err(
-                |error| {
-                    PyOSError::new_err(format!("could not receive inherited TCP listeners: {error}"))
-                },
-            )?,
-        };
-        let ReceivedTcpListeners { first, remaining } = received;
-        let server_addr = first.local_addr().map_err(|error| {
-            PyOSError::new_err(format!("could not inspect inherited TCP listener: {error}"))
-        })?;
-        let mut listeners = Vec::with_capacity(remaining.len() + 1);
-        listeners.push(first);
-        listeners.extend(remaining);
-        (BoundListener::Tcp(listeners), server_addr)
-    } else if let Some(path) = options.uds.as_deref() {
-        #[cfg(unix)]
-        {
-            let listener = bind_unix_listener(path).map_err(|error| {
-                PyOSError::new_err(format!("could not bind unix socket {path}: {error}"))
-            })?;
-            (
-                BoundListener::Unix(listener),
-                SocketAddr::from(([0, 0, 0, 0], 0)),
-            )
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = path;
-            return Err(PyValueError::new_err(
-                "Unix domain sockets are not supported on this platform",
-            ));
-        }
-    } else {
-        let listener = match bind_tcp_listener(&options.host, options.port, options.backlog).await {
-            Ok(listener) => listener,
-            Err(error) => {
-                startup_signal.mark_failed();
-                return Err(PyOSError::new_err(format!(
-                    "could not bind {}:{}: {error}",
-                    options.host, options.port
-                )));
-            }
-        };
-        let local_addr = {
-            #[cfg(coverage)]
-            if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
-                Err(std::io::Error::other(
-                    "coverage-injected listener address inspection error",
-                ))
-            } else {
-                listener.local_addr()
-            }
-            #[cfg(not(coverage))]
-            {
-                listener.local_addr()
-            }
-        };
-        let server_addr = local_addr.map_err(|error| {
-            PyOSError::new_err(format!("could not inspect bound listener: {error}"))
-        })?;
-        (BoundListener::Tcp(vec![listener]), server_addr)
-    };
-    #[cfg(not(uvicorn_rs_native_transport))]
-    let listener = if options.fd_transfer_path.is_some() {
-        let path = options
-            .fd_transfer_path
-            .as_deref()
-            .ok_or_else(|| PyValueError::new_err("inherited TCP listener path is missing"))?;
-        let received = tokio::select! {
-            _ = cancellation.cancelled() => return Ok(()),
-            result = receive_prebound_tcp_listeners(path, options.backlog) => result.map_err(
-                |error| {
-                    PyOSError::new_err(format!("could not receive inherited TCP listeners: {error}"))
-                },
-            )?,
-        };
-        if !received.remaining.is_empty() {
-            return Err(PyValueError::new_err(
-                "multiple inherited TCP listeners require the native-tcp feature",
-            ));
-        }
-        received.first
-    } else if options.uds.is_some() {
-        return Err(PyValueError::new_err(
-            "Unix domain sockets require the native-tcp feature",
-        ));
-    } else {
-        match bind_tcp_listener(&options.host, options.port, options.backlog).await {
-            Ok(listener) => listener,
-            Err(error) => {
-                startup_signal.mark_failed();
-                return Err(PyOSError::new_err(format!(
-                    "could not bind {}:{}: {error}",
-                    options.host, options.port
-                )));
-            }
-        }
-    };
-    #[cfg(not(uvicorn_rs_native_transport))]
-    let server_addr = {
-        let local_addr = {
-            #[cfg(coverage)]
-            if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
-                Err(std::io::Error::other(
-                    "coverage-injected listener address inspection error",
-                ))
-            } else {
-                listener.local_addr()
-            }
-            #[cfg(not(coverage))]
-            {
-                listener.local_addr()
-            }
-        };
-        local_addr.map_err(|error| {
-            PyOSError::new_err(format!("could not inspect bound listener: {error}"))
-        })?
-    };
     let app = Arc::new(app);
     let invoke = Arc::new(invoke);
-    #[cfg(uvicorn_rs_native_transport)]
-    let endpoint = if matches!(&listener, BoundListener::Tcp(_)) {
-        if let Some(quic_config) = options.quic_config {
-            let endpoint = {
-                #[cfg(coverage)]
-                if coverage_fault_take(CoverageFaultPoint::ServerHttp3EndpointBindError) {
-                    Err(std::io::Error::other(
-                        "coverage-injected HTTP/3 endpoint bind error",
-                    ))
-                } else {
-                    quinn::Endpoint::server(quic_config, server_addr)
-                }
-                #[cfg(not(coverage))]
-                {
-                    quinn::Endpoint::server(quic_config, server_addr)
-                }
-            };
-            Some(endpoint.map_err(|error| {
-                PyOSError::new_err(format!("could not bind HTTP/3 endpoint: {error}"))
-            })?)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-    #[cfg(not(uvicorn_rs_native_transport))]
-    let endpoint = if let Some(quic_config) = options.quic_config {
-        let endpoint = {
-            #[cfg(coverage)]
-            if coverage_fault_take(CoverageFaultPoint::ServerHttp3EndpointBindError) {
-                Err(std::io::Error::other(
-                    "coverage-injected HTTP/3 endpoint bind error",
-                ))
-            } else {
-                quinn::Endpoint::server(quic_config, server_addr)
-            }
-            #[cfg(not(coverage))]
-            {
-                quinn::Endpoint::server(quic_config, server_addr)
-            }
-        };
-        Some(endpoint.map_err(|error| {
-            PyOSError::new_err(format!("could not bind HTTP/3 endpoint: {error}"))
-        })?)
-    } else {
-        None
-    };
-
     // Lifespan cancellation cleanup has its own tracker: the main lifespan
     // application remains active while request cleanup is drained.
     let lifespan_cleanup_tasks = TaskTracker::new();
@@ -6649,6 +6583,210 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         }
     } else {
         None
+    };
+    if startup_signal.was_cancelled() {
+        cancellation.cancelled().await;
+        if let Some(lifespan) = lifespan.as_mut() {
+            lifespan.shutdown().await?;
+        }
+        wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
+        return Ok(());
+    }
+    let listener_setup = async {
+        #[cfg(uvicorn_rs_native_transport)]
+        let (listener, server_addr) = if let Some(path) = options.fd_transfer_path.as_deref() {
+            let received = tokio::select! {
+                _ = cancellation.cancelled() => return Ok(None),
+                result = receive_prebound_tcp_listeners(path, options.backlog) => result.map_err(
+                    |error| {
+                        PyOSError::new_err(format!("could not receive inherited TCP listeners: {error}"))
+                    },
+                )?,
+            };
+            let ReceivedTcpListeners { first, remaining } = received;
+            let server_addr = first.local_addr().map_err(|error| {
+                PyOSError::new_err(format!("could not inspect inherited TCP listener: {error}"))
+            })?;
+            let mut listeners = Vec::with_capacity(remaining.len() + 1);
+            listeners.push(first);
+            listeners.extend(remaining);
+            (BoundListener::Tcp(listeners), server_addr)
+        } else if let Some(path) = options.uds.as_deref() {
+            #[cfg(unix)]
+            {
+                let listener = bind_unix_listener(path).map_err(|error| {
+                    PyOSError::new_err(format!("could not bind unix socket {path}: {error}"))
+                })?;
+                (
+                    BoundListener::Unix(listener),
+                    SocketAddr::from(([0, 0, 0, 0], 0)),
+                )
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = path;
+                return Err(PyValueError::new_err(
+                    "Unix domain sockets are not supported on this platform",
+                ));
+            }
+        } else {
+            let listener = match bind_tcp_listener(&options.host, options.port, options.backlog).await {
+                Ok(listener) => listener,
+                Err(error) => {
+                    return Err(PyOSError::new_err(format!(
+                        "could not bind {}:{}: {error}",
+                        options.host, options.port
+                    )));
+                }
+            };
+            let local_addr = {
+                #[cfg(coverage)]
+                if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
+                    Err(std::io::Error::other(
+                        "coverage-injected listener address inspection error",
+                    ))
+                } else {
+                    listener.local_addr()
+                }
+                #[cfg(not(coverage))]
+                {
+                    listener.local_addr()
+                }
+            };
+            let server_addr = local_addr.map_err(|error| {
+                PyOSError::new_err(format!("could not inspect bound listener: {error}"))
+            })?;
+            (BoundListener::Tcp(vec![listener]), server_addr)
+        };
+        #[cfg(not(uvicorn_rs_native_transport))]
+        let listener = if options.fd_transfer_path.is_some() {
+            let path = options
+                .fd_transfer_path
+                .as_deref()
+                .ok_or_else(|| PyValueError::new_err("inherited TCP listener path is missing"))?;
+            let received = tokio::select! {
+                _ = cancellation.cancelled() => return Ok(None),
+                result = receive_prebound_tcp_listeners(path, options.backlog) => result.map_err(
+                    |error| {
+                        PyOSError::new_err(format!("could not receive inherited TCP listeners: {error}"))
+                    },
+                )?,
+            };
+            if !received.remaining.is_empty() {
+                return Err(PyValueError::new_err(
+                    "multiple inherited TCP listeners require the native-tcp feature",
+                ));
+            }
+            received.first
+        } else if options.uds.is_some() {
+            return Err(PyValueError::new_err(
+                "Unix domain sockets require the native-tcp feature",
+            ));
+        } else {
+            match bind_tcp_listener(&options.host, options.port, options.backlog).await {
+                Ok(listener) => listener,
+                Err(error) => {
+                    return Err(PyOSError::new_err(format!(
+                        "could not bind {}:{}: {error}",
+                        options.host, options.port
+                    )));
+                }
+            }
+        };
+        #[cfg(not(uvicorn_rs_native_transport))]
+        let server_addr = {
+            let local_addr = {
+                #[cfg(coverage)]
+                if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
+                    Err(std::io::Error::other(
+                        "coverage-injected listener address inspection error",
+                    ))
+                } else {
+                    listener.local_addr()
+                }
+                #[cfg(not(coverage))]
+                {
+                    listener.local_addr()
+                }
+            };
+            local_addr.map_err(|error| {
+                PyOSError::new_err(format!("could not inspect bound listener: {error}"))
+            })?
+        };
+        #[cfg(uvicorn_rs_native_transport)]
+        let endpoint = if matches!(&listener, BoundListener::Tcp(_)) {
+            if let Some(quic_config) = options.quic_config.take() {
+                let endpoint = {
+                    #[cfg(coverage)]
+                    if coverage_fault_take(CoverageFaultPoint::ServerHttp3EndpointBindError) {
+                        Err(std::io::Error::other(
+                            "coverage-injected HTTP/3 endpoint bind error",
+                        ))
+                    } else {
+                        quinn::Endpoint::server(quic_config, server_addr)
+                    }
+                    #[cfg(not(coverage))]
+                    {
+                        quinn::Endpoint::server(quic_config, server_addr)
+                    }
+                };
+                Some(endpoint.map_err(|error| {
+                    PyOSError::new_err(format!("could not bind HTTP/3 endpoint: {error}"))
+                })?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        #[cfg(not(uvicorn_rs_native_transport))]
+        let endpoint = if let Some(quic_config) = options.quic_config.take() {
+            let endpoint = {
+                #[cfg(coverage)]
+                if coverage_fault_take(CoverageFaultPoint::ServerHttp3EndpointBindError) {
+                    Err(std::io::Error::other(
+                        "coverage-injected HTTP/3 endpoint bind error",
+                    ))
+                } else {
+                    quinn::Endpoint::server(quic_config, server_addr)
+                }
+                #[cfg(not(coverage))]
+                {
+                    quinn::Endpoint::server(quic_config, server_addr)
+                }
+            };
+            Some(endpoint.map_err(|error| {
+                PyOSError::new_err(format!("could not bind HTTP/3 endpoint: {error}"))
+            })?)
+        } else {
+            None
+        };
+
+        Ok(Some((listener, server_addr, endpoint)))
+    }
+    .await;
+    let (listener, server_addr, endpoint) = match listener_setup {
+        Ok(Some(setup)) => setup,
+        Ok(None) => {
+            startup_signal.mark_stopped();
+            if let Some(lifespan) = lifespan.as_mut() {
+                let _ = lifespan.shutdown().await;
+            }
+            wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
+            return Ok(());
+        }
+        Err(error) => {
+            startup_signal.mark_failed();
+            if let Some(lifespan) = lifespan.as_mut() {
+                if let Err(shutdown_error) = lifespan.shutdown().await {
+                    log_error(format_args!(
+                        "uvicorn-rs: ASGI lifespan shutdown failed after listener setup error: {shutdown_error}"
+                    ));
+                }
+            }
+            wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
+            return Err(error);
+        }
     };
     // A server that reaches request handling always has lifecycle state when
     // lifespan ran, or an empty state dictionary when lifespan was disabled.
@@ -6709,7 +6847,16 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
     if server.limit_max_requests == Some(0) {
         server.cancellation.cancel();
     }
-    startup_signal.mark_started();
+    if !startup_signal.mark_started() {
+        drop(endpoint);
+        drop(listener);
+        cancellation.cancelled().await;
+        if let Some(lifespan) = lifespan.as_mut() {
+            lifespan.shutdown().await?;
+        }
+        wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
+        return Ok(());
+    }
 
     if let Some(acknowledgement) = startup_acknowledgement.as_mut() {
         while !*acknowledgement.borrow_and_update() {

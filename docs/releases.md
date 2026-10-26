@@ -94,57 +94,85 @@ these archive hashes remain bound to the clean commit above and do not describe
 the current dirty worktree. That commit has no hosted candidate workflow
 result.
 The local `cargo publish` attempt for `asgi-lifespan-protocol-rs 0.2.1` was
-rejected with HTTP 403 because the configured token lacks publish permission;
-the version remains absent and no upload occurred. On 2026-10-26, the maintainer
-reported that a replacement short-lived token is available. Cargo authentication
-had not been rechecked with that token, and no retry had occurred. At that
-update, the PyPI wheel and sdist had not been built; the later local build is
-recorded below.
+rejected with HTTP 403 because the configured token lacked publish permission;
+the version remained absent and no upload occurred. On 2026-10-26, Cargo
+reported that a replacement short-lived token was saved through its login
+prompt. A read-only Cargo owner lookup for `asgi-lifespan-protocol-rs` returned
+`appunni-m`, confirming registry authentication for owner-list reads. This does
+not verify publish permission. The owner lookup for `uvicorn-rs` returns 404
+because that package is absent. No publish retry has occurred.
 
 ### Current candidate state (2026-10-26)
 
 The checkout is on branch `codex/uvicorn-rs-consolidation` at commit
-`7811b2392b60cd8eadc8a951c1eff47d57ace2d6`. The checkout is dirty, has no
-release tag at `HEAD`, and is not the exact-main candidate bundle required by
-`release.yml`. The release audit therefore reports `dirty_worktree` as a
-blocking error. The local Cargo
-0.2.1 archives recorded above remain bound to commit
+`35e548f08d1a4248488fc1351ed8850e7c80f23c`. The checkout has 30 changed or
+untracked paths. `origin/main` is
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`; this checkout's `HEAD` is not
+contained in that branch. There is no release tag at `HEAD`, and it is not the
+exact-main candidate bundle required by `release.yml`. The release audit
+reports `dirty_worktree` as a blocking error. GitHub currently shows PR #19 as
+open and draft, and the combined-status lookup for this head returned no
+statuses. The earlier clean Cargo 0.2.1 archives
+recorded above remain bound to commit
 `7754895262c7b1d7baa2e9595277a81607634d38` and do not represent this checkout.
 
-Local PyPI artifact check (2026-10-26): `uv build
---out-dir target/kata-progress/release-candidate-20261026` built the sdist
-`uvicorn_rs-0.2.1.tar.gz` and the macOS ARM64 abi3 wheel
-`uvicorn_rs-0.2.1-cp39-abi3-macosx_11_0_arm64.whl` from the generated sdist.
-Both artifacts declare PyPI name `uvicorn-rs` and version 0.2.1. A fresh Python
-3.12 environment installed the wheel; `import uvicorn, uvicorn_rs._native` and
-the `uvicorn --version` command succeeded. SHA-256: sdist
-`15e3a43976a6e2035ba5901cecfd1dd87939a9da49ccb48103c35324b305a975`; macOS
-ARM64 wheel `410ba24bec274eb818fb4b49664a1334b78fc0df42291e732d3e4b92c51c517a`.
-These local artifacts were built from the dirty checkout and do not replace the
-exact-main, multi-platform candidate bundle or its clean-consumer receipts.
+Latest local PyPI artifact check (2026-10-26): `uv build
+--out-dir target/release-candidate/pypi` built the sdist
+`uvicorn_rs-0.2.1.tar.gz` (SHA-256
+`978321f9caa54d0708a19f7635ca7c5e6c95ab75e6eb669168baa1f132590fed`) and the
+macOS ARM64 abi3 wheel
+`uvicorn_rs-0.2.1-cp39-abi3-macosx_11_0_arm64.whl` (SHA-256
+`5631ff719daf284403b19db4824e0a8618b4acbedcf9a635ef33e60fc529359d`). Both
+declare PyPI name `uvicorn-rs` and version 0.2.1. An isolated CPython 3.13.14
+environment installed the wheel; the `uvicorn` namespace and native extension
+resolved inside that environment, and both `uvicorn --version` and
+`python -m uvicorn --version` succeeded with compatibility version 0.54.0.
+These local artifacts came from the dirty checkout and do not replace the
+exact-main, multi-platform candidate bundle or its clean registry-consumer
+receipts.
 
-Cargo packaging check (2026-10-26): `asgi-lifespan-protocol-rs 0.2.1` archived
-9 files from the local checkout. Packaging dependent `uvicorn-rs 0.2.1` stopped
-because the crates.io index still exposed only lifecycle version 0.2.0. Publish
-the lifecycle crate before packaging and publishing the server crate. Cargo's
-configured token has not been refreshed with the replacement `publish-new`
-token, so there has been no retry or upload.
+Latest Cargo package preflight (2026-10-26): `cargo package --locked` verified
+`asgi-lifespan-protocol-rs 0.2.1` (9 files; SHA-256
+`dc8580b39b1cdad0a928518b98e002b01f5dc9c08728d66b7a633e8a60a6a93a`). The
+`uvicorn-rs 0.2.1` archive passed default-feature and all-feature verification
+when its unpublished lifecycle dependency was patched to the workspace path
+(72 files; SHA-256
+`34e8dd5a31a56c41fb25d05cef01d50f077d15de3d6eb3e4288471717881bafd`). The
+unpatched registry-resolving package check still fails because only lifecycle
+version 0.2.0 is indexed. These local archives came from the dirty checkout;
+they are not clean candidate artifacts or registry-consumer receipts. No
+Cargo or PyPI upload was attempted.
 
-At the time of this update, hosted benchmark run
+Hosted benchmark run
 [`40228012455`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455)
-was incomplete. Linux x86-64 and Linux ARM64 had passed the installed-binary
-parity gate and were running the category workloads. macOS ARM64 stopped before
-timing after an oracle-side timeout in
+has completed with failure. It used earlier branch commit
+`7811b2392b60cd8eadc8a951c1eff47d57ace2d6`: Linux x86-64 passed its parity and
+category job; macOS ARM64 stopped before timing after an oracle-side timeout in
 `websocket-tls.text-round-trip-with-query-and-subprotocol` (468 cases passed,
-one infrastructure failure, one not run). The same selected case passed once
-locally on macOS, but this does not establish the hosted failure's cause or
-provide three-system benchmark evidence. On `main` commit
+one infrastructure failure, one not run); Linux ARM64 passed parity and the
+FastAPI comparison, then failed the HTTP/3 `large-response` correctness gate
+against Hypercorn asyncio in repetition 2 after receiving 904,262 bytes instead
+of the expected 1,048,576. Its checkpoint has no completed HTTP/3 report. The
+same selected macOS parity case passed once locally, but this does not establish
+the hosted timeout's cause. The run's Linux ARM64 HTTP/1 artifact contains 20
+timing-valid, zero-failure `fastapi-upload-1m-write-1k` rows at concurrency 8;
+the earlier upload timeout was not reproduced, and its cause remains unknown.
+There is no validated three-system aggregate or release performance claim. On
+`main` commit
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`, unified coverage run
 [`39689988928`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
 reported 10,962/11,375 regions and 8,130/8,438 lines, below the 100% gate. No
 accepted independent Coverage-MCP receipt is bound to that exact source. No
 clean candidate artifact or consumer receipt is bound to the current branch
 commit. No Cargo or PyPI upload has occurred.
+
+The latest full pull-request coverage run
+[`40237012947`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40237012947)
+used PR head `35e548f08d1a4248488fc1351ed8850e7c80f23c` and reported
+12,502/12,711 regions and 9,280/9,415 lines. Coverage-MCP did not accept its
+synthetic-merge source revision as an independent receipt for the exact local
+checkout. The focused cases added since that run are not a replacement for a
+new complete coverage run.
 
 Registry check (2026-10-26): crates.io returns HTTP 404 for `uvicorn-rs` and
 `uvicorn-rs 0.2.1`, and for `asgi-lifespan-protocol-rs 0.2.1`; PyPI returns

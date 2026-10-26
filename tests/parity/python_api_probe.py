@@ -326,8 +326,21 @@ import uvicorn
 
 lifespan_state = {"started": False}
 factory_invoked = False
+loop_factory_calls = 0
 request_context = contextvars.ContextVar("python_api_request_context", default="empty")
 request_context.set("inherited")
+
+_default_loop = asyncio.new_event_loop()
+_default_loop_type = type(_default_loop)
+_default_loop.close()
+
+class ParityEventLoop(_default_loop_type):
+    pass
+
+def custom_loop_factory():
+    global loop_factory_calls
+    loop_factory_calls += 1
+    return ParityEventLoop()
 
 async def asgi3_app(scope, receive, send):
     if scope["type"] == "lifespan":
@@ -426,6 +439,8 @@ async def asgi3_app(scope, receive, send):
         loop = asyncio.get_running_loop()
         loop_name = f"{type(loop).__module__}.{type(loop).__qualname__}"
         body_parts.append(b"python-loop=" + loop_name.encode("ascii"))
+    if loop_factory_calls:
+        body_parts.append(f"loop-factory-calls={loop_factory_calls}".encode("ascii"))
     if observe_unix_scope:
         client_is_none = scope.get("client") is None
         server = scope.get("server")
@@ -491,7 +506,7 @@ ssl_certfile = sys.argv[29] or None
 ssl_keyfile = sys.argv[30] or None
 host = sys.argv[31]
 ssl_keyfile_password = json.loads(sys.argv[32])
-ssl_ca_certs = sys.argv[33] or None
+ssl_ca_certs = json.loads(sys.argv[33])
 ssl_cert_reqs = int(sys.argv[34])
 ssl_version = json.loads(sys.argv[35])
 proxy_headers = sys.argv[9] == "1"
@@ -573,19 +588,31 @@ except KeyboardInterrupt:
     inherited_listeners = []
     tls_directory = Path(__file__).resolve().parents[1] / "native-core" / "tls"
     tls_assets = request.get("_tls_assets", {})
+    certificate_filename = (
+        "localhost-cert-ec.pem"
+        if request.get("ssl_keyfile_format") == "traditional-ec-aes256"
+        else "localhost-cert.pem"
+    )
     tls_certificate = (
         Path(tls_assets["server_certificate"])
         if request.get("tls") and "server_certificate" in tls_assets
-        else tls_directory / "localhost-cert.pem"
+        else tls_directory / certificate_filename
         if request.get("tls")
         else None
     )
-    key_filename = (
-        "localhost-key-rsa-aes256-encrypted.pem"
-        if request.get("ssl_keyfile_format") == "traditional-rsa-aes256"
-        else "localhost-key-pkcs8-encrypted.pem"
+    key_filename = {
+        "traditional-rsa-aes128": "localhost-key-rsa-aes128-encrypted.pem",
+        "traditional-rsa-aes192": "localhost-key-rsa-aes192-encrypted.pem",
+        "traditional-rsa-aes256": "localhost-key-rsa-aes256-encrypted.pem",
+        "traditional-ec-aes256": "localhost-key-ec-aes256-encrypted.pem",
+        "traditional-rsa-aes256-high-nonhex-iv": "localhost-key-rsa-aes256-high-nonhex-iv.pem",
+        "traditional-rsa-aes256-odd-iv": "localhost-key-rsa-aes256-odd-iv.pem",
+        "traditional-rsa-aes256-nonhex-iv": "localhost-key-rsa-aes256-nonhex-iv.pem",
+    }.get(
+        request.get("ssl_keyfile_format"),
+        "localhost-key-pkcs8-encrypted.pem"
         if request.get("ssl_keyfile_password") is not None
-        else "localhost-key.pem"
+        else "localhost-key.pem",
     )
     tls_key = (
         Path(tls_assets["server_key"])
@@ -597,6 +624,8 @@ except KeyboardInterrupt:
     ssl_ca_certs = (
         tls_assets.get("ca_certificate")
         if request.get("ssl_ca_certs") == "generated-ca"
+        else tls_assets.get("empty_ca_certificate")
+        if request.get("ssl_ca_certs") == "empty-ca"
         else request.get("ssl_ca_certs")
     )
     ssl_cert_reqs = request.get("ssl_cert_reqs", 0)
@@ -748,7 +777,7 @@ except KeyboardInterrupt:
             str(tls_key) if tls_key is not None else "",
             host,
             json.dumps(request.get("ssl_keyfile_password")),
-            str(ssl_ca_certs) if ssl_ca_certs is not None else "",
+            json.dumps(ssl_ca_certs),
             str(ssl_cert_reqs),
             json.dumps(request.get("ssl_version")),
         ]
@@ -961,7 +990,14 @@ except KeyboardInterrupt:
     )
 
     def make_client_tls_context() -> ssl.SSLContext:
-        trust_anchor = ssl_ca_certs or tls_certificate
+        # An empty CA file is an input for server-side startup rejection. Keep
+        # the probe's own TLS trust valid so a slow startup failure cannot be
+        # misreported as an error in the client context setup.
+        trust_anchor = (
+            tls_certificate
+            if request.get("ssl_ca_certs") == "empty-ca"
+            else ssl_ca_certs or tls_certificate
+        )
         if trust_anchor is None:
             raise RuntimeError("TLS client context is missing its trust anchor")
         context = ssl.create_default_context(cafile=str(trust_anchor))
@@ -1660,6 +1696,92 @@ async def server_readiness_observation() -> dict[str, object]:
             await asyncio.gather(task, return_exceptions=True)
 
 
+async def server_serve_cancellation_observation(phase: str) -> dict[str, bool]:
+    """Observe public serve-task cancellation during or after lifespan startup."""
+    import uvicorn
+
+    startup_entered = asyncio.Event()
+    allow_startup_completion = asyncio.Event()
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                if message["type"] == "lifespan.startup":
+                    startup_entered.set()
+                    if phase == "during-startup":
+                        await allow_startup_completion.wait()
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+        elif scope["type"] == "http":
+            await send({"type": "http.response.start", "status": 204, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+        reservation.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=port,
+            loop="asyncio",
+            lifespan="on" if phase == "during-startup" else "off",
+            log_config=None,
+            access_log=False,
+        )
+    )
+    task = asyncio.create_task(server.serve())
+    try:
+        if phase == "during-startup":
+            await asyncio.wait_for(startup_entered.wait(), timeout=5)
+        else:
+            for _ in range(500):
+                if server.started:
+                    break
+                if task.done():
+                    await task
+                    break
+                await asyncio.sleep(0.01)
+        started_before_cancel = bool(server.started)
+        if phase == "after-startup" and not started_before_cancel:
+            raise RuntimeError("server did not become ready before cancellation probe")
+
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            serve_cancelled = True
+        else:
+            serve_cancelled = False
+
+        await asyncio.sleep(0)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.settimeout(1)
+            listener_accepting_after_cancel = probe.connect_ex(("127.0.0.1", port)) == 0
+        return {
+            "lifespan_startup_entered_before_cancel": startup_entered.is_set(),
+            "server_started_before_cancel": started_before_cancel,
+            "serve_cancelled": serve_cancelled,
+            "serve_task_finished": task.done(),
+            "listener_accepting_after_cancel": listener_accepting_after_cancel,
+        }
+    finally:
+        allow_startup_completion.set()
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        if phase == "after-startup":
+            try:
+                await asyncio.wait_for(server.shutdown(), timeout=5)
+            except BaseException:
+                pass
+
+
 async def server_callback_notify_observation() -> dict[str, int | bool]:
     import uvicorn
 
@@ -2028,6 +2150,16 @@ def main() -> None:
     if "server_readiness" in request:
         observations = {
             "server_readiness": asyncio.run(server_readiness_observation()),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_serve_cancellation" in request:
+        observations = {
+            "server_serve_cancellation": asyncio.run(
+                server_serve_cancellation_observation(
+                    request["server_serve_cancellation"]["phase"]
+                )
+            ),
         }
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
         return

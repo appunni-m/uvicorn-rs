@@ -888,6 +888,9 @@ def load_contract(
         "process_stdout_base64", "process_stderr_base64",
         "workers_ignored_warning", "excluded_change_reloaded",
         "included_change_reloaded", "scope_observation", "compression_negotiated",
+        "lifespan_startup_entered_before_cancel", "server_started_before_cancel",
+        "serve_cancelled", "serve_task_finished",
+        "listener_accepting_after_cancel",
     }
     for operation in manifest["operations"]:
         expected_operation_keys = {"id", "kind", "observe"}
@@ -2484,27 +2487,34 @@ def load_contract(
                         f"{case_id}.api.run_http.ssl_keyfile_password must be a non-empty string and requires tls=true"
                     )
                 if "ssl_keyfile_format" in run_http and (
-                    run_http["ssl_keyfile_format"] != "traditional-rsa-aes256"
+                    run_http["ssl_keyfile_format"] not in {
+                        "traditional-rsa-aes128",
+                        "traditional-rsa-aes192",
+                        "traditional-rsa-aes256",
+                        "traditional-ec-aes256",
+                        "traditional-rsa-aes256-high-nonhex-iv",
+                        "traditional-rsa-aes256-odd-iv",
+                        "traditional-rsa-aes256-nonhex-iv",
+                    }
                     or not run_http.get("tls")
                     or not run_http.get("ssl_keyfile_password")
                 ):
                     raise ParityError(
-                        f"{case_id}.api.run_http.ssl_keyfile_format must be traditional-rsa-aes256 and requires tls=true with a password"
+                        f"{case_id}.api.run_http.ssl_keyfile_format must select a supported encrypted traditional private key and requires tls=true with a password"
                     )
                 if "ssl_ca_certs" in run_http and (
-                    run_http["ssl_ca_certs"] != "generated-ca"
+                    run_http["ssl_ca_certs"] not in {"generated-ca", "empty-ca", ""}
                     or not run_http.get("tls")
                 ):
                     raise ParityError(
-                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca and requires tls=true"
+                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca, empty-ca, or an empty path and requires tls=true"
                     )
                 if "ssl_cert_reqs" in run_http and (
                     type(run_http["ssl_cert_reqs"]) is not int
-                    or run_http["ssl_cert_reqs"] not in {0, 1, 2}
                     or not run_http.get("tls")
                 ):
                     raise ParityError(
-                        f"{case_id}.api.run_http.ssl_cert_reqs must be 0, 1, or 2 and requires tls=true"
+                        f"{case_id}.api.run_http.ssl_cert_reqs must be an integer and requires tls=true"
                     )
                 if "ssl_version" in run_http and (
                     type(run_http["ssl_version"]) is not int
@@ -2732,13 +2742,30 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.observe_loop requires a programmatic invocation"
                     )
-                if "loop" in run_http and (
-                    type(run_http["loop"]) is not str
-                    or run_http["loop"] not in {"auto", "asyncio", "uvloop"}
-                ):
-                    raise ParityError(
-                        f"{case_id}.api.run_http.loop must be auto, asyncio, or uvloop"
-                    )
+                if "loop" in run_http:
+                    loop = run_http["loop"]
+                    custom_factory_path = False
+                    if type(loop) is str and run_http["invocation"] in {
+                        "api",
+                        "config-server",
+                        "server-sockets",
+                    }:
+                        module, separator, attribute = loop.partition(":")
+                        custom_factory_path = (
+                            separator == ":"
+                            and bool(module)
+                            and bool(attribute)
+                            and all(part.isidentifier() for part in module.split("."))
+                            and all(part.isidentifier() for part in attribute.split("."))
+                        )
+                    if type(loop) is not str or (
+                        loop not in {"auto", "asyncio", "uvloop"}
+                        and not custom_factory_path
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.loop must be auto, asyncio, uvloop, "
+                            "or a programmatic module:factory import path"
+                        )
                 if "proxy_headers" in run_http and type(run_http["proxy_headers"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.proxy_headers must be a boolean"
@@ -3004,6 +3031,18 @@ def load_contract(
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
                     raise ParityError(
                         f"{case_id}.api.run_websocket.timeout_seconds must be from 2 through 8"
+                    )
+            elif case["operation"] == "python.api.server-serve-cancellation":
+                exact_keys(case["api"], {"server_serve_cancellation"}, f"{case_id}.api")
+                cancellation = case["api"]["server_serve_cancellation"]
+                exact_keys(
+                    cancellation,
+                    {"phase"},
+                    f"{case_id}.api.server_serve_cancellation",
+                )
+                if cancellation["phase"] not in {"after-startup", "during-startup"}:
+                    raise ParityError(
+                        f"{case_id}.api.server_serve_cancellation.phase must be after-startup or during-startup"
                     )
             elif case["operation"] in readiness_operations:
                 input_name = readiness_operations[case["operation"]]
@@ -4939,6 +4978,13 @@ def start_server(
         "startup-encrypted-private-key-malformed-pem",
         "startup-encrypted-private-key-wrong-label",
         "startup-encrypted-private-key-invalid-der",
+        "startup-traditional-encrypted-private-key-unsupported-cipher",
+        "startup-traditional-encrypted-private-key-missing-dek-info",
+        "startup-traditional-encrypted-private-key-invalid-dek-info",
+        "startup-traditional-encrypted-private-key-invalid-proc-type",
+        "startup-traditional-encrypted-private-key-missing-body",
+        "startup-traditional-encrypted-private-key-invalid-body-base64",
+        "startup-traditional-encrypted-private-key-missing-end-marker",
     }
     if profile_id in startup_api_profiles:
         server_python = str(ORACLE_PYTHON) if server_id == "uvicorn" else sys.executable
@@ -11378,7 +11424,7 @@ def run_python_api_probe(
     run_http = case["api"].get("run_http", {})
     probe_run_http = dict(run_http)
     temporary_tls_assets = None
-    if run_http.get("ssl_ca_certs") == "generated-ca" or run_http.get("client_tls"):
+    if run_http.get("ssl_ca_certs") in {"generated-ca", "empty-ca"} or run_http.get("client_tls"):
         temporary_tls_assets = tempfile.TemporaryDirectory(
             prefix="uvicorn-rs-python-api-tls-"
         )
@@ -11389,6 +11435,10 @@ def run_python_api_probe(
             "server_key": str(key),
             "ca_certificate": str(ca_certificate),
         }
+        if run_http.get("ssl_ca_certs") == "empty-ca":
+            empty_ca_certificate = tls_directory / "empty-ca.pem"
+            empty_ca_certificate.write_bytes(b"")
+            tls_assets["empty_ca_certificate"] = str(empty_ca_certificate)
         if run_http.get("client_tls"):
             client_certificate, client_key = make_client_certificate(tls_directory)
             tls_assets.update(
@@ -11461,6 +11511,32 @@ def run_python_api_probe(
         "stdout_base64": base64.b64encode(completed.stdout).decode("ascii"),
         "stderr_base64": base64.b64encode(completed.stderr).decode("ascii"),
     }
+    if case["operation"] == "python.api.server-serve-cancellation":
+        try:
+            cancellation = json.loads(completed.stdout)["server_serve_cancellation"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: serve cancellation probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(cancellation) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: serve cancellation observation must be an object"
+            )
+        observation.update(
+            {
+                name: cancellation.get(name)
+                for name in (
+                    "lifespan_startup_entered_before_cancel",
+                    "server_started_before_cancel",
+                    "serve_cancelled",
+                    "serve_task_finished",
+                    "listener_accepting_after_cancel",
+                )
+            }
+        )
     if case["operation"] in {
         "python.api.run-http-reload",
         "python.api.run-http-reload-filters",
@@ -11788,6 +11864,13 @@ def start_profile_servers(
         "startup-encrypted-private-key-malformed-pem",
         "startup-encrypted-private-key-wrong-label",
         "startup-encrypted-private-key-invalid-der",
+        "startup-traditional-encrypted-private-key-unsupported-cipher",
+        "startup-traditional-encrypted-private-key-missing-dek-info",
+        "startup-traditional-encrypted-private-key-invalid-dek-info",
+        "startup-traditional-encrypted-private-key-invalid-proc-type",
+        "startup-traditional-encrypted-private-key-missing-body",
+        "startup-traditional-encrypted-private-key-invalid-body-base64",
+        "startup-traditional-encrypted-private-key-missing-end-marker",
     }
     if tls:
         certificate, key, trust_anchor = make_certificate(tempdir)

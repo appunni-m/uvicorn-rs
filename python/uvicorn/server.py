@@ -135,6 +135,7 @@ class Server:
 
         process_id = os.getpid()
         logger.info("Started server process [%d]", process_id)
+        cancelled = False
         try:
             await self.startup(sockets=sockets)
             await self.main_loop()
@@ -148,16 +149,22 @@ class Server:
                 raise SystemExit(3) from None
             raise
         except asyncio.CancelledError:
-            native_server = self._native_server
-            native_task = self._native_task
-            if native_server is not None:
-                native_server.shutdown()
-            if native_task is not None:
-                with contextlib.suppress(BaseException):
-                    await asyncio.shield(native_task)
+            if self.started:
+                # Once startup is complete, Uvicorn leaves listener and server
+                # state intact when the public serve task is cancelled.
+                cancelled = True
+            else:
+                # Uvicorn binds only after lifespan startup. Let the native
+                # server keep its lifespan task but skip listener startup if
+                # this public serve task is cancelled first.
+                native_server = self._native_server
+                if native_server is not None:
+                    native_server.cancel_startup()
+                    cancelled = True
             raise
         finally:
-            self._cleanup_native_runtime()
+            if not cancelled:
+                self._cleanup_native_runtime()
 
     async def startup(self, sockets: list[socket.socket] | None = None) -> None:
         """Start the Rust server and wait until its listener and lifespan are ready."""
@@ -197,7 +204,7 @@ class Server:
                 ssl_keyfile_password=self.config.ssl_keyfile_password,
                 ssl_ca_certs=(
                     os.fspath(self.config.ssl_ca_certs)
-                    if self.config.ssl_ca_certs is not None
+                    if self.config.ssl_ca_certs
                     else None
                 ),
                 ssl_cert_reqs=int(self.config.ssl_cert_reqs),
@@ -259,10 +266,6 @@ class Server:
             self._cleanup_native_runtime()
             raise
         except asyncio.CancelledError:
-            native_server.shutdown()
-            with contextlib.suppress(BaseException):
-                await asyncio.shield(native_task)
-            self._cleanup_native_runtime()
             raise
         except BaseException:
             native_server.shutdown()

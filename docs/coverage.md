@@ -4,9 +4,9 @@
 
 <a id="current-unified-coverage-status-2026-10-22"></a>
 
-## Current unified coverage status (2026-10-22)
+## Current unified coverage status (2026-10-26)
 
-The latest exact-main CI run
+The last exact-main CI run
 [39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
 is bound to clean commit
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its unified matrix completed
@@ -19,12 +19,60 @@ and **8,130/8,438 executable lines**. The remaining gaps are 413 regions and
 report SHA-256 is
 `9d58a1e169b6e751efbe35f4492528fc368d7c31ea02aee2bd35d06c5669a51c`.
 
+The latest full pull-request coverage run
+[`40237012947`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40237012947)
+used PR head `35e548f08d1a4248488fc1351ed8850e7c80f23c`. It passed its selected
+parity cases but failed the 100% gate at **12,502/12,711 regions** and
+**9,280/9,415 lines** (209 regions and 135 lines missing). The uploaded report
+records a synthetic merge revision, so Coverage-MCP did not accept it as a
+review bound to the exact local checkout; there is no accepted independent
+zero-gap receipt. The focused cases added after that run are selected dirty
+source evidence and do not refresh the full gate.
+
 Independent Coverage-MCP review is **not complete**. The local consolidation
 draft has a measured report, but its coverage gate failed and there is no
 accepted zero-gap receipt. The exact-main CI result still describes the old
 committed package graph. Candidate package and Python-floor jobs were skipped
 after the coverage gate failed. See the [release guide](releases.md) and
 [benchmark status](benchmark-status.md) for the other open release gates.
+
+After the pull-request run, five focused local startup cases reached
+traditional encrypted RSA key parsing. The unsupported-cipher case passed
+1/1; missing and malformed `DEK-Info`, invalid `Proc-Type`, and missing end
+marker cases passed 4/4 against Uvicorn 0.54.0. Target LLVM profiles record the
+rejection paths at `src/lib.rs:5710`, `src/lib.rs:5732`, `src/lib.rs:5738`,
+`src/lib.rs:5742`, and `src/lib.rs:5749`. These selected dirty-source cases do
+not refresh the full report or satisfy the 100% gate.
+
+A new input, `startup-traditional-encrypted-private-key-missing-body`, checks
+traditional encrypted RSA PEM with `Proc-Type` and `DEK-Info` headers but no
+blank body separator. It passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7
+ARM64 / CPython 3.12.13. Coverage-MCP matched the report to its source receipt
+and found no missing regions at the no-body error path (`src/lib.rs:5731`).
+The selected report is
+`target/kata-progress/coverage-traditional-missing-body-current.json` (run
+`b0cf304c045243dc90f67af63a9d086b`, report SHA-256
+`e3b690370ac375d6f3e5c55c43db5c842b153b144aa18262a5b1b343f40102a3`, source
+SHA-256 `925d352eac310c8219d1a154cc5fae803f1a1feb68cf3b93ed0d7b9155ccaf54`,
+instrumented extension SHA-256
+`926dea46abde6f4eab735fd88ef5d6996bb94d903a3c2143c2dd96273f141076`). The
+selected subset measured 270/12,750 regions and 218/9,438 lines; it does not
+refresh the full report or satisfy the 100% gate.
+
+A second input, `startup-traditional-encrypted-private-key-invalid-body-base64`,
+reaches the base64 decoder with valid traditional RSA encryption headers and
+an invalid framed body. It passed 1/1 with complete attribution against
+Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. Coverage-MCP matched
+the report to its source receipt, reported `tests=passed`, and found no missing
+regions in the decoder error closure at `src/lib.rs:5763`. The selected report
+is `target/kata-progress/coverage-traditional-invalid-body-base64-current.json`
+(run `6fc048d2d4f84167b76caaa348f5d1cd`, report SHA-256
+`4f92cd3738a48d437e9f480d9f9183b3445ca437f1cb352008076a5ea1a739d2`, source
+SHA-256 `013d6d57e9c3d0e344c9d1d394316f999bf18bfa8f553f2c986ccf65d142233b`,
+instrumented extension SHA-256
+`0dbfbafd03dd20dc8c63079f76ef4cf43488abb2732e947ccbe56be78f144ea2`). This
+selected subset measured 341/12,750 regions and 252/9,438 lines; it does not
+refresh the full report or satisfy the 100% gate.
 
 ### Local consolidation draft (2026-10-22)
 
@@ -57,9 +105,9 @@ not exchange WebSocket frames or prove active-session ping suppression. These
 `target/` reports are local ignored artifacts, not published documentation
 attachments.
 
-The current 2026-10-26 working-tree inventory contains 1,040 cases: 801
-indexed ASGI inputs (480 oracle-parity and 321 target-only fault-contract
-cases) plus 239 native-core contracts. The three new Yawc adapter fault cases
+The current 2026-10-26 working-tree inventory contains 1,059 cases: 819
+indexed ASGI inputs (498 oracle-parity and 321 target-only fault-contract
+cases) plus 240 native-core contracts. The three new Yawc adapter fault cases
 passed 1/1 each in a selected local coverage batch on macOS ARM64 / CPython
 3.12.13. Two additional Python API parity inputs compare successful loading of
 a traditional AES-256-CBC encrypted RSA key and the wrong-password failure;
@@ -76,7 +124,15 @@ covered. Its report is `target/kata-progress/coverage-encrypted-key-formats-fixe
 source SHA-256
 `6e611ec3893ec3ef8ef2c5f71f7e3ccf0e43d3562038b1c2f31bd865c73961e9`). This is
 selected-subset evidence and does not establish the full coverage gate. The
-separate Yawc coverage report is
+new input `python-api.config-server-uses-traditional-encrypted-ec-key` adds a
+successful encrypted SEC1 EC-key load through the Python API. It passed 1/1
+against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. The parity
+receipt is `target/kata-progress/traditional-encrypted-ec-key-current-20261026.json`
+(run `5c776eaf4bd24718aab95a887907c8a2`, SHA-256
+`a05d380a44c4b1ba327193ce27a9d7808638a5fdd79b22f2555ddd3224def48f`). It uses
+dirty source at `35e548f08d1a4248488fc1351ed8850e7c80f23c` and did not collect an
+LLVM coverage profile; it is parity evidence only, not a coverage-gate result.
+The separate Yawc coverage report is
 `target/kata-progress/coverage-yawc-adapter-faults-775489526/coverage-report.json`
 (SHA-256
 `6242f3b1a9e9d17e4cfb3987ac0a0cac67c21708a89ddc545528db2cfb65a0e2`; build ID
@@ -134,6 +190,35 @@ extension digest
 `c74c89acb61d6d8abd0f7803d55dc9a724d30839ecb4138a70b67d2f7e2b7b32`.
 This remains one selected case, not a full coverage report, three-repeat
 result, or full Coverage-MCP review.
+
+One focused Python API input now checks invalid `ssl_cert_reqs=3`. It passed
+1/1 against Uvicorn 0.54.0 after matching the upstream `ValueError` text,
+`3 is not a valid VerifyMode`. The selected report is
+`target/kata-progress/coverage-invalid-client-cert-reqs-20261026.json` (report
+SHA-256 `c282768a5fe7b5c89f8cce76a148c6c93bdb70a2a8cf1c26a0a3d71d66248b7e`,
+build ID `ceb0acb6269aa4bf148ff84d93bb86336252b70905a75439d9e6e8b2fb405bfe`,
+source SHA-256
+`7189a531535da3dc4215277f8bc0a087097a6840c78ffe10030a9bf376142236`). Its
+selected case covers 177/12,711 regions and 159/9,415 lines. Coverage-MCP
+matched the source receipt and found no missing region at the error formatting
+span (`src/lib.rs:5578`); the selected report still has an uncovered valid-mode
+branch at `src/lib.rs:5577`. This is one dirty-source case, not a refreshed
+full report or a 100% gate pass.
+
+A separate input uses an empty `ssl_ca_certs` file with `ssl_cert_reqs=2`.
+It passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13;
+both servers reject startup with matching `ssl.SSLError` observations. The
+selected report is
+`target/kata-progress/empty-client-ca-matched-runtime/coverage-report.json`
+(run `0a2be6f26e5b438dac0db9593e049564`, report SHA-256
+`19a4e7ca2cab4f5f2058c669d51bfa457f2d634a857f0505d7b17d0960c61a13`, source
+SHA-256 `ce35205bbd74c6ca56eb09f6d8e06fda4748986c2e3d0084d67fdac572cb355f`,
+instrumented extension SHA-256
+`9879a7e67d83799c1f360ae67732ee27aa902dbb626fa85702bb3ee1a9e146d1`).
+Coverage-MCP matched the source receipt and recorded the selected test as
+passed; the single-case report remains incomplete at 225/12,750 regions and
+189/9,438 lines and does not refresh the full gate. The case covers the empty
+client-CA error path only.
 
 A later selected case, `python-api.run-websocket-zero-ping-interval-disables-keepalive`,
 opens a WebSocket through the Python API with a zero interval, waits 0.35

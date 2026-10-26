@@ -69,6 +69,52 @@ def identity_for(
             b"-----BEGIN ENCRYPTED PRIVATE KEY-----\nMAA=\n"
             b"-----END ENCRYPTED PRIVATE KEY-----\n"
         ),
+        "startup-traditional-encrypted-private-key-unsupported-cipher": (
+            b"-----BEGIN RSA PRIVATE KEY-----\n"
+            b"Proc-Type: 4,ENCRYPTED\n"
+            b"DEK-Info: UNKNOWN-CBC,0123456789ABCDEF\n\n"
+            b"AAAA\n"
+            b"-----END RSA PRIVATE KEY-----\n"
+        ),
+        "startup-traditional-encrypted-private-key-missing-dek-info": (
+            b"-----BEGIN RSA PRIVATE KEY-----\n"
+            b"Proc-Type: 4,ENCRYPTED\n\n"
+            b"AAAA\n"
+            b"-----END RSA PRIVATE KEY-----\n"
+        ),
+        "startup-traditional-encrypted-private-key-invalid-dek-info": (
+            b"-----BEGIN RSA PRIVATE KEY-----\n"
+            b"Proc-Type: 4,ENCRYPTED\n"
+            b"DEK-Info: AES-256-CBC-0123456789ABCDEF\n\n"
+            b"AAAA\n"
+            b"-----END RSA PRIVATE KEY-----\n"
+        ),
+        "startup-traditional-encrypted-private-key-invalid-proc-type": (
+            b"-----BEGIN RSA PRIVATE KEY-----\n"
+            b"Proc-Type: 5,ENCRYPTED\n"
+            b"DEK-Info: AES-256-CBC,0123456789ABCDEF0123456789ABCDEF\n\n"
+            b"AAAA\n"
+            b"-----END RSA PRIVATE KEY-----\n"
+        ),
+        "startup-traditional-encrypted-private-key-missing-body": (
+            b"-----BEGIN RSA PRIVATE KEY-----\n"
+            b"Proc-Type: 4,ENCRYPTED\n"
+            b"DEK-Info: AES-256-CBC,0123456789ABCDEF0123456789ABCDEF\n"
+            b"-----END RSA PRIVATE KEY-----\n"
+        ),
+        "startup-traditional-encrypted-private-key-invalid-body-base64": (
+            b"-----BEGIN RSA PRIVATE KEY-----\n"
+            b"Proc-Type: 4,ENCRYPTED\n"
+            b"DEK-Info: AES-256-CBC,0123456789ABCDEF0123456789ABCDEF\n\n"
+            b"not-base64!\n"
+            b"-----END RSA PRIVATE KEY-----\n"
+        ),
+        "startup-traditional-encrypted-private-key-missing-end-marker": (
+            b"-----BEGIN RSA PRIVATE KEY-----\n"
+            b"Proc-Type: 4,ENCRYPTED\n"
+            b"DEK-Info: AES-256-CBC,0123456789ABCDEF0123456789ABCDEF\n\n"
+            b"AAAA\n"
+        ),
     }
     if scenario in malformed_encrypted_key_documents:
         invalid = temporary / "invalid-encrypted-key.pem"
@@ -90,6 +136,7 @@ def main() -> None:
         key_password = (
             "not-the-parity-key-password"
             if scenario.startswith("startup-encrypted-private-key-")
+            or scenario.startswith("startup-traditional-encrypted-private-key-")
             else None
         )
         host = "does-not-exist.invalid" if scenario == "startup-invalid-host" else "127.0.0.1"

@@ -41,6 +41,11 @@
           "uvicorn.main.ServerState",
           "uvicorn:Server.run",
           "uvicorn:Server.serve",
+          "uvicorn:Server.startup",
+          "uvicorn:Server.shutdown",
+          "uvicorn:Server.main_loop",
+          "uvicorn:Server.on_tick",
+          "uvicorn:Server.capture_signals",
           "uvicorn:Config.get_loop_factory",
           "uvicorn:Config.load_app",
           "uvicorn:Config.setup_event_loop",
@@ -236,6 +241,25 @@
           "invocation": "config-server",
           "root_path": "",
           "loop": "asyncio",
+          "observe_loop": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-uses-custom-loop-factory",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-custom-loop-factory",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "loop": "__main__:custom_loop_factory",
           "observe_loop": true
         }
       }
@@ -1582,6 +1606,28 @@
       }
     },
     {
+      "case_id": "python-api.server-serve-cancellation-listener-state",
+      "profile": "python-api",
+      "operation": "python.api.server-serve-cancellation",
+      "covers": ["python.api.server-serve-cancellation"],
+      "api": {
+        "server_serve_cancellation": {
+          "phase": "after-startup"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.server-serve-cancellation-during-startup",
+      "profile": "python-api",
+      "operation": "python.api.server-serve-cancellation",
+      "covers": ["python.api.server-serve-cancellation"],
+      "api": {
+        "server_serve_cancellation": {
+          "phase": "during-startup"
+        }
+      }
+    },
+    {
       "case_id": "python-api.server-on-propagates-lifespan-startup-failure",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-startup",
@@ -2171,6 +2217,127 @@
       }
     },
     {
+      "case_id": "python-api.config-server-uses-traditional-encrypted-rsa-aes128-key",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-aes128-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes128"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-uses-traditional-encrypted-rsa-aes192-key",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-aes192-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes192"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-high-nonhex-iv",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-high-nonhex-iv",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-high-nonhex-iv",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-odd-iv",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-odd-iv",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-odd-iv",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-nonhex-iv",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-nonhex-iv",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-nonhex-iv",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
       "case_id": "python-api.config-server-uses-traditional-encrypted-rsa-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -2187,6 +2354,26 @@
           "tls": true,
           "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
           "ssl_keyfile_format": "traditional-rsa-aes256"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-uses-traditional-encrypted-ec-key",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-ec-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-ec-aes256"
         }
       }
     },
@@ -2240,6 +2427,79 @@
             "process_exit_code": 1,
             "process_timed_out": false
           }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-invalid-client-certificate-reqs",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-invalid-client-cert-reqs",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_cert_reqs": 3,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-empty-client-ca-file",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-empty-client-ca-file",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "empty-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-ignores-empty-client-ca-path",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-empty-client-ca-path",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "",
+          "ssl_cert_reqs": 0
         }
       }
     },
