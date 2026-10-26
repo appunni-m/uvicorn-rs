@@ -15,6 +15,25 @@ Use these state labels precisely:
 - **Released:** the authorized distribution decision and required verification
   are complete.
 
+## Current release status (2026-10-26)
+
+`asgi-lifespan-protocol-rs` 0.2.1 and `uvicorn-rs` 0.2.1 have been published
+to crates.io from clean commit
+`d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`. Their archive SHA-256 values are
+`44adef2e2648be1514aebe33ddc1dcc5267dae67abd8d31f1aff7ded7ce16235` and
+`0662828f3f852f4960a034e734b2a281765e40b29388d4e8469230e5d4e52fcf`,
+respectively. The server archive was reproduced with registry dependency
+resolution after removing the workspace path patch from candidate packaging.
+The PyPI distribution `uvicorn-rs` 0.2.1 has not been uploaded.
+
+This is a Cargo publication, not a completed project release. PR #19 remains a
+draft; its current full coverage job is still running on the PR branch. The
+exact-main coverage gate, independent Coverage-MCP receipt, complete three-
+system benchmarks, compatibility gates, exact-main candidate bundle, and clean
+downstream consumers remain open. `release.yml` only publishes from `main`
+after it verifies the tagged candidate and all attached evidence. Do not call
+the local Cargo publication a verified PyPI release candidate.
+
 ## Distribution boundaries
 
 | Channel | Distribution | Scope |
@@ -23,12 +42,12 @@ Use these state labels precisely:
 | PyPI | uvicorn-rs | Optional Python compatibility client for standard Python ASGI applications. It is not required by the Python-free Rust library. |
 | Documentation | README, MkDocs site, and docs.rs | Repository docs deploy through GitHub Pages; crate API docs are generated from published Cargo archives. |
 
-The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py` internally; that is not the PyPI distribution name. The package also retains its `uvicorn-rs-py` console alias. The exact compatibility scope is recorded in the [support matrix](support-matrix.md); these names do not imply full Uvicorn parity. The coordinated candidate version is 0.2.1: lifecycle version 0.2.0 is already occupied by a dirty-source archive, while the consolidated server crate and PyPI distribution have no published 0.2.1 version. Local 0.2.1 Cargo archives were built from clean commit `7754895262c7b1d7baa2e9595277a81607634d38`; their hashes and limits are recorded below. These are not the exact-main workflow bundle. As of 2026-10-26, neither 0.2.1 crate nor the PyPI distribution is published.
+The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py` internally; that is not the PyPI distribution name. The package also retains its `uvicorn-rs-py` console alias. The exact compatibility scope is recorded in the [support matrix](support-matrix.md); these names do not imply full Uvicorn parity. The Cargo and Python package versions are 0.2.1. The two 0.2.1 Cargo crates have been published as recorded above; the PyPI distribution remains unpublished. Local artifacts from earlier source commits are retained below as historical evidence and are not the exact-main workflow bundle.
 
-The historical 0.1.0 Cargo bootstrap is recorded below. The maintainer has removed the old `uvicorn-rs` release and is removing the standalone `uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` identities. A crates.io API check on 2026-10-25 returned HTTP 404 for all three names; this confirms they are not currently registry-resolvable, but does not establish that a new `uvicorn-rs` publication will be accepted. Recheck availability immediately before any Cargo release. The new `uvicorn-rs` package vendors the H3 protocol and Quinn adapter source behind `http3`; it does not depend on separate project-owned H3 crates. `asgi-lifespan-protocol-rs` is the current lifecycle-contract package. The Python adapter depends on `uvicorn-rs`; Rust-native frameworks can depend on `uvicorn-rs` without Python.
+The historical 0.1.0 Cargo bootstrap is recorded below. A registry API check on 2026-10-25 returned HTTP 404 for the then-removed `uvicorn-rs`, `uvicorn-rs-h3`, and `uvicorn-rs-h3-quinn` names; the subsequent `uvicorn-rs` 0.2.1 publication is recorded above. The old H3/Quinn package identities are not current release targets. The `uvicorn-rs` package vendors the H3 protocol and Quinn adapter source behind `http3`; it does not depend on separate project-owned H3 crates. `asgi-lifespan-protocol-rs` is the current lifecycle-contract package. The Python adapter depends on `uvicorn-rs`; Rust-native frameworks can depend on `uvicorn-rs` without Python.
 
-The Cargo workspace packages and Python package now declare candidate version
-0.2.1. This is an unreleased version selection, not release evidence.
+The Cargo workspace packages and Python package declare version 0.2.1. The
+Cargo archives are published; the PyPI version is still absent.
 All published Cargo packages require Rust 1.85 or newer, the workspace MSRV
 verified by the locked CI lane.
 The PyPI package requires Python 3.9 or newer and uses the cp39-abi3 wheel ABI.
@@ -41,11 +60,10 @@ published archive records source commit
 `86e72e181d00feca1b4db7f30377d5d9d4345b83` with `dirty: true` in
 `.cargo_vcs_info.json`. The archive's crate sources match the current draft,
 but this provenance is not clean-source release evidence. Do not rebuild or
-attempt to republish 0.2.0 with different bytes. Because the candidate gate
-requires clean provenance for both Cargo archives and the project keeps the
-Cargo and Python versions synchronized, the next candidate uses 0.2.1 for the
-lifecycle crate, server crate, and PyPI distribution. HTTP/3 has no separate
-project-owned package.
+attempt to republish 0.2.0 with different bytes. The synchronized 0.2.1 Cargo
+archives have now been published with clean provenance; PyPI `uvicorn-rs` 0.2.1
+remains the pending first distribution. HTTP/3 has no separate project-owned
+package.
 
 ## Release workflow model
 
@@ -62,20 +80,18 @@ workflow (`candidate.yml`) does not publish. The manual Release workflow
 (`release.yml`) defaults to prepare-only, revalidates the exact tag and candidate
 artifact, and grants short-lived OIDC publishing permission only to selected
 publisher jobs. The bootstrap audit preserves four historical Cargo
-publication records. The maintainer removed the old `uvicorn-rs` release and is
-removing the `uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` identities; current API
-lookups for those three names return HTTP 404. Do not publish separate H3 or
-Quinn crates. Recheck `uvicorn-rs` name availability before a future Cargo
-release. Configure Trusted Publishing for the two current crate identities
-before using Cargo publisher jobs. No release workflow creates or moves a tag.
+publication records. Do not publish separate H3 or Quinn crates. The 0.2.1
+Cargo crates were published manually from a clean source commit; crates.io
+Trusted Publishing is not yet verified for future Cargo publisher jobs. No
+release workflow creates or moves a tag.
 
 Release direction (2026-10-25): the maintainer authorized a coordinated Cargo
-and PyPI release and specified local Cargo publication first. Publish
-`asgi-lifespan-protocol-rs` before its dependent `uvicorn-rs`, verify both
-registry artifacts, then publish PyPI `uvicorn-rs`. The local workflow still
-offers `prepare-only`, `cargo`, `pypi`, and `cargo-and-pypi`; its combined path
-waits for the Cargo publisher jobs before publishing to PyPI, but it does not
-replace the requested local first publication. This does not bypass candidate
+and PyPI release and specified local Cargo publication first. The local
+publication was completed on 2026-10-26: `asgi-lifespan-protocol-rs` was
+published before its dependent `uvicorn-rs`, and both registry artifacts were
+verified. PyPI `uvicorn-rs` remains pending. The local workflow offers
+`prepare-only`, `cargo`, `pypi`, and `cargo-and-pypi`; its combined path waits
+for the Cargo publisher jobs before publishing to PyPI. This does not bypass candidate
 gates: release still requires a clean tagged commit on `main`, a successful
 exact candidate artifact, all required release evidence, configured publisher
 trust, and the typed confirmation.
@@ -88,33 +104,30 @@ contains 72 files and has SHA-256
 `b734ee2131a5abb48f368fa0a16896b43fd397f3de26841ff7d16d46626d8461`. The
 local standalone H3 archive consumer passed against those exact archives,
 observing H3 error 262 and a successful request on a fresh connection. These
-are local candidate artifacts, not the exact-main candidate workflow bundle.
-The current checkout has uncommitted edits, including server Rust source, so
-these archive hashes remain bound to the clean commit above and do not describe
-the current dirty worktree. That commit has no hosted candidate workflow
-result.
-The local `cargo publish` attempt for `asgi-lifespan-protocol-rs 0.2.1` was
-rejected with HTTP 403 because the configured token lacked publish permission;
-the version remained absent and no upload occurred. On 2026-10-26, Cargo
-reported that a replacement short-lived token was saved through its login
-prompt. A read-only Cargo owner lookup for `asgi-lifespan-protocol-rs` returned
-`appunni-m`, confirming registry authentication for owner-list reads. This does
-not verify publish permission. The owner lookup for `uvicorn-rs` returns 404
-because that package is absent. No publish retry has occurred.
+were local candidate artifacts, not the exact-main candidate workflow bundle.
+At that earlier preflight, the checkout also had uncommitted server source, so
+those hashes did not describe its dirty worktree or the subsequently published
+archives.
+The first local `cargo publish` attempt for `asgi-lifespan-protocol-rs 0.2.1`
+was rejected with HTTP 403 because the configured token lacked publish
+permission. After the maintainer saved a replacement token through Cargo's
+login prompt, both 0.2.1 crates were published locally. The successful
+publication checksums and `.cargo_vcs_info.json` source commit are recorded in
+the current status above; this supersedes the earlier failed attempt.
 
 ### Current candidate state (2026-10-26)
 
-The checkout is on branch `codex/uvicorn-rs-consolidation` at commit
-`35e548f08d1a4248488fc1351ed8850e7c80f23c`. The checkout has 30 changed or
-untracked paths. `origin/main` is
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`; this checkout's `HEAD` is not
-contained in that branch. There is no release tag at `HEAD`, and it is not the
-exact-main candidate bundle required by `release.yml`. The release audit
-reports `dirty_worktree` as a blocking error. GitHub currently shows PR #19 as
-open and draft, and the combined-status lookup for this head returned no
-statuses. The earlier clean Cargo 0.2.1 archives
-recorded above remain bound to commit
-`7754895262c7b1d7baa2e9595277a81607634d38` and do not represent this checkout.
+The local branch is `codex/uvicorn-rs-consolidation` at
+`9b6b766bf07349556a0226b5ea5cd06af1437893`; it is one local commit ahead of
+the pushed PR head `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`. `origin/main` is
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. PR #19 is open and draft, and no
+version tag exists. The local commit removes the Cargo workspace path patch
+from release packaging so the archive can match registry bytes. CI run
+[`40267125476`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40267125476)
+is running on the pushed PR head: Rust quality, native FastAPI composition,
+installed-wheel parity (500/500), release-contract, and MSRV jobs passed; the
+complete three-repeat coverage job is still in progress. This PR run does not
+meet the release workflow's requirement for a tagged exact-main candidate.
 
 Latest local PyPI artifact check (2026-10-26): `uv build
 --out-dir target/release-candidate/pypi` built the sdist
@@ -131,17 +144,13 @@ These local artifacts came from the dirty checkout and do not replace the
 exact-main, multi-platform candidate bundle or its clean registry-consumer
 receipts.
 
-Latest Cargo package preflight (2026-10-26): `cargo package --locked` verified
-`asgi-lifespan-protocol-rs 0.2.1` (9 files; SHA-256
-`dc8580b39b1cdad0a928518b98e002b01f5dc9c08728d66b7a633e8a60a6a93a`). The
-`uvicorn-rs 0.2.1` archive passed default-feature and all-feature verification
-when its unpublished lifecycle dependency was patched to the workspace path
-(72 files; SHA-256
-`34e8dd5a31a56c41fb25d05cef01d50f077d15de3d6eb3e4288471717881bafd`). The
-unpatched registry-resolving package check still fails because only lifecycle
-version 0.2.0 is indexed. These local archives came from the dirty checkout;
-they are not clean candidate artifacts or registry-consumer receipts. No
-Cargo or PyPI upload was attempted.
+The earlier dirty-checkout package preflight hashes above are not registry
+artifacts. The published 0.2.1 crates instead have the checksums and clean
+source provenance recorded at the top of this guide. A registry-resolving
+`cargo package --no-verify --locked --offline` build reproduced the published
+`uvicorn-rs` checksum after the path patch was removed. The package archives
+are registry-visible, but exact-main candidate verification and clean
+downstream consumer receipts remain outstanding.
 
 Hosted benchmark run
 [`40228012455`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455)
@@ -164,9 +173,10 @@ There is no validated three-system aggregate or release performance claim. On
 reported 10,962/11,375 regions and 8,130/8,438 lines, below the 100% gate. No
 accepted independent Coverage-MCP receipt is bound to that exact source. No
 clean candidate artifact or consumer receipt is bound to the current branch
-commit. No Cargo or PyPI upload has occurred.
+commit. At the time of that historical main-commit audit, no Cargo or PyPI
+upload had occurred; the later local Cargo publications are recorded above.
 
-The latest full pull-request coverage run
+The earlier full pull-request coverage run
 [`40237012947`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40237012947)
 used PR head `35e548f08d1a4248488fc1351ed8850e7c80f23c` and reported
 12,502/12,711 regions and 9,280/9,415 lines. Coverage-MCP did not accept its
@@ -174,12 +184,14 @@ synthetic-merge source revision as an independent receipt for the exact local
 checkout. The focused cases added since that run are not a replacement for a
 new complete coverage run.
 
-Registry check (2026-10-26): crates.io returns HTTP 404 for `uvicorn-rs` and
-`uvicorn-rs 0.2.1`, and for `asgi-lifespan-protocol-rs 0.2.1`; PyPI returns
-HTTP 404 for `uvicorn-rs 0.2.1`. The lifecycle crate itself remains registry
-visible from its earlier release. A 404 does not prove that crates.io will
-accept a new package identity. Recheck the exact candidate version and package
-name immediately before publication.
+The newer PR run [`40267125476`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40267125476)
+is still executing its full three-repeat coverage job on commit
+`d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`; its report and independent
+Coverage-MCP handoff are not yet available.
+
+Registry state (2026-10-26): both Cargo 0.2.1 crates are published and their
+registry checksums match the values recorded above. PyPI returns HTTP 404 for
+`uvicorn-rs` 0.2.1, so the first PyPI upload remains pending.
 
 GitHub release-control audit (2026-10-26): the repository has an active
 [`Protect main` ruleset](https://github.com/appunni-m/uvicorn-rs/rules/25771026)
@@ -204,15 +216,14 @@ joins. The maintainer reports the PyPI Trusted Publisher tuple as project
 environment `pypi`; the pending publisher record has not been verified through
 a publication. crates.io Trusted Publishing setup remains unverified. The local
 Cargo archive hashes and standalone H3 archive consumer are verified, but the
-exact-main candidate workflow bundle, PyPI distributions, registry visibility
-and consumer checks, and the remaining release acceptance gates are
-outstanding. No release tag or package publication has occurred.
-Registry check (2026-10-25): `asgi-lifespan-protocol-rs` 0.2.0 is visible with
-the checksum and dirty-source provenance recorded above. API lookups for
-`uvicorn-rs`, `uvicorn-rs-h3`, and `uvicorn-rs-h3-quinn` return HTTP 404. The
-`uvicorn-rs` name's reuse or publication eligibility has not been tested; the
-previous cooldown timestamp has passed, so do not rely on the old cooldown
-statement. Verify availability before any future Cargo publish.
+exact-main candidate workflow bundle, the PyPI distribution, and clean
+consumer checks remain outstanding. The two Cargo 0.2.1 packages have been
+published locally; no release tag or PyPI publication has occurred.
+Historical registry check (2026-10-25): `asgi-lifespan-protocol-rs` 0.2.0 was
+visible with the checksum and dirty-source provenance recorded above. API
+lookups for `uvicorn-rs`, `uvicorn-rs-h3`, and `uvicorn-rs-h3-quinn` returned
+HTTP 404 before the 0.2.1 publication. This snapshot is superseded by the
+current registry state above.
 
 ### Cargo bootstrap publication record
 
@@ -347,26 +358,20 @@ an isolated consumer check was previously reported as passing. The registry
 archive's `dirty: true` source provenance means that check does not establish a
 clean-source release artifact. Its exact registry checksum must be recognized
 before reusing the version; publishing different bytes as 0.2.0 is not valid.
-The clean candidate therefore uses 0.2.1 for both Rust crates and the PyPI
-distribution so its source provenance and synchronized version checks match
-the exact reviewed commit.
-The earlier `uvicorn-rs` release was removed by the maintainer; the current
-crates.io API returns 404 for the name. Recheck name availability immediately
-before publication. crates.io requires the first release of a crate to be
-published manually before Trusted Publishing can be configured ([crates.io
-team guidance](https://blog.rust-lang.org/2025/07/11/crates-io-development-update-2025-07/)).
-After all candidate gates pass, bootstrap `uvicorn-rs` 0.2.1 from the exact
-clean candidate using a secure local Cargo credential, publish the lifecycle
-dependency first, and compare each registry checksum with the candidate. Then
-configure Trusted Publishing for both crate identities. The combined workflow
-will publish PyPI only after Cargo jobs succeed or are skipped because the
-exact candidate bytes are already visible.
+The clean 0.2.1 archives for both Rust crates have now been published manually
+and their registry checksums are recorded above. This satisfies the first
+manual-publish requirement for enabling crates.io Trusted Publishing, but that
+publisher configuration remains unverified. Do not try to publish different
+0.2.1 bytes. Future Cargo versions should use a new candidate version, compare
+its archive checksums with the registry, and configure Trusted Publishing for
+the two current crate identities. The combined workflow will publish PyPI only
+after Cargo jobs succeed or are skipped because the exact candidate bytes are
+already visible.
 
-After the candidate gates pass and the maintainer authorizes release, verify
-the candidate bundle's `SHA256SUMS`, compare the server `.crate` byte-for-byte
-with a clean package build, then publish only after the name-reuse window opens.
-Use a narrowly scoped, short-lived maintainer credential through an approved
-local credential provider; do not put it in workflow inputs or GitHub secrets.
+For future Cargo releases, verify the candidate bundle's `SHA256SUMS` and
+compare the server `.crate` byte-for-byte with a clean package build. Use a
+narrowly scoped, short-lived maintainer credential through an approved local
+credential provider; do not put it in workflow inputs or GitHub secrets.
 Configure crates.io Trusted Publishing for the current crate identities with
 owner `appunni-m`, repository `uvicorn-rs`, workflow `release.yml`, and
 environment `crates-io` where required.

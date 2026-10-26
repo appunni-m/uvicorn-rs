@@ -4,8 +4,11 @@
 
 This document describes the PyO3/ASGI source implementation intended for the
 not-yet-published `uvicorn-rs` PyPI distribution and the Python-free
-`uvicorn-rs` server crate. Its root Cargo integration package and optional
-extra console script are named `uvicorn-rs-py`.
+`uvicorn-rs` server crate. The `uvicorn-rs` and
+`asgi-lifespan-protocol-rs` Cargo crates are published at 0.2.1 from clean
+source commit `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`; that publication is
+not a completed exact-main release. Its root Cargo integration package and
+optional extra console script are named `uvicorn-rs-py`.
 Every Cargo feature configuration of the Python adapter delegates HTTP/1.1,
 HTTP/2 over TCP/TLS, and HTTP/3 over Quinn to the native crate through Rust
 services. Feature selection no longer switches to a second protocol stack.
@@ -39,9 +42,9 @@ The Rust package graph has two native crates: `asgi-lifespan-protocol-rs`
 defines runtime-neutral lifecycle hooks, and `uvicorn-rs` contains the server
 and its optional HTTP/3 implementation. The historical bootstrap audit records
 the old `uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` 0.1.0 uploads. On 2026-10-25,
-crates.io API lookups for those names and the removed `uvicorn-rs` 0.1.0 name
-returned HTTP 404; retain the checksums as history and recheck name availability
-before a future release. New server builds do not depend on separate H3 crates.
+crates.io API lookups for the removed 0.1.0 names returned HTTP 404; the
+subsequent 0.2.1 `uvicorn-rs` and lifecycle crates were published from the clean
+commit recorded above. New server builds do not depend on separate H3 crates.
 `uvicorn-rs-py` enables the core's `http3` feature for Python ASGI hosting,
 while Rust-native applications choose whether to enable it. The currently
 visible `asgi-lifespan-protocol-rs` 0.2.0 archive records a dirty source tree;

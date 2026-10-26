@@ -4,21 +4,23 @@ A Rust-first server for ASGI applications and Rust services.
 
 ## Project status
 
-The next coordinated candidate is version 0.2.1. Registry state checked on
-2026-10-26 is mixed. `asgi-lifespan-protocol-rs`
-0.2.0 is visible on crates.io, but its archive records `dirty: true` for source
-commit `86e72e181d00feca1b4db7f30377d5d9d4345b83`, so it is not clean-source
-release evidence. Crates.io currently returns 404 for `uvicorn-rs` and the old
-split crate names; PyPI returns 404 for the `uvicorn-rs` distribution. Earlier
-0.1.0 publication records are historical and do not qualify the current
-release.
+The `asgi-lifespan-protocol-rs` and `uvicorn-rs` 0.2.1 crates have been
+published to crates.io from clean source commit
+`d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`. Their registry checksums and
+release provenance are recorded in [release status](docs/releases.md). The
+PyPI distribution `uvicorn-rs` 0.2.1 has not been uploaded. This is not a
+complete project release: consolidation PR #19 is still a draft, exact-main
+coverage, independent coverage review, full three-system benchmarks,
+compatibility evidence, and clean consumers remain open. The old
+`asgi-lifespan-protocol-rs` 0.2.0 archive records `dirty: true` and is not the
+current clean-source release evidence.
 The Python adapter is **not yet a drop-in Uvicorn replacement**. If your
 application depends on Uvicorn's full command-line, Python API, worker, or
 reload behavior, keep using upstream Uvicorn for now.
 
 The consolidated `uvicorn-rs` crate provides a Rust library, not a standalone
-server executable. The dirty-source lifecycle archive does not qualify the
-Python adapter or complete the project's release gates. See
+server executable. Cargo publication does not qualify the Python adapter or
+complete the project's release gates. See
 [release status](docs/releases.md).
 
 The PyPI distribution is named `uvicorn-rs`, following the project's

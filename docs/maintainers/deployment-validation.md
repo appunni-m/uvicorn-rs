@@ -20,8 +20,9 @@ non-default timeout. Repeated restart/failure behavior, dynamic worker
 controls, and reload filters remain incomplete. Proxy-header behavior has only the focused
 CLI and `uvicorn.run()` coverage listed in the [support matrix](../support-matrix.md).
 The old Cargo `0.1.0` releases are historical. `asgi-lifespan-protocol-rs`
-0.2.0 is registry-visible; the consolidated `uvicorn-rs` crate and the
-`uvicorn-rs` PyPI distribution remain unpublished. Build and install a wheel
+and the consolidated `uvicorn-rs` crate are published at 0.2.1 from clean
+source commit `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`; the `uvicorn-rs`
+PyPI distribution remains unpublished. Build and install a wheel
 into the same environment as the application and its Python dependencies.
 
 ## Start an application
