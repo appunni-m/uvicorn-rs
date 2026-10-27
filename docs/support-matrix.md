@@ -33,6 +33,10 @@ not WebSocket session behavior. See the [interface result](parity.md#invalid-mod
 [log-level result](parity.md#module-cli-log-level-environment-parity-2026-10-27),
 [graceful-shutdown precedence result](parity.md#explicit-module-cli-graceful-shutdown-value-overrides-malformed-environment-2026-10-27), and
 [WebSocket precedence result](parity.md#module-cli-websocket-environment-precedence-2026-10-27).
+Four additional focused CLI cases pass 4/4: malformed
+`UVICORN_LIMIT_MAX_REQUESTS` and `UVICORN_LIMIT_MAX_REQUESTS_JITTER` values
+produce matching diagnostics, and explicit zero-valued CLI options override
+each malformed value. See the [request-limit environment result](parity.md#module-cli-request-limit-environment-validation-and-precedence-2026-10-27).
 
 ## Can I replace Uvicorn?
 

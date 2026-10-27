@@ -628,6 +628,92 @@
       }
     },
     {
+      "case_id": "cli.invalid-limit-max-requests-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": ["tests.parity.app:app"],
+        "environment": {
+          "UVICORN_LIMIT_MAX_REQUESTS": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-limit-max-requests-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_LIMIT_MAX_REQUESTS": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-limit-max-requests-jitter-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": ["tests.parity.app:app"],
+        "environment": {
+          "UVICORN_LIMIT_MAX_REQUESTS_JITTER": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-limit-max-requests-jitter-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0",
+          "--limit-max-requests-jitter",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_LIMIT_MAX_REQUESTS_JITTER": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.invalid-timeout-graceful-shutdown-env-is-rejected",
       "profile": "cli",
       "operation": "cli.process",
