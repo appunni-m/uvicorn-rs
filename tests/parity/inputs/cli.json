@@ -2020,6 +2020,328 @@
         "working_directory": "project",
         "timeout_seconds": 10
       }
+    },
+    {
+      "case_id": "cli.version-from-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [],
+        "environment": {
+          "UVICORN_VERSION": "true"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.factory-from-environment-starts-server",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:python_api_factory_probe_app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_FACTORY": "true"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-fd-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app"
+        ],
+        "environment": {
+          "UVICORN_FD": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-h11-size-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app"
+        ],
+        "environment": {
+          "UVICORN_H11_MAX_INCOMPLETE_EVENT_SIZE": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-h11-size-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0",
+          "--h11-max-incomplete-event-size",
+          "16384"
+        ],
+        "environment": {
+          "UVICORN_H11_MAX_INCOMPLETE_EVENT_SIZE": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-ssl-version-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app"
+        ],
+        "environment": {
+          "UVICORN_SSL_VERSION": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-ssl-cert-reqs-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app"
+        ],
+        "environment": {
+          "UVICORN_SSL_CERT_REQS": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-ssl-options-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0",
+          "--ssl-certfile",
+          "tests/native-core/tls/localhost-cert.pem",
+          "--ssl-keyfile",
+          "tests/native-core/tls/localhost-key-pkcs8-encrypted.pem",
+          "--ssl-keyfile-password",
+          "uvicorn-rs-parity-key",
+          "--ssl-ca-certs",
+          "tests/native-core/tls/localhost-cert.pem",
+          "--ssl-cert-reqs",
+          "0",
+          "--ssl-version",
+          "17",
+          "--ssl-ciphers",
+          "DEFAULT"
+        ],
+        "environment": {
+          "UVICORN_SSL_CERTFILE": "uvicorn-rs-missing-cert-20261028.pem",
+          "UVICORN_SSL_KEYFILE": "uvicorn-rs-missing-key-20261028.pem",
+          "UVICORN_SSL_KEYFILE_PASSWORD": "incorrect-parity-password",
+          "UVICORN_SSL_CA_CERTS": "uvicorn-rs-missing-ca-20261028.pem",
+          "UVICORN_SSL_CERT_REQS": "not-an-integer",
+          "UVICORN_SSL_VERSION": "not-an-integer",
+          "UVICORN_SSL_CIPHERS": "NO_SUCH_CIPHER"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.http2-from-environment-with-zttp-backend",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0",
+          "--http",
+          "zttp"
+        ],
+        "environment": {
+          "UVICORN_HTTP2": "true"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-loop-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_LOOP": "uvicorn_rs_missing_loop_factory_20261028"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-loop-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0",
+          "--loop",
+          "asyncio"
+        ],
+        "environment": {
+          "UVICORN_LOOP": "uvicorn_rs_missing_loop_factory_20261028"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.uds-from-environment-starts-and-cleans",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_UDS": "/tmp/uvicorn-rs-parity-cli-uds-env.sock"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
     }
   ]
 }

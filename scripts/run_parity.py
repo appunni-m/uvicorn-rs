@@ -979,7 +979,7 @@ def load_contract(
             if (
                 operation.get("id") != "cli.process"
                 or normalizations["stderr_base64"]
-                != "python-traceback-exception-chain"
+                != "python-process-diagnostics"
             ):
                 raise ParityError(
                     f"{operation.get('id')}: unsupported comparison normalization"
@@ -3311,6 +3311,16 @@ def load_contract(
                             raise ParityError(
                                 f"{case_id}.api.run_http.environment entries must be valid strings or null"
                             )
+                if environment.get("UVICORN_FD") not in (None, "@probe-fd"):
+                    raise ParityError(
+                        f"{case_id}: run_http UVICORN_FD must use @probe-fd for inherited-listener parity"
+                    )
+                if environment.get("UVICORN_FD") == "@probe-fd" and (
+                    run_http["invocation"] != "module-cli" or not run_http.get("fd")
+                ):
+                    raise ParityError(
+                        f"{case_id}: UVICORN_FD=@probe-fd requires module-cli invocation and fd=true"
+                    )
                 if has_concurrency_environment:
                     if run_http["invocation"] != "module-cli":
                         raise ParityError(
@@ -9442,19 +9452,43 @@ def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
     return value
 
 
-def normalize_cli_traceback_stderr(stderr_base64: str) -> tuple[str, Any]:
-    """Compare CLI tracebacks by exception outcome, retaining raw bytes elsewhere.
+def normalize_cli_process_stderr(stderr_base64: str) -> tuple[str, Any]:
+    """Compare Python CLI diagnostics without implementation source locations.
 
     Python traceback frames name implementation-specific source files and line
-    numbers. CLI evidence keeps the original stderr; this comparison value keeps
-    all other stderr lines, exception-chain separators, and exception messages.
-    If stderr is not a standard traceback, its bytes remain exact.
+    numbers. Runtime warnings also print the source path, line, and code line.
+    CLI evidence keeps the original stderr; comparisons retain the exception
+    messages and warning text while removing only those implementation details.
     """
     stderr = base64.b64decode(stderr_base64, validate=True)
     lines = stderr.splitlines()
     traceback_header = b"Traceback (most recent call last):"
     if traceback_header not in lines:
-        return ("raw", stderr)
+        warning_separator = b": RuntimeWarning:"
+        if not any(
+            b"uvicorn/" in line and warning_separator in line
+            for line in lines
+        ):
+            return ("raw", stderr)
+        normalized_warning: list[bytes] = []
+        skip_source_line = False
+        for line in lines:
+            if skip_source_line and line.startswith(b"  "):
+                normalized_warning.append(b"  <source line>")
+                skip_source_line = False
+                continue
+            if b"uvicorn/" in line and warning_separator in line:
+                prefix, _, message = line.partition(warning_separator)
+                source_path = prefix.rsplit(b"uvicorn/", 1)[1].replace(b"\\", b"/")
+                source_name, separator, line_number = source_path.rpartition(b":")
+                if separator and line_number.isdigit() and source_name.endswith(b".py"):
+                    normalized_warning.append(
+                        b"RuntimeWarning:" + message
+                    )
+                    skip_source_line = True
+                    continue
+            normalized_warning.append(line)
+        return ("python-runtime-warning-source", tuple(normalized_warning))
 
     chain_markers = {
         b"The above exception was the direct cause of the following exception:",
@@ -9492,8 +9526,8 @@ def normalize_operation_comparison_observation(
     """Apply only the comparison normalizations declared for an operation."""
     normalized = dict(observation)
     for field, policy in operation.get("comparison_normalization", {}).items():
-        if policy == "python-traceback-exception-chain":
-            normalized[field] = normalize_cli_traceback_stderr(normalized[field])
+        if policy == "python-process-diagnostics":
+            normalized[field] = normalize_cli_process_stderr(normalized[field])
     return normalized
 
 

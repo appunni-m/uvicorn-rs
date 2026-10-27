@@ -17,6 +17,7 @@ import socket
 import sys
 import threading
 import time
+import warnings
 from collections.abc import Generator
 from email.utils import formatdate
 from functools import cached_property
@@ -456,18 +457,38 @@ class Server:
 
     def run(self, sockets: list[socket.socket] | None = None) -> None:
         """Run :meth:`serve` in a new loop and handle process signals."""
-        loop_factory = self.config.get_loop_factory()
+        # Match Uvicorn's evaluation order: it creates the serve coroutine
+        # before resolving the loop factory. If loop selection fails, Python
+        # consequently reports the same unawaited-coroutine warning.
+        serve_coroutine = self.serve(sockets=sockets)
+        try:
+            loop_factory = self.config.get_loop_factory()
+        except BaseException:
+            # The Rust adapter resolves the loop before handing the coroutine
+            # to asyncio.Runner. Emit the warning Uvicorn gets from dropping
+            # that coroutine during argument evaluation, then close it so the
+            # adapter does not emit a second warning during cleanup.
+            try:
+                warnings.warn(
+                    f"coroutine '{serve_coroutine.__qualname__}' was never awaited",
+                    RuntimeWarning,
+                    stacklevel=2,
+                    source=serve_coroutine,
+                )
+            finally:
+                serve_coroutine.close()
+            raise
 
         if sys.version_info >= (3, 11):
             with asyncio.Runner(loop_factory=loop_factory) as runner:
-                runner.run(self.serve(sockets=sockets))
+                runner.run(serve_coroutine)
         elif loop_factory is None:
-            asyncio.run(self.serve(sockets=sockets))
+            asyncio.run(serve_coroutine)
         else:
             loop = loop_factory()
             try:
                 asyncio.set_event_loop(loop)
-                loop.run_until_complete(self.serve(sockets=sockets))
+                loop.run_until_complete(serve_coroutine)
             finally:
                 asyncio.set_event_loop(None)
                 loop.close()

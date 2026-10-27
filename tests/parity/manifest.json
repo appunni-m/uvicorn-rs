@@ -2353,7 +2353,7 @@
         "stderr_base64"
       ],
       "comparison_normalization": {
-        "stderr_base64": "python-traceback-exception-chain"
+        "stderr_base64": "python-process-diagnostics"
       }
     },
     {

@@ -705,6 +705,7 @@ except KeyboardInterrupt:
     configured_environment = request.get("environment", {})
     host_from_environment = configured_environment.get("UVICORN_HOST")
     port_from_environment = configured_environment.get("UVICORN_PORT")
+    fd_from_environment = configured_environment.get("UVICORN_FD") == "@probe-fd"
     if host_from_environment is not None and host_from_environment != host:
         raise RuntimeError("UVICORN_HOST must match the requested listener host")
     if port_from_environment not in (None, "@probe-port"):
@@ -763,18 +764,22 @@ except KeyboardInterrupt:
         if uds_path is not None:
             command.extend(("--uds", uds_path))
         if tls_certificate is not None and tls_key is not None:
-            command.extend(
-                ("--ssl-certfile", str(tls_certificate), "--ssl-keyfile", str(tls_key))
-            )
-            if request.get("ssl_keyfile_password") is not None:
+            if "UVICORN_SSL_CERTFILE" not in configured_environment:
+                command.extend(("--ssl-certfile", str(tls_certificate)))
+            if "UVICORN_SSL_KEYFILE" not in configured_environment:
+                command.extend(("--ssl-keyfile", str(tls_key)))
+            if (
+                request.get("ssl_keyfile_password") is not None
+                and "UVICORN_SSL_KEYFILE_PASSWORD" not in configured_environment
+            ):
                 command.extend(("--ssl-keyfile-password", request["ssl_keyfile_password"]))
-        if ssl_ca_certs is not None:
+        if ssl_ca_certs is not None and "UVICORN_SSL_CA_CERTS" not in configured_environment:
             command.extend(("--ssl-ca-certs", str(ssl_ca_certs)))
-        if "ssl_cert_reqs" in request:
+        if "ssl_cert_reqs" in request and "UVICORN_SSL_CERT_REQS" not in configured_environment:
             command.extend(("--ssl-cert-reqs", str(ssl_cert_reqs)))
-        if "ssl_version" in request:
+        if "ssl_version" in request and "UVICORN_SSL_VERSION" not in configured_environment:
             command.extend(("--ssl-version", str(ssl_version)))
-        if inherited_listeners:
+        if inherited_listeners and not fd_from_environment:
             command.extend(("--fd", str(inherited_listeners[0].fileno())))
         if request.get("factory"):
             command.append("--factory")
@@ -874,6 +879,10 @@ except KeyboardInterrupt:
         # The probe reserves a dynamic listener port. Bind that exact port
         # through Click's environment path so the HTTP observer can verify it.
         environment["UVICORN_PORT"] = str(port)
+    if fd_from_environment:
+        if not inherited_listeners:
+            raise RuntimeError("UVICORN_FD=@probe-fd requires an inherited listener")
+        environment["UVICORN_FD"] = str(inherited_listeners[0].fileno())
     signal_hold_directory = None
     signal_hold_marker = None
     signal_cancel_marker = None

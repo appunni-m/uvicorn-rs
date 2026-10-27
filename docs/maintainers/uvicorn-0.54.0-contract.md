@@ -47,6 +47,11 @@ uvicorn` invokes the same command. Click supplies `--help`, `--version`, input
 validation, environment-variable binding, and exit behavior. There are 52
 declared Click parameters, including the required `APP` argument; `--help` is
 provided by Click rather than declared as an application parameter.
+The maintained CLI and Python API input files now represent all 52
+parameter-derived `UVICORN_*` environment names. This is input inventory
+coverage, not proof that every binding behaves identically; focused results and
+their exact input/source identities are recorded in the
+[parity evidence](../parity.md).
 
 | Area | Uvicorn 0.54.0 public inputs | Defaults and behavior to preserve | Implementation / evidence owner |
 | --- | --- | --- | --- |
