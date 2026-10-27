@@ -18,6 +18,18 @@ against the manifest versions. A baseline update must change the
 dependency lock, oracle version, source revision here, and the relevant parity
 inputs together; an upstream release does not silently change this contract.
 
+The parity manifest pins the Uvicorn and Hypercorn oracle runtime to CPython
+3.12. Upstream Uvicorn 0.54.0 declares `Requires-Python >=3.10`, so a candidate
+wheel run on CPython 3.9 is supplemental package-floor smoke, not an oracle
+parity receipt. On 2026-10-27, the dirty-source 0.2.2 wheel's `cli.console-help`
+case passed on CPython 3.9.6, while `python-api.public-imports-and-signatures`
+was compared against the CPython 3.12 oracle and differed only in
+`typing.get_type_hints()` resolution. The 0.54.0 oracle source itself cannot
+import on CPython 3.9. This cross-runtime observation establishes no candidate
+API mismatch and does not change the CPython 3.12 parity result. See
+`target/kata-progress/installed-parity-current-20261027/python39-parity-fixed.json`
+(SHA-256 `dbec448a973e403efb7396f65f068c14fde0bf257336f846491516cda47c4daa`).
+
 Authority files:
 
 | Surface | Uvicorn 0.54.0 authority |
@@ -43,13 +55,13 @@ provided by Click rather than declared as an application parameter.
 | Reload | `--reload`, repeatable `--reload-dir`, `--reload-include`, `--reload-exclude`, `--reload-delay` | false; no explicit dirs; includes/excludes are unset; `0.25` seconds. With no watcher package, file polling behavior is narrower. If reload and multiple workers are both set, Uvicorn warns that workers are ignored while reloading. | `dhfq`, `9kbx`, `4fvf` |
 | Workers and process lifetime | `--workers`, `--timeout-worker-healthcheck`, `--limit-max-requests`, `--limit-max-requests-jitter`, `--timeout-graceful-shutdown` | workers unset, then `WEB_CONCURRENCY` or one; healthcheck `5`; request limit unset; jitter `0`; graceful timeout unset. When reload and multiple workers are both requested, reload takes precedence and Uvicorn warns that the worker count is ignored. Signal handling includes SIGINT and SIGTERM, SIGBREAK on Windows, and supervisor-specific SIGHUP/SIGTTIN/SIGTTOU behavior where available. | `dhfq`, `dv25`, `4fvf` |
 | Event loop | `--loop` | `auto`; documented choices are `auto`, `asyncio`, `uvloop`, and `zuvloop`. The API also accepts `none` and import paths. Optional implementations have platform/runtime restrictions. | `dv25`, `9kbx`, `4fvf` |
-| HTTP | `--http`, `--http2`, `--h11-max-incomplete-event-size` | `auto`, false, and 16 KiB effective h11 limit. Documented HTTP backends are `auto`, `h11`, `httptools`, and experimental `zttp`; HTTP/2 requires `--http zttp --http2`. The candidate maps H1 selectors to its Rust implementation and accepts the zttp selector without importing zttp. `http1.h11-selector-scope-query-header-and-body` and `http1.httptools-selector-scope-query-header-and-body` send a POST through each selected backend and compare the response and ASGI scope with Uvicorn 0.54.0. The httptools case passed 1/1 on macOS ARM64 / CPython 3.12.13 at clean candidate revision `544b44f77f03cca5e7fd4062cac924103a537bbe` (run `fa0eae62007e4e578873a8cfe0222278`). A local aggregate run passed all 27 HTTP/2 parity inputs against Uvicorn 0.54.0 and zttp 0.0.34. The reset case encodes a zero-byte request with an empty final DATA frame because zttp does not wake ASGI `receive()` for END_STREAM on initial HEADERS; that alternate encoding remains unverified. Parser-specific malformed H1 behavior, hosted release, and benchmark evidence remain pending. | `dv25`, `9kbx`, `4fvf` |
+| HTTP | `--http`, `--http2`, `--h11-max-incomplete-event-size` | `auto`, false, and 16 KiB effective h11 limit. Documented HTTP backends are `auto`, `h11`, `httptools`, and experimental `zttp`; HTTP/2 requires `--http zttp --http2`. The candidate maps H1 selectors to its Rust implementation and accepts the zttp selector without importing zttp. `http1.h11-selector-scope-query-header-and-body` and `http1.httptools-selector-scope-query-header-and-body` send a POST through each selected backend and compare the response and ASGI scope with Uvicorn 0.54.0. The httptools case passed 1/1 on macOS ARM64 / CPython 3.12.13 at clean candidate revision `544b44f77f03cca5e7fd4062cac924103a537bbe` (run `fa0eae62007e4e578873a8cfe0222278`). A prior local aggregate run passed the 27 earlier HTTP/2 parity inputs against Uvicorn 0.54.0 and zttp 0.0.34. The added `http2.zero-concurrency-rejects-request-with-503` case passed 1/1 in selected coverage run `8db2016852224570b63db99eea9b0a90`; it checks the oracle-matched 503 with a zero limit and reaches the HTTP/2 observer arm. This dirty local receipt is one-case evidence. The reset case encodes a zero-byte request with an empty final DATA frame because zttp does not wake ASGI `receive()` for END_STREAM on initial HEADERS; that alternate encoding remains unverified. Parser-specific malformed H1 behavior, hosted release, and benchmark evidence remain pending. | `dv25`, `9kbx`, `4fvf` |
 | WebSockets | `--ws`, `--ws-max-size`, `--ws-max-queue`, `--ws-ping-interval`, `--ws-ping-timeout`, `--ws-per-message-deflate` | `auto`, 16 MiB, 32, 20 s, 20 s, true. Backends include `none`, `websockets`, `websockets-sansio`, and `wsproto`; queue and compression support depend on backend. | `dv25`, `9kbx`, `4fvf` |
 | Lifespan and interface | `--lifespan`, `--interface` | both `auto`; lifespan choices are `auto`, `on`, `off`; interface choices are `auto`, `asgi3`, `asgi2`, `wsgi`. Uvicorn's native WSGI implementation is deprecated. | `dv25`, `4fvf` |
 | App environment | `--env-file`, `Config(env_file=...)`, `run(env_file=...)` | unset; loads environment for the app before app import/factory invocation. `UVICORN_*` server settings are not loaded from this file. The module CLI and programmatic factory paths have focused parity cases; broader dotenv syntax and precedence remain unverified. | `9kbx`, `gjpr`, `4fvf` |
 | Logging | `--log-config`, `--log-level`, `--access-log` / `--no-access-log`, `--use-colors` / `--no-use-colors` | Selected default startup, access, shutdown, and concurrency-limit warning events are compared for `uvicorn.run()`, `Config`/`Server.run()`, and module CLI requests. `python-api.run-applies-numeric-warning-log-level` verifies that API level 30 filters application DEBUG/INFO events while retaining WARNING and above; module CLI cases verify that `--log-level warning` suppresses startup/access INFO events, `UVICORN_LOG_LEVEL=debug` enables DEBUG application logs, and an explicit warning option overrides that debug environment value. `python-api.run-disables-access-log` and `python-api.module-cli-disables-access-log` verify access-log suppression while retaining other normalized lifecycle events. Custom JSON, INI, and YAML formatter cases compare through both public entry points; the YAML cases run with PyYAML from the benchmark dependency group, matching the package's `[standard]` extra. `python-api.module-cli-uses-log-config-from-environment` confirms that `UVICORN_LOG_CONFIG` overrides the built-in setting. Raw child logs remain in result artifacts; other levels, precedence combinations, color combinations, and exact traceback frames remain unverified. | `9kbx`, `gjpr`, `4fvf` |
 | Proxy and response headers | `--proxy-headers` / `--no-proxy-headers`, `--forwarded-allow-ips`, `--server-header` / `--no-server-header`, `--date-header` / `--no-date-header`, repeatable `--header` | proxy/server/date headers true; trusted IPs default from `FORWARDED_ALLOW_IPS` or `127.0.0.1,::1`. Selected `uvicorn.run()` inputs cover environment-only trust and explicit API override; module-CLI inputs cover environment-only trust, explicit CLI override of a conflicting environment value, and `--no-proxy-headers`. This does not verify all proxy/header flags or precedence combinations. | `9kbx`, `dv25`, `4fvf` |
-| Request/resource limits | `--root-path`, `--limit-concurrency`, `--limit-max-requests`, `--limit-max-requests-jitter`, `--timeout-keep-alive` | Empty root path; concurrency and request limit unset; jitter `0`; keep-alive `5` seconds. HTTP/1.1 target contract inputs cover ASCII `root_path` through the API and module CLI; they validate all three relevant ASGI scope values against explicit expectations and compare exit code, response receipt, shutdown signal, and timeout state with Uvicorn. Uvicorn 0.54.0 adds the configured prefix to `raw_path`, so response-body parity is not claimed for these cases. A separate case covers percent-encoded UTF-8 request-path decoding with an empty root path. A target conformance case checks Unicode `root_path` and original `raw_path` bytes; Uvicorn 0.54.0 rejects the Unicode prefix before ASGI invocation. HTTP/1.1 CLI, `uvicorn.run(limit_concurrency=1)`, and `Config`/`Server.run()` inputs verify the 503 behavior at limit 1. `cli.limit-max-requests-zero-exits-after-startup` checks the zero threshold, and `python-api.module-cli-limit-max-requests-exits-after-one-response` verifies one-request natural shutdown through `UVICORN_LIMIT_MAX_REQUESTS=1`; both match Uvicorn 0.54.0. `python-api.module-cli-limit-max-requests-jitter-stays-in-configured-range` checks that jitter 1 with a base limit of 2 exits naturally after 2 or 3 responses, preserving per-run counts but comparing the range rather than the randomized count. Negative jitter timing/message behavior remains unverified. `python-api.module-cli-timeout-keep-alive-closes-idle-connection` verifies that a one-second timeout closes an idle HTTP/1 connection after a two-second wait; concurrent request-limit behavior, TLS, HTTP/2/HTTP/3, other timeout values, and other request-limit values remain unverified. Backlog controls the OS accept queue. | `9kbx`, `dv25`, `4fvf` |
+| Request/resource limits | `--root-path`, `--limit-concurrency`, `--limit-max-requests`, `--limit-max-requests-jitter`, `--timeout-keep-alive` | Empty root path; concurrency and request limit unset; jitter `0`; keep-alive `5` seconds. HTTP/1.1 target contract inputs cover ASCII `root_path` through the API and module CLI; they validate all three relevant ASGI scope values against explicit expectations and compare exit code, response receipt, shutdown signal, and timeout state with Uvicorn. Uvicorn 0.54.0 adds the configured prefix to `raw_path`, so response-body parity is not claimed for these cases. A separate case covers percent-encoded UTF-8 request-path decoding with an empty root path. A target conformance case checks Unicode `root_path` and original `raw_path` bytes; Uvicorn 0.54.0 rejects the Unicode prefix before ASGI invocation. HTTP/1.1 CLI, `uvicorn.run(limit_concurrency=1)`, and `Config`/`Server.run()` inputs verify the 503 behavior at limit 1. `cli.limit-max-requests-zero-exits-after-startup` checks the zero threshold, and `python-api.module-cli-limit-max-requests-exits-after-one-response` verifies one-request natural shutdown through `UVICORN_LIMIT_MAX_REQUESTS=1`; both match Uvicorn 0.54.0. `python-api.module-cli-limit-max-requests-jitter-stays-in-configured-range` checks that jitter 1 with a base limit of 2 exits naturally after 2 or 3 responses, preserving per-run counts but comparing the range rather than the randomized count. Negative jitter timing/message behavior remains unverified. `python-api.module-cli-timeout-keep-alive-closes-idle-connection` verifies that a one-second timeout closes an idle HTTP/1 connection after a two-second wait; the HTTP/2 zero-threshold limit and 503 response now have one selected oracle-parity case; concurrent-stream accounting, TLS, HTTP/3, other timeout values, and other request-limit values remain unverified. Backlog controls the OS accept queue. | `9kbx`, `dv25`, `4fvf` |
 | TLS | `--ssl-keyfile`, `--ssl-certfile`, `--ssl-keyfile-password`, `--ssl-version`, `--ssl-cert-reqs`, `--ssl-ca-certs`, `--ssl-ciphers` | Six focused mTLS inputs exercise trusted client certificates under default negotiation and TLS 1.2, optional anonymous clients with CA-backed and empty-root configuration, rejection of an untrusted client certificate with empty roots, and trusted TLS 1.2 client authentication through the module CLI. The Config/Server batch passed 5/5 and the separate module-CLI case passed 1/1 against Uvicorn 0.54.0; selected evidence does not establish full TLS parity. Other focused inputs verify TLS 1.2 negotiation, one TLS 1.2 cipher-string restriction, and one encrypted PKCS#8 key using AES-256-CBC/PBKDF2-HMAC-SHA1. The default enables TLS 1.2/1.3; QUIC remains TLS 1.3. Two selected traditional RSA PEM cases verify AES-256-CBC loading with the correct password and the wrong-password failure; encrypted EC PEM, AES-128/AES-192 variants, and other encryption combinations remain unverified. Legacy TLS 1.0/1.1 and arbitrary `ssl_context_factory` behavior remain unsupported by the native Rustls path. | `9kbx`, `dv25`, `4fvf` |
 | Command output | `--help`, `--version`, Click parse errors, missing/invalid app errors | version output includes Uvicorn version, Python implementation/version, and OS; startup failure uses exit status 3. Exact help/error text and stream placement are parity obligations. | `9kbx`, `4fvf` |
 
@@ -183,22 +195,355 @@ and [`docs/server-behavior.md`](https://github.com/Kludex/uvicorn/blob/3eb9a9ab9
 | Operator logs | `uvicorn.error` and `uvicorn.access` are separately configurable; custom logging config accepts dict/JSON/YAML and fileConfig formats; warnings and exception traces are observable output. Selected default log events now have input-driven parity checks; custom configuration and exact traceback frame formatting remain open. | `9kbx`, `gjpr`, `4fvf` |
 
 The ASGI protocol inputs in `tests/parity/manifest.json` cover only some rows
-above. The manifest now also has a narrow CLI process slice; Python API and
-import/signature, most settings and environment combinations, process/socket,
-and package-replacement cases remain incomplete. `4fvf` owns expanding the
-input-only parity system, with implementation work split across the owners in
-the evidence map below.
+above. The input-only matrix now also includes CLI, Python API, and process
+cases, but package-replacement checks and supported-platform evidence remain
+incomplete. `4fvf` owns expanding the input-only parity system, with
+implementation work split across the owners in the evidence map below.
 
 ## Current implementation and evidence map
 
 | Surface | Current `uvicorn-rs` state | Owner | Required parity route |
 | --- | --- | --- | --- |
-| Distribution and `uvicorn` command/import namespace | The current source metadata is version `0.2.1` and declares the PyPI name `uvicorn-rs`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. The root Cargo integration package and optional extra console script remain named `uvicorn-rs-py`; `uvicorn.__version__` reports the pinned Uvicorn compatibility baseline `0.54.0`. The Cargo crates at 0.2.1 are published, but PyPI `uvicorn-rs` 0.2.1 has not been uploaded. The exact-main candidate and clean downstream consumer gates are still open, as is full package and runtime parity. | `1s4z` | Input cases compare installed distribution metadata/imports, entry points, module and console commands, and executable behavior with upstream 0.54.0. |
-| CLI/settings/environment | The compatibility namespace uses Click option metadata adapted from Uvicorn 0.54.0. The current CLI input index has 54 cases (schema `uvicorn-rs-parity/input@37`; SHA-256 `45a6fdf9ad758c8d792614bfed02d9154b241dc60a2b79c522d664fabd7ef9a5`); the historical indexed profile had 34 cases: help/version, validation, app selection and loading, current-directory import resolution from the installed console command, worker-option normalization, selected protocol options, `--root-path`, environment-file behavior, response-header policy, `--limit-max-requests 0` startup shutdown, and `--ws-ping-interval 0` startup acceptance. The historical dirty-source profile passed 34/34 against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13 on 2026-10-22 (run ID `78f47e13dcec4e0eb0e2f6a1ac656e36`; report SHA-256 `17969ce55d3bfb4ab7ef435ed5a24c23bebc1bb0759f6134742e6766af57f951`). After the websocket-selector change on 2026-10-23, the two affected cases, `cli.ws-websockets-sansio-preserves-app-load-diagnostic` and `cli.sansio-ws-size-and-queue-preserve-app-load-diagnostic`, passed 2/2 (run ID `d652526ebcb745eca981dfd69317151b`; receipt SHA-256 `bb8a89e9df0241f59bee8b06f8fbffc69cfb80d870a9f5b3ff9e5e403ff5d22c`). The 34-case profile has not been rerun after that change. On 2026-10-24, the added `cli.invalid-limit-concurrency-env-is-rejected` case passed 1/1 against the oracle (run ID `2c2fee8ea606497f9fbad3dfc8c0005b`; receipt SHA-256 `df3c7746ab0bee5c66accf3a9f42a9a86977ada25aadd0d0879a3c33d1d1804c`; source SHA-256 `b34d2cb7e272fa3cb293b6012aaef66f4035da47df0a81cb1677e689feda2a67`; `cli.json` SHA-256 at that run `331eaa5f201437d6b3903afa2ccdf96fd94a9953720bcae0ca5a30cd9b6ed9a4`). The full current 54-case inventory has not been rerun. Later selected receipts for invalid log-level and invalid protocol/interface selectors are recorded in [parity results](../parity.md); they do not constitute a full profile. The distinct `cli.explicit-port-over-invalid-env-starts-server` case also passed 1/1, verifying that `--port 0` overrides malformed `UVICORN_PORT` through startup (run `188a09864fa34689bd4d65008b9b9cff`; receipt SHA-256 `af93265d6d50c55d9a351295e7fa08127f7307f404b822f85b8db6938e909fbf`; runtime source digest `57ed2f030ad86d3088dde78277cfbef472aa1f04a72d544465a57e3ce4d35197`; current CLI input SHA-256 `34b092559c9919b6dd3f0e0ce6702f47f372477f5e3832a39e5af1d2acb9550b`). A separate `cli.env-file-value-reaches-application-factory` case removed the process value and verified that the env-file value reaches the app factory; it passed 1/1 with identical exit status and output (run `6c2e18e456194eceb8aa897b2d354f3d`; receipt SHA-256 `94fee7a0e75237444da4f71e9e9f0c2d5a2087dbd0ef3ee9530168b3fab77035`; runtime source digest `57ed2f030ad86d3088dde78277cfbef472aa1f04a72d544465a57e3ce4d35197`; CLI input SHA-256 `c7bc6b4db7400f0d9488b633e17536248b492041687aa2ba69b0abd5df296425`). Both newer selected cases are dirty-source macOS ARM64 / CPython 3.12.13 evidence only. The zero-interval case exits after startup and does not verify WebSocket Ping behavior on an active session. Python API inputs also drive module CLI limit settings through `UVICORN_LIMIT_MAX_REQUESTS` and `UVICORN_LIMIT_MAX_REQUESTS_JITTER`. A separate HTTP/1.1 protocol input compares `--limit-concurrency 1` 503 responses. Two Python API inputs check two-worker module-CLI request and shutdown using explicit `--workers 2` and `WEB_CONCURRENCY=2`; the historical 73-case Python API profile checks one worker crash/replacement path. A selected POSIX health-check case passed 1/1 with a non-default 2-second timeout on 2026-10-23 (run ID ae4e43b0e69245a8b22cd67668cdaeba; report SHA-256 eae083b94d0d0637b0005fa9278066b48b52f787f93b06c3e58113270a602e1e; dirty target source SHA-256 2ab00648452a5ea0ca1c4ef4942e4069440d92446734ccd5513ee6046e53f57e). Repeated restart/failure policy, worker-control signals, and other option effects remain unverified. `ssl_ciphers` now maps OpenSSL-selected TLS 1.2 suites into Rustls, with one negotiated-cipher parity case passing. The PKCS#8 selected cases cover successful Config/Server and module-CLI loading plus a wrong-password failure using AES-256-CBC/PBKDF2-HMAC-SHA1. A new selected run compares successful Config/Server loading of a traditional AES-256-CBC encrypted RSA PEM and its wrong-password failure; both pass against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 (run `d8d3680a7144445891702d5694d2f08c`; receipt `target/kata-progress/parity-traditional-key-current.json`, SHA-256 `5ac2a8d0051609964f20a4281c3498eb505e3f42e27489ac2a9448a85600e04b`; dirty source digest `e81ab997f0b1f8405bba9400028366681d8f73c977c7823783d71c5cc7fb3af4`). Encrypted EC PEM, AES-128/AES-192 variants, and other combinations remain unverified; `ssl_context_factory` remains unsupported. | `9kbx` | Extend `tests/parity/inputs/cli.json`; invoke both module and console paths with matching argv/env/cwd/files and compare exit status, stdout, stderr, and listener/app behavior. |
-| `run`, `Config`, and `Server` API | `uvicorn.Config`, `uvicorn.Server(config)`, and `uvicorn.run` expose the pinned signatures. Focused comparisons cover default ASGI3 serving, successful ASGI3 application-factory serving through both the programmatic API and module CLI, ASGI2 auto-detection and explicit selection, WSGI GETs through `uvicorn.run()` and the module CLI with `lifespan="off"` and `lifespan="auto"`, lifespan, the `root_path` ASGI scope contract, environment files, custom headers, the `Server.on_tick` signature and callback/header/request-limit behavior, readiness, startup-failure state, positive and zero concurrency-limit behavior, single-worker acceptance of a non-default healthcheck timeout, `WEB_CONCURRENCY=0` selecting one in-process server, request-limit zero/positive/jitter natural-shutdown behavior through the module CLI, warning-level filtering, `UVICORN_LOG_LEVEL=debug` and explicit CLI precedence over that environment value, custom JSON, INI, and YAML logging configuration through `uvicorn.run()` and the module CLI, two-worker module-CLI request and SIGINT shutdown with explicit `--workers 2` and `WEB_CONCURRENCY=2`, and selected SIGINT shutdown outcomes. The input set contains 98 ordinary HTTP-run, two request-limit, and four concurrency cases, including zero-concurrency rejection through the programmatic API. WSGI auto-mode cases compare the unsupported-lifespan fallback with no logging, configured logging, and default module-CLI logging; all five WSGI request cases check method, path, query, and request-header mapping. The three auto-mode cases and the two `lifespan="off"` cases pass individually against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Advanced Config settings, WSGI request-body/streaming/error behavior, other strict-mode failure classes, other log levels and precedence combinations, inherited-listener variants beyond two IPv4 TCP sockets and plain HTTP/1.1 UDS, and broader lifecycle behavior remain unverified. The two-listener case passed on macOS ARM64 / CPython 3.12.13. | `gjpr` | `tests/parity/inputs/python-api.json` compares public imports, signatures, selected run behavior, custom headers, environment-file loading, successful application-factory loading through both entry points, ASGI/WSGI interface handling, resource-limit responses, logging configuration, lifecycle observations, and normalized log events against upstream Uvicorn. |
+| Distribution and `uvicorn` command/import namespace | The current source metadata is version `0.2.2` and declares the PyPI name `uvicorn-rs`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. The root Cargo integration package and optional extra console script remain named `uvicorn-rs-py`; `uvicorn.__version__` reports the pinned Uvicorn compatibility baseline `0.54.0`. Cargo crates at 0.2.1 are published. Local 0.2.2 inspection artifacts were built from dirty source and are not upload-eligible; the PyPI `uvicorn-rs` distribution remains unpublished. The exact-main candidate, clean downstream consumers, and full package/runtime parity gates remain open. | `1s4z` | Input cases compare installed distribution metadata/imports, entry points, module and console commands, and executable behavior with upstream 0.54.0. |
+| CLI/settings/environment | The compatibility namespace uses Click option metadata adapted from Uvicorn 0.54.0. The current CLI input index has 60 unique cases (schema `uvicorn-rs-parity/input@40`; SHA-256 `b86587d0f2f6d890a9dfef3b974bd2f6b5f5cc109a09fde93c6935e892688cf0`); the historical indexed profile had 34 cases: help/version, validation, app selection and loading, current-directory import resolution from the installed console command, worker-option normalization, selected protocol options, `--root-path`, environment-file behavior, response-header policy, `--limit-max-requests 0` startup shutdown, and `--ws-ping-interval 0` startup acceptance. The historical dirty-source profile passed 34/34 against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13 on 2026-10-22 (run ID `78f47e13dcec4e0eb0e2f6a1ac656e36`; report SHA-256 `17969ce55d3bfb4ab7ef435ed5a24c23bebc1bb0759f6134742e6766af57f951`). After the websocket-selector change on 2026-10-23, the two affected cases, `cli.ws-websockets-sansio-preserves-app-load-diagnostic` and `cli.sansio-ws-size-and-queue-preserve-app-load-diagnostic`, passed 2/2 (run ID `d652526ebcb745eca981dfd69317151b`; receipt SHA-256 `bb8a89e9df0241f59bee8b06f8fbffc69cfb80d870a9f5b3ff9e5e403ff5d22c`). The 34-case profile has not been rerun after that change. On 2026-10-24, the added `cli.invalid-limit-concurrency-env-is-rejected` case passed 1/1 against the oracle (run ID `2c2fee8ea606497f9fbad3dfc8c0005b`; receipt SHA-256 `df3c7746ab0bee5c66accf3a9f42a9a86977ada25aadd0d0879a3c33d1d1804c`; source SHA-256 `b34d2cb7e272fa3cb293b6012aaef66f4035da47df0a81cb1677e689feda2a67`; `cli.json` SHA-256 at that run `331eaa5f201437d6b3903afa2ccdf96fd94a9953720bcae0ca5a30cd9b6ed9a4`). A later one-pass full unified diagnostic (run `4d45912cb1084ed8b4e1d08a22a21b53`, report SHA-256 `6b84d61748bce0c41d2510b32cf2e9f46e5423868bb33187d6354ad15d250063`) includes all 55 CLI cases with 55/55 passing and the same CLI input hash. It binds to dirty source revision `5b1ec29201c963d8590c989b07318bb7366d7922`, has zero complete verification repeats, and predates the current input@40 inventory. It is one-pass evidence, not a release-ready full-profile receipt. Later selected receipts for invalid log-level and invalid protocol/interface selectors are recorded in [parity results](../parity.md); they do not constitute a full profile. The distinct `cli.explicit-port-over-invalid-env-starts-server` case also passed 1/1, verifying that `--port 0` overrides malformed `UVICORN_PORT` through startup (run `188a09864fa34689bd4d65008b9b9cff`; receipt SHA-256 `af93265d6d50c55d9a351295e7fa08127f7307f404b822f85b8db6938e909fbf`; runtime source digest `57ed2f030ad86d3088dde78277cfbef472aa1f04a72d544465a57e3ce4d35197`; current CLI input SHA-256 `34b092559c9919b6dd3f0e0ce6702f47f372477f5e3832a39e5af1d2acb9550b`). A separate `cli.env-file-value-reaches-application-factory` case removed the process value and verified that the env-file value reaches the app factory; it passed 1/1 with identical exit status and output (run `6c2e18e456194eceb8aa897b2d354f3d`; receipt SHA-256 `94fee7a0e75237444da4f71e9e9f0c2d5a2087dbd0ef3ee9530168b3fab77035`; runtime source digest `57ed2f030ad86d3088dde78277cfbef472aa1f04a72d544465a57e3ce4d35197`; CLI input SHA-256 `c7bc6b4db7400f0d9488b633e17536248b492041687aa2ba69b0abd5df296425`). Both newer selected cases are dirty-source macOS ARM64 / CPython 3.12.13 evidence only. The zero-interval case exits after startup and does not verify WebSocket Ping behavior on an active session. Python API inputs also drive module CLI limit settings through `UVICORN_LIMIT_MAX_REQUESTS` and `UVICORN_LIMIT_MAX_REQUESTS_JITTER`. A separate HTTP/1.1 protocol input compares `--limit-concurrency 1` 503 responses. Two Python API inputs check two-worker module-CLI request and shutdown using explicit `--workers 2` and `WEB_CONCURRENCY=2`; the historical 73-case Python API profile checks one worker crash/replacement path. A selected POSIX health-check case passed 1/1 with a non-default 2-second timeout on 2026-10-23 (run ID ae4e43b0e69245a8b22cd67668cdaeba; report SHA-256 eae083b94d0d0637b0005fa9278066b48b52f787f93b06c3e58113270a602e1e; dirty target source SHA-256 2ab00648452a5ea0ca1c4ef4942e4069440d92446734ccd5513ee6046e53f57e). Repeated restart/failure policy, worker-control signals, and other option effects remain unverified. `ssl_ciphers` now maps OpenSSL-selected TLS 1.2 suites into Rustls, with one negotiated-cipher parity case passing. The PKCS#8 selected cases cover successful Config/Server and module-CLI loading plus a wrong-password failure using AES-256-CBC/PBKDF2-HMAC-SHA1. A new selected run compares successful Config/Server loading of a traditional AES-256-CBC encrypted RSA PEM and its wrong-password failure; both pass against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 (run `d8d3680a7144445891702d5694d2f08c`; receipt `target/kata-progress/parity-traditional-key-current.json`, SHA-256 `5ac2a8d0051609964f20a4281c3498eb505e3f42e27489ac2a9448a85600e04b`; dirty source digest `e81ab997f0b1f8405bba9400028366681d8f73c977c7823783d71c5cc7fb3af4`). Encrypted EC PEM, AES-128/AES-192 variants, and other combinations remain unverified; `ssl_context_factory` remains unsupported. | `9kbx` | Extend `tests/parity/inputs/cli.json`; invoke both module and console paths with matching argv/env/cwd/files and compare exit status, stdout, stderr, and listener/app behavior. |
+| `run`, `Config`, and `Server` API | `uvicorn.Config`, `uvicorn.Server(config)`, and `uvicorn.run` expose the pinned signatures. Focused comparisons cover default ASGI3 serving, successful ASGI3 application-factory serving through both the programmatic API and module CLI, ASGI2 auto-detection and explicit selection, WSGI GETs through `uvicorn.run()` and the module CLI with `lifespan="off"` and `lifespan="auto"`, lifespan, the `root_path` ASGI scope contract, environment files, custom headers, the `Server.on_tick` signature and callback/header/request-limit behavior, readiness, startup-failure state, positive and zero concurrency-limit behavior, single-worker acceptance of a non-default healthcheck timeout, `WEB_CONCURRENCY=0` selecting one in-process server, request-limit zero/positive/jitter natural-shutdown behavior through the module CLI, warning-level filtering, `UVICORN_LOG_LEVEL=debug` and explicit CLI precedence over that environment value, custom JSON, INI, and YAML logging configuration through `uvicorn.run()` and the module CLI, two-worker module-CLI request and SIGINT shutdown with explicit `--workers 2` and `WEB_CONCURRENCY=2`, and selected SIGINT shutdown outcomes. The current input set contains 129 ordinary HTTP-run (including two active-request graceful-timeout cancellation cases), two request-limit, and five concurrency cases; it includes module-CLI --limit-concurrency 1, which returns the oracle-matched 503 and shuts down cleanly. WSGI auto-mode cases compare the unsupported-lifespan fallback with no logging, configured logging, and default module-CLI logging; all five WSGI request cases check method, path, query, and request-header mapping. The three auto-mode cases and the two `lifespan="off"` cases pass individually against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Advanced Config settings, WSGI request-body/streaming/error behavior, other strict-mode failure classes, other log levels and precedence combinations, inherited-listener variants beyond two IPv4 TCP sockets and plain HTTP/1.1 UDS, and broader lifecycle behavior remain unverified. The two-listener case passed on macOS ARM64 / CPython 3.12.13. | `gjpr` | `tests/parity/inputs/python-api.json` compares public imports, signatures, selected run behavior, custom headers, environment-file loading, successful application-factory loading through both entry points, ASGI/WSGI interface handling, resource-limit responses, logging configuration, lifecycle observations, and normalized log events against upstream Uvicorn. |
 | HTTP, WebSocket, lifespan, ASGI and errors | The current Rust server has an input-driven ASGI protocol matrix. Uvicorn is the H1/WebSocket/lifespan oracle; Hypercorn is the current H2/H3 oracle. This is not Uvicorn CLI/API compatibility. | `dv25`, `4fvf` | Extend the existing protocol cases where applicable; preserve the declared reference per protocol and compare public observations. |
-| Unix/fd sockets, reload, multi-worker supervision | Eight focused HTTP/1.1 comparisons pass for POSIX UDS and inherited IPv4 TCP listeners: plain UDS through the module CLI and `Config`/`Server`, HTTPS over UDS through the module CLI, and inherited TCP through module CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one and two listeners. The UDS scope checks `client=None` and `server=(PATH, None)`. Two module-CLI inputs start two workers, selected by `--workers 2` and `WEB_CONCURRENCY=2`, serve a GET, and shut down on SIGINT. The historical 73-case Python API/import profile passed 73/73 on 2026-10-22 against dirty source at exact commit `86e72e181d00feca1b4db7f30377d5d9d4345b83` on macOS ARM64 / CPython 3.12.13, including `python-api.module-cli-worker-crash-restarts`; both implementations replaced one worker that exited with status 73, served the HTTP request, and shut down cleanly. Run ID `161275c5ed8c44a18d83a139622f3dad`, receipt SHA-256 `7ab890cb6988a0837621e522dce6e2447fb6d93c7b28c9084ee639af5bea8758`, source SHA-256 `92d6b4e68282fb735262d08abcc39b930bd53d6bf4347bf5dfcc659ea05fd475`, and native extension SHA-256 `969ff7c36bc36ac7f23a5837f794417b4374c1e733024112caa85a1d90b1a618`. This profile predates the 2026-10-23 Python-source change and is not current-source full-profile evidence. The local `python-api.module-cli-reload-restarts-after-watched-module-change` input also passed against Uvicorn with `--workers 2` in both dependency modes: candidate `StatReload` without watchfiles and candidate `WatchFilesReload` with `watchfiles==1.3.0`. It verifies the replacement response, the warning that reload ignores the worker count, and graceful SIGINT shutdown. The POSIX health-check expiry input passes. A focused include/exclude glob case also passes; repeated restart/failure policy, worker-control signals, startup failures, and other listener/platform combinations remain unverified. | `dhfq` | Add inputs for repeated restart/failure policy and process signals; then extend socket, platform, TLS, and protocol combinations. |
-| Package extras and release gates | The 0.2.1 source metadata targets the `uvicorn-rs` PyPI name and declares Uvicorn-style base dependencies plus a `[standard]` extra. The PyPI distribution remains unpublished; there is no exact-main tagged candidate, and exact clean artifacts and downstream consumers have not passed release acceptance. | `1s4z`, `v5fe` | Installed-artifact cases and package-content/dependency gates on the supported OS/Python matrix. |
+| Unix/fd sockets, reload, multi-worker supervision | Eight focused HTTP/1.1 comparisons pass for POSIX UDS and inherited IPv4 TCP listeners: plain UDS through the module CLI and `Config`/`Server`, HTTPS over UDS through the module CLI, and inherited TCP through module CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one and two listeners. The UDS scope checks `client=None` and `server=(PATH, None)`. One selected `Server.serve()` case also matches replacement of an existing UDS pathname and lifespan startup/shutdown on macOS; see [the one-case receipt](#existing-uds-pathname-replacement-and-lifespan-cleanup). Two module-CLI inputs start two workers, selected by `--workers 2` and `WEB_CONCURRENCY=2`, serve a GET, and shut down on SIGINT. The historical 73-case Python API/import profile passed 73/73 on 2026-10-22 against dirty source at exact commit `86e72e181d00feca1b4db7f30377d5d9d4345b83` on macOS ARM64 / CPython 3.12.13, including `python-api.module-cli-worker-crash-restarts`; both implementations replaced one worker that exited with status 73, served the HTTP request, and shut down cleanly. Run ID `161275c5ed8c44a18d83a139622f3dad`, receipt SHA-256 `7ab890cb6988a0837621e522dce6e2447fb6d93c7b28c9084ee639af5bea8758`, source SHA-256 `92d6b4e68282fb735262d08abcc39b930bd53d6bf4347bf5dfcc659ea05fd475`, and native extension SHA-256 `969ff7c36bc36ac7f23a5837f794417b4374c1e733024112caa85a1d90b1a618`. This profile predates the 2026-10-23 Python-source change and is not current-source full-profile evidence. The local `python-api.module-cli-reload-restarts-after-watched-module-change` input also passed against Uvicorn with `--workers 2` in both dependency modes: candidate `StatReload` without watchfiles and candidate `WatchFilesReload` with `watchfiles==1.3.0`. It verifies the replacement response, the warning that reload ignores the worker count, and graceful SIGINT shutdown. The POSIX health-check expiry input passes. A focused include/exclude glob case also passes. The earlier full diagnostic pass on 2026-10-27 compared `python-api.server-handle-exit-signal-escalation` with Uvicorn 0.54.0 and it passed (report `target/kata-progress/coverage-current-source-full-diagnostic-20261027.json`; per-case result SHA-256 `b5755d5624222b0c84804982e9213570d16da19b1cdf37988c07c79936f0eba4`). It checks `handle_exit` state transitions for SIGINT and SIGTERM sequences; it does not send OS signals to supervised workers. A separate process-level input, `python-api.module-cli-second-sigint-forces-inflight-request-shutdown`, sends two actual SIGINT signals to a module-CLI process while an ASGI request remains active; both implementations serve HTTP 200, exit 0, and do not time out. Its one-case macOS receipt is documented below. This does not establish Windows or broad worker signal parity. Repeated restart/failure policy, worker-control signals, startup failures, and other listener/platform combinations remain unverified. | `dhfq` | Extend process-control parity across platforms, startup and repeated-failure recovery, supervisor signals, sockets, TLS, and reload combinations. |
+| Package extras and release gates | The 0.2.2 source metadata targets the `uvicorn-rs` PyPI name and declares Uvicorn-style base dependencies plus a `[standard]` extra; the available local artifacts were built from dirty source and cannot be uploaded as a clean candidate. The PyPI distribution remains unpublished; there is no exact-main tagged candidate, and exact clean artifacts and downstream consumers have not passed release acceptance. | `1s4z`, `v5fe` | Installed-artifact cases and package-content/dependency gates on the supported OS/Python matrix. |
+
+### Current CLI and Python API profile runs — 2026-10-27
+
+The full current input@40 CLI profile passed 60/60 against Uvicorn 0.54.0 in
+run `c25aac929fd74dcb9ff3d9206653596a`. Report
+`target/kata-progress/9kbx-cli-current-full-20261027.json`, SHA-256
+`fc58678c2f3ab8227fead7ef6f9c4e34b9d5ca823976cebcc4d72c49ba3cb3b7`.
+The full Python API profile passed 209/209 oracle-parity cases in run
+`c4f523f43087481f90d90fd74c46c5e8`. Report
+`target/kata-progress/x3az-python-api-current-full-after-sigint-contract-fix-20261027.json`,
+SHA-256 `f45a36e6f32baaaebe8d16b37f19ddf433579f9565f08cd6572e151531009b7e`.
+Both use current manifest SHA-256
+`ede173a29d162a002ee37d469f1ecaeeafa5d8e97c15c5bfbc67157b55c6f9be`, current
+CLI input SHA-256
+`b86587d0f2f6d890a9dfef3b974bd2f6b5f5cc109a09fde93c6935e892688cf0`, and
+Python API input SHA-256
+`3fb4cb2e7e4146060908da556d692ec8654196762261797bf92a352a4f847a96`. The
+dirty target is revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+SHA-256 `7ba47a4d8cc3aa4b0039058a68b4d8c201b484ebf4ab5df7a15d27c61a2119ae`,
+native extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`, on
+macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1.
+
+The earlier Python API attempt exposed an over-specific fixed exit-code
+requirement in
+`python-api.config-server-uses-traditional-encrypted-rsa-des-ede3-key`. Both
+upstream and target return `-SIGINT` because `Config`/`Server.run()` re-raises
+the captured signal after shutdown. The input now compares the observed
+process exit code between implementations while retaining the HTTP 200, signal
+delivery, and no-timeout requirements. The corrected full profile passed
+209/209. These are local one-pass CLI/API profiles only; installed clean
+candidate, Windows/Linux, full protocol/native matrix, and three-repeat release
+acceptance remain open. Benchmarks remain paused until parity is complete.
+
+### Prior-source one-pass parity diagnostic — 2026-10-27
+
+The local unified run executed all 926 ASGI inputs and 258 native contract
+inputs once; all 1,184 passed with zero case failures or infrastructure
+failures. It ran on macOS 15.7.7 ARM64, CPython 3.12.13, and Rust 1.98.1
+against dirty working source at revision `5b1ec29201c963d8590c989b07318bb7366d7922`.
+The report is
+`target/kata-progress/coverage-current-source-full-diagnostic-20261027.json`
+(SHA-256
+`a67a79a380c9ea1446ba5a8ad079256300e8efe0d42a27cfe02dfd2690d8d0ac`). Its
+`python-api.server-handle-exit-signal-escalation` oracle comparison passed;
+the per-case result SHA-256 is
+`b5755d5624222b0c84804982e9213570d16da19b1cdf37988c07c79936f0eba4`.
+
+This is one local pass of the declared inputs on its recorded dirty source snapshot, before the focused repeated-SIGINT change. It does not establish the
+three-repeat CI gate, the full supported-OS matrix (including Windows), or a
+clean release candidate. Coverage remains incomplete at 13,503/13,586 regions
+and 9,980/10,022 lines, so this report is not release acceptance evidence.
+
+The hosted CI run for PR #19 also passed 508/508 public parity cases against
+an installed normal wheel on Ubuntu 24.04.5 / CPython 3.12.13 at merge commit
+`d6f2400f7ebfd27adbc21e1ca44f01eceff6204c` (the tested PR head was
+`5b1ec29201c963d8590c989b07318bb7366d7922`). The uploaded parity artifact is
+`uvicorn-rs-public-parity`, SHA-256
+`88aeb3b5f4e4f9786713b834d5ec17e815db482027a9135578c78c67d0f5ec02`, from CI
+run `40317129093`. This clean hosted receipt covers the public parity subset
+on Linux; its coverage job failed, and it does not establish the three-system
+benchmark gate.
+
+A fresh local abi3 wheel from the current dirty source passed the installed
+consumer check and four installed-candidate comparisons: console help, public
+imports/signatures, and successful and wrong-password PKCS#12 PBE startup.
+Wheel SHA-256 is
+`83cbac6aacc8739911b482dee0a457975275dd436ed19e9d942aec8977f4878f`; the
+selected parity report SHA-256 is
+`b719cdc454c678150995fe44af201898841aa16db96f120553a952e2929b2ab2`, and the
+installed-consumer receipt SHA-256 is
+`4d2313607feb714ff8f5a5b963ab2a06a18c4a25dbf3ad32f148fd00cb91d3b4`. A
+separate replacement/rollback check could not install the pinned upstream
+`uvicorn==0.54.0` because the configured package index only exposed versions
+through 0.39.0; it stopped before checking rollback. These local artifacts
+remain dirty-source diagnostics, not release candidates.
+
+### Actual repeated-SIGINT shutdown with an active request
+
+`python-api.module-cli-second-sigint-forces-inflight-request-shutdown` passed
+1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust
+1.98.1. Both module-CLI processes served HTTP 200, received two OS SIGINT
+signals while an ASGI request task was held, exited 0, and did not time out.
+Run `5250fc7d6d4145e2a1d206de3621fd91`; report
+`target/kata-progress/parity-second-sigint-current-20261027.json`, SHA-256
+`3d1d1487fc206a067c1cb58d5a175ac21b0cc88c3b673cd64e982f179521f601`. The
+receipt binds to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`,
+source SHA-256
+`7ba47a4d8cc3aa4b0039058a68b4d8c201b484ebf4ab5df7a15d27c61a2119ae`, native
+extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`, and
+Python API input@39 SHA-256
+`9cd73e4493708deebe55227a1face7bf3be76ecba8f81c6fc8ebca3b46498feb`.
+Server log events are retained but excluded from comparison because platform
+traceback details differ during forced cancellation. This selected macOS case
+does not close wider worker, restart, or cross-platform process-control
+parity.
+
+### Actual graceful-timeout cancellation with an active request
+
+`python-api.module-cli-graceful-timeout-cancels-inflight-request` passed 1/1
+against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1.
+Both module-CLI processes served HTTP 200, received one SIGINT with
+`UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=1`, observed cancellation of the held ASGI
+task, exited 0, and did not time out. Run
+`566af64b1d144153b2e9acb369f9795c`; report
+`target/kata-progress/parity-graceful-timeout-current-20261027.json`, SHA-256
+`e7b00fa31814e5baf03a7667c4660c11006ba67c5ed57e45994386a81f579eda`. The
+receipt binds to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`,
+source SHA-256
+`7ba47a4d8cc3aa4b0039058a68b4d8c201b484ebf4ab5df7a15d27c61a2119ae`, native
+extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`, and
+Python API input@39 SHA-256
+`4e42e17e08aef42975f49bc4248ec87a9559045d320fe63a45863dd82ad50f67`. This is
+one selected local platform receipt; other timeout values, signal/process
+combinations, and supported platforms remain unverified.
+
+`python-api.module-cli-graceful-timeout-flag-cancels-inflight-request` also
+passed 1/1 with the timeout supplied as `--timeout-graceful-shutdown 1`.
+Oracle and target both served HTTP 200, received one SIGINT while the ASGI task
+was held, observed task cancellation, exited 0, and did not time out. Run
+`694b96675dca41d593b315f07d0470e7`; report
+`target/kata-progress/parity-graceful-timeout-flag-current-20261027.json`,
+SHA-256 `d021e11ceb9d5eb27eb089f1006f5329cf4d6aa4a5a5b005ec97ff4c60ee5c87`.
+The receipt binds to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`,
+source SHA-256
+`7ba47a4d8cc3aa4b0039058a68b4d8c201b484ebf4ab5df7a15d27c61a2119ae`, native
+extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`, and
+Python API input@40 SHA-256
+`f8d6b7873a5c83f173f63866df6f7b3d7503159522db1929b20659dd7332ed72`. Full
+current-source repeats and cross-platform acceptance remain open.
+
+### Current-source reload parity refresh — 2026-10-27
+
+The current-source diagnostic also passed both module-CLI reload inputs against
+Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1 at dirty
+revision `5b1ec29201c963d8590c989b07318bb7366d7922` (source SHA-256
+`e9e0ccc0b6f16b803cb99984ebdded01830b89ea80056db101f55d5d2573cd6a`; Python
+API input SHA-256
+`452c332fcaa22a624ea85c875ae2abf6560654ac486142a72e131f1a5fe80f92`).
+
+- `python-api.module-cli-reload-restarts-after-watched-module-change` passed
+  1/1: both sides returned `before` and then `after`, observed the reload and
+  ignored-worker warning, and exited 0 after SIGINT without timing out. Run
+  `b2b71e5449744697ad266af99f8c5f90`; per-case report SHA-256
+  `80d05baf0897d68787cdb883c3b5cbcaf1c5085b3695a2748c76619e34775a42`.
+- `python-api.module-cli-reload-respects-include-exclude-globs` passed 1/1:
+  an excluded-file change did not reload, an included-file change did, and
+  both sides exited 0 after SIGINT without timing out. Run
+  `f4416b62f9844075b2d596598d3a6b31`; per-case report SHA-256
+  `c836b8e35cf64db0974ea3f514ee3dfebac34f606d7f13130f99079ec69018c0`.
+
+These are current-source single-platform receipts. They do not establish other
+glob combinations, fallback-watcher filtering, reload startup failures, or
+cross-platform behavior.
+
+### Focused module-CLI WebSocket timeout setting — 2026-10-27
+
+`cli.websocket-zero-ping-timeout-is-accepted` starts `python -m uvicorn`
+with `--ws-ping-interval 0` and `--ws-ping-timeout 0`. The selected comparison
+passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13
+(run `98338893fcab4a2fbc3113859ea3c311`; report
+`target/kata-progress/cli-ws-ping-timeout-zero-20261027.json`, SHA-256
+`c0cc541d55b801745c5ad4fe543fd619a45ad5eaa1c4195fffaf34e9e1705eec`). It
+binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+SHA-256 `3c6654dd24f30e6b838232518a5c8967c73952a1e722a6ec4d6725568f28fe0d`,
+and native extension SHA-256
+`d1cdd7955095a0d61c85412d1e3c41aaebd93904a0558136c5f26bc916f94657`. This
+only checks CLI startup acceptance; it does not exercise live WebSocket
+Ping/Pong behavior or complete CLI parity.
+
+
+### Focused module-CLI graceful-shutdown settings — 2026-10-27
+
+`cli.timeout-graceful-shutdown-valid-value-exits-after-startup` starts
+`python -m uvicorn` with `--timeout-graceful-shutdown 1` and exits after startup
+using `--limit-max-requests 0`. The selected comparison passed 1/1 against
+Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 (run
+`7b7752d239b249e3943f50400775c437`; receipt
+`target/kata-progress/9kbx-graceful-timeout-valid-20261027.json`, SHA-256
+`ab9df8e484f24acc20c43edbe83d3839c2f5fa37b0a7823a4295a8efeb14963f`). It binds dirty revision
+`5b1ec29201c963d8590c989b07318bb7366d7922`, source SHA-256
+`e69c91726396071cff19ffccf124992bf75c30e63ea233dffbc1c233bc06696a`, native
+extension SHA-256
+`4c84221e0a04be80ba00ce056352cace1d72e3dac7572261121bcf577b543074`, and CLI
+input SHA-256
+`b376a82fdcd7ad0b2969b345be718022aaf17fc1cf546e6bab595bcd921c703b`. Both
+processes exited 0 with empty stdout and stderr. This verifies valid-option
+startup acceptance only; it does not verify cancellation of an in-flight
+request after the graceful timeout.
+
+`cli.timeout-graceful-shutdown-valid-environment-value-exits-after-startup`
+starts the module CLI with `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=1`, without a
+CLI override, and exits after startup using `--limit-max-requests 0`. The
+selected comparison passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 /
+CPython 3.12.13 / Rust 1.98.1 (run
+`24c550a6a3464489a859b501faf2f6a2`; receipt
+`target/kata-progress/9kbx-graceful-timeout-valid-env-20261027.json`, SHA-256
+`701091163ad0db64e0b62c3536c5663fb526de961d1249bc4c2a481b930ade26`). It
+binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+SHA-256 `e69c91726396071cff19ffccf124992bf75c30e63ea233dffbc1c233bc06696a`,
+native extension SHA-256
+`4c84221e0a04be80ba00ce056352cace1d72e3dac7572261121bcf577b543074`, and
+the then-current 58-case CLI input SHA-256
+`bc99598c6cb980a26f58b05746fd47b32e5367f8092ad9efe12e50cf5a32af3f`. Both
+processes exited 0 with empty stdout and stderr. This checks valid environment
+value startup acceptance only; it does not verify the timeout effect on an
+in-flight request.
+
+### Focused module-CLI host environment error — 2026-10-27
+
+`cli.invalid-host-env-is-rejected` starts the module CLI without `--host` and
+sets `UVICORN_HOST=invalid host`. Uvicorn 0.54.0 and the target both exit 3
+with empty stdout/stderr in the selected run on macOS 15.7.7 ARM64 / CPython
+3.12.13 / Rust 1.98.1 (run `d8b06f9cb7c44a1d8c9a7c7147c3773a`; receipt
+`target/kata-progress/9kbx-invalid-host-env-20261027.json`, SHA-256
+`1e0646131004fcaefecf1bf2456620522c7284b090530fb5d12b5af4cc5812a2`). It
+binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+SHA-256 `e69c91726396071cff19ffccf124992bf75c30e63ea233dffbc1c233bc06696a`,
+native extension SHA-256
+`4c84221e0a04be80ba00ce056352cace1d72e3dac7572261121bcf577b543074`, and
+the 59-case CLI input SHA-256
+`e8e0781e94793b79e8a86a9515e3fa9212763247f0148ed3db044b1f72c13ec7`. This
+checks the public startup failure from an invalid environment value; it does
+not establish full environment or CLI parity.
+
+### Focused module CLI missing APP argument — 2026-10-27
+
+Added `cli.no-arguments-requires-app` to represent a true empty argv for the
+module invocation. The parity runner now accepts an empty argument list while
+continuing to reject non-string and NUL-containing arguments; the earlier
+validator rejected this valid process shape before either implementation ran.
+The selected comparison passed 1/1 against Uvicorn 0.54.0: both commands exit 2,
+emit the identical missing-`APP` usage diagnostic on stderr, and leave stdout
+empty.
+
+Run `c17273bcc43745c684d6acf60da4b566`; receipt
+`target/kata-progress/9kbx-no-arguments-requires-app-20261027.json`, SHA-256
+`2ec969fede17569d3c30a009e7d88967173f034490c5d6546826a00107ec19ca2`.
+The receipt binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`,
+source SHA-256
+`3d902bf0ff0c32c2bf4e7baed1d9074feab558cead42c05e8fa0300b4f9740f5`,
+native extension SHA-256
+`ab60493a10f9674a016034805f6cbdec5cee8c9724fbb0c309d43fc3e0bd373d`,
+CLI input SHA-256
+`058e6d836f2e87d9c7aff2e39557b0642574246bbaea429a8d384ed57848db53`,
+runner SHA-256
+`5a684586ab66df8b930bb182ce5fd7b55c32f86208ac16dbafd84d902a1864ac`,
+and manifest SHA-256
+`38501024e8a41fe41c905f04890a9131ea8da098dc84deb70f280d1751a3384f`.
+Environment: macOS 15.7.7 ARM64, CPython 3.12.13, Rust 1.98.1, Uvicorn
+0.54.0. This verifies only the no-argument missing-app diagnostic; full
+CLI/settings and platform parity remain open.
+
+### Focused Python import and signature refresh (2026-10-27)
+
+After the Python wrapper imports and constructor return annotations changed,
+`python-api.public-imports-and-signatures` passed 1/1 against Uvicorn 0.54.0
+on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1. Run
+`c22b399ad08348448e7880ded0abdeb3`; receipt
+`target/kata-progress/gjpr-public-imports-signatures-20261027.json`, SHA-256
+`b87371a0428cc767553821fb48197555d668a4b5eb1b617cd96341bbacec8c49`. It binds
+dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source SHA-256
+`e69c91726396071cff19ffccf124992bf75c30e63ea233dffbc1c233bc06696a`, native
+extension SHA-256
+`4c84221e0a04be80ba00ce056352cace1d72e3dac7572261121bcf577b543074`, and
+Python API input SHA-256
+`331fa538328c0a716594f144dc4b0c7e0a7c1caada920383add78a12c8afd283`. The
+selected import/signature case passes for this dirty source; broader API,
+lifecycle, platform, and installed-package acceptance remain open.
+
+### Focused Config and run() parity group (2026-10-27)
+
+Three selected current-source cases passed together against Uvicorn 0.54.0 on
+macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1:
+`python-api.config-properties-and-retired-loop-hook`,
+`python-api.run-loads-env-file-before-factory`, and
+`python-api.run-reports-missing-module` (3/3, run
+`93f415b0d1434d298c04266d07c78e50`). Receipt
+`target/kata-progress/gjpr-config-env-import-errors-20261027.json`, SHA-256
+`ef02ba1591e263dbd90d0be1065a5e3416392e0eb52d0cba15f6b3dae601926e`.
+It binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, runtime
+source SHA-256 `e69c91726396071cff19ffccf124992bf75c30e63ea233dffbc1c233bc06696a`,
+native extension SHA-256
+`4c84221e0a04be80ba00ce056352cace1d72e3dac7572261121bcf577b543074`, and
+Python API input SHA-256
+`331fa538328c0a716594f144dc4b0c7e0a7c1caada920383add78a12c8afd283`.
+The Config-properties and env-file/factory cases add current-source receipts;
+the missing-module case refreshes a 2026-10-19 pass against older source. These
+selected behaviors pass on this dirty source but do not complete the public
+API or release acceptance.
+
+### Focused startup and lifecycle parity group (2026-10-27)
+
+Three selected public-API cases passed 3/3 against Uvicorn 0.54.0 on macOS
+15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1: bind-failure lifespan cleanup,
+UDS pathname replacement with lifespan cleanup, and concurrent startup-failure
+waiter signaling. The observations match: bind failure runs startup and
+shutdown, raises from `serve()`, and leaves `started` false; UDS replacement
+runs startup and shutdown and returns with `started` true; the startup-failure
+waiter returns true while `serve()` finishes before shutdown and `started`
+remains false. Run `cf6d77c587604f50b2a00836279128d9`; receipt
+`target/kata-progress/gjpr-startup-failure-cleanup-waiter-20261027.json`,
+SHA-256 `e1bf2780b8aa83d9498293a56445b6111d4acb8d005df8fe8e8a52b19515dd73`.
+It binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+SHA-256 `e69c91726396071cff19ffccf124992bf75c30e63ea233dffbc1c233bc06696a`,
+native extension SHA-256
+`4c84221e0a04be80ba00ce056352cace1d72e3dac7572261121bcf577b543074`, and
+Python API input SHA-256
+`331fa538328c0a716594f144dc4b0c7e0a7c1caada920383add78a12c8afd283`.
+This is selected dirty-source lifecycle evidence; full platform and installed
+package acceptance remain open.
+
+### Focused Server.serve startup cancellation — 2026-10-27
+
+`python-api.server-serve-cancellation-during-startup` passed 1/1 against
+Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1. Both
+observations report that lifespan startup entered before cancellation, the
+listener was not accepting after cancellation, the serve task was cancelled
+and finished, and `server.started` remained false. Run
+`e530db81248644218613ff4a19fe824f`; selected report
+`target/kata-progress/gjpr-server-cancel-during-startup-20261027.json`,
+SHA-256 `b8bbf7ffe2f17232144c4b018c145335b72d462eb13cccba3846b4345232e4eb`.
+The receipt binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`,
+source SHA-256 `2a205a2ee7e482c69fa66338b587060036ce38db5ead5d0a24bd7762cdf76e9b`,
+native extension SHA-256
+`4c84221e0a04be80ba00ce056352cace1d72e3dac7572261121bcf577b543074`, and
+Python API input SHA-256
+`331fa538328c0a716594f144dc4b0c7e0a7c1caada920383add78a12c8afd283`. The
+selected case has complete attribution (808 regions, 606 lines); the report
+is a one-case subset with no complete matrix repeats and does not satisfy the
+unified coverage gate. Full lifecycle and platform acceptance remain open.
 
 Current-source CA validation — 2026-10-26: a focused unified-coverage batch passed 13/13 cases (5 Uvicorn parity cases and 8 target-only fault contracts). The cases cover empty, missing, directory, malformed, and `TRUSTED CERTIFICATE` CA inputs, plus error propagation at each step of the Python SSL compatibility helper and its successful-CPython fallback. The trusted-certificate parity case uses a PEM block without auxiliary trust bytes. Coverage-MCP found no missing spans in `python_ssl_ca_certificates_error` for this report. The selected report remains incomplete overall: 3,590/12,973 regions and 2,682/9,610 lines are covered; the full matrix and release coverage gate remain open. Source SHA-256 `83a43c50e8bd1085261e57f95125c5f319ee3c6225a25950c2d15996b9cab79f`; native extension SHA-256 `8d8d9358596ec19462012166f0146710312f9d1f6507d08174c59d9638469eaa`; report `target/coverage-ca-tls-current/report.json`, SHA-256 `f8f417148b22e9405a3fc19863a76a9bd9cb60b0d4922007bcdc554a94c2c948`.
 
@@ -295,7 +640,7 @@ Current-source CA validation — 2026-10-26: a focused unified-coverage batch pa
   `1666dd0b1e40d046f9ee6d4f011ae940cec6dfa007efcc7f0c7d81c68d865d34`;
   `cli.json` SHA-256
   `9bfd77f7f332c584df2441e9c7024cb29a44c8cc42960da29c705a7a8b1a690c`.
-  This selected result does not close the 54-case profile.
+  At the time, this selected result did not close the CLI profile. A later one-pass full unified diagnostic includes all 55 CLI inputs (see the CLI/settings evidence row) but has zero complete verification repeats.
 
 - The added `cli.explicit-host-over-invalid-env-starts-server` input passed
   1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. It
@@ -309,7 +654,7 @@ Current-source CA validation — 2026-10-26: a focused unified-coverage batch pa
   `99fb03f9b2c03933eab493f3f5f1cdd2596a2f2058f1ef6ed9c408da06390113`;
   native extension SHA-256
   `1666dd0b1e40d046f9ee6d4f011ae940cec6dfa007efcc7f0c7d81c68d865d34`.
-  This is one selected case; the full 54-case profile remains unverified.
+  This is one selected case. A later one-pass full unified diagnostic includes all 55 CLI inputs (see the CLI/settings evidence row) but has zero complete verification repeats.
 
 - `python-api.module-cli-worker-crash-restarts` passed 1/1 on the current
   dirty draft against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13.
@@ -531,8 +876,11 @@ API and module CLI. The two-worker module-CLI cases verify a successful HTTP req
 shutdown. A separate selected POSIX input verifies one worker stops answering
 health checks, its supervisor starts a replacement, and the server serves and
 shuts down cleanly; its receipt is listed in the process-supervision row
-above. Repeated restart/failure behavior, dynamic worker-count controls,
-reload, and package replacement behavior remain unverified.
+above. At this 2026-10-23 snapshot, repeated restart/failure behavior,
+dynamic worker-count controls, reload, and package replacement behavior were
+unverified. The current-source reload receipts are recorded in the
+2026-10-27 section above; broader restart, worker-control, and package
+replacement evidence remains open.
 The selected `python-api.server-callback-notify-stops-server` case was added and passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. It configures `timeout_notify=0`, observes one `callback_notify`, and has that callback request server shutdown. The receipt is `target/kata-progress/python-api-server-callback-notify-20261024.json` (run ID `374c669e49c0423491e17c054a57d074`; receipt SHA-256 `4704c5569db341d35e98c932851bd9fa97cc313f5f3a04c9e4209c519ef9b0e9`; source SHA-256 `52149ee124968d443ccc0372c7c5212199b7feac628abab6cfabf7b21f135dac`; Python API input SHA-256 `cfaf2a623280f5ab7cf174333387d1124518d783622fb7780e8cacd2b211b64`). The target was dirty at base revision `86e72e181d00feca1b4db7f30377d5d9d4345b83`, so this is selected local evidence only. It does not establish Gunicorn process supervision or Python 3.9/3.10 worker-loop cleanup.
 
 Python API inputs introduced `uvicorn-rs-parity/input@11` to include
@@ -1013,6 +1361,29 @@ checks that the connection remains usable after the configured interval; it
 does not inspect Ping-frame emission or establish wire-level ping suppression.
 It is selected-case evidence, not a full parity or coverage-gate result.
 
+Two current-source CLI inputs also compare zero-valued keepalive settings:
+`cli.websocket-ping-interval-zero-disables-keepalive-and-exits` sets
+`--ws-ping-interval 0`, and `cli.websocket-zero-ping-timeout-is-accepted`
+sets both `--ws-ping-interval 0` and `--ws-ping-timeout 0`. Each case passed
+1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. The
+oracle and target both exited 0 with empty stdout and stderr. Reports:
+`target/kata-progress/9kbx-ws-keepalive-zero-20261027.json` (run
+`5e9ad941c0cc432d988af55d3c963499`, SHA-256
+`ade0a7fa56a11b1bcdb8495eed6ca964e517e9520575cc480f00da5824f3dd6d`) and
+`target/kata-progress/9kbx-ws-zero-timeout-20261027.json` (run
+`72d23479ab5c48a6b9c09ed3bad65c66`, SHA-256
+`1af9260663bf5156f58298d06e216e06b46b5bf2b0530896b90666e7097af55b`). Both
+receipts bind dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`,
+CLI input@38 SHA-256
+`058e6d836f2e87d9c7aff2e39557b0642574246bbaea429a8d384ed57848db53`, runner
+SHA-256 `eac669579c55ba7ce905d4a03c387567d1fc079820c927126c419b1761998ad2`,
+and native extension SHA-256
+`8ebf16713c705f88f179b7dac26bedd71db606c30daf3c9392546f06548634d7`; all
+155 recorded source files still match the checkout. These cases establish
+CLI option acceptance and startup/exit behavior only. They do not observe
+active WebSocket Ping frames or close the full CLI/API or cross-platform
+compatibility gates.
+
 The input `python-api.run-websocket-negative-ping-timeout-closes-1011` sets
 `ws_ping_interval=0.1` and `ws_ping_timeout=-0.1`, waits for the server Ping,
 and observes close code 1011 before the application message is delivered.
@@ -1037,6 +1408,35 @@ ID `c4201abea2113cbceba673100711a038479e23a0cddf4ec0df18ac50aee47372`. The
 selection does not complete the full parity, coverage, or release gates; the
 infinite-interval case does not observe wire-level Ping suppression.
 
+## Existing UDS pathname replacement and lifespan cleanup
+
+The selected input
+`python-api.server-startup-uds-replaces-existing-socket-and-shuts-down-lifespan`
+binds an active Unix-domain socket at the configured path before starting
+`Server.serve()`. The implementation removes an existing pathname only when it
+refers to a Unix socket, matching Uvicorn's replacement behavior while leaving
+regular files for the bind error path. The input compares startup, completion,
+exception/timeout state, exit status, and lifespan events; it does not send an
+HTTP request through the replacement listener.
+
+The case passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython
+3.12.13 / Rust 1.98.1 (run `77810df8d13f4d6fbca2bf2a6e796580`; receipt
+`target/asgi-parity/uds-replacement-one-case.json`, SHA-256
+`600c69da81ec30df304892ef2f8dd1059562b7f6f5dc0d57666a37737b38c5e5`). Oracle
+and target both started, completed the serve task, exited 0, and observed
+`lifespan.startup` followed by `lifespan.shutdown`, with no exception or
+timeout. The receipt binds to dirty target revision
+`5b1ec29201c963d8590c989b07318bb7366d7922` (`dirty=true`), Python API input
+SHA-256 `1c9f06464bc0e69ce517eebefbe36fea27c77090255d582eb17362476d072a9c`,
+manifest SHA-256
+`38501024e8a41fe41c905f04890a9131ea8da098dc84deb70f280d1751a3384f`, and
+native extension SHA-256
+`07807ccd278f6b5cfb23d311c1751b18edfbc5705011937a822e8226956254fd`.
+
+This is one selected local case on one platform. It is not clean-source or
+hosted release evidence and does not establish other UDS lifecycle, platform,
+TLS, HTTP/2, or HTTP/3 behavior.
+
 ## Keep benchmark oracle files separate
 
 The candidate distribution and upstream Uvicorn both provide files under the
@@ -1057,6 +1457,59 @@ WebSocket, and lifecycle benchmark runners pass
 `--uvicorn-python target/uvicorn-oracle/bin/python`. The runners verify the
 oracle version, Python version, import origin, absence of the `uvicorn-rs` distribution, and
 installed Uvicorn file hashes before starting a comparison.
+
+## Focused PKCS#12 PBE-SHA1-3DES key parity — 2026-10-27
+
+Added the Config/Server input
+`python-api.config-server-uses-pkcs12-pbe-sha1-3des-key`. It passed 1/1 against
+Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1. Both
+implementations loaded the same PKCS#8 private key encrypted with
+`pbeWithSHA1And3-KeyTripleDES-CBC`, served HTTP 200, received SIGINT, and exited
+cleanly. The focused Rust decrypt path supports this one PKCS#12 PBE OID; other
+legacy PBE algorithms and full TLS/platform parity remain unverified.
+
+Receipt: `target/kata-progress/x3az-pkcs12-pbe-sha1-3des-20261027.json`, SHA-256
+`a1adc6563459eb7520cd2ea0e24598e3c9aed89447f09adda731adb2eaf95929`. It binds
+to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, Python API input
+SHA-256 `a003111db711f02cda5ae40f888a6142ffbab2fe155ac8bea3f3795921ac458d`,
+`src/lib.rs` SHA-256
+`9f66996ee8df59fb54540cab41e813352f98f4dc6dd276ed8480871e8ceffb1b`, and
+native extension SHA-256
+`e7ab61a231ba2c79575f6316d9c8ff55471f1772ec266d4be1bcc45a545e28b8`. This is
+one selected dirty-source behavior and does not qualify the full compatibility
+matrix or release candidate.
+
+## Complete installed-wheel public parity after lifespan timeout fix — 2026-10-27
+
+The first complete installed-wheel run identified one lifecycle mismatch in
+`lifespan.post-response-background-task-cancelled-before-server-return`:
+after a one-second request-drain timeout cancelled the held request, the target
+skipped the ASGI lifespan shutdown handshake that Uvicorn completed. The
+failing case reproduced in isolation. `src/lib.rs` now always performs the
+lifespan shutdown handshake after request cancellation. The focused case and
+four related graceful-timeout inputs passed on the rebuilt wheel.
+
+The final current-source wheel then passed the complete declared public parity
+inventory: 580/580 cases, zero behavior or infrastructure failures, zero not
+run. It was built and installed in a fresh environment separate from the
+Uvicorn 0.54.0 oracle. Receipt:
+`target/kata-progress/installed-parity-current-source-20261027/installed-full-parity-after-lifespan-fix.json`,
+run `9f5d8332dbd842b08e52372571b0eee2`, report SHA-256
+`b9ea5b0062a935406fcb45fc8579d3a370470776cb07d82a148bf92a743b7153`. The
+abi3 wheel SHA-256 is
+`8b424d96785e22df63f429104783446ecff81f9136ec15ce4ae64098df4de9fd`.
+
+This receipt binds to dirty revision
+`5b1ec29201c963d8590c989b07318bb7366d7922`, source SHA-256
+`eb302a715923469d490bde65c43e8cdff097fd68a6216033921092176b873197`, native
+extension SHA-256
+`74fd52144fbc0b168db90da59de02cffaf5e1a037995beb2a3b6b2792a523535`, and
+manifest SHA-256 `ede173a29d162a002ee37d469f1ecaeeafa5d8e97c15c5bfbc67157b55c6f9be`.
+Environment: macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1. Offline
+evidence validation passed with `scripts/check_ci_evidence.py parity --offline`.
+This covers local public oracle parity only; the supported OS/Python matrix,
+349 target-only fault contracts, 258 native-core contracts, and clean exact-main
+release evidence remain open.
 
 ## User-facing status
 

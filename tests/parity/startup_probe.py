@@ -115,6 +115,11 @@ def identity_for(
             b"DEK-Info: AES-256-CBC,0123456789ABCDEF0123456789ABCDEF\n\n"
             b"AAAA\n"
         ),
+        "startup-traditional-unencrypted-private-key-invalid-base64": (
+            b"-----BEGIN RSA PRIVATE KEY-----\n\n"
+            b"not-base64!\n"
+            b"-----END RSA PRIVATE KEY-----\n"
+        ),
     }
     if scenario in malformed_encrypted_key_documents:
         invalid = temporary / "invalid-encrypted-key.pem"
@@ -137,6 +142,7 @@ def main() -> None:
             "not-the-parity-key-password"
             if scenario.startswith("startup-encrypted-private-key-")
             or scenario.startswith("startup-traditional-encrypted-private-key-")
+            or scenario == "startup-traditional-unencrypted-private-key-invalid-base64"
             else None
         )
         host = "does-not-exist.invalid" if scenario == "startup-invalid-host" else "127.0.0.1"

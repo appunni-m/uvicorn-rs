@@ -1,6 +1,6 @@
 [package]
 name = "uvicorn-rs"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 rust-version = "1.85"
 license = "BSD-3-Clause OR MIT"
@@ -31,7 +31,7 @@ futures-util = "0.3"
 http = "1"
 http-body = "1"
 http-body-util = "0.1"
-asgi-lifespan-protocol-rs = { version = "0.2.1", path = "../asgi-lifespan-protocol-rs" }
+asgi-lifespan-protocol-rs = { version = "0.2.2", path = "../asgi-lifespan-protocol-rs" }
 pin-project-lite = "0.2"
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["http1", "http2", "server", "server-auto", "service", "tokio"] }

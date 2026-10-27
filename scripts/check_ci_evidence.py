@@ -199,6 +199,18 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-websocket",
         "scenario": "accept-key-header-value-error",
     },
+    "websocket.handshake.extension-negotiation": {
+        "operation": "native-http1-websocket",
+        "scenario": "extension-negotiation-error",
+    },
+    "websocket.session.construction-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-construction-error",
+    },
+    "websocket.session.extension-to-str-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-extension-header-error",
+    },
     "websocket.receive.close-reply.flush": {
         "operation": "native-http1-websocket",
         "scenario": "close-reply-flush-failure",

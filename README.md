@@ -8,8 +8,9 @@ The `asgi-lifespan-protocol-rs` and `uvicorn-rs` 0.2.1 crates have been
 published to crates.io from clean source commit
 `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`. Their registry checksums and
 release provenance are recorded in [release status](docs/releases.md). The
-PyPI distribution `uvicorn-rs` 0.2.1 has not been uploaded. This is not a
-complete project release: consolidation PR #19 is still a draft, exact-main
+PyPI distribution `uvicorn-rs` remains unpublished. Local 0.2.2 inspection
+artifacts were built from dirty source and are not upload-eligible. This is
+not a complete project release: consolidation PR #19 is still a draft, exact-main
 coverage, independent coverage review, full three-system benchmarks,
 compatibility evidence, and clean consumers remain open. The old
 `asgi-lifespan-protocol-rs` 0.2.0 archive records `dirty: true` and is not the

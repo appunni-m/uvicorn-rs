@@ -36,7 +36,7 @@ class ColourizedFormatter(logging.Formatter):
         datefmt: str | None = None,
         style: Literal["%", "{", "$"] = "%",
         use_colors: bool | None = None,
-    ) -> None:
+    ):
         if use_colors in (True, False):
             self.use_colors = use_colors
         else:

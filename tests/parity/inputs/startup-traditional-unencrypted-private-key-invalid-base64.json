@@ -1,0 +1,12 @@
+{
+  "schema": "uvicorn-rs-parity/input@40",
+  "cases": [
+    {
+      "case_id": "startup-traditional-unencrypted-private-key-invalid-base64.rejects-key",
+      "profile": "startup-traditional-unencrypted-private-key-invalid-base64",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "startup_failure": {"expect_failed": true}
+    }
+  ]
+}

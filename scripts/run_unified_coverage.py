@@ -145,6 +145,10 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-keepalive-deadline-channel-closed",
         "scenario": "deadline-channel-closed",
     },
+    "http1.keep-alive.deadline-rescheduled-before-expiry": {
+        "operation": "native-http1-keepalive-deadline-rescheduled",
+        "scenario": "deadline-rescheduled-before-expiry",
+    },
     "native.request-lifetime.body-missing-guard": {
         "operation": "native-request-lifetime-body-missing-guard",
         "scenario": "guard-missing",
@@ -237,6 +241,18 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-websocket",
         "scenario": "accept-key-header-value-error",
     },
+    "websocket.handshake.extension-negotiation": {
+        "operation": "native-http1-websocket",
+        "scenario": "extension-negotiation-error",
+    },
+    "websocket.session.construction-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-construction-error",
+    },
+    "websocket.session.extension-to-str-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-extension-header-error",
+    },
     "websocket.receive.close-reply.flush": {
         "operation": "native-http1-websocket",
         "scenario": "close-reply-flush-failure",
@@ -293,8 +309,7 @@ REPORT_INPUT_PATHS = (
     "tests/parity/server_api_probe.py",
     "tests/native-core/manifest.json",
     "crates/uvicorn-rs/examples/native_core_contracts.rs",
-    "tests/native-core/tls/localhost-cert.pem",
-    "tests/native-core/tls/localhost-key.pem",
+    "tests/native-core/tls",
     "tools/http3-probe/Cargo.toml",
     "Cargo.lock",
     "tools/http3-probe/src/bin/parity-http3.rs",
@@ -483,7 +498,14 @@ def source_identity(
         selected[relative] = digest_file(ROOT / relative)
     for relative in REPORT_INPUT_PATHS:
         path = ROOT / relative
-        selected[relative] = digest_file(path)
+        if path.is_dir():
+            for artifact in sorted(path.rglob("*")):
+                if artifact.is_file():
+                    selected[str(artifact.relative_to(ROOT))] = digest_file(artifact)
+        elif path.is_file():
+            selected[relative] = digest_file(path)
+        else:
+            raise CoverageError(f"report input is missing: {relative}")
     for path in input_paths:
         selected[str(path.relative_to(ROOT))] = digest_file(path)
     return {

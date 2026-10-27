@@ -12,6 +12,50 @@
 This attempt did not produce a validated three-system aggregate or a complete performance report. Partial per-system measurements remain in this run's artifacts. The [previous complete report](benchmark-results.md) remains the latest complete measurement; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455) for this attempt.
 <!-- END GENERATED LATEST ATTEMPT -->
 
+## Focused Linux ARM64 diagnostics after parity work (2026-10-27)
+
+The HTTP/1 upload diagnostic
+[40503979255](https://github.com/appunni-m/uvicorn-rs/actions/runs/40503979255)
+ran only `fastapi-upload-1m-write-1k` on commit
+[`5b1ec29201c963d8590c989b07318bb7366d7922`](https://github.com/appunni-m/uvicorn-rs/commit/5b1ec29201c963d8590c989b07318bb7366d7922).
+The workload sends 1 MiB request bodies in 1 KiB client writes at concurrency
+8. Stock Uvicorn asyncio and uvloop and uvicorn-rs asyncio and uvloop all
+completed with zero failures (3,615, 3,733, 3,080, and 3,288 requests,
+respectively). The timeout did not recur, so there was no failing request to
+trace to its first stalled stage. Artifact SHA-256:
+`a494334dd8bf77228f36229da982c030dfd72dd364c3512b5fcb8abf1e0c0d1e`.
+This was a profiling-only diagnostic with invalid timing; request counts and
+rates are not performance evidence. Do not repeat this unchanged case.
+
+The separate HTTP/3 trace
+[40537037621](https://github.com/appunni-m/uvicorn-rs/actions/runs/40537037621)
+used the same commit on Linux ARM64 with Hypercorn 0.18.0 asyncio and one
+`slow-reader-backpressure` repetition. It completed 40 requests / 40 MiB with
+zero failures and shut down cleanly. For the observed stream ID 52 instances,
+the trace records successful stream creation, removal on `StreamClosed`, and
+duplicate close notifications after removal; it records no later
+`DataReceived` or missing-stream lookup for that ID. The
+[trace artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/40537037621/artifacts/12748168902)
+has SHA-256
+`de0efa8076b18a2bb179b9515a9e0d854a507b52835cc63710c2bf0d2582650b`.
+Tracing invalidates timing, so this is diagnostic only.
+
+Neither diagnostic reproduces its earlier timeout or stream failure. The
+HTTP/3 trace does not establish the event order in the original
+[main-commit failure](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939),
+which remains correctness-invalid and excluded from ranking. The original
+stream-52 cause remains unconfirmed, and the three-system benchmark remains
+incomplete; make no release performance claim from these focused runs.
+
+The local macOS timing preflight on 2026-10-27 rejected the host for unrelated
+CPU activity (aggregate over 100%, a process over 25% for two consecutive
+intervals, and one interval over 200%). No timing benchmark started. Its
+receipt is `target/kata-progress/benchmark-host-preflight-20261027.json`,
+SHA-256
+`dbc2c2f3071b003739d15d71eff07cfcc4c95038dcd1a7aac7d6ae40f4e25814`.
+Recheck only after the unrelated CPU load has cleared; do not use the current
+host for timing.
+
 ## Focused HTTP/3 diagnostic (2026-10-26)
 
 Focused trace run
@@ -33,6 +77,35 @@ client recorded two response-header timeouts. The retained failure log lacks
 event ordering, and the focused trace uses a different source commit. The
 ordering and cause therefore remain unconfirmed; neither run supplies complete
 three-system performance evidence.
+
+A second focused trace run
+[40318621446](https://github.com/appunni-m/uvicorn-rs/actions/runs/40318621446)
+used current PR head `5b1ec29201c963d8590c989b07318bb7366d7922` on Linux ARM64
+with Hypercorn asyncio and one `slow-reader-backpressure` repetition. It served
+40 requests / 40 MiB with no failures and shut down cleanly. The trace retained
+434 H3 events, including 112 inbound QUIC `StreamDataReceived` events, 48
+`HeadersReceived` events, and duplicate `StreamClosed` notifications. It
+recorded no missing-stream lookup, so it did not reproduce the main-commit
+failure. This trace is diagnostic only: it does not record outbound response
+scheduling and tracing invalidates timing. A separate large-response failure
+in run `40228012455` did retain a late-`DataReceived` lookup after
+`StreamClosed`; that evidence applies to that failure, not to the slow-reader
+timeout above.
+
+A follow-up trace
+[40457068808](https://github.com/appunni-m/uvicorn-rs/actions/runs/40457068808)
+repeated the same one-cell configuration on the same source and runner. It
+completed 40/40 requests, with no `stream_lookup_missing` or `h3_decode_error`
+event. For stream ID 52, the trace recorded `HeadersReceived` followed by
+`StreamClosed` and duplicate close notifications; it recorded no later
+`DataReceived` event for that stream. The run artifact is
+[12712852387](https://github.com/appunni-m/uvicorn-rs/actions/runs/40457068808/artifacts/12712852387)
+with SHA-256
+`53f4f160a13b8e0823c7da06df2de1964baf60442d3d111d9d0b3fdb037d7953`.
+Timing is invalid because tracing and unrelated runner CPU activity affect the
+sample. This repeated diagnostic adds no explanation for the original
+failure; do not rerun the same cell without a relevant source, input, or runner
+change.
 
 The local optimization host preflight on 2026-10-26 also rejected timing
 because unrelated CPU exceeded 100% aggregate and a process exceeded 25% for
@@ -121,6 +194,26 @@ timeouts from [run 39036702600](https://github.com/appunni-m/uvicorn-rs/actions/
 It does not explain that earlier failure; its available logs show the client
 timeout before Starlette `ClientDisconnect` without an earlier server fault.
 The separate HTTP/3 failure still leaves the three-system run incomplete.
+
+The retained Linux x86-64 HTTP/1 artifact also has 300 completed rows and no
+case failures. Both Linux artifacts used the same threaded libcurl C client
+with its 15-second transfer timeout. On x86-64, the two historical failure
+shapes (`fastapi-request-upload`, 1 MiB / 64 KiB writes / concurrency 64, and
+`fastapi-upload-1m-write-1k`, 1 MiB / 1 KiB writes / concurrency 8) each have
+10 Rust rows across asyncio and uvloop, five repetitions per runtime, all with
+zero failures. On ARM64, each corresponding workload also has 10 Rust rows
+with zero failures. The x86 artifact SHA-256 is
+`6ca02d6c756434d2642a5fcd093c22a5a9103bead00d44d5a9e4f2e970521939`; its
+`http1.json` report SHA-256 is
+`c620449baef039ad80be0732420a6e7672800a717d0133d8ebd5f3000ec1b3fc`.
+
+One source change between the failing `b27ee4d` and passing `86e72e1` commits
+is relevant but not causal evidence: `33a705d` increased
+`HTTP_REQUEST_BODY_BATCH_MAX_WAIT` from 1 ms to 5 ms. The exact-main uploads
+show that the earlier failures did not recur under these later settings; they
+do not distinguish whether that change, intermittent runner/input conditions,
+or another change explains the earlier long tail. Keep the 15-second timeout
+and leave the original root-cause question open.
 
 ## Earlier parity-gate failure (run 39508168315)
 
@@ -300,6 +393,41 @@ native extension SHA-256
 `a704c7832ad1f0b6b3ed888fa24fba9b8384d38d8a2d4aa3118830b0096bfa87`. The
 raw reports remain outside Git under the Linux host's ignored `target/`
 directories; no report or server log is committed.
+
+### Current-source peer-read correctness probes (2026-10-27)
+
+The current dirty source passed seven focused input-only parity cases against
+Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. The selected cases
+cover upload streaming, response-before-upload-drain, reset during a partial
+request body, disconnect while the application is waiting to receive,
+concurrent slow readers, and a Config/Server request over a Unix-domain
+socket. The first case,
+`http1.request-streaming-progress-before-upload-complete`, passed 1/1 in run
+`48ba0d12a41b4ae799645d33cbf970f8`; receipt
+`target/kata-progress/v7a1-request-streaming-progress-20261027.json`,
+SHA-256 `1925a9d2f7622715ad7af91dbac7ea788b98ee358cc86a453dc1b0a8c9797385`.
+The five-case batch passed 5/5 in run `6d11965c94244975b8fe175e9a3de835`;
+receipt `target/kata-progress/v7a1-peer-read-boundary-cases-20261027.json`,
+SHA-256 `9218865b1a1d158cccfc24c45d0248d5cf5c3b24d8b4c9de081627b19f477c03`.
+The Unix-domain-socket case passed 1/1 in run
+`a3a9be35601641d1b961d93ec13687ae`; receipt
+`target/kata-progress/v7a1-unix-peer-read-parity-20261027.json`, SHA-256
+`21edc51d438c82c896a344a06a4e53286003bafab922209cbe1dabf4fa6265e4`.
+All three reports bind dirty revision
+`5b1ec29201c963d8590c989b07318bb7366d7922`, source SHA-256
+`3c6654dd24f30e6b838232518a5c8967c73952a1e722a6ec4d6725568f28fe0d`, HTTP/1
+input SHA-256 `7a3c4b99daf79846b69f08c5f7f7b15277d9f11c03ab653ed9151a190186c1ec`,
+and Python API input SHA-256
+`951e47c19c1eddd213cbf3d1a1bc7529118e572ad3b094ce500e0e234ceeced7`.
+
+These results verify selected behavior only; they do not measure allocations,
+bounded-memory behavior under stress, or a performance gain. The subsequent
+eight-interval host preflight rejected timing for aggregate unrelated CPU over
+100% and a process above 25% CPU for two consecutive intervals. Receipt
+`target/benchmark-host-preflight-20261027-v7a1.json`, SHA-256
+`ccbc086015b1e6ce26be333ccc6ef674d936d011c93a65a5829df688deb6ab5f`, records
+`timing_benchmark_started=false`. The matched FastAPI performance comparison
+for this exact implementation remains pending a quiet-host preflight.
 
 ## Tokio blocking-pool cap decision (2026-10-17)
 

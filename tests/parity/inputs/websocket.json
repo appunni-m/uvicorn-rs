@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@37",
+  "schema": "uvicorn-rs-parity/input@40",
   "cases": [
     {
       "case_id": "websocket.none-selector-dispatches-upgrade-as-http",
@@ -731,6 +731,42 @@
       }
     },
     {
+      "case_id": "websocket.server-keepalive-mismatched-pong-times-out",
+      "profile": "websocket",
+      "operation": "websocket.server-keepalive-mismatched-pong",
+      "covers": [
+        "websocket.server-keepalive-mismatched-pong"
+      ],
+      "server_options": {
+        "ws_ping_interval": 0.1,
+        "ws_ping_timeout": 0.3
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "second_pong_payload_base64": "bWlzbWF0Y2g="
+      }
+    },
+    {
+      "case_id": "websocket.server-keepalive-ignores-unsolicited-pong",
+      "profile": "websocket",
+      "operation": "websocket.server-keepalive-unsolicited-pong",
+      "covers": [
+        "websocket.server-keepalive-unsolicited-pong"
+      ],
+      "server_options": {
+        "ws_ping_interval": 1.0,
+        "ws_ping_timeout": 0.3
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "unsolicited_pong_payload_base64": "b3JwaGFuZWQ="
+      }
+    },
+    {
       "case_id": "websocket.abrupt-client-disconnect",
       "profile": "websocket",
       "operation": "websocket.abrupt-disconnect",
@@ -757,6 +793,27 @@
         "subprotocols": [],
         "messages": [],
         "raw_frame_base64": "g4ABAgME",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.frame-after-close-is-rejected",
+      "profile": "websocket",
+      "operation": "websocket.raw-frame-disconnect",
+      "covers": [
+        "websocket.raw-frame-disconnect"
+      ],
+      "websocket": {
+        "path": "/ws-wait-for-disconnect",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "raw_frame_base64": "iIIBAgMEAuqBgQUGBwh9",
         "followup_path": "/scope"
       }
     },
@@ -1042,6 +1099,80 @@
           ]
         ],
         "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.yawc-close-reply-flush-error",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.close-reply-flush-error",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "server_options": {
+        "ws": "websockets-sansio"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "client_close": {
+          "code": 1000,
+          "reason": "coverage-probe"
+        },
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.yawc-close-reply-flush-unexpected-frame",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.close-reply-flush-unexpected-frame",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "server_options": {
+        "ws": "websockets-sansio"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "client_close": {
+          "code": 1000,
+          "reason": "coverage-probe"
+        },
         "followup_path": "/state"
       }
     },
@@ -2009,6 +2140,30 @@
       },
       "websocket": {
         "path": "/ws-send-and-hold",
+        "subprotocols": [],
+        "messages": [],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.keepalive-ping-send-error-followup-200",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.driver.send-error",
+        "contract": "websocket-driver-send-error-followup-200"
+      },
+      "server_options": {
+        "ws_ping_interval": 0.1,
+        "ws_ping_timeout": 0.3
+      },
+      "websocket": {
+        "path": "/ws",
         "subprotocols": [],
         "messages": [],
         "expect_close": true,

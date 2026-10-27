@@ -160,6 +160,12 @@ class Server:
         if control is not None:
             control.shutdown()
 
+    def force_shutdown(self):
+        """Cancel active ASGI work as part of a forced server shutdown."""
+        control = self._control
+        if control is not None:
+            control.force_shutdown()
+
     def cancel_startup(self):
         """Prevent listener startup when the public serve task is cancelled."""
         control = self._control

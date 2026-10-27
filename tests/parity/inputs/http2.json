@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@37",
+  "schema": "uvicorn-rs-parity/input@40",
   "cases": [
     {
       "case_id": "http2.scope-query-header-and-body",
@@ -368,6 +368,23 @@
           "body_base64": ""
         }
       ]
+    },
+    {
+      "case_id": "http2.zero-concurrency-rejects-request-with-503",
+      "profile": "http2",
+      "operation": "http.concurrency-limit",
+      "covers": [
+        "http.concurrency-limit"
+      ],
+      "server_options": {
+        "limit_concurrency": 0
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?concurrency=zero",
+        "headers": [],
+        "body_base64": ""
+      }
     },
     {
       "case_id": "http2.final-response-completes-before-app-return",

@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@37"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@40"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -107,6 +107,7 @@ FAULT_POINTS = {
     "server.control.shutdown.borrow-conflict",
     "server.serve.control.borrow-conflict",
     "server.graceful-timeout.overflow",
+    "server.connection.invalid-default-header.source-chain",
     "server.python-locals.get-current",
     "python.task-completion.allocate",
     "http.request.empty-body.channel-closed",
@@ -121,6 +122,17 @@ FAULT_POINTS = {
     "python.ssl.ca-verifier.create-verify-mode",
     "python.ssl.ca-verifier.set-verify-mode",
     "python.ssl.ca-verifier.rust-parse-error",
+    "python.ssl.keyfile-error.import",
+    "python.ssl.keyfile-error.protocol",
+    "python.ssl.keyfile-error.context",
+    "python.ssl.keyfile-error.create-context",
+    "python.ssl.keyfile.rust-decrypt-error",
+    "python.pkcs12.reader.outer-too-long",
+    "python.pkcs12.reader.outer-sequence-decode",
+    "python.pkcs12.reader.outer-finish",
+    "python.pkcs12.reader.encrypted-info-too-long",
+    "python.pkcs12.reader.algorithm-too-long",
+    "python.pkcs12.reader.parameters-too-long",
     "native.module.wrap-function.serve",
     "native.runtime.build.error",
     "server.websocket-task.shutdown-panic",
@@ -145,6 +157,7 @@ FAULT_POINTS = {
     "http.response.start.status.extract",
     "http.response.start.headers.get-item",
     "http.response.start.headers.extract",
+    "http.response.date-header.invalid-value",
     "http.response.body.body.get-item",
     "http.response.body.body.extract",
     "http.response.body.more-body.get-item",
@@ -230,6 +243,7 @@ FAULT_POINTS = {
     "http.asgi.app-invoke",
     "server.listener.accept-error",
     "server.listener.local-addr-error",
+    "server.unix-listener.set-permissions-error",
     "server.prebound-transfer.bind-error",
     "server.prebound-transfer.accept-error",
     "server.prebound-transfer.read-error",
@@ -351,6 +365,8 @@ FAULT_POINTS = {
     "websocket.yawc.unexpected-continuation-frame",
     "websocket.yawc.invalid-text-frame",
     "websocket.yawc.invalid-close-reason",
+    "websocket.yawc.close-reply-flush-error",
+    "websocket.yawc.close-reply-flush-unexpected-frame",
     "websocket.driver.connection-closed",
     "websocket.peer-read-failed.wait-complete",
     "websocket.peer-read-failed.unavailable",
@@ -440,12 +456,19 @@ EAGER_REGISTRATION_CLEANUP_CONTRACTS = (
 )
 FAULT_CONTRACTS = {
     "asgi-spec-version-2.5",
+    "server-connection-invalid-default-header-source-chain",
     "python-ssl-ca-verifier-error-propagates",
     "python-ssl-ca-verifier-success-fallback-propagates",
+    "python-ssl-keyfile-error-propagates",
+    "python-ssl-keyfile-rust-decrypt-error-propagates",
+    "python-pkcs12-reader-error-propagates",
     "http3-request-trailers-drained-as-body-only",
     "http-response-reset-cancels-deferred-task",
     "server-cancellation-schedule-error-bounded-shutdown",
+    "server-startup-cancellation-shutdown-error-propagates",
+    "server-startup-bind-shutdown-error-logged",
     "http-500-then-followup-200",
+    "http-response-build-error-closes-connection-followup-200",
     "http-callback-error-followup-200",
     "http-original-task-start-error-followup-200",
     "http-callback-error-cleans-task-followup-200",
@@ -518,6 +541,7 @@ FAULT_CONTRACTS = {
     "http-connection-lifetime-closed-disconnect-followup-200",
     "http-immediate-disconnect-message-error-followup-200",
     "server-startup-failure",
+    "server-unix-listener-permission-error-startup-propagates",
     "server-lifespan-startup-auto-fallback",
     "server-lifespan-startup-auto-fallback-logger-failure-ignored",
     "server-shutdown-failure",
@@ -542,6 +566,21 @@ PYTHON_SSL_CA_VERIFIER_FAULT_POINTS = {
 PYTHON_SSL_CA_VERIFIER_RUST_PARSE_FAULT_POINT = (
     "python.ssl.ca-verifier.rust-parse-error"
 )
+PYTHON_SSL_KEYFILE_ERROR_FAULT_POINTS = {
+    "python.ssl.keyfile-error.import",
+    "python.ssl.keyfile-error.protocol",
+    "python.ssl.keyfile-error.context",
+    "python.ssl.keyfile-error.create-context",
+}
+PYTHON_SSL_KEYFILE_RUST_DECRYPT_FAULT_POINT = "python.ssl.keyfile.rust-decrypt-error"
+PKCS12_PARSER_FAULT_POINTS = {
+    "python.pkcs12.reader.outer-too-long",
+    "python.pkcs12.reader.outer-sequence-decode",
+    "python.pkcs12.reader.outer-finish",
+    "python.pkcs12.reader.encrypted-info-too-long",
+    "python.pkcs12.reader.algorithm-too-long",
+    "python.pkcs12.reader.parameters-too-long",
+}
 WEBSOCKET_FAULT_POINTS = {
     "asgi.event-type.websocket-send.eq",
     "asgi.event-type.websocket-close.eq",
@@ -558,6 +597,8 @@ WEBSOCKET_FAULT_POINTS = {
     "websocket.yawc.unexpected-continuation-frame",
     "websocket.yawc.invalid-text-frame",
     "websocket.yawc.invalid-close-reason",
+    "websocket.yawc.close-reply-flush-error",
+    "websocket.yawc.close-reply-flush-unexpected-frame",
     "websocket.driver.connection-closed",
     "websocket.peer-read-failed.unavailable",
     "websocket.peer-read-failed.watch-fallback",
@@ -878,7 +919,9 @@ def load_contract(
         "startup_failed", "startup_error_observed", "responses", "pong_received",
         "bind_error_logged",
         "first_server_ping_received", "first_server_ping_payload_length", "pong_sent",
+        "unsolicited_pong_sent",
         "second_server_ping_received", "second_server_ping_payload_length",
+        "second_pong_sent", "second_pong_payload_matches_ping",
         "timeout_close_received", "timeout_close_code", "timeout_close_reason",
         "resource_rounds", "resource_stable", "task_count_stable",
         "active_tasks_zero", "load_reached", "followup_healthy",
@@ -899,10 +942,13 @@ def load_contract(
         "body_stream_error", "trigger_error", "shutdown_clean",
         "exit_code", "stdout_base64", "stderr_base64",
         "response_received", "response_status", "response_content_type",
-        "response_body_base64", "listener_responses", "shutdown_signal_sent", "process_timed_out",
+        "response_body_base64", "listener_responses", "shutdown_signal_sent", "shutdown_signals_sent", "process_timed_out",
+        "graceful_shutdown_cancellation_observed",
         "server_log_events", "worker_replacement_observed", "request_limit_response_count",
         "request_limit_range_satisfied",
         "server_started_before_shutdown", "serve_task_finished_before_shutdown",
+        "server_started",
+        "startup_failure_wait_result", "dropped_control_wait_result",
         "serve_raised", "serve_timed_out", "server_exit_code",
         "client_certificate_rejected", "negotiated_tls_version", "negotiated_tls_cipher",
         "process_stderr_has_unhandled_task_warning",
@@ -912,7 +958,7 @@ def load_contract(
         "included_change_reloaded", "scope_observation", "compression_negotiated",
         "lifespan_startup_entered_before_cancel", "server_started_before_cancel",
         "serve_cancelled", "serve_task_finished",
-        "listener_accepting_after_cancel",
+        "listener_accepting_after_cancel", "listener_transfer_blocked",
     }
     for operation in manifest["operations"]:
         expected_operation_keys = {"id", "kind", "observe"}
@@ -1093,6 +1139,7 @@ def load_contract(
             elif fault["contract"] in {
                 "http-500-then-followup-200", "http-callback-error-followup-200",
                 "http-original-task-start-error-followup-200",
+                "http-response-build-error-closes-connection-followup-200",
             }:
                 if (
                     case.get("profile") != "http1"
@@ -2148,6 +2195,48 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: lifespan shutdown fault requires the shutdown-failure workflow"
                     )
+            elif fault["contract"] == "server-startup-cancellation-shutdown-error-propagates":
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation")
+                    != "python.api.server-startup-cancel-shutdown-error"
+                    or fault["point"] != "lifespan.shutdown.task-join-error"
+                    or case.get("api", {}).get(
+                        "server_startup_cancel_before_listener"
+                    )
+                    is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: shutdown join fault requires startup cancellation before listener bind"
+                    )
+            elif fault["contract"] == "server-startup-bind-shutdown-error-logged":
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation")
+                    != "python.api.server-startup-bind-shutdown-error-log"
+                    or fault["point"] != "lifespan.shutdown.task-join-error"
+                    or case.get("api", {}).get(
+                        "server_startup_bind_failure_lifespan_cleanup"
+                    )
+                    is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: shutdown join fault requires the listener-bind-failure workflow"
+                    )
+            elif fault["contract"] == "server-unix-listener-permission-error-startup-propagates":
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation")
+                    != "python.api.server-startup-uds-socket-replacement-lifespan-cleanup"
+                    or fault["point"] != "server.unix-listener.set-permissions-error"
+                    or case.get("api", {}).get(
+                        "server_startup_uds_socket_replacement_lifespan_cleanup"
+                    )
+                    is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: Unix socket permission failures require the UDS startup and lifespan workflow"
+                    )
             elif fault["contract"] == "server-lifespan-task-cancel":
                 if (
                     case.get("profile") != "lifespan-fault-shutdown-cancel"
@@ -2200,6 +2289,64 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: Rust CA parser faults require a generated-CA Config/Server startup case"
                     )
+            elif fault["contract"] == "python-ssl-keyfile-error-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"] not in PYTHON_SSL_KEYFILE_ERROR_FAULT_POINTS
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_keyfile_format")
+                    != "pkcs12-pbe-sha1-3des-invalid-decrypted-key"
+                    or not run_http.get("ssl_keyfile_password")
+                    or run_http.get("ssl_cert_reqs") != 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: Python SSL keyfile helper faults require the invalid-decrypted-key Config/Server case"
+                    )
+            elif fault["contract"] == "python-ssl-keyfile-rust-decrypt-error-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"] != PYTHON_SSL_KEYFILE_RUST_DECRYPT_FAULT_POINT
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_keyfile_format") != "traditional-rsa-des-ede3"
+                    or not run_http.get("ssl_keyfile_password")
+                    or run_http.get("ssl_cert_reqs") != 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: Rust keyfile decryption fault requires a valid encrypted RSA key"
+                    )
+            elif fault["contract"] == "python-pkcs12-reader-error-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"] not in PKCS12_PARSER_FAULT_POINTS
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_keyfile_format") != "pkcs12-pbe-sha1-3des"
+                    or not run_http.get("ssl_keyfile_password")
+                ):
+                    raise ParityError(
+                        f"{case_id}: PKCS#12 reader faults require password-protected PKCS#12 Config/Server startup"
+                    )
+            elif fault["contract"] == "server-connection-invalid-default-header-source-chain":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"]
+                    != "server.connection.invalid-default-header.source-chain"
+                    or run_http.get("invocation") != "api"
+                    or run_http.get("headers") != [["Invalid Header", "value"]]
+                ):
+                    raise ParityError(
+                        f"{case_id}: source-chain filtering requires an invalid default-header API request"
+                    )
             elif fault["contract"] == "websocket-server-shutdown-force-abort":
                 if (
                     case.get("profile") != "websocket"
@@ -2220,6 +2367,24 @@ def load_contract(
                     if fault["contract"] == "websocket-driver-send-error-followup-200"
                     else "/ws-send-and-hold"
                 )
+                websocket = case.get("websocket", {})
+                server_options = case.get("server_options", {})
+                if type(server_options) is not dict:
+                    server_options = {}
+                ping_interval = server_options.get("ws_ping_interval")
+                ping_timeout = server_options.get("ws_ping_timeout")
+                ping_send_error = (
+                    fault["contract"] == "websocket-driver-send-error-followup-200"
+                    and fault["point"] == "websocket.driver.send-error"
+                    and websocket.get("path") == "/ws"
+                    and websocket.get("messages") == []
+                    and type(ping_interval) in {int, float}
+                    and math.isfinite(ping_interval)
+                    and ping_interval > 0
+                    and type(ping_timeout) in {int, float}
+                    and math.isfinite(ping_timeout)
+                    and ping_timeout > 0
+                )
                 if (
                     case.get("profile") != "websocket"
                     or case.get("operation") != "websocket.fault-contract"
@@ -2227,8 +2392,11 @@ def load_contract(
                         "websocket.driver.send-error",
                         "websocket.driver.drain-send-error",
                     }
-                    or case.get("websocket", {}).get("path") != expected_path
-                    or case.get("websocket", {}).get("expect_close") is not True
+                    or (
+                        websocket.get("path") != expected_path
+                        and not ping_send_error
+                    )
+                    or websocket.get("expect_close") is not True
                 ):
                     raise ParityError(
                         f"{case_id}: WebSocket send-error contracts require their matching outbound-send workflow"
@@ -2285,6 +2453,8 @@ def load_contract(
                             "websocket.receive.disconnect-type.set-item",
                             "websocket.receive.disconnect-code.set-item",
                             "websocket.receive.disconnect-reason.set-item",
+                            "websocket.yawc.close-reply-flush-error",
+                            "websocket.yawc.close-reply-flush-unexpected-frame",
                         }
                         and "client_close" in case["websocket"]
                     )
@@ -2324,10 +2494,9 @@ def load_contract(
             arguments = process["arguments"]
             if (
                 not isinstance(arguments, list)
-                or not arguments
                 or any(not isinstance(argument, str) or "\x00" in argument for argument in arguments)
             ):
-                raise ParityError(f"{case_id}: process arguments must be non-empty NUL-free strings")
+                raise ParityError(f"{case_id}: process arguments must be a list of NUL-free strings")
             environment = process["environment"]
             if not isinstance(environment, dict):
                 raise ParityError(f"{case_id}: process environment must be an object")
@@ -2367,20 +2536,104 @@ def load_contract(
                     == PYTHON_SSL_CA_VERIFIER_RUST_PARSE_FAULT_POINT
                     and run_http.get("ssl_ca_certs") == "generated-ca"
                 )
+                pkcs12_parser_error_case = (
+                    fault["contract"] == "python-pkcs12-reader-error-propagates"
+                    and fault["point"] in PKCS12_PARSER_FAULT_POINTS
+                    and run_http.get("ssl_keyfile_format") == "pkcs12-pbe-sha1-3des"
+                )
+                keyfile_error_case = (
+                    fault["contract"] == "python-ssl-keyfile-error-propagates"
+                    and fault["point"] in PYTHON_SSL_KEYFILE_ERROR_FAULT_POINTS
+                    and run_http.get("ssl_keyfile_format")
+                    == "pkcs12-pbe-sha1-3des-invalid-decrypted-key"
+                )
+                keyfile_rust_decrypt_error_case = (
+                    fault["contract"] == "python-ssl-keyfile-rust-decrypt-error-propagates"
+                    and fault["point"] == PYTHON_SSL_KEYFILE_RUST_DECRYPT_FAULT_POINT
+                    and run_http.get("ssl_keyfile_format") == "traditional-rsa-des-ede3"
+                )
+                default_header_source_chain_case = (
+                    fault["contract"]
+                    == "server-connection-invalid-default-header-source-chain"
+                    and fault["point"]
+                    == "server.connection.invalid-default-header.source-chain"
+                    and run_http.get("headers") == [["Invalid Header", "value"]]
+                )
+                startup_shutdown_error_case = (
+                    fault["contract"]
+                    == "server-startup-cancellation-shutdown-error-propagates"
+                    and fault["point"] == "lifespan.shutdown.task-join-error"
+                    and case["operation"]
+                    == "python.api.server-startup-cancel-shutdown-error"
+                    and case.get("api", {}).get(
+                        "server_startup_cancel_before_listener"
+                    )
+                    is True
+                )
+                startup_bind_shutdown_error_case = (
+                    fault["contract"] == "server-startup-bind-shutdown-error-logged"
+                    and fault["point"] == "lifespan.shutdown.task-join-error"
+                    and case["operation"]
+                    == "python.api.server-startup-bind-shutdown-error-log"
+                    and case.get("api", {}).get(
+                        "server_startup_bind_failure_lifespan_cleanup"
+                    )
+                    is True
+                )
+                uds_permission_error_case = (
+                    fault["contract"]
+                    == "server-unix-listener-permission-error-startup-propagates"
+                    and fault["point"] == "server.unix-listener.set-permissions-error"
+                    and case["operation"]
+                    == "python.api.server-startup-uds-socket-replacement-lifespan-cleanup"
+                    and case.get("api", {}).get(
+                        "server_startup_uds_socket_replacement_lifespan_cleanup"
+                    )
+                    is True
+                )
                 if (
-                    case["operation"] != "python.api.run-http"
-                    or not (helper_error_case or fallback_error_case)
-                    or run_http.get("invocation") != "config-server"
-                    or run_http.get("tls") is not True
-                    or run_http.get("ssl_cert_reqs") != 2
+                    not startup_shutdown_error_case
+                    and not startup_bind_shutdown_error_case
+                    and not uds_permission_error_case
+                    and (
+                        case["operation"] != "python.api.run-http"
+                        or not (
+                            helper_error_case
+                            or fallback_error_case
+                            or keyfile_error_case
+                            or keyfile_rust_decrypt_error_case
+                            or default_header_source_chain_case
+                            or pkcs12_parser_error_case
+                        )
+                        or (
+                            not (
+                                default_header_source_chain_case
+                                or pkcs12_parser_error_case
+                            )
+                            and (
+                                run_http.get("invocation") != "config-server"
+                                or run_http.get("tls") is not True
+                                or run_http.get("ssl_cert_reqs") != 2
+                            )
+                        )
+                    )
                 ):
                     raise ParityError(
-                        f"{case_id}: Python SSL CA verifier faults require a malformed-CA Config/Server startup case"
+                        f"{case_id}: Python adapter fault requires its declared public workflow"
                     )
             readiness_operations = {
                 "python.api.server-readiness": "server_readiness",
                 "python.api.server-callback-notify": "server_callback_notify",
                 "python.api.server-startup-failure-state": "server_startup_failure",
+                "python.api.server-startup-bind-failure-lifespan-cleanup": "server_startup_bind_failure_lifespan_cleanup",
+                "python.api.server-startup-uds-socket-replacement-lifespan-cleanup": "server_startup_uds_socket_replacement_lifespan_cleanup",
+                "python.api.server-startup-failure-waiter": "server_startup_failure_waiter",
+                "python.api.server-startup-cancel-before-listener": "server_startup_cancel_before_listener",
+                "python.api.server-startup-cancel-shutdown-error": "server_startup_cancel_before_listener",
+                "python.api.server-startup-cancel-without-lifespan": "server_startup_cancel_without_lifespan",
+                "python.api.server-startup-cancel-during-prebound-transfer": "server_startup_cancel_during_prebound_transfer",
+                "python.api.server-startup-cancel-during-prebound-transfer-without-lifespan": "server_startup_cancel_during_prebound_transfer_without_lifespan",
+                "python.api.server-startup-bind-shutdown-error-log": "server_startup_bind_failure_lifespan_cleanup",
             }
             if case["operation"] in {
                 "python.api.run-http-reload",
@@ -2435,6 +2688,8 @@ def load_contract(
                             )
             elif case["operation"] in {
                 "python.api.run-http",
+                "python.api.run-http-signal-sequence",
+                "python.api.run-http-graceful-timeout",
                 "python.api.run-http-request-limit",
                 "python.api.run-http-asgi-scope-contract",
                 "python.api.run-http-concurrency",
@@ -2450,6 +2705,7 @@ def load_contract(
                     "application_interface",
                     "environment",
                     "request_headers",
+                    "http_version",
                     "observe_scope",
                     "proxy_headers",
                     "forwarded_allow_ips",
@@ -2460,10 +2716,14 @@ def load_contract(
                     "log_config",
                     "emit_level_logs",
                     "access_log",
+                    "server_header",
+                    "date_header",
                     "use_colors",
                     "factory",
                     "backlog",
                     "timeout_keep_alive",
+                    "timeout_graceful_shutdown",
+                    "root_path_from_environment",
                     "keep_alive_probe_delay_seconds",
                     "workers",
                     "timeout_worker_healthcheck",
@@ -2482,6 +2742,7 @@ def load_contract(
                     "reset_contextvars",
                     "bind_conflict",
                     "required_observations",
+                    "shutdown_signal_sequence",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2502,6 +2763,7 @@ def load_contract(
                         "response_received",
                         "response_status",
                         "shutdown_signal_sent",
+                        "shutdown_signals_sent",
                         "process_exit_code",
                         "process_timed_out",
                         "worker_replacement_observed",
@@ -2522,6 +2784,18 @@ def load_contract(
                             raise ParityError(
                                 f"{case_id}.api.run_http.required_observations.{field} must be a boolean"
                             )
+                    if "shutdown_signals_sent" in required and (
+                        not isinstance(required["shutdown_signals_sent"], list)
+                        or not required["shutdown_signals_sent"]
+                        or any(
+                            not isinstance(signal_name, str)
+                            or signal_name not in {"SIGINT", "SIGTERM"}
+                            for signal_name in required["shutdown_signals_sent"]
+                        )
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.required_observations.shutdown_signals_sent must be a signal-name array"
+                        )
                     if "response_status" in required and (
                         required["response_status"] is not None
                         and type(required["response_status"]) is not int
@@ -2569,10 +2843,45 @@ def load_contract(
                     )
                 if "ssl_keyfile_format" in run_http and (
                     run_http["ssl_keyfile_format"] not in {
+                        "unencrypted-rsa-with-password",
+                        "pkcs12-pbe-sha1-2des",
+                        "pkcs12-pbe-sha1-3des",
+                        "pkcs12-pbe-sha1-3des-zero-iterations",
+                        "pkcs12-pbe-sha1-3des-short-ciphertext",
+                        "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+                        "pkcs12-pbe-sha1-3des-malformed-outer-sequence",
+                        "pkcs12-pbe-sha1-3des-trailing-outer-data",
+                        "pkcs12-pbe-sha1-3des-missing-algorithm",
+                        "pkcs12-pbe-sha1-3des-invalid-encrypted-data-type",
+                        "pkcs12-pbe-sha1-3des-trailing-encrypted-info-field",
+                        "pkcs12-pbe-sha1-3des-invalid-algorithm-oid-type",
+                        "pkcs12-pbe-sha1-3des-missing-parameters",
+                        "pkcs12-pbe-sha1-3des-trailing-algorithm-field",
+                        "pkcs12-pbe-sha1-3des-invalid-salt-type",
+                        "pkcs12-pbe-sha1-3des-missing-iterations",
+                        "pkcs12-pbe-sha1-3des-trailing-parameters-field",
                         "traditional-rsa-aes128",
                         "traditional-rsa-aes192",
                         "traditional-rsa-aes256",
+                        "traditional-rsa-des-ede3",
                         "traditional-ec-aes256",
+                        "traditional-rsa-aes256-invalid-proc-type",
+                        "traditional-rsa-aes256-unknown-header",
+                        "traditional-rsa-aes256-missing-proc-type",
+                        "traditional-rsa-aes256-missing-dek-info",
+                        "traditional-rsa-aes256-malformed-dek-info",
+                        "traditional-rsa-aes256-short-iv",
+                        "traditional-rsa-aes256-missing-body",
+                        "traditional-rsa-aes256-missing-end-marker",
+                        "traditional-rsa-aes256-invalid-base64",
+                        "traditional-rsa-aes256-empty-body",
+                        "traditional-rsa-aes256-short-ciphertext",
+                        "traditional-rsa-unsupported-cipher",
+                        "traditional-rsa-malformed-begin-line",
+                        "traditional-rsa-empty-key",
+                        "traditional-rsa-invalid-utf8",
+                        "traditional-dsa-encrypted",
+                        "traditional-rsa-malformed-begin-suffix",
                         "traditional-rsa-aes256-high-nonhex-iv",
                         "traditional-rsa-aes256-odd-iv",
                         "traditional-rsa-aes256-nonhex-iv",
@@ -2581,7 +2890,7 @@ def load_contract(
                     or not run_http.get("ssl_keyfile_password")
                 ):
                     raise ParityError(
-                        f"{case_id}.api.run_http.ssl_keyfile_format must select a supported encrypted traditional private key and requires tls=true with a password"
+                        f"{case_id}.api.run_http.ssl_keyfile_format must select a supported key fixture and requires tls=true with a password"
                     )
                 if "ssl_ca_certs" in run_http and (
                     run_http["ssl_ca_certs"]
@@ -2592,12 +2901,14 @@ def load_contract(
                         "missing-ca",
                         "directory-ca",
                         "malformed-ca",
+                        "invalid-der-ca",
+                        "non-utf8-ca",
                         "",
                     }
                     or not run_http.get("tls")
                 ):
                     raise ParityError(
-                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca, trusted-ca, empty-ca, missing-ca, directory-ca, malformed-ca, or an empty path and requires tls=true"
+                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca, trusted-ca, empty-ca, missing-ca, directory-ca, malformed-ca, invalid-der-ca, non-utf8-ca, or an empty path and requires tls=true"
                     )
                 if "ssl_cert_reqs" in run_http and (
                     type(run_http["ssl_cert_reqs"]) is not int
@@ -2695,6 +3006,19 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.timeout_keep_alive must be an integer"
                     )
+                if "timeout_graceful_shutdown" in run_http and type(
+                    run_http["timeout_graceful_shutdown"]
+                ) is not int:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.timeout_graceful_shutdown must be an integer"
+                    )
+                if (
+                    "timeout_graceful_shutdown" in run_http
+                    and run_http["invocation"] != "module-cli"
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.timeout_graceful_shutdown currently requires module-cli invocation"
+                    )
                 if "workers" in run_http and type(run_http["workers"]) is not int:
                     raise ParityError(f"{case_id}.api.run_http.workers must be an integer")
                 if "timeout_worker_healthcheck" in run_http and type(
@@ -2744,6 +3068,30 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: run_http supports SIGINT and SIGTERM shutdown stimuli"
                     )
+                shutdown_signal_sequence = run_http.get("shutdown_signal_sequence")
+                if shutdown_signal_sequence is not None:
+                    if (
+                        not isinstance(shutdown_signal_sequence, list)
+                        or len(shutdown_signal_sequence) < 2
+                        or len(shutdown_signal_sequence) > 4
+                        or any(
+                            not isinstance(signal_name, str)
+                            or signal_name not in {"SIGINT", "SIGTERM"}
+                            for signal_name in shutdown_signal_sequence
+                        )
+                        or shutdown_signal_sequence[-1] != run_http["shutdown_signal"]
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.shutdown_signal_sequence must contain at least two supported signals and end with shutdown_signal"
+                        )
+                    if (
+                        run_http["invocation"] != "module-cli"
+                        or run_http["path"]
+                        != "/python-api-second-signal-escalation"
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http repeated signal input requires the module-CLI escalation fixture path"
+                        )
                 if run_http["lifespan"] not in {"auto", "on", "off"}:
                     raise ParityError(f"{case_id}.api.run_http.lifespan must be auto, on, or off")
                 log_level = run_http.get("log_level")
@@ -2777,8 +3125,30 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.use_colors must be a boolean"
                     )
+                for field in ("server_header", "date_header"):
+                    if field in run_http and type(run_http[field]) is not bool:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.{field} must be a boolean"
+                        )
+                    if field in run_http and run_http["invocation"] != "module-cli":
+                        raise ParityError(
+                            f"{case_id}.api.run_http.{field} currently requires module-cli invocation"
+                        )
                 if not isinstance(run_http["root_path"], str):
                     raise ParityError(f"{case_id}.api.run_http.root_path must be a string")
+                if "root_path_from_environment" in run_http:
+                    if type(run_http["root_path_from_environment"]) is not bool:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.root_path_from_environment must be a boolean"
+                        )
+                    if run_http["root_path_from_environment"] and (
+                        run_http["invocation"] != "module-cli"
+                        or run_http.get("environment", {}).get("UVICORN_ROOT_PATH")
+                        != run_http["root_path"]
+                    ):
+                        raise ParityError(
+                            f"{case_id}: root_path_from_environment requires module-cli invocation and a matching UVICORN_ROOT_PATH"
+                        )
                 for field in ("headers", "request_headers", "observe_headers"):
                     if field not in run_http:
                         continue
@@ -2872,6 +3242,13 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}.api.run_http.limit_concurrency must be a non-negative integer"
+                    )
+                if "http_version" in run_http and run_http["http_version"] not in {
+                    "1.0",
+                    "1.1",
+                }:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.http_version must be 1.0 or 1.1"
                     )
                 if (
                     case["operation"] == "python.api.run-http-concurrency"
@@ -3139,6 +3516,40 @@ def load_contract(
                 exact_keys(case["api"], {input_name}, f"{case_id}.api")
                 if case["api"][input_name] is not True:
                     raise ParityError(f"{case_id}.api.{input_name} must be true")
+            elif case["operation"] == "python.api.server-lifespan-mode-validation":
+                exact_keys(case["api"], {"server_lifespan_mode"}, f"{case_id}.api")
+                mode = case["api"]["server_lifespan_mode"]
+                mode_keys = {"mode"}
+                if mode.get("mode") == "boolean-disabled":
+                    mode_keys.update(
+                        {"prebound_listener", "limit_max_requests", "limit_max_requests_jitter"}
+                    )
+                exact_keys(mode, mode_keys, f"{case_id}.api.server_lifespan_mode")
+                if mode["mode"] not in {
+                    "boolean-disabled",
+                    "boolean-enabled",
+                    "invalid-string",
+                    "invalid-type",
+                }:
+                    raise ParityError(
+                        f"{case_id}.api.server_lifespan_mode.mode must be boolean-disabled, boolean-enabled, invalid-string, or invalid-type"
+                    )
+                if mode["mode"] == "boolean-disabled":
+                    if mode["prebound_listener"] is not True:
+                        raise ParityError(
+                            f"{case_id}.api.server_lifespan_mode.prebound_listener must be true"
+                        )
+                    if type(mode["limit_max_requests"]) is not int or mode["limit_max_requests"] < 1:
+                        raise ParityError(
+                            f"{case_id}.api.server_lifespan_mode.limit_max_requests must be a positive integer"
+                        )
+                    if (
+                        type(mode["limit_max_requests_jitter"]) is not int
+                        or mode["limit_max_requests_jitter"] < 1
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.server_lifespan_mode.limit_max_requests_jitter must be a positive integer"
+                        )
             elif case["operation"] in {
                 "python.api.server-lifespan-startup",
                 "python.api.server-lifespan-auto-fallback",
@@ -4337,6 +4748,68 @@ def load_contract(
                         f"{case_id}: server keepalive requires the /ws idle-session workflow "
                         "and explicit ping interval and timeout settings"
                     )
+            if case.get("operation") == "websocket.server-keepalive-mismatched-pong":
+                if (
+                    case.get("profile") != "websocket"
+                    or websocket.get("path") != "/ws"
+                    or websocket.get("messages") != []
+                    or not {"ws_ping_interval", "ws_ping_timeout"}.issubset(
+                        case.get("server_options", {})
+                    )
+                    or "second_pong_payload_base64" not in websocket
+                ):
+                    raise ParityError(
+                        f"{case_id}: mismatched-Pong coverage requires the /ws idle-session workflow, "
+                        "explicit keepalive settings, and a second Pong payload"
+                    )
+                websocket_keys.add("second_pong_payload_base64")
+                try:
+                    second_pong_payload = base64.b64decode(
+                        websocket["second_pong_payload_base64"], validate=True
+                    )
+                except (ValueError, TypeError) as error:
+                    raise ParityError(
+                        f"{case_id}: second_pong_payload_base64 must be valid base64"
+                    ) from error
+                if not 1 <= len(second_pong_payload) <= 125 or len(second_pong_payload) == 4:
+                    raise ParityError(
+                        f"{case_id}: second Pong must be a control-frame payload whose length differs from the four-byte server Ping"
+                    )
+            elif "second_pong_payload_base64" in websocket:
+                raise ParityError(
+                    f"{case_id}: second_pong_payload_base64 requires the mismatched-Pong operation"
+                )
+            if case.get("operation") == "websocket.server-keepalive-unsolicited-pong":
+                if (
+                    case.get("profile") != "websocket"
+                    or websocket.get("path") != "/ws"
+                    or websocket.get("messages") != []
+                    or not {"ws_ping_interval", "ws_ping_timeout"}.issubset(
+                        case.get("server_options", {})
+                    )
+                    or "unsolicited_pong_payload_base64" not in websocket
+                ):
+                    raise ParityError(
+                        f"{case_id}: unsolicited-Pong coverage requires the /ws idle-session workflow, "
+                        "explicit keepalive settings, and a Pong payload"
+                    )
+                websocket_keys.add("unsolicited_pong_payload_base64")
+                try:
+                    unsolicited_pong_payload = base64.b64decode(
+                        websocket["unsolicited_pong_payload_base64"], validate=True
+                    )
+                except (ValueError, TypeError) as error:
+                    raise ParityError(
+                        f"{case_id}: unsolicited_pong_payload_base64 must be valid base64"
+                    ) from error
+                if not 1 <= len(unsolicited_pong_payload) <= 125:
+                    raise ParityError(
+                        f"{case_id}: unsolicited Pong payload must fit a control frame"
+                    )
+            elif "unsolicited_pong_payload_base64" in websocket:
+                raise ParityError(
+                    f"{case_id}: unsolicited_pong_payload_base64 requires the unsolicited-Pong operation"
+                )
             if "shutdown" in websocket:
                 websocket_keys.add("shutdown")
                 if websocket["shutdown"] is not True:
@@ -5083,6 +5556,7 @@ def start_server(
         "startup-traditional-encrypted-private-key-missing-body",
         "startup-traditional-encrypted-private-key-invalid-body-base64",
         "startup-traditional-encrypted-private-key-missing-end-marker",
+        "startup-traditional-unencrypted-private-key-invalid-base64",
     }
     if profile_id in startup_api_profiles:
         server_python = str(ORACLE_PYTHON) if server_id == "uvicorn" else sys.executable
@@ -8229,8 +8703,11 @@ def websocket_server_keepalive_observation(
         "first_server_ping_received": False,
         "first_server_ping_payload_length": None,
         "pong_sent": False,
+        "unsolicited_pong_sent": False,
         "second_server_ping_received": False,
         "second_server_ping_payload_length": None,
+        "second_pong_sent": False,
+        "second_pong_payload_matches_ping": None,
         "timeout_close_received": False,
         "timeout_close_code": None,
         "timeout_close_reason": None,
@@ -8295,6 +8772,13 @@ def websocket_server_keepalive_observation(
         if observation["handshake_status"] != 101:
             return observation
 
+        if "unsolicited_pong_payload_base64" in specification:
+            unsolicited_pong_payload = base64.b64decode(
+                specification["unsolicited_pong_payload_base64"], validate=True
+            )
+            send_pong(client, unsolicited_pong_payload)
+            observation["unsolicited_pong_sent"] = True
+
         try:
             first_opcode, first_payload = read_frame(reader)
         except (EOFError, OSError, TimeoutError):
@@ -8323,6 +8807,15 @@ def websocket_server_keepalive_observation(
                     )
             return observation
         observation["second_server_ping_payload_length"] = len(second_payload)
+        if "second_pong_payload_base64" in specification:
+            second_pong_payload = base64.b64decode(
+                specification["second_pong_payload_base64"], validate=True
+            )
+            send_pong(client, second_pong_payload)
+            observation["second_pong_sent"] = True
+            observation["second_pong_payload_matches_ping"] = (
+                second_pong_payload == second_payload
+            )
 
         try:
             close_opcode, close_payload = read_frame(reader)
@@ -8770,8 +9263,11 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "first_server_ping_received": "first_server_ping_received",
         "first_server_ping_payload_length": "first_server_ping_payload_length",
         "pong_sent": "pong_sent",
+        "unsolicited_pong_sent": "unsolicited_pong_sent",
         "second_server_ping_received": "second_server_ping_received",
         "second_server_ping_payload_length": "second_server_ping_payload_length",
+        "second_pong_sent": "second_pong_sent",
+        "second_pong_payload_matches_ping": "second_pong_payload_matches_ping",
         "timeout_close_received": "timeout_close_received",
         "timeout_close_code": "timeout_close_code",
         "timeout_close_reason": "timeout_close_reason",
@@ -9452,7 +9948,11 @@ def execute_case(
             observation = websocket_raw_frame_observation(server, case["websocket"])
             observation["server_log"] = read_server_log(server)[log_offset:]
             return observation
-        if case.get("operation") == "websocket.server-keepalive":
+        if case.get("operation") in {
+            "websocket.server-keepalive",
+            "websocket.server-keepalive-mismatched-pong",
+            "websocket.server-keepalive-unsolicited-pong",
+        }:
             log_offset = len(read_server_log(server))
             observation = websocket_server_keepalive_observation(
                 server, case["websocket"]
@@ -10105,6 +10605,38 @@ def execute_case(
 def fault_contract_matches(
     fault: dict[str, Any], observation: dict[str, Any], case: dict[str, Any]
 ) -> bool:
+    if fault["contract"] == "server-unix-listener-permission-error-startup-propagates":
+        return (
+            fault["point"] == "server.unix-listener.set-permissions-error"
+            and observation.get("fault_consumed") is True
+            and observation.get("exit_code") == 0
+            and observation.get("server_started") is False
+            and observation.get("serve_task_finished") is True
+            and observation.get("serve_raised") is True
+            and observation.get("serve_timed_out") is False
+            and observation.get("application_events")
+            == ["lifespan.startup", "lifespan.shutdown"]
+        )
+    if fault["contract"] == "server-connection-invalid-default-header-source-chain":
+        server_logs = observation.get("server_log_events", {})
+        stderr_events = server_logs.get("stderr", []) if isinstance(server_logs, dict) else []
+        connection_error_logged = any(
+            isinstance(event, dict)
+            and "uvicorn-rs: HTTP connection from" in event.get("message", "")
+            for event in stderr_events
+        )
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 0
+            and observation.get("process_timed_out") is False
+            and not connection_error_logged
+            and any(
+                isinstance(event, dict)
+                and event.get("message") == "Invalid HTTP header name."
+                for event in stderr_events
+            )
+        )
     if fault["contract"] == "python-ssl-ca-verifier-error-propagates":
         expected_message = (
             "coverage-injected Python SSL helper failure at " + fault["point"]
@@ -10124,6 +10656,33 @@ def fault_contract_matches(
             and observation.get("process_timed_out") is False
             and "invalid CA certificate PEM: coverage-injected Rust CA parser failure"
             in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-ssl-keyfile-error-propagates":
+        expected_message = (
+            "coverage-injected Python SSL keyfile helper failure at " + fault["point"]
+        )
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and expected_message in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-ssl-keyfile-rust-decrypt-error-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and "coverage-injected Rust encrypted private-key decryption failure"
+            in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-pkcs12-reader-error-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
         )
     if fault["contract"] == "asgi-spec-version-2.5":
         payload = None
@@ -10385,6 +10944,16 @@ def fault_contract_matches(
             and responses[1].get("status") == 200
             and responses[1].get("body_base64")
             == base64.b64encode(b'{"pending_application_tasks":0}').decode("ascii")
+        )
+    if fault["contract"] == "http-response-build-error-closes-connection-followup-200":
+        responses = observation.get("responses")
+        return (
+            isinstance(responses, list)
+            and len(responses) == 2
+            and all(isinstance(response, dict) for response in responses)
+            and responses[0].get("status") is None
+            and responses[0].get("connection_closed") is True
+            and responses[1].get("status") == 200
         )
     if fault["contract"] in {
         "http-500-then-followup-200", "http-callback-error-followup-200",
@@ -10973,6 +11542,30 @@ def fault_contract_matches(
             and isinstance(observation.get("process_exit_code"), int)
             and observation["process_exit_code"] != 0
         )
+    if fault["contract"] == "server-startup-cancellation-shutdown-error-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("exit_code") == 0
+            and observation.get("lifespan_startup_entered_before_cancel") is True
+            and observation.get("server_started_before_cancel") is False
+            and observation.get("serve_raised") is True
+            and observation.get("serve_cancelled") is False
+            and observation.get("serve_task_finished") is True
+            and observation.get("server_started_before_shutdown") is False
+            and observation.get("application_events") == ["lifespan.startup"]
+        )
+    if fault["contract"] == "server-startup-bind-shutdown-error-logged":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("exit_code") == 0
+            and observation.get("server_started") is False
+            and observation.get("serve_task_finished") is True
+            and observation.get("serve_raised") is True
+            and observation.get("serve_timed_out") is False
+            and observation.get("application_events") == ["lifespan.startup"]
+            and "uvicorn-rs: ASGI lifespan shutdown failed after listener setup error:"
+            in observation.get("fault_server_stderr", "")
+        )
     if fault["contract"] == "server-lifespan-task-cancel":
         events = observation.get("application_events", [])
         return (
@@ -11072,6 +11665,8 @@ def fault_contract_matches(
             "websocket.yawc.unexpected-continuation-frame",
             "websocket.yawc.invalid-text-frame",
             "websocket.yawc.invalid-close-reason",
+            "websocket.yawc.close-reply-flush-error",
+            "websocket.yawc.close-reply-flush-unexpected-frame",
         }:
             return healthy_followup and observation.get("fault_consumed") is True
         expected_disconnect = {
@@ -11569,6 +12164,7 @@ def run_python_api_probe(
     environment.pop("PYTHONHOME", None)
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
+    environment["ASGI_PARITY_SERVER_ID"] = server_id
     source_python_path = str(ROOT / "python")
     target_source_path = (
         source_python_path
@@ -11596,6 +12192,8 @@ def run_python_api_probe(
         "missing-ca",
         "directory-ca",
         "malformed-ca",
+        "invalid-der-ca",
+        "non-utf8-ca",
     } or run_http.get("client_tls"):
         temporary_tls_assets = tempfile.TemporaryDirectory(
             prefix="uvicorn-rs-python-api-tls-"
@@ -11638,6 +12236,16 @@ def run_python_api_probe(
                 b"-----BEGIN CERTIFICATE-----\nnot-base64!\n-----END CERTIFICATE-----\n"
             )
             tls_assets["malformed_ca_certificate"] = str(malformed_ca_certificate)
+        if run_http.get("ssl_ca_certs") == "invalid-der-ca":
+            invalid_der_ca_certificate = tls_directory / "invalid-der-ca.pem"
+            invalid_der_ca_certificate.write_bytes(
+                b"-----BEGIN CERTIFICATE-----\nAQID\n-----END CERTIFICATE-----\n"
+            )
+            tls_assets["invalid_der_ca_certificate"] = str(invalid_der_ca_certificate)
+        if run_http.get("ssl_ca_certs") == "non-utf8-ca":
+            non_utf8_ca_certificate = tls_directory / "non-utf8-ca.pem"
+            non_utf8_ca_certificate.write_bytes(b"\xff\xfe\x00not a PEM certificate\n")
+            tls_assets["non_utf8_ca_certificate"] = str(non_utf8_ca_certificate)
         if run_http.get("client_tls"):
             client_certificate, client_key = make_client_certificate(tls_directory)
             tls_assets.update(
@@ -11779,6 +12387,8 @@ def run_python_api_probe(
         )
     if case["operation"] in {
         "python.api.run-http",
+        "python.api.run-http-signal-sequence",
+        "python.api.run-http-graceful-timeout",
         "python.api.run-http-request-limit",
         "python.api.run-http-asgi-scope-contract",
         "python.api.run-http-concurrency",
@@ -11807,8 +12417,10 @@ def run_python_api_probe(
                     "listener_responses",
                     "idle_connection_closed",
                     "shutdown_signal_sent",
+                    "shutdown_signals_sent",
                     "process_exit_code",
                     "process_timed_out",
+                    "graceful_shutdown_cancellation_observed",
                     "request_limit_response_count",
                     "request_limit_range_satisfied",
                 )
@@ -11872,6 +12484,152 @@ def run_python_api_probe(
                 )
             }
         )
+    if "server_startup_failure_waiter" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)["server_startup_failure_waiter"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: startup failure waiter returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: startup failure waiter observation must be an object"
+            )
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "startup_failure_wait_result",
+                    "dropped_control_wait_result",
+                    "server_started_before_shutdown",
+                    "serve_task_finished_before_shutdown",
+                )
+            }
+        )
+    if "server_startup_bind_failure_lifespan_cleanup" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)[
+                "server_startup_bind_failure_lifespan_cleanup"
+            ]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: startup bind-failure lifespan probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: startup bind-failure lifespan observation must be an object"
+            )
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "server_started",
+                    "serve_task_finished",
+                    "serve_raised",
+                    "serve_timed_out",
+                    "application_events",
+                )
+            }
+        )
+        if fault_point is not None:
+            observation["fault_server_stderr"] = completed.stderr.decode(
+                "utf-8", errors="replace"
+            )
+    if "server_startup_uds_socket_replacement_lifespan_cleanup" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)[
+                "server_startup_uds_socket_replacement_lifespan_cleanup"
+            ]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: startup UDS replacement lifespan probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: startup UDS replacement lifespan observation must be an object"
+            )
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "server_started",
+                    "serve_task_finished",
+                    "serve_raised",
+                    "serve_timed_out",
+                    "application_events",
+                )
+            }
+        )
+        if fault_point is not None:
+            observation["fault_consumed"] = fault_consumed
+    if (
+        "server_startup_cancel_before_listener" in case["api"]
+        or "server_startup_cancel_without_lifespan" in case["api"]
+        or "server_startup_cancel_during_prebound_transfer" in case["api"]
+        or "server_startup_cancel_during_prebound_transfer_without_lifespan" in case["api"]
+    ):
+        try:
+            startup = json.loads(completed.stdout)["server_startup_cancel_before_listener"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: startup cancellation probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: startup cancellation observation must be an object"
+            )
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "lifespan_startup_entered_before_cancel",
+                    "server_started_before_cancel",
+                    "serve_cancelled",
+                    "serve_raised",
+                    "serve_timed_out",
+                    "serve_task_finished",
+                    "application_events",
+                    "server_started_before_shutdown",
+                    "listener_transfer_blocked",
+                )
+            }
+        )
+    if "server_lifespan_mode" in case["api"]:
+        try:
+            mode_observation = json.loads(completed.stdout)["server_lifespan_mode"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: server lifespan mode probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(mode_observation) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: server lifespan mode observation must be an object"
+            )
+        observation.update(
+            {
+                name: mode_observation.get(name)
+                for name in (
+                    "server_started_before_shutdown",
+                    "serve_raised",
+                    "application_events",
+                )
+            }
+        )
     if "module_cli_lifespan_startup" in case["api"]:
         try:
             startup = json.loads(completed.stdout)["module_cli_lifespan_startup"]
@@ -11929,6 +12687,8 @@ def run_python_api_probe(
                     f"{case['case_id']}: requested WebSocket scope observation is missing"
                 )
             observation["scope_observation"] = scope_observation
+    if fault_point is not None:
+        observation["fault_consumed"] = fault_consumed
     return observation
 
 
@@ -11994,7 +12754,12 @@ def execute_python_api_profile(
                 )
                 raise_if_llvm_profile_write_failed(target_raw, case["case_id"])
                 target = {name: target_raw[name] for name in operation["observe"]}
-                required = required_observations_for_case(case, operation)
+                required = (
+                    {}
+                    if fault["contract"]
+                    == "server-unix-listener-permission-error-startup-propagates"
+                    else required_observations_for_case(case, operation)
+                )
                 matches = all(
                     target.get(field) == value
                     for field, value in required.items()
@@ -12145,6 +12910,7 @@ def start_profile_servers(
         "startup-traditional-encrypted-private-key-missing-body",
         "startup-traditional-encrypted-private-key-invalid-body-base64",
         "startup-traditional-encrypted-private-key-missing-end-marker",
+        "startup-traditional-unencrypted-private-key-invalid-base64",
     }
     if tls:
         certificate, key, trust_anchor = make_certificate(tempdir)
@@ -12517,6 +13283,11 @@ def execute_profile(
                             fault_observation = {**target_result, "server_log": target_raw["server_log"]}
                         elif case["fault"]["contract"] == "server-startup-failure":
                             fault_observation = {**target_result, "server_log": read_server_log(target)}
+                        elif case["fault"]["contract"] == "server-unix-listener-permission-error-startup-propagates":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
                         elif case["fault"]["contract"] in {
                             "server-lifespan-startup-auto-fallback",
                             "server-lifespan-startup-auto-fallback-logger-failure-ignored",
@@ -12549,6 +13320,8 @@ def execute_profile(
                                 "websocket.yawc.unexpected-continuation-frame",
                                 "websocket.yawc.invalid-text-frame",
                                 "websocket.yawc.invalid-close-reason",
+                                "websocket.yawc.close-reply-flush-error",
+                                "websocket.yawc.close-reply-flush-unexpected-frame",
                             }
                         ):
                             fault_observation = {

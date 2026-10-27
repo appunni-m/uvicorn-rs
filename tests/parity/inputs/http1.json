@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@37",
+  "schema": "uvicorn-rs-parity/input@40",
   "cases": [
     {
       "case_id": "http1.scope-query-header-and-body",
@@ -1768,6 +1768,33 @@
       "fault": {
         "point": "scope.http.asgi.version.set-item",
         "contract": "http-500-then-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=trigger",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope?coverage-fault=followup",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "fault.http1.generated-date-header-error-recovers",
+      "profile": "http1",
+      "operation": "http.keepalive-sequence",
+      "covers": [
+        "http.keepalive-sequence"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.date-header.invalid-value",
+        "contract": "http-response-build-error-closes-connection-followup-200"
       },
       "request_sequence": [
         {

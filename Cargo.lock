@@ -45,7 +45,7 @@ dependencies = [
 
 [[package]]
 name = "asgi-lifespan-protocol-rs"
-version = "0.2.1"
+version = "0.2.2"
 
 [[package]]
 name = "assert_matches"
@@ -114,6 +114,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
 dependencies = [
  "hybrid-array",
+ "zeroize",
 ]
 
 [[package]]
@@ -188,6 +189,7 @@ dependencies = [
  "block-buffer 0.12.1",
  "crypto-common 0.2.2",
  "inout",
+ "zeroize",
 ]
 
 [[package]]
@@ -302,6 +304,15 @@ dependencies = [
  "const-oid",
  "pem-rfc7468",
  "zeroize",
+]
+
+[[package]]
+name = "des"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "916a94e407b54f9034d71dd748234cd1e516ced6284009906ae246f177eafe5a"
+dependencies = [
+ "cipher",
 ]
 
 [[package]]
@@ -628,6 +639,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17"
 dependencies = [
  "typenum",
+ "zeroize",
 ]
 
 [[package]]
@@ -1819,7 +1831,7 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uvicorn-rs"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "asgi-lifespan-protocol-rs",
  "assert_matches",
@@ -1868,12 +1880,13 @@ dependencies = [
 
 [[package]]
 name = "uvicorn-rs-py"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "aes",
  "base64",
  "bytes",
  "cbc",
+ "des",
  "fastrand",
  "futures-util",
  "http",
@@ -1889,6 +1902,7 @@ dependencies = [
  "pyo3-async-runtimes",
  "rustix",
  "rustls-pemfile",
+ "sha1 0.11.0",
  "tokio",
  "tokio-rustls",
  "tokio-util",

@@ -16,8 +16,7 @@ and does not exercise factories, worker supervision, or reload. Separate
 source parity cases cover two-worker HTTP request and SIGINT shutdown using
 explicit worker count and `WEB_CONCURRENCY`, one forced worker exit and
 replacement, and one POSIX health-check expiry and replacement with a
-non-default timeout. Repeated restart/failure behavior, dynamic worker
-controls, and reload filters remain incomplete. Proxy-header behavior has only the focused
+non-default timeout. One current-source module-CLI case verifies reload restart and another verifies one WatchFiles include/exclude pair. Repeated restart/failure behavior, dynamic worker controls, other filter combinations, fallback-watcher behavior, and platform coverage remain incomplete. Proxy-header behavior has only the focused
 CLI and `uvicorn.run()` coverage listed in the [support matrix](../support-matrix.md).
 The old Cargo `0.1.0` releases are historical. `asgi-lifespan-protocol-rs`
 and the consolidated `uvicorn-rs` crate are published at 0.2.1 from clean
@@ -86,6 +85,13 @@ wheel as a transient systemd service, sent the manager's stop request, and
 verified request cancellation, lifespan completion, and successful exit under
 the ten-second stop bound. This was measured on the Ubuntu 24.04 runner in the
 [CI run for commit `9d05c72`](https://github.com/appunni-m/uvicorn-rs/actions/runs/37566368036).
+
+A separate local parity case on macOS 15.7.7 ARM64 / CPython 3.12.13 sends two
+actual SIGINT signals while an ASGI request remains active; Uvicorn and the
+candidate both serve HTTP 200, exit 0, and avoid a timeout. The receipt records
+both server logs but excludes platform-specific traceback details from the
+comparison. This is focused dirty-source evidence, not a cross-platform
+deployment guarantee; see the [maintainer receipt](uvicorn-0.54.0-contract.md#actual-repeated-sigint-shutdown-with-an-active-request).
 
 To run the same service-manager probe on a Linux systemd host, first install
 the exact candidate wheel into the Python environment used to invoke the

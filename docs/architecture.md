@@ -46,9 +46,9 @@ crates.io API lookups for the removed 0.1.0 names returned HTTP 404; the
 subsequent 0.2.1 `uvicorn-rs` and lifecycle crates were published from the clean
 commit recorded above. New server builds do not depend on separate H3 crates.
 `uvicorn-rs-py` enables the core's `http3` feature for Python ASGI hosting,
-while Rust-native applications choose whether to enable it. The currently
-visible `asgi-lifespan-protocol-rs` 0.2.0 archive records a dirty source tree;
-its release provenance and checksum are documented in the
+while Rust-native applications choose whether to enable it. The earlier
+`asgi-lifespan-protocol-rs` 0.2.0 archive records a dirty source tree; the
+published 0.2.1 release provenance and checksum are documented in the
 [release guide](releases.md#distribution-boundaries).
 
 The native crate exposes an opt-in proactive TCP EOF observer through
@@ -106,9 +106,12 @@ as ASGI request trailers.
 The native module builds its Tokio multithread runtime at import with one async
 worker and registers it with PyO3's async integration. This count applies to
 Tokio's asynchronous scheduler. The Python asyncio or uvloop event loop runs on
-its own thread, and Tokio can create blocking-pool threads when needed; the
-process can therefore use more than one CPU with one Tokio async worker. A
-process-wide `OnceLock<Result<Runtime, io::Error>>` retains either the runtime or its
+its own thread, and Tokio can create blocking-pool threads when needed. One
+Tokio async worker cannot execute Rust async tasks in parallel across CPU
+cores. The process can create additional threads, so work outside that async
+scheduler may use other cores when it runs concurrently and releases the GIL.
+This is one Tokio scheduler worker, not a one-thread or one-core process limit.
+A process-wide `OnceLock<Result<Runtime, io::Error>>` retains either the runtime or its
 construction failure. Construction failures become Python `OSError` before
 the native exports are added; repeated initialization returns the cached
 failure. If the async integration already has a valid registered runtime, that

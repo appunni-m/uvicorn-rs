@@ -4,7 +4,7 @@
 
 <a id="current-unified-coverage-status-2026-10-22"></a>
 
-## Current unified coverage status (2026-10-26)
+## Current unified coverage status (2026-10-27)
 
 The last exact-main CI run
 [39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
@@ -19,7 +19,454 @@ and **8,130/8,438 executable lines**. The remaining gaps are 413 regions and
 report SHA-256 is
 `9d58a1e169b6e751efbe35f4492528fc368d7c31ea02aee2bd35d06c5669a51c`.
 
-The latest full pull-request coverage run
+### Previous full current-draft coverage attempt (2026-10-27)
+
+This earlier full-inventory report describes the pre-CA-fix source snapshot
+below and is not current-source coverage evidence.
+
+One no-repeat diagnostic pass ran on dirty revision
+`5b1ec29201c963d8590c989b07318bb7366d7922`, source SHA-256
+`0f6f08a042d517c083c3ec775efc159cb2d21053084769a2af6f653a640b6066`.
+The full inventory selected and executed 1,137 cases (881 ASGI and 256
+native); 1,135 passed, with zero behavior failures and two infrastructure
+failures. Both failures were TLS WebSocket cases. In each, the oracle process
+remained alive after lifespan startup while the handshake response timed out;
+the target server reached readiness. Coverage attribution completed for all
+selected cases, but the full release gate also requires three complete passes
+with every case passing.
+
+The coverage gate remains incomplete at **13,080/13,191 regions** and
+**9,729/9,787 lines** (111 regions and 58 lines missing). The report is
+`target/asgi-coverage/coverage-current-draft-fresh-20261027.json`, run
+`fc7fc82bf56b4f67954e1ea601e77fc3`, report SHA-256
+`c88e3cd15585eb787cd75f1957770512d1b1245221104b2f932da66af049974a`; the
+instrumented extension SHA-256 is
+`ab60493a10f9674a016034805f6cbdec5cee8c9724fbb0c309d43fc3e0bd373d`.
+The remaining 111 uncovered regions are in `src/lib.rs` (103) and
+`crates/uvicorn-rs/src/websocket.rs` (8); the other measured Rust source files
+are complete in this report.
+
+Coverage-MCP fully paginated both metrics for this exact report. It returned
+`source=matches_receipt` and `tests=failed`, with 899 region groups and 54 line
+groups. The two infrastructure failures prevent an accepted review receipt;
+the grouped observations do not change the 111-region and 58-line full-report
+totals or pass the zero-gap review.
+
+A focused no-retry recheck of only the two failed TLS WebSocket cases passed
+2/2 against Uvicorn 0.54.0 and the Rust target. Its report is
+`target/asgi-coverage/coverage-websocket-tls-recheck-20261027.json`, run
+`d1b1a60e9e834bbca8a8569b830f4cf9`, report SHA-256
+`3f7e5963859e788e38448bc1111b168f8799f8ee90592443202d631602f1eb81`; it uses
+the same dirty source and instrumented extension. The timeout did not
+reproduce, but this selected subset does not rewrite the full matrix result,
+remove the remaining coverage gaps, or establish the three-repeat gate.
+
+A focused follow-up offered `permessage-deflate` on
+`websocket.frame-after-close-is-rejected`, routing its raw close-plus-data
+frames through the Yawc session. Uvicorn 0.54.0 and the Rust target matched
+the 101 handshake, normal 1000 disconnect, and HTTP 200 follow-up. The selected
+profile hits the Yawc `ConnectionClosed` handling at
+`crates/uvicorn-rs/src/websocket.rs:632` and `:636`; it does not reach the
+defensive `Err(error)` or `Ok(_)` arms at lines 637–641. The one-case report
+`target/kata-progress/websocket-frame-after-close-yawc-20261027.json` passed
+1/1 with complete attribution and no infrastructure failures (run
+`00a51921e8dd4317b770fdfbd0f6b153`, report SHA-256
+`d87e0c64809785198a0dd39577f44584c140ab42c3b0edec7b6e07fce209ee18`). It
+binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source SHA-256
+`0ea64c2d398c46468fe62d80a9d670e85fb9901107b81753a068da56fb496162`,
+WebSocket input SHA-256
+`e57035e7a7982bbe1f872522a265b3c92e266a35d01b680f98c4bba9431616a4`, and
+instrumented extension SHA-256
+`544dfcf37b731fabb0f72c9f37e70d3307b0ed920aa2530cffa145de096e1bee`. This
+selected-subset receipt is not a full coverage pass or independent review.
+
+Two coverage-only fault contracts now exercise the remaining Yawc close-flush
+outcomes that normal close frames do not reach. They send an explicit client
+close, then inject either a Yawc I/O error or an unexpected frame returned
+after close. Both contracts passed (2/2), with the 101 handshake, consumed
+fault, and HTTP 200 follow-up; there were no case or infrastructure failures.
+The selected receipt is
+`target/kata-progress/websocket-yawc-close-flush-faults-20261027.json`, run
+`b575189e07584284b6d1a32c2ccdcc91`, report SHA-256
+`564f3e3543b418d7b204ff7064ea507109847ee6e10c3bbde1238a24b2cc7d78`, source
+SHA-256 `993ef4820f55ba7f42c9e2dfab62d2ff59bb441a7c298c61cb58f166e43c7ee4`,
+and instrumented extension SHA-256
+`ab60493a10f9674a016034805f6cbdec5cee8c9724fbb0c309d43fc3e0bd373d`. The
+fault profiles attribute the error arm to
+`crates/uvicorn-rs/src/websocket.rs:651` and the unexpected-frame arm to
+`:652–655`. These are target-only selected fault contracts; the report remains
+an incomplete subset and does not replace a current full-source run or
+Coverage-MCP review.
+
+A route-explicit current-source rerun (2026-10-27) sets
+`server_options.ws="websockets-sansio"` in both inputs so they exercise the
+intended Yawc backend. Both selected fault contracts passed (2/2), with no
+case or infrastructure failures. Run `66c230606c0c4310b76609f9082b080e`;
+report `target/asgi-coverage/coverage-yawc-close-reply-flush-sansio-20261027.json`,
+SHA-256 `47050d27c0906ce5cc5f956e670bb28785cc3f4a7de619d899d4d220811fecfa`.
+It binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+digest `bae4968452b9b6fa667d921a6cb1b041c23231d58dfc72e53165ba49dda3d6c1`,
+WebSocket input SHA-256
+`c31ff3ec38a6eafa9d943c84a6e6f5fc72b5e26ea71ed8d772c75c80c788ced8`, and
+instrumented extension SHA-256
+`09879b43a4d09cbd51fe287bd6c94c5cf179e15cb49ca2a1a52eb12e010814b2`.
+Per-case source-span attribution hits the error helper for the first case and
+the unexpected-frame helper for the second. Coverage-MCP confirms this report
+matches its source receipt and that its tests passed, but its function-level
+query still lists six no-hit helper instances while the report's normalized
+source-span attribution marks those helper locations hit. This selected report
+does not settle that independent-review discrepancy or the full coverage gate.
+
+### Selected invalid CA certificate follow-up (2026-10-27)
+
+Added the live case `python-api.config-server-rejects-invalid-der-client-ca-file`
+with a PEM-wrapped invalid DER certificate. Its first selected run exposed a
+parity mismatch: Uvicorn raised `ssl.SSLError` with OpenSSL's `[X509] PEM lib`
+message, while the Rust target surfaced a rustls `ValueError`. The target now
+routes `RootCertStore::add` failures through the existing CPython SSL error
+adapter, preserving the rustls error as fallback if CPython accepts the file.
+The focused rerun passed 1/1, including the same public error class and message
+as Uvicorn.
+
+The report is
+`target/asgi-coverage/coverage-invalid-der-client-ca-after-fix-20261027.json`,
+run `ba7e1bb61af74d18888dd0eb12607e56`, report SHA-256
+`0735a4ee7c99d51157148c3881f310f4f0f6069ee433239e38a093afb4e67661`; it binds
+`src/lib.rs` SHA-256
+`356dc7b1553b1586f924408925b8efae13481e4a77e1587122282dc8a782a2df` and
+instrumented extension SHA-256
+`2016f980ddd2a52a42a65ddd70a7017e43cd7185f61d5b88151f87ee6254bc17`.
+Attribution records 263 covered regions for the selected case. The report is
+selected-subset evidence; it does not establish full coverage. The earlier
+full draft report and WebSocket recheck predate this Rust change, so their
+source identities do not describe the current checkout. Refresh the full
+matrix and independent Coverage-MCP review after the remaining gaps are fixed.
+
+### Selected HTTP/1.0 concurrency callback follow-up (2026-10-27)
+
+Added `python-api.run-zero-concurrency-rejects-http10-request` to exercise the
+Python adapter with a real HTTP/1.0 request and `limit_concurrency=0`. The
+case passed 1/1 against Uvicorn and the Rust target with the expected 503; its
+coverage profile reaches the HTTP/1.0 formatting arm at `src/lib.rs:5540`.
+
+The report is
+`target/asgi-coverage/coverage-python-api-http10-concurrency-20261027.json`,
+run `c451b8ccc6f1455e93722b684db1248b`, report SHA-256
+`1d48432d5e77d04b98e35a554307aedd9065d17a81f2a3be259cc0e90a23090f`. It binds
+`src/lib.rs` SHA-256
+`356dc7b1553b1586f924408925b8efae13481e4a77e1587122282dc8a782a2df` and
+instrumented extension SHA-256
+`67eca10e3c26a5632aad6850aa7cbd896077010a0fa456111cdf3691b179a950`.
+Attribution records 2,054 covered regions and 1,610 lines for this selected
+case. HTTP/0.9, HTTP/2, HTTP/3, empty-path, and callback-error arms remain
+uncovered in the prior full report; this selected report does not refresh the
+full matrix or satisfy the independent review.
+
+### Full one-pass current-source diagnostic before UDS fault coverage (2026-10-27)
+
+One full inventory pass ran on dirty revision
+`5b1ec29201c963d8590c989b07318bb7366d7922`, source SHA-256
+`f02bd82bff910047259af535ba700f075c4d365acfc0b60be7084cc0a388af09`. All
+1,142 selected cases passed (884 ASGI and 258 native), with no case or
+infrastructure failures. This was one pass; the release gate requires three
+complete passes.
+
+Coverage was **13,154/13,259 regions** and **9,783/9,836 lines** (105 regions
+and 53 lines missing). The report is
+`target/asgi-coverage/coverage-current-source-diagnostic-20261027.json`, run
+`d003d53fbba04b4eb41ece2c72de9277`, report SHA-256
+`dba2de253f6478737f172bfa343a543883d968fb1c1108b2fb1c92dae9a18bb6`, and
+instrumented extension SHA-256
+`6be84aa8b61337a7c2330497e5d274748d3dec6fe0602d3fb656a7ad66b4d7b2`.
+Coverage-MCP matched the report receipt and reported failed tests because of
+the remaining gaps. Its function query for `serve_unix_listener` showed gap
+locations that were absent from the report's normalized uncovered-region
+list, so the attribution discrepancy still needs review.
+
+### Latest full pull-request coverage run (2026-10-26)
+
+PR run [`40317129093`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40317129093)
+measured branch head `5b1ec29201c963d8590c989b07318bb7366d7922`. Its full matrix
+completed 1,084/1,084 indexed cases across three verification repeats (837 ASGI
+and 247 native), with no parity failures, infrastructure failures, or retries.
+The 100% gate still failed at **12,880/13,052 regions** and
+**9,557/9,662 lines** (172 regions and 105 lines missing).
+
+The retained [`uvicorn-rs-unified-coverage` artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/40317129093/artifacts/12651255632)
+has archive SHA-256
+`a291ff61325f065ee7c742442615c2dc8571c8616a948d032b1e73ae0abb71d9`. Its
+report SHA-256 is
+`905a2ada915de9a248200629713215879232e77e8c4871450d4e87e5d9285043`; the
+artifact context records merge revision
+`d6f2400f7ebfd27adbc21e1ca44f01eceff6204c` and source digest
+`53f53e87a82cecb725f5acca1ceaf8d5f05ac417c80b62217ebaf2e588a62da1`. A fresh
+local hash audit found mismatches for `src/lib.rs`,
+`crates/uvicorn-rs/src/lib.rs`, and `crates/uvicorn-rs/src/websocket.rs`, so
+the hosted report's gap map is stale for those files in the current dirty
+checkout. Its measured gaps were concentrated in the Python adapter
+(`src/lib.rs`, 148 regions and 85 lines), server core
+(`crates/uvicorn-rs/src/lib.rs`, 5 regions and 4 lines), and WebSocket handling
+(`crates/uvicorn-rs/src/websocket.rs`, 19 regions and 16 lines). HTTP/3, its
+transport, and peer-read each had 100% region and line coverage in that report.
+This is PR evidence, not exact-main evidence. The Python-floor and
+package-artifact jobs were skipped after coverage failed.
+
+Coverage-MCP has not returned an independent receipt for this hosted full
+report. A historical local daemon invalidation and timeout prevented that
+query. On 2026-10-27, Coverage-MCP responded to an exact-receipt query for the
+selected Yawc report below, but that selected result does not review this full
+hosted report or satisfy the independent full-source gate.
+
+### Prior local one-pass follow-up (2026-10-26)
+
+One fresh attribution pass completed against dirty branch head
+`5b1ec29201c963d8590c989b07318bb7366d7922`, after `src/lib.rs` changed from
+the source measured by the hosted PR run. All **1,118/1,118 indexed cases**
+passed once with complete case attribution and no case or infrastructure
+failures. The run used `--matrix-repeats 0`, so it does not satisfy the required
+three-repeat gate.
+
+The report is
+`target/asgi-coverage/coverage-current-dirty-one-pass.json` (run
+`0400b930d64049b7854a70676488189a`, report SHA-256
+`b90b6aeb7ca1b6f8ffdf9739065e1e11ce6599eeb2f86f278402975fbcbfe50d`). It
+records source digest
+`a291485ff9f3770e4660cdf1cd71b944d19aadc879f41dfb194bdf2e541c05c2` and
+instrumented extension SHA-256
+`7d8a29b93609283394cc758789f4f62790584d612fe94e3cd6fa7b6b05658ceb`.
+Coverage remains incomplete at **12,978/13,105 regions** and **9,633/9,708
+lines**. The remaining 127 regions and 75 lines are in `src/lib.rs` (112
+regions, 61 lines) and `crates/uvicorn-rs/src/websocket.rs` (15 regions, 14
+lines); the other measured files are complete in this report.
+
+This is local diagnostic evidence for the dirty checkout. It does not replace
+the failed hosted coverage gate, complete three-repeat run, or independent
+Coverage-MCP receipt. The indexed input inventory has since grown from 1,118
+to 1,133 cases, including three selected CLI cases added after this report; the
+server core and WebSocket sources have also changed. It predates the Yawc
+handshake fault hook and native case documented next, so it is not current
+coverage for the checkout.
+
+### Focused HTTP/2 concurrency-limit case (2026-10-27)
+
+Added `http2.zero-concurrency-rejects-request-with-503` to
+`tests/parity/inputs/http2.json`. With `limit_concurrency=0`, the case confirms
+the oracle-matched HTTP 503 and reaches the HTTP/2 arm of the adapter's
+`ConcurrencyLimitObserver` at `src/lib.rs:5536`.
+
+The selected run passed 1/1 with complete attribution and no infrastructure
+failures: run `8db2016852224570b63db99eea9b0a90`. Its report is
+`target/asgi-coverage/selected-http2-zero-concurrency-20261027.json` (SHA-256
+`7aa1d6ea15bc5ce45c0c28fd9b5ee21888ff2f9ab2838b68058cb1f865f5604e`). It is
+bound to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+digest `87a46890d3d54ae7668322092896bd1b8907a57b6ff929a96f8fe41c26a6a931`,
+HTTP/2 input SHA-256
+`c383e9b53c71ddf7adbcc584f93a694e0e054f63aba7c9607c734087c1fe0055`, and
+instrumented extension SHA-256
+`d1cdd7955095a0d61c85412d1e3c41aaebd93904a0558136c5f26bc916f94657`. This
+selected subset attributes 2,450/13,127 regions and 1,887/9,722 lines. It
+confirms one H2 observer path; it does not refresh full coverage, satisfy the
+three-repeat gate, or provide an independent Coverage-MCP receipt.
+The later inherited-listener fault-hook change updated `src/lib.rs`, so this
+H2 report is historical for its recorded source digest and is not an
+exact-source receipt for the latest checkout.
+
+### Focused inherited-listener address failure (2026-10-27)
+
+Extended the existing `server.listener.local-addr-error` hook to the inherited
+TCP listener path, under coverage builds only. Added the target-only fault
+contract `fault.http1.inherited-server-local-address-inspection-error`; the
+instrumented server received the inherited listener, returned a startup
+failure, and emitted lifespan startup and shutdown events.
+
+The selected run passed 1/1 with complete attribution and no infrastructure
+failures: run `53b3ce05c19043ab8b4e5752902f5622`. Its report is
+`target/asgi-coverage/selected-inherited-fd-local-addr-error-20261027-attempt2.json`
+(SHA-256
+`92eeb3c3e89cb6baf42c393f857229e43c5880e870ddef06e5a54389b5ffa73a`). It is
+bound to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+digest `ea03a1b848d3d6dd311f37ed24e8c535295bbd74b8066a4c221f6d8d2116626e`,
+input SHA-256
+`6c69a3316905417bda986ae297c5efcecdcb87134856e3de5e106bb31bbbd9ce`, and
+instrumented extension SHA-256
+`4c84221e0a04be80ba00ce056352cace1d72e3dac7572261121bcf577b543074`. The
+selected subset attributes 1,124/13,132 regions and 828/9,728 lines. It adds
+one target-only input; the full coverage gate and independent review remain
+incomplete.
+
+### Focused Yawc handshake-error fault contract (2026-10-27)
+
+The target-only case
+`fault.http1.native-websocket-extension-negotiation-error-recovers` passed
+1/1 with the injected failure consumed, complete case attribution, and no
+infrastructure retries. This is a source refresh of an existing case after the
+WebSocket handshake hook and native runner changed; it adds no new case ID.
+The fault hook is compiled only into coverage builds.
+
+The current selected report is
+`target/kata-progress/b8k7-yawc-handshake-error-20261027.json` (run
+`504f5ca068b546ebbf03f74b151f08ea`, report SHA-256
+`91d1ca19bc2be5fb529b877b644b505385b50dde86f3d4306d3776628728f024`), bound
+to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source digest
+`2a205a2ee7e482c69fa66338b587060036ce38db5ead5d0a24bd7762cdf76e9b`, native
+manifest SHA-256
+`3be1278e408924497b0b61c3a21d054fbfd715f326e332f1fdfdd6a373002589`, and
+instrumented extension SHA-256
+`711e2d5ffdd245e465015665711dfe62bb73ecc250147d9f1292ac222446c29a`. It
+attributes 1,353 regions to the selected case. Coverage-MCP queried this exact
+report for regions and lines; both results returned `status=measured`,
+`source=matches_receipt`, and `tests=passed`. The one-case report totals
+1,353/13,132 regions and 1,150/9,728 lines. This is selected-subset evidence,
+not a full coverage refresh or an accepted independent full-source review;
+the three-repeat and full 100% gates remain open.
+
+### Focused response-header coverage diagnostics (2026-10-26)
+
+The new parity case `python-api.module-cli-appends-custom-response-header`
+passed 1/1 in local selected run `be77bb7263cc490da17a49e1e35a1871` on
+macOS 15.7.7 ARM64 / CPython 3.12.13. Its instrumented report attributed 66
+regions in `src/lib.rs`'s `apply_default_response_headers` function group to
+the case. The report is
+`target/asgi-coverage/selected-custom-header-report.json` (SHA-256
+`6ee3bca8d7ea9b0eb37caf498e596883a8ae72ce8e811b8db4da565a57b57bd8`), bound
+to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source digest
+`d5005474aff3cafc2e01a89545d1e16918660622bcca67efa8d5274f2fd31e35`, and
+instrumented extension SHA-256
+`ac4218787d422f8f46977880bfb6935a580c12e92a39c5f33b8de63543134f92`.
+The selected subset measured 3,146/13,098 regions and 2,362/9,701 lines;
+its coverage gate is incomplete. This local diagnostic is not a full-matrix
+refresh or an independent Coverage-MCP receipt.
+
+A second case, `fault.http1.generated-date-header-error-recovers`, is a
+target-only fault contract. It injects an invalid Date value in the coverage
+build, confirms the first request connection closes without a response, and
+confirms a follow-up request receives 200. It passed 1/1 with complete case
+attribution and no infrastructure failures. The report is
+`target/asgi-coverage/selected-date-header-fault-recovery-report.json` (run
+`a9d1063ab56b427087a532360e3663e7`, report SHA-256
+`df81e45f630262769f4dba6776ceb21240b60a080da548ef332c00ff10e59934`), bound
+to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source digest
+`4b81409879899acfb442072a6f11f06c242dd339b2db0fae6f3f5a2a4ada93ae`, and
+instrumented extension SHA-256
+`936e9aff985ff0eb9f1899f20f573173de185d8ff307138dfc2cb51390155bff`. The
+selected subset measured 3,424/13,104 regions and 2,569/9,706 lines, so it
+does not refresh the full-matrix gate or independently review the report.
+
+### Traditional encrypted-key failure attribution (2026-10-26)
+
+Before the cipher-enum refactor below, added two input-only startup failures
+using the existing AES-128 and AES-192 traditional RSA key fixtures with an
+incorrect password. Each case passed once against Uvicorn 0.54.0 and the target
+with complete attribution and no
+infrastructure failures. Their combined post-change run is
+`d16cee8e4f4c45af8cb38c23e92ec82e`; report SHA-256
+`12248fedcd1f53e674194fb1acc3db690fa5daa33a46d6bef3e4d2d928445590`. Both
+cases passed with complete attribution, covering 409/13,101 regions and
+280/9,706 lines in this selected subset. The report binds `src/lib.rs`
+SHA-256 `84022f97dd0084bf21626aa8633ddc3017160287d184ecbd8c13d3ea3f993ff0`.
+After the same refactor, the existing AES-256 wrong-password case also passed
+1/1 in run `07f4cea1b5c04d0ebf177e6817b86143`; report SHA-256
+`5ebe66b9ffa7bb0448137c347c3ae42d60c0b086ed40c22d72f2c8e5a6ab656f`. It
+binds the same `src/lib.rs` hash and attributes 399 regions in its selected
+subset.
+
+The review also removed three unreachable constructor-error mappings. The
+locked `crypto-common` 0.1.7 implementation returns `InvalidLength` only when
+the key or IV lengths differ from the cipher's fixed sizes; this code derives a
+key of the selected cipher's exact length and validates the IV length before
+construction. The constructors now state that invariant explicitly. The
+selected report's region denominator dropped by three after this change. This
+source review and the selected cases do not refresh the full report or satisfy
+the overall 100% gate.
+
+A later review found a second unreachable fallback: after the parser accepted
+one of three AES cipher names, decryption repeated the string match with another
+unsupported-name arm. The parser now converts the accepted name into an
+exhaustive `TraditionalPrivateKeyCipher` enum and dispatches on that enum. This
+removed three more regions and lines from the denominator. Post-refactor run
+`199b764c93424a519705beb0fbd176e9` reran the four successful AES-128/192/256
+RSA and AES-256 EC cases plus all three wrong-password cases: 7/7 passed with
+complete attribution and zero infrastructure failures. Its report SHA-256 is
+`b69c9bb419336ec60810b6b78c32cc2748a5b4ccc6e1a4f6690e08b7bc094ef6`; selected
+coverage is 3,677/13,098 regions and 2,704/9,703 lines. It binds `src/lib.rs`
+SHA-256 `f59da9165e78423e0b4699cef2697c6f063e2c18f47591601662976cc285723f`
+and instrumented extension SHA-256
+`696971351481671c4ba18b8bc92b87768e4c28ee6942177448c49753d1617c18`.
+
+The unsupported-cipher case was also rerun against that build, because the
+enum conversion changed its dispatch point. Run
+`f5838fbd6d854136958fdd6d9fa53004` passed 1/1 with complete attribution; report
+SHA-256
+`43b5344d22dfbd225acd451a5b4eb24ab2b120c5cb8e43fe40571ca064d43bae`. This
+selected case covers 327 regions and has the same source and extension hashes.
+
+Fifteen input-only traditional-key failures passed individually against Uvicorn
+0.54.0 and the target before the enum refactor, each with complete attribution
+and no infrastructure failures. The cases cover invalid `Proc-Type`, absent and
+malformed `DEK-Info`, short IV, missing body, missing end marker, invalid
+base64, empty and short ciphertext, unsupported cipher and label, malformed
+begin lines, an empty key file, and invalid UTF-8:
+
+| Case | Run | Selected regions | Report SHA-256 |
+| --- | --- | ---: | --- |
+| Invalid `Proc-Type` | `983264291e4046e8bd7b8f29ca85df89` | 260 | `d4d6524a3e06207b0179640f73a0561679ccb512827feb8163e55eb81b596097` |
+| Missing `DEK-Info` | `d24d7354b8644e52b4745b1df688d95e` | 285 | `3fa2bd55834df040ea750d36eea0d5dd2df56b556d12c31b846ae55e00c40b86` |
+| Malformed `DEK-Info` | `8354028a7a70418c955354544f50b746` | 290 | `884b6aa7b973000700b1d7113d8f9708886c60abaa6b7f808d217e44d791b468` |
+| Short IV | `9a25cf2c911d4048931fb99c36f5bda9` | 330 | `090695eb982332b50f674b457b077c9661bb6697350c75db7433fb72791b28c5` |
+| Missing body | `853a0587f2b94600b9bc323ed45ad2df` | 270 | `46436a92e73a1e635ac257ffbfe6d3af769c1a31e1106326bf9543fcbde59553` |
+| Missing end marker | `430a9c463b7048318544b09a58e66507` | 280 | `2ee48f3c841106a2369ae209eb917438cd3ae8cba297b2022a190ab3e1f08e04` |
+| Invalid base64 | `4538f64e4bd34c0c8d020543f1f3e3a5` | 341 | `7b22f2ee23cf0e56ce6a5a922cb02f2faa86b177534d0d4bc7178f4abe8a0408` |
+| Empty ciphertext | `39e118e1f39741aea1d2e35c193d1210` | 331 | `1bf1ab82127c8cbf977150953fe446b09d23a687aba521a0b96a1fd209a5783b` |
+| Short ciphertext | `07fb947cbdc5461a80e3c66f04060527` | 342 | `0e1778e81285971c75e8507a3938af1d944870ac9d1dc710675e381ff64e82d5` |
+| Unsupported cipher | `b9623d34eace4a1596cf5ff445b05630` | 327 | `9d1c6246e1302d7617532e79e48f139c3242e054cd0e0def041de44cd4ff6a67` |
+| Malformed begin line | `98aa88fdbaa94eb8af6d166db195504d` | 241 | `3f8c11460d55d5cb00ebc01fed65a0450c4fda2f82843d937430ad333cb882e3` |
+| Empty key file | `49129e6bfc8348b0be86e944efe21c8a` | 237 | `8376509d7f3884e1867aa333277aadd3e6359ac9695cdec7137c454ee42d802a` |
+| Invalid UTF-8 | `5abc82df0a004be2b41bd2793913dbe3` | 227 | `2db92f5cc8f7ea11a79ba2ae3a953a61635052c19d20844991d93577fb736de6` |
+| Unsupported key label | `3c12eb5e869c4ee7821c63de06895bb1` | 247 | `ceaeab893693c38e753381948678fd631aba211785a1f2f9829bfb45211694eb` |
+| Malformed begin suffix | `cfd9befa22274b0d99b88f91cfeac5fd` | 244 | `986ce54e3b3031f4d0666b8efccccaf22db91f2444a7013414e3316a200fd123` |
+
+The 15 malformed-key reports bind `src/lib.rs` SHA-256
+`84022f97dd0084bf21626aa8633ddc3017160287d184ecbd8c13d3ea3f993ff0` and
+instrumented extension SHA-256
+`053ca6051a9008cb4da7d94b97340a8346c254374308b178f5e13e3799adcffb`. Their
+selected totals are not combined because each report has a different input
+manifest digest. These cases do not refresh the full matrix or the 100% gate.
+
+### Native WebSocket negotiation coverage diagnostics (2026-10-26)
+
+Five newly added native WebSocket negotiation cases passed once each with
+complete attribution and no failures or infrastructure retries. The cases
+cover valid `client_max_window_bits`, a valid non-window parameter, invalid
+client-window fallback, missing server-window fallback, and ignoring an
+unsupported extension. Their per-case attribution totals are 1,697, 1,679,
+1,457, 1,441, and 1,456 regions.
+
+Correction (2026-10-27): comparing source coordinates rather than region IDs
+shows that the selected report leaves the same WebSocket error spans uncovered.
+The five cases passed and cover other negotiation paths, but they do not reach
+the remaining error branches. The selected and full reports have the same
+`crates/uvicorn-rs/src/websocket.rs` source hash
+`91a15df3483202e11b4837d6175f6fbcc3b3a5c93d5c3e5ae91442ce3e4bed6a`; a
+per-coordinate comparison confirms that all 15 WebSocket regions still
+uncovered in current one-pass report `0400b930d64049b7854a70676488189a` are
+also uncovered in this selected report. Its aggregate per-case attribution
+counts are not evidence that those spans were reached. The selected report is
+not full-suite evidence and cannot be combined with the current full report,
+whose source and extension hashes differ.
+
+The selected report is
+`target/asgi-coverage/selected-native-websocket-negotiation-current.json`
+(SHA-256
+`cc8d483ee31857897cc46b6045f9734c8e1ae55fb06aae8bea1d718223e1d664`). It is
+bound to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+SHA-256
+`4b81409879899acfb442072a6f11f06c242dd339b2db0fae6f3f5a2a4ada93ae`, and
+instrumented extension SHA-256
+`7d47df4e31cce994409217bbbca2b3e0d9292a4170d573045c0756188e15be4d`. This
+selected subset does not refresh the full 100% gate or provide the independent
+Coverage-MCP receipt.
+
+An earlier full pull-request coverage run
 [`40237012947`](https://github.com/appunni-m/uvicorn-rs/actions/runs/40237012947)
 used PR head `35e548f08d1a4248488fc1351ed8850e7c80f23c`. It passed its selected
 parity cases but failed the 100% gate at **12,502/12,711 regions** and
@@ -2824,3 +3271,284 @@ evidence of successful hosted CI on a release commit. The release preparation
 archive (`benchmarks/results/release-preparation-2026-10-05/README.md`) retains
 tracked release receipts and source snapshots. Generated coverage reports,
 per-case logs and profiles remain local-only.
+
+## Lifespan mode coverage progress (2026-10-26)
+
+Added two input-only direct `uvicorn_rs.Server` parity cases to cover the
+documented boolean lifespan option and invalid mode rejection:
+
+- `python-api.direct-server-lifespan-boolean-false` maps to Uvicorn's
+  `lifespan="off"`. Its selected run also exercises a pre-bound listener,
+  request-limit jitter, and `cancel_startup()` after readiness.
+- `python-api.direct-server-rejects-invalid-lifespan-mode` compares rejection
+  of an unsupported string through each public server API.
+
+Both cases passed once with complete per-case attribution and no
+infrastructure failures in `selected-lifespan-mode-final.json` (run
+`537ee5e3a2104056b86e2f654ddc2540`, report SHA-256
+`ca1778d5d088dfa49f866057c35262f2760afd577543789ad4f28b651b749620`). The
+boolean case used the pre-bound listener and jitter inputs. This is a
+selected-case measurement, not a complete-suite receipt. It uses instrumented
+extension SHA-256
+`696971351481671c4ba18b8bc92b87768e4c28ee6942177448c49753d1617c18` and
+source/input identity SHA-256
+`ed179b84d8d4f60d7fa09ff9eaebc970f6f699488a6ae1af50b416bedf3c3ee3`.
+
+The earlier one-pass full diagnostic `coverage-current-source-once.json` (run
+`4d45912cb1084ed8b4e1d08a22a21b53`, report SHA-256
+`6b84d61748bce0c41d2510b32cf2e9f46e5423868bb33187d6354ad15d250063`) passed
+1,112/1,112 cases and attributed 1,058/1,058 source-bound cases, with no case
+or infrastructure failures. It measured 12,951/13,098 regions and
+9,615/9,703 lines. It predates these two inputs and is diagnostic only; it had
+zero complete verification repeats and no accepted independent Coverage-MCP
+receipt. The complete exact-current-source, three-repeat coverage gate remains
+open.
+
+### Startup failure waiter coverage (2026-10-26)
+
+Added the input-only case `python-api.concurrent-startup-failure-waiter`. It
+holds lifespan startup open while the public `wait_startup_failed()` call is
+waiting, then sends `lifespan.startup.failed`; both implementations report a
+failed, not-started server. The target also drops a standalone native
+`ServerControl` while its waiter is pending and verifies that the closed
+watch channel returns `false`.
+
+The selected case passed once with complete attribution and no infrastructure
+failures: run `828b69bdd3bd4512956f19f9a59e8ded`, report
+`concurrent-startup-failure-waiter-final.json`, SHA-256
+`bf20aa4d7e00d5f07e7d5e7424dfd57a1c909db8714647347c31d7b10f395bc8`. It uses
+`src/lib.rs` SHA-256
+`f59da9165e78423e0b4699cef2697c6f063e2c18f47591601662976cc285723f` and
+instrumented extension SHA-256
+`696971351481671c4ba18b8bc92b87768e4c28ee6942177448c49753d1617c18`.
+Coverage-MCP reports two remaining spans for this method in the selected
+report: the generated `#[pymethods]` wrapper span and the `Stopped` match arm.
+The report is selected-case evidence, so other cases may cover the latter.
+Incremental comparison against the earlier one-pass full diagnostic was
+rejected because that baseline has failed verification status; no union or
+marginal gain is claimed. Full exact-source coverage, three complete repeats,
+and the independent review remain open.
+
+### Startup cancellation before listener bind (2026-10-26)
+
+Added the input-only case `python-api.cancel-startup-before-listener-and-shutdown-lifespan`. It holds ASGI lifespan startup, requests shutdown before the listener binds, then releases startup and checks that `serve()` finishes without cancellation and emits both startup and shutdown lifecycle events. The parity comparison checks the shared Uvicorn contract; the target-specific requirement verifies that `uvicorn-rs` remains unstarted through shutdown.
+
+The selected case passed once with complete attribution and no infrastructure failures: run `f72433fb3f314f5882fdf4d43f36f264`; report `startup-cancel-before-listener-after-fix.json`, SHA-256 `cfa913db89dfd8f44a836565d93429baf84dceda6361d558ee1bf836b9d9c633`. It binds to dirty source revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source/input identity SHA-256 `86d0b9a45d7df461162f27d9b1058cf212eb18b97269ef1836e40b3173fd6d60`, and instrumented extension SHA-256 `696971351481671c4ba18b8bc92b87768e4c28ee6942177448c49753d1617c18`. This is selected-case evidence only; full exact-source coverage, three complete repeats, and accepted independent Coverage-MCP review remain open.
+
+### Listener setup failure runs lifespan shutdown (2026-10-26)
+
+Added the input-only case `python-api.server-startup-bind-failure-shuts-down-lifespan`. It runs a lifespan-enabled server against the deterministic invalid-host startup failure and compares startup/shutdown events, the unstarted state, and the completed failing serve task against Uvicorn 0.54.0.
+
+The selected case passed once with complete attribution and no infrastructure failures: run `0f3e0168ef6d4c03a799b856558d3968`; report `startup-bind-failure-lifespan-final.json`, SHA-256 `c235f64b236b9a540e3c9fdef88b726ee130e1734eb545755e4caf2ec0fc07c8`. Both implementations observed `lifespan.startup` followed by `lifespan.shutdown`, `server_started=false`, and a finished serve task. It binds to dirty source revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source/input identity SHA-256 `853232ba6cd92fadbf95b6025240c48f78582ca9cf8b2401e42710238f25f77f`, and instrumented extension SHA-256 `696971351481671c4ba18b8bc92b87768e4c28ee6942177448c49753d1617c18`. This remains selected-case evidence; the exact-source full coverage gate and independent review remain open.
+
+### Native WebSocket selected group (2026-10-27)
+
+After the WebSocket handshake fault case changed `websocket.rs` and the native
+manifest, ran the affected native WebSocket group once: 43/43 selected cases
+passed, including all three selected fault contracts, with zero case or
+infrastructure failures. The run ID is
+`d5309e715482459d9c81cce3d95393bf`; report
+`selected-native-websocket-group.json` has SHA-256
+`4a0d5de38be7aeb0e8876f59cd3950b5d9ff670f9e438291f8efd99ede41bb7f`.
+
+The report binds to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`
+and source/input digest
+`cca93cb5da697e348fba35763d12443e0db8421d9e5b252f6fbfda0599199f40`. The
+instrumented extension SHA-256 is
+`801fcbf2a23917639db023a9fa9931aebe27f37a8a92d300461d21ad342b34aa` and the
+native runner SHA-256 is
+`a5066f23ecd68a2d8628c3a24464edd0fb59e6c690ce5169ff5f1a3bbc877731`. This
+selected subset attributes 2,689/13,127 regions and 2,221/9,722 lines; it is
+not a full-coverage or three-repeat receipt. It uses the same source/input
+digest as the separately selected extension-negotiation fault case, but a
+different extension build, so the two selected reports are not merged. The
+complete exact-source matrix and independent Coverage-MCP review remain open.
+
+### Native WebSocket handler error observation (2026-10-27)
+
+Added the input-only case
+`http1.native-websocket-handler-error-is-observed`. The client completes a
+WebSocket handshake, sends a text message, and receives no application frame
+after the handler returns an error. The configured server error observer must
+report the error in the connection phase with its source chain intact. The
+selected case passed 1/1 with complete case attribution, zero failures, and
+zero retries: run `242a64eb1bcc4ab1bd1056ad79db87b5`, report
+`selected-websocket-handler-error.json`, SHA-256
+`57d0b851255411b79c94609187f5176fa67cf225c6332b8448ace46316b76d1a`.
+
+It binds to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`,
+source/input digest
+`a954d9fd36940de01ff9fe435eb99c8a01dd9669f9b0fc5a804659223966a52a`, and
+instrumented extension SHA-256
+`48242e1f6ef008da2f9274e9078e3eff2badd88c961a884234e1def229e4cf63`. The
+single-case report attributes 1,383/13,127 regions and 1,207/9,722 lines; it
+does not certify the full matrix. Complete exact-source coverage, all three
+matrix repeats, and independent Coverage-MCP review remain open.
+
+### Direct-server invalid lifespan type (2026-10-27)
+
+Added input-only case `python-api.direct-server-rejects-invalid-lifespan-type`
+to exercise a value that is neither a string nor a boolean. The selected
+parity and unified coverage run both passed 1/1; case attribution is complete
+with zero failures, infrastructure retries, or matrix repeats. This case
+hits the final `LifespanMode::from_python` rejection path. Unified run
+`918bdda1ce4046439d29a749e3cc9425`; report
+`selected-lifespan-invalid-type-coverage.json`, SHA-256
+`f0f94f5924637bb57b85388dafbbe41c6e604989702d1ada392c8b25512f0a4b`.
+
+The report binds to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`,
+source/input digest
+`1a4707ad26214c92eb700e2c9e1d09017c5b61cbcb1cd03df2cb090f9419c508`, and
+instrumented extension SHA-256
+`7ca14686782476576e48ac44ae5197814d9f1fe910b4831782f0569a6f3f8bb7`. The
+case attributes 73 regions. This is selected-case evidence only; full
+exact-source coverage, three matrix repeats, and accepted independent
+Coverage-MCP review remain open.
+
+### Direct-server boolean-enabled lifespan (2026-10-27)
+
+Added input-only case `python-api.direct-server-lifespan-boolean-true` to cover
+the direct Python `Server(lifespan=True)` conversion. The target's boolean
+`True` maps to Uvicorn's `"auto"` mode; both implementations completed startup
+and shutdown with a clean exit. The selected parity and unified coverage run
+passed 1/1 with complete attribution, no infrastructure failures, no retries,
+and no matrix repeats. The case covers the `Auto` branch in
+`LifespanMode::from_python` (`src/lib.rs:3315`).
+
+The report is
+`target/asgi-coverage/selected-lifespan-boolean-true-20261027-attempt2.json`
+(run `4013d123f2684dcfa9a730c1942fbd5f`, report SHA-256
+`33295be123b567b88ace649213f0f60c03c0ed2b078fce0efb4a91f7eef73bc3`), bound
+to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source digest
+`2ada60f740dfe5fb8955b67171ee437c64810af7faf8814135e9fc39da58b009`,
+`src/lib.rs` SHA-256
+`53abec96793f977e9587ebc1011c864b556141267a9e90f4e56ec19b5540b281`, and
+instrumented extension SHA-256
+`597d1887f68bab9a0bbd3c58ab03ec0a3d44b51360bc62ba7558c18f9470a87f`. This is
+selected-case evidence only; it does not refresh full-source coverage, satisfy
+the three-repeat gate, or provide an independent Coverage-MCP receipt.
+
+### Module-CLI concurrency-limit parity (2026-10-27)
+
+Added input-only case
+`python-api.module-cli-applies-concurrency-limit` to verify that
+`--limit-concurrency 1` reaches the server through the module CLI. Uvicorn
+0.54.0 and the target both return HTTP 503 for the first request, emit the
+concurrency-limit warning, and exit cleanly after SIGINT. The selected parity
+and unified coverage run passed 1/1 with complete attribution, no
+infrastructure failures, retries, or verification repeats. The selected case
+attributes 2,054 regions.
+
+The report is
+`target/asgi-coverage/selected-cli-concurrency-limit-20261027.json` (run
+`b616dda2b87d45bd985423b3b53b6904`, report SHA-256
+`1b6471d77384f59a4417c1ac33c051f2814834ae8a7a6329d0584fa8fe72d2b0`), bound
+to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source digest
+`02f8393bec6cbe624b5afc749032609692befcfef4253c4f5cdbc7552c49281d`,
+`src/lib.rs` SHA-256
+`53abec96793f977e9587ebc1011c864b556141267a9e90f4e56ec19b5540b281`, and
+instrumented extension SHA-256
+`d1cdd7955095a0d61c85412d1e3c41aaebd93904a0558136c5f26bc916f94657`. This is
+selected-case evidence only; the full coverage gate, three repeats, and
+independent Coverage-MCP review remain open.
+
+### Non-UTF-8 client CA startup rejection (2026-10-27)
+
+Added input-only case
+`python-api.config-server-rejects-non-utf8-client-ca-file`. It gives both
+implementations a CA file containing non-UTF-8 bytes and requires TLS server
+configuration to fail before serving. The probe keeps its own client trust
+anchor valid so the observation measures server startup rather than client
+context setup.
+
+The selected unified run passed 1/1 with complete attribution, zero case or
+infrastructure failures, and zero retries: run
+`7d3203c103644d7c9341fa8ebfb26e9d`. Report SHA-256:
+`b98e5dc958db8020f2c5a3a2721cdc7034478cf98931605ace5f293704f47df8`; source
+and input identity SHA-256:
+`8d22380c11db8c26087357651d69195523ed728a8be9da7807dc070e7ec68a52`; native
+extension SHA-256:
+`7ca14686782476576e48ac44ae5197814d9f1fe910b4831782f0569a6f3f8bb7`. The
+attribution receipt confirms the case covered the non-UTF-8 conversion branch
+in `load_client_cert_verifier` (`src/lib.rs:5703`). This is selected-case
+evidence only; the full-source coverage gate and independent Coverage-MCP
+review remain open.
+
+### Infallible compressed WebSocket close conversion (2026-10-27)
+
+The current-source draft report identified an uncovered error-propagation
+region in `WebSocketSession::close` for Yawc sessions. That call can only pass
+`WebSocketMessage::Close(frame)` to `yawc_message_to_frame`; the converter can
+fail only for `WebSocketMessage::Frame`, which is unreachable at this call
+site. The close conversion now uses the infallible `yawc_close_frame` helper,
+shared with the general message converter. This removes the impossible error
+path without changing WebSocket framing or raw-frame send errors.
+
+The existing target-contract case
+`http1.native-websocket-permessage-deflate-close-without-code` passed 1/1 with
+complete attribution, no failures or infrastructure retries, and no matrix
+repeats. Unified run `5d3e8813b01546f081bc23934cae8c16`; report
+`coverage-yawc-close-infallible-20261027.json`, SHA-256
+`6f39f3d47ee2cfb6cbf120ecdea3057dcbd304701a0214567d3eba9e7179b78a`. It binds
+to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source/input
+identity SHA-256 `6a0f7332963933a4a9057d751ab71dcbbe9ff0d2e63cb9ef2050a7c14b649feb`,
+`crates/uvicorn-rs/src/websocket.rs` SHA-256
+`aa9a4dfe60eff4da017eec29c5b78da3a19dfe7fffa72b94ec137b9b775e6e35`, and
+instrumented extension SHA-256
+`a6119a5e5e782f29f548c9623e094268aa7296288163121d235ef6fbc20f31cb`. The
+selected report attributes 1,677 regions to this case and contains no uncovered
+spans in the changed close path. Full exact-source coverage, three complete
+matrix repeats, and accepted independent Coverage-MCP review remain open.
+
+### Accepted Yawc session setup error contracts (2026-10-27)
+
+Added two target-only fault contracts after a valid extension-bearing WebSocket
+handshake. One injects a Yawc session-construction error and verifies that the
+adapter converts and reports it through the HTTP/1 connection observer. The
+other injects a non-UTF-8 negotiated-extension value after response generation
+to exercise the `HeaderValue::to_str` error conversion. Both cases verify the
+101 handshake, the observed server error, and listener recovery.
+
+Both cases passed in one selected run with complete attribution, no case or
+infrastructure failures, and zero matrix repeats. The run is
+`3edff43f3989446184c83ab8e5662ae9`; report
+`target/asgi-coverage/coverage-yawc-session-errors-final-20261027.json`,
+SHA-256 `866b1d8658a1022ef72fbc7c90c4db4bbb7a6a48b886bdb4b971cdc79ff22b91`.
+It binds dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source
+digest `82e049f06c5309c02f47dc5e2581242b80081bd88067fdcff9dcdc966c27f3bd`,
+native manifest SHA-256
+`12a38ff0ca7b49109b30d7f1730eaee9ada586d79ec5c81b961d3a32e42569ab`,
+`crates/uvicorn-rs/src/websocket.rs` SHA-256
+`a25ebe8f45639e14530a90c02170c94474f400261213ac82d497fec120fff47a`, and
+instrumented extension SHA-256
+`d363ed1410bca7af9805150b5e6657b77308165a2b5ce59b9eda5631e757c7d8`.
+Attribution covers 1,621 regions across the two selected cases. This report is
+still an incomplete selected subset; its 13,241-region denominator and missing
+regions do not represent a full current-source run. The full matrix, three
+complete repeats, and accepted zero-gap Coverage-MCP review remain open.
+
+### Selected Unix-socket permission error path (2026-10-27)
+
+Added the target-only case
+`python-api.fault.uds-permissions-error-propagates-and-cleans-lifespan` to
+inject a deterministic `set_permissions` error in coverage builds. It verifies
+that startup fails before the server starts, the serve task finishes with the
+error, and lifespan startup/shutdown cleanup completes. The first selected
+attempt exposed the harness applying the ordinary successful-startup
+expectations to a fault case; the fault matcher was corrected, then the case
+passed 1/1 with no case or infrastructure failures.
+
+The selected report is
+`target/asgi-coverage/coverage-uds-permissions-error-20261027.json`, run
+`69e47921a249435c80924c0fcc4daf25`, case run
+`a8be6ebb9b994605a64eede654e3c49f`, report SHA-256
+`9b4537f6edfa72a3a11f5968ab4360c82926ecf9e59326b7fdab3391eb13d970`, source
+SHA-256 `76e57f7d810c15e58d3d9cdbf2aca67db28f5d781992a4cc675d3b63c39ec928`,
+and instrumented extension SHA-256
+`8ebf16713c705f88f179b7dac26bedd71db606c30daf3c9392546f06548634d7`. The
+report's recorded source files match the current checkout. Coverage-MCP
+matched this selected report's source receipt and reported tests passed; a
+focused query for `bind_unix_listener` at `src/lib.rs:6393` returned no gap
+groups. This selected subset's 957/13,265 regions and 724/9,843 lines are not
+aggregate coverage evidence. The full-source gate, three complete passes, and
+accepted independent zero-gap review remain open.

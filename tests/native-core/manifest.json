@@ -648,6 +648,18 @@
       "server_wait_ms": 2000
     },
     {
+      "id": "http1.upgrade-registration-at-zero-keep-alive-timeout-drains-session",
+      "protocol": "native-core",
+      "operation": "native-http1-upgrade-session",
+      "scenario": "keep-alive-expiry",
+      "path": "/upgrade-session-not-accepted",
+      "expected_status": 200,
+      "expected_response_body": "upgrade was not accepted\n",
+      "expected_session_error": "no upgrade available",
+      "http1_keep_alive_timeout_ms": 0,
+      "server_wait_ms": 2000
+    },
+    {
       "id": "http1.upgrade-session-handler-error-is-observed",
       "protocol": "native-core",
       "operation": "native-http1-upgrade-session",
@@ -711,6 +723,16 @@
       "verification": "fault-contract",
       "fault": {
         "point": "http1.keep-alive.deadline-channel-closed"
+      }
+    },
+    {
+      "id": "fault.http1.keep-alive.deadline-rescheduled-before-expiry",
+      "protocol": "native-core",
+      "operation": "native-http1-keepalive-deadline-rescheduled",
+      "scenario": "deadline-rescheduled-before-expiry",
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http1.keep-alive.deadline-rescheduled-before-expiry"
       }
     },
     {
@@ -833,6 +855,150 @@
         110,
         97
       ],
+      "expected_close_code": 1000,
+      "expected_close_reason": "case complete",
+      "server_wait_ms": 1000,
+      "covers": [
+        "websocket.message-exchange"
+      ]
+    },
+    {
+      "id": "http1.native-websocket-deflate-valid-client-window-bits",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "permessage-deflate-control-exchange",
+      "path": "/native-websocket-permessage-deflate-control-exchange",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_extensions": "permessage-deflate; client_max_window_bits=15",
+      "expected_extensions": "permessage-deflate",
+      "offered_subprotocol": "native.echo.v1",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "text_payload": "native websocket control",
+      "client_ping_payload": "native client ping",
+      "binary_payload": [
+        0,
+        255,
+        110,
+        97
+      ],
+      "expected_close_code": 1000,
+      "expected_close_reason": "case complete",
+      "server_wait_ms": 1000,
+      "covers": [
+        "websocket.message-exchange"
+      ]
+    },
+    {
+      "id": "http1.native-websocket-deflate-valid-non-window-parameter",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "permessage-deflate-control-exchange",
+      "path": "/native-websocket-permessage-deflate-control-exchange",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_extensions": "permessage-deflate; server_no_context_takeover",
+      "expected_extensions": "permessage-deflate",
+      "offered_subprotocol": "native.echo.v1",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "text_payload": "native websocket control",
+      "client_ping_payload": "native client ping",
+      "binary_payload": [
+        0,
+        255,
+        110,
+        97
+      ],
+      "expected_close_code": 1000,
+      "expected_close_reason": "case complete",
+      "server_wait_ms": 1000,
+      "covers": [
+        "websocket.message-exchange"
+      ]
+    },
+    {
+      "id": "http1.native-websocket-deflate-invalid-client-window-falls-back",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "message-exchange",
+      "path": "/native-websocket-echo",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_extensions": "permessage-deflate; client_max_window_bits=99",
+      "offered_subprotocol": "native.echo.v1",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "text_payload": "native text",
+      "binary_payload": [
+        0,
+        255,
+        110,
+        97,
+        116,
+        105,
+        118,
+        101
+      ],
+      "ping_payload": "ping probe",
+      "expected_close_code": 1000,
+      "expected_close_reason": "case complete",
+      "server_wait_ms": 1000,
+      "covers": [
+        "websocket.message-exchange"
+      ]
+    },
+    {
+      "id": "http1.native-websocket-deflate-missing-server-window-falls-back",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "message-exchange",
+      "path": "/native-websocket-echo",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_extensions": "permessage-deflate; server_max_window_bits",
+      "offered_subprotocol": "native.echo.v1",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "text_payload": "native text",
+      "binary_payload": [
+        0,
+        255,
+        110,
+        97,
+        116,
+        105,
+        118,
+        101
+      ],
+      "ping_payload": "ping probe",
+      "expected_close_code": 1000,
+      "expected_close_reason": "case complete",
+      "server_wait_ms": 1000,
+      "covers": [
+        "websocket.message-exchange"
+      ]
+    },
+    {
+      "id": "http1.native-websocket-unsupported-extension-is-ignored",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "message-exchange",
+      "path": "/native-websocket-echo",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_extensions": "x-example; client_max_window_bits=99",
+      "offered_subprotocol": "native.echo.v1",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "text_payload": "native text",
+      "binary_payload": [
+        0,
+        255,
+        110,
+        97,
+        116,
+        105,
+        118,
+        101
+      ],
+      "ping_payload": "ping probe",
       "expected_close_code": 1000,
       "expected_close_reason": "case complete",
       "server_wait_ms": 1000,
@@ -1209,6 +1375,93 @@
       "fault": {
         "point": "websocket.accept-key.header-value-error"
       },
+      "covers": [
+        "websocket.protocol-error"
+      ]
+    },
+    {
+      "id": "fault.http1.native-websocket-extension-negotiation-error-recovers",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "extension-negotiation-error",
+      "path": "/native-websocket-permessage-deflate-control-exchange",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "request_websocket_extensions": "permessage-deflate",
+      "expected_status": 400,
+      "expected_error": "invalid WebSocket handshake: the Sec-WebSocket-Extensions offer could not be negotiated",
+      "server_wait_ms": 1000,
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.handshake.extension-negotiation"
+      },
+      "covers": [
+        "websocket.protocol-error"
+      ]
+    },
+    {
+      "id": "fault.http1.native-websocket-session-construction-error-is-observed",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "accepted-session-construction-error",
+      "path": "/native-websocket-session-construction-error",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "offered_subprotocol": "native.echo.v1",
+      "request_websocket_extensions": "permessage-deflate",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "expected_subprotocol": "native.echo.v1",
+      "expected_extensions": "permessage-deflate",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_message": "upgraded session failed: WebSocket session failed: IO error: Invalid connection header",
+      "expected_server_error_has_source": true,
+      "server_wait_ms": 1000,
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.session.construction-error"
+      },
+      "covers": [
+        "websocket.protocol-error"
+      ]
+    },
+    {
+      "id": "fault.http1.native-websocket-session-extension-header-error-is-observed",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "accepted-session-extension-header-error",
+      "path": "/native-websocket-session-construction-error",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "offered_subprotocol": "native.echo.v1",
+      "request_websocket_extensions": "permessage-deflate",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "expected_subprotocol": "native.echo.v1",
+      "expected_extensions": "permessage-deflate",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_message": "upgraded session failed: WebSocket session failed: IO error: failed to convert header to a str",
+      "expected_server_error_has_source": true,
+      "server_wait_ms": 1000,
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.session.extension-to-str-error"
+      },
+      "covers": [
+        "websocket.protocol-error"
+      ]
+    },
+    {
+      "id": "http1.native-websocket-handler-error-is-observed",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "handler-error",
+      "path": "/native-websocket-handler-error",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "text_payload": "trigger handler error",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_message": "upgraded session failed: injected native WebSocket handler failure",
+      "expected_server_error_has_source": true,
+      "server_wait_ms": 1000,
       "covers": [
         "websocket.protocol-error"
       ]

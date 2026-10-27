@@ -51,6 +51,9 @@ pub use tokio_tungstenite::tungstenite::protocol::{
     frame::coding::CloseCode as WebSocketCloseCode,
 };
 
+/// UTF-8 text payload type used by [`WebSocketMessage::Text`].
+pub use tokio_tungstenite::tungstenite::protocol::frame::Utf8Bytes as WebSocketText;
+
 /// A validated HTTP/1.1 WebSocket upgrade request.
 ///
 /// Create this value from a mutable request, optionally select one of the
@@ -223,15 +226,21 @@ impl WebSocketUpgrade {
                 *negotiation_request.uri_mut() = request.uri().clone();
                 *negotiation_request.version_mut() = request.version();
                 *negotiation_request.headers_mut() = request.headers().clone();
-                let (response, unused_upgrade) = YawcHandshake::upgrade_with_options(
-                    &mut negotiation_request,
-                    yawc_options(
-                        WebSocketConfig::default()
-                            .max_message_size
-                            .unwrap_or(usize::MAX),
-                    ),
-                )
-                .map_err(|_| {
+                let options = yawc_options(
+                    WebSocketConfig::default()
+                        .max_message_size
+                        .unwrap_or(usize::MAX),
+                );
+                #[cfg(coverage)]
+                let negotiation = if take_yawc_handshake_error_fault() {
+                    Err(yawc::WebSocketError::InvalidConnectionHeader)
+                } else {
+                    YawcHandshake::upgrade_with_options(&mut negotiation_request, options)
+                };
+                #[cfg(not(coverage))]
+                let negotiation =
+                    YawcHandshake::upgrade_with_options(&mut negotiation_request, options);
+                let (response, unused_upgrade) = negotiation.map_err(|_| {
                     WebSocketUpgradeError::InvalidHandshake(
                         "the Sec-WebSocket-Extensions offer could not be negotiated",
                     )
@@ -499,21 +508,42 @@ impl WebSocketSession {
     ) -> Result<Self, WebSocketError> {
         let stream = match negotiated_extensions {
             Some(extensions) => {
+                #[cfg(coverage)]
+                let extensions = if take_yawc_session_extension_to_str_error_fault() {
+                    HeaderValue::from_bytes(b"\xff").map_err(|error| {
+                        WebSocketError(TungsteniteError::Io(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            error,
+                        )))
+                    })?
+                } else {
+                    extensions
+                };
                 let extensions = extensions.to_str().map_err(|error| {
                     WebSocketError(TungsteniteError::Io(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
                         error,
                     )))
                 })?;
-                WebSocketStreamKind::Yawc(Box::new(
+                #[cfg(coverage)]
+                let session = if take_yawc_session_construction_error_fault() {
+                    Err(yawc::WebSocketError::InvalidConnectionHeader)
+                } else {
                     YawcWebSocket::from_stream_with_extensions(
                         YawcHttpStream::from(stream),
                         YawcRole::Server,
                         Some(extensions),
                         yawc_options(max_message_size),
                     )
-                    .map_err(yawc_error)?,
-                ))
+                };
+                #[cfg(not(coverage))]
+                let session = YawcWebSocket::from_stream_with_extensions(
+                    YawcHttpStream::from(stream),
+                    YawcRole::Server,
+                    Some(extensions),
+                    yawc_options(max_message_size),
+                );
+                WebSocketStreamKind::Yawc(Box::new(session.map_err(yawc_error)?))
             }
             None => {
                 let mut config = WebSocketConfig::default();
@@ -623,17 +653,32 @@ impl WebSocketSession {
             WebSocketStreamKind::Tungstenite(stream) => {
                 stream.flush().await.map_err(WebSocketError)
             }
-            WebSocketStreamKind::Yawc(stream) => match stream.next_frame().await {
-                // Yawc queues the close reply when it reads the peer's close
-                // frame, then flushes that reply while observing the closed
-                // read state on the next read.
-                Err(yawc::WebSocketError::ConnectionClosed) => Ok(()),
-                Err(error) => Err(yawc_error(error)),
-                Ok(_) => Err(WebSocketError(TungsteniteError::Io(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "received a WebSocket frame after the close frame",
-                )))),
-            },
+            WebSocketStreamKind::Yawc(stream) => {
+                #[cfg(coverage)]
+                let next_frame = if take_yawc_close_reply_flush_error_fault() {
+                    Err(yawc::WebSocketError::IoError(std::io::Error::new(
+                        std::io::ErrorKind::BrokenPipe,
+                        "coverage-injected Yawc close-reply flush failure",
+                    )))
+                } else if take_yawc_close_reply_flush_unexpected_frame_fault() {
+                    Ok(YawcFrame::text(Bytes::new()))
+                } else {
+                    stream.next_frame().await
+                };
+                #[cfg(not(coverage))]
+                let next_frame = stream.next_frame().await;
+                match next_frame {
+                    // Yawc queues the close reply when it reads the peer's close
+                    // frame, then flushes that reply while observing the closed
+                    // read state on the next read.
+                    Err(yawc::WebSocketError::ConnectionClosed) => Ok(()),
+                    Err(error) => Err(yawc_error(error)),
+                    Ok(_) => Err(WebSocketError(TungsteniteError::Io(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "received a WebSocket frame after the close frame",
+                    )))),
+                }
+            }
         }
     }
 
@@ -675,7 +720,7 @@ impl WebSocketSession {
                 stream.close(frame).await.map_err(WebSocketError)
             }
             WebSocketStreamKind::Yawc(stream) => stream
-                .send(yawc_message_to_frame(WebSocketMessage::Close(frame))?)
+                .send(yawc_close_frame(frame))
                 .await
                 .map_err(yawc_error),
         }
@@ -729,20 +774,26 @@ fn yawc_message_to_frame(message: WebSocketMessage) -> Result<YawcFrame, WebSock
         WebSocketMessage::Binary(payload) => Ok(YawcFrame::binary(payload)),
         WebSocketMessage::Ping(payload) => Ok(YawcFrame::ping(payload)),
         WebSocketMessage::Pong(payload) => Ok(YawcFrame::pong(payload)),
-        WebSocketMessage::Close(Some(frame)) => Ok(YawcFrame::close(
-            YawcCloseCode::from(u16::from(frame.code)),
-            frame.reason.as_bytes(),
-        )),
-        WebSocketMessage::Close(None) => {
-            let mut frame = YawcFrame::close(YawcCloseCode::Status, b"");
-            *frame.payload_mut() = Bytes::new();
-            Ok(frame)
-        }
+        WebSocketMessage::Close(frame) => Ok(yawc_close_frame(frame)),
         WebSocketMessage::Frame(_) => {
             Err(WebSocketError(TungsteniteError::Io(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "raw WebSocket frames cannot be sent on a compressed session",
             ))))
+        }
+    }
+}
+
+fn yawc_close_frame(frame: Option<WebSocketCloseFrame>) -> YawcFrame {
+    match frame {
+        Some(frame) => YawcFrame::close(
+            YawcCloseCode::from(u16::from(frame.code)),
+            frame.reason.as_bytes(),
+        ),
+        None => {
+            let mut frame = YawcFrame::close(YawcCloseCode::Status, b"");
+            *frame.payload_mut() = Bytes::new();
+            frame
         }
     }
 }
@@ -756,11 +807,21 @@ static CLOSE_REPLY_FLUSH_CANCELLATION_REACHED: OnceLock<Notify> = OnceLock::new(
 #[cfg(coverage)]
 static DERIVED_ACCEPT_KEY_HEADER_VALUE_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
+static YAWC_HANDSHAKE_ERROR_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static YAWC_SESSION_CONSTRUCTION_ERROR_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static YAWC_SESSION_EXTENSION_TO_STR_ERROR_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
 static YAWC_UNEXPECTED_CONTINUATION_FRAME_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static YAWC_INVALID_TEXT_FRAME_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static YAWC_INVALID_CLOSE_REASON_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static YAWC_CLOSE_REPLY_FLUSH_ERROR_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
+static YAWC_CLOSE_REPLY_FLUSH_UNEXPECTED_FRAME_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
 
 /// Arms the coverage-only Yawc continuation-frame adapter fault.
 #[cfg(coverage)]
@@ -827,6 +888,121 @@ pub fn finish_yawc_invalid_close_reason_fault() -> bool {
 #[cfg(coverage)]
 fn take_yawc_invalid_close_reason_fault() -> bool {
     YAWC_INVALID_CLOSE_REASON_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms the coverage-only Yawc close-reply flush error fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_yawc_close_reply_flush_error_fault() -> bool {
+    YAWC_CLOSE_REPLY_FLUSH_ERROR_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only Yawc close-reply flush error fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_yawc_close_reply_flush_error_fault() -> bool {
+    YAWC_CLOSE_REPLY_FLUSH_ERROR_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_yawc_close_reply_flush_error_fault() -> bool {
+    YAWC_CLOSE_REPLY_FLUSH_ERROR_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms the coverage-only Yawc post-close unexpected-frame fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_yawc_close_reply_flush_unexpected_frame_fault() -> bool {
+    YAWC_CLOSE_REPLY_FLUSH_UNEXPECTED_FRAME_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only Yawc post-close unexpected-frame fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_yawc_close_reply_flush_unexpected_frame_fault() -> bool {
+    YAWC_CLOSE_REPLY_FLUSH_UNEXPECTED_FRAME_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_yawc_close_reply_flush_unexpected_frame_fault() -> bool {
+    YAWC_CLOSE_REPLY_FLUSH_UNEXPECTED_FRAME_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms the coverage-only Yawc WebSocket handshake error contract.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_yawc_handshake_error_fault() -> bool {
+    YAWC_HANDSHAKE_ERROR_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only Yawc WebSocket handshake error contract.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_yawc_handshake_error_fault() -> bool {
+    YAWC_HANDSHAKE_ERROR_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_yawc_handshake_error_fault() -> bool {
+    YAWC_HANDSHAKE_ERROR_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms the coverage-only accepted Yawc session-construction error contract.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_yawc_session_construction_error_fault() -> bool {
+    YAWC_SESSION_CONSTRUCTION_ERROR_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only accepted Yawc session-construction error contract.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_yawc_session_construction_error_fault() -> bool {
+    YAWC_SESSION_CONSTRUCTION_ERROR_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_yawc_session_construction_error_fault() -> bool {
+    YAWC_SESSION_CONSTRUCTION_ERROR_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms the coverage-only non-UTF-8 negotiated-extension conversion fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_yawc_session_extension_to_str_error_fault() -> bool {
+    YAWC_SESSION_EXTENSION_TO_STR_ERROR_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only negotiated-extension conversion fault.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_yawc_session_extension_to_str_error_fault() -> bool {
+    YAWC_SESSION_EXTENSION_TO_STR_ERROR_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_yawc_session_extension_to_str_error_fault() -> bool {
+    YAWC_SESSION_EXTENSION_TO_STR_ERROR_FAULT_STATE
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
 }

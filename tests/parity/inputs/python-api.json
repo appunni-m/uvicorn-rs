@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@37",
+  "schema": "uvicorn-rs-parity/input@40",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -581,6 +581,69 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-second-sigint-forces-inflight-request-shutdown",
+      "profile": "python-api",
+      "operation": "python.api.run-http-signal-sequence",
+      "covers": ["python.api.run-http-signal-sequence"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-second-signal-escalation",
+          "shutdown_signal": "SIGINT",
+          "shutdown_signal_sequence": ["SIGINT", "SIGINT"],
+          "timeout_seconds": 8,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "required_observations": {
+            "response_received": true,
+            "response_status": 200,
+            "shutdown_signals_sent": ["SIGINT", "SIGINT"],
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-graceful-timeout-cancels-inflight-request",
+      "profile": "python-api",
+      "operation": "python.api.run-http-graceful-timeout",
+      "covers": ["python.api.run-http-graceful-timeout"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-graceful-timeout-hold",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 8,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "environment": {
+            "UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN": "1"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-graceful-timeout-flag-cancels-inflight-request",
+      "profile": "python-api",
+      "operation": "python.api.run-http-graceful-timeout",
+      "covers": ["python.api.run-http-graceful-timeout"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-graceful-timeout-hold",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 8,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "timeout_graceful_shutdown": 1
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-web-concurrency-two-workers-serve-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -831,6 +894,45 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-disables-server-and-date-headers",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-server-date-headers-disabled",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "server_header": false,
+          "date_header": false,
+          "observe_headers": ["server", "date"]
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-appends-custom-response-header",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-custom-response-header",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "headers": [["X-Parity-Server", "uvicorn-cli"]],
+          "observe_headers": ["x-parity-server"]
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-custom-backlog-serves-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -989,6 +1091,65 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-root-path-envvar-applies-root-path",
+      "profile": "python-api",
+      "operation": "python.api.run-http-asgi-scope-contract",
+      "covers": ["python.api.run-http-asgi-scope-contract"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-root-path-envvar?mode=cli",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "/mounted",
+          "root_path_from_environment": true,
+          "environment": {"UVICORN_ROOT_PATH": "/mounted"},
+          "request_headers": [
+            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
+            [
+              "x-asgi-expected-path-base64",
+              "L21vdW50ZWQvbW9kdWxlLWNsaS1yb290LXBhdGgtZW52dmFy"
+            ],
+            [
+              "x-asgi-expected-raw-path-base64",
+              "L21vZHVsZS1jbGktcm9vdC1wYXRoLWVudnZhcg=="
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-explicit-root-path-over-envvar",
+      "profile": "python-api",
+      "operation": "python.api.run-http-asgi-scope-contract",
+      "covers": ["python.api.run-http-asgi-scope-contract"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-root-path-explicit?mode=cli",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "/mounted",
+          "environment": {"UVICORN_ROOT_PATH": "/from-environment"},
+          "request_headers": [
+            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
+            [
+              "x-asgi-expected-path-base64",
+              "L21vdW50ZWQvbW9kdWxlLWNsaS1yb290LXBhdGgtZXhwbGljaXQ="
+            ],
+            [
+              "x-asgi-expected-raw-path-base64",
+              "L21vZHVsZS1jbGktcm9vdC1wYXRoLWV4cGxpY2l0"
+            ]
+          ]
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-applies-custom-default-response-header",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -1016,6 +1177,36 @@
         "run_http": {
           "method": "GET",
           "path": "/python-api-invalid-default-header-name",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "headers": [["Invalid Header", "value"]],
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": true,
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.connection-invalid-default-header-source-chain-suppresses-connection-log",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.connection.invalid-default-header.source-chain",
+        "contract": "server-connection-invalid-default-header-source-chain"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-invalid-default-header-source-chain",
           "shutdown_signal": "SIGINT",
           "timeout_seconds": 5,
           "lifespan": "auto",
@@ -1076,6 +1267,24 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-applies-concurrency-limit",
+      "profile": "python-api",
+      "operation": "python.api.run-http-concurrency",
+      "covers": ["python.api.run-http-concurrency"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-module-cli-concurrency-limit",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "limit_concurrency": 1
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-zero-concurrency-rejects-request",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
@@ -1090,6 +1299,32 @@
           "invocation": "api",
           "root_path": "",
           "limit_concurrency": 0
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-zero-concurrency-rejects-http10-request",
+      "profile": "python-api",
+      "operation": "python.api.run-http-concurrency",
+      "covers": ["python.api.run-http-concurrency"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-concurrency-zero-http10?reason=limit",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "limit_concurrency": 0,
+          "http_version": "1.0",
+          "required_observations": {
+            "response_received": true,
+            "response_status": 503,
+            "shutdown_signal_sent": true,
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
         }
       }
     },
@@ -1606,6 +1841,61 @@
       }
     },
     {
+      "case_id": "python-api.server-startup-bind-failure-shuts-down-lifespan",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-bind-failure-lifespan-cleanup",
+      "covers": ["python.api.server-startup-bind-failure-lifespan-cleanup"],
+      "api": {
+        "server_startup_bind_failure_lifespan_cleanup": true
+      }
+    },
+    {
+      "case_id": "python-api.server-startup-bind-failure-shutdown-error-logged",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-bind-shutdown-error-log",
+      "covers": ["python.api.server-startup-bind-shutdown-error-log"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.shutdown.task-join-error",
+        "contract": "server-startup-bind-shutdown-error-logged"
+      },
+      "api": {
+        "server_startup_bind_failure_lifespan_cleanup": true
+      }
+    },
+    {
+      "case_id": "python-api.server-startup-uds-replaces-existing-socket-and-shuts-down-lifespan",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-uds-socket-replacement-lifespan-cleanup",
+      "covers": ["python.api.server-startup-uds-socket-replacement-lifespan-cleanup"],
+      "api": {
+        "server_startup_uds_socket_replacement_lifespan_cleanup": true
+      }
+    },
+    {
+      "case_id": "python-api.fault.uds-permissions-error-propagates-and-cleans-lifespan",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-uds-socket-replacement-lifespan-cleanup",
+      "covers": ["python.api.server-startup-uds-socket-replacement-lifespan-cleanup"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.unix-listener.set-permissions-error",
+        "contract": "server-unix-listener-permission-error-startup-propagates"
+      },
+      "api": {
+        "server_startup_uds_socket_replacement_lifespan_cleanup": true
+      }
+    },
+    {
+      "case_id": "python-api.concurrent-startup-failure-waiter",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-failure-waiter",
+      "covers": ["python.api.server-startup-failure-waiter"],
+      "api": {
+        "server_startup_failure_waiter": true
+      }
+    },
+    {
       "case_id": "python-api.server-serve-cancellation-listener-state",
       "profile": "python-api",
       "operation": "python.api.server-serve-cancellation",
@@ -1624,6 +1914,103 @@
       "api": {
         "server_serve_cancellation": {
           "phase": "during-startup"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.cancel-startup-before-listener-and-shutdown-lifespan",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-cancel-before-listener",
+      "covers": ["python.api.server-startup-cancel-before-listener"],
+      "api": {
+        "server_startup_cancel_before_listener": true
+      }
+    },
+    {
+      "case_id": "python-api.cancel-startup-shutdown-task-join-error",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-cancel-shutdown-error",
+      "covers": ["python.api.server-startup-cancel-shutdown-error"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.shutdown.task-join-error",
+        "contract": "server-startup-cancellation-shutdown-error-propagates"
+      },
+      "api": {
+        "server_startup_cancel_before_listener": true
+      }
+    },
+    {
+      "case_id": "python-api.cancel-startup-without-lifespan-before-listener",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-cancel-without-lifespan",
+      "covers": ["python.api.server-startup-cancel-without-lifespan"],
+      "api": {
+        "server_startup_cancel_without_lifespan": true
+      }
+    },
+    {
+      "case_id": "python-api.cancel-startup-during-prebound-listener-transfer",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-cancel-during-prebound-transfer",
+      "covers": ["python.api.server-startup-cancel-during-prebound-transfer"],
+      "api": {
+        "server_startup_cancel_during_prebound_transfer": true
+      }
+    },
+    {
+      "case_id": "python-api.cancel-startup-during-prebound-transfer-without-lifespan",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-cancel-during-prebound-transfer-without-lifespan",
+      "covers": ["python.api.server-startup-cancel-during-prebound-transfer-without-lifespan"],
+      "api": {
+        "server_startup_cancel_during_prebound_transfer_without_lifespan": true
+      }
+    },
+    {
+      "case_id": "python-api.direct-server-lifespan-boolean-false",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-mode-validation",
+      "covers": ["python.api.server-lifespan-mode-validation"],
+      "api": {
+        "server_lifespan_mode": {
+          "mode": "boolean-disabled",
+          "prebound_listener": true,
+          "limit_max_requests": 2,
+          "limit_max_requests_jitter": 1
+        }
+      }
+    },
+    {
+      "case_id": "python-api.direct-server-lifespan-boolean-true",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-mode-validation",
+      "covers": ["python.api.server-lifespan-mode-validation"],
+      "api": {
+        "server_lifespan_mode": {
+          "mode": "boolean-enabled"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.direct-server-rejects-invalid-lifespan-mode",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-mode-validation",
+      "covers": ["python.api.server-lifespan-mode-validation"],
+      "api": {
+        "server_lifespan_mode": {
+          "mode": "invalid-string"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.direct-server-rejects-invalid-lifespan-type",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-mode-validation",
+      "covers": ["python.api.server-lifespan-mode-validation"],
+      "api": {
+        "server_lifespan_mode": {
+          "mode": "invalid-type"
         }
       }
     },
@@ -2198,6 +2585,697 @@
       }
     },
     {
+      "case_id": "python-api.config-server-uses-pkcs12-pbe-sha1-3des-key",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-uses-pkcs12-pbe-sha1-2des-key",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-2des-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-2des"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-wrong-pkcs12-pbe-sha1-3des-key-password",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-key-wrong-password",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "incorrect-pkcs12-parity-password",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-zero-iterations",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-zero-iterations",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-zero-iterations",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-short-ciphertext",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-short-ciphertext",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-short-ciphertext",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-malformed-outer-sequence",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-malformed-outer-sequence",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-malformed-outer-sequence",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-trailing-outer-data",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-trailing-outer-data",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-trailing-outer-data",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-missing-algorithm",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-missing-algorithm",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-missing-algorithm",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-invalid-encrypted-data-type",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-invalid-encrypted-data-type",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-encrypted-data-type",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-trailing-encrypted-info-field",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-trailing-encrypted-info-field",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-trailing-encrypted-info-field",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-invalid-algorithm-oid-type",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-invalid-algorithm-oid-type",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-algorithm-oid-type",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-missing-parameters",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-missing-parameters",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-missing-parameters",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-trailing-algorithm-field",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-trailing-algorithm-field",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-trailing-algorithm-field",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-invalid-salt-type",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-invalid-salt-type",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-salt-type",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-missing-iterations",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-missing-iterations",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-missing-iterations",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-trailing-parameters-field",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-pbe-sha1-3des-trailing-parameters-field",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-trailing-parameters-field",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "fault.python-api.pkcs12-outer-reader-too-long",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.pkcs12.reader.outer-too-long",
+        "contract": "python-pkcs12-reader-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-outer-reader-too-long",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "fault.python-api.pkcs12-outer-sequence-decode",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.pkcs12.reader.outer-sequence-decode",
+        "contract": "python-pkcs12-reader-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-outer-sequence-decode",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "fault.python-api.pkcs12-outer-reader-finish",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.pkcs12.reader.outer-finish",
+        "contract": "python-pkcs12-reader-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-outer-reader-finish",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "fault.python-api.pkcs12-encrypted-info-reader-too-long",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.pkcs12.reader.encrypted-info-too-long",
+        "contract": "python-pkcs12-reader-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-encrypted-info-reader-too-long",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "fault.python-api.pkcs12-algorithm-reader-too-long",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.pkcs12.reader.algorithm-too-long",
+        "contract": "python-pkcs12-reader-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-algorithm-reader-too-long",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "fault.python-api.pkcs12-parameters-reader-too-long",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.pkcs12.reader.parameters-too-long",
+        "contract": "python-pkcs12-reader-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-pkcs12-parameters-reader-too-long",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-handles-password-for-unencrypted-key",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-password-for-unencrypted-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "unencrypted-rsa-with-password"
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-uses-pkcs8-keyfile-password",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -2253,6 +3331,519 @@
           "tls": true,
           "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
           "ssl_keyfile_format": "traditional-rsa-aes192"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-wrong-traditional-rsa-aes128-key-password",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-aes128-key-wrong-password",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "incorrect-traditional-parity-password",
+          "ssl_keyfile_format": "traditional-rsa-aes128",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-wrong-traditional-rsa-aes192-key-password",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-aes192-key-wrong-password",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "incorrect-traditional-parity-password",
+          "ssl_keyfile_format": "traditional-rsa-aes192",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-key-malformed-begin-suffix",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-key-malformed-begin-suffix",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-malformed-begin-suffix",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-unsupported-traditional-encrypted-key-label",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-key-unsupported-label",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-dsa-encrypted",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-key-invalid-utf8",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-key-invalid-utf8",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-invalid-utf8",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-key-empty-file",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-key-empty-file",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-empty-key",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-key-malformed-begin-line",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-key-malformed-begin-line",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-malformed-begin-line",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-unsupported-cipher",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-unsupported-cipher",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-unsupported-cipher",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-short-ciphertext",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-short-ciphertext",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-short-ciphertext",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-empty-body",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-empty-body",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-empty-body",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-invalid-base64",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-invalid-base64",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-invalid-base64",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-missing-end-marker",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-missing-end-marker",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-missing-end-marker",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-missing-body",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-missing-body",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-missing-body",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-short-iv",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-short-iv",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-short-iv",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-malformed-dek-info",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-malformed-dek-info",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-malformed-dek-info",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-missing-dek-info",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-missing-dek-info",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-missing-dek-info",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-invalid-proc-type",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-invalid-proc-type",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-invalid-proc-type",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-unknown-header",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-unknown-header",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-unknown-header",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-missing-proc-type",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-key-missing-proc-type",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes256-missing-proc-type",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
         }
       }
     },
@@ -2354,6 +3945,92 @@
           "tls": true,
           "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
           "ssl_keyfile_format": "traditional-rsa-aes256"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-uses-traditional-encrypted-rsa-des-ede3-key",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-des-ede3-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-des-ede3",
+          "required_observations": {
+            "response_received": true,
+            "response_status": 200,
+            "shutdown_signal_sent": true,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-wrong-traditional-rsa-des-ede3-key-password",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-des-ede3-key-wrong-password",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "incorrect-traditional-parity-password",
+          "ssl_keyfile_format": "traditional-rsa-des-ede3",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.keyfile-rust-decrypt-error-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.keyfile.rust-decrypt-error",
+        "contract": "python-ssl-keyfile-rust-decrypt-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-keyfile-rust-decrypt-error",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_cert_reqs": 2,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-des-ede3",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
         }
       }
     },
@@ -2553,6 +4230,60 @@
           "root_path": "",
           "tls": true,
           "ssl_ca_certs": "malformed-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-invalid-der-client-ca-file",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-invalid-der-client-ca-file",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "invalid-der-ca",
+          "ssl_cert_reqs": 2,
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-rejects-non-utf8-client-ca-file",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-non-utf8-client-ca-file",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "non-utf8-ca",
           "ssl_cert_reqs": 2,
           "required_observations": {
             "response_received": false,
@@ -3203,6 +4934,138 @@
             ["SIGINT", "SIGINT"],
             ["SIGTERM", "SIGTERM"]
           ]
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.keyfile-error-import-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.keyfile-error.import",
+        "contract": "python-ssl-keyfile-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-keyfile-error-import",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_cert_reqs": 2,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.keyfile-error-protocol-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.keyfile-error.protocol",
+        "contract": "python-ssl-keyfile-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-keyfile-error-protocol",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_cert_reqs": 2,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.keyfile-error-context-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.keyfile-error.context",
+        "contract": "python-ssl-keyfile-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-keyfile-error-context",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_cert_reqs": 2,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.keyfile-error-create-context-propagates",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "python.ssl.keyfile-error.create-context",
+        "contract": "python-ssl-keyfile-error-propagates"
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-keyfile-error-create-context",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_cert_reqs": 2,
+          "ssl_keyfile_password": "uvicorn-rs-parity-key",
+          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "required_observations": {
+            "response_received": false,
+            "response_status": null,
+            "shutdown_signal_sent": false,
+            "process_exit_code": 1,
+            "process_timed_out": false
+          }
         }
       }
     }

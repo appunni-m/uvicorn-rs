@@ -7,18 +7,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import platform
 import ssl
 import sys
 import warnings
-from typing import Any, get_args
+from collections.abc import Callable
+from configparser import RawConfigParser
+from typing import IO, Any, get_args
 
 import click
 
 from uvicorn import __version__
 from uvicorn._types import ASGIApplication
 from uvicorn.config import (
+    Config,
     HTTPProtocolType,
     InterfaceType,
     LifespanType,

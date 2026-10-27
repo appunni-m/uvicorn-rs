@@ -1712,6 +1712,29 @@ async def lifespan_probe_app(scope, receive, send):
             )
             await _respond(send, body, content_type=b"text/plain")
             return
+        if scope["path"] in {
+            "/python-api-second-signal-escalation",
+            "/python-api-graceful-timeout-hold",
+        }:
+            await _respond(
+                send,
+                b"python-api-signal-escalation-hold",
+                content_type=b"text/plain",
+            )
+            marker_path = os.environ.get("ASGI_PARITY_SIGNAL_HOLD_MARKER")
+            if marker_path is None:
+                raise RuntimeError("signal-escalation input is missing its hold marker")
+            Path(marker_path).touch()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancel_marker_path = os.environ.get(
+                    "ASGI_PARITY_SIGNAL_CANCEL_MARKER"
+                )
+                if cancel_marker_path is not None:
+                    Path(cancel_marker_path).touch()
+                raise
+            return
         if scope["path"] == "/module-cli-proxy-headers":
             client = scope.get("client") or ("", 0)
             client_host, client_port = client

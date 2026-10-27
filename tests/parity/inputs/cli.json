@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@37",
+  "schema": "uvicorn-rs-parity/input@40",
   "cases": [
     {
       "case_id": "cli.help",
@@ -9,6 +9,19 @@
       "process": {
         "invocation": "module",
         "arguments": ["--help"],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.no-arguments-requires-app",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [],
         "environment": {},
         "working_directory": "project",
         "timeout_seconds": 10
@@ -241,6 +254,33 @@
           "0"
         ],
         "environment": {"UVICORN_HOST": "invalid host"},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-host-env-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_HOST": "invalid host"
+        },
         "working_directory": "project",
         "timeout_seconds": 10
       }
@@ -503,6 +543,77 @@
         "arguments": ["tests.parity.app:app"],
         "environment": {
           "UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN": "not-a-timeout"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-timeout-graceful-shutdown-argument-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--timeout-graceful-shutdown",
+          "not-a-timeout"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.timeout-graceful-shutdown-valid-value-exits-after-startup",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--timeout-graceful-shutdown",
+          "1",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.timeout-graceful-shutdown-valid-environment-value-exits-after-startup",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN": "1"
         },
         "working_directory": "project",
         "timeout_seconds": 10
@@ -941,6 +1052,37 @@
           "--limit-max-requests",
           "0",
           "--ws-ping-interval",
+          "0"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.websocket-zero-ping-timeout-is-accepted",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0",
+          "--ws-ping-interval",
+          "0",
+          "--ws-ping-timeout",
           "0"
         ],
         "environment": {},

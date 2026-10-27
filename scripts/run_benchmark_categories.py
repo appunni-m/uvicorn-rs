@@ -140,6 +140,18 @@ def workload_names(path):
     raise ValueError(f"{path}: no WORKLOADS dictionary")
 
 
+def default_category_workloads(label, names):
+    """Select FastAPI comparisons while excluding protocol-only probes."""
+    if label == "http1":
+        return [name for name in names if name.startswith("fastapi-")]
+    if label in {"http2", "http3"}:
+        # These category modules also use short names for ordinary FastAPI
+        # workloads. Keep only negotiated-protocol probes out of the matched
+        # FastAPI comparison class.
+        return [name for name in names if not name.startswith("protocol-")]
+    return list(names)
+
+
 def expected_rows(path, label, selected_servers, repetitions, selected_workloads=None):
     if label == "lifecycle":
         return {(label, name, number) for name in selected_servers
@@ -381,6 +393,13 @@ def main():
             if non_fastapi:
                 parser.error("the maintained cross-category comparison accepts upstream FastAPI workloads only: "
                              + ", ".join(non_fastapi))
+        elif selected_category in {"http2", "http3"}:
+            protocol_only = sorted(name for name in args.workloads if name.startswith("protocol-"))
+            if protocol_only:
+                parser.error(
+                    "protocol-only probes are separate from the stock-FastAPI comparison: "
+                    + ", ".join(protocol_only)
+                )
     if args.capture_identity and (args.output_dir or args.parity_before_identity or args.parity_report):
         parser.error("capture mode cannot also run the suite")
     if not args.capture_identity and (not args.parity_before_identity or not args.parity_report):
@@ -489,8 +508,8 @@ def main():
                 workloads = workload_names(script)
                 if args.workloads and args.category == [label]:
                     workloads = list(dict.fromkeys(args.workloads))
-                elif label == "http1":
-                    workloads = [workload for workload in workloads if workload.startswith("fastapi-")]
+                else:
+                    workloads = default_category_workloads(label, workloads)
                 category_concurrency = args.h3_concurrency if label == "http3" else args.concurrency
                 command += ["--workloads", *workloads, "--duration", str(args.duration),
                             "--warmup", str(args.warmup), "--concurrency", str(category_concurrency)]

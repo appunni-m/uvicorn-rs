@@ -1,5 +1,7 @@
 """Run input-selected Python public API probes for parity comparison."""
 
+from __future__ import annotations
+
 import asyncio
 import base64
 import http.client
@@ -18,9 +20,13 @@ import threading
 import time
 import warnings
 from pathlib import Path
+from typing import get_type_hints
 
 _startup_failure_server = None
 _startup_failure_task = None
+_startup_bind_failure_lifespan_state = None
+_startup_uds_replacement_lifespan_state = None
+_startup_failure_waiter_state = None
 _lifespan_startup_server = None
 _lifespan_startup_task = None
 
@@ -53,8 +59,18 @@ def resolve(path: str):
 
 
 def signature(value):
+    signature_target = value.__init__ if inspect.isclass(value) else value
+    try:
+        get_type_hints(signature_target)
+        type_hints_resolve = {"resolves": True}
+    except Exception as error:
+        type_hints_resolve = {
+            "resolves": False,
+            "error_type": f"{type(error).__module__}.{type(error).__qualname__}",
+        }
+    inspected_signature = inspect.signature(value)
     result = []
-    for parameter in inspect.signature(value).parameters.values():
+    for parameter in inspected_signature.parameters.values():
         default = (
             "<required>"
             if parameter.default is inspect.Parameter.empty
@@ -68,7 +84,11 @@ def signature(value):
                 "annotation": str(parameter.annotation),
             }
         )
-    return result
+    return {
+        "parameters": result,
+        "return_annotation": str(inspected_signature.return_annotation),
+        "type_hints": type_hints_resolve,
+    }
 
 
 class UnixHTTPConnection(http.client.HTTPConnection):
@@ -601,10 +621,45 @@ except KeyboardInterrupt:
         else None
     )
     key_filename = {
+        "unencrypted-rsa-with-password": "localhost-key.pem",
+        "pkcs12-pbe-sha1-3des": "localhost-key-pkcs12-pbe-sha1-3des.pem",
+        "pkcs12-pbe-sha1-2des": "localhost-key-pkcs12-pbe-sha1-2des.pem",
+        "pkcs12-pbe-sha1-3des-zero-iterations": "localhost-key-pkcs12-pbe-sha1-3des-zero-iterations.pem",
+        "pkcs12-pbe-sha1-3des-short-ciphertext": "localhost-key-pkcs12-pbe-sha1-3des-short-ciphertext.pem",
+        "pkcs12-pbe-sha1-3des-invalid-decrypted-key": "localhost-key-pkcs12-pbe-sha1-3des-invalid-decrypted-key.pem",
+        "pkcs12-pbe-sha1-3des-malformed-outer-sequence": "localhost-key-pkcs12-pbe-sha1-3des-malformed-outer-sequence.pem",
+        "pkcs12-pbe-sha1-3des-trailing-outer-data": "localhost-key-pkcs12-pbe-sha1-3des-trailing-outer-data.pem",
+        "pkcs12-pbe-sha1-3des-missing-algorithm": "localhost-key-pkcs12-pbe-sha1-3des-missing-algorithm.pem",
+        "pkcs12-pbe-sha1-3des-invalid-encrypted-data-type": "localhost-key-pkcs12-pbe-sha1-3des-invalid-encrypted-data-type.pem",
+        "pkcs12-pbe-sha1-3des-trailing-encrypted-info-field": "localhost-key-pkcs12-pbe-sha1-3des-trailing-encrypted-info-field.pem",
+        "pkcs12-pbe-sha1-3des-invalid-algorithm-oid-type": "localhost-key-pkcs12-pbe-sha1-3des-invalid-algorithm-oid-type.pem",
+        "pkcs12-pbe-sha1-3des-missing-parameters": "localhost-key-pkcs12-pbe-sha1-3des-missing-parameters.pem",
+        "pkcs12-pbe-sha1-3des-trailing-algorithm-field": "localhost-key-pkcs12-pbe-sha1-3des-trailing-algorithm-field.pem",
+        "pkcs12-pbe-sha1-3des-invalid-salt-type": "localhost-key-pkcs12-pbe-sha1-3des-invalid-salt-type.pem",
+        "pkcs12-pbe-sha1-3des-missing-iterations": "localhost-key-pkcs12-pbe-sha1-3des-missing-iterations.pem",
+        "pkcs12-pbe-sha1-3des-trailing-parameters-field": "localhost-key-pkcs12-pbe-sha1-3des-trailing-parameters-field.pem",
         "traditional-rsa-aes128": "localhost-key-rsa-aes128-encrypted.pem",
         "traditional-rsa-aes192": "localhost-key-rsa-aes192-encrypted.pem",
         "traditional-rsa-aes256": "localhost-key-rsa-aes256-encrypted.pem",
+        "traditional-rsa-des-ede3": "localhost-key-rsa-3des-encrypted.pem",
         "traditional-ec-aes256": "localhost-key-ec-aes256-encrypted.pem",
+        "traditional-rsa-aes256-invalid-proc-type": "localhost-key-rsa-aes256-invalid-proc-type.pem",
+        "traditional-rsa-aes256-unknown-header": "localhost-key-rsa-aes256-unknown-header.pem",
+        "traditional-rsa-aes256-missing-proc-type": "localhost-key-rsa-aes256-missing-proc-type.pem",
+        "traditional-rsa-aes256-missing-dek-info": "localhost-key-rsa-aes256-missing-dek-info.pem",
+        "traditional-rsa-aes256-malformed-dek-info": "localhost-key-rsa-aes256-malformed-dek-info.pem",
+        "traditional-rsa-aes256-short-iv": "localhost-key-rsa-aes256-short-iv.pem",
+        "traditional-rsa-aes256-missing-body": "localhost-key-rsa-aes256-missing-body.pem",
+        "traditional-rsa-aes256-missing-end-marker": "localhost-key-rsa-aes256-missing-end-marker.pem",
+        "traditional-rsa-aes256-invalid-base64": "localhost-key-rsa-aes256-invalid-base64.pem",
+        "traditional-rsa-aes256-empty-body": "localhost-key-rsa-aes256-empty-body.pem",
+        "traditional-rsa-aes256-short-ciphertext": "localhost-key-rsa-aes256-short-ciphertext.pem",
+        "traditional-rsa-unsupported-cipher": "localhost-key-rsa-unsupported-cipher.pem",
+        "traditional-rsa-malformed-begin-line": "localhost-key-rsa-malformed-begin-line.pem",
+        "traditional-rsa-empty-key": "localhost-key-rsa-empty-key.pem",
+        "traditional-rsa-invalid-utf8": "localhost-key-rsa-invalid-utf8.pem",
+        "traditional-dsa-encrypted": "localhost-key-dsa-encrypted.pem",
+        "traditional-rsa-malformed-begin-suffix": "localhost-key-rsa-malformed-begin-suffix.pem",
         "traditional-rsa-aes256-high-nonhex-iv": "localhost-key-rsa-aes256-high-nonhex-iv.pem",
         "traditional-rsa-aes256-odd-iv": "localhost-key-rsa-aes256-odd-iv.pem",
         "traditional-rsa-aes256-nonhex-iv": "localhost-key-rsa-aes256-nonhex-iv.pem",
@@ -634,6 +689,10 @@ except KeyboardInterrupt:
         if request.get("ssl_ca_certs") == "directory-ca"
         else tls_assets.get("malformed_ca_certificate")
         if request.get("ssl_ca_certs") == "malformed-ca"
+        else tls_assets.get("invalid_der_ca_certificate")
+        if request.get("ssl_ca_certs") == "invalid-der-ca"
+        else tls_assets.get("non_utf8_ca_certificate")
+        if request.get("ssl_ca_certs") == "non-utf8-ca"
         else request.get("ssl_ca_certs")
     )
     ssl_cert_reqs = request.get("ssl_cert_reqs", 0)
@@ -691,11 +750,10 @@ except KeyboardInterrupt:
             host,
             "--port",
             str(port),
-            "--root-path",
-            request["root_path"],
-            "--lifespan",
-            request["lifespan"],
         ]
+        if not request.get("root_path_from_environment"):
+            command.extend(("--root-path", request["root_path"]))
+        command.extend(("--lifespan", request["lifespan"]))
         if uds_path is not None:
             command.extend(("--uds", uds_path))
         if tls_certificate is not None and tls_key is not None:
@@ -732,6 +790,13 @@ except KeyboardInterrupt:
             command.extend(("--backlog", str(request["backlog"])))
         if request.get("timeout_keep_alive") is not None:
             command.extend(("--timeout-keep-alive", str(request["timeout_keep_alive"])))
+        if request.get("timeout_graceful_shutdown") is not None:
+            command.extend(
+                (
+                    "--timeout-graceful-shutdown",
+                    str(request["timeout_graceful_shutdown"]),
+                )
+            )
         if request.get("workers") is not None:
             command.extend(("--workers", str(request["workers"])))
         if request.get("timeout_worker_healthcheck") is not None:
@@ -748,6 +813,10 @@ except KeyboardInterrupt:
             command.append("--reset-contextvars")
         if request.get("use_colors") is not None:
             command.append("--use-colors" if request["use_colors"] else "--no-use-colors")
+        if request.get("server_header") is not None:
+            command.append("--server-header" if request["server_header"] else "--no-server-header")
+        if request.get("date_header") is not None:
+            command.append("--date-header" if request["date_header"] else "--no-date-header")
     else:
         command = [
             sys.executable,
@@ -791,6 +860,33 @@ except KeyboardInterrupt:
         ]
 
     environment = subprocess_environment()
+    signal_hold_directory = None
+    signal_hold_marker = None
+    signal_cancel_marker = None
+    if (
+        "shutdown_signal_sequence" in request
+        or request["path"] == "/python-api-graceful-timeout-hold"
+    ):
+        if (
+            request["invocation"] != "module-cli"
+            or request["path"] not in {
+                "/python-api-second-signal-escalation",
+                "/python-api-graceful-timeout-hold",
+            }
+        ):
+            raise RuntimeError(
+                "shutdown signal sequences require the module-CLI hold input"
+            )
+        signal_hold_directory = tempfile.TemporaryDirectory(
+            prefix="uvrs-signal-escalation-"
+        )
+        signal_hold_marker = Path(signal_hold_directory.name) / "asgi-held"
+        environment["ASGI_PARITY_SIGNAL_HOLD_MARKER"] = str(signal_hold_marker)
+        if request["path"] == "/python-api-graceful-timeout-hold":
+            signal_cancel_marker = Path(signal_hold_directory.name) / "asgi-cancelled"
+            environment["ASGI_PARITY_SIGNAL_CANCEL_MARKER"] = str(
+                signal_cancel_marker
+            )
     worker_crash_directory = None
     worker_crash_count_value = os.environ.get("ASGI_PARITY_WORKER_CRASH_COUNT")
     if worker_crash_count_value is None:
@@ -938,6 +1034,8 @@ except KeyboardInterrupt:
     except BaseException:
         for inherited_listener in inherited_listeners:
             inherited_listener.close()
+        if signal_hold_directory is not None:
+            signal_hold_directory.cleanup()
         if bind_conflict_listener is not None:
             bind_conflict_listener.close()
         if uds_directory is not None:
@@ -998,13 +1096,20 @@ except KeyboardInterrupt:
     )
 
     def make_client_tls_context() -> ssl.SSLContext:
-        # Empty and missing CA files are inputs for server-side startup
+        # Invalid or absent CA files are inputs for server-side startup
         # rejection. Keep the probe's own TLS trust valid so those startup
         # failures cannot be misreported as client context setup errors.
         trust_anchor = (
             tls_certificate
             if request.get("ssl_ca_certs")
-            in {"empty-ca", "missing-ca", "directory-ca", "malformed-ca"}
+            in {
+                "empty-ca",
+                "missing-ca",
+                "directory-ca",
+                "malformed-ca",
+                "invalid-der-ca",
+                "non-utf8-ca",
+            }
             else ssl_ca_certs or tls_certificate
         )
         if trust_anchor is None:
@@ -1069,6 +1174,9 @@ except KeyboardInterrupt:
                     connection = http.client.HTTPConnection(
                         host, listener_port, timeout=connection_timeout
                     )
+                if request.get("http_version") == "1.0":
+                    connection._http_vsn = 10
+                    connection._http_vsn_str = "HTTP/1.0"
                 try:
                     keep_alive_probe_delay = request.get("keep_alive_probe_delay_seconds")
                     connection.request(
@@ -1230,13 +1338,41 @@ except KeyboardInterrupt:
             finally:
                 connection.close()
 
-        shutdown_signal_sent = False
-        if process.poll() is None:
+        shutdown_signal_names = request.get(
+            "shutdown_signal_sequence", [shutdown_signal_name]
+        )
+        shutdown_signals_sent = []
+        if signal_hold_marker is not None:
+            hold_deadline = time.monotonic() + request["timeout_seconds"]
+            while (
+                not signal_hold_marker.exists()
+                and process.poll() is None
+                and time.monotonic() < hold_deadline
+            ):
+                time.sleep(0.01)
+            if not signal_hold_marker.exists():
+                raise RuntimeError(
+                    "signal-escalation ASGI task did not enter its hold before shutdown"
+                )
+        for index, signal_name in enumerate(shutdown_signal_names):
+            if process.poll() is not None:
+                break
+            if index:
+                time.sleep(0.2)
             try:
-                process.send_signal(stop_signal)
-                shutdown_signal_sent = True
+                process.send_signal(
+                    stop_signal
+                    if signal_name == shutdown_signal_name
+                    else (
+                        signal.CTRL_BREAK_EVENT
+                        if os.name == "nt" and signal_name == "SIGINT"
+                        else getattr(signal, signal_name)
+                    )
+                )
+                shutdown_signals_sent.append(signal_name)
             except OSError:
-                pass
+                break
+        shutdown_signal_sent = bool(shutdown_signals_sent)
         server_stdout = b""
         server_stderr = b""
         try:
@@ -1265,8 +1401,12 @@ except KeyboardInterrupt:
             "listener_responses": listener_responses,
             "idle_connection_closed": idle_connection_closed,
             "shutdown_signal_sent": shutdown_signal_sent,
+            "shutdown_signals_sent": shutdown_signals_sent,
             "process_exit_code": process.returncode,
             "process_timed_out": process_timed_out,
+            "graceful_shutdown_cancellation_observed": (
+                signal_cancel_marker is not None and signal_cancel_marker.exists()
+            ),
             "request_limit_response_count": response_count,
             "request_limit_range_satisfied": request_limit_range_satisfied,
             "server_stdout_base64": base64.b64encode(server_stdout).decode("ascii"),
@@ -1282,6 +1422,8 @@ except KeyboardInterrupt:
             worker_stall_resumer.join(timeout=1.0)
         if uds_directory is not None:
             uds_directory.cleanup()
+        if signal_hold_directory is not None:
+            signal_hold_directory.cleanup()
         if worker_crash_directory is not None:
             worker_crash_directory.cleanup()
         if worker_control_startup_failure_directory is not None:
@@ -1784,11 +1926,255 @@ async def server_serve_cancellation_observation(phase: str) -> dict[str, bool]:
         if not task.done():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
-        if phase == "after-startup":
+
+
+async def server_startup_cancel_before_listener_observation(
+    lifespan_mode: str = "on",
+) -> dict[str, object]:
+    """Cancel startup before bind and verify lifespan shutdown still runs."""
+
+    target = os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn-rs"
+    startup_entered = asyncio.Event()
+    allow_startup_completion = asyncio.Event()
+    application_events = []
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                application_events.append(message["type"])
+                if message["type"] == "lifespan.startup":
+                    startup_entered.set()
+                    await allow_startup_completion.wait()
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+
+    if target:
+        from uvicorn_rs import Server
+
+        server = Server(app, host="127.0.0.1", port=0, lifespan=lifespan_mode)
+    else:
+        import uvicorn
+
+        server = uvicorn.Server(
+            uvicorn.Config(
+                app,
+                host="127.0.0.1",
+                port=0,
+                loop="asyncio",
+                lifespan=lifespan_mode,
+                log_config=None,
+                access_log=False,
+            )
+        )
+
+    task = asyncio.create_task(server.serve())
+    serve_cancelled = False
+    serve_raised = False
+    serve_timed_out = False
+    try:
+        if lifespan_mode == "off":
+            if target:
+                # The serve coroutine publishes its native control before it
+                # schedules the Rust future. Cancel in that handoff window so
+                # startup observes cancellation before the no-lifespan branch
+                # can bind a listener.
+                await asyncio.sleep(0)
+                server_started_before_cancel = bool(
+                    getattr(server, "started", False)
+                )
+                server.cancel_startup()
+                server.shutdown()
+            else:
+                server_started_before_cancel = bool(
+                    getattr(server, "started", False)
+                )
+                server.should_exit = True
+        else:
+            await asyncio.wait_for(startup_entered.wait(), timeout=5)
+            server_started_before_cancel = bool(getattr(server, "started", False))
+            if target:
+                server.cancel_startup()
+                server.shutdown()
+            else:
+                server.should_exit = True
+
+        allow_startup_completion.set()
+        try:
+            await asyncio.wait_for(task, timeout=5)
+        except asyncio.CancelledError:
+            serve_cancelled = True
+        except asyncio.TimeoutError:
+            serve_timed_out = True
+        except BaseException:
+            serve_raised = True
+        return {
+            "lifespan_startup_entered_before_cancel": startup_entered.is_set(),
+            "server_started_before_cancel": server_started_before_cancel,
+            "serve_cancelled": serve_cancelled,
+            "serve_raised": serve_raised,
+            "serve_timed_out": serve_timed_out,
+            "serve_task_finished": task.done(),
+            "application_events": application_events,
+            "server_started_before_shutdown": bool(
+                getattr(server, "started", False)
+            ),
+        }
+    finally:
+        allow_startup_completion.set()
+        if not task.done():
+            if target:
+                server.shutdown()
+            else:
+                server.should_exit = True
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+
+async def server_startup_cancel_during_prebound_transfer_observation(
+    lifespan_mode: str = "on",
+) -> dict[str, object]:
+    """Cancel while the inherited-listener transfer is held before delivery."""
+
+    target = os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn-rs"
+    startup_entered = asyncio.Event()
+    allow_startup_completion = asyncio.Event()
+    shutdown_complete = asyncio.Event()
+    application_events = []
+    transfer_started = threading.Event()
+    allow_transfer = threading.Event()
+    bridge = None
+    original_send_listener_fds = None
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                application_events.append(message["type"])
+                if message["type"] == "lifespan.startup":
+                    startup_entered.set()
+                    await allow_startup_completion.wait()
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    shutdown_complete.set()
+                    return
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    if target:
+        from uvicorn_rs import Server, _bridge
+
+        bridge = _bridge
+        original_send_listener_fds = bridge.send_listener_fds
+
+        def hold_listener_transfer(path, listeners, stop_event=None):
+            transfer_started.set()
+            if not allow_transfer.wait(timeout=5):
+                raise TimeoutError("listener-transfer probe was not released")
+            return original_send_listener_fds(path, listeners, stop_event)
+
+        bridge.send_listener_fds = hold_listener_transfer
+        server = Server(
+            app,
+            host="127.0.0.1",
+            port=0,
+            sockets=[listener],
+            lifespan=lifespan_mode,
+        )
+        task = asyncio.create_task(server.serve())
+    else:
+        import uvicorn
+
+        server = uvicorn.Server(
+            uvicorn.Config(
+                app,
+                host="127.0.0.1",
+                port=0,
+                loop="asyncio",
+                lifespan=lifespan_mode,
+                log_config=None,
+                access_log=False,
+            )
+        )
+        task = asyncio.create_task(server.serve(sockets=[listener]))
+
+    serve_cancelled = False
+    serve_raised = False
+    serve_timed_out = False
+    server_started_before_cancel = False
+    listener_transfer_blocked = False
+    try:
+        if lifespan_mode == "off":
+            server_started_before_cancel = bool(getattr(server, "started", False))
+            if target:
+                listener_transfer_blocked = await asyncio.wait_for(
+                    asyncio.to_thread(transfer_started.wait, 5), timeout=5
+                )
+                if not listener_transfer_blocked:
+                    raise RuntimeError("listener transfer did not enter its hold")
+                server.shutdown()
+                allow_transfer.set()
+            else:
+                server.should_exit = True
+        else:
+            await asyncio.wait_for(startup_entered.wait(), timeout=5)
+            server_started_before_cancel = bool(getattr(server, "started", False))
+            if target:
+                allow_startup_completion.set()
+                listener_transfer_blocked = await asyncio.wait_for(
+                    asyncio.to_thread(transfer_started.wait, 5), timeout=5
+                )
+                if not listener_transfer_blocked:
+                    raise RuntimeError("listener transfer did not enter its hold")
+                server.shutdown()
+                await asyncio.wait_for(shutdown_complete.wait(), timeout=5)
+                allow_transfer.set()
+            else:
+                server.should_exit = True
+                allow_startup_completion.set()
+
+        try:
+            await asyncio.wait_for(task, timeout=5)
+        except asyncio.CancelledError:
+            serve_cancelled = True
+        except asyncio.TimeoutError:
+            serve_timed_out = True
+        except BaseException:
+            serve_raised = True
+        return {
+            "lifespan_startup_entered_before_cancel": startup_entered.is_set(),
+            "server_started_before_cancel": server_started_before_cancel,
+            "serve_cancelled": serve_cancelled,
+            "serve_raised": serve_raised,
+            "serve_timed_out": serve_timed_out,
+            "serve_task_finished": task.done(),
+            "application_events": application_events,
+            "server_started_before_shutdown": bool(
+                getattr(server, "started", False)
+            ),
+            "listener_transfer_blocked": listener_transfer_blocked,
+        }
+    finally:
+        allow_startup_completion.set()
+        allow_transfer.set()
+        if not task.done():
+            if target:
+                server.shutdown()
+            else:
+                server.should_exit = True
             try:
-                await asyncio.wait_for(server.shutdown(), timeout=5)
+                await asyncio.wait_for(task, timeout=5)
             except BaseException:
-                pass
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+        if bridge is not None and original_send_listener_fds is not None:
+            bridge.send_listener_fds = original_send_listener_fds
+        listener.close()
 
 
 async def server_callback_notify_observation() -> dict[str, int | bool]:
@@ -2005,6 +2391,272 @@ async def server_startup_failure_observation() -> dict[str, bool]:
     }
 
 
+async def server_startup_bind_failure_lifespan_observation() -> dict[str, object]:
+    """Verify lifespan cleanup when listener setup fails after startup."""
+    import uvicorn
+
+    global _startup_bind_failure_lifespan_state
+
+    application_events = []
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                application_events.append(message["type"])
+                if message["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app,
+            host="256.256.256.256",
+            port=0,
+            loop="asyncio",
+            lifespan="on",
+            log_config=None,
+            access_log=False,
+        )
+    )
+    task = asyncio.create_task(server.serve())
+    _startup_bind_failure_lifespan_state = {
+        "server": server,
+        "task": task,
+        "application_events": application_events,
+    }
+    raised = False
+    timed_out = False
+    try:
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=5)
+        except TimeoutError:
+            if task.done():
+                raised = True
+            else:
+                timed_out = True
+        except BaseException:
+            raised = True
+    finally:
+        if not task.done():
+            server.should_exit = True
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    return {
+        "server_started": bool(server.started),
+        "serve_task_finished": task.done(),
+        "serve_raised": raised,
+        "serve_timed_out": timed_out,
+        "application_events": application_events,
+    }
+
+
+async def server_startup_uds_replacement_lifespan_observation() -> dict[str, object]:
+    """Verify Uvicorn replaces an existing UDS path and shuts down lifespan."""
+    import uvicorn
+
+    global _startup_uds_replacement_lifespan_state
+
+    application_events = []
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                application_events.append(message["type"])
+                if message["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+
+    _startup_uds_replacement_lifespan_state = None
+    with tempfile.TemporaryDirectory(prefix="urs-") as directory:
+        socket_path = str(Path(directory) / "server.sock")
+        blocker = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server = None
+        task = None
+        raised = False
+        timed_out = False
+        try:
+            blocker.bind(socket_path)
+            blocker.listen(1)
+            server = uvicorn.Server(
+                uvicorn.Config(
+                    app,
+                    host="127.0.0.1",
+                    port=0,
+                    uds=socket_path,
+                    loop="asyncio",
+                    lifespan="on",
+                    log_config=None,
+                    access_log=False,
+                )
+            )
+            task = asyncio.create_task(server.serve())
+            _startup_uds_replacement_lifespan_state = {
+                "server": server,
+                "task": task,
+                "application_events": application_events,
+            }
+            try:
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + 5
+                while not server.started and not task.done() and loop.time() < deadline:
+                    await asyncio.sleep(0.001)
+                if not server.started:
+                    if task.done():
+                        raised = True
+                    else:
+                        timed_out = True
+                else:
+                    server.should_exit = True
+                    await asyncio.wait_for(asyncio.shield(task), timeout=5)
+            except TimeoutError:
+                if task.done():
+                    raised = True
+                else:
+                    timed_out = True
+            except BaseException:
+                raised = True
+        finally:
+            if task is not None and not task.done():
+                server.should_exit = True
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+            blocker.close()
+        if server is None or task is None:
+            raise RuntimeError("UDS replacement probe did not create its server")
+        return {
+            "server_started": bool(server.started),
+            "serve_task_finished": task.done(),
+            "serve_raised": raised,
+            "serve_timed_out": timed_out,
+            "application_events": application_events,
+        }
+
+
+async def server_startup_failure_waiter_observation() -> dict[str, object]:
+    """Compare a concurrent startup-failure waiter with Uvicorn startup status."""
+
+    global _startup_failure_waiter_state
+
+    target = os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn-rs"
+    lifespan_entered = asyncio.Event()
+    release_failure = asyncio.Event()
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            message = await receive()
+            if message["type"] == "lifespan.startup":
+                lifespan_entered.set()
+                await release_failure.wait()
+                await send(
+                    {
+                        "type": "lifespan.startup.failed",
+                        "message": "parity startup failure",
+                    }
+                )
+
+    if target:
+        from uvicorn_rs import Server, _native
+
+        server = Server(
+            app,
+            host="127.0.0.1",
+            port=0,
+            lifespan="on",
+            _defer_startup_failure=True,
+        )
+    else:
+        import uvicorn
+
+        server = uvicorn.Server(
+            uvicorn.Config(
+                app,
+                host="127.0.0.1",
+                port=0,
+                loop="asyncio",
+                lifespan="on",
+                log_config=None,
+                access_log=False,
+            )
+        )
+
+    task = asyncio.create_task(server.serve())
+    waiter = None
+    _startup_failure_waiter_state = {
+        "server": server,
+        "task": task,
+        "startup_failure_wait_result": None,
+        "dropped_control_wait_result": None,
+    }
+    try:
+        await asyncio.wait_for(lifespan_entered.wait(), timeout=5)
+        if target:
+            waiter = asyncio.create_task(server.wait_startup_failed())
+            _startup_failure_waiter_state["waiter"] = waiter
+            await asyncio.sleep(0)
+
+            control = _native.ServerControl(False)
+            dropped_waiter = control.wait_startup_failed()
+            del control
+            dropped_control_wait_result = await asyncio.wait_for(
+                dropped_waiter, timeout=5
+            )
+            _startup_failure_waiter_state[
+                "dropped_control_wait_result"
+            ] = dropped_control_wait_result
+
+        release_failure.set()
+        if target:
+            startup_failure_wait_result = await asyncio.wait_for(waiter, timeout=5)
+            _startup_failure_waiter_state[
+                "startup_failure_wait_result"
+            ] = startup_failure_wait_result
+            await asyncio.wait_for(task, timeout=5)
+        else:
+            try:
+                await asyncio.wait_for(task, timeout=5)
+            except BaseException:
+                # Uvicorn reports an explicit lifespan startup failure by
+                # terminating serve with SystemExit(3).
+                pass
+            startup_failure_wait_result = not server.started and task.done()
+            _startup_failure_waiter_state[
+                "startup_failure_wait_result"
+            ] = startup_failure_wait_result
+    finally:
+        release_failure.set()
+        if not task.done():
+            server.should_exit = True
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    return startup_failure_waiter_result_from_state(_startup_failure_waiter_state)
+
+
+def startup_failure_waiter_result_from_state(state) -> dict[str, object]:
+    """Collect stable startup observations even if Uvicorn SystemExit stops the loop."""
+
+    state = state or {}
+    server = state.get("server")
+    task = state.get("task")
+    startup_failure_wait_result = state.get("startup_failure_wait_result")
+    if startup_failure_wait_result is None and server is not None and task is not None:
+        startup_failure_wait_result = not bool(getattr(server, "started", False)) and task.done()
+    return {
+        "startup_failure_wait_result": startup_failure_wait_result,
+        "dropped_control_wait_result": state.get("dropped_control_wait_result"),
+        "server_started_before_shutdown": bool(
+            server is not None and getattr(server, "started", False)
+        ),
+        "serve_task_finished_before_shutdown": bool(task and task.done()),
+    }
+
+
 async def server_lifespan_startup_observation(request: dict) -> dict[str, object]:
     """Observe strict lifespan startup through the public Config and Server APIs."""
 
@@ -2067,6 +2719,131 @@ async def server_lifespan_startup_observation(request: dict) -> dict[str, object
             except TimeoutError:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
+
+
+async def server_lifespan_mode_observation(request: dict) -> dict[str, object]:
+    """Compare direct-server lifespan values with Uvicorn's public API."""
+
+    server_id = os.environ.get("ASGI_PARITY_SERVER_ID")
+    target = server_id == "uvicorn-rs"
+    events = []
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                events.append(message["type"])
+                if message["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    await send({"type": "lifespan.shutdown.complete"})
+                    return
+
+    mode = request["mode"]
+    server_started = False
+    serve_raised = False
+    listener = None
+
+    try:
+        if mode == "boolean-disabled" and request.get("prebound_listener", False):
+            listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+        if target:
+            from uvicorn_rs import Server
+
+            if mode == "boolean-disabled":
+                lifespan = False
+            elif mode == "boolean-enabled":
+                lifespan = True
+            elif mode == "invalid-type":
+                lifespan = 1
+            else:
+                lifespan = "not-a-lifespan-mode"
+            server = Server(
+                app,
+                host="127.0.0.1",
+                port=0,
+                sockets=[listener] if listener is not None else None,
+                limit_max_requests=request.get("limit_max_requests"),
+                limit_max_requests_jitter=request.get("limit_max_requests_jitter", 0),
+                lifespan=lifespan,
+            )
+        else:
+            import uvicorn
+
+            if mode == "boolean-disabled":
+                lifespan = "off"
+            elif mode == "boolean-enabled":
+                lifespan = "auto"
+            elif mode == "invalid-type":
+                lifespan = 1
+            else:
+                lifespan = "not-a-lifespan-mode"
+            config = uvicorn.Config(
+                app,
+                host="127.0.0.1",
+                port=0,
+                loop="asyncio",
+                lifespan=lifespan,
+                limit_max_requests=request.get("limit_max_requests"),
+                limit_max_requests_jitter=request.get("limit_max_requests_jitter", 0),
+                log_config=None,
+                access_log=False,
+            )
+            server = uvicorn.Server(config)
+
+        serve = (
+            server.serve(sockets=[listener])
+            if not target and listener is not None
+            else server.serve()
+        )
+        task = asyncio.create_task(serve)
+        if mode in {"boolean-disabled", "boolean-enabled"}:
+            if target:
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + 5
+                while not server_started and not task.done() and loop.time() < deadline:
+                    server_started = await server.wait_started()
+                    if not server_started:
+                        await asyncio.sleep(0.001)
+                if not server_started:
+                    raise TimeoutError("direct server did not finish startup")
+                server.cancel_startup()
+                await asyncio.wait_for(task, timeout=5)
+            else:
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + 5
+                while not server.started and not task.done() and loop.time() < deadline:
+                    await asyncio.sleep(0.001)
+                server_started = bool(server.started)
+                if not server_started:
+                    raise TimeoutError("Uvicorn server did not finish startup")
+                server.should_exit = True
+                await asyncio.wait_for(task, timeout=5)
+        else:
+            try:
+                await asyncio.wait_for(task, timeout=2)
+            except (AssertionError, KeyError, ValueError):
+                serve_raised = True
+            except TimeoutError:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+    except (AssertionError, KeyError, ValueError):
+        serve_raised = True
+    finally:
+        if "task" in locals() and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        if listener is not None and listener.fileno() >= 0:
+            listener.close()
+
+    return {
+        "server_started_before_shutdown": server_started,
+        "serve_raised": serve_raised,
+        "application_events": events,
+    }
 
 
 def module_cli_lifespan_startup_observation(request: dict) -> dict[str, object]:
@@ -2172,6 +2949,38 @@ def main() -> None:
         }
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
         return
+    if "server_startup_cancel_before_listener" in request:
+        observations = {
+            "server_startup_cancel_before_listener": asyncio.run(
+                server_startup_cancel_before_listener_observation()
+            ),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_startup_cancel_without_lifespan" in request:
+        observations = {
+            "server_startup_cancel_before_listener": asyncio.run(
+                server_startup_cancel_before_listener_observation("off")
+            ),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_startup_cancel_during_prebound_transfer" in request:
+        observations = {
+            "server_startup_cancel_before_listener": asyncio.run(
+                server_startup_cancel_during_prebound_transfer_observation()
+            ),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_startup_cancel_during_prebound_transfer_without_lifespan" in request:
+        observations = {
+            "server_startup_cancel_before_listener": asyncio.run(
+                server_startup_cancel_during_prebound_transfer_observation("off")
+            ),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
     if "server_callback_notify" in request:
         observations = {
             "server_callback_notify": asyncio.run(
@@ -2204,6 +3013,60 @@ def main() -> None:
         observations = {"server_startup_failure": observation}
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
         return
+    if "server_startup_bind_failure_lifespan_cleanup" in request:
+        try:
+            observation = asyncio.run(
+                server_startup_bind_failure_lifespan_observation()
+            )
+        except BaseException:
+            state = _startup_bind_failure_lifespan_state or {}
+            server = state.get("server")
+            task = state.get("task")
+            observation = {
+                "server_started": bool(
+                    server is not None and getattr(server, "started", False)
+                ),
+                "serve_task_finished": bool(task and task.done()),
+                "serve_raised": True,
+                "serve_timed_out": False,
+                "application_events": state.get("application_events", []),
+            }
+        observations = {"server_startup_bind_failure_lifespan_cleanup": observation}
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_startup_uds_socket_replacement_lifespan_cleanup" in request:
+        try:
+            observation = asyncio.run(
+                server_startup_uds_replacement_lifespan_observation()
+            )
+        except BaseException:
+            state = _startup_uds_replacement_lifespan_state or {}
+            server = state.get("server")
+            task = state.get("task")
+            observation = {
+                "server_started": bool(
+                    server is not None and getattr(server, "started", False)
+                ),
+                "serve_task_finished": bool(task and task.done()),
+                "serve_raised": True,
+                "serve_timed_out": False,
+                "application_events": state.get("application_events", []),
+            }
+        observations = {
+            "server_startup_uds_socket_replacement_lifespan_cleanup": observation
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_startup_failure_waiter" in request:
+        try:
+            observation = asyncio.run(server_startup_failure_waiter_observation())
+        except BaseException:
+            observation = startup_failure_waiter_result_from_state(
+                _startup_failure_waiter_state
+            )
+        observations = {"server_startup_failure_waiter": observation}
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
     if "server_lifespan_startup" in request:
         try:
             observation = asyncio.run(
@@ -2224,6 +3087,14 @@ def main() -> None:
                 "server_exit_code": error.code,
             }
         observations = {"server_lifespan_startup": observation}
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_lifespan_mode" in request:
+        observations = {
+            "server_lifespan_mode": asyncio.run(
+                server_lifespan_mode_observation(request["server_lifespan_mode"])
+            ),
+        }
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
         return
     if "module_cli_lifespan_startup" in request:

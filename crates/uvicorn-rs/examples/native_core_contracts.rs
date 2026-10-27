@@ -1398,8 +1398,10 @@ where
                 | "/native-websocket-reserved-response-header"
                 | "/native-websocket-duplicate-subprotocol"
                 | "/native-websocket-custom-response-header"
+                | "/native-websocket-handler-error"
                 | "/native-websocket-permessage-deflate-control-exchange"
                 | "/native-websocket-permessage-deflate-raw-frame-send-error"
+                | "/native-websocket-session-construction-error"
                 | "/native-websocket-permessage-deflate-close-without-code" => {
                     if request.uri().path() == "/native-websocket-missing-upgrade-capability" {
                         request.extensions_mut().remove::<ConnectionUpgrade>();
@@ -1413,6 +1415,9 @@ where
                         }
                         "/native-websocket-custom-response-header" => {
                             NativeWebSocketBehavior::EchoWithHeader
+                        }
+                        "/native-websocket-handler-error" => {
+                            NativeWebSocketBehavior::HandlerError
                         }
                         "/native-websocket-permessage-deflate-control-exchange" => {
                             NativeWebSocketBehavior::ControlExchange
@@ -1454,6 +1459,7 @@ where
                         }
                         "/native-websocket-accept-header-capacity"
                         | "/native-websocket-echo-accept-header-capacity"
+                        | "/native-websocket-handler-error"
                         | "/native-websocket-malformed-frame"
                         | "/native-websocket-close-flush-error"
                         | "/native-websocket-cancel-receive" => None,
@@ -2321,6 +2327,7 @@ where
 enum NativeWebSocketBehavior {
     Echo,
     EchoWithHeader,
+    HandlerError,
     ControlExchange,
     RejectRawFrameSend(watch::Sender<Option<String>>),
     CloseWithoutCode,
@@ -2388,6 +2395,20 @@ fn native_websocket_route<B>(
                 Err(error) => websocket_bad_request(error),
             }
         }
+        NativeWebSocketBehavior::HandlerError => upgrade
+            .accept(empty_body(), |mut session| async move {
+                let Some(WebSocketMessage::Text(_)) =
+                    session.receive().await.map_err(io::Error::other)?
+                else {
+                    return Err(io::Error::other(
+                        "WebSocket handler-error case expected a text message",
+                    ));
+                };
+                Err::<(), _>(io::Error::other(
+                    "injected native WebSocket handler failure",
+                ))
+            })
+            .map_err(|error| io::Error::other(error.to_string())),
         NativeWebSocketBehavior::ControlExchange => upgrade
             .accept(empty_body(), |mut session| async move {
                 let message = session.receive().await.map_err(io::Error::other)?;
@@ -3016,6 +3037,7 @@ async fn main() -> ProbeResult<()> {
                 | "native-server-graceful-deadline-overflow"
                 | "native-http1-concurrency-limit-observer-panic"
                 | "native-http1-keepalive-deadline-channel-closed"
+                | "native-http1-keepalive-deadline-rescheduled"
                 | "native-http1-keepalive-active-request-drain"
                 | "native-server-listener-accept-error"
                 | "native-tcp-multi-listener-accept-error"
@@ -3092,6 +3114,8 @@ async fn main() -> ProbeResult<()> {
                 run_isolated_http1_concurrency_limit_observer_panic_case(case).await?;
             } else if operation == "native-http1-keepalive-deadline-channel-closed" {
                 run_isolated_http1_keepalive_deadline_channel_closed_case(case).await?;
+            } else if operation == "native-http1-keepalive-deadline-rescheduled" {
+                run_isolated_http1_keepalive_deadline_rescheduled_case(case).await?;
             } else if operation == "native-http1-keepalive-active-request-drain" {
                 run_isolated_http1_keepalive_active_request_drain_case(case).await?;
             } else if operation == "native-server-graceful-deadline-overflow" {
@@ -4868,27 +4892,29 @@ async fn run_http1_keep_alive_timeout_upgrade_case(
         .into());
     }
 
-    let mut probe = [0_u8; 1];
-    match tokio::time::timeout(
-        Duration::from_millis((keep_alive_timeout_ms / 4).max(1)),
-        client.read(&mut probe),
-    )
-    .await
-    {
-        Err(_) => {}
-        Ok(Ok(0)) => {
-            return Err(io::Error::other(
-                "HTTP/1 keep-alive connection closed before its configured timeout",
-            )
-            .into());
+    if keep_alive_timeout_ms > 0 {
+        let mut probe = [0_u8; 1];
+        match tokio::time::timeout(
+            Duration::from_millis((keep_alive_timeout_ms / 4).max(1)),
+            client.read(&mut probe),
+        )
+        .await
+        {
+            Err(_) => {}
+            Ok(Ok(0)) => {
+                return Err(io::Error::other(
+                    "HTTP/1 keep-alive connection closed before its configured timeout",
+                )
+                .into());
+            }
+            Ok(Ok(_)) => {
+                return Err(io::Error::other(
+                    "HTTP/1 keep-alive connection produced unexpected bytes while idle",
+                )
+                .into());
+            }
+            Ok(Err(error)) => return Err(error.into()),
         }
-        Ok(Ok(_)) => {
-            return Err(io::Error::other(
-                "HTTP/1 keep-alive connection produced unexpected bytes while idle",
-            )
-            .into());
-        }
-        Ok(Err(error)) => return Err(error.into()),
     }
 
     let mut trailing = Vec::new();
@@ -5103,9 +5129,11 @@ async fn wait_for_http1_upgrade_error(
 ) -> ProbeResult<ObservedServerError> {
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
-        let observed = observed_errors
+        let observations = observed_errors
             .lock()
             .map_err(|_| io::Error::other("upgrade error-observation lock was poisoned"))?
+            .clone();
+        let observed = observations
             .iter()
             .find(|error| {
                 error.phase == ServerErrorPhase::Connection
@@ -5118,7 +5146,9 @@ async fn wait_for_http1_upgrade_error(
         if Instant::now() >= deadline {
             return Err(io::Error::new(
                 io::ErrorKind::TimedOut,
-                format!("no connection error contained {expected_message:?}"),
+                format!(
+                    "no connection error contained {expected_message:?}; observed errors: {observations:?}"
+                ),
             )
             .into());
         }
@@ -5247,6 +5277,11 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
         "close-reply-flush-failure" => Some("websocket.receive.close-reply.flush"),
         "close-receive-cancellation" => Some("websocket.receive.close-reply.cancel"),
         "accept-key-header-value-error" => Some("websocket.accept-key.header-value-error"),
+        "extension-negotiation-error" => Some("websocket.handshake.extension-negotiation"),
+        "accepted-session-construction-error" => Some("websocket.session.construction-error"),
+        "accepted-session-extension-header-error" => {
+            Some("websocket.session.extension-to-str-error")
+        }
         _ => None,
     };
     if fault_point != expected_fault_point {
@@ -5264,6 +5299,15 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
         }
         Some("websocket.accept-key.header-value-error") => {
             uvicorn_rs::arm_derived_accept_key_header_value_fault()
+        }
+        Some("websocket.handshake.extension-negotiation") => {
+            uvicorn_rs::arm_yawc_handshake_error_fault()
+        }
+        Some("websocket.session.construction-error") => {
+            uvicorn_rs::arm_yawc_session_construction_error_fault()
+        }
+        Some("websocket.session.extension-to-str-error") => {
+            uvicorn_rs::arm_yawc_session_extension_to_str_error_fault()
         }
         None => false,
         Some(_) => false,
@@ -5284,12 +5328,28 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
     let address = listener.local_addr()?;
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     let (application, state) = contract_app_with_state(shutdown_sender.clone());
+    let observed_server_errors = Arc::new(Mutex::new(Vec::<ObservedServerError>::new()));
+    let error_log = Arc::clone(&observed_server_errors);
+    let error_observer: ServerErrorObserver = Arc::new(move |event: ServerErrorEvent<'_>| {
+        if let Ok(mut observations) = error_log.lock() {
+            observations.push(ObservedServerError {
+                phase: event.phase(),
+                peer_addr: event.peer_addr(),
+                is_io_error: error_chain_contains::<io::Error>(event.error()),
+                is_direct_io_error: event.error().is::<io::Error>(),
+                has_error_source: event.error().source().is_some(),
+                h3_error_code: h3_connection_error_code(event.error()),
+                message: event.error().to_string(),
+            });
+        }
+    });
     let server = tokio::spawn(uvicorn_rs::serve_tcp(
         listener,
         application,
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             graceful_shutdown_timeout: Some(Duration::from_millis(500)),
+            error_observer: Some(error_observer),
             ..uvicorn_rs::ServerConfig::default()
         },
     ));
@@ -5301,6 +5361,10 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
     let workflow: ProbeResult<()> = async {
         match scenario {
             "message-exchange" => run_native_websocket_exchange_case(address, case).await,
+            "handler-error" => {
+                run_native_websocket_handler_error_case(address, case, &observed_server_errors)
+                    .await
+            }
             "permessage-deflate-control-exchange" => {
                 run_native_websocket_permessage_deflate_control_exchange_case(address, case).await
             }
@@ -5344,6 +5408,25 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
             }
             "accept-key-header-value-error" => {
                 run_native_websocket_rejection_case(address, case).await
+            }
+            "extension-negotiation-error" => {
+                run_native_websocket_rejection_case(address, case).await
+            }
+            "accepted-session-construction-error" => {
+                run_native_websocket_session_construction_error_case(
+                    address,
+                    case,
+                    &observed_server_errors,
+                )
+                .await
+            }
+            "accepted-session-extension-header-error" => {
+                run_native_websocket_session_construction_error_case(
+                    address,
+                    case,
+                    &observed_server_errors,
+                )
+                .await
             }
             "accept-after-close" => {
                 run_native_websocket_accept_after_close_case(
@@ -5401,6 +5484,15 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
             Some("websocket.accept-key.header-value-error") => {
                 uvicorn_rs::finish_derived_accept_key_header_value_fault()
             }
+            Some("websocket.handshake.extension-negotiation") => {
+                uvicorn_rs::finish_yawc_handshake_error_fault()
+            }
+            Some("websocket.session.construction-error") => {
+                uvicorn_rs::finish_yawc_session_construction_error_fault()
+            }
+            Some("websocket.session.extension-to-str-error") => {
+                uvicorn_rs::finish_yawc_session_extension_to_str_error_fault()
+            }
             None | Some(_) => false,
         };
         if !consumed {
@@ -5430,6 +5522,7 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
     })??;
     workflow?;
     server_result?;
+    verify_server_error_observation(case, observed_server_errors.as_ref())?;
     Ok(())
 }
 
@@ -5602,6 +5695,99 @@ async fn run_native_websocket_exchange_case(address: SocketAddr, case: &Value) -
         }
     }
     Ok(())
+}
+
+async fn run_native_websocket_handler_error_case(
+    address: SocketAddr,
+    case: &Value,
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+) -> ProbeResult<()> {
+    let (client, status, headers) = open_native_websocket_handshake(address, case).await?;
+    let expected_status = required_status(case, "expected_status")?;
+    let expected_accept = required_str(case, "expected_accept")?;
+    if status != expected_status
+        || !has_required_websocket_response_headers(&headers)
+        || headers.get("sec-websocket-accept").map(String::as_str) != Some(expected_accept)
+    {
+        return Err(io::Error::other(format!(
+            "{}: handler-error WebSocket handshake mismatch: status={status}, headers={headers:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    let mut websocket = tokio_tungstenite::WebSocketStream::from_raw_socket(
+        client,
+        tokio_tungstenite::tungstenite::protocol::Role::Client,
+        None,
+    )
+    .await;
+    websocket
+        .send(tokio_tungstenite::tungstenite::protocol::Message::Text(
+            required_str(case, "text_payload")?.to_owned().into(),
+        ))
+        .await?;
+    match tokio::time::timeout(Duration::from_secs(2), websocket.next()).await? {
+        Some(Err(_)) | None => {}
+        other => {
+            return Err(io::Error::other(format!(
+                "{}: failed WebSocket handler unexpectedly produced a frame: {other:?}",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+    }
+    drop(websocket);
+
+    let expected_error = required_str(case, "expected_server_error_message")?;
+    wait_for_http1_upgrade_error(observed_errors, expected_error).await?;
+    Ok(())
+}
+
+async fn run_native_websocket_session_construction_error_case(
+    address: SocketAddr,
+    case: &Value,
+    observed_errors: &Mutex<Vec<ObservedServerError>>,
+) -> ProbeResult<()> {
+    let (mut client, status, headers) = open_native_websocket_handshake(address, case).await?;
+    let expected_status = required_status(case, "expected_status")?;
+    let expected_accept = required_str(case, "expected_accept")?;
+    let expected_subprotocol = required_str(case, "expected_subprotocol")?;
+    let expected_extensions = required_str(case, "expected_extensions")?;
+    if status != expected_status
+        || !has_required_websocket_response_headers(&headers)
+        || headers.get("sec-websocket-accept").map(String::as_str) != Some(expected_accept)
+        || headers.get("sec-websocket-protocol").map(String::as_str) != Some(expected_subprotocol)
+        || !headers
+            .get("sec-websocket-extensions")
+            .is_some_and(|extensions| extensions.contains(expected_extensions))
+    {
+        return Err(io::Error::other(format!(
+            "{}: session-construction fault handshake mismatch: status={status}, headers={headers:?}",
+            required_str(case, "id")?
+        ))
+        .into());
+    }
+
+    let mut byte = [0_u8; 1];
+    match tokio::time::timeout(Duration::from_secs(2), client.read(&mut byte)).await? {
+        Ok(0) | Err(_) => {}
+        Ok(count) => {
+            return Err(io::Error::other(format!(
+                "{}: failed WebSocket session unexpectedly wrote {count} bytes",
+                required_str(case, "id")?
+            ))
+            .into());
+        }
+    }
+
+    wait_for_http1_upgrade_error(
+        observed_errors,
+        required_str(case, "expected_server_error_message")?,
+    )
+    .await?;
+    drop(client);
+    verify_http1_upgrade_listener_recovers(address, case).await
 }
 
 async fn run_native_websocket_manual_size_limit_case(
@@ -8945,6 +9131,7 @@ async fn run_cases(
                 | "native-server-graceful-deadline-overflow"
                 | "native-http1-concurrency-limit-observer-panic"
                 | "native-http1-keepalive-deadline-channel-closed"
+                | "native-http1-keepalive-deadline-rescheduled"
                 | "native-http1-keepalive-active-request-drain"
                 | "native-server-listener-accept-error"
                 | "native-tcp-multi-listener-accept-error"
@@ -17094,6 +17281,38 @@ async fn run_isolated_http1_keepalive_deadline_channel_closed_case(
         return Err(io::Error::new(
             io::ErrorKind::TimedOut,
             "closed keep-alive deadline channels did not finish both timeout waiters",
+        )
+        .into());
+    }
+    let mut output = io::stdout().lock();
+    writeln!(output, "FAULT_CONSUMED {FAULT_POINT}")?;
+    output.flush()?;
+    Ok(())
+}
+
+async fn run_isolated_http1_keepalive_deadline_rescheduled_case(case: &Value) -> ProbeResult<()> {
+    const FAULT_POINT: &str = "http1.keep-alive.deadline-rescheduled-before-expiry";
+    if required_str(case, "scenario")? != "deadline-rescheduled-before-expiry"
+        || case
+            .get("fault")
+            .and_then(|fault| fault.get("point"))
+            .and_then(Value::as_str)
+            != Some(FAULT_POINT)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "keep-alive deadline reschedule fault metadata differs from its scenario",
+        )
+        .into());
+    }
+    #[cfg(coverage)]
+    let stale_timeout_rejected =
+        uvicorn_rs::coverage_http1_keep_alive_deadline_rejects_stale_timeout().await;
+    #[cfg(not(coverage))]
+    let stale_timeout_rejected = false;
+    if !stale_timeout_rejected {
+        return Err(io::Error::other(
+            "rescheduled keep-alive deadline did not reject the stale timeout",
         )
         .into());
     }

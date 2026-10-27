@@ -98,6 +98,7 @@ class Server:
         self.started = False
         self._should_exit = False
         self.force_exit = False
+        self._shutdown_logged = False
         self.last_notified = 0.0
         self._native_server: Any = None
         self._native_task: asyncio.Task[None] | None = None
@@ -112,7 +113,19 @@ class Server:
     def should_exit(self, value: bool) -> None:
         self._should_exit = bool(value)
         if self._should_exit and self._native_server is not None:
+            self._log_shutdown_status()
             self._native_server.shutdown()
+
+    def _log_shutdown_status(self) -> None:
+        """Report shutdown before native draining waits on ASGI tasks."""
+        if self._shutdown_logged:
+            return
+        logger.info("Shutting down")
+        if self.server_state.tasks:
+            logger.info(
+                "Waiting for background tasks to complete. (CTRL+C to force quit)"
+            )
+        self._shutdown_logged = True
 
     @cached_property
     def limit_max_requests(self) -> int | None:
@@ -292,7 +305,7 @@ class Server:
 
     async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
         """Stop the Rust server and wait for active connections and lifespan cleanup."""
-        logger.info("Shutting down")
+        self._log_shutdown_status()
 
         native_server = self._native_server
         native_task = self._native_task
@@ -435,6 +448,8 @@ class Server:
         self._captured_signals.append(sig)
         if self._should_exit and sig == signal.SIGINT:
             self.force_exit = True
+            if self._native_server is not None:
+                self._native_server.force_shutdown()
         else:
             self.should_exit = True
 

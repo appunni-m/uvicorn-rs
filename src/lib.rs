@@ -21,7 +21,7 @@ use std::fmt;
 use std::future::Future;
 use std::net::SocketAddr;
 #[cfg(all(unix, uvicorn_rs_native_transport))]
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{FileTypeExt, PermissionsExt};
 use std::pin::Pin;
 #[cfg(feature = "runtime-diagnostics")]
 use std::sync::atomic::AtomicU64;
@@ -36,6 +36,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 #[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 use bytes::Buf;
 use bytes::Bytes;
+use des::TdesEde3;
 #[cfg(not(uvicorn_rs_native_transport))]
 use futures_util::task::AtomicWaker;
 #[cfg(not(uvicorn_rs_native_transport))]
@@ -57,12 +58,14 @@ use hyper_util::rt::TokioIo;
 #[cfg(not(uvicorn_rs_native_transport))]
 use hyper_util::server::conn::auto;
 use md5::{Digest, Md5};
+use pkcs8::der::{Reader, SliceReader, asn1::SequenceRef};
 #[cfg(coverage)]
 use pyo3::exceptions::PyMemoryError;
 use pyo3::exceptions::{PyOSError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList, PyModule, PyString};
 use pyo3_async_runtimes::TaskLocals;
+use sha1::Sha1;
 #[cfg(not(uvicorn_rs_native_transport))]
 use tokio::io::{AsyncRead, AsyncWrite};
 #[cfg(not(uvicorn_rs_native_transport))]
@@ -84,7 +87,7 @@ use uvicorn_rs::h3;
 use uvicorn_rs::h3_quinn;
 use uvicorn_rs::{
     WebSocketCloseCode as CloseCode, WebSocketCloseFrame as CloseFrame,
-    WebSocketMessage as Message, WebSocketSession,
+    WebSocketMessage as Message, WebSocketSession, WebSocketText,
 };
 use zeroize::{Zeroize, Zeroizing};
 
@@ -146,6 +149,17 @@ enum CoverageFaultPoint {
     PythonSslCaVerifierCreateVerifyMode,
     PythonSslCaVerifierSetVerifyMode,
     PythonSslCaVerifierRustParseError,
+    PythonSslKeyfileErrorImport,
+    PythonSslKeyfileErrorProtocol,
+    PythonSslKeyfileErrorContext,
+    PythonSslKeyfileErrorCreateContext,
+    PythonSslKeyfileRustDecryptError,
+    Pkcs12OuterReaderTooLong,
+    Pkcs12OuterSequenceDecode,
+    Pkcs12OuterReaderFinish,
+    Pkcs12EncryptedInfoReaderTooLong,
+    Pkcs12AlgorithmReaderTooLong,
+    Pkcs12ParametersReaderTooLong,
     NativeModuleWrapServeFunction,
     NativeRuntimeBuildError,
     ServerWebSocketTaskShutdownPanic,
@@ -169,6 +183,7 @@ enum CoverageFaultPoint {
     HttpResponseStartStatusExtract,
     HttpResponseStartHeadersGetItem,
     HttpResponseStartHeadersExtract,
+    HttpResponseDateHeaderInvalidValue,
     HttpResponseBodyBodyGetItem,
     HttpResponseBodyBodyExtract,
     HttpResponseBodyMoreBodyGetItem,
@@ -184,6 +199,8 @@ enum CoverageFaultPoint {
     WebSocketYawcUnexpectedContinuationFrame,
     WebSocketYawcInvalidTextFrame,
     WebSocketYawcInvalidCloseReason,
+    WebSocketYawcCloseReplyFlushError,
+    WebSocketYawcCloseReplyFlushUnexpectedFrame,
     WebSocketHandshakeSendClosed,
     WebSocketOutgoingChannelClosedOnSend,
     WebSocketOutgoingQueueReceiverClosed,
@@ -247,6 +264,7 @@ enum CoverageFaultPoint {
     HttpReceiveImmediateDisconnectMessageError,
     HttpReceiveLockContention,
     HttpConnectionPeerReadFailedWaitComplete,
+    ServerConnectionInvalidDefaultHeaderSourceChain,
     ServerConnectionTaskServiceError,
     ServerConnectionInfoMissing,
     ServerConnectionLifetimeMissing,
@@ -315,6 +333,7 @@ enum CoverageFaultPoint {
     Http3BodyPumpSendError,
     ServerListenerAcceptError,
     ServerListenerLocalAddrError,
+    ServerUnixListenerSetPermissionsError,
     ServerPreboundBindError,
     ServerPreboundAcceptError,
     ServerPreboundReadError,
@@ -421,6 +440,9 @@ impl CoverageFaultPoint {
             Self::HttpConnectionPeerReadFailedWaitComplete => {
                 "http.connection.peer-read-failed.wait-complete"
             }
+            Self::ServerConnectionInvalidDefaultHeaderSourceChain => {
+                "server.connection.invalid-default-header.source-chain"
+            }
             Self::HttpBodyPumpFirstPollPause => "http.body-pump.first-poll-pause",
             Self::HttpBodyPumpBatchLimitOneByte => "http.body-pump.batch-limit.one-byte",
             Self::HttpBodyPumpBatchThresholdSendConnectionClosed => {
@@ -479,6 +501,19 @@ impl CoverageFaultPoint {
             }
             Self::PythonSslCaVerifierSetVerifyMode => "python.ssl.ca-verifier.set-verify-mode",
             Self::PythonSslCaVerifierRustParseError => "python.ssl.ca-verifier.rust-parse-error",
+            Self::PythonSslKeyfileErrorImport => "python.ssl.keyfile-error.import",
+            Self::PythonSslKeyfileErrorProtocol => "python.ssl.keyfile-error.protocol",
+            Self::PythonSslKeyfileErrorContext => "python.ssl.keyfile-error.context",
+            Self::PythonSslKeyfileErrorCreateContext => "python.ssl.keyfile-error.create-context",
+            Self::PythonSslKeyfileRustDecryptError => "python.ssl.keyfile.rust-decrypt-error",
+            Self::Pkcs12OuterReaderTooLong => "python.pkcs12.reader.outer-too-long",
+            Self::Pkcs12OuterSequenceDecode => "python.pkcs12.reader.outer-sequence-decode",
+            Self::Pkcs12OuterReaderFinish => "python.pkcs12.reader.outer-finish",
+            Self::Pkcs12EncryptedInfoReaderTooLong => {
+                "python.pkcs12.reader.encrypted-info-too-long"
+            }
+            Self::Pkcs12AlgorithmReaderTooLong => "python.pkcs12.reader.algorithm-too-long",
+            Self::Pkcs12ParametersReaderTooLong => "python.pkcs12.reader.parameters-too-long",
             Self::NativeModuleWrapServeFunction => "native.module.wrap-function.serve",
             Self::NativeRuntimeBuildError => "native.runtime.build.error",
             Self::ServerWebSocketTaskShutdownPanic => "server.websocket-task.shutdown-panic",
@@ -510,6 +545,7 @@ impl CoverageFaultPoint {
             Self::HttpResponseStartStatusExtract => "http.response.start.status.extract",
             Self::HttpResponseStartHeadersGetItem => "http.response.start.headers.get-item",
             Self::HttpResponseStartHeadersExtract => "http.response.start.headers.extract",
+            Self::HttpResponseDateHeaderInvalidValue => "http.response.date-header.invalid-value",
             Self::HttpResponseBodyBodyGetItem => "http.response.body.body.get-item",
             Self::HttpResponseBodyBodyExtract => "http.response.body.body.extract",
             Self::HttpResponseBodyMoreBodyGetItem => "http.response.body.more-body.get-item",
@@ -527,6 +563,10 @@ impl CoverageFaultPoint {
             }
             Self::WebSocketYawcInvalidTextFrame => "websocket.yawc.invalid-text-frame",
             Self::WebSocketYawcInvalidCloseReason => "websocket.yawc.invalid-close-reason",
+            Self::WebSocketYawcCloseReplyFlushError => "websocket.yawc.close-reply-flush-error",
+            Self::WebSocketYawcCloseReplyFlushUnexpectedFrame => {
+                "websocket.yawc.close-reply-flush-unexpected-frame"
+            }
             Self::WebSocketHandshakeSendClosed => "websocket.handshake.send-closed",
             Self::WebSocketOutgoingChannelClosedOnSend => {
                 "websocket.outgoing.channel-closed-on-send"
@@ -709,6 +749,9 @@ impl CoverageFaultPoint {
             Self::Http3BodyPumpSendError => "http3.body-pump.send-error",
             Self::ServerListenerAcceptError => "server.listener.accept-error",
             Self::ServerListenerLocalAddrError => "server.listener.local-addr-error",
+            Self::ServerUnixListenerSetPermissionsError => {
+                "server.unix-listener.set-permissions-error"
+            }
             Self::ServerPreboundBindError => "server.prebound-transfer.bind-error",
             Self::ServerPreboundAcceptError => "server.prebound-transfer.accept-error",
             Self::ServerPreboundReadError => "server.prebound-transfer.read-error",
@@ -895,6 +938,20 @@ macro_rules! coverage_value {
         #[cfg(not(coverage))]
         let result = $operation;
         result
+    }};
+}
+
+macro_rules! coverage_option {
+    ($fault_point:ident, $operation:expr_2021) => {{
+        #[cfg(coverage)]
+        let result = if coverage_fault_take(CoverageFaultPoint::$fault_point) {
+            None
+        } else {
+            $operation
+        };
+        #[cfg(not(coverage))]
+        let result = $operation;
+        result?
     }};
 }
 
@@ -1915,7 +1972,7 @@ struct WebSocketDriverContext {
 }
 
 impl WebSocketKeepaliveConfig {
-    fn from_seconds(interval: Option<f64>, timeout: Option<f64>) -> PyResult<Self> {
+    fn from_seconds(interval: Option<f64>, timeout: Option<f64>) -> Self {
         let interval = match interval {
             Some(seconds) if seconds <= 0.0 => None,
             Some(seconds) => Self::duration_from_seconds(seconds),
@@ -1926,7 +1983,7 @@ impl WebSocketKeepaliveConfig {
             Some(seconds) => Self::duration_from_seconds(seconds),
             None => None,
         };
-        Ok(Self { interval, timeout })
+        Self { interval, timeout }
     }
 
     fn duration_from_seconds(seconds: f64) -> Option<std::time::Duration> {
@@ -2555,9 +2612,6 @@ impl fmt::Display for InvalidDefaultHeader {
 impl StdError for InvalidDefaultHeader {}
 
 fn contains_invalid_default_header_error(error: &(dyn StdError + 'static)) -> bool {
-    if format!("{error:?}").contains("InvalidDefaultHeader") {
-        return true;
-    }
     let mut source = Some(error);
     while let Some(error) = source {
         if error.is::<InvalidDefaultHeader>() {
@@ -2565,7 +2619,33 @@ fn contains_invalid_default_header_error(error: &(dyn StdError + 'static)) -> bo
         }
         source = error.source();
     }
-    false
+    format!("{error:?}").contains("InvalidDefaultHeader")
+}
+
+#[cfg(coverage)]
+struct CoverageInvalidDefaultHeaderSourceError {
+    source: InvalidDefaultHeader,
+}
+
+#[cfg(coverage)]
+impl fmt::Debug for CoverageInvalidDefaultHeaderSourceError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("CoverageInvalidDefaultHeaderSourceError")
+    }
+}
+
+#[cfg(coverage)]
+impl fmt::Display for CoverageInvalidDefaultHeaderSourceError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("coverage error wrapper")
+    }
+}
+
+#[cfg(coverage)]
+impl StdError for CoverageInvalidDefaultHeaderSourceError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        Some(&self.source)
+    }
 }
 
 fn invalid_default_header_error(error: InvalidDefaultHeader) -> std::io::Error {
@@ -3256,7 +3336,8 @@ fn python_task_future(
 }
 
 enum WebSocketIncoming {
-    Data(Message),
+    Text(WebSocketText),
+    Binary(Bytes),
     Disconnect { code: u16, reason: String },
 }
 
@@ -3708,7 +3789,7 @@ impl WebSocketIo {
             Python::attach(|py| -> PyResult<Py<PyAny>> {
                 let message = PyDict::new(py);
                 match incoming_message {
-                    Some(WebSocketIncoming::Data(Message::Text(text))) => {
+                    Some(WebSocketIncoming::Text(text)) => {
                         coverage_try!(
                             WebSocketReceiveTextTypeSetItem,
                             message.set_item("type", "websocket.receive")
@@ -3718,7 +3799,7 @@ impl WebSocketIo {
                             message.set_item("text", text.as_str())
                         );
                     }
-                    Some(WebSocketIncoming::Data(Message::Binary(data))) => {
+                    Some(WebSocketIncoming::Binary(data)) => {
                         coverage_try!(
                             WebSocketReceiveBinaryTypeSetItem,
                             message.set_item("type", "websocket.receive")
@@ -3741,11 +3822,6 @@ impl WebSocketIo {
                             WebSocketReceiveDisconnectReasonSetItem,
                             message.set_item("reason", reason)
                         );
-                    }
-                    Some(WebSocketIncoming::Data(_)) => {
-                        return Err(PyRuntimeError::new_err(
-                            "WebSocket transport delivered a non-data message to ASGI",
-                        ));
                     }
                     None => {
                         state.store(3, Ordering::Release);
@@ -4469,6 +4545,7 @@ impl Drop for ServerStartupSignal {
 #[pyclass]
 struct ServerControl {
     cancellation: CancellationToken,
+    force_application_shutdown: CancellationToken,
     startup: watch::Sender<ServerStartupState>,
     startup_gate: Arc<AtomicU8>,
     startup_acknowledgement: Option<watch::Sender<bool>>,
@@ -4483,6 +4560,7 @@ impl ServerControl {
         let startup_acknowledgement = defer_acceptance.then(|| watch::channel(false).0);
         Self {
             cancellation: CancellationToken::new(),
+            force_application_shutdown: CancellationToken::new(),
             startup,
             startup_gate: Arc::new(AtomicU8::new(ServerStartupGate::Starting as u8)),
             startup_acknowledgement,
@@ -4491,6 +4569,10 @@ impl ServerControl {
 
     fn shutdown(&self) {
         self.cancellation.cancel();
+    }
+
+    fn force_shutdown(&self) {
+        self.force_application_shutdown.cancel();
     }
 
     fn cancel_startup(&self) {
@@ -5443,7 +5525,7 @@ fn serve<'py>(
 ) -> PyResult<Bound<'py, PyAny>> {
     let lifespan_mode = LifespanMode::from_python(&lifespan)?;
     let websocket_keepalive =
-        WebSocketKeepaliveConfig::from_seconds(ws_ping_interval, ws_ping_timeout)?;
+        WebSocketKeepaliveConfig::from_seconds(ws_ping_interval, ws_ping_timeout);
     #[cfg(not(uvicorn_rs_native_transport))]
     if limit_concurrency.is_some() {
         return Err(PyValueError::new_err(
@@ -5513,6 +5595,7 @@ fn serve<'py>(
         coverage_fault_take(CoverageFaultPoint::ServerServeControlBorrowConflict)
             .then(|| control.borrow_mut(py));
     let cancellation = control.try_borrow(py)?.cancellation.clone();
+    let force_application_shutdown = control.try_borrow(py)?.force_application_shutdown.clone();
     let startup_gate = control.try_borrow(py)?.startup_gate.clone();
     let startup_signal =
         ServerStartupSignal::new(control.try_borrow(py)?.startup.clone(), startup_gate);
@@ -5591,6 +5674,7 @@ fn serve<'py>(
             invoke,
             locals,
             cancellation,
+            force_application_shutdown,
             startup_signal,
             startup_acknowledgement,
             options,
@@ -5733,7 +5817,12 @@ fn load_client_cert_verifier(
         }
         for certificate in certificates {
             roots.add(certificate).map_err(|error| {
-                PyValueError::new_err(format!("invalid CA certificate: {error}"))
+                python_ssl_ca_certificates_error(
+                    py,
+                    path,
+                    cert_reqs,
+                    PyValueError::new_err(format!("invalid CA certificate: {error}")),
+                )
             })?;
         }
     }
@@ -5780,6 +5869,11 @@ fn decrypt_pkcs8_private_key(
             "ssl_keyfile_password requires a PKCS#8 ENCRYPTED PRIVATE KEY PEM",
         ));
     }
+    if let Some((algorithm, encrypted_data, salt, iterations)) =
+        parse_pkcs12_pbe_parameters(encrypted_document.as_bytes())
+    {
+        return decrypt_pkcs12_pbe_sha1_3des(algorithm, encrypted_data, salt, iterations, password);
+    }
     let encrypted_key = pkcs8::EncryptedPrivateKeyInfoRef::try_from(encrypted_document.as_bytes())
         .map_err(|error| {
             PyValueError::new_err(format!("invalid encrypted private-key PEM: {error}"))
@@ -5792,10 +5886,190 @@ fn decrypt_pkcs8_private_key(
     Ok(rustls::pki_types::PrivatePkcs8KeyDer::from(decrypted_key.as_bytes().to_vec()).into())
 }
 
+const PKCS12_PBE_WITH_SHA_AND_3_KEY_TRIPLE_DES_CBC_OID: pkcs8::der::asn1::ObjectIdentifier =
+    pkcs8::der::asn1::ObjectIdentifier::new_unwrap("1.2.840.113549.1.12.1.3");
+const PKCS12_PBE_WITH_SHA_AND_2_KEY_TRIPLE_DES_CBC_OID: pkcs8::der::asn1::ObjectIdentifier =
+    pkcs8::der::asn1::ObjectIdentifier::new_unwrap("1.2.840.113549.1.12.1.4");
+
+#[derive(Clone, Copy)]
+enum Pkcs12PbeAlgorithm {
+    ThreeKeyTripleDes,
+    TwoKeyTripleDes,
+}
+
+fn parse_pkcs12_pbe_parameters(
+    der_bytes: &[u8],
+) -> Option<(Pkcs12PbeAlgorithm, &[u8], &[u8], u32)> {
+    let mut encrypted_info_reader =
+        coverage_option!(Pkcs12OuterReaderTooLong, SliceReader::new(der_bytes).ok());
+    let encrypted_info = coverage_option!(
+        Pkcs12OuterSequenceDecode,
+        encrypted_info_reader.decode::<&SequenceRef>().ok()
+    );
+    coverage_option!(Pkcs12OuterReaderFinish, encrypted_info_reader.finish().ok());
+
+    let mut encrypted_info_fields = coverage_option!(
+        Pkcs12EncryptedInfoReaderTooLong,
+        SliceReader::new(encrypted_info.as_bytes()).ok()
+    );
+    let algorithm = encrypted_info_fields.decode::<&SequenceRef>().ok()?;
+    let encrypted_data = encrypted_info_fields
+        .decode::<&pkcs8::der::asn1::OctetStringRef>()
+        .ok()?;
+    encrypted_info_fields.finish().ok()?;
+
+    let mut algorithm_fields = coverage_option!(
+        Pkcs12AlgorithmReaderTooLong,
+        SliceReader::new(algorithm.as_bytes()).ok()
+    );
+    let algorithm_oid = algorithm_fields
+        .decode::<pkcs8::der::asn1::ObjectIdentifier>()
+        .ok()?;
+    let algorithm = if algorithm_oid == PKCS12_PBE_WITH_SHA_AND_3_KEY_TRIPLE_DES_CBC_OID {
+        Pkcs12PbeAlgorithm::ThreeKeyTripleDes
+    } else if algorithm_oid == PKCS12_PBE_WITH_SHA_AND_2_KEY_TRIPLE_DES_CBC_OID {
+        Pkcs12PbeAlgorithm::TwoKeyTripleDes
+    } else {
+        return None;
+    };
+    let parameters = algorithm_fields.decode::<&SequenceRef>().ok()?;
+    algorithm_fields.finish().ok()?;
+
+    let mut parameter_fields = coverage_option!(
+        Pkcs12ParametersReaderTooLong,
+        SliceReader::new(parameters.as_bytes()).ok()
+    );
+    let salt = parameter_fields
+        .decode::<&pkcs8::der::asn1::OctetStringRef>()
+        .ok()?;
+    let iterations = parameter_fields.decode::<u32>().ok()?;
+    parameter_fields.finish().ok()?;
+
+    Some((
+        algorithm,
+        encrypted_data.as_bytes(),
+        salt.as_bytes(),
+        iterations,
+    ))
+}
+
+fn decrypt_pkcs12_pbe_sha1_3des(
+    algorithm: Pkcs12PbeAlgorithm,
+    encrypted_data: &[u8],
+    salt: &[u8],
+    iterations: u32,
+    password: &str,
+) -> PyResult<rustls::pki_types::PrivateKeyDer<'static>> {
+    if iterations == 0 {
+        return Err(PyValueError::new_err(
+            "PKCS#12 PBE iteration count must be greater than zero",
+        ));
+    }
+    if encrypted_data.is_empty() || encrypted_data.len() % 8 != 0 {
+        return Err(PyValueError::new_err(
+            "PKCS#12 PBE ciphertext has an invalid length",
+        ));
+    }
+
+    let key = match algorithm {
+        Pkcs12PbeAlgorithm::ThreeKeyTripleDes => {
+            derive_pkcs12_pbe_sha1_key::<24>(password, salt, 1, iterations)
+        }
+        Pkcs12PbeAlgorithm::TwoKeyTripleDes => {
+            let two_key = derive_pkcs12_pbe_sha1_key::<16>(password, salt, 1, iterations);
+            let mut three_key = Zeroizing::new([0u8; 24]);
+            three_key[..16].copy_from_slice(&two_key[..]);
+            three_key[16..].copy_from_slice(&two_key[..8]);
+            three_key
+        }
+    };
+    let iv = derive_pkcs12_pbe_sha1_key::<8>(password, salt, 2, iterations);
+    type Pkcs12PbeDecryptor = cbc::Decryptor<TdesEde3>;
+    let cipher_key: &aes::cipher::Key<Pkcs12PbeDecryptor> = (&*key).into();
+    let cipher_iv: &aes::cipher::Iv<Pkcs12PbeDecryptor> = (&*iv).into();
+    let mut plaintext = Zeroizing::new(encrypted_data.to_vec());
+    let plaintext_len = cbc::Decryptor::<TdesEde3>::new(cipher_key, cipher_iv)
+        .decrypt_padded::<Pkcs7>(&mut plaintext)
+        .map(|plaintext| plaintext.len())
+        .map_err(|_| PyValueError::new_err("could not decrypt PKCS#12 PBE private key"))?;
+
+    let decrypted_key = &plaintext[..plaintext_len];
+    pkcs8::PrivateKeyInfoRef::try_from(decrypted_key).map_err(|error| {
+        PyValueError::new_err(format!("could not decrypt private key: {error}"))
+    })?;
+    let private_key = decrypted_key.to_vec();
+    Ok(rustls::pki_types::PrivatePkcs8KeyDer::from(private_key).into())
+}
+
+fn derive_pkcs12_pbe_sha1_key<const OUTPUT_LEN: usize>(
+    password: &str,
+    salt: &[u8],
+    diversifier: u8,
+    iterations: u32,
+) -> Zeroizing<[u8; OUTPUT_LEN]> {
+    const BLOCK_SIZE: usize = 64;
+    const DIGEST_SIZE: usize = 20;
+
+    let mut password_bmp = Zeroizing::new(Vec::with_capacity(password.len() * 2 + 2));
+    for code_unit in password.encode_utf16() {
+        password_bmp.extend_from_slice(&code_unit.to_be_bytes());
+    }
+    password_bmp.extend_from_slice(&[0, 0]);
+
+    let salt_len = salt.len().div_ceil(BLOCK_SIZE) * BLOCK_SIZE;
+    let password_len = password_bmp.len().div_ceil(BLOCK_SIZE) * BLOCK_SIZE;
+    let mut state = Zeroizing::new(Vec::with_capacity(salt_len + password_len));
+    for index in 0..salt_len {
+        state.push(salt[index % salt.len()]);
+    }
+    for index in 0..password_len {
+        state.push(password_bmp[index % password_bmp.len()]);
+    }
+
+    let diversifier = [diversifier; BLOCK_SIZE];
+    let mut output = Zeroizing::new([0_u8; OUTPUT_LEN]);
+    let mut written = 0;
+    while written < OUTPUT_LEN {
+        let mut hasher = Sha1::new();
+        hasher.update(diversifier);
+        hasher.update(&state[..]);
+        let mut digest = Zeroizing::new(hasher.finalize().to_vec());
+        for _ in 1..iterations {
+            let next_digest = Sha1::digest(&digest[..]);
+            digest.zeroize();
+            digest.extend_from_slice(&next_digest);
+        }
+
+        let mut block = [0_u8; BLOCK_SIZE];
+        for (index, byte) in block.iter_mut().enumerate() {
+            *byte = digest[index % DIGEST_SIZE];
+        }
+        for chunk in state.chunks_exact_mut(BLOCK_SIZE) {
+            let mut carry = 1_u16;
+            for (value, addend) in chunk.iter_mut().rev().zip(block.iter().rev()) {
+                let sum = u16::from(*value) + u16::from(*addend) + carry;
+                *value = sum as u8;
+                carry = sum >> 8;
+            }
+        }
+        let count = (OUTPUT_LEN - written).min(DIGEST_SIZE);
+        output[written..written + count].copy_from_slice(&digest[..count]);
+        written += count;
+    }
+    output
+}
+
 fn decrypt_encrypted_private_key(
     pem_bytes: &[u8],
     password: &str,
 ) -> PyResult<rustls::pki_types::PrivateKeyDer<'static>> {
+    #[cfg(coverage)]
+    if coverage_fault_take(CoverageFaultPoint::PythonSslKeyfileRustDecryptError) {
+        return Err(PyRuntimeError::new_err(
+            "coverage-injected Rust encrypted private-key decryption failure",
+        ));
+    }
+
     if let Some(key) = decrypt_traditional_encrypted_private_key(pem_bytes, password)? {
         return Ok(key);
     }
@@ -5849,6 +6123,10 @@ fn decrypt_traditional_encrypted_private_key(
                 }
             } else if let Some(value) = line.strip_prefix("DEK-Info:") {
                 dek_info = Some(value.trim());
+            } else {
+                return Err(PyValueError::new_err(
+                    "invalid traditional private-key PEM header",
+                ));
             }
             continue;
         }
@@ -5856,8 +6134,12 @@ fn decrypt_traditional_encrypted_private_key(
             encoded_body.push(byte);
         }
     }
+    // Plaintext RSA/EC keys are returned by rustls-pemfile before this helper
+    // is called. A traditional key reaching this path must declare encryption.
     if !encrypted {
-        return Ok(None);
+        return Err(PyValueError::new_err(
+            "traditional private-key PEM is missing its encryption header",
+        ));
     }
     if !in_body {
         return Err(PyValueError::new_err(
@@ -5877,10 +6159,11 @@ fn decrypt_traditional_encrypted_private_key(
         .split_once(',')
         .ok_or_else(|| PyValueError::new_err("traditional private-key PEM has invalid DEK-Info"))?;
     let iv = decode_hex(encoded_iv.as_bytes())?;
-    let (key_len, block_len) = match cipher_name {
-        "AES-128-CBC" => (16, 16),
-        "AES-192-CBC" => (24, 16),
-        "AES-256-CBC" => (32, 16),
+    let (cipher, key_len, block_len) = match cipher_name {
+        "AES-128-CBC" => (TraditionalPrivateKeyCipher::Aes128, 16, 16),
+        "AES-192-CBC" => (TraditionalPrivateKeyCipher::Aes192, 24, 16),
+        "AES-256-CBC" => (TraditionalPrivateKeyCipher::Aes256, 32, 16),
+        "DES-EDE3-CBC" => (TraditionalPrivateKeyCipher::TdesEde3, 24, 8),
         _ => {
             return Err(PyValueError::new_err(format!(
                 "unsupported traditional private-key PEM cipher {cipher_name}"
@@ -5907,27 +6190,48 @@ fn decrypt_traditional_encrypted_private_key(
     // using MD5 and the first eight IV bytes. Keep this compatibility-only
     // derivation scoped to decrypting existing PEM keys.
     let key = Zeroizing::new(legacy_pem_key(password.as_bytes(), &iv[..8], key_len));
-    let plaintext_len = match cipher_name {
-        "AES-128-CBC" => cbc::Decryptor::<Aes128>::new_from_slices(&key, &iv)
-            .map_err(|_| PyValueError::new_err("invalid AES key or IV length"))?
+    // `legacy_pem_key` truncates to the selected cipher's key length, and the
+    // IV was checked against `block_len` above. Keep initialization fallible
+    // so an invariant violation is reported instead of panicking.
+    let plaintext_len = match cipher {
+        TraditionalPrivateKeyCipher::Aes128 => cbc::Decryptor::<Aes128>::new_from_slices(&key, &iv)
+            .map_err(|_| {
+                PyValueError::new_err(
+                    "could not initialize traditional private-key cipher with validated lengths",
+                )
+            })?
             .decrypt_padded::<Pkcs7>(&mut ciphertext)
             .map(|plaintext| plaintext.len())
             .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
-        "AES-192-CBC" => cbc::Decryptor::<Aes192>::new_from_slices(&key, &iv)
-            .map_err(|_| PyValueError::new_err("invalid AES key or IV length"))?
+        TraditionalPrivateKeyCipher::Aes192 => cbc::Decryptor::<Aes192>::new_from_slices(&key, &iv)
+            .map_err(|_| {
+                PyValueError::new_err(
+                    "could not initialize traditional private-key cipher with validated lengths",
+                )
+            })?
             .decrypt_padded::<Pkcs7>(&mut ciphertext)
             .map(|plaintext| plaintext.len())
             .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
-        "AES-256-CBC" => cbc::Decryptor::<Aes256>::new_from_slices(&key, &iv)
-            .map_err(|_| PyValueError::new_err("invalid AES key or IV length"))?
+        TraditionalPrivateKeyCipher::Aes256 => cbc::Decryptor::<Aes256>::new_from_slices(&key, &iv)
+            .map_err(|_| {
+                PyValueError::new_err(
+                    "could not initialize traditional private-key cipher with validated lengths",
+                )
+            })?
             .decrypt_padded::<Pkcs7>(&mut ciphertext)
             .map(|plaintext| plaintext.len())
             .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
-        _ => {
-            return Err(PyValueError::new_err(format!(
-                "unsupported traditional private-key PEM cipher {cipher_name}"
-            )));
-        }
+        TraditionalPrivateKeyCipher::TdesEde3 => cbc::Decryptor::<TdesEde3>::new_from_slices(
+            &key, &iv,
+        )
+        .map_err(|_| {
+            PyValueError::new_err(
+                "could not initialize traditional private-key cipher with validated lengths",
+            )
+        })?
+        .decrypt_padded::<Pkcs7>(&mut ciphertext)
+        .map(|plaintext| plaintext.len())
+        .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
     };
     let private_key_der = ciphertext[..plaintext_len].to_vec();
     ciphertext.zeroize();
@@ -5941,6 +6245,14 @@ fn decrypt_traditional_encrypted_private_key(
         ),
     };
     Ok(Some(key))
+}
+
+#[derive(Clone, Copy)]
+enum TraditionalPrivateKeyCipher {
+    Aes128,
+    Aes192,
+    Aes256,
+    TdesEde3,
 }
 
 #[derive(Clone, Copy)]
@@ -6004,9 +6316,34 @@ fn python_ssl_keyfile_error(
     // that failure only on the Rust decryption error path to preserve its
     // public SSLError type and OpenSSL message; successful TLS setup stays in Rust.
     let result = (|| -> PyResult<()> {
-        let ssl = PyModule::import(py, "ssl")?;
-        let protocol = ssl.getattr("PROTOCOL_TLS_SERVER")?;
-        let context = ssl.getattr("SSLContext")?.call1((protocol,))?;
+        macro_rules! coverage_ssl_result {
+            ($fault:ident, $operation:expr_2021) => {{
+                #[cfg(coverage)]
+                let result = if coverage_fault_take(CoverageFaultPoint::$fault) {
+                    Err(PyRuntimeError::new_err(format!(
+                        "coverage-injected Python SSL keyfile helper failure at {}",
+                        CoverageFaultPoint::$fault.as_str()
+                    )))
+                } else {
+                    $operation
+                };
+                #[cfg(not(coverage))]
+                let result = $operation;
+                result
+            }};
+        }
+
+        let ssl = coverage_ssl_result!(PythonSslKeyfileErrorImport, PyModule::import(py, "ssl"))?;
+        let protocol = coverage_ssl_result!(
+            PythonSslKeyfileErrorProtocol,
+            ssl.getattr("PROTOCOL_TLS_SERVER")
+        )?;
+        let context_type =
+            coverage_ssl_result!(PythonSslKeyfileErrorContext, ssl.getattr("SSLContext"))?;
+        let context = coverage_ssl_result!(
+            PythonSslKeyfileErrorCreateContext,
+            context_type.call1((protocol,))
+        )?;
         context
             .call_method1("load_cert_chain", (certfile, keyfile, password))
             .map(drop)
@@ -6321,10 +6658,29 @@ async fn bind_tcp_listener(host: &str, port: u16, backlog: i32) -> std::io::Resu
 
 #[cfg(all(unix, uvicorn_rs_native_transport))]
 fn bind_unix_listener(path: &str) -> std::io::Result<UnixListener> {
+    // Match asyncio's create_unix_server: replace an existing socket path,
+    // even when another open listener still owns that socket inode. Leave
+    // regular files and other path types in place so bind reports the conflict.
+    if let Ok(metadata) = std::fs::metadata(path) {
+        if metadata.file_type().is_socket() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
     let listener = UnixListener::bind(path)?;
     // Match Uvicorn's AF_UNIX bind path, which applies 0666 permissions after
     // bind and leaves the socket path available for the service manager.
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o666))?;
+    #[cfg(coverage)]
+    let permissions_result =
+        if coverage_fault_take(CoverageFaultPoint::ServerUnixListenerSetPermissionsError) {
+            Err(std::io::Error::other(
+                "coverage-injected Unix socket permission failure",
+            ))
+        } else {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o666))
+        };
+    #[cfg(not(coverage))]
+    let permissions_result = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o666));
+    permissions_result?;
     Ok(listener)
 }
 
@@ -6625,6 +6981,7 @@ struct ServeContext {
     invoke: Py<PyAny>,
     locals: TaskLocals,
     cancellation: CancellationToken,
+    force_application_shutdown: CancellationToken,
     startup_signal: ServerStartupSignal,
     startup_acknowledgement: Option<watch::Receiver<bool>>,
     options: ServeOptions,
@@ -6637,6 +6994,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         invoke,
         locals,
         cancellation,
+        force_application_shutdown,
         mut startup_signal,
         mut startup_acknowledgement,
         mut options,
@@ -6692,7 +7050,19 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                 )?,
             };
             let ReceivedTcpListeners { first, remaining } = received;
-            let server_addr = first.local_addr().map_err(|error| {
+            #[cfg(coverage)]
+            let local_addr = {
+                if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
+                    Err(std::io::Error::other(
+                        "coverage-injected listener address inspection error",
+                    ))
+                } else {
+                    first.local_addr()
+                }
+            };
+            #[cfg(not(coverage))]
+            let local_addr = first.local_addr();
+            let server_addr = local_addr.map_err(|error| {
                 PyOSError::new_err(format!("could not inspect inherited TCP listener: {error}"))
             })?;
             let mut listeners = Vec::with_capacity(remaining.len() + 1);
@@ -6934,7 +7304,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         cancellation: cancellation.clone(),
         graceful_timeout: options.graceful_timeout,
         pending_python_tasks,
-        force_application_shutdown: CancellationToken::new(),
+        force_application_shutdown,
     });
     // `started` means lifespan startup completed and the bound listeners are
     // ready to accept application traffic. Notify the Python compatibility
@@ -7017,14 +7387,30 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             error_observer: Some(Arc::new(|event| {
                 if event.phase() == uvicorn_rs::ServerErrorPhase::Connection
                     && !event.is_tls_handshake_failure()
-                    && !contains_invalid_default_header_error(event.error())
                 {
-                    log_error(format_args!(
-                        "uvicorn-rs: HTTP connection from {:?} failed: {} ({:?})",
-                        event.peer_addr(),
-                        event.error(),
-                        event.error()
-                    ));
+                    #[cfg(coverage)]
+                    let invalid_default_header_error = if coverage_fault_take(
+                        CoverageFaultPoint::ServerConnectionInvalidDefaultHeaderSourceChain,
+                    ) {
+                        let error = CoverageInvalidDefaultHeaderSourceError {
+                            source: InvalidDefaultHeader::Name,
+                        };
+                        contains_invalid_default_header_error(&error)
+                    } else {
+                        contains_invalid_default_header_error(event.error())
+                    };
+                    #[cfg(not(coverage))]
+                    let invalid_default_header_error =
+                        contains_invalid_default_header_error(event.error());
+
+                    if !invalid_default_header_error {
+                        log_error(format_args!(
+                            "uvicorn-rs: HTTP connection from {:?} failed: {} ({:?})",
+                            event.peer_addr(),
+                            event.error(),
+                            event.error()
+                        ));
+                    }
                 }
             })),
             concurrency_limit_observer: server.concurrency_limit_observer.clone(),
@@ -8998,6 +9384,12 @@ async fn handle_websocket_request_inner(
     let inject_yawc_invalid_close_reason =
         coverage_fault_is_armed(CoverageFaultPoint::WebSocketYawcInvalidCloseReason);
     #[cfg(coverage)]
+    let inject_yawc_close_reply_flush_error =
+        coverage_fault_is_armed(CoverageFaultPoint::WebSocketYawcCloseReplyFlushError);
+    #[cfg(coverage)]
+    let inject_yawc_close_reply_flush_unexpected_frame =
+        coverage_fault_is_armed(CoverageFaultPoint::WebSocketYawcCloseReplyFlushUnexpectedFrame);
+    #[cfg(coverage)]
     if inject_accept_key_header_value_error {
         let _ = uvicorn_rs::arm_derived_accept_key_header_value_fault();
     }
@@ -9022,6 +9414,14 @@ async fn handle_websocket_request_inner(
             #[cfg(coverage)]
             if inject_yawc_invalid_close_reason {
                 let _ = uvicorn_rs::arm_yawc_invalid_close_reason_fault();
+            }
+            #[cfg(coverage)]
+            if inject_yawc_close_reply_flush_error {
+                let _ = uvicorn_rs::arm_yawc_close_reply_flush_error_fault();
+            }
+            #[cfg(coverage)]
+            if inject_yawc_close_reply_flush_unexpected_frame {
+                let _ = uvicorn_rs::arm_yawc_close_reply_flush_unexpected_frame_fault();
             }
             // Keep cancellation ownership until registration has succeeded.
             // If the connection is already closed, dropping the rejected
@@ -9078,6 +9478,20 @@ async fn handle_websocket_request_inner(
                 && uvicorn_rs::finish_yawc_invalid_close_reason_fault()
             {
                 let _ = coverage_fault_take(CoverageFaultPoint::WebSocketYawcInvalidCloseReason);
+            }
+            #[cfg(coverage)]
+            if inject_yawc_close_reply_flush_error
+                && uvicorn_rs::finish_yawc_close_reply_flush_error_fault()
+            {
+                let _ = coverage_fault_take(CoverageFaultPoint::WebSocketYawcCloseReplyFlushError);
+            }
+            #[cfg(coverage)]
+            if inject_yawc_close_reply_flush_unexpected_frame
+                && uvicorn_rs::finish_yawc_close_reply_flush_unexpected_frame_fault()
+            {
+                let _ = coverage_fault_take(
+                    CoverageFaultPoint::WebSocketYawcCloseReplyFlushUnexpectedFrame,
+                );
             }
             Ok::<(), std::io::Error>(())
         });
@@ -9374,24 +9788,24 @@ where
                 socket.receive_message().await
             } => {
                 match message {
-                    Ok(Some(message @ Message::Text(_))) => {
+                    Ok(Some(Message::Text(text))) => {
                         #[cfg(coverage)]
                         let send_failed = coverage_fault_is_armed(
                             CoverageFaultPoint::WebSocketDriverIncomingTextReceiverClosed,
-                        ) || incoming.send(WebSocketIncoming::Data(message)).await.is_err();
+                        ) || incoming.send(WebSocketIncoming::Text(text)).await.is_err();
                         #[cfg(not(coverage))]
-                        let send_failed = incoming.send(WebSocketIncoming::Data(message)).await.is_err();
+                        let send_failed = incoming.send(WebSocketIncoming::Text(text)).await.is_err();
                         if send_failed {
                             break;
                         }
                     }
-                    Ok(Some(message @ Message::Binary(_))) => {
+                    Ok(Some(Message::Binary(data))) => {
                         #[cfg(coverage)]
                         let send_failed = coverage_fault_is_armed(
                             CoverageFaultPoint::WebSocketDriverIncomingBinaryReceiverClosed,
-                        ) || incoming.send(WebSocketIncoming::Data(message)).await.is_err();
+                        ) || incoming.send(WebSocketIncoming::Binary(data)).await.is_err();
                         #[cfg(not(coverage))]
-                        let send_failed = incoming.send(WebSocketIncoming::Data(message)).await.is_err();
+                        let send_failed = incoming.send(WebSocketIncoming::Binary(data)).await.is_err();
                         if send_failed {
                             break;
                         }
@@ -9844,7 +10258,16 @@ fn apply_default_response_headers(
     let mut headers = HeaderMap::new();
     if server.date_header {
         let date = httpdate::fmt_http_date(std::time::SystemTime::now());
-        let value = HeaderValue::from_bytes(date.as_bytes()).map_err(std::io::Error::other)?;
+        #[cfg(coverage)]
+        let date_bytes =
+            if coverage_fault_take(CoverageFaultPoint::HttpResponseDateHeaderInvalidValue) {
+                &b"\r\n"[..]
+            } else {
+                date.as_bytes()
+            };
+        #[cfg(not(coverage))]
+        let date_bytes = date.as_bytes();
+        let value = HeaderValue::from_bytes(date_bytes).map_err(std::io::Error::other)?;
         headers.append(DATE, value);
         if let Some(prefix) = &mut header_order_prefix {
             prefix.push(DATE);

@@ -43,10 +43,13 @@ HTTP/3 `slow-reader-backpressure` correctness gate in repetition 4 with
 for response headers. The aggregate job retained a partial report, but the
 matrix is incomplete and no result from the failed cell is rankable. The
 source-backed late `DataReceived` after `StreamClosed` explanation remains
-unconfirmed because no per-stream trace was retained. Hypercorn HTTP/3 upload
-also remains excluded after its separate timeout. There is no qualified
-three-system performance claim; see [benchmark status](benchmark-status.md)
-for the retained artifacts and current evidence limits.
+unconfirmed: no trace from the failing cell was retained, and separate focused
+Linux ARM64 traces on the current PR head completed without the missing-stream
+error. Those traces did not establish the original event order. Hypercorn
+HTTP/3 upload also remains excluded after its separate timeout. There is no
+qualified three-system performance claim; see
+[benchmark status](benchmark-status.md) for the retained artifacts and current
+evidence limits.
 
 **Timing qualification:** the category runners now explicitly match access-log,
 server-header, and date-header settings between uvicorn-rs and its reference.
@@ -336,9 +339,22 @@ the bounded H3 event trace, including each raw QUIC stream event before H3
 decoding, aioquic and Hypercorn stream-map presence, stream-map removal, and
 the missing-stream lookup. This makes the capture distinguish an H3 decoding
 failure from `DataReceived` reaching Hypercorn after `StreamClosed` removes its
-stream entry. The event order remains unconfirmed until a trace is captured.
+stream entry. The slow-reader failure's event order remains unconfirmed unless
+a trace reproduces its missing lookup.
 The trace deliberately marks its timing invalid and is diagnostic evidence
 only. Use a fresh output path for each attempt.
+
+Focused slow-reader traces
+[40318621446](https://github.com/appunni-m/uvicorn-rs/actions/runs/40318621446)
+and [40457068808](https://github.com/appunni-m/uvicorn-rs/actions/runs/40457068808)
+each completed one repetition on the same PR head and Linux ARM64 runner, with
+40 requests, no failures, and clean shutdown. The later dispatch repeated the
+same cell without a source, input, or runner change and added no root-cause
+evidence. Neither trace recorded a missing-stream lookup. The earlier
+main-commit timeout remains unexplained because its own event order is absent.
+Do not conflate these traces with the separate large-response failure in run
+`40228012455`, whose retained trace did show `StreamClosed` before a later
+`DataReceived` lookup. These diagnostic runs provide no performance evidence.
 
 To recheck the intermittent Hypercorn response-header timeout seen on macOS
 ARM64, use this push selector for one matched asyncio workload:
@@ -1056,6 +1072,17 @@ and returns the protocol version and received byte count. The existing legal
 early-response workload is unchanged. If that workload crashes stock Hypercorn,
 retain the failure; measure the consumed-request workload in a separate run
 with its own fixture identity rather than replacing the failed workload.
+
+The full stock-FastAPI category plan now includes each HTTP/2 and HTTP/3
+category workload except the `protocol-*` scope probes. These categories use
+the same `examples.bench_fastapi:app` and matched request/response workloads
+for validated routing, Python CPU, large responses, chunked responses, uploads,
+and slow-reader backpressure. HTTP/2 also includes the 64 KiB small-chunk
+upload. HTTP/3 upload has no Hypercorn comparison because the reference failed
+its response correctness probe after a complete request body; the report keeps
+that cell as an explicit limitation and does not rank it. Protocol-scope probe
+results remain outside the FastAPI comparison class. No new timing evidence is
+claimed by this workload-selection change.
 
 HTTP specifications are the source of truth for benchmark wire inputs. [RFC
 9110 §8.6](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.6) says clients

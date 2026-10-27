@@ -4,7 +4,11 @@ Notable user-facing changes are listed here. An `Unreleased` entry describes
 work in progress; it does not mean a candidate has passed the release gates or
 that a package has been published.
 
-## 0.2.1 (Unreleased)
+## 0.2.2 (Unreleased)
+
+Changes for the next release will be recorded here after its release gates pass.
+
+## 0.2.1
 
 ### Added
 

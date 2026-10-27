@@ -1039,18 +1039,23 @@ fn take_graceful_shutdown_deadline_overflow_fault() -> bool {
 pub use http3::{Http3RequestBody, h3, h3_quinn, serve_http3};
 pub use websocket::{
     WebSocketCloseCode, WebSocketCloseFrame, WebSocketError, WebSocketMessage, WebSocketSession,
-    WebSocketUpgrade, WebSocketUpgradeError,
+    WebSocketText, WebSocketUpgrade, WebSocketUpgradeError,
 };
 #[cfg(coverage)]
 #[doc(hidden)]
 pub use websocket::{
     arm_close_reply_flush_cancellation_fault, arm_close_reply_flush_fault,
-    arm_derived_accept_key_header_value_fault, arm_yawc_invalid_close_reason_fault,
-    arm_yawc_invalid_text_frame_fault, arm_yawc_unexpected_continuation_frame_fault,
-    finish_close_reply_flush_cancellation_fault, finish_close_reply_flush_fault,
-    finish_derived_accept_key_header_value_fault, finish_yawc_invalid_close_reason_fault,
-    finish_yawc_invalid_text_frame_fault, finish_yawc_unexpected_continuation_frame_fault,
-    wait_for_close_reply_flush_cancellation_fault,
+    arm_derived_accept_key_header_value_fault, arm_yawc_close_reply_flush_error_fault,
+    arm_yawc_close_reply_flush_unexpected_frame_fault, arm_yawc_handshake_error_fault,
+    arm_yawc_invalid_close_reason_fault, arm_yawc_invalid_text_frame_fault,
+    arm_yawc_session_construction_error_fault, arm_yawc_session_extension_to_str_error_fault,
+    arm_yawc_unexpected_continuation_frame_fault, finish_close_reply_flush_cancellation_fault,
+    finish_close_reply_flush_fault, finish_derived_accept_key_header_value_fault,
+    finish_yawc_close_reply_flush_error_fault,
+    finish_yawc_close_reply_flush_unexpected_frame_fault, finish_yawc_handshake_error_fault,
+    finish_yawc_invalid_close_reason_fault, finish_yawc_invalid_text_frame_fault,
+    finish_yawc_session_construction_error_fault, finish_yawc_session_extension_to_str_error_fault,
+    finish_yawc_unexpected_continuation_frame_fault, wait_for_close_reply_flush_cancellation_fault,
 };
 
 /// An observer for errors handled by the Rust server boundary.
@@ -3291,6 +3296,16 @@ impl<I: AsyncWrite + Unpin> AsyncWrite for Http1KeepAliveIo<I> {
 }
 
 async fn wait_for_http1_keep_alive_timeout(deadline: &mut watch::Receiver<Option<Instant>>) {
+    wait_for_http1_keep_alive_timeout_with(deadline, tokio::time::sleep_until).await;
+}
+
+async fn wait_for_http1_keep_alive_timeout_with<SleepUntil, SleepFuture>(
+    deadline: &mut watch::Receiver<Option<Instant>>,
+    mut sleep_until: SleepUntil,
+) where
+    SleepUntil: FnMut(Instant) -> SleepFuture,
+    SleepFuture: Future<Output = ()>,
+{
     loop {
         let Some(current_deadline) = *deadline.borrow_and_update() else {
             if deadline.changed().await.is_err() {
@@ -3299,9 +3314,13 @@ async fn wait_for_http1_keep_alive_timeout(deadline: &mut watch::Receiver<Option
             continue;
         };
 
+        let sleep = sleep_until(current_deadline);
         tokio::select! {
-            _ = tokio::time::sleep_until(current_deadline) => {
-                if *deadline.borrow_and_update() == Some(current_deadline) {
+            // Resolve a ready timer first, then reject it if the watched
+            // deadline changed at the same time.
+            biased;
+            _ = sleep => {
+                if http1_keep_alive_deadline_is_current(deadline, current_deadline) {
                     return;
                 }
             }
@@ -3314,6 +3333,22 @@ async fn wait_for_http1_keep_alive_timeout(deadline: &mut watch::Receiver<Option
     }
 }
 
+fn http1_keep_alive_deadline_is_current(
+    deadline: &mut watch::Receiver<Option<Instant>>,
+    expected: Instant,
+) -> bool {
+    *deadline.borrow_and_update() == Some(expected)
+}
+
+fn drain_http1_upgrade_sessions(
+    upgrade_receiver: &mut mpsc::UnboundedReceiver<UpgradeSessionFuture>,
+    upgrade_sessions: &mut JoinSet<Result<(), BoxBodyError>>,
+) {
+    while let Ok(session) = upgrade_receiver.try_recv() {
+        upgrade_sessions.spawn(session);
+    }
+}
+
 /// Verifies that keep-alive deadline waiters finish when their signal sender
 /// closes, whether no deadline is scheduled or one is active.
 ///
@@ -3323,25 +3358,50 @@ async fn wait_for_http1_keep_alive_timeout(deadline: &mut watch::Receiver<Option
 pub async fn coverage_http1_keep_alive_timeout_closed_channel_completes() -> bool {
     let (idle_sender, mut idle_deadline) = watch::channel(None);
     drop(idle_sender);
-    if tokio::time::timeout(
+    let idle_completed = tokio::time::timeout(
         Duration::from_millis(100),
         wait_for_http1_keep_alive_timeout(&mut idle_deadline),
     )
     .await
-    .is_err()
-    {
-        return false;
-    }
+    .is_ok();
 
     let (scheduled_sender, mut scheduled_deadline) =
         watch::channel(Some(Instant::now() + Duration::from_secs(10)));
     drop(scheduled_sender);
-    tokio::time::timeout(
+    let scheduled_completed = tokio::time::timeout(
         Duration::from_millis(100),
         wait_for_http1_keep_alive_timeout(&mut scheduled_deadline),
     )
     .await
-    .is_ok()
+    .is_ok();
+
+    idle_completed && scheduled_completed
+}
+
+/// Verifies that a timeout from a superseded HTTP/1 keep-alive deadline is
+/// ignored and that the currently scheduled deadline remains authoritative.
+///
+/// This helper is available only to instrumented coverage builds.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub async fn coverage_http1_keep_alive_deadline_rejects_stale_timeout() -> bool {
+    let stale_deadline = Instant::now();
+    let (sender, mut deadline) = watch::channel(Some(stale_deadline));
+    let mut timer_polls = 0;
+    wait_for_http1_keep_alive_timeout_with(&mut deadline, |expired_deadline| {
+        timer_polls += 1;
+        let timer_poll = timer_polls;
+        let sender = sender.clone();
+        std::future::poll_fn(move |_| {
+            if timer_poll == 1 {
+                sender.send_replace(Some(expired_deadline + Duration::from_secs(1)));
+            }
+            Poll::Ready(())
+        })
+    })
+    .await;
+
+    timer_polls == 2
 }
 
 /// Verifies that an idle deadline starts only after the last active request
@@ -3489,17 +3549,13 @@ where
             result = &mut connection, if connection_result.is_none() => {
                 connection_result = Some(result.map_err(ConnectionError::Http));
                 upgrade_receiver.close();
-                while let Ok(session) = upgrade_receiver.try_recv() {
-                    upgrade_sessions.spawn(session);
-                }
+                drain_http1_upgrade_sessions(&mut upgrade_receiver, &mut upgrade_sessions);
                 upgrade_receiver_open = false;
             }
             _ = wait_for_http1_keep_alive_timeout(&mut keep_alive_deadline_receiver), if keep_alive_timeout_enabled && connection_result.is_none() => {
                 connection_result = Some(Ok(()));
                 upgrade_receiver.close();
-                while let Ok(session) = upgrade_receiver.try_recv() {
-                    upgrade_sessions.spawn(session);
-                }
+                drain_http1_upgrade_sessions(&mut upgrade_receiver, &mut upgrade_sessions);
                 upgrade_receiver_open = false;
             }
             joined = upgrade_sessions.join_next(), if !upgrade_sessions.is_empty() => {
