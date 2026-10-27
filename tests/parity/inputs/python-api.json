@@ -951,6 +951,51 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-disables-server-date-headers-from-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-server-date-headers-environment-disabled",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "observe_headers": ["server", "date"],
+          "environment": {
+            "UVICORN_SERVER_HEADER": "false",
+            "UVICORN_DATE_HEADER": "false"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-explicit-server-date-headers-overrides-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-server-date-headers-explicit-override",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "server_header": true,
+          "observe_headers": ["server"],
+          "environment": {
+            "UVICORN_SERVER_HEADER": "false",
+            "UVICORN_DATE_HEADER": "false"
+          }
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-appends-custom-response-header",
       "profile": "python-api",
       "operation": "python.api.run-http",
