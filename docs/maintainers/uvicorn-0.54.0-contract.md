@@ -51,7 +51,7 @@ provided by Click rather than declared as an application parameter.
 | Area | Uvicorn 0.54.0 public inputs | Defaults and behavior to preserve | Implementation / evidence owner |
 | --- | --- | --- | --- |
 | App selection | `APP`, `UVICORN_APP`, `--factory`, `--app-dir`, `--reset-contextvars` | `APP` is required unless supplied by env; factory false; app-dir is empty and adds a leading import path; context reset false. Missing-module and missing-attribute import diagnostics have focused cases. `http1.cli-contextvars-inherit-by-default` and `http1.cli-reset-contextvars-clears-request-context` compare CLI context behavior; `python-api.run-reset-contextvars-clears-http-request-context` covers the `uvicorn.run()` API against Uvicorn 0.54.0. | `1s4z`, `9kbx`, `4fvf` |
-| Binding | `--host`, `--port`, `--uds`, `--fd`, `--backlog` | `127.0.0.1`, `8000`, `None`, `None`, `2048`. Five live cases cover IPv4 TCP listeners through module CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one and two sockets. Two additional module-CLI cases pass with inherited IPv6 listeners using one and two workers on macOS ARM64 / CPython 3.12.13 (run `bc282b37f69a46a38e8353a94197e2a7`, report SHA-256 `f55d9d1f8227452b0513446e2b96241fc63277c1f359ca761fb570a0ea94ca0f`). Other IPv6 API paths and Windows remain unverified. | IPv4: `python-api.module-cli-serves-request-on-inherited-fd`, `python-api.run-serves-request-on-inherited-fd`, `python-api.config-server-serves-request-on-inherited-fd`, `python-api.server-serves-request-on-prebound-socket`, `python-api.server-serves-request-on-multiple-prebound-sockets`; IPv6: `python-api.module-cli-serves-request-on-inherited-ipv6-fd`, `python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request`; Kata owners: `9kbx`, `dhfq`, `4fvf` |
+| Binding | `--host`, `--port`, `--uds`, `--fd`, `--backlog` | `127.0.0.1`, `8000`, `None`, `None`, `2048`. Five live cases cover IPv4 TCP listeners through module CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one and two sockets. Two additional module-CLI cases pass with inherited IPv6 listeners using one and two workers on macOS ARM64 / CPython 3.12.13 (run `bc282b37f69a46a38e8353a94197e2a7`, report SHA-256 `f55d9d1f8227452b0513446e2b96241fc63277c1f359ca761fb570a0ea94ca0f`). A current-source focused refresh also verifies the startup socket log for the single-worker inherited IPv4 and IPv6 module-CLI cases (2/2). Other IPv6 API paths and Windows remain unverified. | IPv4: `python-api.module-cli-serves-request-on-inherited-fd`, `python-api.run-serves-request-on-inherited-fd`, `python-api.config-server-serves-request-on-inherited-fd`, `python-api.server-serves-request-on-prebound-socket`, `python-api.server-serves-request-on-multiple-prebound-sockets`; IPv6: `python-api.module-cli-serves-request-on-inherited-ipv6-fd`, `python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request`; Kata owners: `9kbx`, `dhfq`, `4fvf` |
 | Reload | `--reload`, repeatable `--reload-dir`, `--reload-include`, `--reload-exclude`, `--reload-delay` | false; no explicit dirs; includes/excludes are unset; `0.25` seconds. With no watcher package, file polling behavior is narrower. If reload and multiple workers are both set, Uvicorn warns that workers are ignored while reloading. | `dhfq`, `9kbx`, `4fvf` |
 | Workers and process lifetime | `--workers`, `--timeout-worker-healthcheck`, `--limit-max-requests`, `--limit-max-requests-jitter`, `--timeout-graceful-shutdown` | workers unset, then `WEB_CONCURRENCY` or one; healthcheck `5`; request limit unset; jitter `0`; graceful timeout unset. When reload and multiple workers are both requested, reload takes precedence and Uvicorn warns that the worker count is ignored. Signal handling includes SIGINT and SIGTERM, SIGBREAK on Windows, and supervisor-specific SIGHUP/SIGTTIN/SIGTTOU behavior where available. | `dhfq`, `dv25`, `4fvf` |
 | Event loop | `--loop` | `auto`; documented choices are `auto`, `asyncio`, `uvloop`, and `zuvloop`. The API also accepts `none` and import paths. Optional implementations have platform/runtime restrictions. | `dv25`, `9kbx`, `4fvf` |
@@ -1771,6 +1771,30 @@ revision `3081301190b99c26ed0e1424824eec821b59492d`, a dirty input tree, source
 SHA-256 `3ba1a079d49bee1bcbcc896aedd5406d84ede6da54adc48d716eafd91512432a`,
 runner SHA-256 `1fdcbe1cbee7fdda29167dc10684ff612133ab8670da2df234036348288be44d`,
 and native extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`.
+
+## Inherited-FD startup log parity — 2026-10-28
+
+The focused module-CLI inputs for inherited IPv4 and IPv6 sockets pass 2/2
+against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1.
+Both compare the `Uvicorn running on socket ...` startup message as well as
+the HTTP response and graceful SIGINT exit. `Server.startup()` now emits that
+message when sockets are supplied, matching Uvicorn. The probe uses a
+four-second client timeout for these two pre-bound-socket inputs so a queued
+request cannot outlive a short client timeout and create a duplicate oracle
+access-log event during startup.
+
+Run `5cf7acc928034f2d957710882e8e1dee`; receipt
+`target/kata-progress/inherited-fd-startup-log-stable-focused-20261028.json`,
+SHA-256 `16ff5cf31f67982477d5d866c8a31667a008fb6c984aa6877ebf4076e7e08e6d`.
+It binds Python API input@42 SHA-256
+`9e7ee27f62e081f64c0d7c83db3734052100abaf4c2cdb6911b1118490802c71`, target
+revision `607a91f46` with a dirty tree, `python/uvicorn/server.py` SHA-256
+`8471197fc67d1ae7d7519d86c4552974a1b5475208331b31b375e9a991e7bdb5`, runner
+SHA-256 `42dad293515138a43806baa7b364aca09372a685103757be9341e79512250a87`,
+Python API probe SHA-256
+`46477f5464dbf8ffbf98f8426666a95d551e8a25bc6689fda9dfb8f63de2fdac`, and
+native extension SHA-256
 `1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`.
 
 ## User-facing status

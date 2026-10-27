@@ -343,6 +343,11 @@ two workers on macOS ARM64 / CPython 3.12.13 (run
 IPv6 API paths, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets remain
 unverified.
 
+A focused refresh now compares the module-CLI startup socket message for both
+inherited IPv4 and IPv6 sockets; the cases pass 2/2 against Uvicorn 0.54.0.
+The local dirty-source receipt and its input/source digests are recorded in the
+[maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md#inherited-fd-startup-log-parity-2026-10-28).
+
 This follows the fixture-matrix approach used by `image-slash-star`/Pillow-RS,
 adapted to a network server. Pillow-RS compares Rust operations with pinned
 oracle fixtures; this server compares wire-visible behavior with a live,

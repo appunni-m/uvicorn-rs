@@ -2516,7 +2516,8 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "",
-          "fd": true
+          "fd": true,
+          "client_timeout_seconds": 4
         }
       }
     },
@@ -2535,7 +2536,8 @@
           "invocation": "module-cli",
           "root_path": "",
           "host": "::1",
-          "fd": true
+          "fd": true,
+          "client_timeout_seconds": 4
         }
       }
     },

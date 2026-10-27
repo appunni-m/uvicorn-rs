@@ -264,8 +264,7 @@ class Server:
             self.started = await native_server.wait_started()
             if self.started:
                 try:
-                    if sockets is None:
-                        self._log_started_message(sockets)
+                    self._log_started_message(sockets)
                 finally:
                     native_server._acknowledge_startup()
         except OSError as error:

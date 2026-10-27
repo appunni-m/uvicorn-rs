@@ -1102,12 +1102,14 @@ except KeyboardInterrupt:
     listener_responses = [None] * len(probe_ports)
     response_count = 0
     idle_connection_closed = None
-    connection_timeout = (
-        5.0
-        if worker_crash_count > 0
-        or os.environ.get("ASGI_PARITY_WORKER_STALL_ONCE") == "1"
-        else 0.5
-    )
+    connection_timeout = request.get("client_timeout_seconds")
+    if connection_timeout is None:
+        connection_timeout = (
+            5.0
+            if worker_crash_count > 0
+            or os.environ.get("ASGI_PARITY_WORKER_STALL_ONCE") == "1"
+            else 0.5
+        )
 
     def make_client_tls_context() -> ssl.SSLContext:
         # Invalid or absent CA files are inputs for server-side startup

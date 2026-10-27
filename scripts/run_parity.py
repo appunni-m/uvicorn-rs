@@ -2763,6 +2763,7 @@ def load_contract(
                     "host",
                     "fd",
                     "prebound_socket_count",
+                    "client_timeout_seconds",
                     "reset_contextvars",
                     "bind_conflict",
                     "required_observations",
@@ -3371,6 +3372,14 @@ def load_contract(
                 timeout_seconds = run_http["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 60:
                     raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 60")
+                client_timeout_seconds = run_http.get("client_timeout_seconds")
+                if client_timeout_seconds is not None and (
+                    type(client_timeout_seconds) is not int
+                    or not 1 <= client_timeout_seconds <= timeout_seconds
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.client_timeout_seconds must be from 1 through timeout_seconds"
+                    )
                 shutdown_delay_values = [
                     value
                     for name, value in run_http.get("request_headers", [])
