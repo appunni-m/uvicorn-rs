@@ -714,6 +714,138 @@
       }
     },
     {
+      "case_id": "cli.invalid-backlog-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": ["tests.parity.app:app"],
+        "environment": {
+          "UVICORN_BACKLOG": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-backlog-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--backlog",
+          "2048",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_BACKLOG": "not-an-integer"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-timeout-keep-alive-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": ["tests.parity.app:app"],
+        "environment": {
+          "UVICORN_TIMEOUT_KEEP_ALIVE": "not-a-timeout"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-timeout-keep-alive-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--timeout-keep-alive",
+          "1",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_TIMEOUT_KEEP_ALIVE": "not-a-timeout"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.invalid-timeout-worker-healthcheck-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": ["tests.parity.app:app"],
+        "environment": {
+          "UVICORN_TIMEOUT_WORKER_HEALTHCHECK": "not-a-timeout"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-timeout-worker-healthcheck-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--timeout-worker-healthcheck",
+          "2",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_TIMEOUT_WORKER_HEALTHCHECK": "not-a-timeout"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.invalid-timeout-graceful-shutdown-env-is-rejected",
       "profile": "cli",
       "operation": "cli.process",

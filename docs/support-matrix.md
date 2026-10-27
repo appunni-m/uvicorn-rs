@@ -37,6 +37,9 @@ Four additional focused CLI cases pass 4/4: malformed
 `UVICORN_LIMIT_MAX_REQUESTS` and `UVICORN_LIMIT_MAX_REQUESTS_JITTER` values
 produce matching diagnostics, and explicit zero-valued CLI options override
 each malformed value. See the [request-limit environment result](parity.md#module-cli-request-limit-environment-validation-and-precedence-2026-10-27).
+Six more selected cases pass 6/6 for malformed backlog, keep-alive timeout,
+and worker-healthcheck timeout environment values and explicit CLI overrides.
+See the [numeric settings environment result](parity.md#module-cli-numeric-settings-environment-validation-and-precedence-2026-10-28).
 
 ## Can I replace Uvicorn?
 
