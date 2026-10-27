@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@40",
+  "schema": "uvicorn-rs-parity/input@41",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -5065,6 +5065,28 @@
             "shutdown_signal_sent": false,
             "process_exit_code": 1,
             "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-listener-host-port-from-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-listener-environment",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "host": "0.0.0.0",
+          "environment": {
+            "UVICORN_HOST": "0.0.0.0",
+            "UVICORN_PORT": "@probe-port"
           }
         }
       }

@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@40"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@41"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -2724,6 +2724,8 @@ def load_contract(
                     "timeout_keep_alive",
                     "timeout_graceful_shutdown",
                     "root_path_from_environment",
+                    "host_from_environment",
+                    "port_from_environment",
                     "keep_alive_probe_delay_seconds",
                     "workers",
                     "timeout_worker_healthcheck",
@@ -3276,6 +3278,27 @@ def load_contract(
                             raise ParityError(
                                 f"{case_id}.api.run_http.environment entries must be valid strings or null"
                             )
+                environment = run_http.get("environment", {})
+                if environment.get("UVICORN_HOST") is not None:
+                    if run_http["invocation"] != "module-cli":
+                        raise ParityError(
+                            f"{case_id}: UVICORN_HOST listener inputs require module-cli invocation"
+                        )
+                    expected_host = run_http.get("host", "127.0.0.1")
+                    if environment.get("UVICORN_HOST") != expected_host:
+                        raise ParityError(
+                            f"{case_id}: UVICORN_HOST must match host when testing its environment binding"
+                        )
+                if environment.get("UVICORN_PORT") not in (None, "@probe-port"):
+                    raise ParityError(
+                        f"{case_id}: run_http UVICORN_PORT must use @probe-port for dynamic listener parity"
+                    )
+                if environment.get("UVICORN_PORT") == "@probe-port" and run_http[
+                    "invocation"
+                ] != "module-cli":
+                    raise ParityError(
+                        f"{case_id}: UVICORN_PORT listener inputs require module-cli invocation"
+                    )
                 if case["operation"] == "python.api.run-http-request-limit":
                     environment = run_http.get("environment", {})
                     try:

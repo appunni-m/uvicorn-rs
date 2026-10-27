@@ -698,6 +698,15 @@ except KeyboardInterrupt:
     ssl_cert_reqs = request.get("ssl_cert_reqs", 0)
     ssl_version = request.get("ssl_version")
     host = request.get("host", "127.0.0.1")
+    # Wildcard binding is observed through a concrete loopback destination.
+    probe_host = "127.0.0.1" if host == "0.0.0.0" else host
+    configured_environment = request.get("environment", {})
+    host_from_environment = configured_environment.get("UVICORN_HOST")
+    port_from_environment = configured_environment.get("UVICORN_PORT")
+    if host_from_environment is not None and host_from_environment != host:
+        raise RuntimeError("UVICORN_HOST must match the requested listener host")
+    if port_from_environment not in (None, "@probe-port"):
+        raise RuntimeError("UVICORN_PORT must use the @probe-port input marker")
     address_family = socket.AF_INET6 if ":" in host else socket.AF_INET
     if request.get("fd", False):
         if os.name == "nt":
@@ -741,16 +750,11 @@ except KeyboardInterrupt:
                 if request.get("application_interface") == "asgi2"
                 else "tests.parity.app:lifespan_probe_app"
             )
-        command = [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            app_target,
-            "--host",
-            host,
-            "--port",
-            str(port),
-        ]
+        command = [sys.executable, "-m", "uvicorn", app_target]
+        if host_from_environment is None:
+            command.extend(("--host", host))
+        if port_from_environment != "@probe-port":
+            command.extend(("--port", str(port)))
         if not request.get("root_path_from_environment"):
             command.extend(("--root-path", request["root_path"]))
         command.extend(("--lifespan", request["lifespan"]))
@@ -860,6 +864,14 @@ except KeyboardInterrupt:
         ]
 
     environment = subprocess_environment()
+    if port_from_environment == "@probe-port":
+        if os.environ.get("UVICORN_PORT") != "@probe-port":
+            raise RuntimeError(
+                "UVICORN_PORT=@probe-port marker was not passed to the probe"
+            )
+        # The probe reserves a dynamic listener port. Bind that exact port
+        # through Click's environment path so the HTTP observer can verify it.
+        environment["UVICORN_PORT"] = str(port)
     signal_hold_directory = None
     signal_hold_marker = None
     signal_cancel_marker = None
@@ -1165,14 +1177,14 @@ except KeyboardInterrupt:
                 elif request.get("tls"):
                     tls_context = make_client_tls_context()
                     connection = http.client.HTTPSConnection(
-                        host,
+                        probe_host,
                         listener_port,
                         timeout=connection_timeout,
                         context=tls_context,
                     )
                 else:
                     connection = http.client.HTTPConnection(
-                        host, listener_port, timeout=connection_timeout
+                        probe_host, listener_port, timeout=connection_timeout
                     )
                 if request.get("http_version") == "1.0":
                     connection._http_vsn = 10
