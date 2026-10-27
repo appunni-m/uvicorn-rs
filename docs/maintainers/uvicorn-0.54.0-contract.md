@@ -213,7 +213,7 @@ implementation work split across the owners in the evidence map below.
 
 ### Input@40 baseline CLI and Python API profile runs — 2026-10-27
 
-The full current input@40 CLI profile passed 60/60 against Uvicorn 0.54.0 in
+The full input@40 CLI baseline passed 60/60 against Uvicorn 0.54.0 in
 run `c25aac929fd74dcb9ff3d9206653596a`. Report
 `target/kata-progress/9kbx-cli-current-full-20261027.json`, SHA-256
 `fc58678c2f3ab8227fead7ef6f9c4e34b9d5ca823976cebcc4d72c49ba3cb3b7`.
@@ -1511,20 +1511,30 @@ This covers local public oracle parity only; the supported OS/Python matrix,
 349 target-only fault contracts, 258 native-core contracts, and clean exact-main
 release evidence remain open.
 
-## Environment-backed listener CLI parity — 2026-10-27
+## Module-CLI environment parity — 2026-10-27
 
-The input@41 case `python-api.module-cli-listener-host-port-from-environment`
-omits explicit host and port arguments, starts the module CLI with
-`UVICORN_HOST=0.0.0.0`, and supplies the dynamically reserved port through the
-parity-only `UVICORN_PORT=@probe-port` marker. Both Uvicorn 0.54.0 and the
-candidate logged the wildcard bind address, served a GET with HTTP 200, and
-exited 0 after SIGINT. The focused case passed 1/1 on macOS ARM64 / CPython
-3.12.13 / Rust 1.98.1. Run `bc491b9062794dc88d6b62f3786c4d63`; receipt
-`target/kata-progress/python-api-listener-environment-20261027.json`, SHA-256
-`90b927336adf8ddf752cb1dde24db18b06d45c3d639950bb75b739ee11350aed`. The
-report records the input@41 digest, dirty target revision, runner, and probe
-hashes. This is selected single-platform evidence; it does not complete the
-full CLI/API inventory or the complete input@41 profile.
+Three selected cases pass against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 /
+CPython 3.12.13 / Rust 1.98.1: `python-api.module-cli-listener-host-port-from-environment`
+binds with `UVICORN_HOST=0.0.0.0` and a dynamically reserved `UVICORN_PORT`
+and serves HTTP 200; `python-api.module-cli-concurrency-limit-from-environment`
+uses `UVICORN_LIMIT_CONCURRENCY=1` and returns HTTP 503 on both implementations;
+`python-api.module-cli-explicit-concurrency-limit-overrides-invalid-environment`
+uses `--limit-concurrency 2` to override a malformed environment value and
+serves HTTP 200. All three processes exit 0 after SIGINT, and the normalized
+observations match.
+
+Run `53eaa64e91a8401fb6a78187416d241f`; receipt
+`target/kata-progress/python-api-environment-parity-20261027.json`, SHA-256
+`b0123c715ef39c1ec30d04492b8dd4a3e0e9c2a9fdb06dd855dbe9f605815d8f7b`.
+It binds Python API input@42 SHA-256
+`ab92dddd0351d5eafb781b77a912198f26841eeb8e40798bbd5541cdeba04486`,
+dirty target revision `80172ab00083f3c12f52ca1230299351e371e7df`, runner SHA-256
+`f402f9d1eb95969f189139987292ead4cbef7f6bd1543941fcb68ee04f00edbf`, and
+probe SHA-256 `5dcfc30c60f59c6340a519114820d9a19d5e402a4d689883ef398d21075e9809`.
+The `@probe-port` value is replaced with the reserved listener port before the
+child starts; it is not a Uvicorn setting. This is selected single-platform
+evidence; the complete input@42 profile, other supported platforms, and exact
+release-candidate parity remain open.
 
 ## User-facing status
 

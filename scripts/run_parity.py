@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@41"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@42"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -3252,18 +3252,28 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.http_version must be 1.0 or 1.1"
                     )
-                if (
-                    case["operation"] == "python.api.run-http-concurrency"
-                ) != ("limit_concurrency" in run_http):
+                environment = run_http.get("environment", {})
+                if not isinstance(environment, dict):
                     raise ParityError(
-                        f"{case_id}: run-http-concurrency requires exactly one limit_concurrency input"
+                        f"{case_id}.api.run_http.environment must be an object"
+                    )
+                concurrency_environment_value = environment.get(
+                    "UVICORN_LIMIT_CONCURRENCY"
+                )
+                has_concurrency_environment = (
+                    concurrency_environment_value is not None
+                )
+                has_concurrency_argument = "limit_concurrency" in run_http
+                is_concurrency_operation = (
+                    case["operation"] == "python.api.run-http-concurrency"
+                )
+                if is_concurrency_operation != (
+                    has_concurrency_argument or has_concurrency_environment
+                ):
+                    raise ParityError(
+                        f"{case_id}: run-http-concurrency requires a limit_concurrency argument or UVICORN_LIMIT_CONCURRENCY environment value"
                     )
                 if "environment" in run_http:
-                    environment = run_http["environment"]
-                    if not isinstance(environment, dict):
-                        raise ParityError(
-                            f"{case_id}.api.run_http.environment must be an object"
-                        )
                     for name, value in environment.items():
                         invalid_name = (
                             not isinstance(name, str)
@@ -3277,6 +3287,22 @@ def load_contract(
                         if invalid_name or not valid_value:
                             raise ParityError(
                                 f"{case_id}.api.run_http.environment entries must be valid strings or null"
+                            )
+                if has_concurrency_environment:
+                    if run_http["invocation"] != "module-cli":
+                        raise ParityError(
+                            f"{case_id}: UVICORN_LIMIT_CONCURRENCY requires module-cli invocation"
+                        )
+                    if not has_concurrency_argument:
+                        try:
+                            environment_limit = int(concurrency_environment_value)
+                        except (TypeError, ValueError) as error:
+                            raise ParityError(
+                                f"{case_id}: UVICORN_LIMIT_CONCURRENCY must be an integer when no explicit CLI override is present"
+                            ) from error
+                        if environment_limit < 0:
+                            raise ParityError(
+                                f"{case_id}: UVICORN_LIMIT_CONCURRENCY must be non-negative"
                             )
                 environment = run_http.get("environment", {})
                 if environment.get("UVICORN_HOST") is not None:
