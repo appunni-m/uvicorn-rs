@@ -4995,6 +4995,47 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-reset-contextvars-from-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/contextvars",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "environment": {
+            "UVICORN_RESET_CONTEXTVARS": "true"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-reset-contextvars-explicit-flag-overrides-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/contextvars",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "reset_contextvars": true,
+          "environment": {
+            "UVICORN_RESET_CONTEXTVARS": "false"
+          }
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-two-workers-scale-with-ttin-ttou",
       "profile": "python-api",
       "operation": "python.api.run-http",

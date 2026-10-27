@@ -181,6 +181,7 @@ class Server:
 
     async def startup(self, sockets: list[socket.socket] | None = None) -> None:
         """Start the Rust server and wait until its listener and lifespan are ready."""
+        should_log_started_message = sockets is None
         self.config._validate_native_runtime()
         if not self.config.loaded:
             self.config.load()
@@ -264,7 +265,8 @@ class Server:
             self.started = await native_server.wait_started()
             if self.started:
                 try:
-                    self._log_started_message(sockets)
+                    if should_log_started_message:
+                        self._log_started_message(sockets)
                 finally:
                     native_server._acknowledge_startup()
         except OSError as error:
