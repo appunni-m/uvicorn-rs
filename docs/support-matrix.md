@@ -47,6 +47,10 @@ environment. See the [WebSocket and concurrency environment result](parity.md#mo
 Ten focused cases also pass 10/10 for malformed HTTP, WebSocket, lifespan,
 worker-count, and reload-delay environment values with explicit valid CLI
 overrides. See the [selector and process-setting environment result](parity.md#module-cli-selector-and-process-setting-environment-precedence-2026-10-28).
+Four additional focused process cases pass 4/4 for environment resolution and
+explicit flag precedence for `UVICORN_APP_DIR` and `UVICORN_ENV_FILE`; these
+verify app import and env-file diagnostics, not the full CLI environment
+contract. See the [app-dir and env-file result](parity.md#module-cli-app-dir-and-env-file-environment-precedence-2026-10-28).
 
 ## Can I replace Uvicorn?
 

@@ -397,6 +397,40 @@
       }
     },
     {
+      "case_id": "cli.app-dir-environment-resolves-import-before-reporting-missing-attribute",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": ["uvicorn_rs_cli_app_dir:missing"],
+        "environment": {
+          "UVICORN_APP_DIR": "tests/parity/fixtures/app_dir_only"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-app-dir-overrides-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_cli_app_dir:missing",
+          "--app-dir",
+          "tests/parity/fixtures/app_dir_only"
+        ],
+        "environment": {
+          "UVICORN_APP_DIR": "tests/parity"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.factory-type-error-is-startup-failure",
       "profile": "cli",
       "operation": "cli.process",
@@ -475,6 +509,48 @@
           "tests/parity/fixtures/app_dir_only/factory.env"
         ],
         "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.env-file-environment-loads-before-factory",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_cli_app_dir:factory_env_file_error",
+          "--app-dir",
+          "tests/parity/fixtures/app_dir_only",
+          "--factory"
+        ],
+        "environment": {
+          "UVICORN_ENV_FILE": "tests/parity/fixtures/app_dir_only/factory.env"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-env-file-overrides-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_cli_app_dir:factory_env_file_error",
+          "--app-dir",
+          "tests/parity/fixtures/app_dir_only",
+          "--factory",
+          "--env-file",
+          "tests/parity/fixtures/app_dir_only/factory.env"
+        ],
+        "environment": {
+          "UVICORN_ENV_FILE": "tests/parity/fixtures/app_dir_only/missing.env"
+        },
         "working_directory": "project",
         "timeout_seconds": 10
       }
