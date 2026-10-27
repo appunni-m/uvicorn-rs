@@ -443,14 +443,48 @@ def normalize_operation_comparison_observation(
     for field, policy in operation.get("comparison_normalization", {}).items():
         require(field in normalized, f"comparison normalization field is absent: {field}")
         require(
-            policy == "python-traceback-exception-chain",
+            policy == "python-process-diagnostics",
             f"unsupported comparison normalization policy: {policy}",
         )
         stderr = base64.b64decode(normalized[field], validate=True)
         lines = stderr.splitlines()
         traceback_header = b"Traceback (most recent call last):"
         if traceback_header not in lines:
-            normalized[field] = ("raw", stderr)
+            warning_separator = b": RuntimeWarning:"
+            if not any(
+                b"uvicorn/" in line and warning_separator in line
+                for line in lines
+            ):
+                normalized[field] = ("raw", stderr)
+                continue
+            normalized_warning: list[bytes] = []
+            skip_source_line = False
+            for line in lines:
+                if skip_source_line and line.startswith(b"  "):
+                    normalized_warning.append(b"  <source line>")
+                    skip_source_line = False
+                    continue
+                normalized_line = line.replace(b"\\", b"/")
+                if (
+                    b"uvicorn/" in normalized_line
+                    and warning_separator in normalized_line
+                ):
+                    prefix, _, message = normalized_line.partition(warning_separator)
+                    source_path = prefix.rsplit(b"uvicorn/", 1)[1]
+                    source_name, separator, line_number = source_path.rpartition(b":")
+                    if (
+                        separator
+                        and line_number.isdigit()
+                        and source_name.endswith(b".py")
+                    ):
+                        normalized_warning.append(b"RuntimeWarning:" + message)
+                        skip_source_line = True
+                        continue
+                normalized_warning.append(line)
+            normalized[field] = (
+                "python-runtime-warning-source",
+                tuple(normalized_warning),
+            )
             continue
 
         chain_markers = {
