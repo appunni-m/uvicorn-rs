@@ -2493,6 +2493,44 @@
       }
     },
     {
+      "case_id": "python-api.run-streams-wsgi-response-before-app-completes",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-wsgi-stream?name=rust",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 8,
+          "lifespan": "off",
+          "invocation": "api",
+          "root_path": "",
+          "interface": "wsgi",
+          "application_interface": "wsgi"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-streams-wsgi-response-before-app-completes",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-wsgi-stream?name=rust",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 8,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "interface": "wsgi",
+          "application_interface": "wsgi"
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-serves-wsgi-request-auto-lifespan",
       "profile": "python-api",
       "operation": "python.api.run-http",

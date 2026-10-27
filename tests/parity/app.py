@@ -10,6 +10,7 @@ import logging
 import os
 from pathlib import Path
 import signal
+import time
 from urllib.parse import parse_qs
 
 
@@ -1818,6 +1819,19 @@ async def python_api_uds_probe_app(scope, receive, send):
 
 def python_api_wsgi_probe_app(environ, start_response):
     """Return a deterministic WSGI response for Python API parity inputs."""
+
+    if environ["PATH_INFO"] == "/python-api-wsgi-stream":
+        start_response("200 OK", [("content-type", "text/plain")])
+        marker = os.environ["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"]
+
+        def response_chunks():
+            yield b"python-api-wsgi-stream|first"
+            deadline = time.monotonic() + 3.0
+            while not os.path.exists(marker) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            yield b"|released" if os.path.exists(marker) else b"|timed-out"
+
+        return response_chunks()
 
     body = b"|".join(
         (

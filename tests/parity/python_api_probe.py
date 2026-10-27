@@ -350,6 +350,10 @@ def run_http_observation(request: dict) -> dict:
     )
     if chunked_request and isinstance(request_body, bytes):
         request_body = [request_body]
+    wsgi_streaming_probe = (
+        request.get("application_interface") == "wsgi"
+        and request["path"].split("?", 1)[0] == "/python-api-wsgi-stream"
+    )
 
     child_code = r'''
 import sys
@@ -360,6 +364,7 @@ import contextvars
 import json
 import logging
 import socket
+import time
 import uvicorn
 
 lifespan_state = {"started": False}
@@ -512,6 +517,17 @@ def asgi2_app(scope):
     return respond
 
 def wsgi_app(environ, start_response):
+    if environ["PATH_INFO"] == "/python-api-wsgi-stream":
+        start_response("200 OK", [("content-type", "text/plain")])
+        marker = os.environ["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"]
+        def response_chunks():
+            yield b"python-api-wsgi-stream|first"
+            deadline = time.monotonic() + 3.0
+            while not os.path.exists(marker) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            yield b"|released" if os.path.exists(marker) else b"|timed-out"
+        return response_chunks()
+
     body = b"|".join((
         b"python-api-wsgi-ok",
         environ["REQUEST_METHOD"].encode("ascii"),
@@ -624,6 +640,8 @@ except KeyboardInterrupt:
 '''
     uds_directory = None
     uds_path = None
+    wsgi_stream_directory = None
+    wsgi_stream_release_marker = None
     bind_conflict_listener = None
     inherited_listeners = []
     tls_directory = Path(__file__).resolve().parents[1] / "native-core" / "tls"
@@ -889,6 +907,16 @@ except KeyboardInterrupt:
         ]
 
     environment = subprocess_environment()
+    if wsgi_streaming_probe:
+        wsgi_stream_directory = tempfile.TemporaryDirectory(
+            prefix="uvrs-wsgi-response-stream-"
+        )
+        wsgi_stream_release_marker = (
+            Path(wsgi_stream_directory.name) / "first-response-byte-received"
+        )
+        environment["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"] = str(
+            wsgi_stream_release_marker
+        )
     if port_from_environment == "@probe-port":
         if os.environ.get("UVICORN_PORT") != "@probe-port":
             raise RuntimeError(
@@ -1081,6 +1109,8 @@ except KeyboardInterrupt:
             bind_conflict_listener.close()
         if uds_directory is not None:
             uds_directory.cleanup()
+        if wsgi_stream_directory is not None:
+            wsgi_stream_directory.cleanup()
         if worker_crash_directory is not None:
             worker_crash_directory.cleanup()
         if worker_control_startup_failure_directory is not None:
@@ -1121,6 +1151,7 @@ except KeyboardInterrupt:
         )
 
     response = None
+    wsgi_stream_response_started = False
     probe_ports = (
         [listener.getsockname()[1] for listener in inherited_listeners]
         if inherited_listeners
@@ -1233,7 +1264,15 @@ except KeyboardInterrupt:
                         },
                     )
                     http_response = connection.getresponse()
-                    response_body = http_response.read()
+                    if wsgi_streaming_probe:
+                        wsgi_stream_response_started = True
+                        first_byte = http_response.read(1)
+                        if first_byte:
+                            assert wsgi_stream_release_marker is not None
+                            wsgi_stream_release_marker.touch()
+                        response_body = first_byte + http_response.read()
+                    else:
+                        response_body = http_response.read()
                     listener_response = {
                         "status": http_response.status,
                         "content_type": http_response.getheader("content-type"),
@@ -1273,6 +1312,8 @@ except KeyboardInterrupt:
             if all(item is not None for item in listener_responses):
                 break
             if not made_progress:
+                if wsgi_streaming_probe and wsgi_stream_response_started:
+                    break
                 time.sleep(0.025)
 
         if request.get("bind_conflict", False) and process.poll() is None:
@@ -1473,6 +1514,8 @@ except KeyboardInterrupt:
             worker_stall_resumer.join(timeout=1.0)
         if uds_directory is not None:
             uds_directory.cleanup()
+        if wsgi_stream_directory is not None:
+            wsgi_stream_directory.cleanup()
         if signal_hold_directory is not None:
             signal_hold_directory.cleanup()
         if worker_crash_directory is not None:
