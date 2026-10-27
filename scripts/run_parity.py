@@ -2644,6 +2644,8 @@ def load_contract(
                 reload_request_keys = {"timeout_seconds", "reload_delay", "workers"}
                 if case["operation"] == "python.api.run-http-reload-filters":
                     reload_request_keys.update({"reload_include", "reload_exclude"})
+                    if "environment" in reload_request:
+                        reload_request_keys.add("environment")
                 exact_keys(
                     reload_request,
                     reload_request_keys,
@@ -2669,12 +2671,32 @@ def load_contract(
                         f"{case_id}.api.run_http_reload.workers must be from 1 through 16"
                     )
                 if case["operation"] == "python.api.run-http-reload-filters":
+                    environment = reload_request.get("environment", {})
+                    if not isinstance(environment, dict):
+                        raise ParityError(
+                            f"{case_id}.api.run_http_reload.environment must be an object"
+                        )
+                    allowed_environment = {
+                        "UVICORN_RELOAD_INCLUDES",
+                        "UVICORN_RELOAD_EXCLUDES",
+                    }
+                    if set(environment) - allowed_environment or any(
+                        not isinstance(value, str) or "\x00" in value
+                        for value in environment.values()
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http_reload.environment supports only string reload include/exclude values"
+                        )
                     for field in ("reload_include", "reload_exclude"):
                         patterns = reload_request[field]
+                        environment_name = {
+                            "reload_include": "UVICORN_RELOAD_INCLUDES",
+                            "reload_exclude": "UVICORN_RELOAD_EXCLUDES",
+                        }[field]
                         if (
                             not isinstance(patterns, list)
-                            or not patterns
                             or len(patterns) > 16
+                            or (not patterns and environment_name not in environment)
                             or any(
                                 not isinstance(pattern, str)
                                 or not pattern

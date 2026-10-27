@@ -5397,6 +5397,44 @@
           }
         }
       }
+    },
+    {
+      "case_id": "python-api.module-cli-reload-filters-from-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http-reload-filters",
+      "covers": ["python.api.run-http-reload-filters"],
+      "api": {
+        "run_http_reload": {
+          "timeout_seconds": 20,
+          "reload_delay": 0.1,
+          "workers": 1,
+          "reload_include": [],
+          "reload_exclude": [],
+          "environment": {
+            "UVICORN_RELOAD_INCLUDES": "*.txt",
+            "UVICORN_RELOAD_EXCLUDES": "ignored.txt"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-explicit-reload-filters-override-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http-reload-filters",
+      "covers": ["python.api.run-http-reload-filters"],
+      "api": {
+        "run_http_reload": {
+          "timeout_seconds": 20,
+          "reload_delay": 0.1,
+          "workers": 1,
+          "reload_include": ["*.txt"],
+          "reload_exclude": ["ignored.txt"],
+          "environment": {
+            "UVICORN_RELOAD_INCLUDES": "*.py",
+            "UVICORN_RELOAD_EXCLUDES": "*.txt"
+          }
+        }
+      }
     }
   ]
 }

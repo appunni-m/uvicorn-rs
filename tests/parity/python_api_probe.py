@@ -194,6 +194,8 @@ async def app(scope, receive, send):
         for pattern in request.get("reload_exclude", []):
             command.extend(["--reload-exclude", pattern])
         environment = subprocess_environment()
+        for name, value in request.get("environment", {}).items():
+            environment[name] = value
         creationflags = (
             subprocess.CREATE_NEW_PROCESS_GROUP
             if os.name == "nt"
