@@ -22,7 +22,10 @@ pass for module-CLI environment behavior: listener host/port settings, a valid
 invalid concurrency environment values, WSGI selection through UVICORN_INTERFACE, and explicit ASGI3 precedence over the WSGI environment selection. It does not establish full CLI/API parity. See
 the [parity receipt](parity.md#module-cli-environment-parity-2026-10-27). A
 separate CLI process case passes 1/1 for malformed `UVICORN_INTERFACE=invalid`,
-with matching exit code 2 and Click diagnostic; see the [focused result](parity.md#invalid-module-cli-interface-environment-2026-10-27).
+with matching exit code 2 and Click diagnostic; a focused two-case group also
+passes 2/2 for malformed `UVICORN_LOG_LEVEL` and explicit `--log-level`
+precedence. See the [interface result](parity.md#invalid-module-cli-interface-environment-2026-10-27)
+and [log-level result](parity.md#module-cli-log-level-environment-parity-2026-10-27).
 
 ## Can I replace Uvicorn?
 
