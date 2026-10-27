@@ -40,6 +40,13 @@ each malformed value. See the [request-limit environment result](parity.md#modul
 Six more selected cases pass 6/6 for malformed backlog, keep-alive timeout,
 and worker-healthcheck timeout environment values and explicit CLI overrides.
 See the [numeric settings environment result](parity.md#module-cli-numeric-settings-environment-validation-and-precedence-2026-10-28).
+Seven additional selected cases pass 7/7 for malformed WebSocket max-queue,
+ping-interval, and per-message-deflate environment values with explicit CLI
+overrides, plus explicit concurrency-limit precedence over malformed
+environment. See the [WebSocket and concurrency environment result](parity.md#module-cli-websocket-and-concurrency-environment-precedence-2026-10-28).
+Ten focused cases also pass 10/10 for malformed HTTP, WebSocket, lifespan,
+worker-count, and reload-delay environment values with explicit valid CLI
+overrides. See the [selector and process-setting environment result](parity.md#module-cli-selector-and-process-setting-environment-precedence-2026-10-28).
 
 ## Can I replace Uvicorn?
 
