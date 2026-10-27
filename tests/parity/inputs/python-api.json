@@ -894,6 +894,43 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-disables-access-log-from-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-no-access-log-environment",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "environment": {"UVICORN_ACCESS_LOG": "false"}
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-explicit-access-log-overrides-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-no-access-log-explicit-override",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "access_log": false,
+          "environment": {"UVICORN_ACCESS_LOG": "true"}
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-disables-server-and-date-headers",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -2158,6 +2195,43 @@
           "invocation": "module-cli",
           "root_path": "",
           "use_colors": false
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-forces-colored-server-logs-from-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-module-cli-colors-environment",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "environment": {"UVICORN_USE_COLORS": "true"}
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-explicit-no-colors-overrides-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-module-cli-no-colors-explicit-override",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "use_colors": false,
+          "environment": {"UVICORN_USE_COLORS": "true"}
         }
       }
     },
