@@ -5131,6 +5131,71 @@
           }
         }
       }
+    },
+    {
+      "case_id": "python-api.module-cli-explicit-concurrency-limit-overrides-valid-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http-concurrency",
+      "covers": ["python.api.run-http-concurrency"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-explicit-concurrency-limit-overrides-valid-environment",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "limit_concurrency": 2,
+          "environment": {
+            "UVICORN_LIMIT_CONCURRENCY": "1"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-uses-wsgi-interface-from-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-wsgi-environment?name=rust",
+          "request_headers": [["X-Python-API", "wsgi-env"]],
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "application_interface": "wsgi",
+          "environment": {
+            "UVICORN_INTERFACE": "wsgi"
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-explicit-interface-overrides-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-cli-interface-precedence",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "interface": "asgi3",
+          "application_interface": "asgi3",
+          "environment": {
+            "UVICORN_INTERFACE": "wsgi"
+          }
+        }
+      }
     }
   ]
 }

@@ -1513,22 +1513,28 @@ release evidence remain open.
 
 ## Module-CLI environment parity — 2026-10-27
 
-Three selected cases pass against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 /
+Six selected cases pass against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 /
 CPython 3.12.13 / Rust 1.98.1: `python-api.module-cli-listener-host-port-from-environment`
 binds with `UVICORN_HOST=0.0.0.0` and a dynamically reserved `UVICORN_PORT`
 and serves HTTP 200; `python-api.module-cli-concurrency-limit-from-environment`
 uses `UVICORN_LIMIT_CONCURRENCY=1` and returns HTTP 503 on both implementations;
 `python-api.module-cli-explicit-concurrency-limit-overrides-invalid-environment`
 uses `--limit-concurrency 2` to override a malformed environment value and
-serves HTTP 200. All three processes exit 0 after SIGINT, and the normalized
-observations match.
+serves HTTP 200; `python-api.module-cli-explicit-concurrency-limit-overrides-valid-environment`
+uses the same CLI limit over `UVICORN_LIMIT_CONCURRENCY=1`, returns HTTP 200,
+and confirms the explicit argument takes precedence; `python-api.module-cli-uses-wsgi-interface-from-environment`
+selects the WSGI adapter through `UVICORN_INTERFACE=wsgi` and serves HTTP 200
+against the WSGI fixture on both implementations; `python-api.module-cli-explicit-interface-overrides-environment`
+uses `--interface asgi3` over the conflicting valid `UVICORN_INTERFACE=wsgi`
+value and serves the ASGI3 fixture with HTTP 200. All six processes exit 0
+after SIGINT, and the normalized observations match.
 
-Run `53eaa64e91a8401fb6a78187416d241f`; receipt
-`target/kata-progress/python-api-environment-parity-20261027.json`, SHA-256
-`b0123c715ef39c1ec30d04492b8dd4a3e0e9c2a9fdb06dd855dbe9f605815d8f7b`.
+Run `6bccbbc39531471f9d5c191bd6a77507`; receipt
+`target/kata-progress/python-api-cli-environment-parity-20261027.json`, SHA-256
+`eaba087fc44e031c275394917555f2398af6f03ee2e2d16c23c61d6cbc190533`.
 It binds Python API input@42 SHA-256
-`ab92dddd0351d5eafb781b77a912198f26841eeb8e40798bbd5541cdeba04486`,
-dirty target revision `80172ab00083f3c12f52ca1230299351e371e7df`, runner SHA-256
+`3e9e033ea06125c39f22c0eecdf8fdf30232894f1a5c61bc54617531a1707753`,
+dirty target revision `8b1f90752b092c447ad4e22b20fe477ae8fe6951`, runner SHA-256
 `f402f9d1eb95969f189139987292ead4cbef7f6bd1543941fcb68ee04f00edbf`, and
 probe SHA-256 `5dcfc30c60f59c6340a519114820d9a19d5e402a4d689883ef398d21075e9809`.
 The `@probe-port` value is replaced with the reserved listener port before the
