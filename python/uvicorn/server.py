@@ -264,7 +264,7 @@ class Server:
             self.started = await native_server.wait_started()
             if self.started:
                 try:
-                    if not self.config._worker_mode:
+                    if sockets is None:
                         self._log_started_message(sockets)
                 finally:
                     native_server._acknowledge_startup()

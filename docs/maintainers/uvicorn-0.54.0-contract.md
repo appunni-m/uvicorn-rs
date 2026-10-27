@@ -1610,6 +1610,65 @@ runner SHA-256 `f402f9d1eb95969f189139987292ead4cbef7f6bd1543941fcb68ee04f00edbf
 and native extension SHA-256
 `1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`.
 
+## Module-CLI worker-count environment parity — 2026-10-28
+
+The new `python-api.module-cli-two-workers-from-uvicorn-workers-environment`
+input passes 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython
+3.12.13 / Rust 1.98.1. It starts the module CLI with
+`UVICORN_WORKERS=2` and no explicit `--workers` argument; both implementations
+emit two worker-start events, serve the request with status 200, and shut down
+cleanly. This is focused environment-binding evidence, not full worker or
+platform compatibility.
+
+Run `93d928bbbce64d15bece0982559e7593`; receipt
+`target/kata-progress/python-api-workers-env-focused-20261028.json`, SHA-256
+`6e3cafefbcff60e7bc0515f303758763629d34f3699ad58c36e0956cb7719563`. It binds
+Python API input@42 SHA-256
+`233fd33063b606c676bde00d35db56850d04f0a7028c12140cb590bca16d6666`, target
+revision `3dfd1802b06283aa0bd50526b222d3acb85dada3`, a dirty input tree, source
+SHA-256 `eb302a715923469d490bde65c43e8cdff097fd68a6216033921092176b873197`,
+runner SHA-256 `f402f9d1eb95969f189139987292ead4cbef7f6bd1543941fcb68ee04f00edbf`,
+and native extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`.
+
+## Module-CLI reload environment parity and log correction — 2026-10-28
+
+The new `python-api.module-cli-reload-from-uvicorn-reload-environment`
+input passes 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython
+3.12.13 / Rust 1.98.1. `UVICORN_RELOAD=true` starts the WatchFiles reloader;
+both implementations serve the request with status 200 and exit cleanly after
+SIGINT.
+
+The first reproduction, run `150eaebd8bb34742b4ecc82066f5ce4c`, found a real
+extra `Uvicorn running` log from the candidate’s supervised child. Its failed
+report is `target/kata-progress/python-api-reload-env-focused-20261028.json`
+(SHA-256 `808aa2f602869d76e7e6cd74703b8cb6f0ad99dfa334a0f2b2c9086995a095ab`). The pinned
+reference logs the bound listener once in the parent; its `Server.startup`
+logs a listener only when `sockets is None`. The candidate now uses the same
+condition after Rust reports readiness, preventing a duplicate for reloader
+children while retaining the readiness log for directly bound servers. The
+follow-up also passed the `UVICORN_WORKERS=2` case after this change. Its
+two-case diagnostic report `target/kata-progress/python-api-reload-worker-env-focused-after-fix-20261028.json`
+(SHA-256 `76b77d294fee94b95f0ca9ab8cda415e27a633ad2641ab1a5ac7c4e24562b79a`,
+run `2c40950db4a54684b86a8e39aefaa2ae`) retained only a dynamic reloader PID
+difference; the parity normalizer now canonicalizes the PIDs in
+the `Started reloader process` and `Stopping reloader process` events, as it
+already does for worker and parent events. It retains both events and their
+order.
+
+Final reload run `fec4519c04b64ef9bd972063a8ffe251`; receipt
+`target/kata-progress/python-api-reload-env-focused-after-normalization-20261028.json`,
+SHA-256 `1569f715bb7e2597ba16b78ae9dde3ad79864e769199be36373544cb5bde435b`.
+It binds Python API input@42 SHA-256
+`2ac51287db9fefb24beba63e254dbdb1f2768297615d79cc301c4918315d88c1`, target
+revision `3dfd1802b06283aa0bd50526b222d3acb85dada3`, a dirty working tree,
+source SHA-256 `3ba1a079d49bee1bcbcc896aedd5406d84ede6da54adc48d716eafd91512432a`,
+runner SHA-256 `1fdcbe1cbee7fdda29167dc10684ff612133ab8670da2df234036348288be44d`,
+and native extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`.
+This is focused environment and startup-log evidence, not full reload or
+platform compatibility.
+
 ## User-facing status
 
 The install/rollback steps and current limitations are on the

@@ -11952,7 +11952,7 @@ def _python_api_server_log_events(
         r"^Uvicorn running on unix socket .+ \(Press CTRL\+C to quit\)$"
     )
     process_pid = re.compile(
-        r"(((?:Started|Finished) server|(?:Started|Stopping) parent|"
+        r"(((?:Started|Finished) server|(?:Started|Stopping) (?:parent|reloader)|"
         r"(?:Terminated|Waiting for) child|Child) process \[)\d+(\])"
     )
     worker_restart_pid = re.compile(r"((?:New child process|keeping worker) \[)\d+(\])")

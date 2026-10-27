@@ -563,6 +563,26 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-two-workers-from-uvicorn-workers-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-two-workers",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 12,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "environment": {
+            "UVICORN_WORKERS": "2"
+          }
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-two-workers-stop-on-sigterm",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -4889,6 +4909,26 @@
           "workers": 1,
           "reload_include": ["*.txt"],
           "reload_exclude": ["ignored.txt"]
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-reload-from-uvicorn-reload-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-reload-from-environment",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 15,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "environment": {
+            "UVICORN_RELOAD": "true"
+          }
         }
       }
     },
