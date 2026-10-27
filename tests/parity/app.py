@@ -1828,6 +1828,8 @@ def python_api_wsgi_probe_app(environ, start_response):
             environ.get("HTTP_X_PYTHON_API", "missing").encode("latin1"),
         )
     )
+    if environ["REQUEST_METHOD"] == "POST":
+        body += b"|request-body=" + environ["wsgi.input"].read()
     start_response(
         "200 OK",
         [

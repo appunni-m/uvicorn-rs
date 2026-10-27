@@ -2727,6 +2727,7 @@ def load_contract(
                     "application_interface",
                     "environment",
                     "request_headers",
+                    "request_body_base64",
                     "http_version",
                     "observe_scope",
                     "proxy_headers",
@@ -3080,8 +3081,35 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.application_interface must be asgi2, asgi3, or wsgi"
                     )
-                if run_http["method"] != "GET":
-                    raise ParityError(f"{case_id}: run_http currently supports the GET method")
+                if not isinstance(run_http["method"], str) or run_http["method"] not in {
+                    "GET",
+                    "POST",
+                }:
+                    raise ParityError(f"{case_id}: run_http supports GET and WSGI POST requests")
+                if run_http["method"] == "POST":
+                    if run_http.get("application_interface") != "wsgi":
+                        raise ParityError(
+                            f"{case_id}: run_http POST currently requires the WSGI probe app"
+                        )
+                    encoded_body = run_http.get("request_body_base64")
+                    if not isinstance(encoded_body, str) or not encoded_body:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.request_body_base64 is required for POST"
+                        )
+                    try:
+                        decoded_body = base64.b64decode(encoded_body, validate=True)
+                    except (ValueError, TypeError) as error:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.request_body_base64 must be valid base64"
+                        ) from error
+                    if not decoded_body or len(decoded_body) > 1024 * 1024:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.request_body_base64 must encode 1 byte through 1 MiB"
+                        )
+                elif "request_body_base64" in run_http:
+                    raise ParityError(
+                        f"{case_id}: request_body_base64 is only valid for WSGI POST inputs"
+                    )
                 if (
                     not isinstance(run_http["path"], str)
                     or not run_http["path"].startswith("/")

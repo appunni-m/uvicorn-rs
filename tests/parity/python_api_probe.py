@@ -335,6 +335,12 @@ async def app(scope, receive, send):
 def run_http_observation(request: dict) -> dict:
     """Exercise a public Python API or CLI server and signal shutdown."""
 
+    request_body = (
+        base64.b64decode(request["request_body_base64"], validate=True)
+        if "request_body_base64" in request
+        else None
+    )
+
     child_code = r'''
 import sys
 import os
@@ -503,6 +509,8 @@ def wsgi_app(environ, start_response):
         environ["QUERY_STRING"].encode("ascii"),
         environ.get("HTTP_X_PYTHON_API", "missing").encode("latin1"),
     ))
+    if environ["REQUEST_METHOD"] == "POST":
+        body += b"|request-body=" + environ["wsgi.input"].read()
     start_response("200 OK", [
         ("content-type", "text/plain"),
         ("content-length", str(len(body))),
@@ -1207,6 +1215,7 @@ except KeyboardInterrupt:
                     connection.request(
                         request["method"],
                         request["path"],
+                        body=request_body,
                         headers={
                             "Connection": "keep-alive" if keep_alive_probe_delay is not None else "close",
                             **dict(request.get("request_headers", [])),
@@ -1234,6 +1243,7 @@ except KeyboardInterrupt:
                                 connection.request(
                                     request["method"],
                                     request["path"],
+                                    body=request_body,
                                     headers={
                                         "Connection": "keep-alive",
                                         **dict(request.get("request_headers", [])),
@@ -1272,6 +1282,7 @@ except KeyboardInterrupt:
                         connection.request(
                             request["method"],
                             request["path"],
+                            body=request_body,
                             headers={
                                 "Connection": "close",
                                 **dict(request.get("request_headers", [])),
@@ -1339,6 +1350,7 @@ except KeyboardInterrupt:
                 connection.request(
                     request["method"],
                     request["path"],
+                    body=request_body,
                     headers={
                         "Connection": "close",
                         **dict(request.get("request_headers", [])),
