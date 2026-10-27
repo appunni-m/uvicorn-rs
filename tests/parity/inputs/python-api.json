@@ -2493,6 +2493,74 @@
       }
     },
     {
+      "case_id": "python-api.run-serves-wsgi-sixty-four-chunk-post-body",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "POST",
+          "path": "/python-api-wsgi?name=rust",
+          "request_headers": [
+            ["Content-Type", "application/octet-stream"],
+            ["Transfer-Encoding", "chunked"],
+            ["X-Python-API", "wsgi-64-chunk-body"]
+          ],
+          "request_body_chunks_base64": [
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ=="
+          ],
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "api",
+          "root_path": "",
+          "interface": "wsgi",
+          "application_interface": "wsgi"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-serves-wsgi-sixty-four-chunk-post-body",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "POST",
+          "path": "/python-api-wsgi?name=rust",
+          "request_headers": [
+            ["Content-Type", "application/octet-stream"],
+            ["Transfer-Encoding", "chunked"],
+            ["X-Python-API", "wsgi-64-chunk-body"]
+          ],
+          "request_body_chunks_base64": [
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
+            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ=="
+          ],
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "interface": "wsgi",
+          "application_interface": "wsgi"
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-streams-wsgi-response-before-app-completes",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -2567,6 +2635,56 @@
           "interface": "wsgi",
           "application_interface": "wsgi",
           "factory": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.run-wsgi-application-error-returns-500",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-wsgi-error?name=rust",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "api",
+          "root_path": "",
+          "interface": "wsgi",
+          "application_interface": "wsgi",
+          "required_observations": {
+            "response_received": true,
+            "response_status": 500,
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-wsgi-application-error-returns-500",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-wsgi-error?name=rust",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "interface": "wsgi",
+          "application_interface": "wsgi",
+          "required_observations": {
+            "response_received": true,
+            "response_status": 500,
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
         }
       }
     },

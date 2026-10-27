@@ -78,6 +78,7 @@ def log_concurrency_limit_rejection(
 
 async def invoke(app, scope, io):
     scope_type = scope.get("type")
+    response_started = False
     if scope_type == "lifespan":
         error_logger.info("Waiting for application startup.")
 
@@ -92,6 +93,7 @@ async def invoke(app, scope, io):
         return message
 
     async def send(message):
+        nonlocal response_started
         pending = io.send(message)
         if pending is not None:
             await pending
@@ -103,22 +105,42 @@ async def invoke(app, scope, io):
                 error_logger.info("Application startup complete.")
             elif event_type == "lifespan.shutdown.complete":
                 error_logger.info("Application shutdown complete.")
-        elif scope_type == "http" and event_type == "http.response.start" and access_logger.hasHandlers():
-            client = scope.get("client")
-            client_addr = "%s:%d" % client if client else ""
-            full_path = quote(scope["path"])
-            if scope["query_string"]:
-                full_path = f"{full_path}?{scope['query_string'].decode('ascii')}"
-            access_logger.info(
-                '%s - "%s %s HTTP/%s" %d',
-                client_addr,
-                scope["method"],
-                full_path,
-                scope["http_version"],
-                message["status"],
-            )
+        elif scope_type == "http" and event_type == "http.response.start":
+            response_started = True
+            if access_logger.hasHandlers():
+                client = scope.get("client")
+                client_addr = "%s:%d" % client if client else ""
+                full_path = quote(scope["path"])
+                if scope["query_string"]:
+                    full_path = f"{full_path}?{scope['query_string'].decode('ascii')}"
+                access_logger.info(
+                    '%s - "%s %s HTTP/%s" %d',
+                    client_addr,
+                    scope["method"],
+                    full_path,
+                    scope["http_version"],
+                    message["status"],
+                )
 
-    await app(scope, receive, send)
+    try:
+        await app(scope, receive, send)
+    except BaseException:
+        if scope_type != "http" or response_started:
+            raise
+        error_logger.exception("Exception in ASGI application")
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 500,
+                "headers": [(b"content-type", b"text/plain; charset=utf-8")],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b"" if scope.get("http_version") == "3" else b"Internal Server Error",
+            }
+        )
 
 
 async def invoke_with_reset_contextvars(app, scope, io):
