@@ -2531,6 +2531,46 @@
       }
     },
     {
+      "case_id": "python-api.run-serves-successful-wsgi-application-factory",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-wsgi-factory?name=rust",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "api",
+          "root_path": "",
+          "interface": "wsgi",
+          "application_interface": "wsgi",
+          "factory": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-serves-successful-wsgi-application-factory",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-wsgi-factory?name=rust",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "interface": "wsgi",
+          "application_interface": "wsgi",
+          "factory": true
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-serves-wsgi-request-auto-lifespan",
       "profile": "python-api",
       "operation": "python.api.run-http",

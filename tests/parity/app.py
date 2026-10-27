@@ -1854,6 +1854,12 @@ def python_api_wsgi_probe_app(environ, start_response):
     return [body]
 
 
+def python_api_wsgi_probe_app_factory():
+    """Return the WSGI app used by Python API factory parity inputs."""
+
+    return python_api_wsgi_probe_app
+
+
 async def lifespan_startup_error_probe_app(scope, receive, send):
     """Raise during lifespan startup for strict-mode public CLI parity."""
     if scope["type"] == "lifespan":
