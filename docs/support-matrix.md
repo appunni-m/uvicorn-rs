@@ -15,7 +15,7 @@ The latest local installed-wheel comparison passed 580/580 declared public
 Uvicorn 0.54.0 parity cases on macOS 15.7.7 ARM64 / CPython 3.12.13. It used a
 wheel built from a dirty checkout; Linux/Windows, other supported Python
 versions, target-only fault contracts, native-core contracts, and clean
-exact-main acceptance remain open. See the [parity receipt](parity.md#full-installed-wheel-public-parity-after-lifespan-shutdown-fix--2026-10-27).
+exact-main acceptance remain open. See the [parity receipt](parity.md#full-installed-wheel-public-parity-after-lifespan-shutdown-fix-2026-10-27).
 
 ## Can I replace Uvicorn?
 

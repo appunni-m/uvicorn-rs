@@ -96,7 +96,7 @@ revision `5b1ec29201c963d8590c989b07318bb7366d7922`, has zero complete
 verification repeats, and predates the current input inventory.
 This is one-pass diagnostic evidence, not a full release-ready profile.
 The new `cli.websocket-zero-ping-timeout-is-accepted` input passed 1/1 against
-Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. The selected valid graceful-shutdown option case also passes 1/1; it only verifies startup/exit acceptance, not in-flight request cancellation. See [the maintainer receipt](maintainers/uvicorn-0.54.0-contract.md#focused-module-cli-graceful-shutdown-settings--2026-10-27). It starts the module
+Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. The selected valid graceful-shutdown option case also passes 1/1; it only verifies startup/exit acceptance, not in-flight request cancellation. See [the maintainer receipt](maintainers/uvicorn-0.54.0-contract.md#focused-module-cli-graceful-shutdown-settings-2026-10-27). It starts the module
 CLI with `--ws-ping-interval 0` and `--ws-ping-timeout 0`; it does not establish
 active WebSocket Ping/Pong behavior. Run
 `98338893fcab4a2fbc3113859ea3c311`; receipt
