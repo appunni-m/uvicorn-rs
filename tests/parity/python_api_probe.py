@@ -335,11 +335,21 @@ async def app(scope, receive, send):
 def run_http_observation(request: dict) -> dict:
     """Exercise a public Python API or CLI server and signal shutdown."""
 
-    request_body = (
-        base64.b64decode(request["request_body_base64"], validate=True)
-        if "request_body_base64" in request
-        else None
+    if "request_body_chunks_base64" in request:
+        request_body = [
+            base64.b64decode(chunk, validate=True)
+            for chunk in request["request_body_chunks_base64"]
+        ]
+    elif "request_body_base64" in request:
+        request_body = base64.b64decode(request["request_body_base64"], validate=True)
+    else:
+        request_body = None
+    chunked_request = any(
+        name.lower() == "transfer-encoding" and value.lower() == "chunked"
+        for name, value in request.get("request_headers", [])
     )
+    if chunked_request and isinstance(request_body, bytes):
+        request_body = [request_body]
 
     child_code = r'''
 import sys
@@ -1216,6 +1226,7 @@ except KeyboardInterrupt:
                         request["method"],
                         request["path"],
                         body=request_body,
+                        encode_chunked=chunked_request,
                         headers={
                             "Connection": "keep-alive" if keep_alive_probe_delay is not None else "close",
                             **dict(request.get("request_headers", [])),
@@ -1244,6 +1255,7 @@ except KeyboardInterrupt:
                                     request["method"],
                                     request["path"],
                                     body=request_body,
+                                    encode_chunked=chunked_request,
                                     headers={
                                         "Connection": "keep-alive",
                                         **dict(request.get("request_headers", [])),
@@ -1283,6 +1295,7 @@ except KeyboardInterrupt:
                             request["method"],
                             request["path"],
                             body=request_body,
+                            encode_chunked=chunked_request,
                             headers={
                                 "Connection": "close",
                                 **dict(request.get("request_headers", [])),
@@ -1351,6 +1364,7 @@ except KeyboardInterrupt:
                     request["method"],
                     request["path"],
                     body=request_body,
+                    encode_chunked=chunked_request,
                     headers={
                         "Connection": "close",
                         **dict(request.get("request_headers", [])),

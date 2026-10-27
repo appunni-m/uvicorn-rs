@@ -49,7 +49,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@42"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@43"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -2728,6 +2728,7 @@ def load_contract(
                     "environment",
                     "request_headers",
                     "request_body_base64",
+                    "request_body_chunks_base64",
                     "http_version",
                     "observe_scope",
                     "proxy_headers",
@@ -3091,24 +3092,79 @@ def load_contract(
                         raise ParityError(
                             f"{case_id}: run_http POST currently requires the WSGI probe app"
                         )
-                    encoded_body = run_http.get("request_body_base64")
-                    if not isinstance(encoded_body, str) or not encoded_body:
+                    has_single_body = "request_body_base64" in run_http
+                    has_chunked_body = "request_body_chunks_base64" in run_http
+                    if has_single_body == has_chunked_body:
                         raise ParityError(
-                            f"{case_id}.api.run_http.request_body_base64 is required for POST"
+                            f"{case_id}: POST requires exactly one of request_body_base64 or request_body_chunks_base64"
                         )
-                    try:
-                        decoded_body = base64.b64decode(encoded_body, validate=True)
-                    except (ValueError, TypeError) as error:
-                        raise ParityError(
-                            f"{case_id}.api.run_http.request_body_base64 must be valid base64"
-                        ) from error
-                    if not decoded_body or len(decoded_body) > 1024 * 1024:
-                        raise ParityError(
-                            f"{case_id}.api.run_http.request_body_base64 must encode 1 byte through 1 MiB"
+                    if has_single_body:
+                        encoded_body = run_http["request_body_base64"]
+                        if not isinstance(encoded_body, str) or not encoded_body:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_base64 must be a non-empty base64 string"
+                            )
+                        try:
+                            decoded_body = base64.b64decode(encoded_body, validate=True)
+                        except (ValueError, TypeError) as error:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_base64 must be valid base64"
+                            ) from error
+                        if not decoded_body or len(decoded_body) > 1024 * 1024:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_base64 must encode 1 byte through 1 MiB"
+                            )
+                    else:
+                        encoded_chunks = run_http["request_body_chunks_base64"]
+                        if (
+                            not isinstance(encoded_chunks, list)
+                            or not 2 <= len(encoded_chunks) <= 64
+                            or any(not isinstance(chunk, str) or not chunk for chunk in encoded_chunks)
+                        ):
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_chunks_base64 must contain 2 through 64 non-empty base64 chunks"
+                            )
+                        try:
+                            decoded_chunks = [
+                                base64.b64decode(chunk, validate=True)
+                                for chunk in encoded_chunks
+                            ]
+                        except (ValueError, TypeError) as error:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_chunks_base64 must contain valid base64"
+                            ) from error
+                        if any(not chunk for chunk in decoded_chunks):
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_chunks_base64 must encode non-empty chunks"
+                            )
+                        if sum(map(len, decoded_chunks)) > 1024 * 1024:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_chunks_base64 must encode at most 1 MiB total"
+                            )
+                        headers = run_http.get("request_headers", [])
+                        has_chunked_transfer_encoding = any(
+                            isinstance(header, list)
+                            and len(header) == 2
+                            and isinstance(header[0], str)
+                            and header[0].lower() == "transfer-encoding"
+                            and isinstance(header[1], str)
+                            and header[1].strip().lower() == "chunked"
+                            for header in headers
                         )
-                elif "request_body_base64" in run_http:
+                        has_content_length = any(
+                            isinstance(header, list)
+                            and len(header) == 2
+                            and isinstance(header[0], str)
+                            and header[0].lower() == "content-length"
+                            for header in headers
+                        )
+                        if not has_chunked_transfer_encoding or has_content_length:
+                            raise ParityError(
+                                f"{case_id}: request_body_chunks_base64 requires Transfer-Encoding: chunked and no Content-Length"
+                            )
+                elif "request_body_base64" in run_http or "request_body_chunks_base64" in run_http:
                     raise ParityError(
-                        f"{case_id}: request_body_base64 is only valid for WSGI POST inputs"
+                        f"{case_id}: request body fields are only valid for WSGI POST inputs"
                     )
                 if (
                     not isinstance(run_http["path"], str)
