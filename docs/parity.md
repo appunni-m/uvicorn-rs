@@ -30,20 +30,25 @@ receipt is `awaiting_query`; see the
 
 ### Focused WSGI POST request-body parity (2026-10-28)
 
-The input case python-api.run-serves-wsgi-post-body sends the finite body
-wsgi-body-parity through uvicorn.run() with the WSGI interface. Uvicorn 0.54.0
-and uvicorn-rs both return HTTP 200 with the identical response body, including
-request-body=wsgi-body-parity, then exit cleanly after SIGINT. It passed 1/1 on
-macOS 15.7.7 ARM64 with CPython 3.12.13 (run
-209aa53eba3047a0b115fac742524809; report SHA-256
+The cases python-api.run-serves-wsgi-post-body and
+python-api.module-cli-serves-wsgi-post-body send the finite body wsgi-body-parity
+through uvicorn.run() and python -m uvicorn, respectively. Uvicorn 0.54.0 and
+uvicorn-rs both return HTTP 200 with the identical response body, including
+request-body=wsgi-body-parity, then exit cleanly after SIGINT. Each passed 1/1
+on macOS 15.7.7 ARM64 with CPython 3.12.13. The uvicorn.run() receipt is run
+209aa53eba3047a0b115fac742524809 (report SHA-256
 e7e9a7d3e965252d1f5dbdfcf2a8a3bf3784ebb7d9b13d174e781197f7d1c1a2; Python API
-input SHA-256 778b2da53c3c063de19e2c3c167c82785d244bb4c952dea22db519015bab203c;
-source SHA-256
-77049980c97caaab495cbbf516b93f213488c549fae214613f4e3c687c70a0e9).
+input SHA-256 778b2da53c3c063de19e2c3c167c82785d244bb4c952dea22db519015bab203c).
+The module-CLI receipt is run 9ed791ef66cf48388f597003f0a9832b (report SHA-256
+d0bcb0afc8cffedbbbfdd2f8996f3545209baa995f2a83c8dbaf085aee74dc32; Python API
+input SHA-256 33f011f2b7a85f00ab0cbc8a21ffe16af47476ca4e56b245fedd9c6711fa0f1e).
+Both bind to source SHA-256
+77049980c97caaab495cbbf516b93f213488c549fae214613f4e3c687c70a0e9.
 
-This is a local dirty-source receipt; hosted CI #435 predates this added input.
-It checks one buffered body read and does not establish streaming uploads,
-chunked requests, large bodies, malformed length handling, or module-CLI POST
+These are local dirty-worktree receipts; hosted CI #435 predates both inputs.
+The module-CLI case extends entry-point coverage, while both cases exercise one
+finite buffered body. They do not establish streaming uploads, chunked requests,
+large bodies, malformed length handling, response streaming, or cross-platform
 behavior.
 
 ## Correctness gate
@@ -470,7 +475,7 @@ error, the held/cancelled application events and a healthy fresh follow-up.
 The maintained [coverage summary](coverage.md) records the historical
 511-case adapter result and the latest complete-scope 595-case baseline. Those
 coverage and case totals are snapshots: the source snapshot for that report had
-604 cases. The current manifest has 659 cases, including four native HTTP/1
+604 cases. The current manifest has 662 cases, including four native HTTP/1
 upgrade-session inputs, five inherited TCP-listener inputs, later CLI
 environment-precedence inputs, the Python `Config`/`Server.run()` concurrency
 case, the h11 selector checks, forced-color comparisons, and custom
@@ -760,10 +765,10 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | HTTP/2 | 28 | Uvicorn 0.54.0, zttp 0.0.34, TLS ALPN, explicit ASGI mode | Experimental Uvicorn HTTP/2 is selected with `--http zttp --http2`. A prior local aggregate run passed the 27 earlier parity cases with the source adapter. The added zero-concurrency case passed as a selected one-case run and checks the oracle-matched 503 plus the HTTP/2 concurrency observer path. Hosted release evidence and the HTTP/2 category benchmark remain pending. Prior Hypercorn receipts are historical. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
 | CLI and environment | 114 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, process outcomes, `--http h11` acceptance, zero WebSocket ping interval startup, graceful-shutdown option/environment acceptance, and explicit-option precedence over malformed backlog, graceful-shutdown, keep-alive, request-limit, worker-healthcheck, WebSocket-size/queue/ping-interval/ping-timeout/deflate, HTTP, WebSocket selector, lifespan, worker-count, and reload-delay environment values and concurrency settings; invalid host/interface/log-level/request-limit/WebSocket environment diagnostics; explicit interface/log-level precedence; environment/explicit-flag resolution for `UVICORN_APP_DIR`, `UVICORN_ENV_FILE`, and `UVICORN_RELOAD_DIRS`; version, factory, FD, h11-size, TLS, HTTP/2, loop, and UDS environment cases; and the missing-path diagnostic for `--reload-dir`. |
-| Python API | 236 | Uvicorn 0.54.0 | These are oracle-comparison cases; 23 target-only fault-contract cases have no Uvicorn comparison and are excluded from this count. Compares documented imports/signatures, including logging formatters, deprecated `ServerState` paths and the `Server.run()`/`Server.serve()` methods and the `Server.startup()`, `shutdown()`, `main_loop()`, `on_tick()`, and `capture_signals()` signatures; selected `run` and `Server` lifecycle behavior; configuration error ordering; selected Python event-loop behavior, including a custom import-string loop factory through `uvicorn.run()`; headers, environment files and `FORWARDED_ALLOW_IPS` precedence; module-CLI `UVICORN_RELOAD=true` live reload selection, `UVICORN_RESET_CONTEXTVARS` behavior and explicit-flag precedence, and environment-driven `UVICORN_RELOAD_INCLUDES`/`UVICORN_RELOAD_EXCLUDES` file filtering plus explicit-option precedence; root-path environment handling and explicit `--root-path` precedence; selected host/port, interface, and concurrency settings through `UVICORN_HOST`, `UVICORN_PORT`, `UVICORN_INTERFACE`, and `UVICORN_LIMIT_CONCURRENCY`; explicit `--limit-concurrency` precedence over valid and malformed environment values, plus explicit `--interface asgi3` precedence over `UVICORN_INTERFACE=wsgi`; ASGI2 and focused WSGI selection, including one finite POST body delivered through wsgi.input via uvicorn.run(); trusted proxy headers, including module-CLI `UVICORN_PROXY_HEADERS=false` and `UVICORN_FORWARDED_ALLOW_IPS` precedence; module-CLI `UVICORN_HEADERS`, inherited `UVICORN_FD`, and TLS `UVICORN_SSL_*` environment handling; non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks; HTTPS over a Unix-domain socket; successful application-factory serving through the programmatic API and module CLI; WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path; positive and zero concurrency-limit behavior, including module-CLI --limit-concurrency 1 returning the oracle-matched 503; warning-level filtering; `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it; access-log suppression plus `UVICORN_ACCESS_LOG` and `UVICORN_USE_COLORS` environment behavior and explicit precedence; `UVICORN_SERVER_HEADER` and `UVICORN_DATE_HEADER` environment suppression with explicit `--server-header` precedence; both CLI color switches; forced ANSI colors through `uvicorn.run()`; custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI; `UVICORN_WORKERS=2` environment-backed module-CLI startup with two worker processes; inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one or two listeners; `Server.serve()` cancellation during held lifespan startup and after readiness; actual repeated SIGINT delivery to a module-CLI child while an ASGI request remains active; and single-SIGINT graceful-timeout cancellation while an ASGI request remains active. Successful PKCS#8 TLS key loading is compared through `Config`/`Server` and the module CLI, and a wrong-password failure is compared through `Config`/`Server` using the same fixture. Two additional inputs compare successful loading of a traditional AES-256-CBC encrypted RSA PEM through `Config`/`Server` and the matching wrong-password failure. A new input compares a password supplied with an unencrypted RSA key; both implementations serve the request over TLS and shut down cleanly. Six focused mTLS inputs cover trusted client certificates with default negotiation and TLS 1.2, optional anonymous clients with CA-backed and empty-root configurations, rejection of an untrusted client certificate with empty roots, and a trusted TLS 1.2 client through the module CLI. Two more inputs compare invalid `ssl_cert_reqs=3` and empty client-CA startup rejection. The selected TLS cases and their source-scope notes are in [coverage results](coverage.md). WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. The WSGI POST check covers one finite buffered request body only; streaming request bodies, response streaming, error behavior, application factories, and cross-platform behavior remain unverified. Other log levels and precedence combinations, and exact traceback frame formatting, also remain unverified. |
+| Python API | 237 | Uvicorn 0.54.0 | These are oracle-comparison cases; 23 target-only fault-contract cases have no Uvicorn comparison and are excluded from this count. Compares documented imports/signatures, including logging formatters, deprecated `ServerState` paths and the `Server.run()`/`Server.serve()` methods and the `Server.startup()`, `shutdown()`, `main_loop()`, `on_tick()`, and `capture_signals()` signatures; selected `run` and `Server` lifecycle behavior; configuration error ordering; selected Python event-loop behavior, including a custom import-string loop factory through `uvicorn.run()`; headers, environment files and `FORWARDED_ALLOW_IPS` precedence; module-CLI `UVICORN_RELOAD=true` live reload selection, `UVICORN_RESET_CONTEXTVARS` behavior and explicit-flag precedence, and environment-driven `UVICORN_RELOAD_INCLUDES`/`UVICORN_RELOAD_EXCLUDES` file filtering plus explicit-option precedence; root-path environment handling and explicit `--root-path` precedence; selected host/port, interface, and concurrency settings through `UVICORN_HOST`, `UVICORN_PORT`, `UVICORN_INTERFACE`, and `UVICORN_LIMIT_CONCURRENCY`; explicit `--limit-concurrency` precedence over valid and malformed environment values, plus explicit `--interface asgi3` precedence over `UVICORN_INTERFACE=wsgi`; ASGI2 and focused WSGI selection, including two finite POST bodies delivered through wsgi.input via uvicorn.run() and python -m uvicorn; trusted proxy headers, including module-CLI `UVICORN_PROXY_HEADERS=false` and `UVICORN_FORWARDED_ALLOW_IPS` precedence; module-CLI `UVICORN_HEADERS`, inherited `UVICORN_FD`, and TLS `UVICORN_SSL_*` environment handling; non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks; HTTPS over a Unix-domain socket; successful application-factory serving through the programmatic API and module CLI; WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path; positive and zero concurrency-limit behavior, including module-CLI --limit-concurrency 1 returning the oracle-matched 503; warning-level filtering; `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it; access-log suppression plus `UVICORN_ACCESS_LOG` and `UVICORN_USE_COLORS` environment behavior and explicit precedence; `UVICORN_SERVER_HEADER` and `UVICORN_DATE_HEADER` environment suppression with explicit `--server-header` precedence; both CLI color switches; forced ANSI colors through `uvicorn.run()`; custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI; `UVICORN_WORKERS=2` environment-backed module-CLI startup with two worker processes; inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one or two listeners; `Server.serve()` cancellation during held lifespan startup and after readiness; actual repeated SIGINT delivery to a module-CLI child while an ASGI request remains active; and single-SIGINT graceful-timeout cancellation while an ASGI request remains active. Successful PKCS#8 TLS key loading is compared through `Config`/`Server` and the module CLI, and a wrong-password failure is compared through `Config`/`Server` using the same fixture. Two additional inputs compare successful loading of a traditional AES-256-CBC encrypted RSA PEM through `Config`/`Server` and the matching wrong-password failure. A new input compares a password supplied with an unencrypted RSA key; both implementations serve the request over TLS and shut down cleanly. Six focused mTLS inputs cover trusted client certificates with default negotiation and TLS 1.2, optional anonymous clients with CA-backed and empty-root configurations, rejection of an untrusted client certificate with empty roots, and a trusted TLS 1.2 client through the module CLI. Two more inputs compare invalid `ssl_cert_reqs=3` and empty client-CA startup rejection. The selected TLS cases and their source-scope notes are in [coverage results](coverage.md). WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. The two WSGI POST checks cover one finite buffered request each; streaming request bodies, response streaming, error behavior, application factories, and cross-platform behavior remain unverified. Other log levels and precedence combinations, and exact traceback frame formatting, also remain unverified. |
 
 The previous `input@40` inventory contained 580 declared oracle-parity cases.
-The current `input@42` inventory contains 643 declared oracle-parity cases;
+The current `input@42` inventory contains 662 declared oracle-parity cases;
 six earlier selected environment-backed module-CLI cases pass together, and
 the later focused CLI precedence groups pass 1/1, 2/2, 4/4, 6/6, 7/7, 10/10,
 and 4/4 twice plus two selected 1/1 cases. The latest hosted installed-wheel
@@ -775,7 +780,7 @@ cases each pass 1/1 on the recorded macOS host; the module-CLI
 environment-only `UVICORN_PROXY_HEADERS=false` behavior. The reload comparison retains
 event count and order while normalizing supervisor PIDs. The other 349 ASGI
 cases are target-only fault/support contracts, and 258 native-core
-contract cases bring the current input inventory to 1,249 (991 ASGI and 258 native). Six
+contract cases bring the current input inventory to 1,251 (993 ASGI and 258 native). Six
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
 reports retain their historical counts. The cap is not part of the current
@@ -792,9 +797,11 @@ source SHA-256
 `input@42`, Ubuntu 24.04 x86-64, and CPython 3.12.13; it records a clean
 source checkout. This is complete evidence for the declared public matrix on
 that Linux configuration, not full Uvicorn compatibility across platforms.
-CI #435 runs three-pass unified coverage as a separate job; this parity receipt
-does not stand in for that coverage result, target-only fault contracts, or
-cross-platform and full CLI/API acceptance.
+The CI #435 three-pass unified coverage job was cancelled. [CI #436](https://github.com/appunni-m/uvicorn-rs/actions/runs/40597549680)
+is in progress on b34df035d. It includes the committed uvicorn.run WSGI POST
+input but not the module-CLI case still local. This parity receipt does not
+stand in for target-only fault contracts or cross-platform and full CLI/API
+acceptance.
 
 ### Input@40 baseline CLI and Python API profile runs — 2026-10-27
 
