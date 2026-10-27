@@ -20,9 +20,9 @@ exact-main acceptance remain open. Current input@42 has a focused 6/6 macOS
 pass for module-CLI environment behavior: listener host/port settings, a valid
 `UVICORN_LIMIT_CONCURRENCY` limit, and explicit CLI precedence over valid and
 invalid concurrency environment values, WSGI selection through UVICORN_INTERFACE, and explicit ASGI3 precedence over the WSGI environment selection. It does not establish full CLI/API parity. See
-the [parity receipt](parity.md#module-cli-environment-parity-2026-10-27). A
-separate CLI process case passes 1/1 for malformed `UVICORN_INTERFACE=invalid`,
-with matching exit code 2 and Click diagnostic; a focused two-case group also
+the [parity receipt](parity.md#module-cli-environment-parity-2026-10-27). Two selected CLI process cases cover malformed `UVICORN_INTERFACE=invalid`
+rejection and explicit `--interface asgi3` precedence over that value; a focused
+two-case group also
 passes 2/2 for malformed `UVICORN_LOG_LEVEL` and explicit `--log-level`
 precedence. See the [interface result](parity.md#invalid-module-cli-interface-environment-2026-10-27)
 and [log-level result](parity.md#module-cli-log-level-environment-parity-2026-10-27).
