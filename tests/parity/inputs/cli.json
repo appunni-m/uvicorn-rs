@@ -687,6 +687,35 @@
       }
     },
     {
+      "case_id": "cli.explicit-graceful-shutdown-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--timeout-graceful-shutdown",
+          "1",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN": "not-a-timeout"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.timeout-graceful-shutdown-valid-environment-value-exits-after-startup",
       "profile": "cli",
       "operation": "cli.process",
@@ -729,6 +758,35 @@
       }
     },
     {
+      "case_id": "cli.explicit-ws-max-size-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--ws-max-size",
+          "4",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_WS_MAX_SIZE": "not-a-size"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.invalid-ws-ping-timeout-env-is-rejected",
       "profile": "cli",
       "operation": "cli.process",
@@ -736,6 +794,37 @@
       "process": {
         "invocation": "module",
         "arguments": ["tests.parity.app:app"],
+        "environment": {
+          "UVICORN_WS_PING_TIMEOUT": "not-a-timeout"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.explicit-ws-ping-timeout-over-invalid-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--ws-ping-interval",
+          "0",
+          "--ws-ping-timeout",
+          "0",
+          "--limit-max-requests",
+          "0"
+        ],
         "environment": {
           "UVICORN_WS_PING_TIMEOUT": "not-a-timeout"
         },

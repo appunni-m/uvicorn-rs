@@ -22,10 +22,17 @@ pass for module-CLI environment behavior: listener host/port settings, a valid
 invalid concurrency environment values, WSGI selection through UVICORN_INTERFACE, and explicit ASGI3 precedence over the WSGI environment selection. It does not establish full CLI/API parity. See
 the [parity receipt](parity.md#module-cli-environment-parity-2026-10-27). Two selected CLI process cases cover malformed `UVICORN_INTERFACE=invalid`
 rejection and explicit `--interface asgi3` precedence over that value; a focused
-two-case group also
-passes 2/2 for malformed `UVICORN_LOG_LEVEL` and explicit `--log-level`
-precedence. See the [interface result](parity.md#invalid-module-cli-interface-environment-2026-10-27)
-and [log-level result](parity.md#module-cli-log-level-environment-parity-2026-10-27).
+two-case group also passes 2/2 for malformed `UVICORN_LOG_LEVEL` and explicit
+`--log-level` precedence. A separate selected case passes 1/1 when explicit
+`--timeout-graceful-shutdown 1` overrides malformed
+`UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN`; this checks parsing/startup precedence,
+while held-request cases cover actual timeout behavior. Two additional
+selected cases pass 2/2 when explicit `--ws-max-size` and `--ws-ping-timeout`
+override malformed environment values; they verify parse/startup precedence,
+not WebSocket session behavior. See the [interface result](parity.md#invalid-module-cli-interface-environment-2026-10-27),
+[log-level result](parity.md#module-cli-log-level-environment-parity-2026-10-27),
+[graceful-shutdown precedence result](parity.md#explicit-module-cli-graceful-shutdown-value-overrides-malformed-environment-2026-10-27), and
+[WebSocket precedence result](parity.md#module-cli-websocket-environment-precedence-2026-10-27).
 
 ## Can I replace Uvicorn?
 
