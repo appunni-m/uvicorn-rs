@@ -155,6 +155,31 @@
       }
     },
     {
+      "case_id": "cli.invalid-interface-environment-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_INTERFACE": "invalid"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.invalid-lifespan-selector-is-rejected",
       "profile": "cli",
       "operation": "cli.process",
