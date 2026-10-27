@@ -1669,6 +1669,63 @@ and native extension SHA-256
 This is focused environment and startup-log evidence, not full reload or
 platform compatibility.
 
+## Module-CLI reset-contextvars behavior — 2026-10-28
+
+The new `python-api.module-cli-reset-contextvars-clears-http-request-context`
+input passes 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython
+3.12.13 / Rust 1.98.1. Both module-CLI implementations accept
+`--reset-contextvars`, return the same HTTP 200 body, and exit cleanly. This
+adds CLI-entry-point evidence alongside the existing `uvicorn.run()` case.
+
+Run `158ce6d9b30447e68ffcd5ffbab113ae`; receipt
+`target/kata-progress/python-api-reset-contextvars-cli-20261028.json`, SHA-256
+`ae7682418c8d0e5968449ccc6b37e27011167d9c08f2959375e1783e041fa779`. It binds
+Python API input@42 SHA-256
+`881a91c48fbf2cbb473103cc4fe1a2950708753a587348b5b7e52df043d951a9`, target
+revision `3081301190b99c26ed0e1424824eec821b59492d`, a dirty input tree, source
+SHA-256 `3ba1a079d49bee1bcbcc896aedd5406d84ede6da54adc48d716eafd91512432a`,
+runner SHA-256 `1fdcbe1cbee7fdda29167dc10684ff612133ab8670da2df234036348288be44d`,
+and native extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`.
+
+## Invalid module-CLI reload directory — 2026-10-28
+
+The new `cli.missing-reload-dir-path-is-rejected` input passes 1/1 on macOS
+15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1. Both implementations reject the
+nonexistent `--reload-dir` path during Click parsing and match the process
+diagnostic and exit status. This checks the path validation boundary only; it
+does not add a reload-directory runtime case.
+
+Run `5f37fcfa2ed843f08a081667fb637572`; receipt
+`target/kata-progress/cli-reload-dir-invalid-focused-20261028.json`, SHA-256
+`44afb809a02406b68dd6eddca0cbb601fe8ae3f0d169dd3c9dc140f772285076`. It binds
+CLI input@42 SHA-256
+`05579f43b3f6231c5e618652fed7ddca661fd6108c933ef3df87b2b0dde2c46a`, target
+revision `3081301190b99c26ed0e1424824eec821b59492d`, a dirty input tree, source
+SHA-256 `3ba1a079d49bee1bcbcc896aedd5406d84ede6da54adc48d716eafd91512432a`,
+runner SHA-256 `1fdcbe1cbee7fdda29167dc10684ff612133ab8670da2df234036348288be44d`,
+and native extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`.
+
+## Module-CLI proxy-header environment binding — 2026-10-28
+
+The new `python-api.module-cli-disables-proxy-headers-from-environment` input
+passes 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 /
+Rust 1.98.1. With `UVICORN_PROXY_HEADERS=false` and forwarded request headers
+present, both module-CLI implementations return `scheme=http` and the actual
+loopback client address, rather than applying the forwarded values.
+
+Run `394f2e555ef94e56a8dcc83f016c7f40`; receipt
+`target/kata-progress/python-api-proxy-headers-env-focused-20261028.json`,
+SHA-256 `304cd11cbf994cadc0e04458560227d952516fb814a0d18527253084e46a8fec`.
+It binds Python API input@42 SHA-256
+`a2503c8341d7ca96ae00a73054b79f104265e1e8e80f40e4c62532719407148c`, target
+revision `3081301190b99c26ed0e1424824eec821b59492d`, a dirty input tree, source
+SHA-256 `3ba1a079d49bee1bcbcc896aedd5406d84ede6da54adc48d716eafd91512432a`,
+runner SHA-256 `1fdcbe1cbee7fdda29167dc10684ff612133ab8670da2df234036348288be44d`,
+and native extension SHA-256
+`1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`.
+
 ## User-facing status
 
 The install/rollback steps and current limitations are on the

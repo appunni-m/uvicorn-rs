@@ -1954,6 +1954,23 @@
         "working_directory": "project",
         "timeout_seconds": 10
       }
+    },
+    {
+      "case_id": "cli.missing-reload-dir-path-is-rejected",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--reload-dir",
+          "uvicorn_rs_missing_cli_reload_dir_20261028"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
     }
   ]
 }

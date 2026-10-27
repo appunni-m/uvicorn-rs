@@ -1620,6 +1620,30 @@
       }
     },
     {
+      "case_id": "python-api.module-cli-disables-proxy-headers-from-environment",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-proxy-headers-disabled",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "request_headers": [
+            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
+            ["x-forwarded-proto", "https"]
+          ],
+          "environment": {
+            "UVICORN_PROXY_HEADERS": "false"
+          }
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-auto-detects-asgi2-callable",
       "profile": "python-api",
       "operation": "python.api.run-http",
@@ -4945,6 +4969,24 @@
           "timeout_seconds": 5,
           "lifespan": "auto",
           "invocation": "api",
+          "root_path": "",
+          "reset_contextvars": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-reset-contextvars-clears-http-request-context",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/contextvars",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
           "root_path": "",
           "reset_contextvars": true
         }
