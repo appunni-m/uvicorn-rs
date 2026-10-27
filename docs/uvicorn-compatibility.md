@@ -26,7 +26,7 @@ manifest SHA-256 `ede173a29d162a002ee37d469f1ecaeeafa5d8e97c15c5bfbc67157b55c6f9
 CLI input SHA-256 `b86587d0f2f6d890a9dfef3b974bd2f6b5f5cc109a09fde93c6935e892688cf0`,
 and Python API input SHA-256 `3fb4cb2e7e4146060908da556d692ec8654196762261797bf92a352a4f847a96`.
 Run IDs, report hashes, and the corrected SIGINT exit-code contract are in the
-[parity evidence record](parity.md#current-cli-and-python-api-profile-runs-2026-10-27).
+[parity evidence record](parity.md#input40-baseline-cli-and-python-api-profile-runs-2026-10-27).
 These are local one-pass source-profile receipts. A fresh current-source
 installed wheel now passes all 580 declared public oracle cases on this host,
 as detailed below; cross-platform parity, native/fault contracts, clean-main
