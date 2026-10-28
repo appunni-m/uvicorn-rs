@@ -1648,6 +1648,48 @@
       }
     },
     {
+      "id": "websocket.fragmented-message-reassembly",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "handshake_accept_valid",
+        "frame_sent",
+        "application_events",
+        "followup_status"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "handshake_accept_valid": true,
+        "frame_sent": true,
+        "application_events": [
+          "websocket.fragmented.message:fragmented"
+        ],
+        "followup_status": 200
+      }
+    },
+    {
+      "id": "websocket.fragmented-compressed-message-reassembly",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "handshake_accept_valid",
+        "compression_negotiated",
+        "frame_sent",
+        "application_events",
+        "followup_status"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "handshake_accept_valid": true,
+        "compression_negotiated": true,
+        "frame_sent": true,
+        "application_events": [
+          "websocket.fragmented.message:fragmented"
+        ],
+        "followup_status": 200
+      }
+    },
+    {
       "id": "websocket.raw-size-limit-close",
       "kind": "protocol_operation",
       "observe": [

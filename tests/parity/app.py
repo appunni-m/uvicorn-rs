@@ -479,6 +479,15 @@ async def _app_impl(scope, receive, send):
             await send({"type": "websocket.accept"})
             await receive(None)
             return
+        if scope["path"] == "/ws-fragmented-message":
+            await send({"type": "websocket.accept"})
+            message = await receive()
+            if message["type"] == "websocket.receive":
+                _record(f"websocket.fragmented.message:{message.get('text')}")
+                await send({"type": "websocket.close", "code": 1000})
+            elif message["type"] == "websocket.disconnect":
+                _record(f"websocket.disconnect:{message.get('code')}:{message.get('reason', '')}")
+            return
         if scope["path"] in {"/ws-upgrade-client-drop", "/ws-upgrade-server-shutdown"}:
             _record("websocket.upgrade.waiting")
             await asyncio.sleep(0.2)

@@ -20,7 +20,7 @@ a prerequisite for completing the repository work.
   `tests/parity/manifest.json`, its indexed inputs, `tests/native-core/manifest.json`,
   and `examples/native-fastapi-contracts/manifest.json`. Do not create a second
   operation inventory or require arbitrary combinations outside this contract.
-- The current manifest has 135 operations and 89 execution profiles. Those counts
+- The current manifest has 137 operations and 89 execution profiles. Those counts
   describe its inventory, not completeness of upstream compatibility.
 - Platform acceptance uses the existing CI profiles: Linux x86-64, macOS ARM64,
   Windows x86-64 on CPython 3.12.13, plus the declared Python 3.9 wheel-consumer
@@ -41,29 +41,19 @@ belong to the release tasks rather than being copied into every prerequisite.
    or push while one of its required jobs is active. Preserve the PR branch head
    and synthetic merge SHA separately. When the run finishes, use its observed
    outcomes to choose only the failing gates for the next batch. CI
-   [#461](https://github.com/appunni-m/uvicorn-rs/actions/runs/40733997486)
-   checks PR head `05919965f09d6b94bc322c4538740b38f0ee9305` against main at
-   `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
+   [#462](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386566)
+   checks committed PR head `66d3f5791d9b6806ce56986f0fe4035364271b92` against
+   main at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
    framework composition, release-evidence handoff, and 714/714 installed-wheel
-   public parity passed. The unified run completed all 1,323 indexed cases but
-   failed the 100% coverage gate at 13,837/14,009 regions and 10,204/10,288
-   lines. One repeated instrumented run failed the
-   `python-api.cancel-startup-shutdown-task-join-error` fault contract. A
-   focused local reproduction passed before the change; the coverage-only
-   injection now aborts before sending lifespan shutdown to remove the race,
-   and that one focused case passes after the change. Full coverage is still
-   unverified. The platform package jobs failed before packaging on macOS and
-   Windows because `setup-python` could not fetch CPython 3.12.13; Linux built
-   the wheel and source consumer, then failed evidence recording because
-   offline Cargo resolution lacked `h2 v0.4.20`. Local commit `2110b6138`
-   switches those jobs to managed Python and online locked archive resolution,
-   and fixes strict docs navigation. Commit `f70d39671` adds the native
-   transport source map. These local changes need hosted validation. The last
-   completed #459 coverage report missed 178 regions and 85 lines. Run #461 is
-   complete, so no active job needs to be canceled. Push this source and docs
-   batch after its focused case and strict docs build pass; then consume one
-   hosted full run for coverage, packaging, platform parity, and the updated
-   documentation. Do not repeat unrelated local matrices.
+   public parity passed; unified parity/coverage is still running. Linux sdist
+   packaging failed because `maturin` was missing from PATH. macOS and Windows
+   wheel consumers failed when pip targeted the uv-managed base interpreter
+   and received `externally-managed-environment`. Local workflow edits install
+   maturin through `uvx` before sdist creation and use isolated uv environments
+   for non-Linux consumers. The fix is committed locally and needs a push and
+   hosted validation after #462 completes. Docs deployment
+   [40747386578](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386578)
+   passed for the committed source. Do not repeat unrelated local matrices.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions
@@ -134,11 +124,17 @@ Keep unsupported Python-version claims out of the user documentation.
 
 ## dv25 — Protocol and lifecycle compatibility
 
-**Work:** Resolve the known HTTP/2 response-header ordering mismatch using a
-wire-order observation; verify HTTP/1 ordering and document what the HTTP/3
-probe can observe. Check WebSocket fragmentation, compression and queue bounds
-against the selected upstream backend where these affect the public contract.
-Audit existing streaming, flow-control, TLS, proxy, disconnect, cancellation,
+**Work:** The HTTP/2 response-header ordering mismatch is fixed in the vendored
+`h2` encoder and already has a strict `http2.response-headers-preserve-asgi-order`
+input plus a focused local oracle receipt. Verify that input in the current
+hosted source run and retain the HTTP/1 ordering receipts. HTTP/3's client
+observation passes through `http::HeaderMap` and cannot establish raw wire
+field order; preserve that limitation in the support docs. One uncompressed
+and one per-message-deflate compressed fragmented WebSocket text input are now
+in the matrix; both pass as selected local oracle comparisons. Continue with
+other extension parameters and queue behavior only where the pinned upstream
+contract requires it. Audit
+existing streaming, flow-control, TLS, proxy, disconnect, cancellation,
 lifespan, limit and shutdown cases before adding inputs. Keep HTTP/3 extensions
 distinct from behavior actually provided by Uvicorn 0.54.0.
 

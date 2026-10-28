@@ -4,18 +4,22 @@
 
 ## Current source status (2026-10-29)
 
-PR #19 remains a draft. CI #461 checked PR head
-`05919965f09d6b94bc322c4538740b38f0ee9305`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its receipts do not cover later
-commits. The `input@43` inventory has 714 public cases; the installed normal
-wheel passed **714/714** on Linux x86-64. The unified run attributed all 1,323
-indexed cases but failed the 100% coverage gate at **13,837/14,009 regions**
-and **10,204/10,288 lines**. One repeated instrumented run failed the
-`python-api.cancel-startup-shutdown-task-join-error` fault contract. A focused
-local case passes after the coverage-only injection was changed to abort before
-sending shutdown; the full three-repeat gate remains unverified. Release
-handoff, native composition, exact Rust minimum, and Rust format/lint/feature/
-docs checks passed. See [CI #461](https://github.com/appunni-m/uvicorn-rs/actions/runs/40733997486).
+PR #19 remains a draft. CI #462 checked committed PR head
+`66d3f5791d9b6806ce56986f0fe4035364271b92`, based on `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its Linux normal-wheel parity job
+passed **714/714** on x86-64; the unified three-repeat parity/coverage job is
+still running. Rust quality/MSRV, native framework composition, and release
+handoff passed. Linux sdist packaging failed because `maturin` was not on PATH;
+macOS ARM64 and Windows x86-64 artifact consumers failed when pip targeted the
+uv-managed base interpreter (`externally-managed-environment`). Local workflow
+changes now install `maturin` through `uvx` and consume wheels in isolated uv
+environments; they are committed locally but have not been pushed or
+validated by CI. See
+[CI #462](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386566).
+
+Two newly added fragmented WebSocket cases pass selected local oracle
+comparisons, including one `permessage-deflate` message. They use dirty local
+source and are not part of CI #462. Their receipts are recorded below.
 
 This hosted result is the current Linux x86-64 parity checkpoint only. It does
 not establish the declared macOS/Windows and Python-version matrix or full
@@ -23,12 +27,54 @@ Uvicorn compatibility. CI #456 and earlier parity runs are historical.
 Coverage, independent Coverage-MCP acceptance, and the remaining platform/
 Python matrix remain open. Benchmarks remain behind compatibility acceptance.
 
+## Focused fragmented WebSocket text-message parity (2026-10-28)
+
+The inputs `websocket.fragmented-text-message-is-reassembled` and
+`websocket.fragmented-compressed-text-message-is-reassembled` send one logical
+text message as two masked RFC 6455 frames: a non-final `frag` text frame
+followed by the final `mented` continuation frame. The second input negotiates
+`permessage-deflate` and sets RSV1 on the initial data frame. The fixture
+records the ASGI event, so both comparisons verify that Uvicorn 0.54.0 and
+uvicorn-rs deliver one `websocket.receive` event with text `fragmented`,
+complete the 101 handshake, and leave the server healthy for a follow-up HTTP
+request. Each case passes 1/1 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust
+1.98.1.
+
+Run `22f3f7f89e3b44998c78edc66d782a3d`; receipt
+`target/completion/websocket-fragmented-parity.json`, SHA-256
+`4eee9ef4bdde3d29b5eef630dfa8600c6ddf9b9e264636fb24091f430f3c30b5`. It binds
+to target revision `66d3f5791d9b6806ce56986f0fe4035364271b92` with a dirty
+worktree, runtime source SHA-256
+`041437a4a03dad44cadc6c76829b9aa0101d5da8c468d0b0300d3695254286a0`, and
+native extension SHA-256
+`4c6116ec76fbf353a7b7c2124cfb7a8700bb1dcdb29d6f67920b3b09033c9876`. The
+manifest SHA-256 is `11a32825472334b115a3303b2c554d22440a5c04692f7c851a6ae1fbb4d3ba14`,
+the WebSocket input SHA-256 is
+`2153e513bdc067a41ad32bb546c1bb7575b38f1a0b314d52531d8f14e23b67dc`, and the
+fixture and runner SHA-256 values are
+`71182f0ee26b034e79660b3a7edf866423bef83c36ea0ebe813ddcc81e395ff7` and
+`3dd858f128dc2a6e22b5bf9486bee0ed166c3009883d61a6acfbfa87e4f43b23`.
+This is focused local evidence; cross-platform hosted acceptance, other
+compression extension parameters, and broader backend behavior remain open.
+
+The compressed case passed in selected run
+`da2487e44182437fbf56e5db536cff78`; receipt
+`target/completion/websocket-fragmented-compressed-parity.json`, SHA-256
+`8e066a7e80af6a6db8b1d558998da0411c6aa17207dce61d9744fe9a44f1858d`. It binds
+to the same dirty target revision and runtime/native binary hashes, with
+manifest SHA-256
+`3ea594fcfc1947fc7543da495a7075085792b2ef00586a1823f061f68d6a6989`, WebSocket
+input SHA-256
+`7ac1e31233329be5d8bba9ad06329b8abe74d9f00f110ca95f1486ed66ca4977`, and
+runner SHA-256
+`c7aec2d2ee4beb489b571cee3c9fc711933cfa1de1224da9a17fc98bd99f6fbf`.
+
 The earlier 702-case local macOS ARM64 run and the selected WebSocket, HTTP/2
 Early Hints, and trailer cases are diagnostic evidence from older source
 snapshots. They do not replace the full OS/Python matrix required for a release
-commit. The Linux public parity checkpoint passed for source commit `4f7a296`; the 100% coverage
-gate, independent Coverage-MCP acceptance, and declared OS/Python matrix
-remain open. Benchmarks remain behind compatibility acceptance.
+commit. CI #462 still needs to finish its unified coverage/parity job; the
+independent Coverage-MCP acceptance and declared OS/Python matrix also remain
+open. Benchmarks remain behind compatibility acceptance.
 
 ## Historical 695-, 699-, and 700-case parity snapshots — 2026-10-28
 
@@ -107,9 +153,9 @@ coverage job completed incompletely at 1,299/1,307 attributed cases,
 13,777/13,959 regions, and 10,154/10,252 lines. This historical run does not
 meet the 100% gate. These older runs are superseded by the current source
 status at the top of this page. CI #461 completed with coverage below the
-100% threshold, and the subsequent focused fix has not yet had a hosted full
-run. No accepted Coverage-MCP receipt is available. Benchmarks remain paused
-until the broader parity work is complete.
+100% threshold; CI #462 is the next hosted full run and remains in progress.
+No accepted Coverage-MCP receipt is available. Benchmarks remain paused until
+the broader parity work is complete.
 
 The 700-case `input@43` snapshot includes
 `python-api.run-serves-request-and-shuts-down-on-sigterm`, which compares a

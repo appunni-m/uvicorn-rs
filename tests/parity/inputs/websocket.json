@@ -884,6 +884,42 @@
       }
     },
     {
+      "case_id": "websocket.fragmented-text-message-is-reassembled",
+      "profile": "websocket",
+      "operation": "websocket.fragmented-message-reassembly",
+      "covers": [
+        "websocket.fragmented-message-reassembly"
+      ],
+      "websocket": {
+        "path": "/ws-fragmented-message",
+        "subprotocols": [],
+        "messages": [],
+        "raw_frame_base64": "AYQBAgMEZ3BiY4CGBQYHCGhjaXxgYg==",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.fragmented-compressed-text-message-is-reassembled",
+      "profile": "websocket",
+      "operation": "websocket.fragmented-compressed-message-reassembly",
+      "covers": [
+        "websocket.fragmented-compressed-message-reassembly"
+      ],
+      "websocket": {
+        "path": "/ws-fragmented-message",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "raw_frame_base64": "QYYBAgMESylJSM5PgIYFBgcIyC1ORQQG",
+        "followup_path": "/scope"
+      }
+    },
+    {
       "case_id": "websocket.raw-oversize-message-reports-size-close",
       "profile": "websocket",
       "operation": "websocket.raw-size-limit-close",

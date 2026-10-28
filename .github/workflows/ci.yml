@@ -523,6 +523,10 @@ jobs:
           version: ${{ env.UV_VERSION }}
           python-version: ${{ env.WHEEL_PYTHON_VERSION }}
           enable-cache: true
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        if: runner.os == 'Linux'
+        with:
+          version: ${{ env.UV_VERSION }}
       - name: Install and resolve the exact managed Python for macOS and Windows
         if: runner.os != 'Linux'
         shell: bash
@@ -575,8 +579,17 @@ jobs:
             if [ "$RUNNER_OS" = 'Linux' ]; then
               cp target/public-parity/asgi-parity/wheel-consumer.json dist/consumer-linux-x86_64.json
             else
-              "$WHEEL_PYTHON" -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
-              "$WHEEL_PYTHON" scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
+              consumer_environment="$RUNNER_TEMP/uvicorn-rs-artifact-consumer"
+              UV_PROJECT_ENVIRONMENT="$consumer_environment" uv sync \
+                --python "$WHEEL_PYTHON_VERSION" \
+                --group benchmark --extra standard --no-install-project --frozen
+              if [ "$RUNNER_OS" = 'Windows' ]; then
+                consumer_python="$consumer_environment/Scripts/python.exe"
+              else
+                consumer_python="$consumer_environment/bin/python"
+              fi
+              uv pip install --python "$consumer_python" --no-deps "${wheels[0]}"
+              "$consumer_python" scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
             fi
           ) >"$log" 2>&1
           status=$?
@@ -658,11 +671,7 @@ jobs:
           retention-days: 90
       - name: Build source distribution
         if: runner.os == 'Linux'
-        run: maturin sdist --out dist
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        if: runner.os == 'Linux'
-        with:
-          version: ${{ env.UV_VERSION }}
+        run: uvx --from "maturin==$MATURIN_VERSION" maturin sdist --out dist
       - name: Rebuild extracted source archive and consume its wheel
         if: runner.os == 'Linux'
         shell: bash

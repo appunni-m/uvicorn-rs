@@ -4924,6 +4924,8 @@ def load_contract(
             websocket_keys = {"path", "subprotocols", "messages"}
             if case["operation"] in {
                 "websocket.raw-frame-disconnect",
+                "websocket.fragmented-message-reassembly",
+                "websocket.fragmented-compressed-message-reassembly",
                 "websocket.raw-size-limit-close",
                 "websocket.raw-size-limit-close-uncompressed",
             }:
@@ -8823,7 +8825,10 @@ def http3_shutdown_request(
 
 
 def websocket_raw_frame_observation(
-    server: dict[str, Any], specification: dict[str, Any]
+    server: dict[str, Any],
+    specification: dict[str, Any],
+    *,
+    observe_application_events: bool = False,
 ) -> dict[str, Any]:
     events_path = server["events"]
     events_before = len(read_events(events_path))
@@ -8909,7 +8914,16 @@ def websocket_raw_frame_observation(
             deadline = time.monotonic() + 3
             while time.monotonic() < deadline:
                 application_events = read_events(events_path)[events_before:]
-                if any(event.startswith("websocket.disconnect:") for event in application_events):
+                if (
+                    any(event.startswith("websocket.disconnect:") for event in application_events)
+                    or (
+                        observe_application_events
+                        and any(
+                            event.startswith("websocket.fragmented.message:")
+                            for event in application_events
+                        )
+                    )
+                ):
                     break
                 if server["process"].poll() is not None:
                     break
@@ -8935,7 +8949,7 @@ def websocket_raw_frame_observation(
         "headers": [],
         "body_base64": "",
     })
-    return {
+    observation = {
         "handshake_status": handshake_status,
         "handshake_accept_valid": handshake_accept_valid,
         "compression_negotiated": compression_negotiated,
@@ -8947,6 +8961,9 @@ def websocket_raw_frame_observation(
         "disconnect_code": disconnect_code,
         "followup_status": followup["status"],
     }
+    if observe_application_events:
+        observation["application_events"] = application_events
+    return observation
 
 
 def websocket_server_keepalive_observation(
@@ -10249,11 +10266,22 @@ def execute_case(
             )
         if case.get("operation") in {
             "websocket.raw-frame-disconnect",
+            "websocket.fragmented-message-reassembly",
+            "websocket.fragmented-compressed-message-reassembly",
             "websocket.raw-size-limit-close",
             "websocket.raw-size-limit-close-uncompressed",
         }:
             log_offset = len(read_server_log(server))
-            observation = websocket_raw_frame_observation(server, case["websocket"])
+            observation = websocket_raw_frame_observation(
+                server,
+                case["websocket"],
+                observe_application_events=(
+                    case["operation"] in {
+                        "websocket.fragmented-message-reassembly",
+                        "websocket.fragmented-compressed-message-reassembly",
+                    }
+                ),
+            )
             observation["server_log"] = read_server_log(server)[log_offset:]
             return observation
         if case.get("operation") in {
