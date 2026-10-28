@@ -22,25 +22,24 @@ The target identities and publisher workflow are settled: publish
 `uvicorn-rs` behind `http3`; publish the `uvicorn-rs` PyPI distribution from
 the `uvicorn-rs-py` adapter through `.github/workflows/release.yml`.
 
-On branch head `a4a520aeb42481cba06cbf4de597c993280d380e`, hosted CI
+Current PR head is `8f50720cd0e1cc12fdb8d6c60b7108c8a14cc516`. Hosted CI
+[#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307) is
+validating its 699-case input snapshot and exact-source coverage; those jobs
+have not completed. The previous CI
 [#451](https://github.com/appunni-m/uvicorn-rs/actions/runs/40626804831)
-passed the installed-wheel 695-case public parity matrix on Ubuntu 24.04.5 /
-x86-64 / CPython 3.12.13; its artifact is `uvicorn-rs-public-parity`
-(`12790545953`). The same 695 cases passed from a clean source checkout on
-macOS 15.7.7 ARM64 / CPython 3.12.13 (report SHA-256
-`d8e2e8abfe7db162ec122f70a8f537457aeaf20a5a781e1e8de622d0cee9a176`). These
-receipts cover the declared matrix on two environments; they do not close the
-broader compatibility contract.
+passed 695/695 installed-wheel public cases and the same local macOS matrix on
+`a4a520aeb`, then was canceled during its first coverage attribution pass at
+785/1,217 cases after the branch advanced. Its uploaded coverage artifact is
+incomplete and is not accepted evidence. Four local focused additions pass
+4/4, but their reports mark the target dirty and are diagnostic only.
 
-The exact-source unified coverage job in CI #451 is still running its complete
-three-repeat matrix. There is no completed 100% coverage report or accepted
-Coverage-MCP review receipt. By the maintainer's parity-first direction, no
-benchmark was started; the previous three-system run remains incomplete after
-the Linux ARM64 Hypercorn HTTP/3 slow-reader failure, and the upload-timeout
-cause remains unresolved.
+Documentation workflow
+[#169](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854285)
+failed on a broken fragment link. That link is fixed in the current worktree
+and a strict local MkDocs build passes; the fix is not yet pushed.
 
 There is no clean candidate archive or downstream-consumer receipt for head
-`a4a520aeb`. The previous 0.2.2 inspection artifacts came from dirty source
+`8f50720cd`. The previous 0.2.2 inspection artifacts came from dirty source
 `5b1ec29201c963d8590c989b07318bb7366d7922` and cannot serve as release evidence.
 No version tag, Cargo package, or PyPI release was created for this candidate.
 
@@ -54,7 +53,7 @@ repository `appunni-m/uvicorn-rs`, workflow `release.yml`, environment `pypi`.
 The crates.io publisher tuple recorded in the earlier authenticated audit is
 repository `appunni-m/uvicorn-rs`, workflow `release.yml`, environment
 `crates-io`, for both release crates. Those registry-specific settings were
-not re-read in this check. See the [acceptance gates](#release-acceptance-gates).
+not re-read in this check. See the [acceptance gates](#gates-before-candidate-assembly).
 
 ## Registry and packaging audit (2026-10-27; earlier source snapshot)
 

@@ -2,9 +2,10 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current public parity evidence — 2026-10-28
+## Latest completed public parity evidence — 2026-10-28
 
-The maintained `input@43` public matrix passed **695/695** on both Linux
+The `input@43` snapshot at commit
+`a4a520aeb42481cba06cbf4de597c993280d380e` passed **695/695** on both Linux
 x86-64 and macOS ARM64. Hosted CI
 [#451](https://github.com/appunni-m/uvicorn-rs/actions/runs/40626804831)
 completed the installed normal-wheel parity job on Ubuntu 24.04.5 / CPython
@@ -22,10 +23,12 @@ The same matrix passed **695/695** from clean source revision
 `d8e2e8abfe7db162ec122f70a8f537457aeaf20a5a781e1e8de622d0cee9a176`. The
 local report records `dirty=false`, 695 selected and executed cases, and no
 failures. The two results exercise distinct installation modes; they do not
-establish Windows, other Python versions, or unlisted Uvicorn behaviors.
+establish Windows, other Python versions, or unlisted Uvicorn behaviors. These
+receipts apply to the earlier 695-case source snapshot, not the current head.
 
-The committed input snapshot at `a4a520aeb` contains 695 cases. The working
-tree now adds three dotenv cases for `export` syntax, single-quoted values,
+The committed input snapshot at `a4a520aeb` contains 695 cases. Commit
+`8f50720cd0e1cc12fdb8d6c60b7108c8a14cc516` adds three dotenv cases for
+`export` syntax, single-quoted values,
 variable interpolation, process-environment precedence, and the rule that
 `UVICORN_*` settings inside an app env file do not configure the server, plus
 `python-api.config-default-settings` for the public `Config` defaults. The
@@ -58,10 +61,14 @@ Python API input SHA-256
 `10dc5a3b3463d1ed96abae295c5324d65396600cfbdd0ccc29be5eafde10ad24`). That
 report also has a dirty target and remains diagnostic only.
 
-The exact-source three-repeat unified coverage job in CI #451 (job
-`122613983153`) is still running. There is no current 100% coverage result or
-accepted Coverage-MCP review receipt. Benchmark work remains paused until the
-broader parity work is complete.
+CI #451 was superseded by the push to `8f50720cd` and canceled during its first
+coverage attribution pass at case 785/1,217. Its uploaded coverage artifact is
+incomplete and is not release evidence. CI
+[#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307) is
+validating the current commit; its unified coverage and installed-wheel parity
+jobs are still running. There is no current 100% coverage result or accepted
+Coverage-MCP review receipt. Benchmark work remains paused until the broader
+parity work is complete.
 
 The last fully successful hosted acceptance receipt recorded here is CI run
 [39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
@@ -1290,8 +1297,8 @@ passes 1/1 against Uvicorn 0.54.0 on the current modified source on macOS
 15.7.7 ARM64 / CPython 3.12.13; run `caf483e38ef64fc3bb8446274504e2fb`,
 report SHA-256
 `72a8b4f38781abd5c00548d4d4a882d60a51f950cdd91e196f0332b0c6db605a`.
-This local result does not confirm the Linux wheel. CI #447's separate
-three-pass unified coverage job is still running.
+This local result does not confirm the Linux wheel. CI #447's separate three-pass unified coverage job was still in progress
+when this historical receipt was recorded; it is not current evidence.
 
 ### Input@40 baseline CLI and Python API profile runs — 2026-10-27
 
