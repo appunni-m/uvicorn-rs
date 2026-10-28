@@ -428,7 +428,7 @@ two other cases reused receipts for those same historical digests. At the time
 of the one-pass diagnostic, `cli.json` was schema
 `uvicorn-rs-parity/input@37` (55 cases; SHA-256
 `a670db6808da18b77139b3bc2880a5fd823aadf6c538b1ab63bec54586c5c7c8`). The
-current `cli.json` is schema `uvicorn-rs-parity/input@43` (114 cases). It now
+current `cli.json` is schema `uvicorn-rs-parity/input@43` (115 cases). It now
 includes malformed `UVICORN_INTERFACE`, `UVICORN_LOG_LEVEL`,
 `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN`, `UVICORN_WS_MAX_SIZE`, and
 `UVICORN_WS_PING_TIMEOUT` environment diagnostics and explicit CLI overrides
@@ -1083,11 +1083,11 @@ short-lived local certificate with OpenSSL. CI exercises all declared profiles.
 | Lifespan and shutdown | 37 | Uvicorn 0.54.0, uvloop 0.23.0, httptools 0.8.0 | Covers lifespan event/error shapes, shallow state copies, cancellation, listener closure before held-response release over plaintext/TLS, and Rust's public Server.serve() cancellation path. |
 | HTTP/2 | 33 | Uvicorn 0.54.0, zttp 0.0.34, TLS ALPN, explicit ASGI mode | Experimental Uvicorn HTTP/2 is selected with `--http zttp --http2`. A prior local aggregate run passed the 27 earlier parity cases with the source adapter. The added zero-concurrency case passed as a selected one-case run and checks the oracle-matched 503 plus the HTTP/2 concurrency observer path. Five new selected cases cover invalid response headers and malformed response-start fields; all 33 current HTTP/2 oracle cases are included in exact-source installed-wheel CI #446. The HTTP/2 category benchmark remains pending. Prior Hypercorn receipts are historical. Includes empty final DATA, concurrent streams, reset, and final-response completion. |
 | HTTP/3 | 34 | Hypercorn 0.18.0, aioquic 1.3.0, QUIC, explicit ASGI mode | Hypercorn provides the same-protocol HTTP/3 reference. Includes the 128-response sequence, typed H3 close recovery, and same-connection recovery after a peer close. |
-| CLI and environment | 114 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, process outcomes, `--http h11` acceptance, zero WebSocket ping interval startup, graceful-shutdown option/environment acceptance, and explicit-option precedence over malformed backlog, graceful-shutdown, keep-alive, request-limit, worker-healthcheck, WebSocket-size/queue/ping-interval/ping-timeout/deflate, HTTP, WebSocket selector, lifespan, worker-count, and reload-delay environment values and concurrency settings; invalid host/interface/log-level/request-limit/WebSocket environment diagnostics; explicit interface/log-level precedence; environment/explicit-flag resolution for `UVICORN_APP_DIR`, `UVICORN_ENV_FILE`, and `UVICORN_RELOAD_DIRS`; version, factory, FD, h11-size, TLS, HTTP/2, loop, and UDS environment cases; and the missing-path diagnostic for `--reload-dir`. |
+| CLI and environment | 115 | Uvicorn 0.54.0 | Compares selected module/console invocations, argument parsing, environment precedence, current-directory app import resolution, app loading, process outcomes, `--http h11` acceptance, zero WebSocket ping interval startup, graceful-shutdown option/environment acceptance, and explicit-option precedence over malformed backlog, graceful-shutdown, keep-alive, request-limit, worker-healthcheck, WebSocket-size/queue/ping-interval/ping-timeout/deflate, HTTP, WebSocket selector, lifespan, worker-count, and reload-delay environment values and concurrency settings; invalid host/interface/log-level/request-limit/WebSocket environment diagnostics; explicit interface/log-level precedence; environment/explicit-flag resolution for `UVICORN_APP_DIR`, `UVICORN_ENV_FILE`, and `UVICORN_RELOAD_DIRS`; version, factory, FD, h11-size, TLS, HTTP/2, loop, and UDS environment cases; the missing-path diagnostic for `--reload-dir`; and an observed custom `--loop module:factory` invocation. |
 | Python API | 260 | Uvicorn 0.54.0 | These are oracle-comparison cases; 23 target-only fault-contract cases have no Uvicorn comparison and are excluded from this count. Compares documented imports/signatures, including logging formatters, deprecated `ServerState` paths and the `Server.run()`/`Server.serve()` methods and the `Server.startup()`, `shutdown()`, `main_loop()`, `on_tick()`, and `capture_signals()` signatures; selected `run` and `Server` lifecycle behavior; configuration error ordering, including `Config.load()` explicit-factory TypeError handling; selected Python event-loop behavior, including a custom import-string loop factory through `uvicorn.run()`; headers, environment files and `FORWARDED_ALLOW_IPS` precedence; module-CLI `UVICORN_RELOAD=true` live reload selection, `UVICORN_RESET_CONTEXTVARS` behavior and explicit-flag precedence, and environment-driven `UVICORN_RELOAD_INCLUDES`/`UVICORN_RELOAD_EXCLUDES` file filtering plus explicit-option precedence; root-path environment handling and explicit `--root-path` precedence; selected host/port, interface, and concurrency settings through `UVICORN_HOST`, `UVICORN_PORT`, `UVICORN_INTERFACE`, and `UVICORN_LIMIT_CONCURRENCY`; explicit `--limit-concurrency` precedence over valid and malformed environment values, plus explicit `--interface asgi3` precedence over `UVICORN_INTERFACE=wsgi`; ASGI2 and focused WSGI selection, including two finite POST bodies and six chunked-transfer POST bodies (two one-chunk, two two-chunk, and two 64-chunk requests) delivered through wsgi.input via uvicorn.run() and python -m uvicorn; two response-streaming handshake cases verify first-byte delivery before the iterator finishes, and two additional cases verify WSGI application-factory serving through both entry points; trusted proxy headers, including module-CLI `UVICORN_PROXY_HEADERS=false` and `UVICORN_FORWARDED_ALLOW_IPS` precedence; module-CLI `UVICORN_HEADERS`, inherited `UVICORN_FD`, and TLS `UVICORN_SSL_*` environment handling; non-default module-CLI TCP backlog and HTTP/1 keep-alive timeout with live connection checks; HTTPS over a Unix-domain socket; explicit ASGI3 and WSGI application-factory serving through both entry points, implicit ASGI3 factory auto-detection through both entry points, plus ASGI2 factory and ASGI3 callable-instance auto-detection through both; WebSocket message-size enforcement with a non-default `ws_max_queue` value on the auto/SansIO path; positive and zero concurrency-limit behavior, including module-CLI --limit-concurrency 1 returning the oracle-matched 503; warning-level filtering; `UVICORN_LOG_LEVEL=debug` through the module CLI and explicit warning-level precedence over it; access-log suppression plus `UVICORN_ACCESS_LOG` and `UVICORN_USE_COLORS` environment behavior and explicit precedence; `UVICORN_SERVER_HEADER` and `UVICORN_DATE_HEADER` environment suppression with explicit `--server-header` precedence; both CLI color switches; forced ANSI colors through `uvicorn.run()`; custom INI/JSON/YAML logging configuration through `uvicorn.run()` and the module CLI; `UVICORN_WORKERS=2` environment-backed module-CLI startup with two worker processes; inherited TCP listener serving through the module CLI, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one or two listeners; `Server.serve()` cancellation during held lifespan startup and after readiness; actual repeated SIGINT delivery to a module-CLI child while an ASGI request remains active; and single-SIGINT graceful-timeout cancellation while an ASGI request remains active. Successful PKCS#8 TLS key loading is compared through `Config`/`Server` and the module CLI, and a wrong-password failure is compared through `Config`/`Server` using the same fixture. Two additional inputs compare successful loading of a traditional AES-256-CBC encrypted RSA PEM through `Config`/`Server` and the matching wrong-password failure. A new input compares a password supplied with an unencrypted RSA key; both implementations serve the request over TLS and shut down cleanly. Six focused mTLS inputs cover trusted client certificates with default negotiation and TLS 1.2, optional anonymous clients with CA-backed and empty-root configurations, rejection of an untrusted client certificate with empty roots, and a trusted TLS 1.2 client through the module CLI. Two more inputs compare invalid `ssl_cert_reqs=3` and empty client-CA startup rejection. The selected TLS cases and their source-scope notes are in [coverage results](coverage.md). WSGI cases check a GET through each entry point with `lifespan="off"`; additional auto-mode cases compare request serving and the unsupported-lifespan fallback with default logging, configured logging, and the module CLI. HTTP-run cases compare normalized server log events, including color presence and configured formatting, alongside HTTP and shutdown outcomes; raw stdout/stderr remain in the evidence. The WSGI POST checks cover finite buffered bodies, one- and two-chunk transfer bodies, and the 64-chunk boundary through both entry points. The response-streaming cases cover one delayed iterator handshake; chunk counts other than one, two, or 64, large bodies, malformed lengths, response backpressure, and other iterator patterns remain uncovered. Matched WSGI exception cases cover a direct app exception and an iterator exception before response start, plus an iterator exception after response start; other exception timings, factory shapes, and cross-platform behavior remain unverified. Other log levels and precedence combinations, and exact traceback frame formatting, also remain unverified. |
 
 The previous `input@40` inventory contained 580 declared oracle-parity cases.
-The current `input@43` inventory contains 691 declared oracle-parity cases;
+The current `input@43` inventory contains 692 declared oracle-parity cases;
 six earlier selected environment-backed module-CLI cases pass together, and
 the later focused CLI precedence groups pass 1/1, 2/2, 4/4, 6/6, 7/7, 10/10,
 and 4/4 twice plus two selected 1/1 cases. A prior hosted installed-wheel
@@ -1099,8 +1099,8 @@ cases each pass 1/1 on the recorded macOS host; the module-CLI
 environment-only `UVICORN_PROXY_HEADERS=false` behavior. The reload comparison retains
 event count and order while normalizing supervisor PIDs. The other 349 ASGI
 cases are target-only fault/support contracts; the current manifest therefore
-contains 1,040 ASGI input cases (691 oracle cases and 349 target-only cases).
-The 258 native-core contract cases bring the indexed inventory to 1,298 items.
+contains 1,041 ASGI input cases (692 oracle cases and 349 target-only cases).
+The 258 native-core contract cases bring the indexed inventory to 1,299 items.
 Six
 historical startup contracts for an experimental Tokio blocking-pool cap were
 removed after matched FastAPI uploads showed no repeatable benefit; archived
@@ -1729,6 +1729,28 @@ runner SHA-256 `f402f9d1eb95969f189139987292ead4cbef7f6bd1543941fcb68ee04f00edbf
 and native extension SHA-256
 `1a168d54b1364f9e6b22eb537aea5f4cd7bd26f214785d402a8f6cb3a83d00bc`.
 
+## Module-CLI custom event-loop factory invocation — 2026-10-28
+
+Added `cli.custom-loop-factory-is-invoked` to the input@43 CLI profile. Its
+`--loop tests.parity.app:observed_custom_loop_factory` stimulus makes both
+Uvicorn 0.54.0 and uvicorn-rs print the same factory-invoked marker, exit 0,
+and leave stderr empty. This checks that the CLI invokes the requested custom
+factory; the earlier startup-only input did not observe invocation.
+
+The selected case passed 1/1 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust
+1.98.1. Run `b4475c8c893d47688a955013a344da3b`; receipt
+`target/kata-progress/cli-custom-loop-factory-20261028.json`, SHA-256
+`9ee1d414ad27b04282cfa6424f64591332cc448f567ac50d9aebd757a6c4f77f`.
+It binds CLI input SHA-256
+`235adff78a27ce087b8efef8b8ca011c7ad62095cc4af63b8fd5e730cad78d20`,
+fixture SHA-256
+`069ef5821da846417521977382348625dd37e5ad5c68845cd2bdc2af0f2cf868`,
+target revision `d58d634719689f689888111cd34907fa27a38a70`, a dirty input tree,
+and native extension SHA-256
+`11072606956085e73a8e949925c3858407872430e5ef230e2d683e51b2b422bd`.
+This is focused local evidence; full CLI and cross-platform acceptance remain
+open.
+
 ## Click-derived environment input inventory — 2026-10-28
 
 A read-only inventory audit compared the 52 parameters in pinned Uvicorn 0.54.0
@@ -2101,10 +2123,10 @@ only the schema marker and preserves existing case data. Schema `@22` adds
 optional event-loop selection and observation to Python API HTTP-run inputs;
 migrate maintained `@21` inputs with
 `python scripts/migrate_parity_input_v21_to_v22.py`. This migrator changes only
-the schema marker and preserves existing case data. Programmatic HTTP-run inputs
-may use a `module:factory` loop import path; the module CLI remains limited to its
-supported loop selectors, and a focused `uvicorn.run()` case observes that the
-returned custom loop is active.
+the schema marker and preserves existing case data. Programmatic HTTP-run inputs may use a `module:factory` loop import path. A
+focused `uvicorn.run()` input observes the returned custom loop, and a separate
+module-CLI process input verifies that a custom factory is invoked by matching
+its captured stdout marker.
 Schema `@24` adds an optional custom logging-config path to Python API HTTP-run
 inputs; migrate maintained `@23` inputs with
 `python scripts/migrate_parity_input_v23_to_v24.py`. The migration changes only

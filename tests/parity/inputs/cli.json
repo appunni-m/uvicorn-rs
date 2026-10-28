@@ -2342,6 +2342,35 @@
         "working_directory": "project",
         "timeout_seconds": 10
       }
+    },
+    {
+      "case_id": "cli.custom-loop-factory-is-invoked",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:app",
+          "--loop",
+          "tests.parity.app:observed_custom_loop_factory",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
     }
   ]
 }

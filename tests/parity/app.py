@@ -34,6 +34,12 @@ def custom_loop_factory():
     return asyncio.new_event_loop()
 
 
+def observed_custom_loop_factory():
+    """Expose custom-loop selection through the CLI's captured process output."""
+    print("parity custom event-loop factory invoked", flush=True)
+    return asyncio.new_event_loop()
+
+
 def _header_capacity_headers(query_string):
     """Build a finite, input-selected list of distinct valid ASGI headers."""
     parameter, separator, value = query_string.partition(b"=")
