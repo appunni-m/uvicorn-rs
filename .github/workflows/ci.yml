@@ -487,7 +487,10 @@ jobs:
 
   release-candidate:
     name: Build and verify ${{ matrix.platform }} package artifacts
-    needs: [rust, msrv, python-package, unified-coverage, release-evidence-contracts]
+    # Platform builds and their installed-wheel parity are independent evidence.
+    # Run them beside unified coverage; the candidate/release handoff still
+    # requires this entire CI run to succeed, including the coverage gate.
+    needs: [rust, msrv, python-package, release-evidence-contracts]
     strategy:
       fail-fast: false
       matrix:
