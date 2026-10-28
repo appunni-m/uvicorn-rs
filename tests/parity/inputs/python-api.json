@@ -91,6 +91,24 @@
       }
     },
     {
+      "case_id": "python-api.config-load-explicit-factory-type-error",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Config"],
+        "signatures": ["uvicorn.Config"],
+        "config_probes": [
+          {
+            "app": "app:python_api_factory_type_error_probe_app",
+            "options": {"factory": true},
+            "properties": [],
+            "methods": ["load"]
+          }
+        ]
+      }
+    },
+    {
       "case_id": "python-api.run-loads-env-file-before-factory",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",

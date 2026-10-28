@@ -1792,6 +1792,12 @@ def python_api_factory_probe_app():
     return lifespan_probe_app
 
 
+def python_api_factory_type_error_probe_app():
+    """Raise from the explicit factory call for Config.load parity."""
+
+    raise TypeError("python-api-factory-type-error")
+
+
 async def python_api_uds_probe_app(scope, receive, send):
     """Expose Unix-domain HTTP scope address semantics in one response."""
     if scope["type"] == "lifespan":
