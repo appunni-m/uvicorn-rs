@@ -627,7 +627,8 @@ jobs:
         run: |
           set -euo pipefail
           cargo package -p asgi-lifespan-protocol-rs --no-verify --locked --offline
-          cargo package -p uvicorn-rs --no-verify --locked
+          cargo package -p uvicorn-rs --no-verify --locked \
+            --config 'patch.crates-io.asgi-lifespan-protocol-rs.path="crates/asgi-lifespan-protocol-rs"'
           packages=(target/native-package/package/*.crate)
           test "${#packages[@]}" -eq 2
           cp "${packages[@]}" dist/
