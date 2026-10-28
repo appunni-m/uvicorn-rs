@@ -3470,7 +3470,7 @@ struct AsgiIo {
     preserve_application_on_disconnect: Arc<AtomicBool>,
     response_start_attempted: Arc<AtomicBool>,
     response_started: Arc<AtomicBool>,
-    response_body_completed: AtomicBool,
+    response_body_completed: Arc<AtomicBool>,
     response_trailers_expected: AtomicBool,
     response_trailer_headers: StdMutex<HeaderMap>,
     request_allows_response_trailers: bool,
@@ -3731,9 +3731,7 @@ impl AsgiIo {
                     }
                     None => false,
                 };
-                if !more_body {
-                    slf.response_body_completed.store(true, Ordering::Release);
-                }
+                let body_completed = (!more_body).then(|| Arc::clone(&slf.response_body_completed));
                 let chunk = ResponseChunk::Body(BodyChunk { body, more_body });
                 slf.diagnostics.http_response_body();
                 #[cfg(coverage)]
@@ -3746,7 +3744,12 @@ impl AsgiIo {
                 #[cfg(not(coverage))]
                 let body_send_result = slf.body.try_send(chunk);
                 match body_send_result {
-                    Ok(()) => Ok(py.None().into_bound(py)),
+                    Ok(()) => {
+                        if let Some(body_completed) = body_completed {
+                            body_completed.store(true, Ordering::Release);
+                        }
+                        Ok(py.None().into_bound(py))
+                    }
                     Err(TrySendError::Closed(_)) => {
                         Err(PyOSError::new_err("server response body channel closed"))
                     }
@@ -3755,10 +3758,14 @@ impl AsgiIo {
                         let wait_started = slf.diagnostics.http_response_body_wait_started();
                         let diagnostics = slf.diagnostics.clone();
                         let sender = slf.body.clone();
+                        let body_completed = body_completed;
                         pyo3_async_runtimes::tokio::future_into_py(py, async move {
                             sender.send(chunk).await.map_err(|_| {
                                 PyOSError::new_err("server response body channel closed")
                             })?;
+                            if let Some(body_completed) = body_completed {
+                                body_completed.store(true, Ordering::Release);
+                            }
                             diagnostics.http_response_body_full_send_wait_finished(wait_started);
                             Python::attach(|py| Ok(py.None()))
                         })
@@ -4850,6 +4857,7 @@ struct AsgiBody {
     receiver: mpsc::Receiver<ResponseChunk>,
     application: Option<ResponseApplication>,
     app_task_tracker: TaskTracker,
+    response_body_completed: Arc<AtomicBool>,
     trailers_expected: bool,
     body_completed: bool,
     defer_completed_app_result_once: bool,
@@ -4870,7 +4878,15 @@ struct AsgiBody {
 
 impl Drop for AsgiBody {
     fn drop(&mut self) {
-        if let Some(ResponseApplication::Running(task)) = &self.application {
+        if self.response_body_completed.load(Ordering::Acquire) {
+            // Some HTTP/1 encoders stop polling once Content-Length bytes have
+            // been written, before consuming the app's final empty body event.
+            // Uvicorn keeps the ASGI task alive after the response completes;
+            // transfer it to the shutdown tracker instead of aborting it here.
+            if let Some(application) = self.application.take() {
+                self.finish_response(application);
+            }
+        } else if let Some(ResponseApplication::Running(task)) = &self.application {
             task.abort();
         }
     }
@@ -9176,8 +9192,10 @@ async fn handle_request_parts(
     let (body_tx, body_rx) = mpsc::channel(RESPONSE_BODY_QUEUE_CAPACITY);
     let response_start_attempted = Arc::new(AtomicBool::new(false));
     let response_started = Arc::new(AtomicBool::new(false));
+    let response_body_completed = Arc::new(AtomicBool::new(false));
     let app_response_start_attempted = Arc::clone(&response_start_attempted);
     let app_response_started = Arc::clone(&response_started);
+    let app_response_body_completed = Arc::clone(&response_body_completed);
     let preserve_application_on_disconnect = Arc::new(AtomicBool::new(false));
     let app_preserve_application_on_disconnect = Arc::clone(&preserve_application_on_disconnect);
     let app_task_tracker = context.server.pending_python_tasks.clone();
@@ -9208,7 +9226,7 @@ async fn handle_request_parts(
                         preserve_application_on_disconnect: app_preserve_application_on_disconnect,
                         response_start_attempted: app_response_start_attempted,
                         response_started: app_response_started,
-                        response_body_completed: AtomicBool::new(false),
+                        response_body_completed: app_response_body_completed,
                         response_trailers_expected: AtomicBool::new(false),
                         response_trailer_headers: StdMutex::new(HeaderMap::new()),
                         request_allows_response_trailers,
@@ -9319,6 +9337,7 @@ async fn handle_request_parts(
         receiver: body_rx,
         application: Some(application),
         app_task_tracker,
+        response_body_completed,
         trailers_expected,
         body_completed: false,
         defer_completed_app_result_once,

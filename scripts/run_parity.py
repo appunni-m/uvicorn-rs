@@ -12212,6 +12212,9 @@ def _python_api_server_log_events(
     )
     worker_restart_pid = re.compile(r"((?:New child process|keeping worker) \[)\d+(\])")
     exception_line = re.compile(r"^(?P<class>[A-Za-z_][\w.]*)\b(?:: ?(?P<message>.*))?$")
+    coverage_body_pump_join = re.compile(
+        r"^uvicorn-rs: request-body pumps joined: [1-9]\d*$"
+    )
 
     normalized: dict[str, list[dict[str, str]]] = {"stdout": [], "stderr": []}
     custom_level_prefix = re.compile(
@@ -12231,6 +12234,12 @@ def _python_api_server_log_events(
                 normalized[channel].append({"kind": "ansi-colors"})
                 saw_ansi_colors = True
             line = ansi_escape.sub("", lines[index])
+            # This lifecycle count is emitted only by coverage builds. Keep it
+            # in the raw logs, but don't treat the coverage diagnostic as a
+            # Uvicorn-visible server event in the input-only parity contract.
+            if coverage_body_pump_join.fullmatch(line):
+                index += 1
+                continue
             if not line:
                 index += 1
                 continue
