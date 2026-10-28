@@ -5184,6 +5184,38 @@
       }
     },
     {
+      "case_id": "http1.upload-one-mib-in-sixteen-64k-chunks",
+      "profile": "http1",
+      "operation": "http.request-upload",
+      "covers": [
+        "http.request-upload"
+      ],
+      "request_stream": {
+        "method": "POST",
+        "path": "/upload-stream",
+        "headers": [],
+        "generated_chunks": [
+          {"byte_value": 97, "size_bytes": 65536},
+          {"byte_value": 98, "size_bytes": 65536},
+          {"byte_value": 99, "size_bytes": 65536},
+          {"byte_value": 100, "size_bytes": 65536},
+          {"byte_value": 101, "size_bytes": 65536},
+          {"byte_value": 102, "size_bytes": 65536},
+          {"byte_value": 103, "size_bytes": 65536},
+          {"byte_value": 104, "size_bytes": 65536},
+          {"byte_value": 105, "size_bytes": 65536},
+          {"byte_value": 106, "size_bytes": 65536},
+          {"byte_value": 107, "size_bytes": 65536},
+          {"byte_value": 108, "size_bytes": 65536},
+          {"byte_value": 109, "size_bytes": 65536},
+          {"byte_value": 110, "size_bytes": 65536},
+          {"byte_value": 111, "size_bytes": 65536},
+          {"byte_value": 112, "size_bytes": 65536}
+        ],
+        "send_all_before_read": true
+      }
+    },
+    {
       "case_id": "http1.request-body-batch-threshold-stream",
       "profile": "http1",
       "operation": "http.request-upload",
