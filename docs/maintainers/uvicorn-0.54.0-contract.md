@@ -56,7 +56,7 @@ their exact input/source identities are recorded in the
 | Area | Uvicorn 0.54.0 public inputs | Defaults and behavior to preserve | Implementation / evidence owner |
 | --- | --- | --- | --- |
 | App selection | `APP`, `UVICORN_APP`, `--factory`, `--app-dir`, `--reset-contextvars` | `APP` is required unless supplied by env; factory false; app-dir is empty and adds a leading import path; context reset false. Missing-module and missing-attribute import diagnostics have focused cases. `http1.cli-contextvars-inherit-by-default` and `http1.cli-reset-contextvars-clears-request-context` compare CLI context behavior; `python-api.run-reset-contextvars-clears-http-request-context` covers the `uvicorn.run()` API against Uvicorn 0.54.0. | `1s4z`, `9kbx`, `4fvf` |
-| Binding | `--host`, `--port`, `--uds`, `--fd`, `--backlog` | `127.0.0.1`, `8000`, `None`, `None`, `2048`. Five live cases cover IPv4 TCP listeners through module CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one and two sockets. Two additional module-CLI cases pass with inherited IPv6 listeners using one and two workers on macOS ARM64 / CPython 3.12.13 (run `bc282b37f69a46a38e8353a94197e2a7`, report SHA-256 `f55d9d1f8227452b0513446e2b96241fc63277c1f359ca761fb570a0ea94ca0f`). A current-source focused refresh also verifies the startup socket log for the single-worker inherited IPv4 and IPv6 module-CLI cases (2/2). Other IPv6 API paths and Windows remain unverified. | IPv4: `python-api.module-cli-serves-request-on-inherited-fd`, `python-api.run-serves-request-on-inherited-fd`, `python-api.config-server-serves-request-on-inherited-fd`, `python-api.server-serves-request-on-prebound-socket`, `python-api.server-serves-request-on-multiple-prebound-sockets`; IPv6: `python-api.module-cli-serves-request-on-inherited-ipv6-fd`, `python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request`; Kata owners: `9kbx`, `dhfq`, `4fvf` |
+| Binding | `--host`, `--port`, `--uds`, `--fd`, `--backlog` | `127.0.0.1`, `8000`, `None`, `None`, `2048`. Five live cases cover IPv4 TCP listeners through module CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one and two sockets. Two additional module-CLI cases pass with inherited IPv6 listeners using one and two workers on macOS ARM64 / CPython 3.12.13 (run `bc282b37f69a46a38e8353a94197e2a7`, report SHA-256 `f55d9d1f8227452b0513446e2b96241fc63277c1f359ca761fb570a0ea94ca0f`). A current-source focused refresh also verifies the startup socket log for the single-worker inherited IPv4 and IPv6 module-CLI cases (2/2). The direct Config/Server.run IPv6 loopback bind has one focused local comparison; other IPv6 API entry points and Windows remain unverified. | IPv4: `python-api.module-cli-serves-request-on-inherited-fd`, `python-api.run-serves-request-on-inherited-fd`, `python-api.config-server-serves-request-on-inherited-fd`, `python-api.server-serves-request-on-prebound-socket`, `python-api.server-serves-request-on-multiple-prebound-sockets`; IPv6: `python-api.module-cli-serves-request-on-inherited-ipv6-fd`, `python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request`; Kata owners: `9kbx`, `dhfq`, `4fvf` |
 | Reload | `--reload`, repeatable `--reload-dir`, `--reload-include`, `--reload-exclude`, `--reload-delay` | false; no explicit dirs; includes/excludes are unset; `0.25` seconds. With no watcher package, file polling behavior is narrower. If reload and multiple workers are both set, Uvicorn warns that workers are ignored while reloading. | `dhfq`, `9kbx`, `4fvf` |
 | Workers and process lifetime | `--workers`, `--timeout-worker-healthcheck`, `--limit-max-requests`, `--limit-max-requests-jitter`, `--timeout-graceful-shutdown` | workers unset, then `WEB_CONCURRENCY` or one; healthcheck `5`; request limit unset; jitter `0`; graceful timeout unset. When reload and multiple workers are both requested, reload takes precedence and Uvicorn warns that the worker count is ignored. Signal handling includes SIGINT and SIGTERM, SIGBREAK on Windows, and supervisor-specific SIGHUP/SIGTTIN/SIGTTOU behavior where available. | `dhfq`, `dv25`, `4fvf` |
 | Event loop | `--loop` | `auto`; documented choices are `auto`, `asyncio`, `uvloop`, and `zuvloop`. The API also accepts `none` and import paths. Optional implementations have platform/runtime restrictions. | `dv25`, `9kbx`, `4fvf` |
@@ -1996,6 +1996,23 @@ Python API probe SHA-256
 `46477f5464dbf8ffbf98f8426666a95d551e8a25bc6689fda9dfb8f63de2fdac`, and
 native extension SHA-256
 `74fd52144fbc0b168db90da59de02cffaf5e1a037995beb2a3b6b2792a523535`.
+
+## Direct IPv6 Config/Server binding parity — 2026-10-28
+
+The input `python-api.config-server-binds-ipv6-loopback` binds `Config` to
+`::1`, starts it through `Server.run()`, serves an HTTP GET, and shuts down on
+SIGINT. The selected comparison passed 1/1 against Uvicorn 0.54.0 on macOS
+15.7.7 ARM64 / CPython 3.12.13.
+
+Result `target/kata-progress/python-api-config-server-binds-ipv6-loopback.json`,
+SHA-256
+`bd6e9c3979061436922d44199db99cf94cba4b9e07fcb02e46be5a92dcb6501f`; Python
+API input SHA-256
+`ceffe89f9c883ecf4a075f03eedb194bbf629f39845e1ea9a39c0b4e07498b83`; target
+HEAD `414ad1285719146bcb63a45eff9be41e1268a312`. The input was uncommitted for
+this focused diagnostic. It is not in CI #453 and does not establish the full
+Python API matrix, exact-source coverage, or Windows parity. The result and
+input identities are also tracked by Katas `4fvf` and `gjpr`.
 
 ## User-facing status
 

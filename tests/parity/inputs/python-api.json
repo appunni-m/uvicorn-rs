@@ -1395,6 +1395,24 @@
       }
     },
     {
+      "case_id": "python-api.config-server-binds-ipv6-loopback",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-config-server-ipv6-loopback",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 8,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "host": "::1"
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-http-asgi-raw-path-preserves-unicode-root-path",
       "profile": "python-api",
       "operation": "python.api.run-http-asgi-scope-contract",
