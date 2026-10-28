@@ -41,7 +41,8 @@ use des::TdesEde3;
 use futures_util::task::AtomicWaker;
 #[cfg(not(uvicorn_rs_native_transport))]
 use futures_util::{SinkExt, StreamExt};
-use h3_quinn::quinn::{self, crypto::rustls::QuicServerConfig};
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
+use h3_quinn::quinn;
 use http::header::{DATE, HeaderName, HeaderValue};
 use http::{HeaderMap, Request, Response, StatusCode, Version};
 use http_body::{Body, Frame, SizeHint};
@@ -84,6 +85,7 @@ use tokio_util::task::TaskTracker;
 use uvicorn_rs::WebSocketUpgrade;
 #[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 use uvicorn_rs::h3;
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 use uvicorn_rs::h3_quinn;
 use uvicorn_rs::{
     WebSocketCloseCode as CloseCode, WebSocketCloseFrame as CloseFrame,
@@ -1836,7 +1838,7 @@ struct ServeOptions {
     http1_max_buffer_size: Option<usize>,
     root_path: String,
     tcp_tls: Option<TlsAcceptor>,
-    quic_config: Option<quinn::ServerConfig>,
+    quic_config: Option<uvicorn_rs::Http3ServerConfig>,
     graceful_timeout: Option<std::time::Duration>,
     lifespan_mode: LifespanMode,
     default_headers: Vec<(Bytes, Bytes)>,
@@ -6670,7 +6672,7 @@ struct ServerTlsOptions<'a> {
 fn load_tls_configs(
     py: Python<'_>,
     options: ServerTlsOptions<'_>,
-) -> PyResult<(TlsAcceptor, quinn::ServerConfig)> {
+) -> PyResult<(TlsAcceptor, uvicorn_rs::Http3ServerConfig)> {
     let ServerTlsOptions {
         certfile,
         keyfile,
@@ -6767,22 +6769,15 @@ fn load_tls_configs(
     };
 
     // QUIC requires TLS 1.3 regardless of the selected TCP SSL protocol.
-    let mut quic_tls =
-        rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
-            .with_client_cert_verifier(client_cert_verifier)
-            .with_single_cert(cert_chain, key)
-            .map_err(|error| {
-                PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}"))
-            })?;
-    quic_tls.alpn_protocols = vec![b"h3".to_vec()];
-    quic_tls.max_early_data_size = 0;
-    let quic_config = quinn::ServerConfig::with_crypto(Arc::new(
-        coverage_runtime_result!(
-            ServerQuicTlsConfigError,
-            QuicServerConfig::try_from(quic_tls)
-        )
-        .map_err(|error| PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}")))?,
-    ));
+    let quic_tls = rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
+        .with_client_cert_verifier(client_cert_verifier)
+        .with_single_cert(cert_chain, key)
+        .map_err(|error| PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}")))?;
+    let quic_config = coverage_runtime_result!(
+        ServerQuicTlsConfigError,
+        uvicorn_rs::Http3ServerConfig::from_rustls_config(quic_tls)
+    )
+    .map_err(|error| PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}")))?;
 
     Ok((TlsAcceptor::from(Arc::new(tcp_tls)), quic_config))
 }
@@ -7426,11 +7421,11 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                             "coverage-injected HTTP/3 endpoint bind error",
                         ))
                     } else {
-                        quinn::Endpoint::server(quic_config, server_addr)
+                        uvicorn_rs::Http3Endpoint::bind(server_addr, quic_config)
                     }
                     #[cfg(not(coverage))]
                     {
-                        quinn::Endpoint::server(quic_config, server_addr)
+                        uvicorn_rs::Http3Endpoint::bind(server_addr, quic_config)
                     }
                 };
                 Some(endpoint.map_err(|error| {
@@ -7451,11 +7446,11 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                         "coverage-injected HTTP/3 endpoint bind error",
                     ))
                 } else {
-                    quinn::Endpoint::server(quic_config, server_addr)
+                    uvicorn_rs::Http3Endpoint::bind(server_addr, quic_config)
                 }
                 #[cfg(not(coverage))]
                 {
-                    quinn::Endpoint::server(quic_config, server_addr)
+                    uvicorn_rs::Http3Endpoint::bind(server_addr, quic_config)
                 }
             };
             Some(endpoint.map_err(|error| {
@@ -8202,7 +8197,7 @@ where
 
 #[cfg(uvicorn_rs_native_transport)]
 fn spawn_native_http3(
-    endpoint: quinn::Endpoint,
+    endpoint: uvicorn_rs::Http3Endpoint,
     server: Arc<ServerContext>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -8279,7 +8274,7 @@ fn coverage_legacy_http3_fault_is_armed() -> bool {
 
 #[cfg(any(not(uvicorn_rs_native_transport), coverage))]
 async fn serve_legacy_http3(
-    endpoint: quinn::Endpoint,
+    endpoint: uvicorn_rs::Http3Endpoint,
     server: Arc<ServerContext>,
 ) -> Result<(), BoxError> {
     let mut connections = tokio::task::JoinSet::new();

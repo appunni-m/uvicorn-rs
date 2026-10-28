@@ -4,7 +4,6 @@ use std::{
     future::Future,
     io::{self, BufReader, ErrorKind},
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -13,8 +12,10 @@ use http::{Request, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
 use rustls::{ServerConfig, pki_types::CertificateDer};
 use tower_service::Service;
-use uvicorn_rs::{Http3RequestBody, ServerConfig as UvicornConfig, h3_quinn, serve_http3};
-use h3_quinn::quinn::{self, crypto::rustls::QuicServerConfig};
+use uvicorn_rs::{
+    Http3Endpoint, Http3RequestBody, Http3ServerConfig, ServerConfig as UvicornConfig,
+    serve_http3,
+};
 
 type ResponseFuture =
     Pin<Box<dyn Future<Output = Result<Response<Full<Bytes>>, io::Error>> + Send>>;
@@ -61,17 +62,15 @@ fn read_certificates(path: &str) -> Result<Vec<CertificateDer<'static>>, Box<dyn
 fn server_config(
     certificate_path: &str,
     key_path: &str,
-) -> Result<quinn::ServerConfig, Box<dyn Error>> {
+) -> Result<Http3ServerConfig, Box<dyn Error>> {
     let certificates = read_certificates(certificate_path)?;
     let key_file = File::open(key_path)?;
     let key = rustls_pemfile::private_key(&mut BufReader::new(key_file))?
         .ok_or_else(|| io::Error::new(ErrorKind::InvalidData, "private key file is empty"))?;
-    let mut tls = ServerConfig::builder()
+    let tls = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certificates, key)?;
-    tls.alpn_protocols = vec![b"h3".to_vec()];
-    let crypto = QuicServerConfig::try_from(tls)?;
-    Ok(quinn::ServerConfig::with_crypto(Arc::new(crypto)))
+    Ok(Http3ServerConfig::from_rustls_config(tls)?)
 }
 
 #[tokio::main]
@@ -84,9 +83,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .next()
         .ok_or_else(|| io::Error::new(ErrorKind::InvalidInput, "missing server key path"))?;
 
-    let endpoint = quinn::Endpoint::server(
-        server_config(&certificate_path, &key_path)?,
+    let endpoint = Http3Endpoint::bind(
         "127.0.0.1:0".parse()?,
+        server_config(&certificate_path, &key_path)?,
     )?;
     let address = endpoint.local_addr()?;
     println!("READY {address}");

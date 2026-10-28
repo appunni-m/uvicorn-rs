@@ -61,7 +61,7 @@ Then request `http://127.0.0.1:8080/health`.
 ## Protocol and support boundaries
 
 - Cleartext TCP and TLS over TCP support HTTP/1.1 and HTTP/2.
-- HTTP/3 is experimental and uses a caller-configured Quinn endpoint.
+- HTTP/3 is experimental. `Http3ServerConfig` and `Http3Endpoint` keep TLS-to-QUIC conversion and endpoint binding in this crate; `serve_http3` also accepts a caller-configured Quinn endpoint for advanced setups.
 - HTTP/3 implementation code is contained in this crate and gated by `http3`.
 - The native WebSocket API currently supports HTTP/1.1 only.
 - `ApplicationLifecycle` provides native Rust startup and shutdown hooks; it

@@ -1,4 +1,4 @@
-//! HTTP/3 serving over a caller-configured Quinn endpoint.
+//! HTTP/3 serving over a native Quinn endpoint.
 
 // These modules are vendored MIT-licensed sources. Keep their upstream
 // implementation intact while retaining Clippy's correctness checks and the
@@ -25,6 +25,8 @@ use std::{
     fmt,
     future::Future,
     io,
+    net::SocketAddr,
+    ops::Deref,
     panic::AssertUnwindSafe,
     pin::Pin,
     sync::Arc,
@@ -32,7 +34,10 @@ use std::{
     time::Duration,
 };
 
-use self::{h3::error::Code, h3_quinn::quinn};
+use self::{
+    h3::error::Code,
+    h3_quinn::quinn::{self, crypto::rustls::QuicServerConfig},
+};
 use bytes::{Buf, Bytes};
 use futures_util::FutureExt;
 use http::{Request, Response, StatusCode, Version};
@@ -53,6 +58,81 @@ use crate::{
 
 /// Error returned when reading an HTTP/3 request body.
 pub type Http3RequestBodyError = Box<dyn Error + Send + Sync + 'static>;
+
+/// TLS and QUIC settings used to bind an HTTP/3 endpoint.
+///
+/// HTTP/3 requires TLS 1.3. The supplied Rustls configuration is converted to
+/// Quinn's Rustls crypto provider, its ALPN list is set to `h3`, and 0-RTT is
+/// disabled before the endpoint is created.
+pub struct Http3ServerConfig {
+    quinn: quinn::ServerConfig,
+}
+
+impl Http3ServerConfig {
+    /// Converts a Rustls server configuration into HTTP/3 QUIC settings.
+    ///
+    /// The input must already contain a server certificate and private key.
+    /// This method sets the HTTP/3 ALPN and disables early data.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `InvalidInput` I/O error when Quinn cannot use the supplied
+    /// Rustls configuration.
+    pub fn from_rustls_config(mut tls: tokio_rustls::rustls::ServerConfig) -> io::Result<Self> {
+        tls.alpn_protocols = vec![b"h3".to_vec()];
+        tls.max_early_data_size = 0;
+        let crypto = QuicServerConfig::try_from(tls).map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid HTTP/3 TLS configuration: {error}"),
+            )
+        })?;
+        Ok(Self {
+            quinn: quinn::ServerConfig::with_crypto(Arc::new(crypto)),
+        })
+    }
+}
+
+/// A Quinn endpoint bound and configured by the Python-free server crate.
+///
+/// Use [`Http3Endpoint::bind`] to create an endpoint from [`Http3ServerConfig`]
+/// and pass it to [`serve_http3`]. The wrapper dereferences to Quinn's endpoint
+/// for advanced transport configuration and interoperability.
+pub struct Http3Endpoint(quinn::Endpoint);
+
+impl Http3Endpoint {
+    /// Binds a QUIC endpoint with HTTP/3 TLS settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying socket bind error.
+    pub fn bind(address: SocketAddr, config: Http3ServerConfig) -> io::Result<Self> {
+        quinn::Endpoint::server(config.quinn, address).map(Self)
+    }
+
+    /// Returns the socket address assigned to this endpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Quinn cannot inspect the bound socket address.
+    pub fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.0.local_addr()
+    }
+}
+
+impl Deref for Http3Endpoint {
+    type Target = quinn::Endpoint;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<quinn::Endpoint> for Http3Endpoint {
+    fn from(endpoint: quinn::Endpoint) -> Self {
+        Self(endpoint)
+    }
+}
 
 pin_project! {
     /// A streaming HTTP/3 request body backed directly by its QUIC receive stream.
@@ -162,14 +242,14 @@ impl Body for Http3RequestBody {
     }
 }
 
-/// Serves an HTTP/3 application over a caller-configured Quinn endpoint.
+/// Serves an HTTP/3 application over a Quinn endpoint.
 ///
-/// The endpoint must have a server TLS configuration whose ALPN list includes
-/// `h3`. This function owns no certificate policy: callers create and bind the
-/// [`quinn::Endpoint`] and remain responsible for its TLS configuration. The
-/// accepted request uses HTTP version `HTTP_3`, and its body is the streaming
-/// [`Http3RequestBody`] type. Each request receives [`ConnectionInfo`] with its
-/// QUIC peer address, `TransportKind::Quic`, and negotiated ALPN bytes.
+/// Prefer [`Http3Endpoint::bind`] and [`Http3ServerConfig::from_rustls_config`]
+/// so this crate owns QUIC TLS conversion and endpoint binding. A caller-bound
+/// [`quinn::Endpoint`] is also accepted for applications with custom Quinn
+/// setup. The accepted request uses HTTP version `HTTP_3`, and its body is the
+/// streaming [`Http3RequestBody`] type. Each request receives [`ConnectionInfo`]
+/// with its QUIC peer address, `TransportKind::Quic`, and negotiated ALPN bytes.
 ///
 /// Response bodies are polled one frame at a time. Sending each frame awaits
 /// QUIC/H3 flow control before the next body frame is polled. Request DATA and
@@ -194,13 +274,14 @@ impl Body for Http3RequestBody {
 /// optional error observer and do not terminate the listener. When lifecycle
 /// hooks are configured, startup must also succeed before endpoint acceptance;
 /// shutdown runs after active connections are drained or cancelled.
-pub async fn serve_http3<S, B, Shutdown>(
-    endpoint: quinn::Endpoint,
+pub async fn serve_http3<E, S, B, Shutdown>(
+    endpoint: E,
     service: S,
     shutdown: Shutdown,
     config: ServerConfig,
 ) -> Result<(), ServeError>
 where
+    E: Into<Http3Endpoint>,
     S: Service<Request<Http3RequestBody>, Response = Response<B>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: Error + fmt::Display + Send + Sync + 'static,
@@ -208,6 +289,7 @@ where
     B::Error: Into<super::BoxBodyError> + Send + Sync + 'static,
     Shutdown: Future<Output = ()>,
 {
+    let endpoint = endpoint.into();
     let lifecycle_config = config.clone();
     super::run_with_application_lifecycle(lifecycle_config, async move {
         let connection_slots = Arc::new(Semaphore::new(config.max_connections));
@@ -291,7 +373,7 @@ struct Http3ConnectionOptions<'a> {
 }
 
 async fn finish_http3_shutdown(
-    endpoint: quinn::Endpoint,
+    endpoint: Http3Endpoint,
     shutdown_sender: watch::Sender<bool>,
     connections: &mut JoinSet<()>,
     graceful_shutdown_timeout: Option<Duration>,

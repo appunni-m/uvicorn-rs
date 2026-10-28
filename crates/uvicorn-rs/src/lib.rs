@@ -1036,7 +1036,7 @@ fn take_graceful_shutdown_deadline_overflow_fault() -> bool {
 }
 
 #[cfg(feature = "http3")]
-pub use http3::{Http3RequestBody, h3, h3_quinn, serve_http3};
+pub use http3::{Http3Endpoint, Http3RequestBody, Http3ServerConfig, h3, h3_quinn, serve_http3};
 pub use websocket::{
     WebSocketCloseCode, WebSocketCloseFrame, WebSocketError, WebSocketMessage, WebSocketSession,
     WebSocketText, WebSocketUpgrade, WebSocketUpgradeError,
