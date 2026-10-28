@@ -613,6 +613,8 @@ timeout_worker_healthcheck = json.loads(sys.argv[23])
 uds_path = sys.argv[24] or None
 if os.environ.get("ASGI_PARITY_CALLABLE_INSTANCE") == "1":
     app = ASGI3CallableInstance()
+elif os.environ.get("ASGI_PARITY_IMPLICIT_FACTORY") == "1":
+    app = app_factory
 else:
     app = app_factory if factory else (
         wsgi_app
@@ -813,6 +815,8 @@ except KeyboardInterrupt:
     if request["invocation"] == "module-cli":
         if request.get("callable_instance"):
             app_target = "tests.parity.app:python_api_asgi3_callable_app"
+        elif request.get("implicit_factory"):
+            app_target = "tests.parity.app:python_api_factory_probe_app"
         elif request.get("uds"):
             app_target = "tests.parity.app:python_api_uds_probe_app"
         elif request.get("factory") and request.get("application_interface") == "wsgi":
@@ -949,6 +953,8 @@ except KeyboardInterrupt:
     environment = subprocess_environment()
     if request.get("callable_instance"):
         environment["ASGI_PARITY_CALLABLE_INSTANCE"] = "1"
+    if request.get("implicit_factory"):
+        environment["ASGI_PARITY_IMPLICIT_FACTORY"] = "1"
     if wsgi_streaming_probe:
         wsgi_stream_directory = tempfile.TemporaryDirectory(
             prefix="uvrs-wsgi-response-stream-"

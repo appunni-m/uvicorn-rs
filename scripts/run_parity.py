@@ -2745,6 +2745,7 @@ def load_contract(
                     "use_colors",
                     "factory",
                     "callable_instance",
+                    "implicit_factory",
                     "backlog",
                     "timeout_keep_alive",
                     "timeout_graceful_shutdown",
@@ -2857,6 +2858,12 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.callable_instance must be a boolean"
                     )
+                if "implicit_factory" in run_http and type(
+                    run_http["implicit_factory"]
+                ) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.implicit_factory must be a boolean"
+                    )
                 if run_http.get("callable_instance") and (
                     run_http.get("factory", False)
                     or run_http.get("application_interface", "asgi3") != "asgi3"
@@ -2864,6 +2871,15 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}.api.run_http.callable_instance requires an ASGI3 api or module-cli input without factory mode"
+                    )
+                if run_http.get("implicit_factory") and (
+                    run_http.get("factory", False)
+                    or run_http.get("callable_instance", False)
+                    or run_http.get("application_interface", "asgi3") != "asgi3"
+                    or run_http["invocation"] not in {"api", "module-cli"}
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.implicit_factory requires an ASGI3 api or module-cli input without explicit factory mode"
                     )
                 if "reset_contextvars" in run_http and type(
                     run_http["reset_contextvars"]
