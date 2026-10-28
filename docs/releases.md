@@ -22,13 +22,14 @@ The target identities and publisher workflow are settled: publish
 `uvicorn-rs` behind `http3`; publish the `uvicorn-rs` PyPI distribution from
 the `uvicorn-rs-py` adapter through `.github/workflows/release.yml`.
 
-The pushed PR head is
+PR #19 is still a draft. Its remote head is
 `3edd3b3a4916bebd36d4193b1fd805c09048d687`. Hosted CI
 [#453](https://github.com/appunni-m/uvicorn-rs/actions/runs/40635905337) passed
 700/700 installed-wheel public parity cases on Linux x86-64 and all Rust,
-native composition, and release-handoff checks. Its exact-source three-repeat
-coverage job is still in progress; the coverage result and independent
-Coverage-MCP receipt are not yet available. The earlier CI
+native-composition, and release-handoff checks. At the latest status read, its
+exact-source three-repeat coverage job was still running; no coverage result or
+Coverage-MCP receipt is available yet. This run does not include the newer
+local input below. The earlier CI
 [#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307)
 passed 699/699 cases, but its coverage job was superseded.
 
@@ -39,17 +40,31 @@ macOS ARM64. The clean-source receipt binds that result to local commit
 `481fcc0177ed900218fb39b89041e216edc2885d`, but that commit is not pushed and
 the case is not included in CI #453. The parity, maintainer-contract, release,
 and support-matrix docs record the receipt. The hash-locked strict docs build
-passes on the current local documentation tree. The source and documentation
-commits are local and waiting to be pushed until CI #453 finishes.
+passes on the current local documentation tree. Before this status-doc edit,
+local branch head was `03aec1041`, clean and seven commits ahead of the remote
+PR branch. The new input and documentation commits are not in the hosted run
+and are waiting to be pushed until CI #453 finishes.
 
-There is no clean candidate archive or downstream-consumer receipt for commit
-`481fcc0`. The previous 0.2.2 inspection artifacts came from dirty source
-`5b1ec29201c963d8590c989b07318bb7366d7922` and cannot serve as release evidence.
-No version tag, Cargo package, or PyPI release was created for this candidate.
-Once the current CI run finishes, push the committed source and docs, then use
-the resulting exact-source CI evidence before assembling and checking clean
-0.2.2 artifacts. Do not repeat the unchanged 700 cases locally; the updated
-701-case hosted matrix is the next full parity and coverage run.
+Local 0.2.2 Cargo archives, a PyPI wheel, and an sdist were built from clean
+package source at commit `ce8e2cf`. The standalone HTTP/3 Cargo consumer,
+installed-wheel check, and extracted-sdist build/consumer all passed. The last
+sdist receipt is
+`target/release-candidate/local-ce8e2cf33/python/sdist-consumer-normalized-2/result.json`.
+The later `03aec1041` commit changes only release-evidence validation, which is
+excluded from package inputs. These are local preparation receipts, not the
+hosted exact-commit candidate bundle or registry-consumer verification; no
+version tag, Cargo package, or PyPI release was created for this candidate.
+After CI #453 finishes, push the committed source and docs and obtain
+source-matched hosted parity and coverage evidence. Do not repeat the unchanged
+700 cases locally; the updated 701-case hosted matrix is the next full parity
+and coverage run.
+
+Full Uvicorn 0.54.0 CLI, imports, configuration, process, and worker parity is
+still open. The previous three-system benchmark is incomplete: Linux ARM64
+failed in Hypercorn's HTTP/3 slow-reader case, and the HTTP/1 upload timeout
+remains unresolved. Per the maintainer's order, benchmark diagnostics resume
+after parity is complete; current benchmark evidence does not establish a
+performance gain.
 
 GitHub API readback confirms the active `Protect main` ruleset on
 `refs/heads/main` with the required CI checks and the active `Protect version
