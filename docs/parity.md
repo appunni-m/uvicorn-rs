@@ -2,46 +2,36 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Latest completed public parity evidence (2026-10-28)
+## Current source status (2026-10-28)
 
-The 702-case `input@43` inventory at PR #19 head
-`4a429684d5fd92c1068c7776093452cca1ccfc90` passed **702/702** against the
-installed normal wheel in [CI #455](https://github.com/appunni-m/uvicorn-rs/actions/runs/40652026006)
-on Ubuntu 24.04 / x86-64 / CPython 3.12.13. GitHub evaluated merge commit
-`9c935f8ec4b075c783d9fde755c43d8b430a1ac9`; all recorded target-source hashes
-match the PR head. Artifact `uvicorn-rs-public-parity` (ID `12800288367`) has
+PR #19 is a draft at source commit
+`4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The committed `input@43` inventory
+contains 707 public cases. In current-head CI
+[#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253), the
+installed normal wheel passed **707/707** public cases on Linux x86-64, with
+zero failed or infrastructure-failed cases. Its exact-run artifact is
+[`uvicorn-rs-public-parity` (ID `12809014899`)](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253/artifacts/12809014899),
 archive SHA-256
-`8e16571e230e5d2764ea7db624f50af9fb9f1d2148962dea7336f2a06ada045b`.
+`6205e39d9e650f63ba6ff498d1fcc05a8f57d03dd5110d6174bacbdf4ca8adac`. The
+unified three-repeat job is still running, so no current coverage result is
+available. The release-handoff, native composition, exact Rust minimum, and
+Rust format/lint/feature/docs jobs have passed on this head.
 
-The same 702 cases passed **702/702** against a locally built installed ABI3
-wheel from clean source commit `4a429684d5fd92c1068c7776093452cca1ccfc90` on
-macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1. Local run ID
-`954f313fdbb944f0bbe9bb8e119aedad`; report
-`target/parity-macos-arm64-4a429/result.json`, SHA-256
-`3a0dbffd4054536c656d8624156fb961ffe459c7b64fbe99b8d91a82c39e2129`; native
-extension SHA-256 `9f28239d63cd803c3c2728edf0aee5a873c690a4c58d42fb013747cd3618266a`.
-This is local macOS evidence, not a hosted receipt or release artifact.
+This hosted result is the current Linux x86-64 parity checkpoint only. It does
+not establish the declared macOS/Windows and Python-version matrix or full
+Uvicorn compatibility. CI #456, which passed the same 707 cases on the
+preceding source commit `1c5a9a7fca45e6e4e985cf775ef844bc1fd37e83`, is
+historical. Coverage, independent Coverage-MCP acceptance, and the remaining
+platform/Python matrix remain open. Benchmarks remain behind compatibility
+acceptance.
 
-The dirty local worktree adds two public WebSocket event-context cases, one
-HTTP/2 Early Hints validation case, and two HTTP/2 response-trailer validation
-cases. These selected groups pass 5/5 against Uvicorn and the target on macOS
-ARM64. The inventory now has 707 public oracle cases, but the full 707-case
-matrix has not run on this source. CI #455 and the clean-source 702-case
-receipt above remain the latest complete results.
-
-CI #455 completed with the unified coverage job failed. Its three ASGI matrix
-repeats reported 1,050/1,051, 1,051/1,051, and 1,051/1,051 cases; the first
-repeat hit a race in the coverage-only lifespan shutdown join-error contract.
-The same report measured **13,801/13,983 regions** and **10,165/10,263 lines**.
-Two targeted coverage fault-contract cases now pass 1/1 each in the local
-worktree: the shutdown event-ordering case and
-`fault.asgi-event-type.extract`. The latter now verifies the injected error
-marker rather than accepting an ordinary 500 from a different invalid ASGI
-event. These selected results do not replace a complete exact-source coverage
-run or an accepted Coverage-MCP receipt. Windows candidate parity was skipped
-because it depends on the failed coverage job. The Linux and macOS public
-parity receipts do not establish full drop-in compatibility across platforms;
-benchmark work remains behind full compatibility acceptance.
+The earlier 702-case local macOS ARM64 run and the selected WebSocket, HTTP/2
+Early Hints, and trailer cases are diagnostic evidence from older source
+snapshots. They do not replace a full current-head platform matrix. The Linux
+public parity checkpoint passed for the current source; the 100% coverage
+gate, independent Coverage-MCP acceptance, and declared OS/Python matrix
+remain open. Benchmarks remain behind compatibility acceptance.
 
 ## Historical 695-, 699-, and 700-case parity snapshots — 2026-10-28
 
@@ -118,10 +108,11 @@ source SHA-256
 `92af8083d758e2152bfdd424cdddd8b96a0985cdaade7025921bd7be131b1169`. Its
 coverage job completed incompletely at 1,299/1,307 attributed cases,
 13,777/13,959 regions, and 10,154/10,252 lines. This historical run does not
-meet the 100% gate. CI #455 is the newer current run and is summarized at the
-top of this page; its three-repeat coverage job completed with one fault-case
-failure. No complete 100% result or accepted Coverage-MCP receipt is available
-yet. Benchmarks remain paused until the broader parity work is complete.
+meet the 100% gate. These older runs are superseded by the current source
+status at the top of this page. CI #457 is running for the current head; no
+complete current-source 100% result or accepted Coverage-MCP receipt is
+available yet. Benchmarks remain paused until the broader parity work is
+complete.
 
 The 700-case `input@43` snapshot includes
 `python-api.run-serves-request-and-shuts-down-on-sigterm`, which compares a

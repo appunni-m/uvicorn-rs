@@ -6,7 +6,25 @@
 
 ## Current unified coverage status (2026-10-28)
 
-The latest pull-request CI run,
+PR #19 is a draft at source commit
+`4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Current-head CI
+[#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253) is
+running its unified three-repeat parity/fault/coverage job. At the latest
+check, it had started attribution and the three complete repeats; no
+current-head coverage percentages, source digest, or receipt are available.
+The handoff
+contract, native framework composition, minimum Rust, and Rust format/lint/
+feature/docs jobs have passed for this head.
+
+The prior run, CI #456, was superseded when #457 started. Its coverage job was
+canceled and its retained artifact is not a completed gate receipt. No
+current-head 100% coverage result or accepted independent Coverage-MCP review
+is available.
+
+### Prior CI #455 coverage result (source 4a429684)
+
+The earlier pull-request run,
 [#455](https://github.com/appunni-m/uvicorn-rs/actions/runs/40652026006),
 evaluated merge commit `9c935f8ec4b075c783d9fde755c43d8b430a1ac9`, with its
 recorded target-source hashes matching PR head
@@ -23,15 +41,16 @@ passed 1,051/1,051; one passed 1,050/1,051 because a coverage-only shutdown
 join-error case recorded `lifespan.shutdown` after the message was sent but
 before the injected task abort. The aggregate measured **13,801/13,983
 regions** and **10,165/10,263 lines**. The `uvicorn-rs-public-parity` job
-passed 702/702, but this does not clear source coverage.
+passed 702/702, but this older source result does not clear current coverage.
 
-The current local worktree corrects the fault-specific shutdown predicate and
-removes the contradictory generic `application_events` requirement; that
-selected case passed 1/1. It also corrected `fault.asgi-event-type.extract`:
+An earlier local draft corrected the fault-specific shutdown predicate and
+removed the contradictory generic `application_events` requirement; that
+selected case passed 1/1 on that draft. It also corrected
+`fault.asgi-event-type.extract`:
 the old fixture sent the recognized `http.response.trailers` event, so its
 ordinary HTTP 500 could pass without exercising the injected extraction error.
-The updated dedicated fixture route now produces the injected `MemoryError`,
-which the fault contract verifies from the server log. It passed 1/1 and
+The dedicated fixture route produced the injected `MemoryError`, which the
+fault contract verified from the server log. It passed 1/1 and
 attributed the previously missing `src/lib.rs:542` fault-point region. Local
 run `65a83d09fa124b0da40f5b5c43a22b75` is dirty relative to revision
 `4a429684d5fd92c1068c7776093452cca1ccfc90`; its selected report SHA-256 is
