@@ -553,7 +553,7 @@ jobs:
         if: runner.os != 'Linux'
         with:
           version: ${{ env.UV_VERSION }}
-      - name: Run CLI and platform-applicable Python API parity on the ${{ matrix.platform }} candidate wheel
+      - name: Run all indexed platform-applicable parity inputs on the ${{ matrix.platform }} candidate wheel
         if: runner.os != 'Linux'
         shell: bash
         run: |
@@ -579,7 +579,7 @@ jobs:
             uv pip install --python "$oracle_python" "gunicorn==$GUNICORN_VERSION"
           fi
           uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
-          parity_args=(--profile cli --profile python-api)
+          parity_args=()
           if [ "$RUNNER_OS" = 'Windows' ]; then
             # These inputs require inherited POSIX descriptors or POSIX-only worker signals.
             parity_args+=(
@@ -603,12 +603,15 @@ jobs:
             --oracle-python "$oracle_python" \
             --installed-candidate \
             "${parity_args[@]}" \
-            --output "target/parity-cli-api-${{ matrix.platform }}.json"
+            --output "target/parity-${{ matrix.platform }}.json"
+          "$candidate_python" scripts/check_ci_evidence.py parity \
+            "target/parity-${{ matrix.platform }}.json" \
+            --offline --require-clean "${parity_args[@]}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always() && runner.os != 'Linux'
         with:
           name: uvicorn-rs-platform-parity-${{ matrix.platform }}
-          path: target/parity-cli-api-${{ matrix.platform }}.json
+          path: target/parity-${{ matrix.platform }}.json
           if-no-files-found: warn
           retention-days: 90
       - name: Build source distribution

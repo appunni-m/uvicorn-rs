@@ -579,12 +579,30 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
 def validate_parity(
     result: dict[str, Any], *, expected_cases: list[dict[str, Any]] | None = None,
     expected_native_sha256: str | None = None, offline: bool = True,
+    expected_excluded_case_ids: set[str] | None = None,
     _current_revision: str | None = None, expected_coverage_profile_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Check exact indexed cases; callers may bind evidence to a shipping native hash."""
     manifest, all_cases, input_paths = load_contract()
+    excluded = expected_excluded_case_ids or set()
+    if excluded:
+        public_ids = {
+            case["case_id"] for case in all_cases
+            if case.get("verification", "oracle-parity") == "oracle-parity"
+        }
+        unknown_exclusions = sorted(excluded - public_ids)
+        require(
+            not unknown_exclusions,
+            f"parity exclusions are not public oracle cases: {', '.join(unknown_exclusions)}",
+        )
     if expected_cases is None:
-        expected_cases = [case for case in all_cases if case.get("verification", "oracle-parity") == "oracle-parity"]
+        expected_cases = [
+            case for case in all_cases
+            if case.get("verification", "oracle-parity") == "oracle-parity"
+            and case["case_id"] not in excluded
+        ]
+    else:
+        require(not excluded, "explicit case exclusions cannot be combined with a preselected case batch")
     expected = {case["case_id"]: case for case in expected_cases}
     require(len(expected) == len(expected_cases) and bool(expected), "expected parity case selection is empty or duplicated")
     exact_keys(result, {"schema", "status", "run", "summary", "cases", "infrastructure_errors"}, "parity report")
@@ -597,6 +615,16 @@ def validate_parity(
     require(isinstance(run.get("run_id"), str) and bool(run["run_id"]), "parity run identity is empty")
     require(isinstance(run.get("command"), list) and bool(run["command"])
             and all(isinstance(part, str) for part in run["command"]), "parity command identity is invalid")
+    if expected_excluded_case_ids is not None:
+        command = run["command"]
+        recorded_exclusions = [
+            command[index + 1]
+            for index, value in enumerate(command[:-1])
+            if value == "--exclude-case-id"
+        ]
+        require(len(recorded_exclusions) == len(set(recorded_exclusions))
+                and set(recorded_exclusions) == expected_excluded_case_ids,
+                "parity command exclusions differ from the declared platform exclusions")
     if expected_coverage_profile_dir is not None:
         command = run["command"]
         expected_profile_dir = str(expected_coverage_profile_dir.resolve())
@@ -1812,6 +1840,12 @@ def main() -> int:
     parser.add_argument("--offline", action="store_true", help="validate retained evidence without importing the installed native")
     parser.add_argument("--require-clean", action="store_true", help="require evidence produced from a clean source checkout")
     parser.add_argument(
+        "--exclude-case-id",
+        action="append",
+        default=[],
+        help="declare a platform-inapplicable public input excluded from a parity report; repeat for each case",
+    )
+    parser.add_argument(
         "--allow-pending-mcp",
         action="store_true",
         help=("CI-only mode: validate the complete raw LLVM and matrix evidence while Coverage-MCP is pending; "
@@ -1820,10 +1854,16 @@ def main() -> int:
     args = parser.parse_args()
     if args.kind != "coverage" and args.allow_pending_mcp:
         parser.error("--allow-pending-mcp is valid only for coverage reports")
+    if args.kind != "parity" and args.exclude_case_id:
+        parser.error("--exclude-case-id is valid only for parity reports")
     path = args.report.resolve()
     result = read_json(path)
     checked = (
-        validate_parity(result, offline=args.offline)
+        validate_parity(
+            result,
+            offline=args.offline,
+            expected_excluded_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
+        )
         if args.kind == "parity"
         else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp)
     )
