@@ -7388,6 +7388,8 @@ def http2_request(
                 "early_hint_before_final_start": early_hint_before_final_start,
                 "response_trailers": response_trailers,
             })
+        if events_path is not None:
+            result["application_events"] = read_events(events_path)[events_before:]
         return result
 
     try:
@@ -10023,13 +10025,17 @@ def execute_case(
             response_extension_operation = case["operation"] in {
                 "http2.response-early-hints",
                 "http2.response-trailers",
+                "http2.response-trailers-without-te",
             }
             return http2_request(
                 server["port"],
                 case["request"],
                 observe_response_extensions=response_extension_operation,
                 events_path=server["events"]
-                if case["operation"] == "http2.response-early-hints"
+                if case["operation"] in {
+                    "http2.response-early-hints",
+                    "http2.response-trailers-without-te",
+                }
                 else None,
             )
         if profile_id == "http3":

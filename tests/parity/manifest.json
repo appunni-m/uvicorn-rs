@@ -1144,6 +1144,30 @@
       }
     },
     {
+      "id": "http2.response-trailers-without-te",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes",
+        "response_trailers",
+        "application_events"
+      ],
+      "compare": [
+        "status",
+        "body_bytes",
+        "response_trailers",
+        "application_events"
+      ],
+      "required_observations": {
+        "status": 200,
+        "response_trailers": [],
+        "application_events": [
+          "http2.response-trailers.first-send-returned",
+          "http2.response-trailers.final-send-returned"
+        ]
+      }
+    },
+    {
       "id": "http.sync-callable-awaitable",
       "kind": "protocol_operation",
       "observe": [

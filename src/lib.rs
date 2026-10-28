@@ -2722,6 +2722,7 @@ struct BodyChunk {
 enum ResponseChunk {
     Body(BodyChunk),
     Trailers(HeaderMap),
+    End,
 }
 
 enum RequestBody {
@@ -3617,8 +3618,7 @@ impl AsgiIo {
                     .get_item("trailers")?
                     .map(|value| value.extract::<bool>())
                     .transpose()?
-                    .unwrap_or(false)
-                    && slf.request_allows_response_trailers;
+                    .unwrap_or(false);
                 // Uvicorn validates configured headers as part of the
                 // response.start send. Reject a known-invalid default header
                 // before acknowledging the event, so the application cannot
@@ -3832,11 +3832,30 @@ impl AsgiIo {
                     .map(|value| value.extract::<bool>())
                     .transpose()?
                     .unwrap_or(false);
-                let headers = {
+                let chunk = {
                     let mut accumulated = slf.response_trailer_headers.lock().map_err(|_| {
                         PyRuntimeError::new_err("HTTP response trailers lock poisoned")
                     })?;
                     for (name, value) in header_values {
+                        let mut name = name.to_vec();
+                        name.make_ascii_lowercase();
+                        if name.starts_with(b":") {
+                            return Err(PyRuntimeError::new_err(
+                                "Pseudo headers are not allowed in HTTP response trailers",
+                            ));
+                        }
+                        if name.as_slice() == b"connection"
+                            || name.as_slice() == b"keep-alive"
+                            || name.as_slice() == b"proxy-connection"
+                            || name.as_slice() == b"transfer-encoding"
+                            || name.as_slice() == b"upgrade"
+                            || name.as_slice() == b"te"
+                        {
+                            continue;
+                        }
+                        if !slf.request_allows_response_trailers {
+                            continue;
+                        }
                         let name = HeaderName::from_bytes(&name)
                             .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header name."))?;
                         let value = HeaderValue::from_bytes(&value)
@@ -3848,9 +3867,13 @@ impl AsgiIo {
                     if more_trailers {
                         return Ok(py.None().into_bound(py));
                     }
-                    std::mem::take(&mut *accumulated)
+                    if slf.request_allows_response_trailers {
+                        ResponseChunk::Trailers(std::mem::take(&mut *accumulated))
+                    } else {
+                        ResponseChunk::End
+                    }
                 };
-                match slf.body.try_send(ResponseChunk::Trailers(headers)) {
+                match slf.body.try_send(chunk) {
                     Ok(()) => Ok(py.None().into_bound(py)),
                     Err(TrySendError::Closed(_)) => {
                         Err(PyOSError::new_err("server response body channel closed"))
@@ -5545,6 +5568,10 @@ impl AsgiBody {
             ResponseChunk::Trailers(trailers) => {
                 self.finish_response(application);
                 Poll::Ready(Some(Ok(Frame::trailers(trailers))))
+            }
+            ResponseChunk::End => {
+                self.finish_response(application);
+                Poll::Ready(None)
             }
         }
     }
@@ -9131,12 +9158,11 @@ async fn handle_request_parts(
 ) -> Result<Response<ResponseBody>, BoxError> {
     let http_version = parts.version;
     let request_allows_response_trailers = http_version == Version::HTTP_2
-        && parts.headers.get_all(http::header::TE).iter().any(|value| {
-            value
-                .as_bytes()
-                .split(|byte| *byte == b',')
-                .any(|token| trim_ascii(token).eq_ignore_ascii_case(b"trailers"))
-        });
+        && parts
+            .headers
+            .get_all(http::header::TE)
+            .iter()
+            .any(|value| trim_ascii(value.as_bytes()).eq_ignore_ascii_case(b"trailers"));
     let http2_informational = parts
         .extensions
         .get::<hyper::ext::Http2InformationalSender>()

@@ -601,6 +601,20 @@
       }
     },
     {
+      "case_id": "http2.response-trailers-without-te",
+      "profile": "http2",
+      "operation": "http2.response-trailers-without-te",
+      "covers": [
+        "http2.response-trailers-without-te"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-without-te",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http2.concurrent-stream-load-slow-reader-resource-bound",
       "profile": "http2",
       "operation": "http.concurrent-stream-load",

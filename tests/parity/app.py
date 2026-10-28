@@ -745,7 +745,7 @@ async def _app_impl(scope, receive, send):
         extensions = ",".join(sorted(scope.get("extensions", {}))).encode("ascii")
         await send({"type": "http.response.body", "body": extensions})
         return
-    if path == "/response-trailers":
+    if path in {"/response-trailers", "/response-trailers-without-te"}:
         await send({
             "type": "http.response.start",
             "status": 200,
@@ -756,14 +756,26 @@ async def _app_impl(scope, receive, send):
         await send({"type": "http.response.body", "body": extensions})
         await send({
             "type": "http.response.trailers",
-            "headers": [(b"x-asgi-trailer", b"first")],
+            "headers": [
+                (b"x-asgi-trailer", b"first"),
+                (b"connection", b"close"),
+                (b"te", b"trailers"),
+                (b"keep-alive", b"timeout=5"),
+            ],
             "more_trailers": True,
         })
+        _record("http2.response-trailers.first-send-returned")
         await send({
             "type": "http.response.trailers",
-            "headers": [(b"x-asgi-trailer", b"last")],
+            "headers": [
+                (b"x-asgi-trailer", b"last"),
+                (b"proxy-connection", b"keep-alive"),
+                (b"upgrade", b"websocket"),
+                (b"transfer-encoding", b"chunked"),
+            ],
             "more_trailers": False,
         })
+        _record("http2.response-trailers.final-send-returned")
         return
     if path == "/response-headers-order":
         await send({
