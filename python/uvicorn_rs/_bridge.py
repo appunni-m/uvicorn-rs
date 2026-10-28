@@ -124,8 +124,15 @@ async def invoke(app, scope, io):
 
     try:
         await app(scope, receive, send)
-    except BaseException:
-        if scope_type != "http" or response_started:
+    except BaseException as error:
+        if scope_type != "http":
+            raise
+        if response_started:
+            error_logger.exception("Exception in ASGI application")
+            try:
+                setattr(error, "_uvicorn_rs_logged_asgi_error", True)
+            except BaseException:
+                pass
             raise
         error_logger.exception("Exception in ASGI application")
         await send(

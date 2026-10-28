@@ -352,7 +352,11 @@ def run_http_observation(request: dict) -> dict:
         request_body = [request_body]
     wsgi_streaming_probe = (
         request.get("application_interface") == "wsgi"
-        and request["path"].split("?", 1)[0] == "/python-api-wsgi-stream"
+        and request["path"].split("?", 1)[0]
+        in {
+            "/python-api-wsgi-stream",
+            "/python-api-wsgi-after-start-error",
+        }
     )
 
     child_code = r'''
@@ -519,6 +523,19 @@ def asgi2_app(scope):
 def wsgi_app(environ, start_response):
     if environ["PATH_INFO"] == "/python-api-wsgi-error":
         raise RuntimeError("python-api-wsgi-probe-error")
+
+    if environ["PATH_INFO"] == "/python-api-wsgi-after-start-error":
+        start_response("200 OK", [("content-type", "text/plain")])
+        marker = os.environ["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"]
+
+        def response_chunks():
+            yield b"python-api-wsgi-after-start|first"
+            deadline = time.monotonic() + 3.0
+            while not os.path.exists(marker) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            raise RuntimeError("python-api-wsgi-after-start-probe-error")
+
+        return response_chunks()
 
     if environ["PATH_INFO"] == "/python-api-wsgi-stream":
         start_response("200 OK", [("content-type", "text/plain")])
@@ -1275,7 +1292,10 @@ except KeyboardInterrupt:
                         if first_byte:
                             assert wsgi_stream_release_marker is not None
                             wsgi_stream_release_marker.touch()
-                        response_body = first_byte + http_response.read()
+                        try:
+                            response_body = first_byte + http_response.read()
+                        except http.client.IncompleteRead as error:
+                            response_body = first_byte + error.partial
                     else:
                         response_body = http_response.read()
                     listener_response = {

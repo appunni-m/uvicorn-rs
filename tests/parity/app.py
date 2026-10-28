@@ -1823,6 +1823,19 @@ def python_api_wsgi_probe_app(environ, start_response):
     if environ["PATH_INFO"] == "/python-api-wsgi-error":
         raise RuntimeError("python-api-wsgi-probe-error")
 
+    if environ["PATH_INFO"] == "/python-api-wsgi-after-start-error":
+        start_response("200 OK", [("content-type", "text/plain")])
+        marker = os.environ["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"]
+
+        def response_chunks():
+            yield b"python-api-wsgi-after-start|first"
+            deadline = time.monotonic() + 3.0
+            while not os.path.exists(marker) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            raise RuntimeError("python-api-wsgi-after-start-probe-error")
+
+        return response_chunks()
+
     if environ["PATH_INFO"] == "/python-api-wsgi-stream":
         start_response("200 OK", [("content-type", "text/plain")])
         marker = os.environ["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"]

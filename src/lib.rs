@@ -2622,6 +2622,27 @@ fn contains_invalid_default_header_error(error: &(dyn StdError + 'static)) -> bo
     format!("{error:?}").contains("InvalidDefaultHeader")
 }
 
+fn python_asgi_error_was_logged(error: &PyErr, py: Python<'_>) -> bool {
+    error
+        .value(py)
+        .getattr("_uvicorn_rs_logged_asgi_error")
+        .and_then(|value| value.extract::<bool>())
+        .unwrap_or(false)
+}
+
+fn contains_logged_python_asgi_error(error: &(dyn StdError + 'static)) -> bool {
+    let mut source = Some(error);
+    while let Some(error) = source {
+        if let Some(python_error) = error.downcast_ref::<PyErr>()
+            && Python::attach(|py| python_asgi_error_was_logged(python_error, py))
+        {
+            return true;
+        }
+        source = error.source();
+    }
+    false
+}
+
 #[cfg(coverage)]
 struct CoverageInvalidDefaultHeaderSourceError {
     source: InvalidDefaultHeader,
@@ -5393,7 +5414,11 @@ impl AsgiBody {
             )
             .into()))),
             Ok(Err(error)) => {
-                Python::attach(|py| error.print(py));
+                Python::attach(|py| {
+                    if !python_asgi_error_was_logged(&error, py) {
+                        error.print(py);
+                    }
+                });
                 Poll::Ready(Some(Err(Box::new(error))))
             }
             Err(error) => Poll::Ready(Some(Err(Box::new(error)))),
@@ -7403,7 +7428,9 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                     let invalid_default_header_error =
                         contains_invalid_default_header_error(event.error());
 
-                    if !invalid_default_header_error {
+                    if !invalid_default_header_error
+                        && !contains_logged_python_asgi_error(event.error())
+                    {
                         log_error(format_args!(
                             "uvicorn-rs: HTTP connection from {:?} failed: {} ({:?})",
                             event.peer_addr(),
