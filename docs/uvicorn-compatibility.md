@@ -13,17 +13,19 @@ published.
 
 ## Current status (2026-10-28)
 
-PR #19 remains a draft at head
+PR #19 remains a draft. CI #457 checked source commit
 `4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The committed `input@43` inventory
-has 707 public cases. Current-head CI [#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253)
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its receipts do not cover later
+commits. The committed `input@43` inventory has 707 public cases. CI
+[#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253)
 has passed the release-handoff, native framework composition, exact Rust
 minimum, Rust formatting/lint/feature/docs jobs, and the installed-wheel
 public parity job (707/707 on Linux x86-64). Its unified three-repeat coverage
 job is still running. The complete OS/Python compatibility matrix has not
 passed.
 
-CI #457 passed the current 707-case installed-wheel matrix on Linux x86-64.
+CI #457 passed the 707-case installed-wheel matrix for source commit `4f7a296`
+on Linux x86-64.
 This does not establish macOS, Windows, or other declared Python versions.
 The preceding CI #456 and the earlier 702-case macOS ARM64 evidence are from
 older source snapshots. The exact current-source 100% coverage gate,

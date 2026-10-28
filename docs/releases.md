@@ -25,9 +25,10 @@ implemented by the optional **uvicorn-rs-py** adapter. The publisher is
 candidates. The PyPI trusted publisher tuple is
 **appunni-m/uvicorn-rs / release.yml / pypi**.
 
-PR #19 remains a draft at head
+PR #19 remains a draft. CI #457 checked source commit
 **4f7a29635d7b14151be02b409515f0cf290f7b5c**, based on main
-**86e72e181d00feca1b4db7f30377d5d9d4345b83**. Current CI
+**86e72e181d00feca1b4db7f30377d5d9d4345b83**; its receipts do not cover later
+commits. CI #457
 [#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253) has
 passed the release-handoff, native framework composition, exact Rust minimum,
 and Rust format/lint/feature/docs jobs. Its installed-wheel public parity job

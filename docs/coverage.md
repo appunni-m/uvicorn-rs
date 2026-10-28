@@ -6,21 +6,22 @@
 
 ## Current unified coverage status (2026-10-28)
 
-PR #19 is a draft at source commit
+PR #19 remains a draft. CI #457 checked source commit
 `4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Current-head CI
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its receipt does not cover later
+commits. CI #457
 [#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253) is
 running its unified three-repeat parity/fault/coverage job. At the latest
 check, it had started attribution and the three complete repeats; no
-current-head coverage percentages, source digest, or receipt are available.
+coverage percentages, source digest, or receipt are available.
 The handoff
 contract, native framework composition, minimum Rust, and Rust format/lint/
-feature/docs jobs have passed for this head.
+feature/docs jobs have passed for source commit `4f7a296`.
 
 The prior run, CI #456, was superseded when #457 started. Its coverage job was
 canceled and its retained artifact is not a completed gate receipt. No
-current-head 100% coverage result or accepted independent Coverage-MCP review
-is available.
+100% coverage result for source commit `4f7a296` or an accepted independent
+Coverage-MCP review is available.
 
 ### Prior CI #455 coverage result (source 4a429684)
 

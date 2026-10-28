@@ -14,9 +14,10 @@ candidate artifacts and downstream consumer checks remain open; see
 
 ## Current verification status (2026-10-28)
 
-PR #19 is a draft at source commit
+PR #19 remains a draft. CI #457 checked source commit
 `4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its receipts do not cover later
+commits. CI
 [#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253) has
 passed release-handoff, native framework composition, exact Rust minimum,
 Rust formatting/lint/feature/docs, and installed-wheel public parity
@@ -24,7 +25,7 @@ Rust formatting/lint/feature/docs, and installed-wheel public parity
 progress; the broader OS/Python compatibility matrix is not complete.
 
 The current public parity checkpoint is CI #457: 707/707 `input@43` cases
-passed on Ubuntu 24.04 / x86-64 / CPython 3.12.13 for the current PR source.
+passed on Ubuntu 24.04 / x86-64 / CPython 3.12.13 for source commit `4f7a296`.
 The broader OS/Python matrix, 100% coverage, Coverage-MCP acceptance, and
 complete compatibility remain open. Candidate acceptance still needs
 exact-source artifacts and consumer checks, plus parity-first benchmarks.

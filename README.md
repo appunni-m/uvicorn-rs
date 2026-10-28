@@ -12,9 +12,10 @@ the release workflow must resolve it in its preflight. The PyPI
 `uvicorn-rs` project API returned 404, so the distribution has not had its
 first upload. See [release status](docs/releases.md).
 
-PR #19 is a draft at head
+PR #19 remains a draft. CI #457 checked source commit
 `4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. In CI
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its receipts do not cover later
+commits. In CI
 [#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253), the
 release-handoff, native framework composition, minimum-Rust, and Rust
 formatting/lint/feature/documentation jobs have passed. The installed-wheel

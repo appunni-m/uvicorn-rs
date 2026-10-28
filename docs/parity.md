@@ -4,10 +4,10 @@
 
 ## Current source status (2026-10-28)
 
-PR #19 is a draft at source commit
+PR #19 remains a draft. CI #457 checked source commit
 `4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The committed `input@43` inventory
-contains 707 public cases. In current-head CI
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its receipts do not cover later
+commits. The committed `input@43` inventory contains 707 public cases. In CI
 [#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253), the
 installed normal wheel passed **707/707** public cases on Linux x86-64, with
 zero failed or infrastructure-failed cases. Its exact-run artifact is
@@ -16,7 +16,7 @@ archive SHA-256
 `6205e39d9e650f63ba6ff498d1fcc05a8f57d03dd5110d6174bacbdf4ca8adac`. The
 unified three-repeat job is still running, so no current coverage result is
 available. The release-handoff, native composition, exact Rust minimum, and
-Rust format/lint/feature/docs jobs have passed on this head.
+Rust format/lint/feature/docs jobs have passed for source commit `4f7a296`.
 
 This hosted result is the current Linux x86-64 parity checkpoint only. It does
 not establish the declared macOS/Windows and Python-version matrix or full
@@ -28,8 +28,8 @@ acceptance.
 
 The earlier 702-case local macOS ARM64 run and the selected WebSocket, HTTP/2
 Early Hints, and trailer cases are diagnostic evidence from older source
-snapshots. They do not replace a full current-head platform matrix. The Linux
-public parity checkpoint passed for the current source; the 100% coverage
+snapshots. They do not replace the full OS/Python matrix required for a release
+commit. The Linux public parity checkpoint passed for source commit `4f7a296`; the 100% coverage
 gate, independent Coverage-MCP acceptance, and declared OS/Python matrix
 remain open. Benchmarks remain behind compatibility acceptance.
 
