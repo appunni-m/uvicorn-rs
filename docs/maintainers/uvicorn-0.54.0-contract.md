@@ -597,7 +597,14 @@ Current-source CA validation — 2026-10-26: a focused unified-coverage batch pa
   `77c7148d7b2621a589ae667f95a5d33aa1b35735e549be5ad7628b4f6cfb10d5`;
   dirty-source SHA-256
   `4b28bceb47a9e47db926030456c8dbc218fd302fc51147b3b0302767d68e1ab1`.
-  Runtime updates to the state fields remain unverified.
+  The `python-api.server-started-follows-lifespan-readiness` input checks
+  `total_requests` and active task counts at initial, in-flight, completed, and
+  bodyless-response points. It passed in the historical 580-case installed
+  profile on 2026-10-27 (run `9f5d8332dbd842b08e52372571b0eee2`, report SHA-256
+  `b9ea5b0062a935406fcb45fc8579d3a370470776cb07d82a148bf92a743b7153`, input
+  `input@40`, dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`). Live
+  `connections` updates and current-head installed-package evidence remain
+  unverified.
 
 - `python-api.module-cli-reload-respects-include-exclude-globs` passed 1/1
   against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13. Both sides
@@ -1386,8 +1393,9 @@ runtime source SHA-256
 probe SHA-256 `0752036182c46189e15de227e486522f854e49e5424f9eb3d073e681bf3221ee`,
 and fixture app SHA-256
 `408e4a770098e8339f7d8f2652a921bd2c06a6f7ab46202e22dc555f0b151901`.
-This is focused dirty-source evidence for a pre-response WSGI application error;
-other failure classes and errors after response start remain open.
+This is focused dirty-source evidence for a direct-call pre-response WSGI
+application error. Separate focused pairs cover iterator errors before and
+after response start. Other failure classes and WSGI error timings remain open.
 
 ## Focused WebSocket message-size parity (2026-10-20)
 
