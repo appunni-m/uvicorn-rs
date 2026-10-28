@@ -2111,6 +2111,36 @@
       }
     },
     {
+      "case_id": "cli.explicit-factory-overrides-false-environment",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": [
+        "cli.process"
+      ],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "tests.parity.app:python_api_factory_probe_app",
+          "--factory",
+          "--interface",
+          "asgi3",
+          "--lifespan",
+          "off",
+          "--port",
+          "0",
+          "--log-level",
+          "critical",
+          "--limit-max-requests",
+          "0"
+        ],
+        "environment": {
+          "UVICORN_FACTORY": "false"
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.invalid-fd-environment-is-rejected",
       "profile": "cli",
       "operation": "cli.process",
