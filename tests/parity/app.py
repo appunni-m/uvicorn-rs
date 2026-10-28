@@ -762,6 +762,43 @@ async def _app_impl(scope, receive, send):
             "links": [b"invalid\nlink"],
         })
         return
+    if path == "/response-early-hint-after-start":
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({
+            "type": "http.response.early_hint",
+            "links": [b"</too-late.css>; rel=preload; as=style"],
+        })
+        return
+    if path == "/response-trailers-before-start":
+        await send({"type": "http.response.trailers", "headers": []})
+        return
+    if path == "/response-trailers-before-body-complete":
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        await send({"type": "http.response.trailers", "headers": []})
+        return
+    if path == "/response-trailers-without-negotiation":
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"complete"})
+        await send({"type": "http.response.trailers", "headers": []})
+        return
+    if path == "/response-trailers-pseudo-header":
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        await send({"type": "http.response.body", "body": b"complete"})
+        await send({
+            "type": "http.response.trailers",
+            "headers": [(b":status", b"200")],
+        })
+        return
     if path in {
         "/response-trailers-invalid-header-name",
         "/response-trailers-invalid-header-value",

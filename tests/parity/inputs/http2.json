@@ -596,6 +596,76 @@
       }
     },
     {
+      "case_id": "http2.response-early-hint-after-response-start",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hint-after-start",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers-before-start",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-before-start",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers-before-body-complete",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-before-body-complete",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers-without-negotiation",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-without-negotiation",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers-pseudo-header-rejected",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-pseudo-header",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http2.response-trailers",
       "profile": "http2",
       "operation": "http2.response-trailers",

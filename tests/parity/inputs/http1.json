@@ -621,6 +621,20 @@
       }
     },
     {
+      "case_id": "http1.response-early-hint-is-unsupported",
+      "profile": "http1",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hints",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http1.invalid-asgi-response-start-missing-status",
       "profile": "http1",
       "operation": "http.invalid-response-start",
