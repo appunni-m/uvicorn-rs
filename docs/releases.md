@@ -41,23 +41,33 @@ macOS ARM64. The clean-source receipt binds that result to local commit
 the case is not included in CI #453. The parity, maintainer-contract, release,
 and support-matrix docs record the receipt. The hash-locked strict docs build
 passes on the current local documentation tree. Before this status-doc edit,
-local branch head was `03aec1041`, clean and seven commits ahead of the remote
-PR branch. The new input and documentation commits are not in the hosted run
-and are waiting to be pushed until CI #453 finishes.
+local branch head was `9985a6518741a52302be76e9a38d9a131ac2acdd`, clean and
+nine commits ahead of the remote PR branch. The new input and documentation
+commits are not in the hosted run and are waiting to be pushed until CI #453
+finishes.
 
-Local 0.2.2 Cargo archives, a PyPI wheel, and an sdist were built from clean
-package source at commit `ce8e2cf`. The standalone HTTP/3 Cargo consumer,
-installed-wheel check, and extracted-sdist build/consumer all passed. The last
-sdist receipt is
-`target/release-candidate/local-ce8e2cf33/python/sdist-consumer-normalized-2/result.json`.
-The later `03aec1041` commit changes only release-evidence validation, which is
-excluded from package inputs. These are local preparation receipts, not the
-hosted exact-commit candidate bundle or registry-consumer verification; no
-version tag, Cargo package, or PyPI release was created for this candidate.
-After CI #453 finishes, push the committed source and docs and obtain
-source-matched hosted parity and coverage evidence. Do not repeat the unchanged
-700 cases locally; the updated 701-case hosted matrix is the next full parity
-and coverage run.
+Local 0.2.2 artifacts were rebuilt from clean commit `9985a6518741a52302be76e9a38d9a131ac2acdd`.
+The lifecycle and server Cargo archives have SHA-256 values
+`09015e066c7bb03230ae58c6486164e832f358ce1fd7cff2651271e73ee4f549` and
+`0ae5d7a33fce4c1001eaaec180c8190881db16e7f7a2635b2eb3d1a2341a3f7d`.
+Extracted-archive checks passed for the lifecycle crate, default `uvicorn-rs`,
+and `uvicorn-rs --features http3`; the standalone H3 consumer also passed on
+those exact archives (H3 error 262, follow-up HTTP/1 status 200). The macOS
+ARM64 abi3 wheel SHA-256 is
+`43ada3afb6a14431ffcd5153aa45da21cd5cee67ca2a1564cce425fe17e5b4ff`; clean
+replacement/rollback and installed-wheel consumer checks passed. The sdist
+SHA-256 is
+`e56bfa2fbd002a73db9a4fc0b0270b5f698c16c3f4a91d3ead2363596bd54392`, and its
+extracted-source build and consumer passed. The local macOS manifest is
+`target/release-candidate/local-9985a651/macos/dist/build-manifest-macos-arm64.json`
+(SHA-256
+`d1737f7f8be6953525ca0eaae56bdb640be68d23c1dc437c8edc30b3e11f403e`). These
+are local exact-commit receipts for one wheel platform, not the hosted
+multi-platform candidate bundle or registry verification. No candidate tag
+or package was published. After CI #453 finishes, push the committed source
+and docs and obtain updated hosted parity and coverage evidence. Do not repeat
+the unchanged 700 cases locally; the updated 701-case hosted matrix is the
+next full parity and coverage run.
 
 Full Uvicorn 0.54.0 CLI, imports, configuration, process, and worker parity is
 still open. The previous three-system benchmark is incomplete: Linux ARM64
