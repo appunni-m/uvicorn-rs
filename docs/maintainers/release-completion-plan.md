@@ -178,6 +178,22 @@ Rust owns transport, body flow control, connection/session lifetime and draining
 The adapter owns Python scheduling, context, callable/error transfer and ASGI
 event conversion. Check shared WebSocket upgrade/session and shutdown paths.
 
+**Current production ownership map (source review):**
+
+| Responsibility | Current owner | Boundary |
+| --- | --- | --- |
+| TCP/TLS/UDS accept loops, TLS handshake, HTTP/1 and HTTP/2 connection handling, response body flow, connection drain | `crates/uvicorn-rs/src/lib.rs` | The PyO3 crate binds configured TCP/UDS sockets and builds the TLS acceptor; its `Service<Request<Incoming>>` converts requests to ASGI calls. The native crate owns the accept loop, TLS handshake and Hyper connection after the bound listener/acceptor are passed in. |
+| QUIC endpoint, HTTP/3 connection and request streams | `crates/uvicorn-rs/src/http3.rs` and `crates/uvicorn-rs/src/http3/` | `http3` gates the QUIC dependency and server implementation. The PyO3 crate passes a native endpoint and an ASGI service to `uvicorn_rs::serve_http3`. |
+| WebSocket frame parsing, upgrade I/O, session lifetime and close/drain | `crates/uvicorn-rs/src/websocket.rs` | The adapter translates between native WebSocket messages and ASGI events; it does not parse or serialize frames. |
+| Python imports/API, event-loop scheduling, context propagation, ASGI scope/events, lifespan and Python error transfer | root `src/lib.rs` | This is the language boundary. It also resolves Python-facing settings and constructs the native services. |
+| Older HTTP/1/HTTP/2 driver and the older HTTP/3 service | root `src/lib.rs` | `build.rs` sets `uvicorn_rs_native_transport` for normal builds, so the HTTP/1/HTTP/2 fallback is excluded. The older HTTP/3 service is retained only for coverage fault contracts and is selected only by the coverage harness. It is not a normal runtime alternative. |
+
+This is a source ownership map, not closure evidence. The current hosted run's
+native composition job checks the Python-free dependency graph, while the full
+ASGI/native lifecycle matrix remains the required behavioral evidence. If the
+coverage-only HTTP/3 path is removed, move its fault-contract coverage to the
+native driver in the same reviewed change.
+
 **Close with:** A file/API ownership map with no unintended duplicate transport,
 passing affected ASGI/native lifecycle cases, and no Python/PyO3 dependency in
 the native server graph. Preserve the original streaming, cancellation and
