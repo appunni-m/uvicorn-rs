@@ -40,8 +40,21 @@ belong to the release tasks rather than being copied into every prerequisite.
 1. Consume the latest existing CI run for the current PR head; do not restart it
    or push while one of its required jobs is active. Preserve the PR branch head
    and synthetic merge SHA separately. When the run finishes, use its observed
-   outcomes to choose only the failing gates for the next batch. The last completed
-   #459 coverage report missed 178 regions and 85 lines.
+   outcomes to choose only the failing gates for the next batch. CI
+   [#461](https://github.com/appunni-m/uvicorn-rs/actions/runs/40733997486)
+   checks PR head `05919965f09d6b94bc322c4538740b38f0ee9305` against main at
+   `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
+   framework composition, release-evidence handoff, and 714/714 installed-wheel
+   public parity passed. Its three-repeat coverage/fault-contract job is still
+   active. The platform package jobs failed before packaging on macOS and
+   Windows because `setup-python` could not fetch CPython 3.12.13; Linux failed
+   the extracted Cargo consumer because offline resolution lacked `h2 v0.4.20`.
+   Local commit `2110b6138` switches those jobs to managed Python and online
+   locked archive resolution, and fixes strict docs navigation. Commit
+   `f70d39671` adds the native transport source map. These two commits are
+   unpushed and have no hosted validation yet. Do not cancel #461 to validate
+   them; push once the active required job completes. The last completed #459
+   coverage report missed 178 regions and 85 lines.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions
