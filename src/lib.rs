@@ -4600,22 +4600,30 @@ impl LifespanRuntime {
             return Ok(());
         };
         let app_task = app_task.as_mut();
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::LifespanShutdownTaskJoinError) {
+            // Abort before sending shutdown so the app cannot finish normally
+            // between the injected abort and the task-join observation.
+            app_task.abort();
+            let result = app_task.await;
+            self.app_task.take();
+            return match result {
+                Ok(Ok(_)) => Err(PyRuntimeError::new_err(
+                    "ASGI app returned before lifespan.shutdown.complete",
+                )),
+                Ok(Err(error)) => Err(error),
+                Err(error) => Err(PyRuntimeError::new_err(format!(
+                    "ASGI lifespan task failed: {error}"
+                ))),
+            };
+        }
         requests
             .send(LifespanMessage::Shutdown)
             .await
             .map_err(|_| PyRuntimeError::new_err("could not send ASGI lifespan shutdown"))?;
-        #[cfg(coverage)]
-        let task_join_error =
-            coverage_fault_take(CoverageFaultPoint::LifespanShutdownTaskJoinError);
-        #[cfg(not(coverage))]
-        let task_join_error = false;
-        #[cfg(coverage)]
-        if task_join_error {
-            app_task.abort();
-        }
         tokio::select! {
             biased;
-            event = events.recv(), if !task_join_error => match event {
+            event = events.recv() => match event {
                 Some(LifespanEvent::ShutdownComplete) => {
                     #[cfg(coverage)]
                     if coverage_fault_take(CoverageFaultPoint::LifespanShutdownTaskJoinAfterComplete) {

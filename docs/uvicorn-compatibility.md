@@ -11,7 +11,7 @@ install `uvicorn-rs` and upstream `uvicorn` in the same environment. The
 replacement and rollback steps below apply only after a compatible version is
 published.
 
-## Current status (2026-10-28)
+## Current status (2026-10-29)
 
 PR #19 remains a draft. CI
 [#461](https://github.com/appunni-m/uvicorn-rs/actions/runs/40733997486)
@@ -20,11 +20,16 @@ checked synthetic merge `53ba48e0853e072daef2222207fac87405eec8e2` for PR head
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The 714-case `input@43` public
 matrix passed on Linux x86-64, along with release handoff, native framework
 composition, exact Rust minimum, and Rust formatting/lint/feature/docs jobs.
-The unified three-repeat coverage/fault-contract job is still running. The
-macOS and Windows package jobs could not provision CPython 3.12.13, and Linux's
-extracted-crate consumer lacked cached `h2 v0.4.20` in offline mode. Later local
-commits address those packaging and docs issues; CI #461 does not validate
-them. The complete OS/Python compatibility matrix has not passed.
+The unified run attributed all 1,323 indexed cases but missed its 100% coverage
+gate at 13,837/14,009 regions and 10,204/10,288 lines. One repeated
+instrumented run failed the startup-cancellation shutdown-join fault contract.
+A focused local case passes after the coverage-only injection was changed to
+abort before sending shutdown, but the full repeated suite remains unverified.
+The macOS and Windows package jobs could not provision CPython 3.12.13; Linux's
+extracted-crate consumer failed because offline Cargo resolution lacked
+`h2 v0.4.20`. Later local commits address those packaging and docs issues; CI
+#461 does not validate them. The complete OS/Python compatibility matrix has
+not passed.
 
 The package metadata declares Python `>=3.9`, and CI checks installed-wheel
 import on Python 3.9. That check does not establish Uvicorn 0.54.0 parity:

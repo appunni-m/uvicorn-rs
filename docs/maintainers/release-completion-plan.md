@@ -45,16 +45,25 @@ belong to the release tasks rather than being copied into every prerequisite.
    checks PR head `05919965f09d6b94bc322c4538740b38f0ee9305` against main at
    `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
    framework composition, release-evidence handoff, and 714/714 installed-wheel
-   public parity passed. Its three-repeat coverage/fault-contract job is still
-   active. The platform package jobs failed before packaging on macOS and
-   Windows because `setup-python` could not fetch CPython 3.12.13; Linux failed
-   the extracted Cargo consumer because offline resolution lacked `h2 v0.4.20`.
-   Local commit `2110b6138` switches those jobs to managed Python and online
-   locked archive resolution, and fixes strict docs navigation. Commit
-   `f70d39671` adds the native transport source map. These two commits are
-   unpushed and have no hosted validation yet. Do not cancel #461 to validate
-   them; push once the active required job completes. The last completed #459
-   coverage report missed 178 regions and 85 lines.
+   public parity passed. The unified run completed all 1,323 indexed cases but
+   failed the 100% coverage gate at 13,837/14,009 regions and 10,204/10,288
+   lines. One repeated instrumented run failed the
+   `python-api.cancel-startup-shutdown-task-join-error` fault contract. A
+   focused local reproduction passed before the change; the coverage-only
+   injection now aborts before sending lifespan shutdown to remove the race,
+   and that one focused case passes after the change. Full coverage is still
+   unverified. The platform package jobs failed before packaging on macOS and
+   Windows because `setup-python` could not fetch CPython 3.12.13; Linux built
+   the wheel and source consumer, then failed evidence recording because
+   offline Cargo resolution lacked `h2 v0.4.20`. Local commit `2110b6138`
+   switches those jobs to managed Python and online locked archive resolution,
+   and fixes strict docs navigation. Commit `f70d39671` adds the native
+   transport source map. These local changes need hosted validation. The last
+   completed #459 coverage report missed 178 regions and 85 lines. Run #461 is
+   complete, so no active job needs to be canceled. Push this source and docs
+   batch after its focused case and strict docs build pass; then consume one
+   hosted full run for coverage, packaging, platform parity, and the updated
+   documentation. Do not repeat unrelated local matrices.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions

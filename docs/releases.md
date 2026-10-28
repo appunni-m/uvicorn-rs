@@ -15,7 +15,7 @@ Use these state labels precisely:
 - **Released:** the authorized distribution decision and required verification
   are complete.
 
-## Current release gates (2026-10-28)
+## Current release gates (2026-10-29)
 
 The release set is one Python-free **uvicorn-rs** server crate with HTTP/3
 behind its optional **http3** feature, the separate
@@ -25,19 +25,22 @@ implemented by the optional **uvicorn-rs-py** adapter. The publisher is
 candidates. The PyPI trusted publisher tuple is
 **appunni-m/uvicorn-rs / release.yml / pypi**.
 
-PR #19 remains a draft. CI #457 checked source commit
-**4f7a29635d7b14151be02b409515f0cf290f7b5c**, based on main
+PR #19 remains a draft. CI #461 checked PR head
+**05919965f09d6b94bc322c4538740b38f0ee9305**, based on main
 **86e72e181d00feca1b4db7f30377d5d9d4345b83**; its receipts do not cover later
-commits. CI #457
-[#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253) has
-passed the release-handoff, native framework composition, exact Rust minimum,
-and Rust format/lint/feature/docs jobs. Its installed-wheel public parity job
-passed 707/707 on Linux x86-64, while the unified three-repeat coverage job
-remains in progress. The parity artifact is
-[`uvicorn-rs-public-parity` (ID `12809014899`)](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253/artifacts/12809014899).
-Documentation deploy
-[#174](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760286)
-passed.
+commits. CI #461
+[#461](https://github.com/appunni-m/uvicorn-rs/actions/runs/40733997486) has
+passed release handoff, native framework composition, exact Rust minimum,
+Rust format/lint/feature/docs, and 714/714 installed-wheel public parity on
+Linux x86-64. The unified run attributed all 1,323 indexed cases but missed
+the 100% coverage threshold (13,837/14,009 regions; 10,204/10,288 lines) and
+one repeated instrumented case failed the startup-cancellation shutdown-join
+fault contract. Its focused local fix passes, but requires another complete
+hosted run. macOS/Windows package setup failed to provision CPython 3.12.13;
+Linux built the wheel and source consumer but failed evidence recording because
+offline Cargo resolution lacked `h2 v0.4.20`. Local fixes for those package
+failures are not yet CI-proven. The earlier docs deployment passed, but current
+docs edits have not yet been deployed.
 
 The preceding CI [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
 passed **707/707** public parity cases on Linux x86-64 for commit

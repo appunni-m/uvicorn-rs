@@ -2,29 +2,26 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current source status (2026-10-28)
+## Current source status (2026-10-29)
 
-PR #19 remains a draft. CI #457 checked source commit
-`4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
+PR #19 remains a draft. CI #461 checked PR head
+`05919965f09d6b94bc322c4538740b38f0ee9305`, based on `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`; its receipts do not cover later
-commits. The committed `input@43` inventory contains 707 public cases. In CI
-[#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253), the
-installed normal wheel passed **707/707** public cases on Linux x86-64, with
-zero failed or infrastructure-failed cases. Its exact-run artifact is
-[`uvicorn-rs-public-parity` (ID `12809014899`)](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253/artifacts/12809014899),
-archive SHA-256
-`6205e39d9e650f63ba6ff498d1fcc05a8f57d03dd5110d6174bacbdf4ca8adac`. The
-unified three-repeat job is still running, so no current coverage result is
-available. The release-handoff, native composition, exact Rust minimum, and
-Rust format/lint/feature/docs jobs have passed for source commit `4f7a296`.
+commits. The `input@43` inventory has 714 public cases; the installed normal
+wheel passed **714/714** on Linux x86-64. The unified run attributed all 1,323
+indexed cases but failed the 100% coverage gate at **13,837/14,009 regions**
+and **10,204/10,288 lines**. One repeated instrumented run failed the
+`python-api.cancel-startup-shutdown-task-join-error` fault contract. A focused
+local case passes after the coverage-only injection was changed to abort before
+sending shutdown; the full three-repeat gate remains unverified. Release
+handoff, native composition, exact Rust minimum, and Rust format/lint/feature/
+docs checks passed. See [CI #461](https://github.com/appunni-m/uvicorn-rs/actions/runs/40733997486).
 
 This hosted result is the current Linux x86-64 parity checkpoint only. It does
 not establish the declared macOS/Windows and Python-version matrix or full
-Uvicorn compatibility. CI #456, which passed the same 707 cases on the
-preceding source commit `1c5a9a7fca45e6e4e985cf775ef844bc1fd37e83`, is
-historical. Coverage, independent Coverage-MCP acceptance, and the remaining
-platform/Python matrix remain open. Benchmarks remain behind compatibility
-acceptance.
+Uvicorn compatibility. CI #456 and earlier parity runs are historical.
+Coverage, independent Coverage-MCP acceptance, and the remaining platform/
+Python matrix remain open. Benchmarks remain behind compatibility acceptance.
 
 The earlier 702-case local macOS ARM64 run and the selected WebSocket, HTTP/2
 Early Hints, and trailer cases are diagnostic evidence from older source
@@ -109,10 +106,10 @@ source SHA-256
 coverage job completed incompletely at 1,299/1,307 attributed cases,
 13,777/13,959 regions, and 10,154/10,252 lines. This historical run does not
 meet the 100% gate. These older runs are superseded by the current source
-status at the top of this page. CI #457 is running for the current head; no
-complete current-source 100% result or accepted Coverage-MCP receipt is
-available yet. Benchmarks remain paused until the broader parity work is
-complete.
+status at the top of this page. CI #461 completed with coverage below the
+100% threshold, and the subsequent focused fix has not yet had a hosted full
+run. No accepted Coverage-MCP receipt is available. Benchmarks remain paused
+until the broader parity work is complete.
 
 The 700-case `input@43` snapshot includes
 `python-api.run-serves-request-and-shuts-down-on-sigterm`, which compares a

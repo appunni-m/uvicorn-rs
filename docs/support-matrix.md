@@ -12,7 +12,7 @@ The Cargo release targets are `asgi-lifespan-protocol-rs` and one server crate,
 candidate artifacts and downstream consumer checks remain open; see
 [release status](releases.md).
 
-## Current verification status (2026-10-28)
+## Current verification status (2026-10-29)
 
 PR #19 remains a draft. CI
 [#461](https://github.com/appunni-m/uvicorn-rs/actions/runs/40733997486)
@@ -21,15 +21,20 @@ checked synthetic merge `53ba48e0853e072daef2222207fac87405eec8e2` for PR head
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. It passed release handoff, native
 framework composition, exact Rust minimum, Rust formatting/lint/feature/docs,
 and the installed-wheel public matrix (714/714 on Linux x86-64). Its unified
-three-repeat coverage/fault-contract job is still running. The macOS and
+unified run attributed all 1,323 indexed cases but failed the 100% coverage
+gate at 13,837/14,009 regions and 10,204/10,288 lines. One repeated
+instrumented run failed the startup-cancellation shutdown-join fault contract.
+A focused local case passes after the coverage-only injection was made
+deterministic, but the full three-repeat gate remains unverified. The macOS and
 Windows package jobs could not find CPython 3.12.13 through `setup-python`;
-the Linux package job failed its extracted-crate consumer because offline
-Cargo resolution lacked `h2 v0.4.20`. Subsequent local commits fix the Python
-provisioning, locked archive resolution, and strict docs navigation; CI #461
-does not include or validate those changes. The broader OS/Python compatibility
-matrix, 100% coverage, Coverage-MCP acceptance, and complete compatibility
-remain open. Candidate acceptance still needs exact-source artifacts and
-consumer checks, plus parity-first benchmarks. See the
+the Linux package job built the wheel and source consumer but failed evidence
+recording because offline Cargo resolution lacked `h2 v0.4.20`. Subsequent
+local commits fix the Python provisioning, locked archive resolution, and
+strict docs navigation; CI #461 does not validate those changes. The broader
+OS/Python compatibility matrix, 100% coverage, Coverage-MCP acceptance, and
+complete compatibility remain open. Candidate acceptance still needs
+exact-source artifacts and consumer checks, plus parity-first benchmarks. See
+the
 [full parity history](parity.md).
 
 The current public parity checkpoint is CI #461: 714/714 `input@43` cases
@@ -99,8 +104,10 @@ directory watching remains covered separately. See the
 
 Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
 drop-in replacement today. CI #461 passed 714/714 public cases on its Linux
-x86-64 wheel, but its full coverage job is still running and its package jobs
-failed as described above. No accepted Coverage-MCP receipt is available.
+x86-64 wheel, but its full coverage job missed the coverage threshold and its
+package jobs failed as described above. The coverage-only fault fix has passed
+only its selected case; the full hosted gate and accepted Coverage-MCP receipt
+remain outstanding.
 Windows parity, other declared Python versions, and full Uvicorn CLI, Python
 API, process, and cross-platform acceptance remain open. See the
 [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
