@@ -37,9 +37,11 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-1. Consume the existing CI #460 result for head `53d0bf27`; do not restart it.
-   It was live during this planning audit. Its outcome must be checked again
-   before using it. The last completed #459 report missed 178 regions and 85 lines.
+1. Consume the latest existing CI run for the current PR head; do not restart it
+   or push while one of its required jobs is active. Preserve the PR branch head
+   and synthetic merge SHA separately. When the run finishes, use its observed
+   outcomes to choose only the failing gates for the next batch. The last completed
+   #459 coverage report missed 178 regions and 85 lines.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions

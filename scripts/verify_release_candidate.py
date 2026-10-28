@@ -203,9 +203,9 @@ def verify(root: Path, version: str, commit: str, evidence: Path) -> dict:
                     for package in native_crates
                 },
                 "commands": [
-                    "cargo check --offline --locked --manifest-path <asgi-lifespan-protocol-rs>/Cargo.toml",
-                    "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
-                    "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --features http3 --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
+                    "cargo check --locked --manifest-path <asgi-lifespan-protocol-rs>/Cargo.toml",
+                    "cargo check --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
+                    "cargo check --locked --manifest-path <uvicorn-rs>/Cargo.toml --features http3 --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
                 ],
             }
             if build.get("native_crate_consumer_check") != expected_consumer_check:

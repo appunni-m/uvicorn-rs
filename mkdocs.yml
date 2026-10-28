@@ -86,6 +86,8 @@ nav:
           - Performance investigation: performance-investigation-2026-10-05.md
       - Release and project health:
           - Release process: releases.md
+          - Release completion plan: maintainers/release-completion-plan.md
+          - FastAPI application evaluation: fastapi-evaluation.md
           - Implementation review: implementation-review.md
           - Coverage: coverage.md
           - Coverage plan: coverage-plan.md

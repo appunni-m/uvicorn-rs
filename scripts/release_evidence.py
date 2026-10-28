@@ -733,9 +733,9 @@ def verify_rust_crate_archives(
                 environment[name] = ""
         lifecycle_patch = f'patch.crates-io.asgi-lifespan-protocol-rs.path="{extracted["asgi-lifespan-protocol-rs"].as_posix()}"'
         commands = (
-            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["asgi-lifespan-protocol-rs"] / "Cargo.toml")],
-            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"), "--config", lifecycle_patch],
-            ["cargo", "check", "--offline", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"), "--features", "http3", "--config", lifecycle_patch],
+            ["cargo", "check", "--locked", "--manifest-path", str(extracted["asgi-lifespan-protocol-rs"] / "Cargo.toml")],
+            ["cargo", "check", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"), "--config", lifecycle_patch],
+            ["cargo", "check", "--locked", "--manifest-path", str(extracted["uvicorn-rs"] / "Cargo.toml"), "--features", "http3", "--config", lifecycle_patch],
         )
         for command in commands:
             result = subprocess.run(
@@ -761,9 +761,9 @@ def verify_rust_crate_archives(
             value["filename"]: value["sha256"] for value in inspected.values()
         },
         "commands": [
-            "cargo check --offline --locked --manifest-path <asgi-lifespan-protocol-rs>/Cargo.toml",
-            "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
-            "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --features http3 --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
+            "cargo check --locked --manifest-path <asgi-lifespan-protocol-rs>/Cargo.toml",
+            "cargo check --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
+            "cargo check --locked --manifest-path <uvicorn-rs>/Cargo.toml --features http3 --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
         ],
     }
 
