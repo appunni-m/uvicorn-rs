@@ -30,10 +30,16 @@ parity 702/702 on Linux x86-64 in
 The parity artifact is **uvicorn-rs-public-parity** (ID **12797838313**, archive
 SHA-256 **d45b12a0b61fe1fcad80ee978e300ac67fc372da2d3c53816ed4be6d70855192**).
 The Rust lint job failed on a redundant local binding. Local HEAD
-**4b286e33e28e8051f23b589ecb8620bc92592995** removes it and is one commit
-ahead of the remote branch. The unified three-repeat coverage job is still
-running on the older source. Neither commit has a completed 100% report, and
-no accepted exact-source Coverage-MCP receipt exists. Documentation CI
+**a6450f12337c67ded3f73f637865e4df27a57ff9** removes it and is three commits
+ahead of the remote branch; the targeted strict Clippy command passes locally.
+The same 702-case matrix passed 702/702 against a locally built installed
+wheel from this clean source on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust
+1.98.1. Its local report passed offline exact-source validation with
+`--require-clean`; report SHA-256 is
+**ccb8b8efef451fad1f81105594eb5ef401b14b78607ccc2c42ba3216459e6b6e**. This is
+local evidence, not hosted CI. The unified three-repeat coverage job remains
+running on the older source, so no complete current-source 100% report or
+accepted exact-source Coverage-MCP receipt exists. Documentation CI
 [#171](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222857)
 passed on remote head **642a6bb** before these documentation edits.
 

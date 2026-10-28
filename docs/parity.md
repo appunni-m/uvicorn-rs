@@ -14,12 +14,27 @@ infrastructure-failed, or unrun cases. Artifact `uvicorn-rs-public-parity`
 
 This receipt covers the Linux installed-wheel input matrix for PR head
 `642a6bb`; it does not prove full drop-in compatibility across platforms.
-Local HEAD `4b286e33e28e8051f23b589ecb8620bc92592995` is one lint-only commit
-ahead and is not covered by CI #454. As of 2026-10-28, that run's coverage
-job is still active and its Rust lint job failed on the redundant binding
-that was removed locally. No complete coverage result or accepted
-Coverage-MCP receipt is available yet. Benchmarks follow full compatibility
-acceptance.
+The current local HEAD `a6450f12337c67ded3f73f637865e4df27a57ff9` is three
+commits ahead of the remote PR branch and is not covered by CI #454. Its
+redundant-binding lint fix passes the targeted strict Clippy command locally.
+CI #454's coverage job is still active on the older source; its Rust lint job
+failed on that binding. No complete current-source coverage result or accepted
+Coverage-MCP receipt is available yet.
+
+The same 702-case `input@43` matrix passed **702/702** against a locally built,
+installed ABI3 wheel from clean source revision
+`a6450f12337c67ded3f73f637865e4df27a57ff9` on macOS 15.7.7 ARM64 / CPython
+3.12.13 / Rust 1.98.1. The run reported zero failed, infrastructure-failed,
+or unrun cases. Local run ID `5a8eb7b0da5c4fefbca3ecb17efa235c`; report
+`target/parity-macos-arm64/public-parity.json`, SHA-256
+`ccb8b8efef451fad1f81105594eb5ef401b14b78607ccc2c42ba3216459e6b6e`; wheel
+SHA-256 `050528f816ece77562123af340f5f28db5fb968e5b07efff672c7b50dfa1a64d`.
+Offline evidence validation with `--require-clean` passed and confirmed
+`dirty=false`, the exact commit, and native extension SHA-256
+`0616db9684014a354a047cd4f63eda3ef7e075f7c86c387af9eba1bdbaee89ee`. This
+is local macOS platform evidence, not a hosted CI receipt or release artifact.
+The two platform results cover distinct installation modes; benchmarks follow
+full compatibility acceptance.
 
 ## Historical 695-, 699-, and 700-case parity snapshots — 2026-10-28
 

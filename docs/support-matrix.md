@@ -23,20 +23,31 @@ SHA-256 `d45b12a0b61fe1fcad80ee978e300ac67fc372da2d3c53816ed4be6d70855192`);
 the job log records zero failed, infrastructure-failed, or unrun cases.
 
 The remote PR head is still `642a6bb`. Local HEAD
-`4b286e33e28e8051f23b589ecb8620bc92592995` is one lint-only commit ahead.
-That local commit removes the redundant binding reported by the Rust lint job
-in CI #454, so the hosted run does not validate the exact current local source.
-As of 2026-10-28, the run's exact-source three-repeat coverage job remains in
-progress. No complete 100% report or accepted Coverage-MCP receipt is
-available. CI #453's 700-case parity result and earlier 695-case Linux/macOS
-results are historical snapshots, not evidence for the current 702-case
-inventory.
+`a6450f12337c67ded3f73f637865e4df27a57ff9` is three commits ahead and is not
+yet hosted-validated. It includes the redundant-binding fix reported by the
+Rust lint job in CI #454; the targeted strict Clippy command passes locally.
+CI #454's three-repeat coverage job is still running on the older source. No
+complete current-source 100% report or accepted Coverage-MCP receipt is
+available. CI #453's 700-case parity result and earlier 695-case results are
+historical snapshots, not evidence for the current 702-case inventory.
 
-The installed-wheel result covers Linux x86-64 only; it does not establish
-full Uvicorn compatibility or parity on other supported platforms and Python
-versions. The current candidate still needs full compatibility acceptance,
-reviewed coverage, the complete benchmark evidence, and clean candidate
-consumers. Benchmarks remain paused until the full compatibility gates pass.
+The current 702-case inventory also passed **702/702** against a locally built
+installed ABI3 wheel from clean commit
+`a6450f12337c67ded3f73f637865e4df27a57ff9` on macOS 15.7.7 ARM64 / CPython
+3.12.13 / Rust 1.98.1. Report `target/parity-macos-arm64/public-parity.json`
+(local run `5a8eb7b0da5c4fefbca3ecb17efa235c`, SHA-256
+`ccb8b8efef451fad1f81105594eb5ef401b14b78607ccc2c42ba3216459e6b6e`); the
+exact-source offline evidence check passed with `--require-clean`. This is
+local platform evidence; the hosted Linux receipt remains on the preceding
+source commit and the macOS report is not a hosted release receipt.
+
+The hosted installed-wheel result covers Linux x86-64; current-source local
+installed-wheel evidence covers macOS ARM64 on CPython 3.12.13. Neither
+establishes full Uvicorn compatibility across the declared platform/Python
+matrix. The current candidate still needs hosted checks on the exact source,
+full compatibility acceptance, reviewed coverage, complete benchmark
+evidence, and clean candidate consumers. Benchmarks remain paused until the
+full compatibility gates pass.
 See the [full parity history](parity.md).
 
 Current input@43 has a focused 6/6 macOS
