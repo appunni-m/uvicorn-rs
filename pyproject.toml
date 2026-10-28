@@ -53,6 +53,7 @@ uvicorn = "uvicorn.main:main"
 
 [dependency-groups]
 benchmark = [
+    "cryptography>=42",
     "httptools==0.8.0; python_version >= '3.10'",
     "hypercorn[h3]==0.18.0 ; python_full_version >= '3.10'",
     "psutil==7.2.2; python_version >= '3.10'",

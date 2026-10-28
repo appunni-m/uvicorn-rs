@@ -10,6 +10,7 @@ import errno
 import hashlib
 import http.client
 import importlib
+import ipaddress
 import io
 import json
 import logging
@@ -30,10 +31,14 @@ import time
 import uuid
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 import psutil
 from h2.config import H2Configuration
 from h2.connection import H2Connection
@@ -5502,104 +5507,167 @@ def make_certificate(directory: Path) -> tuple[Path, Path, Path]:
     certificate = directory / "server-chain.pem"
     key = directory / "server-key.pem"
     ca_certificate = directory / "parity-ca.pem"
-    ca_key = directory / "parity-ca-key.pem"
-    csr = directory / "server.csr"
-    extensions = directory / "server-extensions.cnf"
-    extensions.write_text(
-        "[server]\n"
-        "basicConstraints=critical,CA:FALSE\n"
-        "keyUsage=critical,digitalSignature,keyEncipherment\n"
-        "extendedKeyUsage=serverAuth\n"
-        "subjectAltName=DNS:localhost,IP:127.0.0.1\n"
-        "subjectKeyIdentifier=hash\n"
-        "authorityKeyIdentifier=keyid,issuer\n",
-        encoding="utf-8",
+    ca_key_path = directory / "parity-ca-key.pem"
+    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ca_name = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, "uvicorn-rs parity test CA")]
     )
-    subprocess.run(
-        [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
-            "-keyout", str(ca_key), "-out", str(ca_certificate),
-            "-subj", "/CN=uvicorn-rs parity test CA",
-            "-addext", "basicConstraints=critical,CA:TRUE",
-            "-addext", "keyUsage=critical,keyCertSign,cRLSign",
-            "-addext", "subjectKeyIdentifier=hash",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-        timeout=30,
+    server_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
+    not_before = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+    not_after = not_before + timedelta(days=2)
+    ca = (
+        x509.CertificateBuilder()
+        .subject_name(ca_name)
+        .issuer_name(ca_name)
+        .public_key(ca_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=False,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=None,
+                decipher_only=None,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False
+        )
+        .sign(ca_key, hashes.SHA256())
     )
-    subprocess.run(
-        [
-            "openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
-            "-keyout", str(key), "-out", str(csr), "-subj", "/CN=localhost",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-        timeout=30,
+    server = (
+        x509.CertificateBuilder()
+        .subject_name(server_name)
+        .issuer_name(ca_name)
+        .public_key(server_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=True,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=None,
+                decipher_only=None,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
+        )
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                ]
+            ),
+            critical=False,
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(server_key.public_key()),
+            critical=False,
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+            critical=False,
+        )
+        .sign(ca_key, hashes.SHA256())
     )
-    subprocess.run(
-        [
-            "openssl", "x509", "-req", "-in", str(csr), "-CA", str(ca_certificate),
-            "-CAkey", str(ca_key), "-CAcreateserial", "-out", str(leaf_certificate),
-            "-days", "2", "-sha256", "-extfile", str(extensions), "-extensions", "server",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-        timeout=30,
+    ca_pem = ca.public_bytes(serialization.Encoding.PEM)
+    leaf_pem = server.public_bytes(serialization.Encoding.PEM)
+    ca_key_path.write_bytes(
+        ca_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
     )
-    certificate.write_bytes(leaf_certificate.read_bytes() + ca_certificate.read_bytes())
+    key.write_bytes(
+        server_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    ca_certificate.write_bytes(ca_pem)
+    leaf_certificate.write_bytes(leaf_pem)
+    certificate.write_bytes(leaf_pem + ca_pem)
     return certificate, key, ca_certificate
 
 
 def make_client_certificate(directory: Path) -> tuple[Path, Path]:
     """Create a short-lived client identity signed by the parity TLS CA."""
     ca_certificate = directory / "parity-ca.pem"
-    ca_key = directory / "parity-ca-key.pem"
-    ca_serial = directory / "parity-ca.srl"
+    ca_key_path = directory / "parity-ca-key.pem"
     client_certificate = directory / "client-leaf.pem"
     client_key = directory / "client-key.pem"
-    client_csr = directory / "client.csr"
-    extensions = directory / "client-extensions.cnf"
-    extensions.write_text(
-        "[client]\n"
-        "basicConstraints=critical,CA:FALSE\n"
-        "keyUsage=critical,digitalSignature\n"
-        "extendedKeyUsage=clientAuth\n"
-        "subjectKeyIdentifier=hash\n"
-        "authorityKeyIdentifier=keyid,issuer\n",
-        encoding="utf-8",
+    ca = x509.load_pem_x509_certificate(ca_certificate.read_bytes())
+    ca_key = serialization.load_pem_private_key(ca_key_path.read_bytes(), password=None)
+    client_signing_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    client_name = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, "uvicorn-rs parity client")]
     )
-    subprocess.run(
-        [
-            "openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
-            "-keyout", str(client_key), "-out", str(client_csr),
-            "-subj", "/CN=uvicorn-rs parity client",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-        timeout=30,
+    not_before = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+    not_after = not_before + timedelta(days=2)
+    client = (
+        x509.CertificateBuilder()
+        .subject_name(client_name)
+        .issuer_name(ca.subject)
+        .public_key(client_signing_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=None,
+                decipher_only=None,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(client_signing_key.public_key()),
+            critical=False,
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+            critical=False,
+        )
+        .sign(ca_key, hashes.SHA256())
     )
-    subprocess.run(
-        [
-            "openssl", "x509", "-req", "-in", str(client_csr),
-            "-CA", str(ca_certificate), "-CAkey", str(ca_key),
-            "-CAserial", str(ca_serial), "-out", str(client_certificate),
-            "-days", "2", "-sha256", "-extfile", str(extensions),
-            "-extensions", "client",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-        timeout=30,
+    client_certificate.write_bytes(client.public_bytes(serialization.Encoding.PEM))
+    client_key.write_bytes(
+        client_signing_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
     )
     return client_certificate, client_key
 
