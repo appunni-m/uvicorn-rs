@@ -48,7 +48,12 @@ CRATE_DIRS = {
 }
 CRATE_EXCLUDES = {
     "asgi-lifespan-protocol-rs": set(),
-    "uvicorn-rs": {"examples/native_core_contracts.rs"},
+    # Cargo packages a path-patched dependency by its registry identity; it
+    # does not embed the workspace's local Hyper source directory.
+    "uvicorn-rs": {
+        "examples/native_core_contracts.rs",
+        "third-party/hyper/**",
+    },
 }
 CRATE_LICENSE_EXPRESSIONS = {
     "asgi-lifespan-protocol-rs": LICENSE_EXPRESSION,
