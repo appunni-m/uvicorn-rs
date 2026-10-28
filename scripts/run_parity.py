@@ -37,7 +37,14 @@ from urllib.parse import parse_qs, urlsplit
 import psutil
 from h2.config import H2Configuration
 from h2.connection import H2Connection
-from h2.events import DataReceived, ResponseReceived, StreamEnded, StreamReset
+from h2.events import (
+    DataReceived,
+    InformationalResponseReceived,
+    ResponseReceived,
+    StreamEnded,
+    StreamReset,
+    TrailersReceived,
+)
 from h2.errors import ErrorCodes
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidStatus
 from websockets.sync.client import connect as websocket_connect
@@ -907,6 +914,7 @@ def load_contract(
         raise ParityError("duplicate profile ID")
     observation_fields = {
         "status", "content_type", "body_bytes", "ordered_body_bytes", "early_body_bytes",
+        "early_hints", "early_hint_before_final_start", "response_trailers",
         "message_received",
         "ordered_response_headers", "response_header_values_by_name",
         "server_header_values", "date_header_present",
@@ -7331,7 +7339,13 @@ def close_http2_connection(
         return None
 
 
-def http2_request(port: int, request: dict[str, Any]) -> dict[str, Any]:
+def http2_request(
+    port: int,
+    request: dict[str, Any],
+    *,
+    observe_response_extensions: bool = False,
+    events_path: Path | None = None,
+) -> dict[str, Any]:
     body = base64.b64decode(request["body_base64"], validate=True)
     context = ssl._create_unverified_context()
     context.set_alpn_protocols(["h2"])
@@ -7361,38 +7375,76 @@ def http2_request(port: int, request: dict[str, Any]) -> dict[str, Any]:
     status = 0
     response_headers: list[tuple[str, str]] = []
     response_body = bytearray()
+    early_hints: list[dict[str, Any]] = []
+    early_hint_before_final_start = False
+    response_trailers: list[list[str]] = []
+    events_before = len(read_events(events_path)) if events_path is not None else 0
+
+    def observation() -> dict[str, Any]:
+        result = response_observation(status, response_headers, bytes(response_body))
+        if observe_response_extensions:
+            result.update({
+                "early_hints": early_hints,
+                "early_hint_before_final_start": early_hint_before_final_start,
+                "response_trailers": response_trailers,
+            })
+        return result
+
     try:
         while True:
             try:
                 received = tls_socket.recv(65536)
             except TimeoutError:
-                observation = response_observation(status, response_headers, bytes(response_body))
-                observation["connection_closed"] = True
-                return observation
+                result = observation()
+                result["connection_closed"] = True
+                return result
             if not received:
-                observation = response_observation(status, response_headers, bytes(response_body))
-                observation["connection_closed"] = True
-                return observation
+                result = observation()
+                result["connection_closed"] = True
+                return result
             events = connection.receive_data(received)
             for event in events:
-                if isinstance(event, ResponseReceived) and event.stream_id == stream_id:
+                if isinstance(event, InformationalResponseReceived) and event.stream_id == stream_id:
+                    informational_status = 0
+                    informational_headers = []
+                    for name, value in event.headers:
+                        if name == ":status":
+                            informational_status = int(value)
+                        else:
+                            informational_headers.append([name.lower(), value])
+                    early_hints.append({
+                        "status": informational_status,
+                        "headers": informational_headers,
+                    })
+                    if events_path is not None and informational_status == 103:
+                        application_events = read_events(events_path)[events_before:]
+                        if (
+                            "http2.early-hint-call" in application_events
+                            and "http2.final-response-start" not in application_events
+                        ):
+                            early_hint_before_final_start = True
+                elif isinstance(event, ResponseReceived) and event.stream_id == stream_id:
                     for name, value in event.headers:
                         if name == ":status":
                             status = int(value)
                         else:
                             response_headers.append((name, value))
+                elif isinstance(event, TrailersReceived) and event.stream_id == stream_id:
+                    response_trailers.extend(
+                        [name.lower(), value] for name, value in event.headers
+                    )
                 elif isinstance(event, DataReceived) and event.stream_id == stream_id:
                     response_body.extend(event.data)
                     connection.acknowledge_received_data(event.flow_controlled_length, stream_id)
                 elif isinstance(event, StreamReset) and event.stream_id == stream_id:
-                    observation = response_observation(status, response_headers, bytes(response_body))
-                    observation["connection_closed"] = True
-                    return observation
+                    result = observation()
+                    result["connection_closed"] = True
+                    return result
                 elif isinstance(event, StreamEnded) and event.stream_id == stream_id:
                     pending = connection.data_to_send()
                     if pending:
                         tls_socket.sendall(pending)
-                    return response_observation(status, response_headers, bytes(response_body))
+                    return observation()
             pending = connection.data_to_send()
             if pending:
                 tls_socket.sendall(pending)
@@ -9441,6 +9493,9 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "negotiated_tls_cipher": "negotiated_tls_cipher",
         "body_bytes": "body_base64",
         "ordered_body_bytes": "body_base64",
+        "early_hints": "early_hints",
+        "early_hint_before_final_start": "early_hint_before_final_start",
+        "response_trailers": "response_trailers",
         "ordered_response_headers": "ordered_response_headers",
         "response_header_values_by_name": "response_header_values_by_name",
         "server_header_values": "server_header_values",
@@ -9965,7 +10020,18 @@ def execute_case(
                     )
             return http1_request(server["port"], case["request"], ssl_context=ssl_context)
         if profile_id == "http2":
-            return http2_request(server["port"], case["request"])
+            response_extension_operation = case["operation"] in {
+                "http2.response-early-hints",
+                "http2.response-trailers",
+            }
+            return http2_request(
+                server["port"],
+                case["request"],
+                observe_response_extensions=response_extension_operation,
+                events_path=server["events"]
+                if case["operation"] == "http2.response-early-hints"
+                else None,
+            )
         if profile_id == "http3":
             if trust_anchor is None or h3_client is None:
                 raise ParityError("HTTP/3 adapter is missing its certificate or client")

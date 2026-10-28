@@ -650,6 +650,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-core",
+ "futures-util",
  "h2",
  "http",
  "http-body",

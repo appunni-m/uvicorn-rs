@@ -28,6 +28,34 @@ status for the historical
 receipt is `awaiting_query`; see the
 [coverage evidence](coverage.md#current-unified-coverage-status-2026-10-18).
 
+### HTTP/2 Early Hints and response trailers (2026-10-28)
+
+The new `http2.response-early-hints` and `http2.response-trailers` inputs
+exercise the ASGI response extensions against Uvicorn 0.54.0 with zttp 0.0.34.
+Both selected cases passed 2/2 on macOS 15.7.7 ARM64 with CPython 3.12.13,
+Rust 1.98.1, and h2 4.4.1. The Early Hints case observes two ordered 103
+responses with their Link fields and confirms they arrive before the app sends
+its final response start. The trailers case observes the two ordered trailer
+fields after the final response body, with the request advertising
+`TE: trailers`.
+
+Run `de85f0e90263456d848aeee412566d51`. Receipt
+`target/kata-progress/http2-response-extensions-20261028-attempt2.json`,
+SHA-256 `da77b7c82fad15873fd5f0418ab84be2eb8f2bdaf87973add1827ab6b5be63a2`.
+It was generated from a dirty draft based on `4bc1276ff8bc035b75f06406aa2960b49cb1ea8b`;
+the result binds source SHA-256
+`6dcdb4230fc337ac249f40c3f05634a8b4b7e12ee2340b2c3050afe64bb799cd`,
+HTTP/2 input SHA-256
+`121e9257f051cb71fdee9491ee461eaa4d04e227e7c398a80886161b429f8eb6`, and
+manifest SHA-256
+`31e9e8cdc8de47860a09ba8603f02b5ca060402323ac405b4916fd08df026307`.
+
+The focused two-case coverage report attributed each selected case, but the
+aggregate remained incomplete because the full matrix and three repeats were
+not run. These new inputs are not part of the older hosted CI #449 snapshot;
+exact-head hosted CI is still required. This evidence does not close the full
+ASGI parity gate or authorize benchmark work.
+
 ### Focused WSGI POST request-body parity (2026-10-28)
 
 The cases python-api.run-serves-wsgi-post-body and

@@ -26,7 +26,7 @@ use std::pin::Pin;
 #[cfg(feature = "runtime-diagnostics")]
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::task::{Context, Poll};
 
 use aes::cipher::{BlockModeDecrypt, KeyIvInit, block_padding::Pkcs7};
@@ -2002,6 +2002,8 @@ impl WebSocketKeepaliveConfig {
 enum AsgiEventType {
     HttpResponseStart,
     HttpResponseBody,
+    HttpResponseEarlyHint,
+    HttpResponseTrailers,
     WebSocketAccept,
     WebSocketClose,
     WebSocketSend,
@@ -2017,6 +2019,8 @@ impl AsgiEventType {
         match self {
             Self::HttpResponseStart => "http.response.start",
             Self::HttpResponseBody => "http.response.body",
+            Self::HttpResponseEarlyHint => "http.response.early_hint",
+            Self::HttpResponseTrailers => "http.response.trailers",
             Self::WebSocketAccept => "websocket.accept",
             Self::WebSocketClose => "websocket.close",
             Self::WebSocketSend => "websocket.send",
@@ -2047,6 +2051,12 @@ fn classify_asgi_event_type(py: Python<'_>, value: Bound<'_, PyAny>) -> PyResult
             value.eq(pyo3::intern!(py, "http.response.body"))
         )? {
             return Ok(AsgiEventType::HttpResponseBody);
+        }
+        if value.eq(pyo3::intern!(py, "http.response.early_hint"))? {
+            return Ok(AsgiEventType::HttpResponseEarlyHint);
+        }
+        if value.eq(pyo3::intern!(py, "http.response.trailers"))? {
+            return Ok(AsgiEventType::HttpResponseTrailers);
         }
         if coverage_value!(
             AsgiEventTypeWebSocketAcceptEq,
@@ -2096,6 +2106,8 @@ fn classify_asgi_event_type(py: Python<'_>, value: Bound<'_, PyAny>) -> PyResult
     Ok(match event_type.as_str() {
         "http.response.start" => AsgiEventType::HttpResponseStart,
         "http.response.body" => AsgiEventType::HttpResponseBody,
+        "http.response.early_hint" => AsgiEventType::HttpResponseEarlyHint,
+        "http.response.trailers" => AsgiEventType::HttpResponseTrailers,
         "websocket.accept" => AsgiEventType::WebSocketAccept,
         "websocket.close" => AsgiEventType::WebSocketClose,
         "websocket.send" => AsgiEventType::WebSocketSend,
@@ -2577,6 +2589,7 @@ struct ResponseStart {
     status: StatusCode,
     headers: HeaderMap,
     header_order: Vec<HeaderName>,
+    trailers: bool,
 }
 
 #[derive(Debug)]
@@ -2704,6 +2717,11 @@ impl StdError for WebSocketHandshakeError {}
 struct BodyChunk {
     body: Bytes,
     more_body: bool,
+}
+
+enum ResponseChunk {
+    Body(BodyChunk),
+    Trailers(HeaderMap),
 }
 
 enum RequestBody {
@@ -3451,9 +3469,14 @@ struct AsgiIo {
     preserve_application_on_disconnect: Arc<AtomicBool>,
     response_start_attempted: Arc<AtomicBool>,
     response_started: Arc<AtomicBool>,
+    response_body_completed: AtomicBool,
+    response_trailers_expected: AtomicBool,
+    response_trailer_headers: StdMutex<HeaderMap>,
+    request_allows_response_trailers: bool,
+    http2_informational: Option<hyper::ext::Http2InformationalSender>,
     default_header_error: Option<InvalidDefaultHeader>,
     start: mpsc::Sender<ResponseStart>,
-    body: mpsc::Sender<BodyChunk>,
+    body: mpsc::Sender<ResponseChunk>,
     diagnostics: RuntimeDiagnostics,
     #[cfg(coverage)]
     receive_calls: AtomicUsize,
@@ -3590,6 +3613,12 @@ impl AsgiIo {
                     coverage_value!(HttpResponseStartStatusExtract, status_value.extract())?;
                 let status = StatusCode::from_u16(status)
                     .map_err(|_| PyRuntimeError::new_err("Invalid HTTP response status code."))?;
+                let trailers = message
+                    .get_item("trailers")?
+                    .map(|value| value.extract::<bool>())
+                    .transpose()?
+                    .unwrap_or(false)
+                    && slf.request_allows_response_trailers;
                 // Uvicorn validates configured headers as part of the
                 // response.start send. Reject a known-invalid default header
                 // before acknowledging the event, so the application cannot
@@ -3634,6 +3663,9 @@ impl AsgiIo {
                         "ASGI app sent response.start more than once",
                     ));
                 }
+                slf.response_body_completed.store(false, Ordering::Release);
+                slf.response_trailers_expected
+                    .store(trailers, Ordering::Release);
                 slf.diagnostics.http_response_start();
                 #[cfg(coverage)]
                 let start_send_result = if coverage_fault_is_armed(
@@ -3643,12 +3675,14 @@ impl AsgiIo {
                         status,
                         headers,
                         header_order,
+                        trailers,
                     }))
                 } else {
                     slf.start.try_send(ResponseStart {
                         status,
                         headers,
                         header_order,
+                        trailers,
                     })
                 };
                 #[cfg(not(coverage))]
@@ -3656,9 +3690,12 @@ impl AsgiIo {
                     status,
                     headers,
                     header_order,
+                    trailers,
                 });
                 if let Err(error) = start_send_result {
                     slf.response_started.store(false, Ordering::Release);
+                    slf.response_trailers_expected
+                        .store(false, Ordering::Release);
                     return Err(PyOSError::new_err(format!(
                         "server response channel closed: {error}"
                     )));
@@ -3694,7 +3731,10 @@ impl AsgiIo {
                     }
                     None => false,
                 };
-                let chunk = BodyChunk { body, more_body };
+                if !more_body {
+                    slf.response_body_completed.store(true, Ordering::Release);
+                }
+                let chunk = ResponseChunk::Body(BodyChunk { body, more_body });
                 slf.diagnostics.http_response_body();
                 #[cfg(coverage)]
                 let body_send_result =
@@ -3720,6 +3760,107 @@ impl AsgiIo {
                                 PyOSError::new_err("server response body channel closed")
                             })?;
                             diagnostics.http_response_body_full_send_wait_finished(wait_started);
+                            Python::attach(|py| Ok(py.None()))
+                        })
+                    }
+                }
+            }
+            AsgiEventType::HttpResponseEarlyHint => {
+                if slf.connection_closed.is_closed()
+                    || slf.request_disconnected.load(Ordering::Acquire)
+                {
+                    return Err(PyOSError::new_err(
+                        "client disconnected before response early hint",
+                    ));
+                }
+                if slf.response_started.load(Ordering::Acquire) {
+                    return Err(PyValueError::new_err(
+                        "ASGI app sent response.early_hint after response.start",
+                    ));
+                }
+                let Some(sender) = slf.http2_informational.clone() else {
+                    return Err(PyValueError::new_err(
+                        "unsupported ASGI HTTP event: http.response.early_hint",
+                    ));
+                };
+                let links = message
+                    .get_item("links")?
+                    .map(|value| value.extract::<Vec<Bytes>>())
+                    .transpose()?
+                    .unwrap_or_default();
+                let mut response = Response::new(());
+                *response.status_mut() = StatusCode::EARLY_HINTS;
+                for link in links {
+                    let value = HeaderValue::from_bytes(&link)
+                        .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header value."))?;
+                    response.headers_mut().append(http::header::LINK, value);
+                }
+                pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                    sender.send(response).await.map_err(|()| {
+                        PyOSError::new_err("HTTP/2 informational response channel closed")
+                    })?;
+                    Python::attach(|py| Ok(py.None()))
+                })
+            }
+            AsgiEventType::HttpResponseTrailers => {
+                if slf.connection_closed.is_closed()
+                    || slf.request_disconnected.load(Ordering::Acquire)
+                {
+                    return Err(PyOSError::new_err(
+                        "client disconnected before response trailers",
+                    ));
+                }
+                if !slf.response_started.load(Ordering::Acquire) {
+                    return Err(PyValueError::new_err(
+                        "ASGI app sent response.trailers before response.start",
+                    ));
+                }
+                if !slf.response_body_completed.load(Ordering::Acquire) {
+                    return Err(PyValueError::new_err(
+                        "ASGI app sent response.trailers before completing the response body",
+                    ));
+                }
+                if !slf.response_trailers_expected.load(Ordering::Acquire) {
+                    return Err(PyValueError::new_err(
+                        "ASGI app sent response.trailers without negotiating trailers",
+                    ));
+                }
+                let headers_value = message.get_item("headers")?;
+                let header_values = extract_headers(headers_value)?;
+                let more_trailers = message
+                    .get_item("more_trailers")?
+                    .map(|value| value.extract::<bool>())
+                    .transpose()?
+                    .unwrap_or(false);
+                let headers = {
+                    let mut accumulated = slf.response_trailer_headers.lock().map_err(|_| {
+                        PyRuntimeError::new_err("HTTP response trailers lock poisoned")
+                    })?;
+                    for (name, value) in header_values {
+                        let name = HeaderName::from_bytes(&name)
+                            .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header name."))?;
+                        let value = HeaderValue::from_bytes(&value)
+                            .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header value."))?;
+                        accumulated.try_append(name, value).map_err(|error| {
+                            PyRuntimeError::new_err(format!("HTTP response trailers: {error}"))
+                        })?;
+                    }
+                    if more_trailers {
+                        return Ok(py.None().into_bound(py));
+                    }
+                    std::mem::take(&mut *accumulated)
+                };
+                match slf.body.try_send(ResponseChunk::Trailers(headers)) {
+                    Ok(()) => Ok(py.None().into_bound(py)),
+                    Err(TrySendError::Closed(_)) => {
+                        Err(PyOSError::new_err("server response body channel closed"))
+                    }
+                    Err(TrySendError::Full(chunk)) => {
+                        let sender = slf.body.clone();
+                        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                            sender.send(chunk).await.map_err(|_| {
+                                PyOSError::new_err("server response body channel closed")
+                            })?;
                             Python::attach(|py| Ok(py.None()))
                         })
                     }
@@ -4683,9 +4824,11 @@ enum ResponseApplication {
 }
 
 struct AsgiBody {
-    receiver: mpsc::Receiver<BodyChunk>,
+    receiver: mpsc::Receiver<ResponseChunk>,
     application: Option<ResponseApplication>,
     app_task_tracker: TaskTracker,
+    trailers_expected: bool,
+    body_completed: bool,
     defer_completed_app_result_once: bool,
     incomplete_body_result_deferred: bool,
     #[cfg(feature = "runtime-diagnostics")]
@@ -5379,6 +5522,33 @@ impl AsgiBody {
         self.defer_completed_app_result_once = false;
     }
 
+    fn poll_response_chunk(
+        &mut self,
+        application: ResponseApplication,
+        chunk: ResponseChunk,
+    ) -> Poll<Option<Result<Frame<Bytes>, BoxError>>> {
+        match chunk {
+            ResponseChunk::Body(chunk) => {
+                if !chunk.more_body {
+                    self.record_final_body_available();
+                    if self.trailers_expected {
+                        self.body_completed = true;
+                        self.application = Some(application);
+                    } else {
+                        self.finish_response(application);
+                    }
+                } else {
+                    self.application = Some(application);
+                }
+                Poll::Ready(Some(Ok(Frame::data(chunk.body))))
+            }
+            ResponseChunk::Trailers(trailers) => {
+                self.finish_response(application);
+                Poll::Ready(Some(Ok(Frame::trailers(trailers))))
+            }
+        }
+    }
+
     fn poll_app_task(
         &mut self,
         cx: &mut Context<'_>,
@@ -5406,13 +5576,7 @@ impl AsgiBody {
         // Pending while its already-sent body frame is queued, so drain that
         // frame before reporting the app's completion result.
         if let Ok(chunk) = self.receiver.try_recv() {
-            if !chunk.more_body {
-                self.record_final_body_available();
-                self.finish_response(ResponseApplication::Completed(task_result));
-            } else {
-                self.application = Some(ResponseApplication::Completed(task_result));
-            }
-            return Poll::Ready(Some(Ok(Frame::data(chunk.body))));
+            return self.poll_response_chunk(ResponseApplication::Completed(task_result), chunk);
         }
 
         // An incomplete ASGI body can make Hyper discard the response start or
@@ -5427,10 +5591,14 @@ impl AsgiBody {
         }
 
         match task_result {
-            Ok(Ok(_)) => Poll::Ready(Some(Err(std::io::Error::other(
-                "ASGI app returned before completing the response body",
-            )
-            .into()))),
+            Ok(Ok(_)) => {
+                let message = if self.trailers_expected && self.body_completed {
+                    "ASGI app returned before sending response.trailers"
+                } else {
+                    "ASGI app returned before completing the response body"
+                };
+                Poll::Ready(Some(Err(std::io::Error::other(message).into())))
+            }
             Ok(Err(error)) => {
                 Python::attach(|py| {
                     if !python_asgi_error_was_logged(&error, py) {
@@ -5484,15 +5652,7 @@ impl Body for AsgiBody {
         };
 
         match this.receiver.poll_recv(cx) {
-            Poll::Ready(Some(chunk)) => {
-                if !chunk.more_body {
-                    this.record_final_body_available();
-                    this.finish_response(application);
-                } else {
-                    this.application = Some(application);
-                }
-                Poll::Ready(Some(Ok(Frame::data(chunk.body))))
-            }
+            Poll::Ready(Some(chunk)) => this.poll_response_chunk(application, chunk),
             Poll::Ready(None) => {
                 this.application = Some(application);
                 this.poll_app_task(cx)
@@ -8970,6 +9130,17 @@ async fn handle_request_parts(
     context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, BoxError> {
     let http_version = parts.version;
+    let request_allows_response_trailers = http_version == Version::HTTP_2
+        && parts.headers.get_all(http::header::TE).iter().any(|value| {
+            value
+                .as_bytes()
+                .split(|byte| *byte == b',')
+                .any(|token| trim_ascii(token).eq_ignore_ascii_case(b"trailers"))
+        });
+    let http2_informational = parts
+        .extensions
+        .get::<hyper::ext::Http2InformationalSender>()
+        .cloned();
     let diagnostics = context.server.diagnostics.clone();
     let default_header_error = context.server.default_header_error;
     diagnostics.http_request_started();
@@ -9011,6 +9182,11 @@ async fn handle_request_parts(
                         preserve_application_on_disconnect: app_preserve_application_on_disconnect,
                         response_start_attempted: app_response_start_attempted,
                         response_started: app_response_started,
+                        response_body_completed: AtomicBool::new(false),
+                        response_trailers_expected: AtomicBool::new(false),
+                        response_trailer_headers: StdMutex::new(HeaderMap::new()),
+                        request_allows_response_trailers,
+                        http2_informational,
                         default_header_error,
                         start: start_tx,
                         body: body_tx,
@@ -9111,11 +9287,14 @@ async fn handle_request_parts(
     };
     response_timing_diagnostics.http_response_start_latency_finished(response_latency_started);
     let defer_completed_app_result_once = matches!(application, ResponseApplication::Completed(_));
+    let trailers_expected = start.trailers;
 
     let body = AsgiBody {
         receiver: body_rx,
         application: Some(application),
         app_task_tracker,
+        trailers_expected,
+        body_completed: false,
         defer_completed_app_result_once,
         incomplete_body_result_deferred: false,
         #[cfg(feature = "runtime-diagnostics")]
@@ -10270,6 +10449,12 @@ fn build_scope<'py>(
                 ),
             )
         );
+    }
+    if request.version == Version::HTTP_2 {
+        let extensions = PyDict::new(py);
+        extensions.set_item("http.response.early_hint", PyDict::new(py))?;
+        extensions.set_item("http.response.trailers", PyDict::new(py))?;
+        scope.set_item("extensions", extensions)?;
     }
     Ok(scope)
 }

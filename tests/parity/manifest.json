@@ -1089,6 +1089,61 @@
       ]
     },
     {
+      "id": "http2.response-early-hints",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes",
+        "early_hints",
+        "early_hint_before_final_start"
+      ],
+      "compare": [
+        "status",
+        "body_bytes",
+        "early_hints",
+        "early_hint_before_final_start"
+      ],
+      "required_observations": {
+        "status": 200,
+        "early_hints": [
+          {
+            "status": 103,
+            "headers": [
+              ["link", "</style.css>; rel=preload; as=style"]
+            ]
+          },
+          {
+            "status": 103,
+            "headers": [
+              ["link", "</app.js>; rel=preload; as=script"]
+            ]
+          }
+        ],
+        "early_hint_before_final_start": true
+      }
+    },
+    {
+      "id": "http2.response-trailers",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes",
+        "response_trailers"
+      ],
+      "compare": [
+        "status",
+        "body_bytes",
+        "response_trailers"
+      ],
+      "required_observations": {
+        "status": 200,
+        "response_trailers": [
+          ["x-asgi-trailer", "first"],
+          ["x-asgi-trailer", "last"]
+        ]
+      }
+    },
+    {
       "id": "http.sync-callable-awaitable",
       "kind": "protocol_operation",
       "observe": [

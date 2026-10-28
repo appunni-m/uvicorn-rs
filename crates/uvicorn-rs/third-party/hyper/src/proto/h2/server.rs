@@ -5,7 +5,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use bytes::Bytes;
-use futures_core::ready;
+use futures_core::{ready, Stream};
 use h2::server::{Connection, Handshake, SendResponse};
 use h2::{Reason, RecvStream};
 use http::{Method, Request};
@@ -305,10 +305,15 @@ where
                             req.extensions_mut().insert(Protocol::from_inner(protocol));
                         }
 
+                        let (informational_sender, informational_receiver) =
+                            crate::ext::Http2InformationalSender::channel();
+                        req.extensions_mut().insert(informational_sender);
+
                         let fut = H2Stream::new(
                             service.call(req),
                             connect_parts,
                             respond,
+                            informational_receiver,
                             self.date_header,
                             exec.clone(),
                         );
@@ -367,6 +372,8 @@ pin_project! {
         reply: SendResponse<SendBuf<B::Data>>,
         #[pin]
         state: H2StreamState<F, B>,
+        #[pin]
+        informational: futures_channel::mpsc::Receiver<::http::Response<()>>,
         date_header: bool,
         exec: E,
     }
@@ -404,12 +411,14 @@ where
         fut: F,
         connect_parts: Option<ConnectParts>,
         respond: SendResponse<SendBuf<B::Data>>,
+        informational: futures_channel::mpsc::Receiver<::http::Response<()>>,
         date_header: bool,
         exec: E,
     ) -> H2Stream<F, B, E> {
         H2Stream {
             reply: respond,
             state: H2StreamState::Service { fut, connect_parts },
+            informational,
             date_header,
             exec,
         }
@@ -441,6 +450,17 @@ where
     fn poll2(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
         let mut me = self.as_mut().project();
         loop {
+            match me.informational.as_mut().poll_next(cx) {
+                Poll::Ready(Some(response)) => {
+                    if let Err(error) = me.reply.send_informational(response) {
+                        me.reply.send_reset(Reason::INTERNAL_ERROR);
+                        return Poll::Ready(Err(crate::Error::new_h2(error)));
+                    }
+                    continue;
+                }
+                Poll::Ready(None) | Poll::Pending => {}
+            }
+
             let next = match me.state.as_mut().project() {
                 H2StreamStateProj::Service {
                     fut: h,

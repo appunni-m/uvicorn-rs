@@ -135,6 +135,37 @@ impl fmt::Debug for Protocol {
     }
 }
 
+#[cfg(feature = "http2")]
+mod informational_sender {
+    use futures_channel::mpsc::{self, Receiver, Sender};
+    use futures_util::SinkExt;
+    use http::Response;
+
+    /// Internal handle for sending HTTP/2 informational responses while a
+    /// request's final response is still being prepared.
+    #[doc(hidden)]
+    #[derive(Clone, Debug)]
+    pub struct Http2InformationalSender(Sender<Response<()>>);
+
+    impl Http2InformationalSender {
+        pub(crate) fn channel() -> (Self, Receiver<Response<()>>) {
+            let (sender, receiver) = mpsc::channel(16);
+            (Self(sender), receiver)
+        }
+
+        /// Queue an informational response for the active HTTP/2 stream,
+        /// waiting for bounded channel capacity when needed.
+        #[doc(hidden)]
+        pub async fn send(&self, response: Response<()>) -> Result<(), ()> {
+            let mut sender = self.0.clone();
+            sender.send(response).await.map_err(|_| ())
+        }
+    }
+}
+
+#[cfg(feature = "http2")]
+pub use informational_sender::Http2InformationalSender;
+
 /// A map from header names to their original casing as received in an HTTP message.
 ///
 /// If an HTTP/1 response `res` is parsed on a connection whose option

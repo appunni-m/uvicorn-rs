@@ -729,6 +729,42 @@ async def _app_impl(scope, receive, send):
             content_type=b"text/plain; charset=utf-8",
         )
         return
+    if path == "/response-early-hints":
+        _record("http2.early-hint-call")
+        await send({
+            "type": "http.response.early_hint",
+            "links": [b"</style.css>; rel=preload; as=style"],
+        })
+        await send({
+            "type": _ASGIEventType("http.response.early_hint"),
+            "links": [b"</app.js>; rel=preload; as=script"],
+        })
+        await asyncio.sleep(0.15)
+        _record("http2.final-response-start")
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        extensions = ",".join(sorted(scope.get("extensions", {}))).encode("ascii")
+        await send({"type": "http.response.body", "body": extensions})
+        return
+    if path == "/response-trailers":
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        extensions = ",".join(sorted(scope.get("extensions", {}))).encode("ascii")
+        await send({"type": "http.response.body", "body": extensions})
+        await send({
+            "type": "http.response.trailers",
+            "headers": [(b"x-asgi-trailer", b"first")],
+            "more_trailers": True,
+        })
+        await send({
+            "type": "http.response.trailers",
+            "headers": [(b"x-asgi-trailer", b"last")],
+            "more_trailers": False,
+        })
+        return
     if path == "/response-headers-order":
         await send({
             "type": "http.response.start",

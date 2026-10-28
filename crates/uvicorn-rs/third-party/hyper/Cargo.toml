@@ -94,6 +94,7 @@ http2 = [
     "dep:atomic-waker",
     "dep:futures-channel",
     "dep:futures-core",
+    "dep:futures-util",
     "dep:h2",
 ]
 nightly = []
@@ -125,7 +126,7 @@ optional = true
 
 [dependencies.futures-util]
 version = "0.3"
-features = ["alloc"]
+features = ["alloc", "sink"]
 optional = true
 default-features = false
 

@@ -568,6 +568,39 @@
       }
     },
     {
+      "case_id": "http2.response-early-hints",
+      "profile": "http2",
+      "operation": "http2.response-early-hints",
+      "covers": [
+        "http2.response-early-hints"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hints",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers",
+      "profile": "http2",
+      "operation": "http2.response-trailers",
+      "covers": [
+        "http2.response-trailers"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http2.concurrent-stream-load-slow-reader-resource-bound",
       "profile": "http2",
       "operation": "http.concurrent-stream-load",
