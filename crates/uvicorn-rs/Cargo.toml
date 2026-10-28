@@ -8,7 +8,11 @@ description = "Rust-native HTTP server library"
 repository = "https://github.com/appunni-m/uvicorn-rs"
 documentation = "https://docs.rs/uvicorn-rs"
 readme = "README.md"
-exclude = ["examples/native_core_contracts.rs"]
+exclude = [
+    "examples/native_core_contracts.rs",
+    "third-party/h2/**",
+    "third-party/hyper/**",
+]
 
 [lib]
 name = "uvicorn_rs"

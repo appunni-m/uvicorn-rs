@@ -33,6 +33,8 @@ CASE_IDS = (PRIMARY_CASE, *SUPPORT_CASES)
 ARMED_POINT = "native.runtime.build.error"
 SOURCE_PATHS = ("src/lib.rs", "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock",
                 "scripts/run_parity.py", "tests/parity/manifest.json", "tests/parity/app.py",
+                "crates/uvicorn-rs/third-party/h2/Cargo.toml",
+                "crates/uvicorn-rs/third-party/hyper/Cargo.toml",
                 "tools/http3-probe/Cargo.toml",
                 "scripts/audit_normal_build.py", "scripts/check_ci_evidence.py")
 
@@ -43,6 +45,14 @@ def write_json(path: Path, value: object) -> None:
 
 def source_identity() -> dict[str, str]:
     paths = [*SOURCE_PATHS, *(str(path.relative_to(ROOT)) for path in load_contract()[2])]
+    paths.extend(
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "crates/uvicorn-rs/third-party/h2/src").rglob("*.rs")
+    )
+    paths.extend(
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "crates/uvicorn-rs/third-party/hyper/src").rglob("*.rs")
+    )
     return {relative: sha256(ROOT / relative) for relative in paths}
 
 

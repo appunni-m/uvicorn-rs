@@ -75,6 +75,10 @@ python-source = "python"
 python-packages = ["uvicorn_rs", "uvicorn"]
 features = ["pyo3/extension-module"]
 include = [
+    { path = "crates/uvicorn-rs/third-party/h2/Cargo.toml", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/h2/LICENSE", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/h2/UPSTREAM-README.md", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/h2/src/**/*", format = "sdist" },
     { path = "crates/uvicorn-rs/third-party/hyper/Cargo.toml", format = "sdist" },
     { path = "crates/uvicorn-rs/third-party/hyper/LICENSE", format = "sdist" },
     { path = "crates/uvicorn-rs/third-party/hyper/src/**/*", format = "sdist" },

@@ -191,18 +191,17 @@ pub use informational_sender::Http2InformationalSender;
 #[derive(Clone, Debug)]
 pub(crate) struct HeaderCaseMap(HeaderMap<Bytes>);
 
-/// The order of response header fields to use when encoding an HTTP/1 response.
+/// The order of response header fields to use when encoding a response.
 ///
 /// HTTP header maps group values by name and cannot represent interleaved
 /// fields. Attach this extension to a response when the original sequence of
-/// fields must be retained by Hyper's HTTP/1 server encoder. Names not present
-/// in this sequence are encoded afterward using the map's normal iteration
-/// order.
-#[cfg(all(feature = "server", feature = "http1"))]
+/// fields must be retained by Hyper's server encoder. Names not present in
+/// this sequence are encoded afterward using the map's normal iteration order.
+#[cfg(all(feature = "server", feature = "http1", not(feature = "http2")))]
 #[derive(Clone, Debug)]
 pub struct HeaderOrder(Vec<HeaderName>);
 
-#[cfg(all(feature = "server", feature = "http1"))]
+#[cfg(all(feature = "server", feature = "http1", not(feature = "http2")))]
 impl HeaderOrder {
     /// Creates an HTTP/1 response header order from header names.
     ///
@@ -224,6 +223,9 @@ impl HeaderOrder {
         &self.0
     }
 }
+
+#[cfg(all(feature = "server", feature = "http2"))]
+pub use h2::ext::HeaderOrder;
 
 #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
 impl HeaderCaseMap {

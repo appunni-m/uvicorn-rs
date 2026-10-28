@@ -18,6 +18,13 @@ licensed under MPL-2.0. Its source is obtained as a Cargo dependency rather
 than vendored; `third-party/yawc/LICENSE` retains the upstream license text.
 Yawc is used for sessions where the HTTP/1.1 handshake negotiated compression.
 
+The Python ASGI adapter uses the MIT-licensed `h2` 0.4.20 source from
+[hyperium/h2](https://github.com/hyperium/h2), vendored under
+`third-party/h2/`. Its local `HeaderOrder` extension preserves the response
+field sequence supplied by ASGI when the adapter's HTTP/2 path encodes HPACK.
+The published `uvicorn-rs` Cargo crate uses the registry dependency and does
+not package this adapter-only patch.
+
 The adapted transport code is available under the MIT license:
 
 Copyright (c) 2020 h3 authors

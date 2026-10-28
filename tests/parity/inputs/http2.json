@@ -554,11 +554,11 @@
       }
     },
     {
-      "case_id": "http2.response-headers-preserve-duplicate-value-order",
+      "case_id": "http2.response-headers-preserve-asgi-order",
       "profile": "http2",
-      "operation": "http.response-headers",
+      "operation": "http.response-headers-ordered",
       "covers": [
-        "http.response-headers"
+        "http.response-headers-ordered"
       ],
       "request": {
         "method": "GET",

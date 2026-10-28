@@ -42,10 +42,14 @@ LLVM_EXTENSION_KEY = "uvicorn_rs_unified"
 SOURCE_PATHS = (
     "src",
     "crates/uvicorn-rs/src",
+    "crates/uvicorn-rs/third-party/h2/src",
+    "crates/uvicorn-rs/third-party/hyper/src",
     "crates/asgi-lifespan-protocol-rs/src",
     "Cargo.toml",
     "Cargo.lock",
     "crates/uvicorn-rs/Cargo.toml",
+    "crates/uvicorn-rs/third-party/h2/Cargo.toml",
+    "crates/uvicorn-rs/third-party/hyper/Cargo.toml",
     "crates/asgi-lifespan-protocol-rs/Cargo.toml",
 )
 PRODUCTION_SOURCE_SET = (

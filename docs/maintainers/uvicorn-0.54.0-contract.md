@@ -1194,8 +1194,33 @@ Date defaults enabled (run `079d4c55793e4b2f92e65be7dd6d8468`, source digest
 `d7b3c2db28624ae8c7a7019f1734d71a3c183ea94883c29c5f6bf12f8ff0779c`, receipt
 `target/kata-progress/http1-response-headers-defaults-strict-20261025.json`).
 This is a separate dirty-draft source-bound observation, not a rerun of the
-full H1 matrix. Other H1 response cases still compare per-name values, and
-H2/H3 order has not been verified by this patch.
+full H1 matrix. Other H1 response cases still compare per-name values. A
+focused HTTP/2 case now passes the same strict comparator through a local
+`h2` 0.4.20 patch; see [the source-bound receipt](#http2-response-header-order-parity-2026-10-28).
+H3 raw wire order remains unverified.
+
+### HTTP/2 response header order parity — 2026-10-28
+
+`http2.response-headers-preserve-asgi-order` now declares
+`http.response-headers-ordered`, so the parity runner compares the complete
+HTTP/2 field sequence. The previous target emitted both `x-asgi-order` values
+before the `x-asgi-duplicate` fields, while Uvicorn preserved the interleaved
+ASGI sequence. The bridge already carried `HeaderOrder`; Hyper's H2 path passed
+the `HeaderMap` to `h2` after clearing all extensions. A local vendored `h2`
+0.4.20 patch now carries the extension into HPACK encoding. This selected case
+passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13,
+Rust 1.98.1. Both observed field sequences were
+`x-asgi-order:first`, `x-asgi-duplicate:second`, `x-asgi-order:last`,
+`x-asgi-duplicate:first`. Receipt
+`target/kata-progress/http2-response-asgi-order-source-bound-20261028.json`,
+SHA-256 `d79c38203c88586ebdfd77e33b9e5f04e5263f9e068b77af90914f571c043242`;
+runtime source identity `d4a24fb5874abc0d7529a5ce89e855081acf9bf13c3bb867c0e12ab01d5926ac`
+includes the vendored H2 source; native extension SHA-256
+`0966e3dfa1b0a7e9e266311e1a7d5f4d76f3ec56e3e002607634b0d1f81a6e6f`.
+The source was dirty at revision `659e7f18cc7b1dcf5eb83b1310b41d2f6bb3192f`.
+This is focused local evidence only; the exact-source hosted matrix remains
+pending. Other H2 response cases use the normalized comparison, and H3 raw
+wire order remains unverified.
 
 A local abi3 wheel built from that dirty source passed the isolated
 `scripts/check_replacement_install.py` smoke: clean install exposes the

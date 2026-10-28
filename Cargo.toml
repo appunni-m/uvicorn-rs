@@ -19,6 +19,7 @@ default-members = [".", "crates/uvicorn-rs"]
 resolver = "3"
 
 [patch.crates-io]
+h2 = { path = "crates/uvicorn-rs/third-party/h2" }
 hyper = { path = "crates/uvicorn-rs/third-party/hyper" }
 
 [lib]

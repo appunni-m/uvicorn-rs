@@ -52,6 +52,7 @@ CRATE_EXCLUDES = {
     # does not embed the workspace's local Hyper source directory.
     "uvicorn-rs": {
         "examples/native_core_contracts.rs",
+        "third-party/h2/**",
         "third-party/hyper/**",
     },
 }
@@ -88,6 +89,9 @@ REQUIRED = (
     "crates/uvicorn-rs/third-party/h3/UPSTREAM-README.md",
     "crates/uvicorn-rs/third-party/h3-quinn/LICENSE",
     "crates/uvicorn-rs/third-party/h3-quinn/UPSTREAM-README.md",
+    "crates/uvicorn-rs/third-party/h2/Cargo.toml",
+    "crates/uvicorn-rs/third-party/h2/LICENSE",
+    "crates/uvicorn-rs/third-party/h2/UPSTREAM-README.md",
     "crates/uvicorn-rs/third-party/hyper/Cargo.toml",
     "crates/uvicorn-rs/third-party/hyper/LICENSE",
     "python/uvicorn/__init__.py", "python/uvicorn/__main__.py", "python/uvicorn/main.py",

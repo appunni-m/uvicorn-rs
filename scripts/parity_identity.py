@@ -14,6 +14,7 @@ FIXED_RUNTIME_PATHS = (
     "pyproject.toml",
     "uv.lock",
     "crates/uvicorn-rs/Cargo.toml",
+    "crates/uvicorn-rs/third-party/h2/Cargo.toml",
     "crates/uvicorn-rs/third-party/hyper/Cargo.toml",
     "crates/asgi-lifespan-protocol-rs/Cargo.toml",
 )
@@ -29,6 +30,7 @@ OPTIONAL_RUNTIME_PATHS = (
 RUST_SOURCE_ROOTS = (
     "src",
     "crates/uvicorn-rs/src",
+    "crates/uvicorn-rs/third-party/h2/src",
     "crates/uvicorn-rs/third-party/hyper/src",
     "crates/asgi-lifespan-protocol-rs/src",
 )

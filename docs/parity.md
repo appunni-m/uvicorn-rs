@@ -2210,18 +2210,21 @@ the runner also checks the indexed-file set against the files on disk.
 The `http.response-headers` operation records ordered wire fields but compares
 duplicate values in order within each header name. The separate
 `http.response-headers-ordered` operation compares the complete observed field
-sequence. Two focused H1 inputs now pass that strict operation using the local
-Hyper `HeaderOrder` extension: one with custom headers and disabled Server/Date
-defaults, and one with the defaults enabled. These are separate, source-bound
-dirty-draft receipts, not a full H1 response-header matrix. Other H1 cases
-still use the normalized operation; the focused H2 observation still differs
-from Uvicorn, and H3's client observation passes through `http::HeaderMap` and
-does not prove raw wire order. RFC 9110 §5.3 states that order across different field names is not
-significant to HTTP semantics; the ASGI HTTP 2.5 response-start contract is
-stricter and requires preserving the application order. See [RFC 9110 §5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3),
+sequence. Two focused H1 inputs pass this strict operation using Hyper's local
+`HeaderOrder` extension: one with custom headers and disabled Server/Date
+defaults, and one with the defaults enabled. A focused H2 input now passes the
+same strict comparison after the vendored `h2` encoder carries the order
+extension into HPACK. All three receipts are separate, source-bound dirty-draft
+observations, not the full H1/H2 response-header matrix. Other H1/H2 cases
+still use the normalized operation. H3's client observation passes through
+`http::HeaderMap` and does not prove raw wire order. RFC 9110 §5.3 states that
+order across different field names is not significant to HTTP semantics; the
+ASGI HTTP 2.5 response-start contract is stricter and requires preserving the
+application order. See [RFC 9110 §5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3),
 the [ASGI HTTP specification](https://asgi.readthedocs.io/en/latest/specs/www.html),
-and the [support matrix](support-matrix.md#supported-behaviors). The per-run
-receipt is a local ignored artifact.
+and the [support matrix](support-matrix.md#supported-behaviors). Per-run
+receipts are local ignored artifacts. The H2 receipt needs hosted exact-source
+confirmation.
 For this operation, manifest `observe` retains the wire order and its optional
 `compare` list selects the normalized fields used for parity; other operations
 compare every observed field by default. The offline CI evidence checker uses
