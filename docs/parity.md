@@ -2,7 +2,26 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Latest completed public parity evidence — 2026-10-28
+## Latest completed public parity evidence (2026-10-28)
+
+The 702-case `input@43` inventory at PR #19 head
+`642a6bb9c654599ed89ab705270619bc2ad23cfd` passed **702/702** against the
+installed normal wheel in [CI #454](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222815)
+on Ubuntu 24.04 / x86-64 / CPython 3.12.13. The job reported zero failed,
+infrastructure-failed, or unrun cases. Artifact `uvicorn-rs-public-parity`
+(ID `12797838313`) has archive SHA-256
+`d45b12a0b61fe1fcad80ee978e300ac67fc372da2d3c53816ed4be6d70855192`.
+
+This receipt covers the Linux installed-wheel input matrix for PR head
+`642a6bb`; it does not prove full drop-in compatibility across platforms.
+Local HEAD `4b286e33e28e8051f23b589ecb8620bc92592995` is one lint-only commit
+ahead and is not covered by CI #454. As of 2026-10-28, that run's coverage
+job is still active and its Rust lint job failed on the redundant binding
+that was removed locally. No complete coverage result or accepted
+Coverage-MCP receipt is available yet. Benchmarks follow full compatibility
+acceptance.
+
+## Historical 695-, 699-, and 700-case parity snapshots — 2026-10-28
 
 The `input@43` snapshot at commit
 `a4a520aeb42481cba06cbf4de597c993280d380e` passed **695/695** on both Linux
@@ -74,11 +93,14 @@ artifact `uvicorn-rs-public-parity` (ID `12793199057`, archive SHA-256
 `3908c76a4bf31b9b049338f41301004016c590ff4371d56545b5ca5852912f74`) records
 merge commit `ce27229840877cae12237ecaa31499560883e3fd`, `dirty=false`, and
 source SHA-256
-`92af8083d758e2152bfdd424cdddd8b96a0985cdaade7025921bd7be131b1169`. Run
-[#453](https://github.com/appunni-m/uvicorn-rs/actions/runs/40635905337) is
-still attributing and repeating the exact-source coverage matrix; no complete
-100% result or accepted Coverage-MCP receipt is available yet. Benchmarks
-remain paused until the broader parity work is complete.
+`92af8083d758e2152bfdd424cdddd8b96a0985cdaade7025921bd7be131b1169`. Its
+coverage job completed incompletely at 1,299/1,307 attributed cases,
+13,777/13,959 regions, and 10,154/10,252 lines. This historical run does not
+meet the 100% gate. CI #454 is the newer current run and is summarized at the
+top of this page; its three-repeat coverage job was still active at the time
+of that status check. No complete 100% result or accepted Coverage-MCP receipt
+is available yet. Benchmarks remain paused until the broader parity work is
+complete.
 
 The 700-case `input@43` snapshot includes
 `python-api.run-serves-request-and-shuts-down-on-sigterm`, which compares a

@@ -4,17 +4,26 @@ A Rust-first server for ASGI applications and Rust services.
 
 ## Project status
 
-The `asgi-lifespan-protocol-rs` and `uvicorn-rs` 0.2.1 crates have been
-published to crates.io from clean source commit
-`d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`. Their registry checksums and
-release provenance are recorded in [release status](docs/releases.md). The
-PyPI distribution `uvicorn-rs` remains unpublished. Local 0.2.2 inspection
-artifacts were built from dirty source and are not upload-eligible. This is
-not a complete project release: consolidation PR #19 is still a draft, exact-main
-coverage, independent coverage review, full three-system benchmarks,
-compatibility evidence, and clean consumers remain open. The old
-`asgi-lifespan-protocol-rs` 0.2.0 archive records `dirty: true` and is not the
-current clean-source release evidence.
+The `asgi-lifespan-protocol-rs` and `uvicorn-rs` 0.2.1 crates are published
+to crates.io from clean source commit
+`d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`. Their checksums and provenance
+are recorded in [release status](docs/releases.md). The PyPI distribution
+`uvicorn-rs` has not had its first upload.
+
+PR #19 is still a draft at remote head
+`642a6bb9c654599ed89ab705270619bc2ad23cfd`. CI
+[#454](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222815)
+passed **702/702** installed-wheel public parity cases on Linux x86-64. Its
+full coverage job is still running, and its Rust lint job failed on a redundant
+local binding fixed in local commit `4b286e33e28e8051f23b589ecb8620bc92592995`;
+that commit is one ahead of the remote branch and has not been validated by
+hosted CI. Candidate version 0.2.2 is absent from both Cargo registries and
+PyPI; no exact-source candidate artifact or tag exists yet. Full Uvicorn
+compatibility, independent Coverage-MCP review, complete three-system
+benchmarks, and clean consumer checks remain open. The earlier
+`asgi-lifespan-protocol-rs` 0.2.0 archive records `dirty: true`; the clean
+0.2.1 publication is the current registry evidence.
+
 The Python adapter is **not yet a drop-in Uvicorn replacement**. If your
 application depends on Uvicorn's full command-line, Python API, worker, or
 reload behavior, keep using upstream Uvicorn for now.

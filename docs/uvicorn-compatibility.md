@@ -11,28 +11,35 @@ install `uvicorn-rs` and upstream `uvicorn` in the same environment. The
 replacement and rollback steps below apply only after a compatible version is
 published.
 
-## Current status — 2026-10-28
+## Current status (2026-10-28)
 
-The current PR head is `8f50720cd0e1cc12fdb8d6c60b7108c8a14cc516`. Its
-input@43 inventory contains 699 public oracle cases: 117 CLI process cases and
-262 Python API cases, alongside protocol, lifecycle, and target-only contracts.
-The installed-wheel parity job in [CI #452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307) passed 699/699 cases on Linux x86-64. Its unified coverage job is still running.
-The local input@43 working tree adds one Python API SIGTERM case, bringing its
-inventory to 700 public oracle cases (263 Python API cases). That case passes
-1/1 as dirty-source diagnostic evidence; CI #452 predates it, so clean-source
-parity evidence for the addition is still pending.
+PR #19 is still a draft. Its remote head is
+`642a6bb9c654599ed89ab705270619bc2ad23cfd`, and the current `input@43`
+inventory contains 702 public cases spanning the CLI, Python API, protocol,
+lifecycle, and target-only contracts. The installed-wheel parity job in
+[CI #454](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222815)
+passed **702/702** on Linux x86-64. Its parity artifact is
+`uvicorn-rs-public-parity` (ID `12797838313`, archive SHA-256
+`d45b12a0b61fe1fcad80ee978e300ac67fc372da2d3c53816ed4be6d70855192`).
+
+The same CI run has not completed its unified coverage job. Its Rust lint job
+failed on a redundant local binding; that binding was removed in local commit
+`4b286e33e28e8051f23b589ecb8620bc92592995`, one commit ahead of the remote
+branch. Hosted CI has not validated that local commit. Therefore the 702-case
+result is Linux-only evidence for PR head `642a6bb`, not complete drop-in or
+cross-platform acceptance.
 
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | Not available. The `uvicorn-rs` distribution has not been published. |
 | Run the `uvicorn` command | The candidate exposes the `uvicorn` command and `python -m uvicorn`. Selected inputs cover help, settings, environment precedence, and startup; complete CLI parity is not proved. |
 | Import and configure `uvicorn` | The candidate exposes `run`, `Config`, and `Server`. Selected signature, defaults, startup, and shutdown inputs are covered; the full programmatic contract remains open. |
-| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. The pushed 699-case matrix passed on Linux x86-64; the additional local case is not yet in clean-source evidence, and this does not establish full Uvicorn compatibility. |
+| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. CI #454 passed the 702-case matrix on Linux x86-64 at PR head 642a6bb. That single-platform result does not establish full Uvicorn compatibility. |
 | Use workers, reload, sockets, or process controls | Selected parity cases cover some worker, reload, socket, signal, and graceful-shutdown behavior. Other combinations, platforms, and failure paths remain unverified. |
 | Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See [benchmark status](benchmark-status.md). |
 
 The previous 695-case snapshot passed on Linux x86-64 and macOS ARM64, but it
-predates the current 699-case commit. Four focused additions pass 4/4 in local
+predates the current 702-case snapshot. Four focused additions pass 4/4 in local
 runs; their dirty-target reports are diagnostic only. See the [support
 matrix](support-matrix.md) and [release gates](releases.md) for the current
 evidence limits and remaining checks.
@@ -49,12 +56,14 @@ CLI input SHA-256 `b86587d0f2f6d890a9dfef3b974bd2f6b5f5cc109a09fde93c6935e892688
 and Python API input SHA-256 `3fb4cb2e7e4146060908da556d692ec8654196762261797bf92a352a4f847a96`.
 Run IDs, report hashes, and the corrected SIGINT exit-code contract are in the
 [parity evidence record](parity.md#input40-baseline-cli-and-python-api-profile-runs-2026-10-27).
-These are local one-pass source-profile receipts. The latest hosted run,
+These are local one-pass source-profile receipts. The earlier hosted run,
 [CI #435](https://github.com/appunni-m/uvicorn-rs/actions/runs/40591281095),
 passed 660 declared public oracle cases from input@42 on a clean-source installed
-wheel under Linux x86-64. That single platform pass does not establish full
-Uvicorn compatibility; cross-platform parity, native/fault contracts, clean-main
-release evidence, and release repeats remain open.
+wheel under Linux x86-64. It is superseded by CI #454's 702/702 result at the
+current PR head, recorded in the current-status section above. Neither
+single-platform result establishes full Uvicorn compatibility; cross-platform
+parity, native/fault contracts, clean-main release evidence, and release
+repeats remain open.
 
 ### Full installed-wheel parity — 2026-10-27
 

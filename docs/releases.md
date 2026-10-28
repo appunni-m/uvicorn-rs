@@ -17,77 +17,51 @@ Use these state labels precisely:
 
 ## Current release gates (2026-10-28)
 
-The target identities and publisher workflow are settled: publish
-`asgi-lifespan-protocol-rs` and `uvicorn-rs` to crates.io, with HTTP/3 inside
-`uvicorn-rs` behind `http3`; publish the `uvicorn-rs` PyPI distribution from
-the `uvicorn-rs-py` adapter through `.github/workflows/release.yml`.
+The release contract is one Python-free **uvicorn-rs** server crate with HTTP/3
+behind the **http3** feature, the separate **asgi-lifespan-protocol-rs** crate,
+and the PyPI distribution **uvicorn-rs** implemented by the optional
+**uvicorn-rs-py** adapter. Publication is staged through
+**.github/workflows/release.yml**.
 
-PR #19 is still a draft. Its remote head is
-`3edd3b3a4916bebd36d4193b1fd805c09048d687`. Hosted CI
-[#453](https://github.com/appunni-m/uvicorn-rs/actions/runs/40635905337) passed
-700/700 installed-wheel public parity cases on Linux x86-64 and all Rust,
-native-composition, and release-handoff checks. At the latest status read, its
-exact-source three-repeat coverage job was still running; no coverage result or
-Coverage-MCP receipt is available yet. This run does not include the newer
-local input below. The earlier CI
-[#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307)
-passed 699/699 cases, but its coverage job was superseded.
+PR #19 remains a draft. Remote head
+**642a6bb9c654599ed89ab705270619bc2ad23cfd** passed installed-wheel public
+parity 702/702 on Linux x86-64 in
+[CI #454](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222815).
+The parity artifact is **uvicorn-rs-public-parity** (ID **12797838313**, archive
+SHA-256 **d45b12a0b61fe1fcad80ee978e300ac67fc372da2d3c53816ed4be6d70855192**).
+The Rust lint job failed on a redundant local binding. Local HEAD
+**4b286e33e28e8051f23b589ecb8620bc92592995** removes it and is one commit
+ahead of the remote branch. The unified three-repeat coverage job is still
+running on the older source. Neither commit has a completed 100% report, and
+no accepted exact-source Coverage-MCP receipt exists. Documentation CI
+[#171](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222857)
+passed on remote head **642a6bb** before these documentation edits.
 
-The local input@43 inventory now has 701 public cases. It adds
-`python-api.run-second-sigint-forces-inflight-request-shutdown` through direct
-`uvicorn.run()`; the focused comparison passed 1/1 against Uvicorn 0.54.0 on
-macOS ARM64. The clean-source receipt binds that result to local commit
-`481fcc0177ed900218fb39b89041e216edc2885d`, but that commit is not pushed and
-the case is not included in CI #453. The parity, maintainer-contract, release,
-and support-matrix docs record the receipt. The hash-locked strict docs build
-passes on the current local documentation tree. Before this status-doc edit,
-local branch head was `9985a6518741a52302be76e9a38d9a131ac2acdd`, clean and
-nine commits ahead of the remote PR branch. The new input and documentation
-commits are not in the hosted run and are waiting to be pushed until CI #453
-finishes.
+The current local Cargo, PyPI, and lockfile version is **0.2.2**;
+**scripts/check_release_version.py** confirms they are synchronized. Cargo
+registry checks found 0.2.2 absent for **uvicorn-rs** and
+**asgi-lifespan-protocol-rs**; PyPI has no **uvicorn-rs** project yet. The latest
+non-yanked Cargo version for each crate is 0.2.1. No exact-source 0.2.2
+candidate artifact, release tag, or clean-consumer receipt exists. The local
+cargo package inventory contains 72 files for **uvicorn-rs** and 9
+for **asgi-lifespan-protocol-rs**; these file lists are not package-build or
+consumer evidence.
 
-Local 0.2.2 artifacts were rebuilt from clean commit `9985a6518741a52302be76e9a38d9a131ac2acdd`.
-The lifecycle and server Cargo archives have SHA-256 values
-`09015e066c7bb03230ae58c6486164e832f358ce1fd7cff2651271e73ee4f549` and
-`0ae5d7a33fce4c1001eaaec180c8190881db16e7f7a2635b2eb3d1a2341a3f7d`.
-Extracted-archive checks passed for the lifecycle crate, default `uvicorn-rs`,
-and `uvicorn-rs --features http3`; the standalone H3 consumer also passed on
-those exact archives (H3 error 262, follow-up HTTP/1 status 200). The macOS
-ARM64 abi3 wheel SHA-256 is
-`43ada3afb6a14431ffcd5153aa45da21cd5cee67ca2a1564cce425fe17e5b4ff`; clean
-replacement/rollback and installed-wheel consumer checks passed. The sdist
-SHA-256 is
-`e56bfa2fbd002a73db9a4fc0b0270b5f698c16c3f4a91d3ead2363596bd54392`, and its
-extracted-source build and consumer passed. The local macOS manifest is
-`target/release-candidate/local-9985a651/macos/dist/build-manifest-macos-arm64.json`
-(SHA-256
-`d1737f7f8be6953525ca0eaae56bdb640be68d23c1dc437c8edc30b3e11f403e`). These
-are local exact-commit receipts for one wheel platform, not the hosted
-multi-platform candidate bundle or registry verification. No candidate tag
-or package was published. After CI #453 finishes, push the committed source
-and docs and obtain updated hosted parity and coverage evidence. Do not repeat
-the unchanged 700 cases locally; the updated 701-case hosted matrix is the
-next full parity and coverage run.
+Full Uvicorn 0.54.0 compatibility acceptance remains open. After that parity
+gate, the project still needs a complete three-system benchmark and clean
+candidate consumers. The prior benchmark run
+[#39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
+was incomplete: Linux ARM64 failed in Hypercorn's HTTP/3 slow-reader case,
+and the HTTP/1 upload timeout remains unresolved. Existing measurements do
+not support a general performance-gain claim.
 
-Full Uvicorn 0.54.0 CLI, imports, configuration, process, and worker parity is
-still open. The previous three-system benchmark is incomplete: Linux ARM64
-failed in Hypercorn's HTTP/3 slow-reader case, and the HTTP/1 upload timeout
-remains unresolved. Per the maintainer's order, benchmark diagnostics resume
-after parity is complete; current benchmark evidence does not establish a
-performance gain.
-
-GitHub API readback confirms the active `Protect main` ruleset on
-`refs/heads/main` with the required CI checks and the active `Protect version
-tags` ruleset on `refs/tags/v*`, blocking updates, deletion, and non-fast-forward
-changes. The latest recorded registry settings audit says the PyPI environment
-is restricted to `main`, requires `appunni-m`, and permits sole-maintainer
-self-approval. The maintainer reports the pending publisher entry is now added
-for project `uvicorn-rs`, repository `appunni-m/uvicorn-rs`, workflow
-`release.yml`, environment `pypi`.
-The crates.io publisher tuple recorded in the earlier authenticated audit is
-repository `appunni-m/uvicorn-rs`, workflow `release.yml`, environment
-`crates-io`, for both release crates. Those registry-specific settings were
-not re-read in this check. See the [acceptance gates](#gates-before-candidate-assembly).
+The latest saved settings audit says **Protect main** and version-tag
+protection are active. Both Cargo crates have the **release.yml / crates-io**
+trusted-publisher tuple. The user reported adding the PyPI **uvicorn-rs /
+release.yml / pypi** pending publisher. The **pypi** and **crates-io**
+environments were recorded as restricted to **main** and configured for the
+sole maintainer. These settings were not re-read during the current source
+audit. See the [acceptance gates](#gates-before-candidate-assembly).
 
 ## Registry and packaging audit (2026-10-27; earlier source snapshot)
 
