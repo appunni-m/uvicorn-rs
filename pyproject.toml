@@ -58,7 +58,7 @@ benchmark = [
     "psutil==7.2.2; python_version >= '3.10'",
     "PyYAML>=5.1",
     "python-dotenv>=0.13",
-    "uvloop==0.23.0; python_version >= '3.10'",
+    "uvloop==0.23.0; python_version >= '3.10' and sys_platform != 'win32' and sys_platform != 'cygwin' and platform_python_implementation != 'PyPy'",
     "watchfiles>=0.20",
     "websockets>=13.0; python_full_version >= '3.10'",
 ]

@@ -821,7 +821,12 @@ def validate_source_consumer(value: dict, version: str, sdist: dict) -> None:
     if hashes != sdist["source_hashes"]:
         raise ValueError("source consumer must record every packaged checkout input with exact archive hashes")
     command = value.get("build_command", [])
-    if not isinstance(command, list) or command[:2] != ["maturin", "build"] or not {"--release", "--locked"} <= set(command):
+    maturin_version = value.get("maturin_version")
+    if not isinstance(maturin_version, str) or not maturin_version or not isinstance(command, list) \
+            or any(not isinstance(argument, str) for argument in command):
+        raise ValueError("source consumer did not record a locked release rebuild")
+    expected_prefix = ["uvx", "--from", f"maturin=={maturin_version}", "maturin", "build"]
+    if command[:5] != expected_prefix or not {"--release", "--locked"} <= set(command[5:]):
         raise ValueError("source consumer did not record a locked release rebuild")
     validate_consumer(value.get("consumer", {}), version, value.get("wheel_sha256"))
 
