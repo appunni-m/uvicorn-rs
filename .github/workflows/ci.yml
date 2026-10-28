@@ -273,6 +273,7 @@ jobs:
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-30:])[-3000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error title=Upstream Starlette integration failure::{encoded}")
           PY
@@ -336,6 +337,7 @@ jobs:
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-30:])[-3000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error file=.github/workflows/ci.yml,line=126,title=Starlette integration failure::{encoded}")
           PY
@@ -362,6 +364,7 @@ jobs:
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-30:])[-3000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error file=.github/workflows/ci.yml,line=157,title=systemd deployment probe failure::{encoded}")
           PY
@@ -601,6 +604,7 @@ jobs:
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-30:])[-3000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error title=Package wheel build or consumer failure::{encoded}")
           PY
@@ -654,14 +658,20 @@ jobs:
               --exclude-case-id python-api.module-cli-sighup-keeps-workers-after-replacement-startup-failure
             )
           fi
-          "$candidate_python" scripts/run_parity.py \
-            --oracle-python "$oracle_python" \
-            --installed-candidate \
-            "${parity_args[@]}" \
-            --output "target/parity-${{ matrix.platform }}.json"
-          "$candidate_python" scripts/check_ci_evidence.py parity \
-            "target/parity-${{ matrix.platform }}.json" \
-            --offline --require-clean "${parity_args[@]}"
+          run_platform_parity() {
+            "$candidate_python" scripts/run_parity.py \
+              --oracle-python "$oracle_python" \
+              --installed-candidate "$@" \
+              --output "target/parity-${{ matrix.platform }}.json"
+            "$candidate_python" scripts/check_ci_evidence.py parity \
+              "target/parity-${{ matrix.platform }}.json" \
+              --offline --require-clean "$@"
+          }
+          if [ "$RUNNER_OS" = 'Windows' ]; then
+            run_platform_parity "${parity_args[@]}"
+          else
+            run_platform_parity
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always() && runner.os != 'Linux'
         with:
@@ -714,6 +724,7 @@ jobs:
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-80:])[-5000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error title=Release evidence recording failure::{encoded}")
           PY

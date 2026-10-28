@@ -22,6 +22,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sdist", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--maturin-version", default=os.environ.get("MATURIN_VERSION"),
+                        help="pinned maturin version (defaults to MATURIN_VERSION)")
     parser.add_argument("--consumer-python", type=Path,
                         help="Python used for the isolated wheel consumer (defaults to the build interpreter)")
     parser.add_argument("--cargo-target-dir", type=Path,
@@ -69,9 +71,11 @@ def main() -> None:
                            if args.cargo_target_dir is not None
                            else output / "cargo-target"
                        ))
+    if not args.maturin_version:
+        parser.error("--maturin-version or MATURIN_VERSION is required")
     wheels = output / "wheels"
-    command = ["maturin", "build", "--release", "--locked", "--interpreter", sys.executable,
-               "--out", str(wheels)]
+    command = ["uvx", "--from", f"maturin=={args.maturin_version}", "maturin", "build",
+               "--release", "--locked", "--interpreter", sys.executable, "--out", str(wheels)]
     with (output / "build.log").open("w") as log:
         subprocess.run(command, cwd=source, env=environment, stdout=log,
                        stderr=subprocess.STDOUT, check=True, timeout=1800)
@@ -105,7 +109,8 @@ def main() -> None:
             raise ValueError(f"locked source rebuild modified a package input: {name}")
     result = {"schema": "uvicorn-rs-source-consumer@1", "status": "passed",
               "sdist_sha256": hashlib.sha256(archive_path.read_bytes()).hexdigest(),
-              "source_hashes": hashes, "build_command": command,
+              "source_hashes": hashes, "maturin_version": args.maturin_version,
+              "build_command": command,
               "wheel_sha256": hashlib.sha256(artifacts[0].read_bytes()).hexdigest(),
               "consumer": json.loads(receipt.read_text()),
               "scope": "clean extracted source build and real installed-wheel smoke; not full oracle parity"}
