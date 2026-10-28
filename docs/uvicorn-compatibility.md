@@ -13,16 +13,18 @@ published.
 
 ## Current status (2026-10-28)
 
-PR #19 remains a draft. CI #457 checked source commit
-`4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its receipts do not cover later
-commits. The committed `input@43` inventory has 707 public cases. CI
-[#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253)
-has passed the release-handoff, native framework composition, exact Rust
-minimum, Rust formatting/lint/feature/docs jobs, and the installed-wheel
-public parity job (707/707 on Linux x86-64). Its unified three-repeat coverage
-job is still running. The complete OS/Python compatibility matrix has not
-passed.
+PR #19 remains a draft. CI
+[#461](https://github.com/appunni-m/uvicorn-rs/actions/runs/40733997486)
+checked synthetic merge `53ba48e0853e072daef2222207fac87405eec8e2` for PR head
+`05919965f09d6b94bc322c4538740b38f0ee9305`, based on `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The 714-case `input@43` public
+matrix passed on Linux x86-64, along with release handoff, native framework
+composition, exact Rust minimum, and Rust formatting/lint/feature/docs jobs.
+The unified three-repeat coverage/fault-contract job is still running. The
+macOS and Windows package jobs could not provision CPython 3.12.13, and Linux's
+extracted-crate consumer lacked cached `h2 v0.4.20` in offline mode. Later local
+commits address those packaging and docs issues; CI #461 does not validate
+them. The complete OS/Python compatibility matrix has not passed.
 
 The package metadata declares Python `>=3.9`, and CI checks installed-wheel
 import on Python 3.9. That check does not establish Uvicorn 0.54.0 parity:
@@ -32,23 +34,23 @@ The Uvicorn 0.54.0 parity matrix therefore starts at Python 3.10. Any Python
 3.9 runtime-support claim is separate and remains unverified by the install
 check.
 
-CI #457 passed the 707-case installed-wheel matrix for source commit `4f7a296`
-on Linux x86-64.
-This does not establish macOS, Windows, or other declared Python versions.
-The preceding CI #456 and the earlier 702-case macOS ARM64 evidence are from
-older source snapshots. The exact current-source 100% coverage gate,
-independent Coverage-MCP receipt, and complete Uvicorn 0.54.0 compatibility
-matrix remain open.
+CI #461 passed the 714-case installed-wheel matrix for synthetic merge
+`53ba48e` on Linux x86-64. This does not establish macOS, Windows, other
+declared Python versions, or the unvalidated local packaging fixes. The
+preceding CI #456 and earlier 702-case macOS ARM64 evidence are from older
+source snapshots. The exact current-source 100% coverage gate, independent
+Coverage-MCP receipt, and complete Uvicorn 0.54.0 compatibility matrix remain
+open.
 
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | Not available. The uvicorn-rs distribution has not been published. |
-| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #457 passed the current 707-case Linux x86-64 matrix; full CLI and settings parity is not proved. |
-| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #457 passed the current public matrix on Linux x86-64; the complete programmatic contract remains open. |
+| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #461 passed 714 public cases on Linux x86-64; full CLI and settings parity is not proved. |
+| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #461 passed the public matrix on Linux x86-64; the complete programmatic contract remains open. |
 | Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. The current Linux matrix passed, but macOS evidence is from an older source snapshot and Windows/other declared Python versions remain unverified. |
 | Use workers, reload, sockets, or process controls | Selected parity cases cover some worker, reload, socket, signal, and graceful-shutdown behavior. Other combinations, platforms, and failure paths remain unverified. |
 | Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See benchmark status. |
-| Use the current release candidate on Windows | Not verified. CI #457 has no Windows parity job; Windows and the other declared Python versions need exact-source evidence. |
+| Use the current release candidate on Windows | Not verified. CI #461 has no Windows parity job; Windows and the other declared Python versions need exact-source evidence. |
 
 Neither the passing Linux nor macOS public matrix proves full compatibility.
 Windows and other declared Python versions still need exact-source evidence,
