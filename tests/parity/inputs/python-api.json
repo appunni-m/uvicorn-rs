@@ -91,6 +91,80 @@
       }
     },
     {
+      "case_id": "python-api.config-default-settings",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.Config"],
+        "signatures": ["uvicorn.Config"],
+        "config_probes": [
+          {
+            "app": "tests.parity.app:app",
+            "options": {},
+            "properties": [
+              "app",
+              "host",
+              "port",
+              "uds",
+              "fd",
+              "loop",
+              "http",
+              "http2",
+              "ws",
+              "ws_max_size",
+              "ws_max_queue",
+              "ws_ping_interval",
+              "ws_ping_timeout",
+              "ws_per_message_deflate",
+              "lifespan",
+              "env_file",
+              "log_config",
+              "log_level",
+              "access_log",
+              "use_colors",
+              "interface",
+              "reload",
+              "reload_dirs",
+              "reload_includes",
+              "reload_excludes",
+              "reload_delay",
+              "workers",
+              "proxy_headers",
+              "server_header",
+              "date_header",
+              "forwarded_allow_ips",
+              "root_path",
+              "limit_concurrency",
+              "limit_max_requests",
+              "limit_max_requests_jitter",
+              "backlog",
+              "timeout_keep_alive",
+              "timeout_notify",
+              "timeout_graceful_shutdown",
+              "timeout_worker_healthcheck",
+              "ssl_keyfile",
+              "ssl_certfile",
+              "ssl_keyfile_password",
+              "ssl_version",
+              "ssl_cert_reqs",
+              "ssl_ca_certs",
+              "ssl_ciphers",
+              "ssl_context_factory",
+              "headers",
+              "factory",
+              "h11_max_incomplete_event_size",
+              "reset_contextvars",
+              "should_reload",
+              "is_ssl",
+              "asgi_version"
+            ],
+            "methods": []
+          }
+        ]
+      }
+    },
+    {
       "case_id": "python-api.config-load-explicit-factory-type-error",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
@@ -140,6 +214,37 @@
             "keyword_arguments": {
               "app_dir": "tests/parity/fixtures/app_dir_only",
               "env_file": "tests/parity/fixtures/app_dir_only/factory.env",
+              "factory": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "python-api.run-env-file-interpolation-uses-process-environment",
+      "profile": "python-api",
+      "operation": "python.api.imports-signatures",
+      "covers": ["python.api.imports-signatures"],
+      "api": {
+        "imports": ["uvicorn.run"],
+        "signatures": ["uvicorn.run"],
+        "calls": [
+          {
+            "target": "os:environ.pop",
+            "arguments": ["UVICORN_RS_PARITY_DOTENV_EXPANSION"],
+            "keyword_arguments": {"default": null}
+          },
+          {
+            "target": "os:environ.__setitem__",
+            "arguments": ["UVICORN_RS_PARITY_DOTENV_SOURCE", "from-process-environment"],
+            "keyword_arguments": {}
+          },
+          {
+            "target": "uvicorn.run",
+            "arguments": ["uvicorn_rs_cli_app_dir:factory_dotenv_syntax_error"],
+            "keyword_arguments": {
+              "app_dir": "tests/parity/fixtures/app_dir_only",
+              "env_file": "tests/parity/fixtures/app_dir_only/factory-dotenv-syntax.env",
               "factory": true
             }
           }

@@ -15,7 +15,48 @@ Use these state labels precisely:
 - **Released:** the authorized distribution decision and required verification
   are complete.
 
-## Current release status (2026-10-27)
+## Current release gates (2026-10-28)
+
+The target identities and publisher workflow are settled: publish
+`asgi-lifespan-protocol-rs` and `uvicorn-rs` to crates.io, with HTTP/3 inside
+`uvicorn-rs` behind `http3`; publish the `uvicorn-rs` PyPI distribution from
+the `uvicorn-rs-py` adapter through `.github/workflows/release.yml`.
+
+On branch head `a4a520aeb42481cba06cbf4de597c993280d380e`, hosted CI
+[#451](https://github.com/appunni-m/uvicorn-rs/actions/runs/40626804831)
+passed the installed-wheel 695-case public parity matrix on Ubuntu 24.04.5 /
+x86-64 / CPython 3.12.13; its artifact is `uvicorn-rs-public-parity`
+(`12790545953`). The same 695 cases passed from a clean source checkout on
+macOS 15.7.7 ARM64 / CPython 3.12.13 (report SHA-256
+`d8e2e8abfe7db162ec122f70a8f537457aeaf20a5a781e1e8de622d0cee9a176`). These
+receipts cover the declared matrix on two environments; they do not close the
+broader compatibility contract.
+
+The exact-source unified coverage job in CI #451 is still running its complete
+three-repeat matrix. There is no completed 100% coverage report or accepted
+Coverage-MCP review receipt. By the maintainer's parity-first direction, no
+benchmark was started; the previous three-system run remains incomplete after
+the Linux ARM64 Hypercorn HTTP/3 slow-reader failure, and the upload-timeout
+cause remains unresolved.
+
+There is no clean candidate archive or downstream-consumer receipt for head
+`a4a520aeb`. The previous 0.2.2 inspection artifacts came from dirty source
+`5b1ec29201c963d8590c989b07318bb7366d7922` and cannot serve as release evidence.
+No version tag, Cargo package, or PyPI release was created for this candidate.
+
+GitHub API readback confirms the active `Protect main` ruleset on
+`refs/heads/main` with the required CI checks and the active `Protect version
+tags` ruleset on `refs/tags/v*`, blocking updates, deletion, and non-fast-forward
+changes. The latest recorded registry settings audit says the PyPI environment
+is restricted to `main`, requires `appunni-m`, and permits sole-maintainer
+self-approval; the reported PyPI publisher tuple is project `uvicorn-rs`,
+repository `appunni-m/uvicorn-rs`, workflow `release.yml`, environment `pypi`.
+The crates.io publisher tuple recorded in the earlier authenticated audit is
+repository `appunni-m/uvicorn-rs`, workflow `release.yml`, environment
+`crates-io`, for both release crates. Those registry-specific settings were
+not re-read in this check. See the [acceptance gates](#release-acceptance-gates).
+
+## Registry and packaging audit (2026-10-27; earlier source snapshot)
 
 The published Cargo versions are `asgi-lifespan-protocol-rs` 0.2.1 and
 `uvicorn-rs` 0.2.1, both from clean commit
@@ -170,7 +211,7 @@ login prompt, both 0.2.1 crates were published locally. The successful
 publication checksums and `.cargo_vcs_info.json` source commit are recorded in
 the current status above; this supersedes the earlier failed attempt.
 
-### Current candidate state (2026-10-26)
+### Candidate state (2026-10-26; historical)
 
 The local branch is `codex/uvicorn-rs-consolidation` at
 `dcfb66dcbe73217af730fbec08723cf38499106`, two local commits ahead of the
@@ -318,10 +359,11 @@ compatibility, coverage, or performance gates passed.
 
 ## Check release readiness
 
-This guide describes the release gates; it is not a live status report. Check
-the GitHub Actions runs and retained artifacts for the exact clean `main`
-commit under review. Do not rely on a run for an older commit, a partial matrix,
-or a status snapshot copied into documentation. Missing or expired artifacts
+This guide describes the release gates. The dated status above is a snapshot,
+not a live status feed. Check the GitHub Actions runs and retained artifacts
+for the exact clean `main` commit under review. Do not rely on a run for an older
+commit, a partial matrix, or a status snapshot copied into documentation.
+Missing or expired artifacts
 do not count as evidence.
 
 The current performance policy in

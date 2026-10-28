@@ -621,6 +621,49 @@
       }
     },
     {
+      "case_id": "cli.env-file-parses-export-quotes-and-interpolation",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_cli_app_dir:factory_dotenv_syntax_error",
+          "--app-dir",
+          "tests/parity/fixtures/app_dir_only",
+          "--factory",
+          "--env-file",
+          "tests/parity/fixtures/app_dir_only/factory-dotenv-syntax.env"
+        ],
+        "environment": {},
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
+      "case_id": "cli.env-file-does-not-set-uvicorn-server-options",
+      "profile": "cli",
+      "operation": "cli.process",
+      "covers": ["cli.process"],
+      "process": {
+        "invocation": "module",
+        "arguments": [
+          "uvicorn_rs_cli_app_dir:factory_env_file_error",
+          "--app-dir",
+          "tests/parity/fixtures/app_dir_only",
+          "--factory",
+          "--env-file",
+          "tests/parity/fixtures/app_dir_only/server-options.env"
+        ],
+        "environment": {
+          "UVICORN_PORT": null,
+          "UVICORN_RS_PARITY_FACTORY_SENTINEL": null
+        },
+        "working_directory": "project",
+        "timeout_seconds": 10
+      }
+    },
+    {
       "case_id": "cli.uvicorn-app-env-resolves-app-dir-target",
       "profile": "cli",
       "operation": "cli.process",

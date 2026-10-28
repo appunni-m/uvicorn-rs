@@ -2,6 +2,67 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Current public parity evidence — 2026-10-28
+
+The maintained `input@43` public matrix passed **695/695** on both Linux
+x86-64 and macOS ARM64. Hosted CI
+[#451](https://github.com/appunni-m/uvicorn-rs/actions/runs/40626804831)
+completed the installed normal-wheel parity job on Ubuntu 24.04.5 / CPython
+3.12.13 with zero failed, infrastructure-failed, or unrun cases. Its workflow
+head is `a4a520aeb42481cba06cbf4de597c993280d380e`; the report is in artifact
+`uvicorn-rs-public-parity` (ID `12790545953`, archive SHA-256
+`c7b4c407ace0fc723e9383399019d933804f72747cbf18e9c2fe4468b7e07b69`). The
+hosted report records source SHA-256
+`2b52f36acd7ecce4bec2edcf1df8a6b4cc696a44a4bfcfcfabf917af81fc95c0`.
+
+The same matrix passed **695/695** from clean source revision
+`a4a520aeb42481cba06cbf4de597c993280d380e` on macOS 15.7.7 ARM64 / CPython
+3.12.13 / Rust 1.98.1. Run ID `20188eddd2394a13a966e69d9443a723`; local report
+`target/kata-progress/public-parity-macos-a4a520a-20261028-retry.json`, SHA-256
+`d8e2e8abfe7db162ec122f70a8f537457aeaf20a5a781e1e8de622d0cee9a176`. The
+local report records `dirty=false`, 695 selected and executed cases, and no
+failures. The two results exercise distinct installation modes; they do not
+establish Windows, other Python versions, or unlisted Uvicorn behaviors.
+
+The committed input snapshot at `a4a520aeb` contains 695 cases. The working
+tree now adds three dotenv cases for `export` syntax, single-quoted values,
+variable interpolation, process-environment precedence, and the rule that
+`UVICORN_*` settings inside an app env file do not configure the server, plus
+`python-api.config-default-settings` for the public `Config` defaults. The
+dotenv cases are `cli.env-file-parses-export-quotes-and-interpolation`,
+`python-api.run-env-file-interpolation-uses-process-environment`, and
+`cli.env-file-does-not-set-uvicorn-server-options`. The first two passed 2/2
+on macOS 15.7.7 ARM64 / CPython 3.12.13 (run
+`5831e3343fe3461f95269110aeaa51cf`; report
+`target/kata-progress/dotenv-parity-a4a520a-20261028.json`, SHA-256
+`90baae91320f0113a12489b0e13fdf8262d44a6039427ae5909a5b79778da0af`). The
+server-setting case passed 1/1 separately (run
+`3b3b75f1bfe3467391ac8aa1c449db62`; report
+`target/kata-progress/server-env-file-parity-a4a520a-20261028.json`, SHA-256
+`6a61c35761139cbc1314ed4197b986f78edb6dbd6f412dee16a8ff1cfc00527a`). The
+first run used CLI input SHA-256
+`2d3daad105c8c0e59b0d2198b3a858d8586a09702f664aa5229bbf7683c36dc3` and Python
+API input SHA-256 `021aba22c0fe2db112b919ac47ea2b3c2a8a5a267b227201f51e7159b50bcd7f`;
+the second used CLI input SHA-256
+`7e68c4109ea40f4cfb1bc4a913193f53648979fddd41b2c2e99a594ccf6e1d24`. Both
+reports have `dirty=true` targets, so this is diagnostic evidence only; the
+cases are not part of the committed 695-case run or accepted release evidence.
+The first `Config` default probe found that the target exposed `env_file` and
+left `headers` as `None`; Uvicorn 0.54.0 exposes no `env_file` attribute and
+normalizes default headers to an empty list. The target now matches both
+behaviors. Its focused retry passed 1/1 on the same macOS/Python environment
+(run `01848e5ec8734ac0913eb76a34853267`; report
+`target/kata-progress/config-defaults-parity-a4a520a-20261028-retry.json`,
+SHA-256 `5f15710cf6b82104d5275b294c8e05b80d26e47457aa7609b45e4105b46f9e80`,
+Python API input SHA-256
+`10dc5a3b3463d1ed96abae295c5324d65396600cfbdd0ccc29be5eafde10ad24`). That
+report also has a dirty target and remains diagnostic only.
+
+The exact-source three-repeat unified coverage job in CI #451 (job
+`122613983153`) is still running. There is no current 100% coverage result or
+accepted Coverage-MCP review receipt. Benchmark work remains paused until the
+broader parity work is complete.
+
 The last fully successful hosted acceptance receipt recorded here is CI run
 [39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
 on commit `dd6ed00f551c02196544ae9452c7b0747452a422`. Its unified matrix

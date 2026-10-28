@@ -248,8 +248,10 @@ class Config:
     ):
         values = locals().copy()
         values.pop("self")
+        values.pop("env_file")
         for name, value in values.items():
             setattr(self, name, value)
+        self.headers = headers or []
 
         self.configure_logging()
 
