@@ -25,22 +25,21 @@ implemented by the optional **uvicorn-rs-py** adapter. The publisher is
 candidates. The PyPI trusted publisher tuple is
 **appunni-m/uvicorn-rs / release.yml / pypi**.
 
-PR #19 remains a draft. CI #463 checked committed PR head
-**73be515c899e3e8c5e00b231cce994934e90fcd7**, based on main
+PR #19 remains a draft. CI #464 checked committed PR head
+**a4b37c554deb99638d190ecf03e99857ecc49232**, based on main
 **86e72e181d00feca1b4db7f30377d5d9d4345b83**. Release handoff, native framework
 composition, exact Rust minimum, Rust format/lint/feature/docs, and 717/717
 installed-wheel public parity on Linux x86-64 passed. The unified three-repeat
-coverage gate was still running when this status was recorded. Linux sdist
-packaging failed because `maturin` was missing from PATH; macOS ARM64 failed
-while expanding an empty Bash array under `set -u`; and Windows wheel
-consumption failed before parity, with a CP1252 diagnostic error hiding its
-original cause. Local commit **33d4e0d1c0801eec338592a29fffb616f395acd6** fixes
-the identified Linux/macOS workflow issues and preserves the Windows error
-output. Its focused sdist consumer passed locally, but the commit is not
-pushed or validated by hosted CI. Docs run
-[#180](https://github.com/appunni-m/uvicorn-rs/actions/runs/40761550224)
-passed for committed head `73be515`; the documentation refresh recorded here
-has not yet been deployed.
+coverage job is still running. Linux artifact verification failed while
+recording the pinned `uvx maturin` command; Windows candidate setup failed
+before parity because `uvloop` was included in the benchmark dependency set;
+macOS ARM64 candidate parity failed on generated TLS certificates rejected by
+Rustls. Local commits **eacc9609769928e8b430966199b0845326bdfeb8** and
+**dd525c2b08b47f0c0016073cdf7c53204a29d8c9** address these issues. The
+certificate change passed all 12 affected TLS cases in focused local macOS
+parity, but the commits have not yet been validated by hosted CI. Docs run
+#181 passed for the earlier committed source; this documentation refresh still
+needs its own hosted deployment.
 
 The preceding CI [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
 passed **707/707** public parity cases on Linux x86-64 for commit
@@ -51,14 +50,14 @@ pre-4f7 source and must be rebuilt for the current candidate. The standalone
 HTTP/3 consumer compiles against the current local crate source, but that is
 not a clean published-artifact receipt.
 
-The current release blockers are exact-source 100% coverage and its independent
-Coverage-MCP receipt, full Uvicorn 0.54.0 behavior across the declared OS/Python
-matrix, matched benchmarks after parity, and hosted candidate
-artifact/clean-consumer receipts. The 714-case Linux parity checkpoint is not
-the full compatibility matrix. The previous
-three-system benchmark is incomplete: Linux ARM64 Hypercorn HTTP/3 failed in a
-slow-reader case, and an HTTP/1 upload timeout remains unresolved. Existing
-measurements do not support a general performance-gain claim.
+The current release blockers are the exact-source 100% coverage result and its
+independent Coverage-MCP receipt, full Uvicorn 0.54.0 behavior across the
+declared OS/Python matrix, matched benchmarks after parity, and hosted candidate
+artifact/clean-consumer receipts. CI #464's 717-case Linux parity receipt is
+not the full compatibility matrix. The previous three-system benchmark is
+incomplete: Linux ARM64 Hypercorn HTTP/3 failed in a slow-reader case, and an
+HTTP/1 upload timeout remains unresolved. Existing measurements do not support
+a general performance-gain claim.
 
 The 2026-10-27 registry audit recorded the earlier `uvicorn-rs` 0.2.1
 release. The maintainer has since reported deleting that old server-crate

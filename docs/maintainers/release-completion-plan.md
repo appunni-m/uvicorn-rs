@@ -41,20 +41,21 @@ belong to the release tasks rather than being copied into every prerequisite.
    or push while one of its required jobs is active. Preserve the PR branch head
    and synthetic merge SHA separately. When the run finishes, use its observed
    outcomes to choose only the failing gates for the next batch. CI
-   [#463](https://github.com/appunni-m/uvicorn-rs/actions/runs/40761550017)
-   checks committed PR head `73be515c899e3e8c5e00b231cce994934e90fcd7` against
+   [#464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247)
+   checks committed PR head `a4b37c554deb99638d190ecf03e99857ecc49232` against
    main at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
    framework composition, release-evidence handoff, and 717/717 installed-wheel
-   public parity passed; unified parity/coverage is still running. Linux sdist
-   setup failed because `maturin` was missing. macOS ARM64 failed on an empty
-   Bash array under `set -u`. Windows wheel consumption failed before parity;
-   its diagnostic printer raised a CP1252 error before revealing the original
-   failure. Local commit `33d4e0d1c0801eec338592a29fffb616f395acd6` fixes the
-   identified Linux/macOS issues and preserves the Windows error output. The
-   focused pinned sdist consumer passed locally; this commit is not pushed and
-   has no hosted validation yet. Wait for #463 to complete before pushing. Docs
-   deployment [#180](https://github.com/appunni-m/uvicorn-rs/actions/runs/40761550224)
-   passed for committed source. Do not repeat unrelated local matrices.
+   public parity passed; unified parity/coverage is still running. Linux
+   artifact evidence rejected the valid pinned `uvx maturin` build command;
+   Windows candidate setup failed before parity because `uvloop` was included
+   in the benchmark dependency set; macOS ARM64 parity had TLS certificate
+   failures rejected by Rustls. Local commits
+   `eacc9609769928e8b430966199b0845326bdfeb8` and
+   `dd525c2b08b47f0c0016073cdf7c53204a29d8c9` fix those issues. The TLS change
+   passed the 12 affected local macOS cases, but no exact-source hosted run has
+   validated these commits. Wait for #464 coverage to complete before pushing.
+   Docs run #181 passed for the earlier committed source; this refresh needs a
+   new docs deployment. Do not repeat unrelated local matrices.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions

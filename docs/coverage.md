@@ -6,16 +6,17 @@
 
 ## Current unified coverage status (2026-10-29)
 
-PR #19 remains a draft. CI #463 checked committed PR head
-`73be515c899e3e8c5e00b231cce994934e90fcd7`, based on `main` at
+PR #19 remains a draft. CI #464 checked committed PR head
+`a4b37c554deb99638d190ecf03e99857ecc49232`, based on `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its unified three-repeat matrix
-was still running when this status was recorded; therefore it has no completed
-coverage result or accepted Coverage-MCP receipt yet. Release handoff, native
+was still running when this status was recorded; it has no completed coverage
+result or accepted Coverage-MCP receipt yet. Release handoff, native
 composition, minimum Rust, Rust quality, and Linux 717/717 installed-wheel
-parity passed. Candidate package jobs failed before acceptance. Local commit
-`33d4e0d1c0801eec338592a29fffb616f395acd6` fixes the identified Linux and
-macOS workflow failures and improves Windows diagnostics, but it has not been
-validated by a hosted run.
+parity passed. Linux and Windows candidate jobs failed during artifact setup or
+evidence recording, and macOS parity had TLS fixture failures. Local commits
+`eacc9609769928e8b430966199b0845326bdfeb8` and
+`dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address those failures, but are not
+included in #464 and still need exact-source hosted validation.
 
 The post-change focused receipt is local-only:
 `target/coverage-diagnostic/ci461-startup-shutdown-fault-fix/coverage-report.json`,
@@ -32,9 +33,10 @@ The prior run, CI #456, was superseded when #457 started. Its coverage job was
 canceled and its retained artifact is not a completed gate receipt. CI #461
 also missed the 100% gate; its current-source focused follow-up covers one case
 only and does not replace the full report. CI #462 is a completed historical
-failure. CI #463 is the active full report for PR head `73be515`; once it
-completes, inspect its result before pushing the local fix commit. An accepted
-independent Coverage-MCP review is still outstanding.
+failure. CI #463 is historical and does not bind to the latest local commits.
+CI #464 is the active full report for PR head `a4b37c5`; inspect its result
+when complete, then require a new exact-source run for the local branch commits.
+An accepted independent Coverage-MCP review is still outstanding.
 
 ### Prior CI #455 coverage result (source 4a429684)
 
