@@ -1154,6 +1154,28 @@ commit `098be406cbfea01ee88431b5853b44594780cf48`. This is a focused
 single-connection upload parity case; it does not reproduce the benchmark's
 64-client concurrency or resolve the benchmark timeout by itself.
 
+### Clean-source public parity on macOS ARM64 — 2026-10-28
+
+The full current `input@43` public matrix passed **691/691** cases against
+Uvicorn 0.54.0 on macOS 15.7.7 ARM64 and CPython 3.12.13. The run used clean
+commit `b0f270fe2b991fe87b9347eb6b21a2515e3cf96a`, source SHA-256
+`90f196142b0afc493c4d4ec755161f714de694d7475b76e4ebc10719655dd121`, and no
+working-tree changes. Run ID:
+`4dbcb5bc010041439012b1b25ba6f90b`; report SHA-256
+`3224c965ab6e8a3f909f7244e6c099638fdd284fe4f238d0c3f1a644868f8b87`.
+The result covers the declared public inputs on this macOS/Python combination;
+it is not an installed-wheel result or evidence for Windows and other Python
+versions. Hosted [CI #447](https://github.com/appunni-m/uvicorn-rs/actions/runs/40615493115)
+reported 690/691 on its installed Linux wheel. The only mismatch was
+`python-api.run-rejects-invalid-default-header-value`, where the response-start
+failure produced extra disconnect log events. A focused run of that one case
+passes 1/1 against Uvicorn 0.54.0 on the current modified source on macOS
+15.7.7 ARM64 / CPython 3.12.13; run `caf483e38ef64fc3bb8446274504e2fb`,
+report SHA-256
+`72a8b4f38781abd5c00548d4d4a882d60a51f950cdd91e196f0332b0c6db605a`.
+This local result does not confirm the Linux wheel. CI #447's separate
+three-pass unified coverage job is still running.
+
 ### Input@40 baseline CLI and Python API profile runs — 2026-10-27
 
 The input@40 CLI baseline passed 60/60 cases against Uvicorn 0.54.0 in
@@ -1755,8 +1777,8 @@ are:
 
 These selected results are focused receipts. Hosted [CI #435](https://github.com/appunni-m/uvicorn-rs/actions/runs/40591281095)
 later passed the complete declared public `input@42` matrix, 660/660, using a
-clean-source installed wheel on Linux x86-64. That result does not establish
-Windows/macOS parity or full Uvicorn compatibility beyond the declared inputs.
+clean-source installed wheel on Linux x86-64. That Linux result does not establish Windows or cross-platform parity by itself,
+or full Uvicorn compatibility beyond the declared inputs.
 
 ## TLS 1.2 cipher selection
 

@@ -1863,6 +1863,7 @@ struct ServerContext {
     root_path: String,
     tcp_tls: Option<TlsAcceptor>,
     default_headers: Vec<(Bytes, Bytes)>,
+    default_header_error: Option<InvalidDefaultHeader>,
     date_header: bool,
     http2_enabled: bool,
     ws_max_size: usize,
@@ -2579,7 +2580,9 @@ struct ResponseStart {
 }
 
 #[derive(Debug)]
-struct InvalidAsgiResponseStart;
+struct InvalidAsgiResponseStart {
+    default_header_error: Option<InvalidDefaultHeader>,
+}
 
 impl fmt::Display for InvalidAsgiResponseStart {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -2587,8 +2590,15 @@ impl fmt::Display for InvalidAsgiResponseStart {
     }
 }
 
-impl StdError for InvalidAsgiResponseStart {}
+impl StdError for InvalidAsgiResponseStart {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        self.default_header_error
+            .as_ref()
+            .map(|error| error as &(dyn StdError + 'static))
+    }
+}
 
+#[derive(Clone, Copy)]
 enum InvalidDefaultHeader {
     Name,
     Value,
@@ -3441,6 +3451,7 @@ struct AsgiIo {
     preserve_application_on_disconnect: Arc<AtomicBool>,
     response_start_attempted: Arc<AtomicBool>,
     response_started: Arc<AtomicBool>,
+    default_header_error: Option<InvalidDefaultHeader>,
     start: mpsc::Sender<ResponseStart>,
     body: mpsc::Sender<BodyChunk>,
     diagnostics: RuntimeDiagnostics,
@@ -3571,13 +3582,6 @@ impl AsgiIo {
         match event_type {
             AsgiEventType::HttpResponseStart => {
                 slf.response_start_attempted.store(true, Ordering::Release);
-                if slf.connection_closed.is_closed()
-                    || slf.request_disconnected.load(Ordering::Acquire)
-                {
-                    return Err(PyOSError::new_err(
-                        "client disconnected before response start",
-                    ));
-                }
                 let status_value =
                     coverage_value!(HttpResponseStartStatusGetItem, message.get_item("status"))?;
                 let status_value = status_value
@@ -3586,6 +3590,20 @@ impl AsgiIo {
                     coverage_value!(HttpResponseStartStatusExtract, status_value.extract())?;
                 let status = StatusCode::from_u16(status)
                     .map_err(|_| PyRuntimeError::new_err("Invalid HTTP response status code."))?;
+                // Uvicorn validates configured headers as part of the
+                // response.start send. Reject a known-invalid default header
+                // before acknowledging the event, so the application cannot
+                // continue to response.body after the response has failed.
+                if let Some(error) = slf.default_header_error {
+                    return Err(PyRuntimeError::new_err(error.to_string()));
+                }
+                if slf.connection_closed.is_closed()
+                    || slf.request_disconnected.load(Ordering::Acquire)
+                {
+                    return Err(PyOSError::new_err(
+                        "client disconnected before response start",
+                    ));
+                }
                 let headers_value =
                     coverage_value!(HttpResponseStartHeadersGetItem, message.get_item("headers"))?;
                 let header_values = coverage_value!(
@@ -7300,6 +7318,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         };
         limit.saturating_add(jitter)
     });
+    let default_header_error = find_invalid_default_header(&options.default_headers);
     let server = Arc::new(ServerContext {
         app,
         invoke,
@@ -7309,6 +7328,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         root_path: options.root_path,
         tcp_tls: options.tcp_tls,
         default_headers: options.default_headers,
+        default_header_error,
         date_header: options.date_header,
         http2_enabled: options.http2_enabled,
         ws_max_size: options.ws_max_size,
@@ -8951,6 +8971,7 @@ async fn handle_request_parts(
 ) -> Result<Response<ResponseBody>, BoxError> {
     let http_version = parts.version;
     let diagnostics = context.server.diagnostics.clone();
+    let default_header_error = context.server.default_header_error;
     diagnostics.http_request_started();
     let response_latency_started = diagnostics.http_response_latency_started();
     let response_timing_diagnostics = diagnostics.clone();
@@ -8990,6 +9011,7 @@ async fn handle_request_parts(
                         preserve_application_on_disconnect: app_preserve_application_on_disconnect,
                         response_start_attempted: app_response_start_attempted,
                         response_started: app_response_started,
+                        default_header_error,
                         start: start_tx,
                         body: body_tx,
                         diagnostics: diagnostics.clone(),
@@ -9048,11 +9070,15 @@ async fn handle_request_parts(
     let app_task_wins_start_select = false;
 
     let response_without_start = |result| -> Result<Response<ResponseBody>, BoxError> {
-        observe_app_before_response_start(result)?;
+        let invalid_default_header_response_start =
+            default_header_error.is_some() && response_start_attempted.load(Ordering::Acquire);
+        observe_app_before_response_start(result, invalid_default_header_response_start)?;
         if response_started.load(Ordering::Acquire)
             || response_start_attempted.load(Ordering::Acquire)
         {
-            return Err(Box::new(InvalidAsgiResponseStart));
+            return Err(Box::new(InvalidAsgiResponseStart {
+                default_header_error,
+            }));
         }
         let error_body = if http_version == Version::HTTP_3 {
             Bytes::new()
@@ -9348,7 +9374,7 @@ async fn handle_websocket_request_inner(
         })?,
         result = app_task.as_mut() => {
             app_task.into_handle();
-            observe_app_before_response_start(result)?;
+            observe_app_before_response_start(result, false)?;
             return Ok(response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 full_body(Bytes::from_static(b"Internal Server Error")),
@@ -10090,12 +10116,17 @@ fn observe_app_after_response(result: Result<PyResult<Py<PyAny>>, tokio::task::J
 
 fn observe_app_before_response_start(
     result: Result<PyResult<Py<PyAny>>, tokio::task::JoinError>,
+    suppress_python_error_log: bool,
 ) -> Result<(), BoxError> {
     match result {
         Ok(Ok(_)) => log_error(format_args!(
             "uvicorn-rs: ASGI app completed without response.start"
         )),
-        Ok(Err(error)) => Python::attach(|py| error.print(py)),
+        Ok(Err(error)) => Python::attach(|py| {
+            if !suppress_python_error_log && !python_asgi_error_was_logged(&error, py) {
+                error.print(py);
+            }
+        }),
         Err(error) => return Err(Box::new(error)),
     }
     Ok(())
@@ -10262,6 +10293,18 @@ fn full_body(body: Bytes) -> ResponseBody {
     Full::new(body)
         .map_err(|never| -> BoxError { match never {} })
         .boxed_unsync()
+}
+
+fn find_invalid_default_header(headers: &[(Bytes, Bytes)]) -> Option<InvalidDefaultHeader> {
+    for (name, value) in headers {
+        if HeaderName::from_bytes(name).is_err() {
+            return Some(InvalidDefaultHeader::Name);
+        }
+        if HeaderValue::from_bytes(value).is_err() {
+            return Some(InvalidDefaultHeader::Value);
+        }
+    }
+    None
 }
 
 fn validated_default_headers(headers: &[(Bytes, Bytes)]) -> Vec<(HeaderName, HeaderValue)> {
