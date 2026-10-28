@@ -18,7 +18,7 @@ env:
   RUST_TOOLCHAIN: "1.98.1"
   MSRV_TOOLCHAIN: "1.85.0"
   PYTHON_VERSION: "3.12.13"
-  WHEEL_PYTHON_VERSION: "3.12.10"
+  WHEEL_PYTHON_VERSION: "3.12.13"
   UV_VERSION: "0.11.29"
   GUNICORN_VERSION: "23.0.0"
   MATURIN_VERSION: "1.14.1"
@@ -377,7 +377,8 @@ jobs:
             --oracle-python "$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle/bin/python" \
             --installed-candidate \
             --output target/asgi-parity/result.json 2>&1 | tee target/asgi-parity/run.log
-          .venv/bin/python scripts/check_ci_evidence.py parity target/asgi-parity/result.json
+          .venv/bin/python scripts/check_ci_evidence.py parity \
+            target/asgi-parity/result.json --offline --require-clean
       - name: Verify normal fault-seam exclusion with existing public cases
         run: >-
           .venv/bin/python scripts/audit_normal_build.py
@@ -392,6 +393,7 @@ jobs:
           name: uvicorn-rs-public-parity
           path: |
             target/asgi-parity/
+            target/normal-wheels/*.whl
             target/normal-audit/
           if-no-files-found: error
           retention-days: 90
@@ -518,6 +520,11 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check --no-input maturin==${{ env.MATURIN_VERSION }}
           python scripts/check_release_version.py
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: runner.os == 'Linux'
+        with:
+          name: uvicorn-rs-public-parity
+          path: target/public-parity
       - name: Build abi3 wheel and install the exact artifact
         shell: bash
         run: |
@@ -526,12 +533,25 @@ jobs:
           set +e
           (
             set -euo pipefail
-            maturin build --release --locked --interpreter python --out dist
+            mkdir -p dist
+            if [ "$RUNNER_OS" = 'Linux' ]; then
+              wheels=(target/public-parity/normal-wheels/*.whl)
+              test "${#wheels[@]}" -eq 1
+              test -s target/public-parity/asgi-parity/result.json
+              cp "${wheels[0]}" dist/
+              cp target/public-parity/asgi-parity/result.json dist/parity-linux-x86_64.json
+            else
+              maturin build --release --locked --interpreter python --out dist
+            fi
             wheels=(dist/*.whl)
             test "${#wheels[@]}" -eq 1
             python scripts/check_replacement_install.py --wheel "${wheels[0]}"
-            python -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
-            python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
+            if [ "$RUNNER_OS" = 'Linux' ]; then
+              cp target/public-parity/asgi-parity/wheel-consumer.json dist/consumer-linux-x86_64.json
+            else
+              python -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
+              python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
+            fi
           ) >"$log" 2>&1
           status=$?
           set -e
@@ -642,25 +662,9 @@ jobs:
           packages=(target/native-package/package/*.crate)
           test "${#packages[@]}" -eq 2
           cp "${packages[@]}" dist/
-      - name: Run complete public parity on the exact Linux candidate wheel
+      - name: Revalidate the reused exact-source Linux parity receipt
         if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          uv sync --python "$WHEEL_PYTHON_VERSION" --group benchmark --extra standard --frozen --no-install-project
-          wheels=(dist/*.whl)
-          test "${#wheels[@]}" -eq 1
-          uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
-          uv pip install --python .venv/bin/python "gunicorn==$GUNICORN_VERSION"
-          oracle_environment="$RUNNER_TEMP/uvicorn-rs-release-oracle"
-          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$WHEEL_PYTHON_VERSION" \
-            --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
-          uv pip install --python "$oracle_environment/bin/python" "gunicorn==$GUNICORN_VERSION"
-          .venv/bin/python scripts/run_parity.py \
-            --oracle-python "$oracle_environment/bin/python" \
-            --installed-candidate \
-            --output dist/parity-linux-x86_64.json
-          .venv/bin/python scripts/check_ci_evidence.py parity dist/parity-linux-x86_64.json
+        run: python scripts/check_ci_evidence.py parity dist/parity-linux-x86_64.json --offline --require-clean
       - name: Record source, build, license and artifact identities
         shell: bash
         run: |
