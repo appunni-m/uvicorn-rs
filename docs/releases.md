@@ -37,9 +37,10 @@ The local input@43 inventory now has 701 public cases. It adds
 `uvicorn.run()`; the focused comparison passed 1/1 against Uvicorn 0.54.0 on
 macOS ARM64. The clean-source receipt binds that result to local commit
 `481fcc0177ed900218fb39b89041e216edc2885d`, but that commit is not pushed and
-the case is not included in CI #453. The parity and maintainer-contract docs
-have local edits to record this receipt; they still need the release-status
-update, a strict docs build, and a commit.
+the case is not included in CI #453. The parity, maintainer-contract, release,
+and support-matrix docs record the receipt. The hash-locked strict docs build
+passes on the current local documentation tree. The source and documentation
+commits are local and waiting to be pushed until CI #453 finishes.
 
 There is no clean candidate archive or downstream-consumer receipt for commit
 `481fcc0`. The previous 0.2.2 inspection artifacts came from dirty source
