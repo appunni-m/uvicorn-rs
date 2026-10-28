@@ -194,7 +194,37 @@ def validate_sdist_source_contents(contents: dict[str, bytes], root: Path = ROOT
         if name == "PKG-INFO":
             continue
         source = root / name
-        if name != "Cargo.toml" and (not source.is_file() or source.read_bytes() != data):
+        if name == "crates/uvicorn-rs/Cargo.toml":
+            try:
+                original = tomllib.loads(source.read_text(encoding="utf-8"))
+                packaged = tomllib.loads(data.decode("utf-8"))
+            except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+                raise ValueError(f"source archive has invalid {name}") from error
+            expected = dict(original)
+            package = original.get("package", {})
+            excludes = package.get("exclude", []) if isinstance(package, dict) else []
+            examples = original.get("example", [])
+            if not isinstance(excludes, list) or any(not isinstance(pattern, str) for pattern in excludes):
+                raise ValueError(f"{name} package exclusions must be a string list")
+            if not isinstance(examples, list):
+                raise ValueError(f"{name} examples must be a list")
+            retained_examples = []
+            for example in examples:
+                if not isinstance(example, dict) or not isinstance(example.get("name"), str):
+                    raise ValueError(f"{name} has an invalid example target")
+                example_path = example.get("path", f"examples/{example['name']}.rs")
+                if not isinstance(example_path, str):
+                    raise ValueError(f"{name} example path must be a string")
+                excluded = any(fnmatchcase(example_path, pattern) for pattern in excludes)
+                if not excluded or example_path in contents:
+                    retained_examples.append(example)
+            if retained_examples:
+                expected["example"] = retained_examples
+            else:
+                expected.pop("example", None)
+            if packaged != expected:
+                raise ValueError(f"source archive {name} differs beyond excluded-example normalization")
+        elif name != "Cargo.toml" and (not source.is_file() or source.read_bytes() != data):
             raise ValueError(f"source archive differs from reviewed checkout: {name}")
         hashes[name] = sha256(data)
     return dict(sorted(hashes.items()))
