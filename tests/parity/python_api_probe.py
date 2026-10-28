@@ -410,6 +410,24 @@ async def asgi3_app(scope, receive, send):
         logger.error("python-api log-level error sentinel")
         logger.critical("python-api log-level critical sentinel")
     await receive()
+    if scope["path"] == "/python-api-second-signal-escalation":
+        marker_path = os.environ.get("ASGI_PARITY_SIGNAL_HOLD_MARKER")
+        if marker_path is None:
+            raise RuntimeError("signal-escalation input is missing its hold marker")
+        body = b"python-api-signal-escalation-hold"
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [
+                (b"content-type", b"text/plain"),
+                (b"content-length", str(len(body)).encode("ascii")),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+        with open(marker_path, "a", encoding="utf-8"):
+            pass
+        await asyncio.Event().wait()
+        return
     if scope["path"] == "/contextvars":
         body = request_context.get().encode("ascii")
         await send({
@@ -985,14 +1003,14 @@ except KeyboardInterrupt:
         or request["path"] == "/python-api-graceful-timeout-hold"
     ):
         if (
-            request["invocation"] != "module-cli"
+            request["invocation"] not in {"api", "module-cli"}
             or request["path"] not in {
                 "/python-api-second-signal-escalation",
                 "/python-api-graceful-timeout-hold",
             }
         ):
             raise RuntimeError(
-                "shutdown signal sequences require the module-CLI hold input"
+                "shutdown signal sequences require a supported public-API hold input"
             )
         signal_hold_directory = tempfile.TemporaryDirectory(
             prefix="uvrs-signal-escalation-"

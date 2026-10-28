@@ -64,33 +64,39 @@ report also has a dirty target and remains diagnostic only.
 CI #451 was superseded by the push to `8f50720cd` and canceled during its first
 coverage attribution pass at case 785/1,217. Its uploaded coverage artifact is
 incomplete and is not release evidence. CI
-[#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307) is
-validating the current commit. Its installed-wheel public parity job passed
-699/699 on Ubuntu 24.04.5 x86-64 / CPython 3.12.13 with zero failures,
-infrastructure failures, or unrun cases. The report is artifact
-`uvicorn-rs-public-parity` (ID `12793456007`, archive SHA-256
-`3506da0619ccf23299e505a893d3b10f63cbfa82532226ba3df12ef8c0dcb138`); it
-records merge commit `3b2ed0b824e8636eeace728bd4b092fcde09aab5`, clean source,
-and source SHA-256
-`92af8083d758e2152bfdd424cdddd8b96a0985cdaade7025921bd7be131b1169`. The
-unified coverage job is still running. There is no current 100% coverage result
-or accepted Coverage-MCP review receipt. Benchmark work remains paused until
-the broader parity work is complete.
+[#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307)
+passed 699/699 installed-wheel public cases, but its coverage job was
+superseded. The next exact-head run,
+[#453](https://github.com/appunni-m/uvicorn-rs/actions/runs/40635905337),
+passed 700/700 installed-wheel public cases on Ubuntu 24.04.5 x86-64 / CPython
+3.12.13 with zero failures, infrastructure failures, or unrun cases. Its
+artifact `uvicorn-rs-public-parity` (ID `12793199057`, archive SHA-256
+`3908c76a4bf31b9b049338f41301004016c590ff4371d56545b5ca5852912f74`) records
+merge commit `ce27229840877cae12237ecaa31499560883e3fd`, `dirty=false`, and
+source SHA-256
+`92af8083d758e2152bfdd424cdddd8b96a0985cdaade7025921bd7be131b1169`. Run
+[#453](https://github.com/appunni-m/uvicorn-rs/actions/runs/40635905337) is
+still attributing and repeating the exact-source coverage matrix; no complete
+100% result or accepted Coverage-MCP receipt is available yet. Benchmarks
+remain paused until the broader parity work is complete.
 
-The local input@43 working tree adds
-`python-api.run-serves-request-and-shuts-down-on-sigterm`, comparing a
-successful request and single-process `uvicorn.run()` shutdown on SIGTERM.
-It passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13
-(run `3496dda33ed84e84ad5672c237a378fd`; report
+The 700-case `input@43` snapshot includes
+`python-api.run-serves-request-and-shuts-down-on-sigterm`, which compares a
+successful request and single-process `uvicorn.run()` shutdown on SIGTERM. Its
+focused local case passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 /
+CPython 3.12.13 (run `3496dda33ed84e84ad5672c237a378fd`; report
 `target/kata-progress/python-api-run-sigterm.json`, SHA-256
-`1d2493c529c041fb1822597fb37ea7168210fe3fefc6d41956bd0ded7072f4b9`; input
-SHA-256 `7b71196c73a8c6fe3df0c2bd6354e0c2fd44d24733c67bbc97a239f4d6e98461`).
-The target is dirty at local commit `e38365c229398bfd75f4646ab1b01b4939c37497`
-with source SHA-256
-`92af8083d758e2152bfdd424cdddd8b96a0985cdaade7025921bd7be131b1169`, so this
-is diagnostic evidence only. CI #452 passed the pushed 699-case snapshot but
-predates the added input; the local input inventory now contains 700 public
-oracle cases. The new input still needs clean-source CI evidence.
+`1d2493c529c041fb1822597fb37ea7168210fe3fefc6d41956bd0ded7072f4b9`). That
+earlier target was dirty, so the local run was diagnostic; CI #453 now includes
+the committed input.
+
+The current working tree adds
+`python-api.run-second-sigint-forces-inflight-request-shutdown` for the direct
+`uvicorn.run()` API, bringing the local public input inventory to 701 cases.
+Its focused comparison passed 1/1 as dirty-source diagnostic evidence; the
+receipt is documented in [actual repeated-SIGINT shutdown](#actual-repeated-sigint-shutdown-with-an-active-request).
+This new input is not included in CI #453 and still needs clean-source CI
+evidence.
 
 The last fully successful hosted acceptance receipt recorded here is CI run
 [39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)
@@ -1432,6 +1438,8 @@ Python API input@38 SHA-256
 `48368db819691cf0ef7ed4e5d8389e890498c047870a3f8fa562826b07d077a4`. Full CLI
 and platform parity remain open.
 
+### Actual repeated-SIGINT shutdown with an active request
+
 `python-api.module-cli-second-sigint-forces-inflight-request-shutdown` passed
 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust
 1.98.1. Both module-CLI processes served HTTP 200, received two actual SIGINT
@@ -1449,6 +1457,19 @@ The receipt stores server log events, but the comparison omits them because
 platform-specific traceback details differ during forced cancellation. This
 single-platform case does not close broader signal, worker, reload, socket,
 or cross-platform process-control parity.
+
+The direct API variant, `python-api.run-second-sigint-forces-inflight-request-shutdown`,
+also passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13
+/ Rust 1.98.1. Both `uvicorn.run()` processes served HTTP 200, received two
+SIGINT signals while the ASGI request remained active, exited 0, and did not
+time out. Run `eda1457b1444464fbfc80ea3e9a64e45`; report
+`target/kata-progress/python-api-run-second-sigint.json`, SHA-256
+`49db06176ccdc1a44e26d6f2b4716105ad801580c421fccd3ba4b970d8e7cd4d`; input
+SHA-256 `dd6860bd86053d72c60251bde4a1181f970d8cb47145b84b96f2bc94c77509d0`.
+The target was dirty at revision `3edd3b3a4916bebd36d4193b1fd805c09048d687`,
+so this is a diagnostic receipt, not clean-source or hosted CI evidence. The
+added public input is not included in CI #453 and does not close broad
+process-control parity.
 
 `python-api.module-cli-graceful-timeout-cancels-inflight-request` passed 1/1
 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1.

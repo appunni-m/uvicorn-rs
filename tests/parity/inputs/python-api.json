@@ -886,6 +886,31 @@
       }
     },
     {
+      "case_id": "python-api.run-second-sigint-forces-inflight-request-shutdown",
+      "profile": "python-api",
+      "operation": "python.api.run-http-signal-sequence",
+      "covers": ["python.api.run-http-signal-sequence"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-second-signal-escalation",
+          "shutdown_signal": "SIGINT",
+          "shutdown_signal_sequence": ["SIGINT", "SIGINT"],
+          "timeout_seconds": 8,
+          "lifespan": "off",
+          "invocation": "api",
+          "root_path": "",
+          "required_observations": {
+            "response_received": true,
+            "response_status": 200,
+            "shutdown_signals_sent": ["SIGINT", "SIGINT"],
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
       "case_id": "python-api.module-cli-graceful-timeout-cancels-inflight-request",
       "profile": "python-api",
       "operation": "python.api.run-http-graceful-timeout",

@@ -3233,12 +3233,12 @@ def load_contract(
                             f"{case_id}.api.run_http.shutdown_signal_sequence must contain at least two supported signals and end with shutdown_signal"
                         )
                     if (
-                        run_http["invocation"] != "module-cli"
+                        run_http["invocation"] not in {"api", "module-cli"}
                         or run_http["path"]
                         != "/python-api-second-signal-escalation"
                     ):
                         raise ParityError(
-                            f"{case_id}.api.run_http repeated signal input requires the module-CLI escalation fixture path"
+                            f"{case_id}.api.run_http repeated signal input requires the public escalation fixture path"
                         )
                 if run_http["lifespan"] not in {"auto", "on", "off"}:
                     raise ParityError(f"{case_id}.api.run_http.lifespan must be auto, on, or off")

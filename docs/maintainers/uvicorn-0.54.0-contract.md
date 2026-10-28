@@ -313,6 +313,18 @@ traceback details differ during forced cancellation. This selected macOS case
 does not close wider worker, restart, or cross-platform process-control
 parity.
 
+The direct API variant, `python-api.run-second-sigint-forces-inflight-request-shutdown`,
+also passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13
+/ Rust 1.98.1. Both `uvicorn.run()` processes served HTTP 200, received two
+SIGINT signals while the ASGI request remained active, exited 0, and did not
+time out. Run `eda1457b1444464fbfc80ea3e9a64e45`; report
+`target/kata-progress/python-api-run-second-sigint.json`, SHA-256
+`49db06176ccdc1a44e26d6f2b4716105ad801580c421fccd3ba4b970d8e7cd4d`; input
+SHA-256 `dd6860bd86053d72c60251bde4a1181f970d8cb47145b84b96f2bc94c77509d0`.
+The target was dirty at revision `3edd3b3a4916bebd36d4193b1fd805c09048d687`,
+so this is a diagnostic receipt, not clean-source or hosted CI evidence. The
+focused case does not close broad process-control parity.
+
 ### Actual graceful-timeout cancellation with an active request
 
 `python-api.module-cli-graceful-timeout-cancels-inflight-request` passed 1/1

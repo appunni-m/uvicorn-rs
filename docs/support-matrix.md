@@ -14,46 +14,32 @@ candidate artifacts and downstream consumer checks remain open; see
 
 ## Latest completed public parity evidence (2026-10-28)
 
-The `input@43` snapshot at commit `a4a520aeb42481cba06cbf4de597c993280d380e`
-contains 695 oracle cases. Hosted CI
-[#451](https://github.com/appunni-m/uvicorn-rs/actions/runs/40626804831) passed
-**695/695** against the installed normal wheel on Ubuntu 24.04.5 / x86-64 /
-CPython 3.12.13. The report is in artifact `uvicorn-rs-public-parity`
-(artifact ID `12790545953`); it binds to PR head
-`a4a520aeb42481cba06cbf4de597c993280d380e` and source SHA-256
-`2b52f36acd7ecce4bec2edcf1df8a6b4cc696a44a4bfcfcfabf917af81fc95c0`.
+The committed `input@43` snapshot at PR head `3edd3b3a4916bebd36d4193b1fd805c09048d687`
+passed **700/700** against the installed normal wheel on Ubuntu 24.04.5 / x86-64
+/ CPython 3.12.13 in CI
+[#453](https://github.com/appunni-m/uvicorn-rs/actions/runs/40635905337). Its
+report is artifact `uvicorn-rs-public-parity` (ID `12793199057`, archive
+SHA-256 `3908c76a4bf31b9b049338f41301004016c590ff4371d56545b5ca5852912f74`);
+it records merge commit `ce27229840877cae12237ecaa31499560883e3fd`,
+`dirty=false`, and source SHA-256
+`92af8083d758e2152bfdd424cdddd8b96a0985cdaade7025921bd7be131b1169`.
+CI #452 passed its earlier 699-case snapshot, but its coverage job was
+superseded. The earlier 695-case Linux and macOS results are historical and do
+not verify the current 700-case snapshot on macOS.
 
-The same 695 cases passed **695/695** in a local source-mode run on a clean
-checkout of that commit, macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1.
-Run ID `20188eddd2394a13a966e69d9443a723`; report
-`target/kata-progress/public-parity-macos-a4a520a-20261028-retry.json`,
-SHA-256 `d8e2e8abfe7db162ec122f70a8f537457aeaf20a5a781e1e8de622d0cee9a176`.
-The Mac run is source-mode evidence, not an installed-wheel check. These two
-results cover the declared public inputs on Linux x86-64 and macOS ARM64; they
-do not establish Windows or other Python-version support, or full Uvicorn
-compatibility beyond the maintained cases.
+The local input inventory now contains 701 public cases. The added
+`python-api.run-second-sigint-forces-inflight-request-shutdown` compares real
+signals during an active request through `uvicorn.run()` and passed one focused
+case on macOS ARM64; it is dirty-source diagnostic evidence, not clean-source
+release evidence. See the [parity receipt](parity.md#actual-repeated-sigint-shutdown-with-an-active-request).
+It is not included in CI #453.
 
-These receipts bind to the earlier committed 695-case snapshot at `a4a520aeb`.
-Commit `8f50720cd0e1cc12fdb8d6c60b7108c8a14cc516` adds four oracle cases: three
-dotenv syntax, interpolation, process-environment, and server-setting cases,
-plus `python-api.config-default-settings`. The four selected local cases pass
-4/4 across focused runs. The Config probe first
-exposed two mismatches (`env_file` was stored and default headers remained
-`None`); the target now matches Uvicorn 0.54.0. These reports use a dirty target
-and are diagnostic only, so the four cases are not counted as accepted parity
-evidence here.
-
-The pushed public input inventory has 699 cases; the current local input adds
-one Python API case, for 700. CI #451 was canceled during
-its first coverage attribution pass at 785/1,217; its uploaded artifact is
-incomplete. CI
-[#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307) is
-validating the pushed 699-case commit. Its installed-wheel parity job passed
-699/699; its unified coverage job is still running. The new local case has only
-a dirty-source focused pass. No current 100% coverage result or accepted
-Coverage-MCP receipt is available. The benchmark matrix remains paused until
-parity is complete.
-The earlier CI #447 and #446 counts below are historical.
+CI #453's exact-source three-repeat coverage job is still in progress. No
+complete 100% result or accepted Coverage-MCP receipt is available, so the
+dependent release-candidate platform and Python-floor jobs have not run. The
+benchmark matrix remains paused until parity is complete. See the
+[full parity history](parity.md); older CI #451, #447, and #446 counts are
+historical.
 
 Current input@43 has a focused 6/6 macOS
 pass for module-CLI environment behavior: listener host/port settings, a valid
@@ -120,6 +106,11 @@ selected installed-candidate comparisons plus the installed-consumer smoke.
 These are one-pass and selected receipts. The three-repeat CI gate, 100%
 coverage, complete supported-platform matrix, and full Uvicorn command, API,
 and deployment contracts remain open. See the [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
+The latest hosted installed-wheel check, CI
+[#453](https://github.com/appunni-m/uvicorn-rs/actions/runs/40635905337), passed
+700/700 public cases for commit `3edd3b3`; the local 701-case inventory adds a
+direct `uvicorn.run()` repeated-SIGINT case not included in that run. The full
+coverage job is still in progress.
 One selected POSIX
 case verifies replacement after a worker stops answering health checks. A
 separate two-worker SIGTERM input passed 1/1 on the local dirty draft on macOS

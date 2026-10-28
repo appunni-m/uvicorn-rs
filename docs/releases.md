@@ -22,28 +22,25 @@ The target identities and publisher workflow are settled: publish
 `uvicorn-rs` behind `http3`; publish the `uvicorn-rs` PyPI distribution from
 the `uvicorn-rs-py` adapter through `.github/workflows/release.yml`.
 
-Current PR head is `8f50720cd0e1cc12fdb8d6c60b7108c8a14cc516`. Hosted CI
-[#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307) passed
-699/699 installed-wheel public parity cases on Linux x86-64; its unified
-coverage job is still running. The local input adds one single-process
-`uvicorn.run()` SIGTERM case, which passed 1/1 on macOS ARM64 but is dirty-source
-diagnostic evidence and is not in CI #452. The 700-case local snapshot therefore
-still needs exact-source hosted validation. The previous CI
-[#451](https://github.com/appunni-m/uvicorn-rs/actions/runs/40626804831)
-passed 695/695 installed-wheel public cases and the same local macOS matrix on
-`a4a520aeb`, then was canceled during its first coverage attribution pass at
-785/1,217 cases after the branch advanced. Its uploaded coverage artifact is
-incomplete and is not accepted evidence. Four local focused additions pass
-4/4, and the additional SIGTERM case passes 1/1; these reports mark the target
-dirty and are diagnostic only.
+The pushed PR head is
+`3edd3b3a4916bebd36d4193b1fd805c09048d687`. Hosted CI
+[#453](https://github.com/appunni-m/uvicorn-rs/actions/runs/40635905337) passed
+700/700 installed-wheel public parity cases on Linux x86-64 and all Rust,
+native composition, and release-handoff checks. Its exact-source three-repeat
+coverage job is still in progress; the coverage result and independent
+Coverage-MCP receipt are not yet available. The earlier CI
+[#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307)
+passed 699/699 cases, but its coverage job was superseded.
 
-Documentation workflow
-[#169](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854285)
-failed on a broken fragment link. That link is fixed in the current worktree
-and a strict local MkDocs build passes; the fix is not yet pushed.
+The local input@43 inventory now has 701 public cases. It adds
+`python-api.run-second-sigint-forces-inflight-request-shutdown` through direct
+`uvicorn.run()`; the focused comparison passed 1/1 against Uvicorn 0.54.0 on
+macOS ARM64, but the target is dirty and the case is not included in CI #453.
+The local source and documentation changes therefore need a clean commit and
+exact-source validation. The hash-locked strict MkDocs build passes locally.
 
-There is no clean candidate archive or downstream-consumer receipt for head
-`8f50720cd`. The previous 0.2.2 inspection artifacts came from dirty source
+There is no clean candidate archive or downstream-consumer receipt for the
+updated source. The previous 0.2.2 inspection artifacts came from dirty source
 `5b1ec29201c963d8590c989b07318bb7366d7922` and cannot serve as release evidence.
 No version tag, Cargo package, or PyPI release was created for this candidate.
 
@@ -52,8 +49,9 @@ GitHub API readback confirms the active `Protect main` ruleset on
 tags` ruleset on `refs/tags/v*`, blocking updates, deletion, and non-fast-forward
 changes. The latest recorded registry settings audit says the PyPI environment
 is restricted to `main`, requires `appunni-m`, and permits sole-maintainer
-self-approval; the reported PyPI publisher tuple is project `uvicorn-rs`,
-repository `appunni-m/uvicorn-rs`, workflow `release.yml`, environment `pypi`.
+self-approval. The maintainer reports the pending publisher entry is now added
+for project `uvicorn-rs`, repository `appunni-m/uvicorn-rs`, workflow
+`release.yml`, environment `pypi`.
 The crates.io publisher tuple recorded in the earlier authenticated audit is
 repository `appunni-m/uvicorn-rs`, workflow `release.yml`, environment
 `crates-io`, for both release crates. Those registry-specific settings were
