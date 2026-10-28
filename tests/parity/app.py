@@ -2002,6 +2002,25 @@ def python_api_wsgi_probe_app(environ, start_response):
 
         return response_chunks()
 
+    if environ["PATH_INFO"] == "/python-api-wsgi-content-length-drain":
+        body = b"python-api-wsgi-content-length-drain|complete"
+        start_response(
+            "200 OK",
+            [
+                ("content-type", "text/plain"),
+                ("content-length", str(len(body))),
+            ],
+        )
+        marker = os.environ["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"]
+
+        def response_chunks():
+            yield body
+            deadline = time.monotonic() + 3.0
+            while not os.path.exists(marker) and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+        return response_chunks()
+
     body = b"|".join(
         (
             b"python-api-wsgi-ok",

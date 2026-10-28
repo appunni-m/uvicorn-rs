@@ -6,15 +6,15 @@
 
 PR #19 remains a draft. CI #462 checked committed PR head
 `66d3f5791d9b6806ce56986f0fe4035364271b92`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its Linux normal-wheel parity job
-passed **714/714** on x86-64; the unified three-repeat parity/coverage job is
-still running. Rust quality/MSRV, native framework composition, and release
-handoff passed. Linux sdist packaging failed because `maturin` was not on PATH;
-macOS ARM64 and Windows x86-64 artifact consumers failed when pip targeted the
-uv-managed base interpreter (`externally-managed-environment`). Local workflow
-changes now install `maturin` through `uvx` and consume wheels in isolated uv
-environments; they are committed locally but have not been pushed or
-validated by CI. See
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its Linux installed-wheel public
+matrix passed **714/714**; Rust quality/MSRV, native framework composition,
+and release handoff also passed. The unified coverage gate failed at
+**13,838/14,017 regions** and **10,205/10,296 lines**; three WSGI cases failed
+in one instrumented repeat. Linux sdist packaging failed because `maturin`
+was missing from PATH; the macOS ARM64 and Windows x86-64 wheel consumers
+failed when pip targeted the uv-managed base interpreter. Local changes fix
+the packaging setup and WSGI shutdown race, but have not yet been pushed or
+validated by hosted CI. See
 [CI #462](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386566).
 
 Two newly added fragmented WebSocket cases pass selected local oracle
@@ -72,9 +72,9 @@ runner SHA-256
 The earlier 702-case local macOS ARM64 run and the selected WebSocket, HTTP/2
 Early Hints, and trailer cases are diagnostic evidence from older source
 snapshots. They do not replace the full OS/Python matrix required for a release
-commit. CI #462 still needs to finish its unified coverage/parity job; the
-independent Coverage-MCP acceptance and declared OS/Python matrix also remain
-open. Benchmarks remain behind compatibility acceptance.
+commit. CI #462 is complete but its coverage gate failed; the independent
+Coverage-MCP acceptance and declared OS/Python matrix also remain open.
+Benchmarks remain behind compatibility acceptance.
 
 ## Historical 695-, 699-, and 700-case parity snapshots — 2026-10-28
 
@@ -500,6 +500,31 @@ The cases establish one blocked WSGI response-iterator boundary, not all
 response streaming, backpressure, error, or cross-platform behavior. CI #439 on
 commit 24a3d3be2 includes these response-streaming inputs; the WSGI factory
 inputs below were added after that run started.
+
+### WSGI Content-Length shutdown drain parity (2026-10-29)
+
+`python-api.module-cli-drains-wsgi-final-body-after-content-length` serves a
+WSGI body whose declared `Content-Length` is fully delivered before the probe
+sends SIGINT. The probe releases the WSGI iterator only after shutdown starts,
+forcing the ASGI adapter to accept the final empty body event after Hyper stops
+polling at the declared byte count. At warning log level, the focused case
+passed **1/1** against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13 /
+Rust 1.98.1. Warning and error logs remain compared; only scheduler-dependent
+INFO messages are filtered.
+
+Run `2cdeddad9a6d45daa2a41a2ca549cd9e`; report
+`target/kata-progress/wsgi-drain-parity-warning.json`, SHA-256
+`5781157bf376232f7569483ce9ce09973a8e5138a8420cd1c2f6636ca28feb3f`. It
+binds to dirty target revision `7d5bf3dc9701a95f55df79727801ce9dc1d6752c`,
+source SHA-256
+`17789222934d61a813e89e5f445ab8b47cf4654635e82f03a547b9284b782664`, native
+extension SHA-256
+`ab15642b8d88d72004fb7f6175bc1417361aab0f43f52c790bed2a7fe53ab59d`, and
+Python API input SHA-256
+`ad35364cfad4929b3e851c8a7f386a1036beef36a5801808ad7d48ca97324387`.
+This focused result verifies the shutdown race case only; hosted repeated
+coverage, the complete compatibility matrix, and other WSGI iterator behavior
+remain unverified.
 
 ### ASGI2 application-factory parity (2026-10-28)
 

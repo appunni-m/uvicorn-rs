@@ -18,12 +18,12 @@ PR #19 remains a draft. CI
 checked committed PR head `66d3f5791d9b6806ce56986f0fe4035364271b92`, based
 on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The 714-case `input@43`
 public matrix passed on Linux x86-64, along with release handoff, native
-framework composition, exact Rust minimum, and Rust quality jobs. Unified
-parity/coverage is still running. Linux sdist packaging failed because
-`maturin` was missing from PATH; macOS and Windows artifact consumers failed
-with `externally-managed-environment` after pip targeted the uv-managed base
-Python. Local workflow fixes are committed locally but are not pushed or
-hosted-validated. The complete OS/Python compatibility matrix has not passed.
+framework composition, exact Rust minimum, and Rust quality jobs. The unified
+coverage gate failed; Linux sdist packaging and macOS/Windows artifact
+consumers also failed before acceptance. Local changes address the packaging
+issues and add a focused WSGI Content-Length shutdown-race fix, but those
+changes have not been validated by hosted CI. The complete OS/Python
+compatibility matrix has not passed.
 
 The package metadata declares Python `>=3.9`, and CI checks installed-wheel
 import on Python 3.9. That check does not establish Uvicorn 0.54.0 parity:
@@ -34,9 +34,11 @@ The Uvicorn 0.54.0 parity matrix therefore starts at Python 3.10. Any Python
 check.
 
 CI #462 passed the 714-case installed-wheel matrix for committed PR head
-`66d3f5791d9b6806ce56986f0fe4035364271b92` on Linux x86-64. This does not
-establish macOS, Windows, other declared Python versions, or the unvalidated
-local packaging fixes. The preceding CI #456 and earlier 702-case macOS ARM64
+`66d3f5791d9b6806ce56986f0fe4035364271b92` on Linux x86-64. A subsequent
+focused local run of the WSGI Content-Length shutdown case passed 1/1 against
+Uvicorn 0.54.0 on dirty macOS ARM64 source. Neither receipt establishes
+macOS, Windows, other declared Python versions, or the unvalidated local
+packaging fixes. The preceding CI #456 and earlier 702-case macOS ARM64
 evidence are from older source snapshots. The exact current-source 100%
 coverage gate, independent Coverage-MCP receipt, and complete Uvicorn 0.54.0
 compatibility matrix remain open.

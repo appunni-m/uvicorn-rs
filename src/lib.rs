@@ -2595,6 +2595,7 @@ struct ResponseStart {
     status: StatusCode,
     headers: HeaderMap,
     header_order: Vec<HeaderName>,
+    content_length: Option<u64>,
     trailers: bool,
 }
 
@@ -3477,6 +3478,7 @@ struct AsgiIo {
     response_start_attempted: Arc<AtomicBool>,
     response_started: Arc<AtomicBool>,
     response_body_completed: Arc<AtomicBool>,
+    response_content_length_satisfied: Arc<AtomicBool>,
     response_trailers_expected: AtomicBool,
     response_trailer_headers: StdMutex<HeaderMap>,
     request_allows_response_trailers: bool,
@@ -3661,6 +3663,10 @@ impl AsgiIo {
                         PyRuntimeError::new_err(format!("HTTP response headers: {error}"))
                     })?;
                 }
+                let content_length = headers
+                    .get(http::header::CONTENT_LENGTH)
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|value| value.parse::<u64>().ok());
                 // Commit the state only after the event is fully validated.
                 // Invalid status/header data must not look like an accepted
                 // response start to the request driver.
@@ -3685,6 +3691,7 @@ impl AsgiIo {
                         status,
                         headers,
                         header_order,
+                        content_length,
                         trailers,
                     }))
                 } else {
@@ -3692,6 +3699,7 @@ impl AsgiIo {
                         status,
                         headers,
                         header_order,
+                        content_length,
                         trailers,
                     })
                 };
@@ -3700,6 +3708,7 @@ impl AsgiIo {
                     status,
                     headers,
                     header_order,
+                    content_length,
                     trailers,
                 });
                 if let Err(error) = start_send_result {
@@ -3713,7 +3722,16 @@ impl AsgiIo {
                 Ok(py.None().into_bound(py))
             }
             AsgiEventType::HttpResponseBody => {
-                if slf.connection_closed.is_closed()
+                let final_body_after_content_length = slf
+                    .response_content_length_satisfied
+                    .load(Ordering::Acquire)
+                    && message
+                        .get_item("more_body")
+                        .ok()
+                        .flatten()
+                        .and_then(|value| value.extract::<bool>().ok())
+                        == Some(false);
+                if (slf.connection_closed.is_closed() && !final_body_after_content_length)
                     || slf.request_disconnected.load(Ordering::Acquire)
                 {
                     return Err(PyOSError::new_err(
@@ -4875,6 +4893,9 @@ struct AsgiBody {
     application: Option<ResponseApplication>,
     app_task_tracker: TaskTracker,
     response_body_completed: Arc<AtomicBool>,
+    response_content_length_satisfied: Arc<AtomicBool>,
+    expected_content_length: Option<u64>,
+    response_body_bytes: u64,
     trailers_expected: bool,
     body_completed: bool,
     defer_completed_app_result_once: bool,
@@ -4902,6 +4923,40 @@ impl Drop for AsgiBody {
             // transfer it to the shutdown tracker instead of aborting it here.
             if let Some(application) = self.application.take() {
                 self.finish_response(application);
+            }
+        } else if self
+            .expected_content_length
+            .is_some_and(|expected| self.response_body_bytes >= expected)
+        {
+            self.response_content_length_satisfied
+                .store(true, Ordering::Release);
+            if let Some(application) = self.application.take() {
+                // Hyper may stop polling an HTTP/1 body once its declared
+                // Content-Length has reached the wire. Uvicorn keeps the ASGI
+                // task alive after that point, so retain and drain the response
+                // channel until the final body and any negotiated trailers
+                // have been accepted.
+                let (replacement_sender, replacement_receiver) =
+                    mpsc::channel(RESPONSE_BODY_QUEUE_CAPACITY);
+                drop(replacement_sender);
+                let mut receiver = std::mem::replace(&mut self.receiver, replacement_receiver);
+                let trailers_expected = self.trailers_expected;
+                self.app_task_tracker.spawn(async move {
+                    while let Some(chunk) = receiver.recv().await {
+                        let response_complete = match chunk {
+                            ResponseChunk::Body(body) => !trailers_expected && !body.more_body,
+                            ResponseChunk::Trailers(_) | ResponseChunk::End => true,
+                        };
+                        if response_complete {
+                            break;
+                        }
+                    }
+                    let result = match application {
+                        ResponseApplication::Running(task) => task.await,
+                        ResponseApplication::Completed(result) => result,
+                    };
+                    observe_app_after_response(result);
+                });
             }
         } else if let Some(ResponseApplication::Running(task)) = &self.application {
             task.abort();
@@ -5585,6 +5640,16 @@ impl AsgiBody {
     ) -> Poll<Option<Result<Frame<Bytes>, BoxError>>> {
         match chunk {
             ResponseChunk::Body(chunk) => {
+                self.response_body_bytes = self
+                    .response_body_bytes
+                    .saturating_add(chunk.body.len() as u64);
+                if self
+                    .expected_content_length
+                    .is_some_and(|expected| self.response_body_bytes >= expected)
+                {
+                    self.response_content_length_satisfied
+                        .store(true, Ordering::Release);
+                }
                 if !chunk.more_body {
                     self.record_final_body_available();
                     if self.trailers_expected {
@@ -9203,9 +9268,11 @@ async fn handle_request_parts(
     let response_start_attempted = Arc::new(AtomicBool::new(false));
     let response_started = Arc::new(AtomicBool::new(false));
     let response_body_completed = Arc::new(AtomicBool::new(false));
+    let response_content_length_satisfied = Arc::new(AtomicBool::new(false));
     let app_response_start_attempted = Arc::clone(&response_start_attempted);
     let app_response_started = Arc::clone(&response_started);
     let app_response_body_completed = Arc::clone(&response_body_completed);
+    let app_response_content_length_satisfied = Arc::clone(&response_content_length_satisfied);
     let preserve_application_on_disconnect = Arc::new(AtomicBool::new(false));
     let app_preserve_application_on_disconnect = Arc::clone(&preserve_application_on_disconnect);
     let app_task_tracker = context.server.pending_python_tasks.clone();
@@ -9237,6 +9304,7 @@ async fn handle_request_parts(
                         response_start_attempted: app_response_start_attempted,
                         response_started: app_response_started,
                         response_body_completed: app_response_body_completed,
+                        response_content_length_satisfied: app_response_content_length_satisfied,
                         response_trailers_expected: AtomicBool::new(false),
                         response_trailer_headers: StdMutex::new(HeaderMap::new()),
                         request_allows_response_trailers,
@@ -9348,6 +9416,9 @@ async fn handle_request_parts(
         application: Some(application),
         app_task_tracker,
         response_body_completed,
+        response_content_length_satisfied,
+        expected_content_length: start.content_length,
+        response_body_bytes: 0,
         trailers_expected,
         body_completed: false,
         defer_completed_app_result_once,

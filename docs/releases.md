@@ -25,20 +25,20 @@ implemented by the optional **uvicorn-rs-py** adapter. The publisher is
 candidates. The PyPI trusted publisher tuple is
 **appunni-m/uvicorn-rs / release.yml / pypi**.
 
-PR #19 remains a draft. CI #462 checks committed PR head
+PR #19 remains a draft. CI #462 checked committed PR head
 **66d3f5791d9b6806ce56986f0fe4035364271b92**, based on main
 **86e72e181d00feca1b4db7f30377d5d9d4345b83**. Release handoff, native framework
 composition, exact Rust minimum, Rust format/lint/feature/docs, and 714/714
-installed-wheel public parity on Linux x86-64 passed. The unified three-repeat
-parity/coverage job is still running. The Linux sdist step failed because
-`maturin` was missing from PATH; macOS ARM64 and Windows artifact consumers hit
+installed-wheel public parity on Linux x86-64 passed. The unified coverage
+gate failed at 13,838/14,017 regions and 10,205/10,296 lines, with three WSGI
+case failures in one repeat. Linux sdist packaging failed because `maturin`
+was missing from PATH; macOS ARM64 and Windows wheel consumers hit
 `externally-managed-environment` when pip targeted the uv-managed base Python.
-Local workflow changes now use `uvx` for maturin and isolated uv consumer
-environments; they are committed locally, not pushed, and have no hosted
-validation yet. Docs run
+Local workflow fixes use `uvx` for maturin and isolated uv consumer
+environments. A focused local WSGI shutdown-race input now passes 1/1 after a
+small Rust drain fix; both changes are unvalidated by hosted CI. Docs run
 [40747386578](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386578)
-passed for the committed source, but it does not include current local doc
-edits.
+passed for the committed source, not the current local doc edits.
 
 The preceding CI [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
 passed **707/707** public parity cases on Linux x86-64 for commit
@@ -52,8 +52,8 @@ not a clean published-artifact receipt.
 The current release blockers are exact-source 100% coverage and its independent
 Coverage-MCP receipt, full Uvicorn 0.54.0 behavior across the declared OS/Python
 matrix, matched benchmarks after parity, and hosted candidate
-artifact/clean-consumer receipts. The Linux parity checkpoint is not the full
-compatibility matrix. The previous
+artifact/clean-consumer receipts. The 714-case Linux parity checkpoint is not
+the full compatibility matrix. The previous
 three-system benchmark is incomplete: Linux ARM64 Hypercorn HTTP/3 failed in a
 slow-reader case, and an HTTP/1 upload timeout remains unresolved. Existing
 measurements do not support a general performance-gain claim.

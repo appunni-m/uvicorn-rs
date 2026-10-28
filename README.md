@@ -12,28 +12,24 @@ the release workflow must resolve it in its preflight. The PyPI
 `uvicorn-rs` project API returned 404, so the distribution has not had its
 first upload. See [release status](docs/releases.md).
 
-PR #19 remains a draft. CI #457 checked source commit
-`4f7a29635d7b14151be02b409515f0cf290f7b5c`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its receipts do not cover later
-commits. In CI
-[#457](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253), the
-release-handoff, native framework composition, minimum-Rust, and Rust
-formatting/lint/feature/documentation jobs have passed. The installed-wheel
-public parity job passed 707/707 cases on Linux x86-64 with zero failures or
-infrastructure errors; its artifact is
-[retained by CI](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760253/artifacts/12809014899).
-The exact-source three-repeat coverage job is still running, so no current
-coverage result is available. Documentation deploy
-run [#174](https://github.com/appunni-m/uvicorn-rs/actions/runs/40672760286)
-passed.
+PR #19 remains a draft. CI #462 checked committed head
+`66d3f5791d9b6806ce56986f0fe4035364271b92`, based on `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality, minimum-version,
+native FastAPI-RS composition, release handoff, and installed-wheel public
+parity passed (714/714 on Linux x86-64). The exact-source coverage gate failed
+at 13,838/14,017 regions and 10,205/10,296 lines, with three WSGI cases failing
+in one repeat. Linux sdist setup and macOS/Windows wheel consumers also failed
+before acceptance. Local changes address those packaging failures and the WSGI
+shutdown race; the focused WSGI regression passes 1/1 on a dirty macOS ARM64
+checkout. Those local fixes still need an exact-head hosted run. See
+[CI #462](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386566)
+and [parity evidence](docs/parity.md).
 
-The prior-head CI run [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
-passed 707/707 public parity cases on Linux x86-64 for commit
-`1c5a9a7fca45e6e4e985cf775ef844bc1fd37e83`; that result does not cover the
-current head. Its coverage job was canceled when the new source run started.
-The independent Coverage-MCP receipt, full OS/Python Uvicorn compatibility
-matrix, parity-first benchmark evidence, and hosted exact-commit candidate
-consumers remain open. No 0.2.2 release tag or package has been published.
+The docs deployment passed for the older committed source, not the current
+local documentation edits. Independent Coverage-MCP acceptance, the complete
+Uvicorn 0.54.0 behavior and platform matrix, parity-first benchmark evidence,
+and hosted candidate artifacts with clean consumers remain open. No 0.2.2
+release tag or package has been published.
 
 The Python adapter is **not yet a drop-in Uvicorn replacement**. If your
 application depends on Uvicorn's full command-line, Python API, worker, or

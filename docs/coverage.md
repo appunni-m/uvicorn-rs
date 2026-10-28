@@ -6,15 +6,16 @@
 
 ## Current unified coverage status (2026-10-29)
 
-PR #19 remains a draft. CI #462 checks committed PR head
+PR #19 remains a draft. CI #462 checked committed PR head
 `66d3f5791d9b6806ce56986f0fe4035364271b92`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its unified three-repeat job is
-still running. The preceding CI #461 attributed all 1,323 indexed cases but
-missed 13,837/14,009 regions and 10,204/10,288 lines; one repeated run also
-failed the `python-api.cancel-startup-shutdown-task-join-error` fault contract.
-The focused local fix passes, but no full post-fix coverage report or accepted
-Coverage-MCP receipt exists. The handoff, native composition, minimum Rust,
-Rust quality, and Linux 714/714 installed-wheel parity jobs passed in #462.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its unified three-repeat matrix
+attributed every selected case but missed the 100% gate at **13,838/14,017
+regions** and **10,205/10,296 lines**. One repeat had three WSGI parity
+failures around response-body closure; platform package jobs also failed
+before acceptance. Release handoff, native composition, minimum Rust, Rust
+quality, and Linux 714/714 installed-wheel parity passed. A focused local
+WSGI Content-Length shutdown case now passes 1/1 on dirty source; this does not
+replace a full post-fix report. No accepted Coverage-MCP receipt exists.
 
 The post-change focused receipt is local-only:
 `target/coverage-diagnostic/ci461-startup-shutdown-fault-fix/coverage-report.json`,
@@ -30,9 +31,9 @@ coverage totals do not measure the full source gate.
 The prior run, CI #456, was superseded when #457 started. Its coverage job was
 canceled and its retained artifact is not a completed gate receipt. CI #461
 also missed the 100% gate; its current-source focused follow-up covers one case
-only and does not replace the full report. CI #462 must finish before its
-coverage outcome is recorded. Independent Coverage-MCP review is still
-outstanding.
+only and does not replace the full report. CI #462 is complete and also missed
+the gate. A fresh full exact-source report and independent Coverage-MCP review
+are still outstanding.
 
 ### Prior CI #455 coverage result (source 4a429684)
 

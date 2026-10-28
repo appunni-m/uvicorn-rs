@@ -350,12 +350,18 @@ def run_http_observation(request: dict) -> dict:
     )
     if chunked_request and isinstance(request_body, bytes):
         request_body = [request_body]
+    wsgi_final_body_release_after_shutdown = (
+        request.get("application_interface") == "wsgi"
+        and request["path"].split("?", 1)[0]
+        == "/python-api-wsgi-content-length-drain"
+    )
     wsgi_streaming_probe = (
         request.get("application_interface") == "wsgi"
         and request["path"].split("?", 1)[0]
         in {
             "/python-api-wsgi-stream",
             "/python-api-wsgi-after-start-error",
+            "/python-api-wsgi-content-length-drain",
         }
     )
 
@@ -1333,7 +1339,7 @@ except KeyboardInterrupt:
                     if wsgi_streaming_probe:
                         wsgi_stream_response_started = True
                         first_byte = http_response.read(1)
-                        if first_byte:
+                        if first_byte and not wsgi_final_body_release_after_shutdown:
                             assert wsgi_stream_release_marker is not None
                             wsgi_stream_release_marker.touch()
                         try:
@@ -1531,6 +1537,16 @@ except KeyboardInterrupt:
                     )
                 )
                 shutdown_signals_sent.append(signal_name)
+                if (
+                    wsgi_final_body_release_after_shutdown
+                    and wsgi_stream_release_marker is not None
+                ):
+                    # The declared Content-Length lets the client finish its
+                    # read before the WSGI adapter emits ASGI's final empty
+                    # body. Start graceful shutdown first, then release that
+                    # final event so the transport must drain it.
+                    time.sleep(0.05)
+                    wsgi_stream_release_marker.touch()
             except OSError:
                 break
         shutdown_signal_sent = bool(shutdown_signals_sent)
