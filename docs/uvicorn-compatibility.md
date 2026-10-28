@@ -13,36 +13,43 @@ published.
 
 ## Current status (2026-10-28)
 
-PR #19 is still a draft. Its remote head is
-`642a6bb9c654599ed89ab705270619bc2ad23cfd`, and the current `input@43`
-inventory contains 702 public cases spanning the CLI, Python API, protocol,
-lifecycle, and target-only contracts. The installed-wheel parity job in
-[CI #454](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222815)
-passed **702/702** on Linux x86-64. Its parity artifact is
-`uvicorn-rs-public-parity` (ID `12797838313`, archive SHA-256
-`d45b12a0b61fe1fcad80ee978e300ac67fc372da2d3c53816ed4be6d70855192`).
+PR #19 remains a draft at head
+4a429684d5fd92c1068c7776093452cca1ccfc90. The current input@43 inventory has
+702 public cases. CI #455 passed 702/702 on the installed Linux x86-64 wheel
+against Uvicorn 0.54.0. The run evaluated merge commit
+9c935f8ec4b075c783d9fde755c43d8b430a1ac9 and recorded candidate source hashes
+matching the PR head. Its artifact is uvicorn-rs-public-parity (ID
+12800288367; SHA-256
+8e16571e230e5d2764ea7db624f50af9fb9f1d2148962dea7336f2a06ada045b). The same
+702 cases passed 702/702 on a locally built installed wheel from clean head
+4a429684d5fd92c1068c7776093452cca1ccfc90 on macOS 15.7.7 ARM64 / CPython
+3.12.13 / Rust 1.98.1. This is local evidence, not a hosted receipt.
 
-The same CI run has not completed its unified coverage job. Its Rust lint job
-failed on a redundant local binding; that binding was removed in local commit
-`4b286e33e28e8051f23b589ecb8620bc92592995`, one commit ahead of the remote
-branch. Hosted CI has not validated that local commit. Therefore the 702-case
-result is Linux-only evidence for PR head `642a6bb`, not complete drop-in or
-cross-platform acceptance.
+CI #455's unified coverage job failed. One of three ASGI repeats failed in a
+coverage-only lifespan join-error case; the other two repeats passed. The
+report has 13,801/13,983 covered regions and 10,165/10,263 covered lines.
+A focused local correction to the fault contract and generic requirements now
+passes that case 1/1, but the full exact-source coverage gate and independent
+Coverage-MCP review remain open. Windows candidate parity and candidate package
+jobs were skipped after the coverage failure. The current local worktree has
+uncommitted test and documentation edits; this status does not claim hosted
+validation for those edits.
 
 | What you need | Current state |
 | --- | --- |
-| Install from PyPI | Not available. The `uvicorn-rs` distribution has not been published. |
-| Run the `uvicorn` command | The candidate exposes the `uvicorn` command and `python -m uvicorn`. Selected inputs cover help, settings, environment precedence, and startup; complete CLI parity is not proved. |
-| Import and configure `uvicorn` | The candidate exposes `run`, `Config`, and `Server`. Selected signature, defaults, startup, and shutdown inputs are covered; the full programmatic contract remains open. |
-| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. CI #454 passed the 702-case matrix on Linux x86-64 at PR head 642a6bb. That single-platform result does not establish full Uvicorn compatibility. |
+| Install from PyPI | Not available. The uvicorn-rs distribution has not been published. |
+| Run the uvicorn command | The candidate exposes the uvicorn command and python -m uvicorn. CI #455 passed the declared Linux CLI cases; full CLI and settings parity is not proved. |
+| Import and configure uvicorn | The candidate exposes run, Config, and Server. CI #455 passed the declared Linux Python API cases; the complete programmatic contract remains open. |
+| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. The public matrix passes on Linux x86-64 and local macOS ARM64; this does not establish every Uvicorn behavior or platform. |
 | Use workers, reload, sockets, or process controls | Selected parity cases cover some worker, reload, socket, signal, and graceful-shutdown behavior. Other combinations, platforms, and failure paths remain unverified. |
-| Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See [benchmark status](benchmark-status.md). |
+| Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See benchmark status. |
+| Use the current release candidate on Windows | Not verified in CI #455. Its Windows candidate job was skipped because coverage failed. |
 
-The previous 695-case snapshot passed on Linux x86-64 and macOS ARM64, but it
-predates the current 702-case snapshot. Four focused additions pass 4/4 in local
-runs; their dirty-target reports are diagnostic only. See the [support
-matrix](support-matrix.md) and [release gates](releases.md) for the current
-evidence limits and remaining checks.
+Neither the passing Linux nor macOS public matrix proves full compatibility.
+Windows and other declared Python versions still need exact-source evidence,
+and unsupported behaviors must remain visible. The prior benchmark results do
+not justify a general speed claim. See the [support matrix](support-matrix.md),
+[parity evidence](parity.md), and [release gates](releases.md).
 
 ## Historical diagnostic records
 
@@ -59,7 +66,7 @@ Run IDs, report hashes, and the corrected SIGINT exit-code contract are in the
 These are local one-pass source-profile receipts. The earlier hosted run,
 [CI #435](https://github.com/appunni-m/uvicorn-rs/actions/runs/40591281095),
 passed 660 declared public oracle cases from input@42 on a clean-source installed
-wheel under Linux x86-64. It is superseded by CI #454's 702/702 result at the
+wheel under Linux x86-64. It is superseded by CI #455's 702/702 result at the
 current PR head, recorded in the current-status section above. Neither
 single-platform result establishes full Uvicorn compatibility; cross-platform
 parity, native/fault contracts, clean-main release evidence, and release

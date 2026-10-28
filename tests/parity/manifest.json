@@ -3122,10 +3122,7 @@
         "server_started": false,
         "serve_task_finished": true,
         "serve_raised": true,
-        "serve_timed_out": false,
-        "application_events": [
-          "lifespan.startup"
-        ]
+        "serve_timed_out": false
       }
     },
     {

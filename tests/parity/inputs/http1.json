@@ -3473,7 +3473,7 @@
       "request_sequence": [
         {
           "method": "GET",
-          "path": "/invalid-asgi/unknown-type",
+          "path": "/invalid-asgi/unrecognized-type",
           "headers": [
             [
               "Connection",

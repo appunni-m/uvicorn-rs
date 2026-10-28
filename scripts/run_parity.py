@@ -11264,6 +11264,16 @@ def fault_contract_matches(
         "http-original-task-start-error-followup-200",
     }:
         responses = observation.get("responses")
+        if fault["point"] == "asgi.event-type.extract":
+            return (
+                "coverage-only injected MemoryError at AsgiEventTypeExtract"
+                in observation.get("server_log", "")
+                and isinstance(responses, list)
+                and len(responses) == 2
+                and all(isinstance(response, dict) for response in responses)
+                and responses[0].get("status") == 500
+                and responses[1].get("status") == 200
+            )
         if fault["contract"] == "http-original-task-start-error-followup-200":
             log = observation.get("server_log", "")
             cleanup_error = PYTHON_TASK_START_CLEANUP_ERRORS.get(fault["point"])
@@ -11859,6 +11869,9 @@ def fault_contract_matches(
             and observation.get("application_events") == ["lifespan.startup"]
         )
     if fault["contract"] == "server-startup-bind-shutdown-error-logged":
+        # Shutdown is sent before this coverage fault aborts the app task. The
+        # task may consume that message first, so both event traces are valid.
+        application_events = observation.get("application_events")
         return (
             observation.get("fault_consumed") is True
             and observation.get("exit_code") == 0
@@ -11866,7 +11879,11 @@ def fault_contract_matches(
             and observation.get("serve_task_finished") is True
             and observation.get("serve_raised") is True
             and observation.get("serve_timed_out") is False
-            and observation.get("application_events") == ["lifespan.startup"]
+            and application_events
+            in (
+                ["lifespan.startup"],
+                ["lifespan.startup", "lifespan.shutdown"],
+            )
             and "uvicorn-rs: ASGI lifespan shutdown failed after listener setup error:"
             in observation.get("fault_server_stderr", "")
         )
@@ -13560,7 +13577,12 @@ def execute_profile(
                     if case.get("verification", "oracle-parity") == "fault-contract":
                         oracle_result = None
                         fault_observation = target_result
-                        if case["fault"]["contract"] == "http3-body-pump-early-exit-500":
+                        if case["fault"]["point"] == "asgi.event-type.extract":
+                            fault_observation = {
+                                **target_result,
+                                "server_log": target_raw.get("server_log", ""),
+                            }
+                        elif case["fault"]["contract"] == "http3-body-pump-early-exit-500":
                             fault_observation = {
                                 **target_result,
                                 "fault_consumed": target_raw.get("fault_consumed"),

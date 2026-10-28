@@ -392,6 +392,34 @@
       }
     },
     {
+      "case_id": "websocket.http-response-early-hint-event-rejected",
+      "profile": "websocket",
+      "operation": "websocket.app-error",
+      "covers": [
+        "websocket.app-error"
+      ],
+      "websocket": {
+        "path": "/ws-send-http-response-early-hint",
+        "subprotocols": [],
+        "messages": [],
+        "expect_close": true
+      }
+    },
+    {
+      "case_id": "websocket.http-response-trailers-event-rejected",
+      "profile": "websocket",
+      "operation": "websocket.app-error",
+      "covers": [
+        "websocket.app-error"
+      ],
+      "websocket": {
+        "path": "/ws-send-http-response-trailers",
+        "subprotocols": [],
+        "messages": [],
+        "expect_close": true
+      }
+    },
+    {
       "case_id": "websocket.server-app-completion-close",
       "profile": "websocket",
       "operation": "websocket.server-close",

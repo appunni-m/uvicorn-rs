@@ -14,40 +14,41 @@ candidate artifacts and downstream consumer checks remain open; see
 
 ## Latest completed public parity evidence (2026-10-28)
 
-The 702-case `input@43` snapshot at PR #19 head
-`642a6bb9c654599ed89ab705270619bc2ad23cfd` passed **702/702** against the
-installed normal wheel on Ubuntu 24.04 / x86-64 / CPython 3.12.13 in CI
-[#454](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222815).
-The report is artifact `uvicorn-rs-public-parity` (ID `12797838313`, archive
-SHA-256 `d45b12a0b61fe1fcad80ee978e300ac67fc372da2d3c53816ed4be6d70855192`);
-the job log records zero failed, infrastructure-failed, or unrun cases.
+The 702-case `input@43` inventory passed **702/702** against the installed
+normal wheel in [CI #455](https://github.com/appunni-m/uvicorn-rs/actions/runs/40652026006)
+on Ubuntu 24.04 / x86-64 / CPython 3.12.13. GitHub evaluated merge commit
+`9c935f8ec4b075c783d9fde755c43d8b430a1ac9`; all recorded target-source hashes
+match PR #19 head `4a429684d5fd92c1068c7776093452cca1ccfc90`. Artifact
+`uvicorn-rs-public-parity` (ID `12800288367`) has archive SHA-256
+`8e16571e230e5d2764ea7db624f50af9fb9f1d2148962dea7336f2a06ada045b`.
 
-The remote PR head is still `642a6bb`. Local HEAD
-`a6450f12337c67ded3f73f637865e4df27a57ff9` is three commits ahead and is not
-yet hosted-validated. It includes the redundant-binding fix reported by the
-Rust lint job in CI #454; the targeted strict Clippy command passes locally.
-CI #454's three-repeat coverage job is still running on the older source. No
-complete current-source 100% report or accepted Coverage-MCP receipt is
-available. CI #453's 700-case parity result and earlier 695-case results are
-historical snapshots, not evidence for the current 702-case inventory.
+The same 702 cases passed **702/702** against an installed local ABI3 wheel
+from clean PR-head commit `4a429684d5fd92c1068c7776093452cca1ccfc90` on macOS
+15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1. Local run
+`954f313fdbb944f0bbe9bb8e119aedad`; report
+`target/parity-macos-arm64-4a429/result.json`, SHA-256
+`3a0dbffd4054536c656d8624156fb961ffe459c7b64fbe99b8d91a82c39e2129`. This is
+local platform evidence, not a hosted receipt.
 
-The current 702-case inventory also passed **702/702** against a locally built
-installed ABI3 wheel from clean commit
-`a6450f12337c67ded3f73f637865e4df27a57ff9` on macOS 15.7.7 ARM64 / CPython
-3.12.13 / Rust 1.98.1. Report `target/parity-macos-arm64/public-parity.json`
-(local run `5a8eb7b0da5c4fefbca3ecb17efa235c`, SHA-256
-`ccb8b8efef451fad1f81105594eb5ef401b14b78607ccc2c42ba3216459e6b6e`); the
-exact-source offline evidence check passed with `--require-clean`. This is
-local platform evidence; the hosted Linux receipt remains on the preceding
-source commit and the macOS report is not a hosted release receipt.
+The dirty local worktree adds two public WebSocket event-context cases, one
+HTTP/2 Early Hints validation case, and two HTTP/2 response-trailer validation
+cases. These selected groups pass 5/5 against Uvicorn and the target on macOS
+ARM64. The inventory now has 707 public cases, but the full 707-case matrix
+has not run on this source. The complete hosted and clean-source platform
+evidence above remains the earlier 702-case snapshot.
 
-The hosted installed-wheel result covers Linux x86-64; current-source local
-installed-wheel evidence covers macOS ARM64 on CPython 3.12.13. Neither
-establishes full Uvicorn compatibility across the declared platform/Python
-matrix. The current candidate still needs hosted checks on the exact source,
-full compatibility acceptance, reviewed coverage, complete benchmark
-evidence, and clean candidate consumers. Benchmarks remain paused until the
-full compatibility gates pass.
+CI #455 completed but its unified three-repeat coverage job failed. One of
+three ASGI parity repeats rejected the valid
+`lifespan.startup`/`lifespan.shutdown` event trace when a coverage fault aborted
+the task after the shutdown message was sent; the other two repeats passed.
+The report measured **13,801/13,983 regions** and **10,165/10,263 lines**.
+A focused correction to the fault contract passes the affected case 1/1 in
+the current local worktree, but the full exact-source coverage gate and an
+accepted independent Coverage-MCP receipt remain open. The Linux x86-64 and
+macOS ARM64 receipts do not establish full compatibility across the declared
+platform/Python matrix. Candidate acceptance still needs hosted exact-source
+checks, complete compatibility, parity-first benchmarks, and clean candidate
+consumers. See the [full parity history](parity.md).
 See the [full parity history](parity.md).
 
 Current input@43 has a focused 6/6 macOS
@@ -102,14 +103,13 @@ directory watching remains covered separately. See the
 
 ## Can I replace Uvicorn?
 
-Not yet. The uvicorn-rs PyPI distribution is unpublished and is not a
-drop-in replacement today. The current public input inventory contains 702
-cases. CI #454 on PR head 642a6bb passed 702/702 against the installed normal
-wheel on Linux x86-64; see the exact run and artifact near the top of this page.
-The run's unified coverage job is still active, and its lint job failed on a
-redundant local binding removed in local commit 4b286e33e. That commit is one
-ahead and is not included in the hosted run. No exact-source full coverage or
-Coverage-MCP receipt is available. Full Uvicorn CLI, Python API, process, and
+Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
+drop-in replacement today. CI #455 passed the current 702-case public input
+inventory on Linux x86-64, and the same inventory passed locally on macOS
+ARM64; exact receipts are recorded above. The CI run has completed, but its
+unified coverage job failed below 100%, and no accepted Coverage-MCP receipt is
+available. Windows candidate parity did not run because release-candidate jobs
+were skipped after coverage failed. Full Uvicorn CLI, Python API, process, and
 cross-platform acceptance remain open. See the
 [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
 
@@ -148,8 +148,8 @@ and migration guidance.
 | --- | --- | --- |
 | Run a Python ASGI 3 application | Implemented in the source checkout and covered by live protocol cases. Matched async callable-instance cases pass 2/2 through `uvicorn.run()` and the module CLI with `interface="auto"`; see [the focused receipt](parity.md#asgi3-callable-instance-parity-2026-10-28). | This is an experimental adapter; Python application code still runs in Python. |
 | Serve an application factory | Programmatic and module-CLI cases cover no-argument factories returning ASGI 3, ASGI 2, and WSGI callables. The implicit ASGI 3 factory pair passes 2/2 without a factory flag through `uvicorn.run()` and the module CLI; see [the focused receipt](parity.md#implicit-asgi3-application-factory-parity-2026-10-28). The ASGI 2 factory pair passes 2/2 with `interface="auto"` through both entry points; see [the focused receipt](parity.md#asgi2-application-factory-parity-2026-10-28). The WSGI factory group passes 2/2 through `uvicorn.run(factory, factory=True, interface="wsgi")` and `python -m uvicorn --factory --interface wsgi`, with HTTP 200 and clean SIGINT shutdown against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. | Other factory return types, factory combinations, and failure paths remain unverified. |
-| HTTP/1.1 | Implemented and exercised with request/response, streaming, disconnect, TLS, and idle keep-alive timeout cases. | CI #454 passed the 702-case public matrix on the installed Linux x86-64 wheel. This includes a 1 MiB upload sent as sixteen 64 KiB chunks on one connection; it does not establish behavior at 64-client concurrency. The earlier 695-case macOS result at `a4a520aeb` is historical. |
-| Invalid ASGI response starts | Twelve HTTP/1 and HTTP/2 inputs compare invalid response-header names and values, missing or malformed status, and a non-iterable headers field. Both servers close without generating a replacement HTTP 500. Those cases passed in the earlier 695-case snapshot on macOS source and the hosted Linux wheel at `a4a520aeb`. CI #454 passed 702/702 public cases on the installed Linux wheel, including the current 702-case input inventory. Malformed cases outside the declared inputs and other platforms remain separate gates. See the [seven-case H1/H2 receipt](parity.md#invalid-asgi-response-start-parity-2026-10-28) and [five-case HTTP/2 extension](parity.md#http2-invalid-response-start-parity-extension-2026-10-28). |
+| HTTP/1.1 | Implemented and exercised with request/response, streaming, disconnect, TLS, and idle keep-alive timeout cases. | CI #455 passed the 702-case public matrix on the installed Linux x86-64 wheel. This includes a 1 MiB upload sent as sixteen 64 KiB chunks on one connection; it does not establish behavior at 64-client concurrency. The same complete inventory passed locally on macOS ARM64 at PR head 4a429684. |
+| Invalid ASGI response starts | Twelve HTTP/1 and HTTP/2 inputs compare invalid response-header names and values, missing or malformed status, and a non-iterable headers field. Both servers close without generating a replacement HTTP 500. The current 702-case Linux CI and local macOS inventories pass, including these cases. Malformed cases outside the declared inputs and Windows behavior remain unverified. See the [seven-case H1/H2 receipt](parity.md#invalid-asgi-response-start-parity-2026-10-28) and [five-case HTTP/2 extension](parity.md#http2-invalid-response-start-parity-extension-2026-10-28). |
 | HTTP/2 | Implemented and exercised over TLS and cleartext prior knowledge. | The support claim is limited to the tested HTTP/2 behaviors listed in this matrix. |
 | HTTP/3 | Experimental; selected requests, streaming, cancellation, and shutdown behaviors have live cases. | There is no Uvicorn HTTP/3 baseline. Check the current benchmark status before relying on performance results. |
 | Password-protected TLS keys | Focused Uvicorn comparisons cover PKCS#8 encrypted keys through `Config`/`Server` and the module CLI, plus traditional encrypted RSA keys using AES-128-CBC, AES-192-CBC, and AES-256-CBC. Selected cases cover wrong-password rejection, startup failure with an unsupported traditional cipher, missing or malformed `DEK-Info`, invalid `Proc-Type`, a missing end marker, an odd-length AES-256 IV, and non-hex characters in either IV nibble. | The additional traditional-key cases are focused local dirty-source inputs, not a complete TLS matrix or clean hosted release evidence. Encrypted EC keys and other legacy ciphers remain unverified. |
@@ -172,7 +172,7 @@ and migration guidance.
 | Run multiple Python workers or reload code | Two focused module-CLI comparisons verify two workers serve an HTTP/1.1 request and stop on SIGINT: one sets `--workers 2`, the other sets `WEB_CONCURRENCY=2`. A separate input kills one worker process and verifies replacement. A new POSIX input suspends a worker, uses `--timeout-worker-healthcheck 2`, and passes 1/1 against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13 (run `ae4e43b0e69245a8b22cd67668cdaeba`; report SHA-256 `eae083b94d0d0637b0005fa9278066b48b52f787f93b06c3e58113270a602e1e`). Both implementations log an additional server process, serve the request, and shut down cleanly. A reload input passes locally on macOS ARM64 / CPython 3.12.13 with `--workers 2` in both dependency modes: without `watchfiles`, the candidate's `StatReload` fallback matches the Uvicorn watchfiles oracle; with `watchfiles==1.3.0`, both use watchfiles. Each reload run edits a watched Python module, verifies the replacement response, compares the warning that reload ignores the worker count, and shuts down on SIGINT. | See the [two-crash evidence](maintainers/uvicorn-0.54.0-contract.md#two-consecutive-worker-crashes-and-replacement), [SIGHUP restart evidence](maintainers/uvicorn-0.54.0-contract.md#sighup-worker-restart), and [SIGHUP replacement-startup failure evidence](maintainers/uvicorn-0.54.0-contract.md#sighup-replacement-startup-failure); the restart cases cover one forced exit, two consecutive forced worker exits, one POSIX health-check expiry, a successful SIGHUP restart, and one failed replacement startup that preserves the old workers. Restart/failure policy beyond these paths, worker-count signals beyond the tested SIGTTIN/SIGTTOU pair, Windows and other socket/platform combinations remain unverified. One WatchFilesReload include/exclude case also passes: an excluded-file change did not reload, an included-file change did, and SIGINT exited cleanly. That case ran on macOS ARM64 / CPython 3.12.13; other glob combinations, fallback-watcher filtering, platforms, and reload startup/failure modes remain unverified. See the current-source receipts in the [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md). Use upstream Uvicorn for those paths. |
 | Lifespan and graceful shutdown | Startup, shutdown, application failures, and selected cancellation paths have live cases. Two focused module-CLI comparisons set the timeout through the CLI option and environment; both confirm that a held ASGI request is cancelled after 1 second, matching Uvicorn 0.54.0 on macOS ARM64. `lifespan="off"` passes focused public API and module CLI comparisons against Uvicorn 0.54.0. Focused `Config`/`Server.serve()` and module CLI cases verify that an app exception before startup under `lifespan="on"` leaves the server unstarted and exits with code 3. | Other strict-mode failure classes remain unverified. The worker cases cover successful startup/request/SIGINT, one worker crash/replacement, one two-crash replacement case, and one POSIX health-check expiry/replacement path; worker-control signals and broader process control remain unqualified. |
 | Use the native Rust library | The source contains a Python-free `uvicorn-rs` server crate and a separate `asgi-lifespan-protocol-rs` lifecycle crate; HTTP/3 is gated by `uvicorn-rs`'s optional `http3` feature. | Clean release artifacts and downstream consumer checks for the current source remain unverified. See [release status](releases.md) and [native Rust integration](native-fastapi-composition.md). |
-| Match Uvicorn's CLI and Python API | Incomplete. The input@40 CLI and Python API baselines passed 60/60 and 209/209 cases on macOS 15.7.7 ARM64 / CPython 3.12.13. The pushed input@43 snapshot declares 263 Python API oracle-comparison cases, 23 target-only fault contracts, and 117 CLI process cases; the current local input adds two Python API oracle cases. The committed `uvicorn.run()` SIGTERM case is included in CI #454's passing 702-case snapshot. The direct-API repeated-SIGINT case passes 1/1 on clean local source commit `481fcc0177ed900218fb39b89041e216edc2885d`; the direct IPv6 Config/Server.run case also passes 1/1 on local HEAD `414ad1285719146bcb63a45eff9be41e1268a312`. These selected results are not full hosted evidence. A read-only inventory audit compares the pinned Uvicorn 0.54.0 Click parameters with the combined CLI/Python API inputs and finds all 52 derived `UVICORN_*` names represented; this is input coverage, not behavioral proof. A focused `Config.load()` case also compares explicit factory TypeError handling through `SystemExit(3)`. The 12 new CLI environment cases have pass evidence across an 11/12 batch and a targeted 1/1 rerun; the six Python API cases have pass evidence across a 5/6 batch and a corrected 2/2 forwarding rerun. These focused receipts span input snapshots and are scoped to the listed behaviors. See [the maintainer contract](maintainers/uvicorn-0.54.0-contract.md) and [the parity evidence](parity.md). The six selected module-CLI environment cases (listener host/port, valid concurrency limit, explicit flag precedence over valid and invalid concurrency environment values, WSGI interface selection, and explicit interface precedence over a conflicting environment value) passed 6/6, and malformed `UVICORN_INTERFACE=invalid` passed as a separate 1/1 CLI process case on that host. The new `UVICORN_WORKERS=2` module-CLI case passed 1/1 on the same host, matching two worker startup log events, a 200 response, and clean shutdown. The `UVICORN_RELOAD=true` module-CLI case also passed 1/1, matching reloader startup and shutdown, a 200 response, and clean exit. The module-CLI `--reset-contextvars` behavior and missing `--reload-dir` diagnostic each passed 1/1. A new 2-case group passes for `UVICORN_RESET_CONTEXTVARS=true` and explicit flag precedence over a false environment value (run `63a21609687947c7974c80a1d9e4a7c0`; receipt SHA-256 `e63b4fcd4319a7fd5a83c4576f1ce3b41def2fa0d633cd589c70a6f271d0a756`). The 14 worker/reload startup-log cases that failed in CI #432 now pass 14/14 after preserving Uvicorn's parent-only listener message for supervisor-supplied sockets (run `b5228c0251f0492385b1ca422da32659`; receipt SHA-256 `aebe48b2e06c899bbf0f538ce9e9826dc1b6d3c4362cdbbff5a7f64d5c72af28`). Environment-only `UVICORN_PROXY_HEADERS=false` also passed 1/1, suppressing forwarded scheme and client overrides. Three more cases pass 3/3 for valid and invalid `UVICORN_RELOAD_DIRS` parsing plus explicit `--reload-dir` precedence. Exact run and input identities are in the [maintainer evidence record](maintainers/uvicorn-0.54.0-contract.md). These focused groups are dirty-source receipts. CI #454 passed the 702-case input@43 snapshot on the installed Linux wheel; see the evidence near the top of this page. Its coverage job remains in progress, and current local HEAD 4b286e33e is one lint-only commit ahead of the tested source. This does not establish full cross-platform CLI/API parity. Windows and other Python/platform combinations, target-only fault contracts, complete native coverage, and release artifacts remain open. Focused inputs cover default serving and shutdown, console-script current-directory import resolution, `--http h11` and `--http httptools` selector requests, non-default `--backlog` with a live HTTP request, `--timeout-keep-alive` closing an idle HTTP/1 connection, `--limit-max-requests 0` startup shutdown and one-request natural shutdown using `UVICORN_LIMIT_MAX_REQUESTS=1`, plain HTTP/1.1 over `--uds` through the module CLI and `Config`/`Server`, inherited TCP listeners through `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)`, and `Server.run(sockets=[...])` with one or two listeners, `--use-colors` and `--no-use-colors` through the module CLI, `use_colors=True` through `uvicorn.run()`, module-CLI `--reset-contextvars` default and reset behavior plus `uvicorn.run(reset_contextvars=True)`, selected lifespan behavior, `root_path`, environment-file loading, response headers, trusted proxy behavior, module-CLI `UVICORN_PROXY_HEADERS=false`, and `FORWARDED_ALLOW_IPS` default/argument precedence, ASGI2 and WSGI selection, WebSocket message-size and server-keepalive CLI settings, a non-default worker healthcheck timeout through `Config`/`Server` with one worker, `WEB_CONCURRENCY=0` through `Config`/`Server` as a single-process setting, environment-driven two-worker module-CLI startup through `UVICORN_WORKERS=2`, live module-CLI reload selection through `UVICORN_RELOAD=true`, the selected asyncio loop through `Config`/`Server.run()`, and a module-CLI custom import-string loop factory whose invocation marker matches 1/1 against the oracle (see [focused evidence](parity.md)); module-CLI checks for valid `--timeout-graceful-shutdown 1` option and environment values, plus held-request cases that confirm cancellation after the 1-second graceful timeout through both the CLI option and environment, default server/access log events, INI, JSON, and YAML logging configuration through `uvicorn.run()` and the module CLI, including `UVICORN_LOG_CONFIG`, `UVICORN_LOG_LEVEL=debug` through the module CLI, explicit `--log-level warning` precedence over that environment value, access-log suppression through `uvicorn.run(access_log=False)` and `--no-access-log`, and warning-level filtering through `uvicorn.run()` and the module CLI. | These are narrow cases, not full CLI or API parity. The Rust engine has one HTTP implementation, so selectors route to it; the `httptools` request case passed 1/1 against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13. Parser-specific malformed-request behavior is not established. Raw logs are retained and normalized log events compare color presence as well. Other levels and environment combinations, traceback frame formatting, and most runtime options remain unverified. Detailed case results and current evidence identity are in the [maintainer evidence record](maintainers/uvicorn-0.54.0-contract.md). |
+| Match Uvicorn's CLI and Python API | Incomplete. CI #455 passed the 117 declared CLI cases and 265 declared Python API cases as part of the 702-case Linux x86-64 matrix; the full 702-case inventory also passed locally on macOS ARM64. Windows candidate parity was skipped after the coverage job failed. Full settings, runtime, worker/process, platform, and release acceptance remains open; selected passes do not establish drop-in compatibility. See the [compatibility status](uvicorn-compatibility.md). |
 
 ## Known behavior limits
 

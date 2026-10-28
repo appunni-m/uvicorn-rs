@@ -7,15 +7,59 @@
 ## Current unified coverage status (2026-10-28)
 
 The latest pull-request CI run,
-[#454](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222815),
-uses PR head `642a6bb9c654599ed89ab705270619bc2ad23cfd`. Its installed-wheel
-public parity job passed 702/702, but its three-repeat unified coverage job
-was still running at the latest status check. No coverage artifact or result
-is available from that job yet. The run's Rust lint job failed on a redundant
-binding removed in local commit `4b286e33e28e8051f23b589ecb8620bc92592995`;
-that fix and the subsequent documentation commits have not been hosted-
-validated. Do not treat the active run as exact-current-source coverage
-evidence.
+[#455](https://github.com/appunni-m/uvicorn-rs/actions/runs/40652026006),
+evaluated merge commit `9c935f8ec4b075c783d9fde755c43d8b430a1ac9`, with its
+recorded target-source hashes matching PR head
+`4a429684d5fd92c1068c7776093452cca1ccfc90`. The unified coverage artifact is
+ID `12804865394`, archive SHA-256
+`16bab28580018491f7e62ac9290fb36750da79b7d109b085de25cde863622e5d`; the
+extracted report SHA-256 is
+`9d3a169a132a88e57298368f3c572b1a0f36217060503b865f2546a152ae654c`. Its
+coverage source digest is
+`bf1bea77564889116acd1fcee8c8ccc40dc2d4749d04a5496c0422c2d01d80d0`.
+
+The matrix attributed all 1,309 indexed cases. Two of the three ASGI repeats
+passed 1,051/1,051; one passed 1,050/1,051 because a coverage-only shutdown
+join-error case recorded `lifespan.shutdown` after the message was sent but
+before the injected task abort. The aggregate measured **13,801/13,983
+regions** and **10,165/10,263 lines**. The `uvicorn-rs-public-parity` job
+passed 702/702, but this does not clear source coverage.
+
+The current local worktree corrects the fault-specific shutdown predicate and
+removes the contradictory generic `application_events` requirement; that
+selected case passed 1/1. It also corrected `fault.asgi-event-type.extract`:
+the old fixture sent the recognized `http.response.trailers` event, so its
+ordinary HTTP 500 could pass without exercising the injected extraction error.
+The updated dedicated fixture route now produces the injected `MemoryError`,
+which the fault contract verifies from the server log. It passed 1/1 and
+attributed the previously missing `src/lib.rs:542` fault-point region. Local
+run `65a83d09fa124b0da40f5b5c43a22b75` is dirty relative to revision
+`4a429684d5fd92c1068c7776093452cca1ccfc90`; its selected report SHA-256 is
+`c6e24595eff5555f1e65f8ef2a965f742666ac6437627ed2cb8aa5e0caf2588f`. The
+selected report is incomplete by design and is not full-coverage evidence. No
+exact-source 100% report or accepted Coverage-MCP receipt is available.
+Candidate jobs were skipped after the hosted coverage failure, and release
+remains blocked.
+
+Two additional WebSocket input cases send HTTP response-extension event types
+through the public WebSocket ASGI `send` callable. The selected pair passed
+2/2 against Uvicorn and the target, and covered the previously missing
+`AsgiEventType::as_str` regions at `src/lib.rs:2022` and `src/lib.rs:2023`.
+Local run `4c10f41d5f0340ac84bbe98fbac257c8` is dirty relative to revision
+`4a429684d5fd92c1068c7776093452cca1ccfc90`; its selected report SHA-256 is
+`801dc40b7f87f69941d58d41e3fb80fb1a7582c44536d37e000918c92e56ad46`. This
+adds focused attribution only; the full hosted 100% gate remains open.
+
+Two HTTP/2 trailer cases now send an invalid trailer name and an invalid
+trailer value after response-body completion. Both matched Uvicorn 0.54.0 and
+the target; server logs confirm the expected header-name and header-value
+errors. The selected report attributes the target validation paths at
+`src/lib.rs:3865-3868`. Run
+`1472d9e30da84705b6ab3a224e05c813` passed 2/2 with zero case or infrastructure
+failures and no retries. Report SHA-256:
+`bbe74f5d5ad9e635b1da533ab2aa2e585580dd085eee1a5e0337261049818be0`; source
+digest `1c850fe5c4e9f45fc85975198736221190d7dd1add0d6e80ffb281e7cd7ca245`.
+The report is selected-subset diagnostic evidence, not a full coverage pass.
 
 ### Previous exact-main coverage failure (2026-10-27)
 

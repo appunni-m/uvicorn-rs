@@ -658,6 +658,17 @@ async def _app_impl(scope, receive, send):
         if scope["path"] == "/ws-invalid-send-payload":
             await send({"type": "websocket.send"})
             return
+        if scope["path"] in {
+            "/ws-send-http-response-early-hint",
+            "/ws-send-http-response-trailers",
+        }:
+            event_type = (
+                "http.response.early_hint"
+                if scope["path"].endswith("early-hint")
+                else "http.response.trailers"
+            )
+            await send({"type": event_type})
+            return
         if scope["path"] == "/ws-invalid-send-both-payloads":
             await send({"type": "websocket.send", "text": "text", "bytes": b"bytes"})
             return
@@ -744,6 +755,30 @@ async def _app_impl(scope, receive, send):
         await send({"type": "http.response.start", "status": 200, "headers": []})
         extensions = ",".join(sorted(scope.get("extensions", {}))).encode("ascii")
         await send({"type": "http.response.body", "body": extensions})
+        return
+    if path == "/response-early-hint-invalid-header":
+        await send({
+            "type": "http.response.early_hint",
+            "links": [b"invalid\nlink"],
+        })
+        return
+    if path in {
+        "/response-trailers-invalid-header-name",
+        "/response-trailers-invalid-header-value",
+    }:
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        await send({"type": "http.response.body", "body": b"complete"})
+        headers = (
+            [(b"invalid name", b"value")]
+            if path.endswith("header-name")
+            else [(b"x-trailer", b"invalid\nvalue")]
+        )
+        await send({"type": "http.response.trailers", "headers": headers})
         return
     if path in {"/response-trailers", "/response-trailers-without-te"}:
         await send({
@@ -878,6 +913,10 @@ async def _app_impl(scope, receive, send):
 
     if path == "/invalid-asgi/unknown-type":
         await send({"type": "http.response.trailers"})
+        return
+
+    if path == "/invalid-asgi/unrecognized-type":
+        await send({"type": "http.response.unrecognized"})
         return
 
     if path == "/final-body-before-app-return":

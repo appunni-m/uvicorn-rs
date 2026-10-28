@@ -10,19 +10,25 @@ to crates.io from clean source commit
 are recorded in [release status](docs/releases.md). The PyPI distribution
 `uvicorn-rs` has not had its first upload.
 
-PR #19 is still a draft at remote head
-`642a6bb9c654599ed89ab705270619bc2ad23cfd`. CI
-[#454](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222815)
-passed **702/702** installed-wheel public parity cases on Linux x86-64. Its
-full coverage job is still running, and its Rust lint job failed on a redundant
-local binding fixed in local commit `4b286e33e28e8051f23b589ecb8620bc92592995`;
-that commit is one ahead of the remote branch and has not been validated by
-hosted CI. Candidate version 0.2.2 is absent from both Cargo registries and
-PyPI; no exact-source candidate artifact or tag exists yet. Full Uvicorn
-compatibility, independent Coverage-MCP review, complete three-system
-benchmarks, and clean consumer checks remain open. The earlier
-`asgi-lifespan-protocol-rs` 0.2.0 archive records `dirty: true`; the clean
-0.2.1 publication is the current registry evidence.
+PR #19 is a draft at head
+`4a429684d5fd92c1068c7776093452cca1ccfc90`. CI
+[#455](https://github.com/appunni-m/uvicorn-rs/actions/runs/40652026006)
+passed the installed-wheel public parity matrix **702/702** on Linux x86-64
+and passed the Rust, native-composition, and release-handoff jobs. Its unified
+coverage job failed: one of three parity repeats hit a timing-sensitive fault
+contract, and the report measured 13,801/13,983 regions and 10,165/10,263
+lines. Two focused local fault-contract cases now pass 1/1 each: the shutdown
+event-ordering case and `fault.asgi-event-type.extract`, whose fixture now
+reaches the intended injected error. These selected cases do not establish
+full coverage; an exact-source 100% report and accepted independent
+Coverage-MCP review remain open. The same 702-case matrix passed locally on
+macOS ARM64 at the PR head; that is local evidence, not a hosted receipt. The
+dirty worktree adds two WebSocket event-context cases, one HTTP/2 Early Hints
+validation case, and two HTTP/2 response-trailer validation cases. These
+selected groups pass 5/5 against Uvicorn and the target, but the full 707-case
+set has not run on this source. Full Uvicorn compatibility, complete matched
+benchmarks, and hosted exact-source candidate consumers remain open. No 0.2.2
+release tag or package has been published.
 
 The Python adapter is **not yet a drop-in Uvicorn replacement**. If your
 application depends on Uvicorn's full command-line, Python API, worker, or

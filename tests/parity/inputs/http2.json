@@ -582,6 +582,20 @@
       }
     },
     {
+      "case_id": "http2.invalid-response-early-hint-link-value",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hint-invalid-header",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http2.response-trailers",
       "profile": "http2",
       "operation": "http2.response-trailers",
@@ -596,6 +610,38 @@
             "te",
             "trailers"
           ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-response-trailer-name",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-invalid-header-name",
+        "headers": [
+          ["te", "trailers"]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-response-trailer-value",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-invalid-header-value",
+        "headers": [
+          ["te", "trailers"]
         ],
         "body_base64": ""
       }
