@@ -31,6 +31,14 @@ complete compatibility remain open. Candidate acceptance still needs
 exact-source artifacts and consumer checks, plus parity-first benchmarks.
 See the [full parity history](parity.md).
 
+The project metadata declares Python `>=3.9`, and CI checks that the installed
+wheel can be imported on Python 3.9. This is package-floor evidence, not
+Uvicorn 0.54.0 compatibility evidence: the pinned upstream release declares
+Python `>=3.10` in its [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml).
+Parity against Uvicorn 0.54.0 therefore starts at Python 3.10; Python 3.9
+runtime support remains a separate package claim and is not established by
+the install check alone.
+
 Current input@43 has a focused 6/6 macOS
 pass for module-CLI environment behavior: listener host/port settings, a valid
 `UVICORN_LIMIT_CONCURRENCY` limit, and explicit CLI precedence over valid and

@@ -24,6 +24,14 @@ public parity job (707/707 on Linux x86-64). Its unified three-repeat coverage
 job is still running. The complete OS/Python compatibility matrix has not
 passed.
 
+The package metadata declares Python `>=3.9`, and CI checks installed-wheel
+import on Python 3.9. That check does not establish Uvicorn 0.54.0 parity:
+the pinned upstream release declares Python `>=3.10` in its
+[versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml).
+The Uvicorn 0.54.0 parity matrix therefore starts at Python 3.10. Any Python
+3.9 runtime-support claim is separate and remains unverified by the install
+check.
+
 CI #457 passed the 707-case installed-wheel matrix for source commit `4f7a296`
 on Linux x86-64.
 This does not establish macOS, Windows, or other declared Python versions.
