@@ -185,6 +185,76 @@
       }
     },
     {
+      "case_id": "http2.invalid-response-header-name",
+      "profile": "http2",
+      "operation": "http.invalid-response-header",
+      "covers": [
+        "http.invalid-response-header"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/header-name",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-response-header-value",
+      "profile": "http2",
+      "operation": "http.invalid-response-header",
+      "covers": [
+        "http.invalid-response-header"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/header-value",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-asgi-response-status-range",
+      "profile": "http2",
+      "operation": "http.invalid-response-start",
+      "covers": [
+        "http.invalid-response-start"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/invalid-status",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-asgi-response-status-type",
+      "profile": "http2",
+      "operation": "http.invalid-response-start",
+      "covers": [
+        "http.invalid-response-start"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/status-not-integer",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-asgi-response-headers-container",
+      "profile": "http2",
+      "operation": "http.invalid-response-start",
+      "covers": [
+        "http.invalid-response-start"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/headers-not-iterable",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http2.application-error-before-response-start",
       "profile": "http2",
       "operation": "http.application-error",
