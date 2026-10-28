@@ -357,6 +357,46 @@
       }
     },
     {
+      "case_id": "python-api.run-serves-asgi2-application-factory",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-factory",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "interface": "auto",
+          "application_interface": "asgi2",
+          "factory": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-serves-asgi2-application-factory",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-factory",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "module-cli",
+          "root_path": "",
+          "interface": "auto",
+          "application_interface": "asgi2",
+          "factory": true
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-applies-numeric-warning-log-level",
       "profile": "python-api",
       "operation": "python.api.run-http",

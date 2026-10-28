@@ -1898,3 +1898,9 @@ def asgi2_probe_app(scope):
         await lifespan_probe_app(scope, receive, send)
 
     return app
+
+
+def python_api_asgi2_factory_probe_app():
+    """Return the ASGI2 probe used by Python API factory parity inputs."""
+
+    return asgi2_probe_app

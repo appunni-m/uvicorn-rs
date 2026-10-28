@@ -2633,10 +2633,10 @@ fn python_asgi_error_was_logged(error: &PyErr, py: Python<'_>) -> bool {
 fn contains_logged_python_asgi_error(error: &(dyn StdError + 'static)) -> bool {
     let mut source = Some(error);
     while let Some(error) = source {
-        if let Some(python_error) = error.downcast_ref::<PyErr>()
-            && Python::attach(|py| python_asgi_error_was_logged(python_error, py))
-        {
-            return true;
+        if let Some(python_error) = error.downcast_ref::<PyErr>() {
+            if Python::attach(|py| python_asgi_error_was_logged(python_error, py)) {
+                return true;
+            }
         }
         source = error.source();
     }

@@ -808,6 +808,8 @@ except KeyboardInterrupt:
             app_target = "tests.parity.app:python_api_uds_probe_app"
         elif request.get("factory") and request.get("application_interface") == "wsgi":
             app_target = "tests.parity.app:python_api_wsgi_probe_app_factory"
+        elif request.get("factory") and request.get("application_interface") == "asgi2":
+            app_target = "tests.parity.app:python_api_asgi2_factory_probe_app"
         elif request.get("factory"):
             app_target = "tests.parity.app:python_api_factory_probe_app"
         elif request.get("application_interface") == "wsgi":
