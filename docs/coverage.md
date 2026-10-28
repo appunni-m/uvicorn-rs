@@ -4,7 +4,20 @@
 
 <a id="current-unified-coverage-status-2026-10-22"></a>
 
-## Current unified coverage status (2026-10-27)
+## Current unified coverage status (2026-10-28)
+
+The latest pull-request CI run,
+[#454](https://github.com/appunni-m/uvicorn-rs/actions/runs/40646222815),
+uses PR head `642a6bb9c654599ed89ab705270619bc2ad23cfd`. Its installed-wheel
+public parity job passed 702/702, but its three-repeat unified coverage job
+was still running at the latest status check. No coverage artifact or result
+is available from that job yet. The run's Rust lint job failed on a redundant
+binding removed in local commit `4b286e33e28e8051f23b589ecb8620bc92592995`;
+that fix and the subsequent documentation commits have not been hosted-
+validated. Do not treat the active run as exact-current-source coverage
+evidence.
+
+### Previous exact-main coverage failure (2026-10-27)
 
 The last exact-main CI run
 [39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
