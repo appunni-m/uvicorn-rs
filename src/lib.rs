@@ -3758,7 +3758,6 @@ impl AsgiIo {
                         let wait_started = slf.diagnostics.http_response_body_wait_started();
                         let diagnostics = slf.diagnostics.clone();
                         let sender = slf.body.clone();
-                        let body_completed = body_completed;
                         pyo3_async_runtimes::tokio::future_into_py(py, async move {
                             sender.send(chunk).await.map_err(|_| {
                                 PyOSError::new_err("server response body channel closed")
