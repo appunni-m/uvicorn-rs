@@ -1904,3 +1904,13 @@ def python_api_asgi2_factory_probe_app():
     """Return the ASGI2 probe used by Python API factory parity inputs."""
 
     return asgi2_probe_app
+
+
+class PythonApiASGI3Callable:
+    """Expose the Python API probe as an ASGI3 callable instance."""
+
+    async def __call__(self, scope, receive, send):
+        await lifespan_probe_app(scope, receive, send)
+
+
+python_api_asgi3_callable_app = PythonApiASGI3Callable()

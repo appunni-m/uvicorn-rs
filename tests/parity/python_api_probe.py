@@ -520,6 +520,10 @@ def asgi2_app(scope):
         await asgi3_app(scope, receive, send)
     return respond
 
+class ASGI3CallableInstance:
+    async def __call__(self, scope, receive, send):
+        await asgi3_app(scope, receive, send)
+
 def wsgi_app(environ, start_response):
     if environ["PATH_INFO"] == "/python-api-wsgi-error":
         raise RuntimeError("python-api-wsgi-probe-error")
@@ -607,11 +611,14 @@ timeout_keep_alive = json.loads(sys.argv[21])
 workers = json.loads(sys.argv[22])
 timeout_worker_healthcheck = json.loads(sys.argv[23])
 uds_path = sys.argv[24] or None
-app = app_factory if factory else (
-    wsgi_app
-    if application_interface == "wsgi"
-    else asgi2_app if application_interface == "asgi2" else asgi3_app
-)
+if os.environ.get("ASGI_PARITY_CALLABLE_INSTANCE") == "1":
+    app = ASGI3CallableInstance()
+else:
+    app = app_factory if factory else (
+        wsgi_app
+        if application_interface == "wsgi"
+        else asgi2_app if application_interface == "asgi2" else asgi3_app
+    )
 
 options = {
     "host": host,
@@ -804,7 +811,9 @@ except KeyboardInterrupt:
             port = reservation.getsockname()[1]
 
     if request["invocation"] == "module-cli":
-        if request.get("uds"):
+        if request.get("callable_instance"):
+            app_target = "tests.parity.app:python_api_asgi3_callable_app"
+        elif request.get("uds"):
             app_target = "tests.parity.app:python_api_uds_probe_app"
         elif request.get("factory") and request.get("application_interface") == "wsgi":
             app_target = "tests.parity.app:python_api_wsgi_probe_app_factory"
@@ -938,6 +947,8 @@ except KeyboardInterrupt:
         ]
 
     environment = subprocess_environment()
+    if request.get("callable_instance"):
+        environment["ASGI_PARITY_CALLABLE_INSTANCE"] = "1"
     if wsgi_streaming_probe:
         wsgi_stream_directory = tempfile.TemporaryDirectory(
             prefix="uvrs-wsgi-response-stream-"
