@@ -94,6 +94,15 @@ async def invoke(app, scope, io):
 
     async def send(message):
         nonlocal response_started
+        if (
+            scope_type == "http"
+            and isinstance(message, dict)
+            and message.get("type") == "http.response.start"
+        ):
+            # Uvicorn treats a response-start attempt as committed before its
+            # protocol validates status and headers. If validation fails, do
+            # not turn that exception into a second, synthetic HTTP 500.
+            response_started = True
         pending = io.send(message)
         if pending is not None:
             await pending
@@ -106,7 +115,6 @@ async def invoke(app, scope, io):
             elif event_type == "lifespan.shutdown.complete":
                 error_logger.info("Application shutdown complete.")
         elif scope_type == "http" and event_type == "http.response.start":
-            response_started = True
             if access_logger.hasHandlers():
                 client = scope.get("client")
                 client_addr = "%s:%d" % client if client else ""

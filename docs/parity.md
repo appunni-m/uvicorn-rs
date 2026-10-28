@@ -2105,6 +2105,38 @@ multiple HTTP transfer chunks; migrate maintained `@42` inputs with
 existing case data and change only the schema marker.
 The runner rejects older or mixed input schemas.
 
+### Invalid ASGI response-start parity (2026-10-28)
+
+The installed-wheel public parity job in [CI #444](https://github.com/appunni-m/uvicorn-rs/actions/runs/40609308239)
+exposed seven mismatches: the target converted malformed `http.response.start`
+events and invalid response headers into HTTP 500, while Uvicorn closed the
+connection without a response. The ASGI bridge now records the response-start
+attempt before passing the event to the native protocol, so a validation error
+does not trigger a second synthetic 500.
+
+The selected cases `http1.invalid-response-header-name`,
+`http1.invalid-response-header-value`,
+`http1.invalid-asgi-response-start-missing-status`,
+`http1.invalid-asgi-response-status-range`,
+`http1.invalid-asgi-response-status-type`,
+`http1.invalid-asgi-response-headers-container`, and
+`http2.invalid-asgi-response-start-missing-status` pass 7/7 against Uvicorn
+0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13.
+
+Run `750094a57b0b479a83a807c06a1880ac`; report
+`target/kata-progress/invalid-asgi-response-start-20261028.json`, SHA-256
+`7587aaae87dfba757d17ca901602a9192c2d0391c6878868267222d352ccbadc`. It binds
+to target revision `a5ccf47558a1c3b16fe81ed2edbccd871c03ec36` with a dirty
+worktree and source SHA-256
+`90f196142b0afc493c4d4ec755161f714de694d7475b76e4ebc10719655dd121`; HTTP/1
+input SHA-256 `5a08506af27f01bba1d04e662acba5f72687495553df99a66e4d976f4a937ea1`;
+HTTP/2 input SHA-256
+`39df8154a77fa3460e14e0e5da7be82976100668dd67ec14ee64ac389a7cfa45`; and
+manifest SHA-256
+`7150a63fedf4db036f0397e471c81e982b37e77ebf707d3cdca50c40fdf4d666`.
+This focused dirty-source receipt does not replace a clean exact-commit hosted
+run; the full input matrix and unrelated malformed-message cases remain open.
+
 ## CI evidence
 
 Main CI executes the complete public matrix on an installed normal wheel and
