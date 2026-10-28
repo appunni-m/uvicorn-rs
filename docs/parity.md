@@ -4,18 +4,20 @@
 
 ## Current source status (2026-10-29)
 
-PR #19 remains a draft. CI #462 checked committed PR head
-`66d3f5791d9b6806ce56986f0fe4035364271b92`, based on `main` at
+PR #19 remains a draft. CI #463 checked committed PR head
+`73be515c899e3e8c5e00b231cce994934e90fcd7`, based on `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its Linux installed-wheel public
-matrix passed **714/714**; Rust quality/MSRV, native framework composition,
-and release handoff also passed. The unified coverage gate failed at
-**13,838/14,017 regions** and **10,205/10,296 lines**; three WSGI cases failed
-in one instrumented repeat. Linux sdist packaging failed because `maturin`
-was missing from PATH; the macOS ARM64 and Windows x86-64 wheel consumers
-failed when pip targeted the uv-managed base interpreter. Local changes fix
-the packaging setup and WSGI shutdown race, but have not yet been pushed or
-validated by hosted CI. See
-[CI #462](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386566).
+matrix passed **717/717**; Rust quality/MSRV, native framework composition,
+and release handoff also passed. Its unified coverage job was still running
+when this status was recorded. Linux sdist packaging failed because `maturin`
+was missing from PATH, macOS ARM64 failed while expanding an empty Bash array
+under `set -u`, and the Windows x86-64 wheel consumer failed before parity;
+the Windows diagnostic printer raised a CP1252 encoding error before exposing
+the original failure. Local commit
+`33d4e0d1c0801eec338592a29fffb616f395acd6` fixes the Linux and macOS failures
+and preserves the Windows error output. Its focused local sdist consumer
+passed; the commit is not pushed or validated by hosted CI. See
+[CI #463](https://github.com/appunni-m/uvicorn-rs/actions/runs/40761550017).
 
 Two newly added fragmented WebSocket cases pass selected local oracle
 comparisons, including one `permessage-deflate` message. They use dirty local
@@ -72,9 +74,9 @@ runner SHA-256
 The earlier 702-case local macOS ARM64 run and the selected WebSocket, HTTP/2
 Early Hints, and trailer cases are diagnostic evidence from older source
 snapshots. They do not replace the full OS/Python matrix required for a release
-commit. CI #462 is complete but its coverage gate failed; the independent
-Coverage-MCP acceptance and declared OS/Python matrix also remain open.
-Benchmarks remain behind compatibility acceptance.
+commit. CI #463's coverage job had not completed when this status was recorded;
+the independent Coverage-MCP acceptance and declared OS/Python matrix also
+remain open. Benchmarks remain behind compatibility acceptance.
 
 ## Historical 695-, 699-, and 700-case parity snapshots — 2026-10-28
 
@@ -153,9 +155,9 @@ coverage job completed incompletely at 1,299/1,307 attributed cases,
 13,777/13,959 regions, and 10,154/10,252 lines. This historical run does not
 meet the 100% gate. These older runs are superseded by the current source
 status at the top of this page. CI #461 completed with coverage below the
-100% threshold; CI #462 is the next hosted full run and remains in progress.
-No accepted Coverage-MCP receipt is available. Benchmarks remain paused until
-the broader parity work is complete.
+100% threshold; CI #462 is a completed historical failure, and CI #463 is the
+active hosted full run described above. No accepted Coverage-MCP receipt is
+available. Benchmarks remain paused until the broader parity work is complete.
 
 The 700-case `input@43` snapshot includes
 `python-api.run-serves-request-and-shuts-down-on-sigterm`, which compares a

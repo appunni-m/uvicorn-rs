@@ -14,16 +14,18 @@ published.
 ## Current status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#462](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386566)
-checked committed PR head `66d3f5791d9b6806ce56986f0fe4035364271b92`, based
-on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The 714-case `input@43`
-public matrix passed on Linux x86-64, along with release handoff, native
-framework composition, exact Rust minimum, and Rust quality jobs. The unified
-coverage gate failed; Linux sdist packaging and macOS/Windows artifact
-consumers also failed before acceptance. Local changes address the packaging
-issues and add a focused WSGI Content-Length shutdown-race fix, but those
-changes have not been validated by hosted CI. The complete OS/Python
-compatibility matrix has not passed.
+[#463](https://github.com/appunni-m/uvicorn-rs/actions/runs/40761550017)
+checked committed PR head `73be515c899e3e8c5e00b231cce994934e90fcd7`, based
+on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its 717-case public
+matrix passed on Linux x86-64, along with release handoff, native framework
+composition, exact Rust minimum, and Rust quality jobs. The unified coverage
+job was still running when this status was recorded. Candidate package jobs
+failed on Linux sdist setup, macOS Bash 3.2 array handling, and Windows wheel
+consumption; the Windows diagnostic printer hid the original error. Local
+commit `33d4e0d1c0801eec338592a29fffb616f395acd6` fixes the Linux and macOS
+failures and exposes the Windows error. Its focused local sdist consumer
+passed, but the commit has not yet been pushed or validated by hosted CI. The
+complete OS/Python compatibility matrix has not passed.
 
 The package metadata declares Python `>=3.9`, and CI checks installed-wheel
 import on Python 3.9. That check does not establish Uvicorn 0.54.0 parity:
@@ -33,25 +35,25 @@ The Uvicorn 0.54.0 parity matrix therefore starts at Python 3.10. Any Python
 3.9 runtime-support claim is separate and remains unverified by the install
 check.
 
-CI #462 passed the 714-case installed-wheel matrix for committed PR head
-`66d3f5791d9b6806ce56986f0fe4035364271b92` on Linux x86-64. A subsequent
-focused local run of the WSGI Content-Length shutdown case passed 1/1 against
-Uvicorn 0.54.0 on dirty macOS ARM64 source. Neither receipt establishes
-macOS, Windows, other declared Python versions, or the unvalidated local
-packaging fixes. The preceding CI #456 and earlier 702-case macOS ARM64
-evidence are from older source snapshots. The exact current-source 100%
-coverage gate, independent Coverage-MCP receipt, and complete Uvicorn 0.54.0
-compatibility matrix remain open.
+CI #463 passed the 717-case installed-wheel matrix for committed PR head
+`73be515c899e3e8c5e00b231cce994934e90fcd7` on Linux x86-64. A focused local
+run of the WSGI Content-Length shutdown case passed 1/1 against Uvicorn 0.54.0
+on dirty macOS ARM64 source. These receipts do not establish Windows, other
+declared Python versions, or the unvalidated local packaging fixes. The
+preceding CI #456 and earlier 702-case macOS ARM64 evidence are from older
+source snapshots. The exact current-source 100% coverage gate, independent
+Coverage-MCP receipt, and complete Uvicorn 0.54.0 compatibility matrix remain
+open.
 
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | Not available. The uvicorn-rs distribution has not been published. |
-| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #462 passed 714 public cases on Linux x86-64; full CLI and settings parity is not proved. |
-| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #462 passed the public matrix on Linux x86-64; the complete programmatic contract remains open. |
+| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #463 passed 717 public cases on Linux x86-64; full CLI and settings parity is not proved. |
+| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #463 passed the public matrix on Linux x86-64; the complete programmatic contract remains open. |
 | Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. The current Linux matrix passed, but macOS evidence is from an older source snapshot and Windows/other declared Python versions remain unverified. |
 | Use workers, reload, sockets, or process controls | Selected parity cases cover some worker, reload, socket, signal, and graceful-shutdown behavior. Other combinations, platforms, and failure paths remain unverified. |
 | Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See benchmark status. |
-| Use the current release candidate on Windows | Not verified. CI #462's Windows artifact-consumer job failed before parity; Windows and the other declared Python versions need exact-source evidence. |
+| Use the current release candidate on Windows | Not verified. CI #463's Windows artifact-consumer job failed before parity, and its diagnostic printer hid the consumer error; Windows and the other declared Python versions need exact-source evidence. |
 
 Neither the passing Linux nor macOS public matrix proves full compatibility.
 Windows and other declared Python versions still need exact-source evidence,

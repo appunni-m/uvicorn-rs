@@ -25,20 +25,22 @@ implemented by the optional **uvicorn-rs-py** adapter. The publisher is
 candidates. The PyPI trusted publisher tuple is
 **appunni-m/uvicorn-rs / release.yml / pypi**.
 
-PR #19 remains a draft. CI #462 checked committed PR head
-**66d3f5791d9b6806ce56986f0fe4035364271b92**, based on main
+PR #19 remains a draft. CI #463 checked committed PR head
+**73be515c899e3e8c5e00b231cce994934e90fcd7**, based on main
 **86e72e181d00feca1b4db7f30377d5d9d4345b83**. Release handoff, native framework
-composition, exact Rust minimum, Rust format/lint/feature/docs, and 714/714
-installed-wheel public parity on Linux x86-64 passed. The unified coverage
-gate failed at 13,838/14,017 regions and 10,205/10,296 lines, with three WSGI
-case failures in one repeat. Linux sdist packaging failed because `maturin`
-was missing from PATH; macOS ARM64 and Windows wheel consumers hit
-`externally-managed-environment` when pip targeted the uv-managed base Python.
-Local workflow fixes use `uvx` for maturin and isolated uv consumer
-environments. A focused local WSGI shutdown-race input now passes 1/1 after a
-small Rust drain fix; both changes are unvalidated by hosted CI. Docs run
-[40747386578](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386578)
-passed for the committed source, not the current local doc edits.
+composition, exact Rust minimum, Rust format/lint/feature/docs, and 717/717
+installed-wheel public parity on Linux x86-64 passed. The unified three-repeat
+coverage gate was still running when this status was recorded. Linux sdist
+packaging failed because `maturin` was missing from PATH; macOS ARM64 failed
+while expanding an empty Bash array under `set -u`; and Windows wheel
+consumption failed before parity, with a CP1252 diagnostic error hiding its
+original cause. Local commit **33d4e0d1c0801eec338592a29fffb616f395acd6** fixes
+the identified Linux/macOS workflow issues and preserves the Windows error
+output. Its focused sdist consumer passed locally, but the commit is not
+pushed or validated by hosted CI. Docs run
+[#180](https://github.com/appunni-m/uvicorn-rs/actions/runs/40761550224)
+passed for committed head `73be515`; the documentation refresh recorded here
+has not yet been deployed.
 
 The preceding CI [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
 passed **707/707** public parity cases on Linux x86-64 for commit

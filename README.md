@@ -12,24 +12,28 @@ the release workflow must resolve it in its preflight. The PyPI
 `uvicorn-rs` project API returned 404, so the distribution has not had its
 first upload. See [release status](docs/releases.md).
 
-PR #19 remains a draft. CI #462 checked committed head
-`66d3f5791d9b6806ce56986f0fe4035364271b92`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality, minimum-version,
-native FastAPI-RS composition, release handoff, and installed-wheel public
-parity passed (714/714 on Linux x86-64). The exact-source coverage gate failed
-at 13,838/14,017 regions and 10,205/10,296 lines, with three WSGI cases failing
-in one repeat. Linux sdist setup and macOS/Windows wheel consumers also failed
-before acceptance. Local changes address those packaging failures and the WSGI
-shutdown race; the focused WSGI regression passes 1/1 on a dirty macOS ARM64
-checkout. Those local fixes still need an exact-head hosted run. See
-[CI #462](https://github.com/appunni-m/uvicorn-rs/actions/runs/40747386566)
+PR #19 remains a draft. CI #463 checked committed PR head
+`73be515c899e3e8c5e00b231cce994934e90fcd7`, based on `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
+FastAPI-RS composition, release handoff, and installed-wheel public parity
+passed (717/717 on Linux x86-64). The unified 100% coverage job was still
+running when this status was recorded. Linux, macOS, and Windows package jobs
+failed before candidate acceptance: Linux could not find `maturin`, macOS
+Bash 3.2 expanded an empty array under `set -u`, and Windows' diagnostic
+printer masked the original consumer failure with a CP1252 encoding error.
+Local commit `33d4e0d1c0801eec338592a29fffb616f395acd6` fixes the first two
+issues and preserves the Windows error output; the pinned local sdist
+consumer check passed. That commit has not yet been pushed or validated by
+hosted CI. See [CI #463](https://github.com/appunni-m/uvicorn-rs/actions/runs/40761550017)
 and [parity evidence](docs/parity.md).
 
-The docs deployment passed for the older committed source, not the current
-local documentation edits. Independent Coverage-MCP acceptance, the complete
-Uvicorn 0.54.0 behavior and platform matrix, parity-first benchmark evidence,
-and hosted candidate artifacts with clean consumers remain open. No 0.2.2
-release tag or package has been published.
+The docs workflow passed for committed head `73be515` in run
+[#180](https://github.com/appunni-m/uvicorn-rs/actions/runs/40761550224); the
+documentation refresh recorded here has not yet been deployed.
+Independent Coverage-MCP acceptance, the complete Uvicorn 0.54.0 behavior and
+platform matrix, parity-first benchmark evidence, and hosted candidate
+artifacts with clean consumers remain open. No 0.2.2 release tag or package
+has been published.
 
 The Python adapter is **not yet a drop-in Uvicorn replacement**. If your
 application depends on Uvicorn's full command-line, Python API, worker, or

@@ -6,16 +6,16 @@
 
 ## Current unified coverage status (2026-10-29)
 
-PR #19 remains a draft. CI #462 checked committed PR head
-`66d3f5791d9b6806ce56986f0fe4035364271b92`, based on `main` at
+PR #19 remains a draft. CI #463 checked committed PR head
+`73be515c899e3e8c5e00b231cce994934e90fcd7`, based on `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its unified three-repeat matrix
-attributed every selected case but missed the 100% gate at **13,838/14,017
-regions** and **10,205/10,296 lines**. One repeat had three WSGI parity
-failures around response-body closure; platform package jobs also failed
-before acceptance. Release handoff, native composition, minimum Rust, Rust
-quality, and Linux 714/714 installed-wheel parity passed. A focused local
-WSGI Content-Length shutdown case now passes 1/1 on dirty source; this does not
-replace a full post-fix report. No accepted Coverage-MCP receipt exists.
+was still running when this status was recorded; therefore it has no completed
+coverage result or accepted Coverage-MCP receipt yet. Release handoff, native
+composition, minimum Rust, Rust quality, and Linux 717/717 installed-wheel
+parity passed. Candidate package jobs failed before acceptance. Local commit
+`33d4e0d1c0801eec338592a29fffb616f395acd6` fixes the identified Linux and
+macOS workflow failures and improves Windows diagnostics, but it has not been
+validated by a hosted run.
 
 The post-change focused receipt is local-only:
 `target/coverage-diagnostic/ci461-startup-shutdown-fault-fix/coverage-report.json`,
@@ -31,9 +31,10 @@ coverage totals do not measure the full source gate.
 The prior run, CI #456, was superseded when #457 started. Its coverage job was
 canceled and its retained artifact is not a completed gate receipt. CI #461
 also missed the 100% gate; its current-source focused follow-up covers one case
-only and does not replace the full report. CI #462 is complete and also missed
-the gate. A fresh full exact-source report and independent Coverage-MCP review
-are still outstanding.
+only and does not replace the full report. CI #462 is a completed historical
+failure. CI #463 is the active full report for PR head `73be515`; once it
+completes, inspect its result before pushing the local fix commit. An accepted
+independent Coverage-MCP review is still outstanding.
 
 ### Prior CI #455 coverage result (source 4a429684)
 
