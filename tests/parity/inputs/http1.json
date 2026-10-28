@@ -3797,6 +3797,70 @@
       ]
     },
     {
+      "case_id": "fault.http-response-start-trailers-extract",
+      "profile": "http1",
+      "operation": "http.keepalive-sequence",
+      "covers": [
+        "http.keepalive-sequence"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.start.trailers.extract",
+        "contract": "http-start-error-close-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/state",
+          "headers": [
+            [
+              "Connection",
+              "close"
+            ]
+          ],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/state",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "fault.http-response-start-trailers-get-item",
+      "profile": "http1",
+      "operation": "http.keepalive-sequence",
+      "covers": [
+        "http.keepalive-sequence"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.start.trailers.get-item",
+        "contract": "http-start-error-close-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/state",
+          "headers": [
+            [
+              "Connection",
+              "close"
+            ]
+          ],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/state",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
       "case_id": "fault.http1.python-task-starter-import-asyncio",
       "profile": "http1",
       "operation": "http.keepalive-sequence",

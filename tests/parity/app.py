@@ -206,6 +206,7 @@ async def _respond(
             "type": event_type("http.response.start"),
             "status": status,
             "headers": [(b"content-type", content_type)],
+            "trailers": False,
         }
     )
     await send({"type": event_type("http.response.body"), "body": body, "more_body": False})

@@ -162,6 +162,8 @@ FAULT_POINTS = {
     "http.asgi.send.type.get-item",
     "http.response.start.status.get-item",
     "http.response.start.status.extract",
+    "http.response.start.trailers.get-item",
+    "http.response.start.trailers.extract",
     "http.response.start.headers.get-item",
     "http.response.start.headers.extract",
     "http.response.date-header.invalid-value",
@@ -694,6 +696,8 @@ HTTP_RESPONSE_BODY_BACKPRESSURE_FAULT_POINTS = {
 HTTP_RESPONSE_START_ERROR_FAULT_POINTS = {
     "http.response.start.status.get-item",
     "http.response.start.status.extract",
+    "http.response.start.trailers.get-item",
+    "http.response.start.trailers.extract",
     "http.response.start.headers.get-item",
     "http.response.start.headers.extract",
     "http.response.start.channel-closed",

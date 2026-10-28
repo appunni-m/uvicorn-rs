@@ -183,6 +183,8 @@ enum CoverageFaultPoint {
     HttpAsgiSendTypeGetItem,
     HttpResponseStartStatusGetItem,
     HttpResponseStartStatusExtract,
+    HttpResponseStartTrailersGetItem,
+    HttpResponseStartTrailersExtract,
     HttpResponseStartHeadersGetItem,
     HttpResponseStartHeadersExtract,
     HttpResponseDateHeaderInvalidValue,
@@ -545,6 +547,8 @@ impl CoverageFaultPoint {
             Self::HttpAsgiSendTypeGetItem => "http.asgi.send.type.get-item",
             Self::HttpResponseStartStatusGetItem => "http.response.start.status.get-item",
             Self::HttpResponseStartStatusExtract => "http.response.start.status.extract",
+            Self::HttpResponseStartTrailersGetItem => "http.response.start.trailers.get-item",
+            Self::HttpResponseStartTrailersExtract => "http.response.start.trailers.extract",
             Self::HttpResponseStartHeadersGetItem => "http.response.start.headers.get-item",
             Self::HttpResponseStartHeadersExtract => "http.response.start.headers.extract",
             Self::HttpResponseDateHeaderInvalidValue => "http.response.date-header.invalid-value",
@@ -3616,11 +3620,15 @@ impl AsgiIo {
                     coverage_value!(HttpResponseStartStatusExtract, status_value.extract())?;
                 let status = StatusCode::from_u16(status)
                     .map_err(|_| PyRuntimeError::new_err("Invalid HTTP response status code."))?;
-                let trailers = message
-                    .get_item("trailers")?
-                    .map(|value| value.extract::<bool>())
-                    .transpose()?
-                    .unwrap_or(false);
+                let trailers = coverage_value!(
+                    HttpResponseStartTrailersGetItem,
+                    message.get_item("trailers")
+                )?
+                .map(|value| {
+                    coverage_value!(HttpResponseStartTrailersExtract, value.extract::<bool>())
+                })
+                .transpose()?
+                .unwrap_or(false);
                 // Uvicorn validates configured headers as part of the
                 // response.start send. Reject a known-invalid default header
                 // before acknowledging the event, so the application cannot
