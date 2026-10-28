@@ -16,14 +16,18 @@ published.
 The current PR head is `8f50720cd0e1cc12fdb8d6c60b7108c8a14cc516`. Its
 input@43 inventory contains 699 public oracle cases: 117 CLI process cases and
 262 Python API cases, alongside protocol, lifecycle, and target-only contracts.
-The latest hosted validation is [CI #452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307); its installed-wheel parity and unified coverage jobs are still running.
+The installed-wheel parity job in [CI #452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307) passed 699/699 cases on Linux x86-64. Its unified coverage job is still running.
+The local input@43 working tree adds one Python API SIGTERM case, bringing its
+inventory to 700 public oracle cases (263 Python API cases). That case passes
+1/1 as dirty-source diagnostic evidence; CI #452 predates it, so clean-source
+parity evidence for the addition is still pending.
 
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | Not available. The `uvicorn-rs` distribution has not been published. |
 | Run the `uvicorn` command | The candidate exposes the `uvicorn` command and `python -m uvicorn`. Selected inputs cover help, settings, environment precedence, and startup; complete CLI parity is not proved. |
 | Import and configure `uvicorn` | The candidate exposes `run`, `Config`, and `Server`. Selected signature, defaults, startup, and shutdown inputs are covered; the full programmatic contract remains open. |
-| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. The current 699-case matrix is still being validated; this does not establish full Uvicorn compatibility. |
+| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. The pushed 699-case matrix passed on Linux x86-64; the additional local case is not yet in clean-source evidence, and this does not establish full Uvicorn compatibility. |
 | Use workers, reload, sockets, or process controls | Selected parity cases cover some worker, reload, socket, signal, and graceful-shutdown behavior. Other combinations, platforms, and failure paths remain unverified. |
 | Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See [benchmark status](benchmark-status.md). |
 

@@ -65,10 +65,32 @@ CI #451 was superseded by the push to `8f50720cd` and canceled during its first
 coverage attribution pass at case 785/1,217. Its uploaded coverage artifact is
 incomplete and is not release evidence. CI
 [#452](https://github.com/appunni-m/uvicorn-rs/actions/runs/40633854307) is
-validating the current commit; its unified coverage and installed-wheel parity
-jobs are still running. There is no current 100% coverage result or accepted
-Coverage-MCP review receipt. Benchmark work remains paused until the broader
-parity work is complete.
+validating the current commit. Its installed-wheel public parity job passed
+699/699 on Ubuntu 24.04.5 x86-64 / CPython 3.12.13 with zero failures,
+infrastructure failures, or unrun cases. The report is artifact
+`uvicorn-rs-public-parity` (ID `12793456007`, archive SHA-256
+`3506da0619ccf23299e505a893d3b10f63cbfa82532226ba3df12ef8c0dcb138`); it
+records merge commit `3b2ed0b824e8636eeace728bd4b092fcde09aab5`, clean source,
+and source SHA-256
+`92af8083d758e2152bfdd424cdddd8b96a0985cdaade7025921bd7be131b1169`. The
+unified coverage job is still running. There is no current 100% coverage result
+or accepted Coverage-MCP review receipt. Benchmark work remains paused until
+the broader parity work is complete.
+
+The local input@43 working tree adds
+`python-api.run-serves-request-and-shuts-down-on-sigterm`, comparing a
+successful request and single-process `uvicorn.run()` shutdown on SIGTERM.
+It passed 1/1 against Uvicorn 0.54.0 on macOS 15.7.7 ARM64 / CPython 3.12.13
+(run `3496dda33ed84e84ad5672c237a378fd`; report
+`target/kata-progress/python-api-run-sigterm.json`, SHA-256
+`1d2493c529c041fb1822597fb37ea7168210fe3fefc6d41956bd0ded7072f4b9`; input
+SHA-256 `7b71196c73a8c6fe3df0c2bd6354e0c2fd44d24733c67bbc97a239f4d6e98461`).
+The target is dirty at local commit `e38365c229398bfd75f4646ab1b01b4939c37497`
+with source SHA-256
+`92af8083d758e2152bfdd424cdddd8b96a0985cdaade7025921bd7be131b1169`, so this
+is diagnostic evidence only. CI #452 passed the pushed 699-case snapshot but
+predates the added input; the local input inventory now contains 700 public
+oracle cases. The new input still needs clean-source CI evidence.
 
 The last fully successful hosted acceptance receipt recorded here is CI run
 [39107767728](https://github.com/appunni-m/uvicorn-rs/actions/runs/39107767728)

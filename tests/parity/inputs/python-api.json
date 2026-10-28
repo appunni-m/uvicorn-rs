@@ -444,6 +444,23 @@
       }
     },
     {
+      "case_id": "python-api.run-serves-request-and-shuts-down-on-sigterm",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-run-sigterm",
+          "shutdown_signal": "SIGTERM",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": ""
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-serves-successful-application-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
