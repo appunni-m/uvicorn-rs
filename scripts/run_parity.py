@@ -11866,7 +11866,13 @@ def fault_contract_matches(
             and observation.get("serve_cancelled") is False
             and observation.get("serve_task_finished") is True
             and observation.get("server_started_before_shutdown") is False
-            and observation.get("application_events") == ["lifespan.startup"]
+            # The app may consume Shutdown just before cancellation aborts the
+            # task join, so both event traces prove the same fault contract.
+            and observation.get("application_events")
+            in (
+                ["lifespan.startup"],
+                ["lifespan.startup", "lifespan.shutdown"],
+            )
         )
     if fault["contract"] == "server-startup-bind-shutdown-error-logged":
         # Shutdown is sent before this coverage fault aborts the app task. The
