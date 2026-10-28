@@ -35,14 +35,20 @@ passed 699/699 cases, but its coverage job was superseded.
 The local input@43 inventory now has 701 public cases. It adds
 `python-api.run-second-sigint-forces-inflight-request-shutdown` through direct
 `uvicorn.run()`; the focused comparison passed 1/1 against Uvicorn 0.54.0 on
-macOS ARM64, but the target is dirty and the case is not included in CI #453.
-The local source and documentation changes therefore need a clean commit and
-exact-source validation. The hash-locked strict MkDocs build passes locally.
+macOS ARM64. The clean-source receipt binds that result to local commit
+`481fcc0177ed900218fb39b89041e216edc2885d`, but that commit is not pushed and
+the case is not included in CI #453. The parity and maintainer-contract docs
+have local edits to record this receipt; they still need the release-status
+update, a strict docs build, and a commit.
 
-There is no clean candidate archive or downstream-consumer receipt for the
-updated source. The previous 0.2.2 inspection artifacts came from dirty source
+There is no clean candidate archive or downstream-consumer receipt for commit
+`481fcc0`. The previous 0.2.2 inspection artifacts came from dirty source
 `5b1ec29201c963d8590c989b07318bb7366d7922` and cannot serve as release evidence.
 No version tag, Cargo package, or PyPI release was created for this candidate.
+Once the current CI run finishes, push the committed source and docs, then use
+the resulting exact-source CI evidence before assembling and checking clean
+0.2.2 artifacts. Do not repeat the unchanged 700 cases locally; the updated
+701-case hosted matrix is the next full parity and coverage run.
 
 GitHub API readback confirms the active `Protect main` ruleset on
 `refs/heads/main` with the required CI checks and the active `Protect version
