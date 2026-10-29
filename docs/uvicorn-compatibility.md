@@ -22,16 +22,18 @@ composition, and release-handoff jobs also passed. The macOS ARM64 candidate
 lane passed its platform-applicable parity and artifact checks. Linux candidate
 packaging, identity, and clean-consumer checks passed. Windows installed the
 candidate wheel but failed before parity cases because the H3 probe launcher
-omitted `.exe`. The unified three-repeat coverage step is still running, with
-no report uploaded. Commit `dacecf2fd` fixes the Windows executable lookup and
-a QUIC TLS coverage fault; that fix and the current documentation have not yet
-been checked by a newer hosted run. Docs run
+omitted `.exe`, and the Python-floor wheel-install job was skipped. The unified
+three-repeat coverage step is still running, with no report uploaded. Commit
+`dacecf2fd` fixes the Windows executable lookup and a QUIC TLS coverage fault;
+that fix and the current documentation have not yet been checked by a newer
+hosted run. Docs run
 [#184](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243105)
 failed on the previous anchor; the strict local documentation build passed
 after the fix.
 
-The package metadata declares Python `>=3.9`, and CI checks installed-wheel
-import on Python 3.9. That check does not establish Uvicorn 0.54.0 parity:
+The package metadata declares Python `>=3.9`. CI #467 skipped installed-wheel
+import on Python 3.9 after the Windows candidate lane failed. A passing floor
+check would not establish Uvicorn 0.54.0 parity:
 the pinned upstream release declares Python `>=3.10` in its
 [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml).
 The Uvicorn 0.54.0 parity matrix therefore starts at Python 3.10. Any Python

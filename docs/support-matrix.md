@@ -31,17 +31,20 @@ executable path, fixes the focused QUIC TLS coverage contract, and corrects a
 documentation link. The selected TLS case passed 1/1 and covers six previously
 missing regions, but does not establish full coverage. The strict local docs
 build passed. These changes are newer than CI #467 and still need hosted
-confirmation. Coverage-MCP acceptance, full Windows parity, complete Uvicorn
-compatibility, and exact-source candidate receipts remain open. Benchmarks stay
-behind parity acceptance. See the [full parity history](parity.md).
+confirmation. CI #467 skipped the Python-floor wheel installation after its
+Windows candidate lane failed. Coverage-MCP acceptance, full Windows parity,
+complete Uvicorn compatibility, and exact-source candidate receipts remain
+open. Benchmarks stay behind parity acceptance. See the [full parity
+history](parity.md).
 
 The latest completed public parity receipt is CI #467 on Ubuntu 24.04 / x86-64
 / CPython 3.12.13. The macOS ARM64 candidate lane passed its indexed,
 platform-applicable cases. Neither result establishes Windows parity or the
 complete Uvicorn contract.
 
-The project metadata declares Python `>=3.9`, and CI checks that the installed
-wheel can be imported on Python 3.9. This is package-floor evidence, not
+The project metadata declares Python `>=3.9`. CI #467 skipped the Python 3.9
+installed-wheel check after the Windows candidate lane failed. A passing floor
+check is package-install evidence, not
 Uvicorn 0.54.0 compatibility evidence: the pinned upstream release declares
 Python `>=3.10` in its [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml).
 Parity against Uvicorn 0.54.0 therefore starts at Python 3.10; Python 3.9

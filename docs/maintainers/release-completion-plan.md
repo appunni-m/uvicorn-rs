@@ -47,7 +47,9 @@ belong to the release tasks rather than being copied into every prerequisite.
    platform-applicable parity and artifact checks; the Linux candidate artifact
    and clean-consumer checks also passed. Windows installed the candidate wheel
    but stopped before cases because the H3 probe path omitted `.exe`. The
-   three-repeat coverage step is still running and has not uploaded a report.
+   separate declared-Python-floor wheel-install job was skipped after the
+   Windows candidate lane failed. The three-repeat coverage step is still
+   running and has not uploaded a report.
    The Windows failure log is retained in the task history.
 
    Commit `dacecf2fd` contains the Windows executable resolver, a coverage fault

@@ -38,8 +38,10 @@ clean-consumer and identity checks passed. The macOS candidate artifact is ID
 `12872829196` with digest
 `sha256:25fca7c771538d8eb35bdb32a9d4bd434299a49fe7f2fabd9e1e2e494bf036a8`.
 Windows installed its candidate wheel but stopped before parity cases because
-the H3 probe path omitted the `.exe` suffix. The unified three-repeat coverage
-step is still running; no report has been uploaded.
+the H3 probe path omitted the `.exe` suffix. The separate declared-Python-floor
+wheel-install job was skipped after the Windows candidate lane failed. The
+unified three-repeat coverage step is still running; no report has been
+uploaded.
 
 Commit `dacecf2fd`, made after CI #467 started, fixes the Windows H3 client
 path and the focused QUIC TLS coverage fault; a local selected fault case passed
