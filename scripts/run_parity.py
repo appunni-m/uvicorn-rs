@@ -5579,7 +5579,8 @@ def default_event_loop() -> str:
 
 
 def free_port(*, tcp_and_udp: bool = False) -> int:
-    for _ in range(128):
+    last_error: OSError | None = None
+    for _ in range(512):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
             try:
                 tcp.bind(("127.0.0.1", 0))
@@ -5588,9 +5589,12 @@ def free_port(*, tcp_and_udp: bool = False) -> int:
                     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
                         udp.bind(("127.0.0.1", port))
                 return port
-            except OSError:
+            except OSError as error:
+                last_error = error
                 continue
-    raise OSError("could not find an available test port")
+    raise OSError(
+        f"could not find an available test port after 512 attempts: {last_error}"
+    )
 
 
 def make_certificate(directory: Path) -> tuple[Path, Path, Path]:
@@ -6362,7 +6366,7 @@ def stop_server(
 
 def unlink_server_log(path: Path) -> str | None:
     """Remove a closed server log, retrying transient Windows sharing locks."""
-    for attempt in range(5):
+    for attempt in range(8):
         try:
             path.unlink(missing_ok=True)
             return None
@@ -6372,7 +6376,7 @@ def unlink_server_log(path: Path) -> str | None:
             # hiding a persistent cleanup failure from the parity result.
             if os.name != "nt" or getattr(error, "winerror", None) != 32:
                 raise
-            if attempt == 4:
+            if attempt == 7:
                 return str(error)
             time.sleep(0.05 * (2**attempt))
 
@@ -11966,6 +11970,8 @@ def fault_contract_matches(
             observation.get("disconnect_event") is True
             and isinstance(followup, dict)
             and followup.get("status") == 200
+            and followup.get("response_header_values_by_name")
+            == [["x-asgi-coverage-probe", ["present"]]]
             and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "http3-server-shutdown-force-abort":
@@ -14317,6 +14323,7 @@ def execute_profile(
                     })
                     break
         finally:
+            outcomes_by_case = {outcome["case_id"]: outcome for outcome in outcomes}
             for server in server_history:
                 try:
                     exit_code, logs = stop_server(server)
@@ -14376,6 +14383,22 @@ def execute_profile(
                         for case in server["attempted_cases"]
                     )
                 )
+                server_outcome_key = {
+                    "uvicorn": "oracle",
+                    "uvicorn-rs": "target",
+                }.get(server["id"])
+                expected_observed_shutdown_exit = (
+                    exit_code == 3
+                    and server_outcome_key is not None
+                    and any(
+                        stops_server(case)
+                        and (outcome := outcomes_by_case.get(case["case_id"])) is not None
+                        and outcome.get("status") == "passed"
+                        and outcome.get("server_exit_codes", {}).get(server_outcome_key)
+                        == exit_code
+                        for case in server.get("attempted_cases", [])
+                    )
+                )
                 expected_windows_cleanup = (
                     os.name == "nt"
                     and server.get("harness_stop_requested") is True
@@ -14399,7 +14422,9 @@ def execute_profile(
                     })
                 if (
                     (exit_code != 0 and not normal_signal_exit and not expected_startup_error
-                     and not expected_lifespan_shutdown_error and not expected_windows_cleanup)
+                     and not expected_lifespan_shutdown_error
+                     and not expected_observed_shutdown_exit
+                     and not expected_windows_cleanup)
                 ):
                     infrastructure_errors.append({
                         "profile": profile["id"],

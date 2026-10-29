@@ -1999,14 +1999,24 @@ impl WebSocketKeepaliveConfig {
         };
         let timeout = match timeout {
             Some(seconds) if seconds < 0.0 => Some(std::time::Duration::ZERO),
-            // On Windows the pinned Uvicorn/websockets oracle treats a NaN
-            // ping timeout as immediately expired; asyncio timer ordering
-            // makes that observable in the native adapter too.
-            Some(seconds) if seconds.is_nan() && cfg!(windows) => Some(std::time::Duration::ZERO),
+            Some(seconds) if seconds.is_nan() => Self::nan_timeout(),
             Some(seconds) => Self::duration_from_seconds(seconds),
             None => None,
         };
         Self { interval, timeout }
+    }
+
+    #[cfg(windows)]
+    fn nan_timeout() -> Option<std::time::Duration> {
+        // On Windows the pinned Uvicorn/websockets oracle treats a NaN ping
+        // timeout as immediately expired; asyncio timer ordering makes that
+        // observable in the native adapter too.
+        Some(std::time::Duration::ZERO)
+    }
+
+    #[cfg(not(windows))]
+    fn nan_timeout() -> Option<std::time::Duration> {
+        None
     }
 
     fn duration_from_seconds(seconds: f64) -> Option<std::time::Duration> {
@@ -2683,6 +2693,24 @@ fn contains_logged_python_asgi_error(error: &(dyn StdError + 'static)) -> bool {
             if Python::attach(|py| python_asgi_error_was_logged(python_error, py)) {
                 return true;
             }
+        }
+        source = error.source();
+    }
+    false
+}
+
+fn contains_peer_disconnect_error(error: &(dyn StdError + 'static)) -> bool {
+    let mut source = Some(error);
+    while let Some(error) = source {
+        if error.downcast_ref::<std::io::Error>().is_some_and(|error| {
+            matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::BrokenPipe
+                    | std::io::ErrorKind::ConnectionAborted
+            )
+        }) {
+            return true;
         }
         source = error.source();
     }
@@ -7932,6 +7960,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
 
                     if !invalid_default_header_error
                         && !contains_logged_python_asgi_error(event.error())
+                        && !contains_peer_disconnect_error(event.error())
                     {
                         log_error(format_args!(
                             "uvicorn-rs: HTTP connection from {:?} failed: {} ({:?})",

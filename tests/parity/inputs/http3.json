@@ -3151,6 +3151,11 @@
         "point": "http3.legacy-path.selection",
         "contract": "http3-legacy-body-pump-delivers-disconnect-followup-200"
       },
+      "server_options": {
+        "headers": [
+          "X-ASGI-Coverage-Probe:present"
+        ]
+      },
       "request": {
         "method": "POST",
         "path": "/h3-upload-disconnect",
