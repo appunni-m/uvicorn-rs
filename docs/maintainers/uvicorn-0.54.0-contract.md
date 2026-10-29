@@ -2044,6 +2044,35 @@ this focused diagnostic. It is not in CI #453 and does not establish the full
 Python API matrix, exact-source coverage, or Windows parity. The result and
 input identities are also tracked by Katas `4fvf` and `gjpr`.
 
+## Windows multi-worker oracle failure — CI #479 (2026-10-29)
+
+The Windows x86-64 candidate artifact for CI
+[#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964)
+records a failure in `python-api.module-cli-two-workers-serve-request`. Stock
+Uvicorn 0.54.0 reaches `asyncio.base_events.BaseEventLoop.create_server()` in
+its second spawned worker, then raises `[WinError 10022]` from `sock.listen()`.
+The first worker serves HTTP 200 and the supervisor exits 0. The candidate
+starts both workers, serves HTTP 200, and exits 0. The exception appears before
+the `SIGBREAK` shutdown event, so it is not caused by the termination-log race.
+
+This stack matches the Windows socket-sharing failure documented in
+[Uvicorn issue #514](https://github.com/Kludex/uvicorn/issues/514) and the later
+[PR #2778](https://github.com/Kludex/uvicorn/pull/2778), which describes
+concurrent Windows socket duplication producing the same error and proposes
+serializing duplication. PR #2778 was closed without merging. The pinned
+0.54.0 server still calls `socket.share()` / `socket.fromshare()` inside each
+worker. This is corroborating evidence for an upstream reference failure; it
+does not by itself prove the identical race in this CI run or qualify the
+candidate as exact parity. Keep the case visible until the focused hosted
+receipt confirms the behavior after the local log-normalization change.
+
+The other three worker mismatches in #479 differed only by conditional
+`Terminated child process` notices. Local commit `fbdd375` omits only that
+Windows scheduler-dependent message while retaining process-exit and timeout
+comparisons. A selected 4/4 macOS batch does not establish Windows behavior.
+The same Windows artifact also has an oracle TLS-drain timeout; the two later
+TLS cases were not run. These remain separate open parity failures.
+
 ## User-facing status
 
 The install/rollback steps and current limitations are on the
