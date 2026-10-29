@@ -5885,13 +5885,13 @@ fn duplicate_prebound_tcp_listeners(
         let duplicate = duplicate_method.call1((source,))?;
         if !duplicate.is_instance(&low_level_socket)? {
             return Err(PyValueError::new_err(
-                "Windows socket sharing did not return a socket object",
+                "Windows socket duplication did not return a socket object",
             ));
         }
         let detached = detach_method.call1((duplicate,))?;
         // The C socket detach method returns its owned SOCKET as a Python int.
         let raw_socket = detached.extract::<RawSocket>()?;
-        if raw_socket == usize::MAX {
+        if raw_socket == RawSocket::MAX {
             return Err(PyValueError::new_err(
                 "pre-bound socket duplication returned an invalid handle",
             ));
@@ -7523,7 +7523,24 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                         "could not inspect inherited TCP listener: {error}"
                     ))
                 })?;
-            return Ok(Some((BoundListener::Tcp(listeners), server_addr)));
+            let endpoint = if let Some(quic_config) = options.quic_config.take() {
+                Some(
+                    uvicorn_rs::Http3Endpoint::bind(server_addr, quic_config).map_err(
+                        |error| {
+                            PyOSError::new_err(format!(
+                                "could not bind HTTP/3 endpoint: {error}"
+                            ))
+                        },
+                    )?,
+                )
+            } else {
+                None
+            };
+            return Ok(Some((
+                BoundListener::Tcp(listeners),
+                server_addr,
+                endpoint,
+            )));
         }
 
         #[cfg(uvicorn_rs_native_transport)]
