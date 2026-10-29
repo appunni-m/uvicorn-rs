@@ -941,6 +941,15 @@
       ]
     },
     {
+      "id": "startup-fault-lifespan-send-closed-on",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "target-only injected closed lifespan request receiver",
+        "lifespan mode on to require startup failure"
+      ]
+    },
+    {
       "id": "startup-fault-native-add-class-server-control",
       "oracle": "uvicorn",
       "protocol": "http/1.1 + lifespan",
@@ -3712,6 +3721,7 @@
     "inputs/startup-fault-native-add-class-websocket-io.json",
     "inputs/startup-fault-native-add-class-lifespan-io.json",
     "inputs/startup-fault-lifespan-bridge.json",
+    "inputs/startup-fault-lifespan-send-closed-on.json",
     "inputs/startup-fault-native-add-class-server-control.json",
     "inputs/startup-fault-native-add-function-serve.json",
     "inputs/startup-fault-listener-accept.json",

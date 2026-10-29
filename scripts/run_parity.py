@@ -5993,6 +5993,8 @@ def start_server(
             sys.executable, "-m", "uvicorn", APP, *common,
             "--loop", default_event_loop(), "--interface", "asgi3", "--ws", websocket_selector,
         ]
+        if profile_id == "startup-fault-lifespan-send-closed-on":
+            command.extend(["--lifespan", "on"])
         if profile_id == "http2":
             command.extend(["--http", "zttp", "--http2"])
         if certificate and key:

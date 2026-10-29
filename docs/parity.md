@@ -2,7 +2,7 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current source status (2026-10-29)
+## Current source status (2026-10-30)
 
 PR #19 remains a draft. The latest hosted run is
 [#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964), bound
@@ -22,8 +22,9 @@ steps were skipped. Retained artifact
 has archive SHA-256
 `ba6e9939d7e5a0940feffcca448abc32ff722caf0d39e1d6e8bfe734d1d53649`.
 
-The exact-source unified coverage job is still running in #479; see the
-[current coverage status](coverage.md#current-unified-coverage-status-2026-10-29).
+The unified coverage job completed in #479 but failed at 13,985/14,164 regions
+and 10,305/10,392 lines; one startup fault case failed in each of three repeats.
+See the [current coverage status](coverage.md#current-unified-coverage-status-2026-10-30).
 Docs run [#196](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918327024)
 passed for the committed source. A local, unpushed harness commit
 `fbdd375a958038d3506a60b6451007b993a646bc` removes only a Windows
@@ -32,9 +33,12 @@ failure diagnostics. Its four selected worker cases passed 4/4 on macOS ARM64;
 this is not Windows evidence. The commit does not resolve the oracle worker
 start or TLS failure.
 
-Full Windows parity, the complete current CLI/API/process contract, exact-source
-100% coverage, the independent Coverage-MCP review, and the clean cross-platform
-candidate remain open. Benchmark work stays behind compatibility acceptance.
+The focused local startup-send-closed repair passes 1/1 under its dedicated
+`lifespan=on` profile, and one regular lifespan parity case passes 1/1. These
+changes are not covered by a hosted run yet. Full Windows parity, the complete
+current CLI/API/process contract, exact-source 100% coverage, the independent
+Coverage-MCP review, and the clean cross-platform candidate remain open.
+Benchmark work stays behind compatibility acceptance.
 The maintainer will run the real FastAPI application trial after repository
 compatibility work is handed off.
 

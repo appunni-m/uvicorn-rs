@@ -4464,7 +4464,14 @@ impl LifespanRuntime {
         cancellation_tracker: TaskTracker,
         mode: LifespanMode,
     ) -> PyResult<Option<Self>> {
-        let (request_tx, request_rx) = mpsc::channel(1);
+        let (request_tx, mut request_rx) = mpsc::channel(1);
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::LifespanStartupSendClosed) {
+            // Close before the app starts receiving so the injected send
+            // failure is deterministic and the app observes normal channel
+            // closure instead of a synthetic SendError.
+            request_rx.close();
+        }
         let (event_tx, mut event_rx) = mpsc::channel(1);
         let state = Python::attach(|py| PyDict::new(py).unbind());
         let scope_state = Python::attach(|py| state.clone_ref(py));
@@ -4516,11 +4523,7 @@ impl LifespanRuntime {
             app_task.as_mut().abort();
         }
         #[cfg(coverage)]
-        let send_result = if coverage_fault_take(CoverageFaultPoint::LifespanStartupSendClosed) {
-            Err(mpsc::error::SendError(LifespanMessage::Startup))
-        } else {
-            request_tx.send(LifespanMessage::Startup).await
-        };
+        let send_result = request_tx.send(LifespanMessage::Startup).await;
         #[cfg(not(coverage))]
         let send_result = request_tx.send(LifespanMessage::Startup).await;
         if send_result.is_err() {

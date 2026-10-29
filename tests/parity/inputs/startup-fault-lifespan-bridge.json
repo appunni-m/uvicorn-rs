@@ -50,22 +50,6 @@
       }
     },
     {
-      "case_id": "fault.lifespan.startup-send-channel-closed",
-      "profile": "startup-fault-lifespan-bridge",
-      "operation": "lifespan.startup-failure",
-      "covers": [
-        "lifespan.startup-failure"
-      ],
-      "verification": "fault-contract",
-      "fault": {
-        "point": "lifespan.startup.send-closed",
-        "contract": "server-startup-failure"
-      },
-      "startup_failure": {
-        "expect_failed": true
-      }
-    },
-    {
       "case_id": "fault.lifespan.asgi-receive-borrow-conflict",
       "profile": "startup-fault-lifespan-bridge",
       "operation": "lifespan.startup-failure",

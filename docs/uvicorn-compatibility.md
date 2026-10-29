@@ -11,7 +11,7 @@ install `uvicorn-rs` and upstream `uvicorn` in the same environment. The
 replacement and rollback steps below apply only after a compatible version is
 published.
 
-## Current status (2026-10-29)
+## Current status (2026-10-30)
 
 PR #19 remains a draft. The latest hosted run is
 [#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964),
@@ -23,17 +23,21 @@ Windows built and installed its candidate wheel but did not complete parity:
 684/689 executed cases passed; four worker cases differed in logs, one Uvicorn
 oracle worker hit `WinError 10022`, and a TLS active-stream oracle case failed
 with `IncompleteRead`, leaving two following cases not run. Windows sdist and
-consumer steps were skipped. The exact-source coverage job is still running;
-its totals are not available. See the
-[current coverage status](coverage.md#current-unified-coverage-status-2026-10-29)
+consumer steps were skipped. The completed unified coverage job failed at
+13,985/14,164 regions and 10,305/10,392 lines after one startup fault case
+failed in each of three repeats. See the
+[current coverage status](coverage.md#current-unified-coverage-status-2026-10-30)
 and [parity evidence](parity.md).
 
-A local, unpushed harness commit
+The local harness change
 `fbdd375a958038d3506a60b6451007b993a646bc` normalizes one scheduler-dependent
 Windows worker log and adds failure attribution. Four selected worker cases
-passed 4/4 on macOS ARM64, which does not establish Windows behavior. The
-Windows worker-start and TLS failures remain unresolved. Docs run #196 passed
-for the committed source; the local docs refresh still needs hosted validation.
+passed 4/4 on macOS ARM64, which does not establish Windows behavior. A focused
+startup-send-closed fault case and one regular lifespan parity case also pass
+1/1 each on the local source; these selected results do not establish hosted
+Windows or full-suite behavior. The Windows worker-start and TLS failures remain
+unresolved. Docs run #196 passed for the committed source; the local docs
+refresh still needs hosted validation.
 
 The package metadata declares Python `>=3.9`. Uvicorn 0.54.0 declares Python
 `>=3.10` in its [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml),

@@ -24,8 +24,9 @@ Windows built and installed its candidate wheel but parity did not complete:
 684/689 executed cases passed; four worker cases differed in logs, one Uvicorn
 oracle worker hit `WinError 10022`, and a TLS active-stream oracle case failed
 with `IncompleteRead`, leaving two cases not run. Windows sdist and consumer
-steps were skipped. The exact-source coverage job is still running; totals are
-not available. Docs run #196 passed for the committed source.
+steps were skipped. The unified coverage job completed but failed at
+13,985/14,164 regions and 10,305/10,392 lines after one startup fault case
+failed in each of three repeats. Docs run #196 passed for the committed source.
 
 A local harness commit `fbdd375a958038d3506a60b6451007b993a646bc` is not yet
 pushed. Its four selected worker cases passed 4/4 on macOS ARM64, not Windows.
@@ -99,9 +100,9 @@ Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
 drop-in replacement today. CI #479 passed Linux and macOS public parity
 718/718 on each platform. Windows parity remains incomplete after four worker
 log mismatches, a Uvicorn oracle worker-start error, and a TLS active-stream
-oracle failure. The unified three-repeat coverage job is still running, and no
-accepted Coverage-MCP review is available. Full CLI, Python API, process and
-cross-platform acceptance remain open. See the
+oracle failure. Unified coverage failed at 13,985/14,164 regions and
+10,305/10,392 lines, and no accepted Coverage-MCP review is available. Full
+CLI, Python API, process and cross-platform acceptance remain open. See the
 [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
 
 One selected POSIX

@@ -44,17 +44,21 @@ active-stream case failed in the oracle with `IncompleteRead`; two following
 cases were not run. The Windows sdist and downstream consumer steps were
 skipped. The retained Windows parity artifact is
 [12918364774](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964/artifacts/12918364774).
-The exact-source three-repeat coverage job is still running (job
-`123604808228`); no totals or receipt are available yet. Docs run
+The exact-source three-repeat coverage job `123604808228` completed but failed:
+13,985/14,164 regions, 10,305/10,392 lines, and one startup fault case failed
+in all three repeats. No independent Coverage-MCP receipt is accepted. Docs run
 [#196](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918327024) passed
 for the committed source.
 
 A local harness commit, `fbdd375a958038d3506a60b6451007b993a646bc`, now
 normalizes only the Windows scheduler-dependent child-termination notice and
 adds target/oracle event traces and bounded case attribution to infrastructure
-diagnostics. Its four selected worker cases passed 4/4 on macOS ARM64. It is
-not yet pushed and does not resolve the Windows oracle-start or TLS failure.
-No coverage report or independent Coverage-MCP receipt is bound to this commit.
+diagnostics. Its four selected worker cases passed 4/4 on macOS ARM64. The
+focused startup-send-closed case now passes 1/1 after closing the actual
+receiver and selecting `lifespan=on`; one regular lifespan parity case passes
+1/1. These selected results do not resolve the Windows oracle-start or TLS
+failure. No full coverage report or independent Coverage-MCP receipt is bound
+to the follow-up changes.
 
 An earlier exact-main coverage run
 [`39689988928`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
