@@ -920,11 +920,26 @@ def load_contract(
             raise ParityError(f"{oracle['id']}: protocols must be a non-empty array")
         component_ids = set()
         for component in oracle["components"]:
-            exact_keys(component, {"id", "version"}, f"{oracle['id']} oracle component")
+            component_keys = {"id", "version"}
+            if "platforms" in component:
+                component_keys.add("platforms")
+            exact_keys(component, component_keys, f"{oracle['id']} oracle component")
             if not isinstance(component["id"], str) or not component["id"] or component["id"] in component_ids:
                 raise ParityError(f"{oracle['id']}: missing or duplicate component ID")
             if not isinstance(component["version"], str) or not component["version"]:
                 raise ParityError(f"{oracle['id']}/{component['id']}: component version is required")
+            if "platforms" in component:
+                platforms = component["platforms"]
+                if (
+                    not isinstance(platforms, list)
+                    or not platforms
+                    or any(not isinstance(platform_id, str) for platform_id in platforms)
+                    or len(platforms) != len(set(platforms))
+                    or any(platform_id not in {"linux", "macos", "windows"} for platform_id in platforms)
+                ):
+                    raise ParityError(
+                        f"{oracle['id']}/{component['id']}: platforms must be unique supported platform IDs"
+                    )
             component_ids.add(component["id"])
     for profile in manifest["profiles"]:
         exact_keys(profile, {"id", "oracle", "protocol", "oracle_config"}, "manifest profile")
@@ -5373,9 +5388,14 @@ def load_contract(
 def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     actual = {}
     requirements = []
+    platform_id = current_platform_id()
     for oracle in manifest["oracles"]:
         requirements.append((oracle["id"], oracle["version"]))
-        requirements.extend((component["id"], component["version"]) for component in oracle["components"])
+        requirements.extend(
+            (component["id"], component["version"])
+            for component in oracle["components"]
+            if "platforms" not in component or platform_id in component["platforms"]
+        )
     oracle_uvicorn = None
     if any(oracle["id"] == "uvicorn" for oracle in manifest["oracles"]):
         probe = subprocess.run(
@@ -5501,6 +5521,25 @@ def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str
             "source_sha256": runtime_source_digest(source_files),
         },
     )
+
+
+def current_platform_id() -> str:
+    return parity_platform_id(platform.system())
+
+
+def parity_platform_id(platform_name: str) -> str:
+    normalized = platform_name.lower()
+    if normalized.startswith(("windows", "win32")):
+        return "windows"
+    if normalized.startswith(("macos", "darwin")):
+        return "macos"
+    if normalized.startswith("linux"):
+        return "linux"
+    raise ParityError(f"unsupported parity platform: {platform_name}")
+
+
+def default_event_loop() -> str:
+    return "asyncio" if current_platform_id() == "windows" else "uvloop"
 
 
 def free_port(*, tcp_and_udp: bool = False) -> int:
@@ -5910,7 +5949,7 @@ def start_server(
         # instead of the protocol/lifecycle behavior under comparison.
         command = [
             sys.executable, "-m", "uvicorn", APP, *common,
-            "--loop", "uvloop", "--interface", "asgi3", "--ws", websocket_selector,
+            "--loop", default_event_loop(), "--interface", "asgi3", "--ws", websocket_selector,
         ]
         if profile_id == "http2":
             command.extend(["--http", "zttp", "--http2"])
@@ -5929,7 +5968,7 @@ def start_server(
             and env.get("ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG") == "1"
         )
         command = [
-            server_python, "-m", "uvicorn", APP, *common, "--loop", "uvloop",
+            server_python, "-m", "uvicorn", APP, *common, "--loop", default_event_loop(),
             # The default profile follows Uvicorn's maintained auto/SansIO
             # path; the wsproto profile selects its pinned backend explicitly.
             "--http", http_implementation, "--interface", "asgi3", "--ws", websocket_selector,
@@ -5945,7 +5984,7 @@ def start_server(
     elif server_id == "hypercorn":
         command = [
             sys.executable, "-m", "hypercorn", f"asgi:{APP}", "--bind", f"127.0.0.1:{port}",
-            "--worker-class", "uvloop", "--log-level",
+            "--worker-class", default_event_loop(), "--log-level",
             "error" if observe_connection_errors else "critical", "--access-logfile", "/dev/null",
             "--certfile", str(certificate), "--keyfile", str(key), "--config", str(config_path),
         ]
@@ -14102,9 +14141,14 @@ def validate_result_shape(
     dependencies = run["environment"]["dependencies"]
     if not isinstance(dependencies, dict):
         raise ParityError("result environment dependencies must be an object")
+    platform_id = parity_platform_id(run["environment"]["platform"])
     for oracle in manifest["oracles"]:
         pinned = [(oracle["id"], oracle["version"])]
-        pinned.extend((component["id"], component["version"]) for component in oracle["components"])
+        pinned.extend(
+            (component["id"], component["version"])
+            for component in oracle["components"]
+            if "platforms" not in component or platform_id in component["platforms"]
+        )
         for distribution, version in pinned:
             if dependencies.get(distribution) != version:
                 raise ParityError(f"result identity does not match pinned {distribution} version {version}")

@@ -23,7 +23,11 @@
       "components": [
         {
           "id": "uvloop",
-          "version": "0.23.0"
+          "version": "0.23.0",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
         },
         {
           "id": "httptools",
@@ -55,7 +59,11 @@
       "components": [
         {
           "id": "uvloop",
-          "version": "0.23.0"
+          "version": "0.23.0",
+          "platforms": [
+            "linux",
+            "macos"
+          ]
         },
         {
           "id": "h11",

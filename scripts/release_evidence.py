@@ -898,6 +898,12 @@ def record(args: argparse.Namespace) -> None:
     build = {"wheel_command": ["maturin", "build", "--release", "--locked", "--interpreter", "python", "--out", "dist"],
              "features": ["pyo3/extension-module"], "profile": "release", "locked": True,
              "environment": {name: "" for name in sorted(flag_names)}}
+    maturin_version = os.environ.get("MATURIN_VERSION")
+    if not maturin_version:
+        raise ValueError("MATURIN_VERSION must pin the maturin used to build the candidate")
+    maturin = command_output([
+        "uvx", "--from", f"maturin=={maturin_version}", "maturin", "--version"
+    ])
     if args.platform == "linux-x86_64":
         build["native_crate_commands"] = [
             "cargo package -p asgi-lifespan-protocol-rs --no-verify --locked --offline",
@@ -911,7 +917,7 @@ def record(args: argparse.Namespace) -> None:
              "recorded_at": datetime.now(timezone.utc).isoformat(), "license_expression": LICENSE_EXPRESSION,
              "publication_blockers": candidate_publication_blockers(dirty),
              "toolchain": {"rustc": rustc, "cargo": command_output(["cargo", "--version"]),
-                           "maturin": command_output(["maturin", "--version"]), "python": sys.version},
+                           "maturin": maturin, "python": sys.version},
              "build": build,
              "packages": packages, "files": {name: file_sha256(directory / name) for name in sorted(expected)}}
     if source_hashes() != inputs:

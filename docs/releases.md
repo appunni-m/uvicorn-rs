@@ -25,21 +25,27 @@ implemented by the optional **uvicorn-rs-py** adapter. The publisher is
 candidates. The PyPI trusted publisher tuple is
 **appunni-m/uvicorn-rs / release.yml / pypi**.
 
-PR #19 remains a draft. CI #464 checked committed PR head
-**a4b37c554deb99638d190ecf03e99857ecc49232**, based on main
-**86e72e181d00feca1b4db7f30377d5d9d4345b83**. Release handoff, native framework
-composition, exact Rust minimum, Rust format/lint/feature/docs, and 717/717
-installed-wheel public parity on Linux x86-64 passed. The unified three-repeat
-coverage job is still running. Linux artifact verification failed while
-recording the pinned `uvx maturin` command; Windows candidate setup failed
-before parity because `uvloop` was included in the benchmark dependency set;
-macOS ARM64 candidate parity failed on generated TLS certificates rejected by
-Rustls. Local commits **eacc9609769928e8b430966199b0845326bdfeb8** and
-**dd525c2b08b47f0c0016073cdf7c53204a29d8c9** address these issues. The
-certificate change passed all 12 affected TLS cases in focused local macOS
-parity, but the commits have not yet been validated by hosted CI. Docs run
-#181 passed for the earlier committed source; this documentation refresh still
-needs its own hosted deployment.
+PR #19 remains a draft. CI
+[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
+checked committed PR head **51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61**, based
+on main **86e72e181d00feca1b4db7f30377d5d9d4345b83**. Release handoff, native
+framework composition, exact Rust minimum, Rust format/lint/feature/docs, and
+717/717 installed-wheel public parity on Linux x86-64 and macOS ARM64 passed.
+The Windows candidate job stopped before cases because the oracle dependency
+check still required `uvloop`, which is unavailable on Windows. Linux and
+macOS candidate builds completed, but their identity recorders failed because
+the pinned `maturin` executable was not on PATH. Linux clean-consumer checks
+passed, and the macOS candidate wheel passed 717/717 parity; no complete
+candidate identity bundle was produced. The unified three-repeat coverage
+matrix attributed all 1,071 cases but missed the 100% gate at 13,962/14,134
+regions and 10,290/10,377 lines.
+
+Local working-tree fixes make `uvloop` platform-specific and resolve the
+pinned Maturin version through `uvx`. Focused syntax, platform-selection,
+manifest, and pinned-tool checks passed locally; the fixes still need hosted
+confirmation. Docs run
+[#183](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137733)
+passed for the committed source.
 
 The preceding CI [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
 passed **707/707** public parity cases on Linux x86-64 for commit
@@ -51,13 +57,14 @@ HTTP/3 consumer compiles against the current local crate source, but that is
 not a clean published-artifact receipt.
 
 The current release blockers are the exact-source 100% coverage result and its
-independent Coverage-MCP receipt, full Uvicorn 0.54.0 behavior across the
-declared OS/Python matrix, matched benchmarks after parity, and hosted candidate
-artifact/clean-consumer receipts. CI #464's 717-case Linux parity receipt is
-not the full compatibility matrix. The previous three-system benchmark is
-incomplete: Linux ARM64 Hypercorn HTTP/3 failed in a slow-reader case, and an
-HTTP/1 upload timeout remains unresolved. Existing measurements do not support
-a general performance-gain claim.
+independent Coverage-MCP receipt, completion of Windows and broader Uvicorn
+0.54.0 compatibility evidence, hosted candidate identity bundles and clean
+consumers, and the matched benchmarks that follow compatibility. CI #466's
+717-case Linux and macOS parity receipts are not the full compatibility matrix.
+The previous three-system benchmark is incomplete: Linux ARM64 Hypercorn
+HTTP/3 failed in a slow-reader case, and an HTTP/1 upload timeout remains
+unresolved. Existing measurements do not support a general performance-gain
+claim.
 
 The 2026-10-27 registry audit recorded the earlier `uvicorn-rs` 0.2.1
 release. The maintainer has since reported deleting that old server-crate

@@ -3,15 +3,41 @@
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
 <a id="current-unified-coverage-status-2026-10-22"></a>
+<a id="current-unified-coverage-status-2026-10-29"></a>
 
 ## Current unified coverage status (2026-10-29)
 
-PR #19 remains a draft. CI #464 checked committed PR head
-`a4b37c554deb99638d190ecf03e99857ecc49232`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its unified matrix completed all
-1,326 selected cases across three repeats with complete attribution and no case
-or infrastructure failures. The 100% gate failed at **13,924/14,108 regions**
-and **10,257/10,352 lines** (184 regions and 95 lines missing).
+PR #19 remains a draft. CI
+[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
+checked committed PR head `51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, based
+on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its three-repeat
+matrix attributed all 1,071 cases, but the 100% gate failed at
+**13,962/14,134 regions** and **10,290/10,377 lines** (172 regions and 87
+lines uncovered). The retained artifact is ID `12870939134`, archive digest
+`sha256:592368538dcbff0ba373ca9b3640676b80cc1ca7fc7abc572f8a0682f71b7a89`,
+and report SHA-256
+`d2f1dc778284e3736b9783fd50e3f19589c0608db04a42ee3c380e81c11597a6`. The
+matrix passed its cases; only the coverage threshold failed.
+
+The same run passed 717/717 installed-wheel public parity cases on Linux
+x86-64 and macOS ARM64, plus release handoff, native composition, Rust minimum,
+and Rust quality. Windows candidate parity stopped before cases because its
+oracle dependency check required `uvloop`, which is unavailable there. Linux
+and macOS candidate identity recording failed because pinned `maturin` was not
+on PATH; Linux clean-consumer checks passed and the macOS wheel passed parity.
+The local working tree contains focused fixes for Windows dependency selection
+and the pinned-tool lookup; those inputs and runner changes are not covered by
+CI #466. A local gap map identifies 6 uncovered regions / 4 lines in
+`crates/uvicorn-rs/src/http3.rs` and 166 regions / 83 lines in `src/lib.rs`.
+It is diagnostic only because CI used a synthetic merge revision and the local
+manifest/runner have changed since that run.
+
+Coverage-MCP could not return an independent review: its local daemon failed
+health checks, then timed out again after a restart. No review receipt was
+created, and `7t4g` remains blocked. The saved LLVM report can guide targeted
+coverage work but does not satisfy independent acceptance.
+
+### Prior completed unified coverage result (CI #464)
 
 The retained `uvicorn-rs-unified-coverage` artifact is ID `12858010668`, with
 archive SHA-256
@@ -25,14 +51,9 @@ hashes match the branch. A compact Coverage-MCP projection grouped the missing
 regions into 52 functions, but reported `source=unverified`; independent
 acceptance remains open.
 
-Release handoff, native composition, minimum Rust, Rust quality, and Linux
-717/717 installed-wheel parity passed. Linux candidate verification rejected
-the pinned `uvx maturin` invocation, Windows candidate setup included unsupported
-`uvloop` before parity, and macOS ARM64 parity rejected the OpenSSL-generated
-TLS fixtures. Local commits `eacc9609769928e8b430966199b0845326bdfeb8` and
-`dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address those issues; CI #464 did
-not include them, so hosted validation is still required. The documentation
-workflow also needs a new deployment for the current docs changes.
+CI #466 confirms Linux and macOS public parity, including the earlier TLS
+fixture change. The local platform/evidence fixes and this documentation update
+are not included in that run and still need hosted confirmation.
 
 The post-change focused receipt is local-only:
 `target/coverage-diagnostic/ci461-startup-shutdown-fault-fix/coverage-report.json`,
@@ -50,9 +71,10 @@ canceled and its retained artifact is not a completed gate receipt. CI #461
 also missed the 100% gate; its current-source focused follow-up covers one case
 only and does not replace the full report. CI #462 is a completed historical
 failure. CI #463 is historical and does not bind to the latest local commits.
-CI #464 completed on PR head `a4b37c5`; its result is recorded above. A fresh
-exact-source run is still required for the local branch commits. An accepted
-independent Coverage-MCP review is still outstanding.
+CI #466 is a completed prior-source result. After the related parity/evidence
+fixes and targeted coverage inputs are stable, push one coherent batch, then
+request one independent Coverage-MCP review bound to the new exact source and
+report. An accepted independent review is still outstanding.
 
 ### Prior CI #455 coverage result (source 4a429684)
 

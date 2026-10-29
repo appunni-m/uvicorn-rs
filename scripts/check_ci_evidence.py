@@ -672,9 +672,22 @@ def validate_parity(
     exact_keys(run["environment"], {"python", "platform", "machine", "rustc", "dependencies"}, "parity environment")
     dependencies = run["environment"]["dependencies"]
     require(isinstance(dependencies, dict), "parity dependency identity is invalid")
+    platform_name = run["environment"]["platform"].lower()
+    if platform_name.startswith(("windows", "win32")):
+        parity_platform = "windows"
+    elif platform_name.startswith(("macos", "darwin")):
+        parity_platform = "macos"
+    elif platform_name.startswith("linux"):
+        parity_platform = "linux"
+    else:
+        raise EvidenceError(f"unsupported parity environment platform: {run['environment']['platform']}")
     for oracle in manifest["oracles"]:
+        components = [
+            item for item in oracle["components"]
+            if "platforms" not in item or parity_platform in item["platforms"]
+        ]
         for distribution, version in [(oracle["id"], oracle["version"]),
-                                      *((item["id"], item["version"]) for item in oracle["components"])]:
+                                      *((item["id"], item["version"]) for item in components)]:
             require(dependencies.get(distribution) == version, f"parity reference version differs: {distribution}")
     native_sha = valid_digest(target["native_extension"].get("sha256"), "parity native")
     if expected_native_sha256 is not None:

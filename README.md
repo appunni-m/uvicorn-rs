@@ -12,29 +12,29 @@ the release workflow must resolve it in its preflight. The PyPI
 `uvicorn-rs` project API returned 404, so the distribution has not had its
 first upload. See [release status](docs/releases.md).
 
-PR #19 remains a draft. The latest hosted CI run is
-[#464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247) for
-committed PR head `a4b37c554deb99638d190ecf03e99857ecc49232`, based on `main`
-at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
-FastAPI-RS composition, release handoff, and the Linux x86-64 installed-wheel
-parity matrix passed (717/717). Its unified three-repeat coverage job is still
-running. The Linux package job failed while recording source evidence for the
-pinned `uvx maturin` build command; the Windows candidate job failed before
-parity because `uvloop` was not excluded from its dependency set; macOS ARM64
-parity failed on TLS fixtures whose generated CA Rustls rejected. Local commits
-`eacc9609769928e8b430966199b0845326bdfeb8` and
-`dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address those issues. The latter
-replaces runner-specific OpenSSL certificate generation with the locked
-`cryptography` builder; a focused local macOS run passed all 12 affected TLS
-cases. These commits have not yet been validated by hosted CI. See
-[CI #464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247)
-and [parity evidence](docs/parity.md).
+PR #19 remains a draft. CI
+[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
+checked committed head `51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, based on
+`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV,
+native FastAPI-RS composition, release handoff, and the installed-wheel public
+parity matrix passed 717/717 on Linux x86-64 and macOS ARM64. Windows stopped
+before cases because its oracle dependency check still required `uvloop`, which
+is unavailable on that platform. The unified three-repeat coverage matrix
+attributed all 1,071 cases but missed the 100% gate: 13,962/14,134 regions and
+10,290/10,377 lines. Linux and macOS candidate jobs built their artifacts, but
+the identity recorder failed because the pinned `maturin` executable was not
+on PATH; Linux clean-consumer checks passed, and the macOS candidate wheel
+passed 717/717 parity. Local working-tree fixes make `uvloop` platform-specific
+and resolve the pinned Maturin version through `uvx`; these fixes still need
+one hosted exact-source run. See [CI #466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734),
+[coverage evidence](docs/coverage.md), and [parity evidence](docs/parity.md).
 
-Docs run #181 passed for the earlier committed source; this documentation
-refresh still needs its own hosted deployment. Independent Coverage-MCP
-acceptance, the complete Uvicorn 0.54.0 behavior and platform matrix,
-parity-first benchmark evidence, and hosted candidate artifacts with clean
-consumers remain open. No 0.2.2 release tag or package has been published.
+Docs run
+[#183](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137733)
+passed for the then-committed source. Independent Coverage-MCP acceptance, full
+Uvicorn 0.54.0 compatibility across the declared OS/Python matrix, the hosted
+candidate artifact bundle and clean consumers, and parity-first benchmark
+evidence remain open. No 0.2.2 release tag or package has been published.
 
 The Python adapter is **not yet a drop-in Uvicorn replacement**. If your
 application depends on Uvicorn's full command-line, Python API, worker, or

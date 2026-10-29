@@ -4,33 +4,33 @@
 
 ## Current source status (2026-10-29)
 
-PR #19 remains a draft. CI #464 checked committed PR head
-`a4b37c554deb99638d190ecf03e99857ecc49232`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its Linux installed-wheel public
-matrix passed **717/717**; Rust quality/MSRV, native framework composition,
-and release handoff also passed. The unified matrix completed **1,326/1,326**
-selected cases across three repeats, but coverage failed at 13,924/14,108
-regions and 10,257/10,352 lines. Linux artifact verification failed while
-recording the pinned `uvx maturin` command, macOS ARM64 parity failed on TLS
-certificate fixtures rejected by Rustls, and Windows candidate setup failed
-before parity because `uvloop` was included in the benchmark dependency set.
-Local commits
-`eacc9609769928e8b430966199b0845326bdfeb8` and
-`dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address these failures; hosted
-confirmation is pending. The full coverage result and report identity are
-recorded in [coverage status](coverage.md#current-unified-coverage-status-2026-10-22).
-See
-[CI #464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247).
+PR #19 remains a draft. CI
+[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
+checked committed PR head
+`51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, based on `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The Linux x86-64 and macOS ARM64
+installed-wheel public matrices passed **717/717**; Rust quality/MSRV, native
+framework composition, and release handoff also passed. Windows candidate
+parity stopped before its cases because the oracle dependency check required
+`uvloop`, which is unavailable there. Linux and macOS artifact identity
+recording failed because `maturin` was not on PATH; Linux clean-consumer checks
+passed, and the macOS wheel passed its public matrix. The three-repeat coverage
+matrix attributed all 1,071 cases but missed its 100% gate at 13,962/14,134
+regions and 10,290/10,377 lines. Local working-tree fixes make `uvloop`
+platform-specific and resolve the pinned Maturin version through `uvx`; hosted
+confirmation is pending. See
+[CI #466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
+and the [current coverage status](coverage.md#current-unified-coverage-status-2026-10-22).
 
 Two newly added fragmented WebSocket cases pass selected local oracle
 comparisons, including one `permessage-deflate` message. They use dirty local
 source and are not part of CI #462. Their receipts are recorded below.
 
-This hosted result is the current Linux x86-64 parity checkpoint only. It does
-not establish the declared macOS/Windows and Python-version matrix or full
-Uvicorn compatibility. CI #463 and earlier parity runs are historical.
-Coverage, independent Coverage-MCP acceptance, and the remaining platform/
-Python matrix remain open. Benchmarks remain behind compatibility acceptance.
+These hosted results cover Linux x86-64 and macOS ARM64 on CPython 3.12.13; they
+do not establish Windows, other declared Python versions, or full Uvicorn
+compatibility. CI #464 and earlier parity runs are historical. Coverage,
+independent Coverage-MCP acceptance, and the remaining platform/Python matrix
+remain open. Benchmarks remain behind compatibility acceptance.
 
 ## Focused TLS parity follow-up on the local macOS source (2026-10-28)
 
@@ -47,8 +47,9 @@ The local report is
 on macOS 15.7.7 ARM64 / CPython 3.12.13 / Rust 1.98.1. The report records a
 dirty checkout at `eacc9609769928e8b430966199b0845326bdfeb8`; after the change
 was committed as `dd525c2b08b47f0c0016073cdf7c53204a29d8c9`, all 210 recorded
-runtime source-file hashes were verified to match that commit. This is focused
-local evidence and does not replace hosted full macOS parity.
+runtime source-file hashes were verified to match that commit. CI #466 later
+passed the full 717-case macOS ARM64 installed-wheel matrix, including these
+TLS inputs, on a newer committed source.
 
 ## Focused fragmented WebSocket text-message parity (2026-10-28)
 
@@ -95,9 +96,9 @@ runner SHA-256
 The earlier 702-case local macOS ARM64 run and the selected WebSocket, HTTP/2
 Early Hints, and trailer cases are diagnostic evidence from older source
 snapshots. They do not replace the full OS/Python matrix required for a release
-commit. CI #464's coverage job has not completed as of this status; the
-independent Coverage-MCP acceptance and declared OS/Python matrix also remain
-open. Benchmarks remain behind compatibility acceptance.
+commit. CI #466's 100% coverage gate failed, and no independent Coverage-MCP
+receipt is available. The declared OS/Python matrix also remains open.
+Benchmarks remain behind compatibility acceptance.
 
 ## Historical 695-, 699-, and 700-case parity snapshots — 2026-10-28
 
@@ -176,9 +177,9 @@ coverage job completed incompletely at 1,299/1,307 attributed cases,
 13,777/13,959 regions, and 10,154/10,252 lines. This historical run does not
 meet the 100% gate. These older runs are superseded by the current source
 status at the top of this page. CI #461 completed with coverage below the
-100% threshold; CI #462 and #463 are completed historical failures, and CI
-#464 is the active hosted full run described above. No accepted Coverage-MCP receipt is
-available. Benchmarks remain paused until the broader parity work is complete.
+100% threshold; CI #462 through #466 are completed coverage failures. No
+accepted Coverage-MCP receipt is available. Benchmarks remain paused until the
+broader parity work is complete.
 
 The 700-case `input@43` snapshot includes
 `python-api.run-serves-request-and-shuts-down-on-sigterm`, which compares a

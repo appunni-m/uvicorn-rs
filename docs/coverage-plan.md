@@ -1,6 +1,9 @@
 # Plan: unified black-box coverage for the ASGI adapter and Python-free Rust runtime
 
-## Current acceptance status (2026-10-18)
+## Historical acceptance snapshot (2026-10-18)
+
+This report is for an older source revision. The active gate is tracked in the
+[current unified coverage status](coverage.md#current-unified-coverage-status-2026-10-22).
 
 Hosted exact-source CI run
 [39057925580](https://github.com/appunni-m/uvicorn-rs/actions/runs/39057925580)

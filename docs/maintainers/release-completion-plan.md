@@ -37,33 +37,41 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-1. CI [#464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247)
-   completed on PR head `a4b37c554deb99638d190ecf03e99857ecc49232` and synthetic
-   merge `d3bd3bcf634a0d83ab4b13748100d6848b659d2b`, against `main` at
+1. CI
+   [#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
+   completed on committed PR head
+   `51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, against `main` at
    `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
    framework composition, release-evidence handoff, and 717/717 installed-wheel
-   public parity passed. The unified matrix passed all 1,326 cases across three
-   repeats, but failed the 100% gate at 13,924/14,108 regions and 10,257/10,352
-   lines. Its artifact is `12858010668` (archive SHA-256
-   `0dca6fccce5c498361018f34dda30e48c4f1129bc740c32c8b03e30b26ed19e6`); its
-   report SHA-256 is
-   `b0d73cc53969317c211b65b955585fc451636024a014a0f0bd386c59cc9052a9`.
-   Because the report is bound to the synthetic merge revision and three
-   non-Rust tracked files differ from this checkout, use it to map gaps only;
-   all measured Rust source hashes match. The compact Coverage-MCP projection
-   identified 52 function groups but returned `source=unverified`, so it is not
-   an accepted independent receipt.
+   parity on Linux x86-64 and macOS ARM64 passed. Its unified three-repeat
+   matrix attributed all 1,071 cases but missed the 100% gate at 13,962/14,134
+   regions and 10,290/10,377 lines. The artifact is ID `12870939134`, archive
+   digest `sha256:592368538dcbff0ba373ca9b3640676b80cc1ca7fc7abc572f8a0682f71b7a89`,
+   report SHA-256 `d2f1dc778284e3736b9783fd50e3f19589c0608db04a42ee3c380e81c11597a6`.
+   Windows parity stopped before its cases because the oracle dependency check
+   required unavailable `uvloop`; Linux and macOS candidate identity recording
+   failed because pinned `maturin` was not on PATH. Linux consumer checks
+   passed, and the macOS candidate wheel passed 717/717.
 
-   The Linux candidate job rejected the valid pinned `uvx maturin` command;
-   Windows candidate setup included unsupported `uvloop` before parity; and
-   macOS ARM64 parity rejected OpenSSL-generated TLS fixtures. Local commits
-   `eacc9609769928e8b430966199b0845326bdfeb8` and
-   `dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address those failures. The TLS
-   fix passed the 12 affected local macOS cases; hosted confirmation remains
-   pending. Docs run #181 passed for earlier documentation, so the refreshed
-   pages also need a new deployment. No #464 job remains active. Continue with
-   a reviewed batch of focused cases/fixes, then push once and consume its
-   hosted run; do not rerun unrelated local matrices.
+   The local uncommitted fix makes `uvloop` platform-specific, selects asyncio
+   on Windows, and records Maturin through the pinned `uvx` invocation. Focused
+   syntax, manifest/platform selection, and pinned-tool checks passed. The PR
+   workflow cancels its previous run when a new commit is pushed. Run only the
+   affected selected parity and evidence groups locally, then commit and push
+   the platform/evidence fix and aligned documentation with any related
+   coverage inputs as one reviewed batch. Use one hosted run for that changed
+   source. Docs run #183 passed for the previously committed source; the
+   updated pages need a fresh deployment.
+
+   CI #466 is gap-mapping evidence, not coverage acceptance: its recorded Rust
+   source hashes match the branch, but the local manifest and runner changes
+   are not included. Coverage-MCP could not return an independent receipt after
+   its daemon failed health checks and timed out following restart. The saved
+   LLVM report maps 6 regions / 4 lines in `crates/uvicorn-rs/src/http3.rs` and
+   166 regions / 83 lines in `src/lib.rs`; see
+   [coverage status](../coverage.md#current-unified-coverage-status-2026-10-29).
+   The old macOS TLS fixture issue is covered by #466's 717/717 hosted macOS
+   parity receipt. Do not rerun unchanged local matrices.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions

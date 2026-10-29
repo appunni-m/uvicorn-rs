@@ -14,20 +14,22 @@ published.
 ## Current status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247)
-checked committed PR head `a4b37c554deb99638d190ecf03e99857ecc49232`, based
-on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its 717-case public
-matrix passed on Linux x86-64, along with release handoff, native framework
-composition, exact Rust minimum, and Rust quality jobs. Its unified coverage
-job is still running. Linux candidate artifact verification failed while
-recording the valid pinned `uvx maturin` command; Windows failed before parity
-because `uvloop` was included in the benchmark dependency set. macOS ARM64
-ran the matrix but had TLS failures caused by certificate fixtures rejected by
-Rustls. Local commits `eacc9609769928e8b430966199b0845326bdfeb8` and
-`dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address these issues. The
-certificate change passed all 12 affected TLS cases in a focused local run on
-macOS ARM64 / CPython 3.12.13 / Rust 1.98.1; the full hosted cross-platform
-matrix has not yet validated the commits.
+[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
+checked committed PR head `51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, based
+on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its installed-wheel
+public matrix passed 717/717 on Linux x86-64 and macOS ARM64. Rust
+quality/MSRV, native composition, and release-handoff jobs also passed. Windows
+stopped before parity because its oracle dependency check still required
+`uvloop`, which is unavailable there. The unified three-repeat coverage matrix
+attributed 1,071/1,071 cases but missed its 100% gate at 13,962/14,134 regions
+and 10,290/10,377 lines. Linux and macOS candidate builds completed, but their identity
+recorders failed because the pinned `maturin` executable was not on PATH;
+Linux clean-consumer checks passed, and the macOS candidate wheel passed
+717/717 parity. Local working-tree fixes make `uvloop` platform-specific and
+resolve the pinned Maturin version through `uvx`; hosted confirmation is
+pending. Docs run
+[#183](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137733)
+passed for the committed source.
 
 The package metadata declares Python `>=3.9`, and CI checks installed-wheel
 import on Python 3.9. That check does not establish Uvicorn 0.54.0 parity:
@@ -37,32 +39,26 @@ The Uvicorn 0.54.0 parity matrix therefore starts at Python 3.10. Any Python
 3.9 runtime-support claim is separate and remains unverified by the install
 check.
 
-CI #464 passed the 717-case installed-wheel matrix for committed PR head
-`a4b37c554deb99638d190ecf03e99857ecc49232` on Linux x86-64. The 12-case local
-TLS follow-up passed on the later branch source, including all six macOS mTLS
-failures and six TLS infrastructure failures from #464; it is focused evidence,
-not a hosted full-matrix receipt. Windows candidate parity did not run because
-its package-consumer setup failed. These results do not establish Windows,
-other declared Python versions, or the complete Uvicorn contract. The exact
-current-source 100% coverage gate, independent Coverage-MCP receipt, and
-complete Uvicorn 0.54.0 compatibility matrix remain open.
+The Linux and macOS results are exact-host installed-wheel evidence, not proof
+of the complete Uvicorn contract. Windows parity, other declared Python
+versions, a 100% coverage result, and the independent Coverage-MCP receipt
+remain open.
 
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | Not available. The uvicorn-rs distribution has not been published. |
-| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #464 passed 717 public cases on Linux x86-64; full CLI and settings parity is not proved. |
-| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #464 passed the public matrix on Linux x86-64; the complete programmatic contract remains open. |
-| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. Linux installed-wheel parity passed 717/717; 12 TLS cases pass in focused local macOS parity, but full hosted macOS parity and Windows parity remain unverified. |
+| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #466 passed 717 public cases on Linux x86-64 and macOS ARM64; full CLI and settings parity is not proved. |
+| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #466 passed the public matrix on Linux x86-64 and macOS ARM64; the complete programmatic contract remains open. |
+| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. The installed-wheel public matrix passed 717/717 on Linux and macOS; Windows parity did not reach its cases and remains unverified. |
 | Use workers, reload, sockets, or process controls | Selected parity cases cover some worker, reload, socket, signal, and graceful-shutdown behavior. Other combinations, platforms, and failure paths remain unverified. |
 | Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See benchmark status. |
-| Use the current release candidate on Windows | Not verified. CI #464's Windows artifact-consumer job failed before parity because `uvloop` was included in the benchmark dependency set; a local marker fix is committed but needs hosted confirmation. |
+| Use the current release candidate on Windows | Not verified. CI #466 stopped before Windows parity because the oracle dependency check required `uvloop`; a local platform-aware fix needs hosted confirmation. |
 
-The passing Linux matrix and focused local macOS TLS group do not prove full
-compatibility. Full hosted macOS and Windows matrices and other declared Python
-versions still need exact-source evidence, and unsupported behaviors must
-remain visible. The prior benchmark results do not justify a general speed
-claim. See the [support matrix](support-matrix.md),
-[parity evidence](parity.md), and [release gates](releases.md).
+The passing Linux and macOS matrices do not prove full compatibility. Windows,
+other declared Python versions, and unsupported behaviors still need exact
+evidence. The prior benchmark results do not justify a general speed claim.
+See the [support matrix](support-matrix.md), [parity evidence](parity.md), and
+[release gates](releases.md).
 
 ## Historical diagnostic records
 

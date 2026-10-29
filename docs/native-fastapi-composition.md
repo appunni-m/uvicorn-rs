@@ -1,10 +1,10 @@
 # Native FastAPI-RS composition evidence
 
-## Hosted pinned composition pass (2026-10-28)
+## Latest hosted pinned composition pass (2026-10-29)
 
 The native FastAPI-RS composition job in CI
-[#464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247)
-passed for committed PR head `a4b37c554deb99638d190ecf03e99857ecc49232`.
+[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
+passed for committed PR head `51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`.
 It used FastAPI-RS `0afccce9f35447f38ebb5e94d0e67fd338ea7ea4` and its pinned
 Starlette-RS revision `4139a72449bf5751e8902fb1c7175ee7f191d338`, confirmed the
 locked normal/build graph excluded PyO3, and passed all 17 declared H1/H2
