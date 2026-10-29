@@ -2729,6 +2729,7 @@
           ],
           "request_body_base64": "d3NnaS1ib2R5LXBhcml0eQ==",
           "shutdown_signal": "SIGINT",
+          "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
           "lifespan": "off",
           "invocation": "module-cli",
