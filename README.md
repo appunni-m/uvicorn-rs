@@ -12,22 +12,22 @@ the release workflow must resolve it in its preflight. The PyPI
 `uvicorn-rs` project API returned 404, so the distribution has not had its
 first upload. See [release status](docs/releases.md).
 
-PR #19 remains a draft. CI
-[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
-checked committed head `51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, based on
-`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV,
-native FastAPI-RS composition, release handoff, and the installed-wheel public
-parity matrix passed 717/717 on Linux x86-64 and macOS ARM64. Windows stopped
-before cases because its oracle dependency check still required `uvloop`, which
-is unavailable on that platform. The unified three-repeat coverage matrix
-attributed all 1,071 cases but missed the 100% gate: 13,962/14,134 regions and
-10,290/10,377 lines. Linux and macOS candidate jobs built their artifacts, but
-the identity recorder failed because the pinned `maturin` executable was not
-on PATH; Linux clean-consumer checks passed, and the macOS candidate wheel
-passed 717/717 parity. Local working-tree fixes make `uvloop` platform-specific
-and resolve the pinned Maturin version through `uvx`; these fixes still need
-one hosted exact-source run. See [CI #466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734),
-[coverage evidence](docs/coverage.md), and [parity evidence](docs/parity.md).
+PR #19 remains a draft. The latest CI run,
+[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829),
+checked PR head `b44029eb2119bb0a442946030d50d22b9160370f` against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
+FastAPI-RS composition, release handoff, and Linux x86-64 installed-wheel
+parity (718/718) passed. The macOS ARM64 candidate lane had one WSGI log-order
+mismatch; the Windows lane reported factory, worker, and signal failures, then
+exited before writing its parity report. Linux candidate packaging and clean
+consumer checks passed. The three-repeat coverage job completed all 1,331
+indexed cases with complete attribution and no transient infrastructure
+failures, but its gate remains short: 13,984/14,154 regions and 10,303/10,387
+lines. The local harness changes for the macOS timing race and Windows
+control-event handling are not part of CI #468 and still need hosted
+confirmation. See
+[coverage evidence](docs/coverage.md), [parity evidence](docs/parity.md), and
+[release status](docs/releases.md).
 
 Docs run
 [#183](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137733)

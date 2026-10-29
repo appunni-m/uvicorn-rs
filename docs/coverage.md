@@ -8,40 +8,31 @@
 ## Current unified coverage status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
-checked committed PR head `c0104b3775416c5dfd305f6b5fe713b0cad1a995`, based
-on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The complete unified
-matrix finished: all 1,330 selected parity and fault cases passed with complete
-attribution and no infrastructure failures or retries. The 100% coverage gate
-failed at **13,963/14,134 regions** (171 missing) and **10,291/10,377 lines**
-(86 missing). The report SHA-256 is
-`7d82d7aa0adcd9bae869d1ef27e92e967b3d68ecf6a1d629498c51f6cb9a75f2`; the
-uploaded `uvicorn-rs-unified-coverage` artifact is ID `12875322424`, archive
-SHA-256 `941d157371eb9b51bc23b25073c7b7fb10bdd7e5e55fb740272e024afe82ee8e`.
-Linux public parity passed 717/717; the macOS ARM64 candidate lane and Linux
-candidate package/consumer lane passed. Windows installed the candidate wheel
-but stopped before cases because the H3 probe path omitted `.exe`; the Python
-3.9 wheel-install job was skipped after that lane failed.
+[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
+checked committed PR head `b44029eb2119bb0a442946030d50d22b9160370f`, based
+on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The unified matrix
+completed all 1,331 indexed cases with complete attribution and zero transient
+infrastructure failures. Its 100% gate failed at **13,984/14,154 regions**
+(170 missing) and **10,303/10,387 lines** (84 missing). Artifact
+`12880510857` has archive digest
+`sha256:66cc1b9f46dabf33b00268e7bc10deb61a5a5d23b0054a014c6d02b5d1e6edbb`.
+The report is for the CI merge commit
+`1f70ea46dfa255ac90e41b115b997354b8457a01`, which combines the PR head above
+with the stated main base. CI #467 totals remain historical.
 
-Commit `dacecf2fd` fixes the Windows path and the QUIC TLS coverage fault after
-CI #467 started. Its selected TLS fault case passed 1/1 and attributes six
-previously missing regions at `crates/uvicorn-rs/src/http3.rs:84-89`. A second
-focused local case, `python-api.run-error-before-response-start-returns-500`,
-also passed 1/1 against Uvicorn 0.54.0 and matched the configured response
-header. Its selected report is
-`target/coverage-2026-10-29-error-before-response-start/coverage-report.json`,
-SHA-256 `8feac14d9e735f1fc6dbd0ed18ba55ee6a85c376bdedc623719149494a79dd08`;
-it is bound to dirty local source and is not full-gate evidence. Its source-span
-comparison matched none of CI #467's 171 missing regions, so it does not reduce
-the measured coverage gap. CI #467 remains a completed gap map for `c0104b377`;
-the corrected Windows path and current manifest need an exact-source hosted run
-to establish the updated gap map and verify Windows. Coverage remains open until
-a later complete report reaches 100%.
+Other #468 evidence: Linux public parity passed 718/718 and the Linux candidate
+artifact and clean consumers passed. The macOS ARM64 candidate lane had one
+WSGI log-order mismatch. The Windows candidate lane failed after factory,
+multi-worker, and signal cases and exited before writing a parity report. The
+local follow-up changes to those cases and the probe harness are not included
+in #468. Coverage remains open until a report for the follow-up source reaches
+100% regions and lines with passing repeats and complete attribution.
 
 Coverage-MCP could not return an independent review: its local daemon failed
 health checks, then timed out again after a restart. No review receipt was
-created, and `7t4g` remains blocked. The saved LLVM report can guide targeted
-coverage work but does not satisfy independent acceptance.
+created, and `7t4g` remains open. The #468 report is available, but no accepted
+independent receipt is bound to the follow-up source. The saved historical LLVM
+report can guide targeted coverage work but does not satisfy acceptance.
 
 ### Prior completed unified coverage result (CI #464)
 

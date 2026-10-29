@@ -4,11 +4,12 @@
 
 This document describes the PyO3/ASGI source implementation intended for the
 not-yet-published `uvicorn-rs` PyPI distribution and the Python-free
-`uvicorn-rs` server crate. The `uvicorn-rs` and
-`asgi-lifespan-protocol-rs` Cargo crates are published at 0.2.1 from clean
-source commit `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`; that publication is
-not a completed exact-main release. Its root Cargo integration package and
-optional extra console script are named `uvicorn-rs-py`.
+`uvicorn-rs` server crate. The earlier Cargo 0.2.1 release came from clean
+source commit `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`; the maintainer later
+reported removing the old `uvicorn-rs` registry entry. A current crates.io API
+check from this environment returned HTTP 403, so the registry's current state
+must be confirmed by the release preflight. The root Cargo integration package
+and optional extra console script are named `uvicorn-rs-py`.
 Every Cargo feature configuration of the Python adapter delegates HTTP/1.1,
 HTTP/2 over TCP/TLS, and HTTP/3 over Quinn to the native crate through Rust
 services. Feature selection no longer switches to a second protocol stack.

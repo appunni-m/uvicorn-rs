@@ -2816,6 +2816,7 @@ def load_contract(
                     "fd",
                     "prebound_socket_count",
                     "client_timeout_seconds",
+                    "post_response_settle_seconds",
                     "reset_contextvars",
                     "bind_conflict",
                     "required_observations",
@@ -3552,6 +3553,16 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}.api.run_http.client_timeout_seconds must be from 1 through timeout_seconds"
+                    )
+                post_response_settle_seconds = run_http.get(
+                    "post_response_settle_seconds"
+                )
+                if post_response_settle_seconds is not None and (
+                    type(post_response_settle_seconds) not in {int, float}
+                    or not 0 < post_response_settle_seconds <= 2
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.post_response_settle_seconds must be greater than 0 and at most 2"
                     )
                 shutdown_delay_values = [
                     value
@@ -12794,14 +12805,22 @@ def run_python_api_probe(
         str(ROOT / "tests/parity/python_api_probe.py"),
         json.dumps(probe_api, sort_keys=True, separators=(",", ":")),
     ]
+    # The probe can spend its request deadline waiting for a response, then
+    # spend a second deadline waiting for graceful shutdown.
     probe_timeout = max(
         10,
-        run_http.get("timeout_seconds", 5) + 5
+        2 * run_http.get("timeout_seconds", 5) + 10
         if "run_http" in case["api"]
         else run_http_reload["timeout_seconds"] + 5
         if run_http_reload is not None
         else 10,
     )
+    probe_options = {}
+    if os.name == "nt" and "run_http" in case["api"]:
+        # A Windows HTTP probe sends CTRL_BREAK_EVENT to its server process
+        # group. Give that probe and its server a private console so the event
+        # cannot interrupt the parity coordinator sharing the runner console.
+        probe_options["creationflags"] = subprocess.CREATE_NEW_CONSOLE
     try:
         completed = subprocess.run(
             command,
@@ -12810,6 +12829,7 @@ def run_python_api_probe(
             capture_output=True,
             timeout=probe_timeout,
             check=False,
+            **probe_options,
         )
         if fault_control_path is not None:
             fault_consumed = (
@@ -14279,6 +14299,18 @@ def validate_result_shape(
 
 
 def main() -> int:
+    windows_ctrl_break_events = 0
+    if os.name == "nt" and hasattr(signal, "SIGBREAK"):
+        def capture_windows_ctrl_break(signum: int, frame: Any) -> None:
+            nonlocal windows_ctrl_break_events
+            windows_ctrl_break_events += 1
+
+        # Windows parity cases signal isolated server process groups. If a
+        # control event leaks to this coordinator, preserve the rest of the
+        # report and record the leak as an infrastructure failure instead of
+        # letting the process exit before it writes the evidence artifact.
+        signal.signal(signal.SIGBREAK, capture_windows_ctrl_break)
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "asgi-parity" / "result.json")
     parser.add_argument(
@@ -14429,6 +14461,14 @@ def main() -> int:
             )
             case_results.extend(profile_results)
             infrastructure_errors.extend(profile_errors)
+    if windows_ctrl_break_events:
+        infrastructure_errors.append(
+            {
+                "kind": "unexpected_harness_ctrl_break",
+                "count": windows_ctrl_break_events,
+                "message": "CTRL_BREAK_EVENT reached the parity coordinator while signaling a child server",
+            }
+        )
     counts = {
         "selected": len(selected_cases),
         "executed": sum(result["status"] != "not_run" for result in case_results),

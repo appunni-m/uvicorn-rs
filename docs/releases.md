@@ -29,40 +29,32 @@ Publisher entries for **asgi-lifespan-protocol-rs** and **uvicorn-rs** use
 place instead of adding duplicates.
 
 PR #19 remains a draft. CI
-[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
-checked committed PR head **c0104b3775416c5dfd305f6b5fe713b0cad1a995**, based
-on main **86e72e181d00feca1b4db7f30377d5d9d4345b83**. Release handoff, native
-framework composition, exact Rust minimum, Rust format/lint/feature/docs, and
-717/717 installed-wheel public parity on Linux x86-64 passed. The macOS ARM64
-candidate lane passed its platform-applicable parity and artifact checks. The
-Linux candidate artifact is ID `12873042760` with digest
-`sha256:235ab8dc402ab7e21d5dbd859e5270cbed1ec8cfb3ceb96ab4080145027081ec`; its
-clean-consumer and identity checks passed. The macOS candidate artifact is ID
-`12872829196` with digest
-`sha256:25fca7c771538d8eb35bdb32a9d4bd434299a49fe7f2fabd9e1e2e494bf036a8`.
-Windows installed its candidate wheel but stopped before parity cases because
-the H3 probe path omitted the `.exe` suffix. The separate declared-Python-floor
-wheel-install job was skipped after the Windows candidate lane failed. The
-complete unified three-repeat matrix finished with 1,330/1,330 selected parity
-and fault cases passing, complete attribution, and zero infrastructure retries.
-Its 100% gate failed at 13,963/14,134 regions and 10,291/10,377 lines. The
-coverage artifact is ID `12875322424`, archive digest
-`sha256:941d157371eb9b51bc23b25073c7b7fb10bdd7e5e55fb740272e024afe82ee8e`;
-the report digest is
-`7d82d7aa0adcd9bae869d1ef27e92e967b3d68ecf6a1d629498c51f6cb9a75f2`.
+[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
+checked committed PR head **b44029eb2119bb0a442946030d50d22b9160370f**, based
+on main **86e72e181d00feca1b4db7f30377d5d9d4345b83**. Rust quality/MSRV,
+native FastAPI-RS composition, release handoff, and Linux x86-64 installed-wheel
+parity (718/718) passed. The Linux candidate artifact is ID `12877945121`,
+digest `sha256:6929ce610ac9410225e1dc87a251195d7e57a65b85cc279f79f84e65e931012b`;
+its source archive, native crates, and clean-consumer checks passed. The macOS
+ARM64 candidate lane ran 718 cases and had one WSGI log-order mismatch. The
+Windows candidate lane reported factory, multi-worker, and signal failures and
+exited with `-1073741510` before saving a parity report. Those platform lanes do
+not qualify complete candidate receipts. The unified three-repeat coverage job
+completed 1,331 indexed cases with complete attribution and no transient
+infrastructure failures, but failed its 100% gate at 13,984/14,154 regions and
+10,303/10,387 lines. Its artifact is ID `12880510857`, digest
+`sha256:66cc1b9f46dabf33b00268e7bc10deb61a5a5d23b0054a014c6d02b5d1e6edbb`.
 
-Commit `dacecf2fd`, made after CI #467 started, fixes the Windows H3 client
-path and the focused QUIC TLS coverage fault; a local selected fault case passed
-1/1 and attributes six previous missing regions. The local Python API error
-case `python-api.run-error-before-response-start-returns-500` also passes 1/1
-against Uvicorn 0.54.0. Both are selected local evidence, not replacements for
-the complete exact-source hosted gates. The local docs build passed after the
-anchor fix, but Docs run
-[#184](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243105)
-failed on the earlier anchor and awaits a fresh deployment. The corrected
-source and documentation still need hosted confirmation.
+After CI #468 started, the local follow-up commit added a 250 ms settle stimulus
+to the single chunked-WSGI case; that selected case passed once on macOS ARM64.
+The Windows probe runner now uses a private console, a timeout that covers
+request and shutdown deadlines, and process-tree cleanup. These changes still
+need hosted confirmation. No coverage report or independent Coverage-MCP
+receipt is bound to the local follow-up commit. Docs deployment passed for
+the committed source, but local documentation edits in this batch need their
+own hosted check.
 
-The preceding CI [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
+An earlier CI [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
 passed **707/707** public parity cases on Linux x86-64 for commit
 **1c5a9a7fca45e6e4e985cf775ef844bc1fd37e83**. That receipt does not bind to
 this source. Its coverage job was canceled when #457 started. The local
@@ -71,12 +63,12 @@ pre-4f7 source and must be rebuilt for the current candidate. The standalone
 HTTP/3 consumer compiles against the current local crate source, but that is
 not a clean published-artifact receipt.
 
-The current release blockers are an exact-source 100% coverage result and its
-independent Coverage-MCP receipt, complete Windows and broader Uvicorn 0.54.0
-compatibility evidence, exact-source candidate artifacts and clean consumers,
-and the matched benchmarks that follow compatibility. CI #467 is complete but
-does not bind to the later `dacecf2fd` source, and its Windows matrix did not
-reach any cases.
+The current release blockers are a completed exact-source 100% coverage result
+and independent Coverage-MCP receipt, complete Windows and broader Uvicorn
+0.54.0 compatibility evidence, exact-source candidate artifacts and clean
+consumers for all supported systems, and the matched benchmarks that follow
+compatibility. CI #468 does not include the local follow-up commit,
+and its Windows lane produced no accepted parity report.
 The previous three-system benchmark is incomplete: Linux ARM64 Hypercorn
 HTTP/3 failed in a slow-reader case, and an HTTP/1 upload timeout remains
 unresolved. Existing measurements do not support a general performance-gain
@@ -92,10 +84,15 @@ The [PyPI project API](https://pypi.org/pypi/uvicorn-rs/json) returned 404 on
 been published.
 
 The last saved GitHub settings audit found **Protect main** and version-tag
-protection active, release environments restricted to main, and Cargo Trusted
-Publisher entries bound to **release.yml / crates-io**. The PyPI publisher is
-configured for **appunni-m/uvicorn-rs / release.yml / pypi**. Do not publish
-until the current release gates pass.
+protection active. The `pypi` and `crates-io` environments are restricted to
+`main`, list `appunni-m` as the required reviewer, and keep administrator
+bypass disabled. `Prevent self-review` is disabled so the sole maintainer can
+approve the release; add another reviewer when one joins. The PyPI Trusted
+Publisher is **appunni-m/uvicorn-rs / release.yml / pypi**. The maintainer
+confirmed that the Cargo Trusted Publisher entries for `uvicorn-rs` and
+`asgi-lifespan-protocol-rs` already exist as
+**appunni-m/uvicorn-rs / release.yml / crates-io**; do not add duplicates. Do
+not publish until the current release gates pass.
 
 ## Registry and packaging audit (2026-10-27; earlier source snapshot)
 

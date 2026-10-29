@@ -14,26 +14,22 @@ published.
 ## Current status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
-checked committed PR head `c0104b3775416c5dfd305f6b5fe713b0cad1a995`, based
+[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
+checked committed PR head `b44029eb2119bb0a442946030d50d22b9160370f`, based
 on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its Linux
-installed-wheel public matrix passed 717/717; Rust quality/MSRV, native
-composition, and release-handoff jobs also passed. The macOS ARM64 candidate
-lane passed its platform-applicable parity and artifact checks. Linux candidate
-packaging, identity, and clean-consumer checks passed. Windows installed the
-candidate wheel but failed before parity cases because the H3 probe launcher
-omitted `.exe`, and the Python-floor wheel-install job was skipped. The unified
-three-repeat matrix completed with all 1,330 selected parity and fault cases
-passing, but failed the 100% coverage gate at 13,963/14,134 regions and
-10,291/10,377 lines. Commit `dacecf2fd` fixes the Windows executable lookup and
-a QUIC TLS coverage fault; a local ASGI error-before-start input also passes
-1/1. Those changes and the current documentation have not yet been checked by
-a newer hosted run. Docs run
-[#184](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243105)
-failed on the previous anchor; the strict local documentation build passed
-after the fix.
+installed-wheel public matrix passed 718/718; Rust quality/MSRV, native
+composition, and release-handoff jobs also passed. Linux candidate packaging
+and clean-consumer checks passed. The macOS ARM64 candidate lane had one
+chunked-WSGI log-order mismatch. The Windows lane reported factory,
+multi-worker, and signal failures, then exited `-1073741510` before writing its
+parity report. The unified three-repeat coverage job completed 1,331 indexed
+cases with complete attribution and zero transient infrastructure failures,
+but failed at 13,984/14,154 regions and 10,303/10,387 lines. A focused local macOS rerun passed
+after adding a settle interval to that one input; Windows console isolation,
+timeout, and process-tree cleanup changes are still unverified on Windows.
+These local changes and the updated docs are not included in CI #468.
 
-The package metadata declares Python `>=3.9`. CI #467 skipped installed-wheel
+The package metadata declares Python `>=3.9`. CI #468 skipped installed-wheel
 import on Python 3.9 after the Windows candidate lane failed. A passing floor
 check would not establish Uvicorn 0.54.0 parity:
 the pinned upstream release declares Python `>=3.10` in its
@@ -42,20 +38,21 @@ The Uvicorn 0.54.0 parity matrix therefore starts at Python 3.10. Any Python
 3.9 runtime-support claim is separate and remains unverified by the install
 check.
 
-The Linux and macOS results are exact-host installed-wheel evidence, not proof
-of the complete Uvicorn contract. Windows parity, the separate Python 3.9
-wheel-install check, other declared Python versions, a passing 100% coverage
-result, and the independent Coverage-MCP receipt remain open.
+The Linux result is exact-host installed-wheel evidence, not proof of the
+complete Uvicorn contract. macOS parity has one mismatch; Windows parity has no
+accepted report. The separate Python 3.9 wheel-install check, other declared
+Python versions, a passing 100% coverage result, and the independent
+Coverage-MCP receipt remain open.
 
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | Not available. The uvicorn-rs distribution has not been published. |
-| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #467 passed 717 public cases on Linux x86-64; full CLI and settings parity is not proved. |
-| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #467 passed the Linux public matrix; the complete programmatic contract remains open. |
-| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. The installed-wheel public matrix passed 717/717 on Linux and macOS; Windows parity did not reach its cases and remains unverified. |
+| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #468 passed 718 public cases on Linux x86-64; full CLI and settings parity is not proved. |
+| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #468 passed the Linux public matrix; the complete programmatic contract remains open. |
+| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. CI #468 passed 718/718 on Linux and 717/718 on macOS; Windows parity has no accepted report. |
 | Use workers, reload, sockets, or process controls | Selected parity cases cover some worker, reload, socket, signal, and graceful-shutdown behavior. Other combinations, platforms, and failure paths remain unverified. |
 | Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See benchmark status. |
-| Use the current release candidate on Windows | Not verified. CI #467 stopped before Windows parity because the H3 probe launcher omitted `.exe`; the fix is committed and needs hosted confirmation. |
+| Use the current release candidate on Windows | Not verified. CI #468 failed during Windows factory, multi-worker, and signal parity and exited before producing its report. The current local harness fixes still need a hosted Windows run. |
 
 The passing Linux and macOS matrices do not prove full compatibility. Windows,
 other declared Python versions, and unsupported behaviors still need exact

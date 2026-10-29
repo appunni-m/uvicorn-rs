@@ -15,36 +15,31 @@ candidate artifacts and downstream consumer checks remain open; see
 ## Current verification status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
-checked committed head `c0104b3775416c5dfd305f6b5fe713b0cad1a995`, based on
+[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
+checked committed head `b44029eb2119bb0a442946030d50d22b9160370f`, based on
 `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux x86-64
-installed-wheel parity passed 717/717; Rust quality/MSRV, native composition,
-and release handoff also passed. The macOS ARM64 candidate lane passed its
-platform-applicable parity and artifact checks. Linux candidate packaging,
-clean consumers, and artifact identity checks passed. Windows installed the
-candidate wheel but stopped before parity cases because the runner looked for
-`parity-http3` instead of Cargo's `parity-http3.exe`. The complete unified
-three-repeat matrix passed all 1,330 selected parity and fault cases, but its
-100% coverage gate failed at 13,963/14,134 regions and 10,291/10,377 lines.
-The Python 3.9 wheel-install job was skipped after the Windows candidate lane
-failed.
+installed-wheel parity passed 718/718; Rust quality/MSRV, native composition,
+and release handoff also passed. The macOS ARM64 candidate lane had one
+chunked-WSGI log-order mismatch. Windows reported factory, multi-worker, and
+signal failures, then exited before writing a parity report. Linux candidate
+packaging and clean-consumer checks passed. The complete three-repeat coverage
+job finished 1,331 indexed cases with complete attribution and zero transient
+infrastructure failures, but failed its 100% gate at 13,984/14,154 regions and
+10,303/10,387 lines. The local follow-up commit is not included in that run.
 
-The local follow-up `dacecf2fd` resolves the Windows H3 executable path, fixes
-the focused QUIC TLS coverage contract, and corrects a documentation link. Its
-selected TLS case passed 1/1 and covers six previously missing regions. The
-new `python-api.run-error-before-response-start-returns-500` input also passed
-1/1 against the oracle on the dirty local source. The strict local docs build
-passed. These changes are newer than CI #467 and still need hosted confirmation.
-Coverage-MCP acceptance, full Windows parity, complete Uvicorn compatibility,
-and exact-source candidate receipts remain open. Benchmarks stay behind parity
-acceptance. See the [full parity history](parity.md).
+The local follow-up adds a settle stimulus to the single macOS WSGI input and
+isolates Windows HTTP probes from the coordinator console while extending
+timeouts and cleanup. The focused macOS case passed once locally; the Windows
+changes have no hosted result yet. Coverage-MCP acceptance, full Windows parity,
+complete Uvicorn compatibility, and exact-source candidate receipts remain
+open. Benchmarks stay behind parity acceptance. See the [full parity
+history](parity.md).
 
-The latest completed public parity receipt is CI #467 on Ubuntu 24.04 / x86-64
-/ CPython 3.12.13. The macOS ARM64 candidate lane passed its indexed,
-platform-applicable cases. Neither result establishes Windows parity or the
-complete Uvicorn contract.
+These results do not establish the complete Uvicorn contract or release
+support. The declared Python 3.9 wheel-install job was skipped after the
+Windows candidate lane failed.
 
-The project metadata declares Python `>=3.9`. CI #467 skipped the Python 3.9
+The project metadata declares Python `>=3.9`. CI #468 skipped the Python 3.9
 installed-wheel check after the Windows candidate lane failed. A passing floor
 check is package-install evidence, not
 Uvicorn 0.54.0 compatibility evidence: the pinned upstream release declares
@@ -106,13 +101,13 @@ directory watching remains covered separately. See the
 ## Can I replace Uvicorn?
 
 Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
-drop-in replacement today. CI #467 passed Linux public parity 717/717 and the
-macOS ARM64 candidate lane. Windows stopped before parity cases because the H3
-probe launcher omitted `.exe`; the committed fix awaits a new hosted run. The
-unified three-repeat matrix completed, but its coverage gate failed with 171
-regions and 86 lines missing. No accepted Coverage-MCP review is available.
-Full CLI, Python API, process and cross-platform acceptance remain open.
-See the
+drop-in replacement today. CI #468 passed Linux public parity 718/718. The
+macOS ARM64 candidate lane had one chunked-WSGI log-order mismatch. Windows
+reported factory, worker, and signal failures and exited before producing a
+parity report. Its unified three-repeat coverage job failed at 13,984/14,154
+regions and 10,303/10,387 lines. No accepted Coverage-MCP review is available.
+Full CLI,
+Python API, process and cross-platform acceptance remain open. See the
 [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
 
 One selected POSIX
@@ -174,7 +169,7 @@ and migration guidance.
 | Run multiple Python workers or reload code | Two focused module-CLI comparisons verify two workers serve an HTTP/1.1 request and stop on SIGINT: one sets `--workers 2`, the other sets `WEB_CONCURRENCY=2`. A separate input kills one worker process and verifies replacement. A new POSIX input suspends a worker, uses `--timeout-worker-healthcheck 2`, and passes 1/1 against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13 (run `ae4e43b0e69245a8b22cd67668cdaeba`; report SHA-256 `eae083b94d0d0637b0005fa9278066b48b52f787f93b06c3e58113270a602e1e`). Both implementations log an additional server process, serve the request, and shut down cleanly. A reload input passes locally on macOS ARM64 / CPython 3.12.13 with `--workers 2` in both dependency modes: without `watchfiles`, the candidate's `StatReload` fallback matches the Uvicorn watchfiles oracle; with `watchfiles==1.3.0`, both use watchfiles. Each reload run edits a watched Python module, verifies the replacement response, compares the warning that reload ignores the worker count, and shuts down on SIGINT. | See the [two-crash evidence](maintainers/uvicorn-0.54.0-contract.md#two-consecutive-worker-crashes-and-replacement), [SIGHUP restart evidence](maintainers/uvicorn-0.54.0-contract.md#sighup-worker-restart), and [SIGHUP replacement-startup failure evidence](maintainers/uvicorn-0.54.0-contract.md#sighup-replacement-startup-failure); the restart cases cover one forced exit, two consecutive forced worker exits, one POSIX health-check expiry, a successful SIGHUP restart, and one failed replacement startup that preserves the old workers. Restart/failure policy beyond these paths, worker-count signals beyond the tested SIGTTIN/SIGTTOU pair, Windows and other socket/platform combinations remain unverified. One WatchFilesReload include/exclude case also passes: an excluded-file change did not reload, an included-file change did, and SIGINT exited cleanly. That case ran on macOS ARM64 / CPython 3.12.13; other glob combinations, fallback-watcher filtering, platforms, and reload startup/failure modes remain unverified. See the current-source receipts in the [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md). Use upstream Uvicorn for those paths. |
 | Lifespan and graceful shutdown | Startup, shutdown, application failures, and selected cancellation paths have live cases. Two focused module-CLI comparisons set the timeout through the CLI option and environment; both confirm that a held ASGI request is cancelled after 1 second, matching Uvicorn 0.54.0 on macOS ARM64. `lifespan="off"` passes focused public API and module CLI comparisons against Uvicorn 0.54.0. Focused `Config`/`Server.serve()` and module CLI cases verify that an app exception before startup under `lifespan="on"` leaves the server unstarted and exits with code 3. | Other strict-mode failure classes remain unverified. The worker cases cover successful startup/request/SIGINT, one worker crash/replacement, one two-crash replacement case, and one POSIX health-check expiry/replacement path; worker-control signals and broader process control remain unqualified. |
 | Use the native Rust library | The source contains a Python-free `uvicorn-rs` server crate and a separate `asgi-lifespan-protocol-rs` lifecycle crate; HTTP/3 is gated by `uvicorn-rs`'s optional `http3` feature. | Clean release artifacts and downstream consumer checks for the current source remain unverified. See [release status](releases.md) and [native Rust integration](native-fastapi-composition.md). |
-| Match Uvicorn's CLI and Python API | Incomplete. CI #467 passed Linux public parity 717/717 and the platform-applicable macOS candidate lane; Windows parity did not reach cases because the H3 probe path omitted `.exe`. The fix is committed but awaits a new hosted run. Full settings/runtime, worker/process, Windows and other declared Python versions, and release acceptance remain open. Selected passes do not establish drop-in compatibility. See the [compatibility status](uvicorn-compatibility.md). |
+| Match Uvicorn's CLI and Python API | Incomplete. CI #468 passed Linux public parity 718/718; macOS had one WSGI log-order mismatch, and Windows produced no accepted parity report after factory, worker, and signal failures. Full settings/runtime, worker/process, Windows and other declared Python versions, and release acceptance remain open. Selected passes do not establish drop-in compatibility. See the [compatibility status](uvicorn-compatibility.md). |
 
 ## Known behavior limits
 

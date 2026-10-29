@@ -5,31 +5,26 @@
 ## Current source status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
+[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
 checked committed PR head
-`c0104b3775416c5dfd305f6b5fe713b0cad1a995`, based on `main` at
+`b44029eb2119bb0a442946030d50d22b9160370f`, based on `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux x86-64 installed-wheel
-public parity passed **717/717**; Rust quality/MSRV, native composition, and
-release handoff also passed. The macOS ARM64 candidate lane passed its
-platform-applicable parity and artifact checks. Linux candidate packaging,
-clean consumers, and artifact identity passed. Windows installed its candidate
-wheel but stopped before parity cases because the H3 probe path omitted `.exe`;
-the Python 3.9 wheel-install job was skipped. The unified matrix completed with
-1,330/1,330 selected parity and fault cases passing, but the 100% coverage gate
-failed at 13,963/14,134 regions and 10,291/10,377 lines.
+public parity passed **718/718**; Rust quality/MSRV, native composition, and
+release handoff also passed. Linux candidate packaging and clean-consumer
+checks passed. The macOS ARM64 candidate lane ran 718 cases and had one
+chunked-WSGI log-order mismatch. The Windows candidate lane reported factory,
+multi-worker, and signal failures, then exited `-1073741510` before writing a
+parity report. The unified three-repeat coverage job completed 1,331 indexed
+cases with complete attribution and no transient infrastructure failures, but
+failed at 13,984/14,154 regions and 10,303/10,387 lines. The Python 3.9
+wheel-install job was skipped.
 
-The local follow-up `dacecf2fd` fixes the Windows H3 client path and QUIC TLS
-coverage fault. Its focused TLS fault input passed 1/1 and attributes six
-previously missing regions, but is not full coverage or cross-platform parity
-evidence. The added input
-`python-api.run-error-before-response-start-returns-500` also passed 1/1 on the
-dirty local source, matching the oracle's 500 response and configured default
-header. The selected receipt is recorded in
-`target/coverage-2026-10-29-error-before-response-start/coverage-report.json`
-(SHA-256 `8feac14d9e735f1fc6dbd0ed18ba55ee6a85c376bdedc623719149494a79dd08`);
-it does not establish the complete matrix. CI #467 predates these local test
-inputs and the Windows fix. See the
-[current coverage status](coverage.md#current-unified-coverage-status-2026-10-29).
+The local follow-up adds a 250 ms settle interval to the single chunked-WSGI
+input; that selected case passed once on macOS ARM64. Windows HTTP probes now
+run in a private console, allow time for both request and graceful shutdown, and
+kill their server process tree during cleanup. These harness changes are
+committed locally but remain unverified on Windows and were not part of CI
+#468. See the [current coverage status](coverage.md#current-unified-coverage-status-2026-10-29).
 
 Two newly added fragmented WebSocket cases pass selected local oracle
 comparisons, including one `permessage-deflate` message. They use dirty local

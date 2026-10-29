@@ -38,45 +38,35 @@ belong to the release tasks rather than being copied into every prerequisite.
 ## Execution order and stopping rules
 
 1. CI
-   [#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
-   completed on PR head `c0104b3775416c5dfd305f6b5fe713b0cad1a995`, against
-   `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV,
-   native framework composition, release-evidence handoff, and Linux
-   installed-wheel parity (717/717) passed. The macOS ARM64 candidate lane
-   passed its platform-applicable parity and artifact checks; the Linux
-   candidate artifact and clean-consumer checks also passed. Windows installed
-   the candidate wheel but stopped before cases because the H3 probe path
-   omitted `.exe`; the separate declared-Python-floor wheel-install job was
-   skipped after that failure.
+   [#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
+   checked PR head `b44029eb2119bb0a442946030d50d22b9160370f`, against `main`
+   at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
+   framework composition, release-evidence handoff, and Linux installed-wheel
+   parity (718/718) passed. Linux candidate packaging and clean consumers
+   passed. The macOS ARM64 lane had one chunked-WSGI log-order mismatch. The
+   Windows lane reported factory, worker, and signal failures, then exited
+   `-1073741510` without a parity report. The unified three-repeat job completed
+   all 1,331 indexed cases with complete attribution and zero transient
+   infrastructure failures, but failed the 100% gate at 13,984/14,154 regions
+   and 10,303/10,387 lines. Artifact `12880510857` is bound to the run's merge
+   commit `1f70ea46dfa255ac90e41b115b997354b8457a01`.
 
-   The complete unified matrix finished with 1,330/1,330 selected parity and
-   fault cases passed, full attribution, and no case or infrastructure retries.
-   The 100% gate failed at 13,963/14,134 regions and 10,291/10,377 lines. Its
-   report SHA-256 is
-   `7d82d7aa0adcd9bae869d1ef27e92e967b3d68ecf6a1d629498c51f6cb9a75f2`; the
-   artifact archive SHA-256 is
-   `941d157371eb9b51bc23b25073c7b7fb10bdd7e5e55fb740272e024afe82ee8e`.
-   The Windows failure log and complete coverage report are retained by CI.
+   The local follow-up commit gives the WSGI chunked-POST input a 250 ms
+   settle interval; its selected macOS case passed 1/1. It also isolates each
+   Windows HTTP probe in a private console, allows both the response and
+   shutdown deadlines, and kills server process trees during cleanup. Windows
+   behavior still needs hosted confirmation. These changes are not included in
+   #468. Do not start benchmarks until the compatibility gate passes.
 
-   Commit `dacecf2fd` contains the Windows executable resolver, a coverage fault
-   fix that drives Quinn's real TLS conversion error, and a corrected coverage
-   documentation link. The selected fault case passed 1/1 with zero retries and
-   attributes six previously missing regions in
-   `crates/uvicorn-rs/src/http3.rs:84-89`; its selected report is not full-gate
-   evidence. Strict local MkDocs validation passed. These changes were made
-   after #467 started, so the run cannot validate them. The next exact-source
-   hosted run must verify the Windows fix and current parity input and provide a
-   fresh gap map; it is expected to leave the coverage gate open. Use that report
-   to batch the remaining coverage cases before another full run. Do not start
-   benchmarks until the compatibility gate passes. Docs run #184 failed on the
-   old anchor; the local fix awaits hosted deployment.
-
-   CI #467 is completed gap-mapping evidence bound to `c0104b377`, not the
-   later local commit. Coverage-MCP still has no accepted independent receipt
-   after its prior daemon health/time-out failure.
-   See the [coverage status](../coverage.md#current-unified-coverage-status-2026-10-29).
-   Reuse completed unchanged Linux/macOS parity and package slices; do not
-   rerun them locally.
+   CI #467 remains a completed historical gap map for `c0104b377`, not current
+   coverage evidence. Its 1,330/1,330 cases passed with complete attribution,
+   but the gate failed at 13,963/14,134 regions and 10,291/10,377 lines.
+   Coverage-MCP has no accepted independent receipt after its prior daemon
+   health/time-out failure; the #468 report is available, but its independent
+   review is not accepted and it does not include the local follow-up commit. See the
+   [coverage status](../coverage.md#current-unified-coverage-status-2026-10-29).
+   Reuse completed unchanged Linux parity and package receipts; do not rerun
+   those locally.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions

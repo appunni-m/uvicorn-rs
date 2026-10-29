@@ -1197,6 +1197,25 @@ except KeyboardInterrupt:
         raise
 
     def kill_server_process_group() -> None:
+        if os.name == "nt":
+            # Multi-worker Uvicorn leaves descendants holding the parent's
+            # output handles. Killing only the supervisor can leave
+            # communicate() waiting for those handles to close.
+            try:
+                completed = subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=5,
+                    check=False,
+                )
+                if completed.returncode != 0 and process.poll() is None:
+                    process.kill()
+            except (OSError, subprocess.TimeoutExpired):
+                if process.poll() is None:
+                    process.kill()
+            return
         if process_options.get("start_new_session"):
             try:
                 os.killpg(process.pid, signal.SIGKILL)
@@ -1523,6 +1542,8 @@ except KeyboardInterrupt:
                 raise RuntimeError(
                     "signal-escalation ASGI task did not enter its hold before shutdown"
                 )
+        if response is not None:
+            time.sleep(request.get("post_response_settle_seconds", 0))
         for index, signal_name in enumerate(shutdown_signal_names):
             if process.poll() is not None:
                 break
