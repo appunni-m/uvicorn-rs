@@ -6311,6 +6311,8 @@ def stop_server(
         return process.returncode, server.get("captured_log", "")[-6000:]
     if process.poll() is None:
         server["harness_stop_requested"] = True
+        if graceful or signal_number is not None:
+            server["graceful_signal_requested"] = True
         api_control_path = server.get("api_control_path")
         if api_control_path is not None:
             api_control_path.touch()
@@ -11095,6 +11097,7 @@ def execute_case(
                     # on Windows, which prevents the held response from
                     # exercising graceful drain. Ctrl+Break is Uvicorn's
                     # graceful shutdown signal for this process group.
+                    server["graceful_signal_requested"] = True
                     server["process"].send_signal(signal.CTRL_BREAK_EVENT)
                 else:
                     server["process"].terminate()
@@ -12996,16 +12999,15 @@ def run_python_api_probe(
         str(ROOT / "tests/parity/python_api_probe.py"),
         json.dumps(probe_api, sort_keys=True, separators=(",", ":")),
     ]
-    # The probe can spend its request deadline waiting for a response, then
-    # spend a second deadline waiting for graceful shutdown.
-    probe_timeout = max(
-        10,
-        2 * run_http.get("timeout_seconds", 5) + 10
-        if "run_http" in case["api"]
-        else run_http_reload["timeout_seconds"] + 5
-        if run_http_reload is not None
-        else 10,
-    )
+    # The probe can use one deadline for startup/request, another for reload,
+    # and a final one for graceful shutdown. Keep the outer process bound above
+    # the work it is supervising so timeout evidence comes from the probe.
+    if "run_http" in case["api"]:
+        probe_timeout = max(10, 2 * run_http.get("timeout_seconds", 5) + 10)
+    elif run_http_reload is not None:
+        probe_timeout = max(10, 3 * run_http_reload["timeout_seconds"] + 10)
+    else:
+        probe_timeout = 10
     probe_options = {}
     if os.name == "nt" and (
         "run_http" in case["api"] or "run_http_reload" in case["api"]
@@ -14322,6 +14324,12 @@ def execute_profile(
                             case.get("lifecycle", {}).get("shutdown_signal") == "SIGINT"
                             for case in server["attempted_cases"]
                         )
+                    )
+                    or (
+                        os.name == "nt"
+                        and exit_code == 3
+                        and server.get("graceful_signal_requested") is True
+                        and "Finished server process [" in captured_log
                     )
                 )
                 expected_startup_error = server.get("startup_failed", False)

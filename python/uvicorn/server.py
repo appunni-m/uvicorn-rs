@@ -206,6 +206,14 @@ class Server:
             self._inherited_socket = socket.socket(fileno=os.dup(self.config.fd))
             sockets = [self._inherited_socket]
 
+        if sockets is not None and os.name == "nt":
+            # Uvicorn's Server.startup listens on sockets passed by its
+            # multiprocess/reload supervisors. Config.bind_socket only binds
+            # them, so keep that startup step before the native transport
+            # duplicates a Windows listener handle.
+            for sock in sockets:
+                sock.listen(self.config.backlog)
+
         try:
             native_server = NativeServer(
                 _track_server_state(self.config.loaded_app, self.server_state),
