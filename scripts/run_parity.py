@@ -992,6 +992,7 @@ def load_contract(
         "server_started",
         "startup_failure_wait_result", "dropped_control_wait_result",
         "serve_raised", "serve_timed_out", "server_exit_code",
+        "serve_exception_class", "serve_exception_message",
         "client_certificate_rejected", "negotiated_tls_version", "negotiated_tls_cipher",
         "process_stderr_has_unhandled_task_warning",
         "first_response_body_base64", "second_response_body_base64", "reload_observed",
@@ -13210,6 +13211,8 @@ def run_python_api_probe(
                     "serve_raised",
                     "serve_timed_out",
                     "server_exit_code",
+                    "serve_exception_class",
+                    "serve_exception_message",
                 )
             }
         )

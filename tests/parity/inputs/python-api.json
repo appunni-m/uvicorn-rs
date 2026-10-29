@@ -974,6 +974,7 @@
           "method": "GET",
           "path": "/python-api-explicit-workers-overrides-web-concurrency",
           "shutdown_signal": "SIGINT",
+          "post_response_settle_seconds": 0.25,
           "timeout_seconds": 15,
           "lifespan": "auto",
           "invocation": "module-cli",
@@ -2158,9 +2159,9 @@
           "message": "nan-timeout-closes-before-message",
           "ws_max_size": 64,
           "ws_max_queue": 1,
-          "ws_ping_interval": 0.1,
+          "ws_ping_interval": 0.01,
           "ws_ping_timeout": {"$float": "nan"},
-          "keepalive_idle_seconds": 0.35,
+          "keepalive_idle_seconds": 0.5,
           "timeout_seconds": 5
         }
       }
@@ -3162,6 +3163,7 @@
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [["X-Python-API", "wsgi"]],
           "shutdown_signal": "SIGINT",
+          "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
           "lifespan": "auto",
           "invocation": "api",

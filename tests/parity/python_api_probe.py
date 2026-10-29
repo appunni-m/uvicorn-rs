@@ -1183,14 +1183,19 @@ except KeyboardInterrupt:
     shutdown_signal_name = request.get("shutdown_signal", "SIGINT")
     if shutdown_signal_name not in {"SIGINT", "SIGTERM"}:
         raise ValueError("run_http shutdown_signal must be SIGINT or SIGTERM")
+    previous_windows_sigint_handler = None
     if os.name == "nt":
         process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        # The runner gives this probe a private console. Ignore Ctrl+Break in
-        # the probe so a console-wide event can stop the server tree without
-        # terminating its observer process or the parity coordinator.
+        # The runner gives this probe a private console. Ignore the console
+        # event used for shutdown so it reaches the server without
+        # terminating this observer process or the parity coordinator.
         previous_windows_sigbreak_handler = signal.signal(
             signal.SIGBREAK, signal.SIG_IGN
         )
+        if shutdown_signal_name == "SIGINT":
+            previous_windows_sigint_handler = signal.signal(
+                signal.SIGINT, signal.SIG_IGN
+            )
     else:
         if worker_stall_directory is not None or worker_control_signal_names:
             process_options["start_new_session"] = True
@@ -1231,6 +1236,8 @@ except KeyboardInterrupt:
             worker_stall_directory.cleanup()
         if previous_windows_sigbreak_handler is not None:
             signal.signal(signal.SIGBREAK, previous_windows_sigbreak_handler)
+        if previous_windows_sigint_handler is not None:
+            signal.signal(signal.SIGINT, previous_windows_sigint_handler)
         raise
 
     def kill_server_process_group() -> None:
@@ -1588,9 +1595,9 @@ except KeyboardInterrupt:
                 time.sleep(0.2)
             try:
                 if os.name == "nt":
-                    # A CTRL_BREAK broadcast reaches the server's worker tree
-                    # even when multiprocessing children share one process
-                    # group. The private console above contains the event.
+                    # Use the matching console control event. Ctrl+C is the
+                    # Windows form of SIGINT; Ctrl+Break supplies the graceful
+                    # Windows equivalent for SIGTERM.
                     import ctypes
 
                     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -1599,9 +1606,12 @@ except KeyboardInterrupt:
                         ctypes.c_uint,
                     ]
                     kernel32.GenerateConsoleCtrlEvent.restype = ctypes.c_int
-                    if not kernel32.GenerateConsoleCtrlEvent(
-                        signal.CTRL_BREAK_EVENT, 0
-                    ):
+                    control_event = (
+                        signal.CTRL_C_EVENT
+                        if signal_name == "SIGINT"
+                        else signal.CTRL_BREAK_EVENT
+                    )
+                    if not kernel32.GenerateConsoleCtrlEvent(control_event, 0):
                         raise ctypes.WinError(ctypes.get_last_error())
                 else:
                     process.send_signal(getattr(signal, signal_name))
@@ -1689,6 +1699,8 @@ except KeyboardInterrupt:
             bind_conflict_listener.close()
         if previous_windows_sigbreak_handler is not None:
             signal.signal(signal.SIGBREAK, previous_windows_sigbreak_handler)
+        if previous_windows_sigint_handler is not None:
+            signal.signal(signal.SIGINT, previous_windows_sigint_handler)
 
 
 def run_websocket_observation(request: dict) -> dict:
@@ -2949,19 +2961,27 @@ async def server_lifespan_startup_observation(request: dict) -> dict[str, object
     _lifespan_startup_task = task
     raised = False
     timed_out = False
+    serve_exception_class = None
+    serve_exception_message = None
     try:
         try:
             await asyncio.wait_for(asyncio.shield(task), timeout=request["timeout_seconds"])
         except TimeoutError:
             timed_out = True
-        except BaseException:
+        except BaseException as error:
             raised = True
+            serve_exception_class = (
+                f"{type(error).__module__}.{type(error).__qualname__}"
+            )
+            serve_exception_message = str(error)[:512]
         return {
             "server_started_before_shutdown": bool(server.started),
             "serve_task_finished_before_shutdown": task.done(),
             "serve_raised": raised,
             "serve_timed_out": timed_out,
             "server_exit_code": None,
+            "serve_exception_class": serve_exception_class,
+            "serve_exception_message": serve_exception_message,
         }
     finally:
         if not task.done():
@@ -3340,6 +3360,10 @@ def main() -> None:
                 "serve_raised": True,
                 "serve_timed_out": False,
                 "server_exit_code": error.code,
+                "serve_exception_class": (
+                    f"{type(error).__module__}.{type(error).__qualname__}"
+                ),
+                "serve_exception_message": str(error)[:512],
             }
         observations = {"server_lifespan_startup": observation}
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))

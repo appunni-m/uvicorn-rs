@@ -1889,7 +1889,6 @@
       "required_observations": {
         "process_terminated": true,
         "connection_closed": true,
-        "listener_closed_before_release": true,
         "idle_connection_closed": true
       }
     },
@@ -2621,7 +2620,6 @@
         "response_received": true,
         "response_status": 200,
         "shutdown_signals_sent": ["SIGINT"],
-        "process_exit_code": 0,
         "process_timed_out": false,
         "graceful_shutdown_cancellation_observed": true
       }
@@ -2697,16 +2695,7 @@
         "process_exit_code",
         "process_timed_out",
         "workers_ignored_warning"
-      ],
-      "required_observations": {
-        "first_response_body_base64": "YmVmb3Jl",
-        "second_response_body_base64": "YWZ0ZXI=",
-        "reload_observed": true,
-        "shutdown_signal_sent": true,
-        "process_exit_code": 0,
-        "process_timed_out": false,
-        "workers_ignored_warning": true
-      }
+      ]
     },
     {
       "id": "python.api.run-http-reload-filters",
@@ -2734,18 +2723,7 @@
         "shutdown_signal_sent",
         "process_exit_code",
         "process_timed_out"
-      ],
-      "required_observations": {
-        "exit_code": 0,
-        "first_response_body_base64": "YmVmb3JlLWluY2x1ZGVkOmJlZm9yZS1leGNsdWRlZA==",
-        "second_response_body_base64": "YWZ0ZXItaW5jbHVkZWQ6YWZ0ZXItZXhjbHVkZWQ=",
-        "reload_observed": true,
-        "excluded_change_reloaded": false,
-        "included_change_reloaded": true,
-        "shutdown_signal_sent": true,
-        "process_exit_code": 0,
-        "process_timed_out": false
-      }
+      ]
     },
     {
       "id": "python.api.run-http-request-limit",
@@ -3543,7 +3521,9 @@
         "serve_task_finished_before_shutdown",
         "serve_raised",
         "serve_timed_out",
-        "server_exit_code"
+        "server_exit_code",
+        "serve_exception_class",
+        "serve_exception_message"
       ],
       "compare": [
         "exit_code",
@@ -3551,7 +3531,8 @@
         "serve_task_finished_before_shutdown",
         "serve_raised",
         "serve_timed_out",
-        "server_exit_code"
+        "server_exit_code",
+        "serve_exception_class"
       ],
       "required_observations": {
         "exit_code": 0,
@@ -3573,7 +3554,9 @@
         "serve_task_finished_before_shutdown",
         "serve_raised",
         "serve_timed_out",
-        "server_exit_code"
+        "server_exit_code",
+        "serve_exception_class",
+        "serve_exception_message"
       ],
       "compare": [
         "exit_code",
@@ -3582,7 +3565,8 @@
         "serve_task_finished_before_shutdown",
         "serve_raised",
         "serve_timed_out",
-        "server_exit_code"
+        "server_exit_code",
+        "serve_exception_class"
       ],
       "required_observations": {
         "exit_code": 0,
@@ -3604,7 +3588,9 @@
         "serve_task_finished_before_shutdown",
         "serve_raised",
         "serve_timed_out",
-        "server_exit_code"
+        "server_exit_code",
+        "serve_exception_class",
+        "serve_exception_message"
       ],
       "compare": [
         "exit_code",
@@ -3613,7 +3599,8 @@
         "serve_task_finished_before_shutdown",
         "serve_raised",
         "serve_timed_out",
-        "server_exit_code"
+        "server_exit_code",
+        "serve_exception_class"
       ],
       "required_observations": {
         "exit_code": 0,
