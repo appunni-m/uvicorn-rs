@@ -5,32 +5,32 @@
 ## Current source status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
+[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
 checked committed PR head
-`51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The Linux x86-64 and macOS ARM64
-installed-wheel public matrices passed **717/717**; Rust quality/MSRV, native
-framework composition, and release handoff also passed. Windows candidate
-parity stopped before its cases because the oracle dependency check required
-`uvloop`, which is unavailable there. Linux and macOS artifact identity
-recording failed because `maturin` was not on PATH; Linux clean-consumer checks
-passed, and the macOS wheel passed its public matrix. The three-repeat coverage
-matrix attributed all 1,071 cases but missed its 100% gate at 13,962/14,134
-regions and 10,290/10,377 lines. Local working-tree fixes make `uvloop`
-platform-specific and resolve the pinned Maturin version through `uvx`; hosted
-confirmation is pending. See
-[CI #466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
-and the [current coverage status](coverage.md#current-unified-coverage-status-2026-10-22).
+`c0104b3775416c5dfd305f6b5fe713b0cad1a995`, based on `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux x86-64 installed-wheel
+public parity passed **717/717**; Rust quality/MSRV, native composition, and
+release handoff also passed. The macOS ARM64 candidate lane passed its
+platform-applicable parity and artifact checks. Linux candidate packaging,
+clean consumers, and artifact identity passed. Windows installed its candidate
+wheel but stopped before parity cases because the H3 probe path omitted `.exe`.
+The three-repeat coverage step is still running and has not uploaded a report.
+
+The local follow-up is committed as `dacecf2fd`; it fixes the Windows H3 client
+path and the QUIC TLS coverage fault. The focused TLS fault input passed 1/1,
+but that selected result is not full coverage or cross-platform parity evidence.
+CI #467 started before this commit. See the
+[current coverage status](coverage.md#current-unified-coverage-status-2026-10-29).
 
 Two newly added fragmented WebSocket cases pass selected local oracle
 comparisons, including one `permessage-deflate` message. They use dirty local
 source and are not part of CI #462. Their receipts are recorded below.
 
-These hosted results cover Linux x86-64 and macOS ARM64 on CPython 3.12.13; they
-do not establish Windows, other declared Python versions, or full Uvicorn
-compatibility. CI #464 and earlier parity runs are historical. Coverage,
-independent Coverage-MCP acceptance, and the remaining platform/Python matrix
-remain open. Benchmarks remain behind compatibility acceptance.
+These hosted results cover Linux x86-64 and the platform-applicable macOS ARM64
+candidate inputs on CPython 3.12.13. They do not establish Windows parity, other
+declared Python versions, or full Uvicorn compatibility. Coverage and
+independent Coverage-MCP acceptance remain open. Benchmarks remain behind
+compatibility acceptance.
 
 ## Focused TLS parity follow-up on the local macOS source (2026-10-28)
 

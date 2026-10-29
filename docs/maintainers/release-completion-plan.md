@@ -38,40 +38,35 @@ belong to the release tasks rather than being copied into every prerequisite.
 ## Execution order and stopping rules
 
 1. CI
-   [#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
-   completed on committed PR head
-   `51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, against `main` at
+   [#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
+   is running on committed PR head
+   `c0104b3775416c5dfd305f6b5fe713b0cad1a995`, against `main` at
    `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
-   framework composition, release-evidence handoff, and 717/717 installed-wheel
-   parity on Linux x86-64 and macOS ARM64 passed. Its unified three-repeat
-   matrix attributed all 1,071 cases but missed the 100% gate at 13,962/14,134
-   regions and 10,290/10,377 lines. The artifact is ID `12870939134`, archive
-   digest `sha256:592368538dcbff0ba373ca9b3640676b80cc1ca7fc7abc572f8a0682f71b7a89`,
-   report SHA-256 `d2f1dc778284e3736b9783fd50e3f19589c0608db04a42ee3c380e81c11597a6`.
-   Windows parity stopped before its cases because the oracle dependency check
-   required unavailable `uvloop`; Linux and macOS candidate identity recording
-   failed because pinned `maturin` was not on PATH. Linux consumer checks
-   passed, and the macOS candidate wheel passed 717/717.
+   framework composition, release-evidence handoff, and Linux installed-wheel
+   parity (717/717) passed. The macOS ARM64 candidate lane passed its
+   platform-applicable parity and artifact checks; the Linux candidate artifact
+   and clean-consumer checks also passed. Windows installed the candidate wheel
+   but stopped before cases because the H3 probe path omitted `.exe`. The
+   three-repeat coverage step is still running and has not uploaded a report.
+   The Windows failure log is retained in the task history.
 
-   The local uncommitted fix makes `uvloop` platform-specific, selects asyncio
-   on Windows, and records Maturin through the pinned `uvx` invocation. Focused
-   syntax, manifest/platform selection, and pinned-tool checks passed. The PR
-   workflow cancels its previous run when a new commit is pushed. Run only the
-   affected selected parity and evidence groups locally, then commit and push
-   the platform/evidence fix and aligned documentation with any related
-   coverage inputs as one reviewed batch. Use one hosted run for that changed
-   source. Docs run #183 passed for the previously committed source; the
-   updated pages need a fresh deployment.
+   Commit `dacecf2fd` contains the Windows executable resolver, a coverage fault
+   fix that drives Quinn's real TLS conversion error, and a corrected coverage
+   documentation link. The selected fault case passed 1/1 with zero retries and
+   attributes six previously missing regions in
+   `crates/uvicorn-rs/src/http3.rs:84-89`; its selected report is not full-gate
+   evidence. Strict local MkDocs validation passed. These changes were made
+   after #467 started, so the run cannot validate them. Wait for its report
+   before pushing, then send one reviewed batch and use one hosted run for the
+   changed source. Docs run #184 failed on the old anchor; the local fix awaits
+   hosted deployment.
 
-   CI #466 is gap-mapping evidence, not coverage acceptance: its recorded Rust
-   source hashes match the branch, but the local manifest and runner changes
-   are not included. Coverage-MCP could not return an independent receipt after
-   its daemon failed health checks and timed out following restart. The saved
-   LLVM report maps 6 regions / 4 lines in `crates/uvicorn-rs/src/http3.rs` and
-   166 regions / 83 lines in `src/lib.rs`; see
-   [coverage status](../coverage.md#current-unified-coverage-status-2026-10-29).
-   The old macOS TLS fixture issue is covered by #466's 717/717 hosted macOS
-   parity receipt. Do not rerun unchanged local matrices.
+   CI #467 is gap-mapping evidence until its artifact is available and is
+   bound to `c0104b377`, not the later local commit. Coverage-MCP still has no
+   accepted independent receipt after its prior daemon health/time-out failure.
+   See the [coverage status](../coverage.md#current-unified-coverage-status-2026-10-29).
+   Reuse completed unchanged Linux/macOS parity and package slices; do not
+   rerun them locally.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions

@@ -8,29 +8,21 @@
 ## Current unified coverage status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
-checked committed PR head `51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, based
-on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its three-repeat
-matrix attributed all 1,071 cases, but the 100% gate failed at
-**13,962/14,134 regions** and **10,290/10,377 lines** (172 regions and 87
-lines uncovered). The retained artifact is ID `12870939134`, archive digest
-`sha256:592368538dcbff0ba373ca9b3640676b80cc1ca7fc7abc572f8a0682f71b7a89`,
-and report SHA-256
-`d2f1dc778284e3736b9783fd50e3f19589c0608db04a42ee3c380e81c11597a6`. The
-matrix passed its cases; only the coverage threshold failed.
+[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
+checked committed PR head `c0104b3775416c5dfd305f6b5fe713b0cad1a995`, based
+on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its unified
+attribution and three-repeat step is still running, so there is no current full
+coverage report or percentage to report. Linux public parity passed 717/717;
+the macOS ARM64 candidate lane and Linux candidate package/consumer lane passed.
+Windows installed the candidate wheel but stopped before cases because the H3
+probe path omitted `.exe`.
 
-The same run passed 717/717 installed-wheel public parity cases on Linux
-x86-64 and macOS ARM64, plus release handoff, native composition, Rust minimum,
-and Rust quality. Windows candidate parity stopped before cases because its
-oracle dependency check required `uvloop`, which is unavailable there. Linux
-and macOS candidate identity recording failed because pinned `maturin` was not
-on PATH; Linux clean-consumer checks passed and the macOS wheel passed parity.
-The local working tree contains focused fixes for Windows dependency selection
-and the pinned-tool lookup; those inputs and runner changes are not covered by
-CI #466. A local gap map identifies 6 uncovered regions / 4 lines in
-`crates/uvicorn-rs/src/http3.rs` and 166 regions / 83 lines in `src/lib.rs`.
-It is diagnostic only because CI used a synthetic merge revision and the local
-manifest/runner have changed since that run.
+Commit `dacecf2fd` fixes the Windows path and the QUIC TLS coverage fault. Its
+selected case passed 1/1 with no retries and attributes six previously missing
+regions at `crates/uvicorn-rs/src/http3.rs:84-89`. The selected report is
+incomplete by design and does not establish the 100% gate. CI #467 predates
+that commit; use its completed report as a gap map only. The next hosted run
+must bind to the newer source and re-establish the complete result.
 
 Coverage-MCP could not return an independent review: its local daemon failed
 health checks, then timed out again after a restart. No review receipt was
@@ -51,9 +43,11 @@ hashes match the branch. A compact Coverage-MCP projection grouped the missing
 regions into 52 functions, but reported `source=unverified`; independent
 acceptance remains open.
 
-CI #466 confirms Linux and macOS public parity, including the earlier TLS
-fixture change. The local platform/evidence fixes and this documentation update
-are not included in that run and still need hosted confirmation.
+The prior CI #466 report remains historical gap-mapping evidence. Coverage-MCP
+could not return an independent review: its local daemon failed health checks,
+then timed out after a restart. No review receipt was created, and `7t4g`
+remains open. Retry the independent review after a complete report for the
+accepted source is available.
 
 The post-change focused receipt is local-only:
 `target/coverage-diagnostic/ci461-startup-shutdown-fault-fix/coverage-report.json`,

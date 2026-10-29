@@ -26,26 +26,28 @@ candidates. The PyPI trusted publisher tuple is
 **appunni-m/uvicorn-rs / release.yml / pypi**.
 
 PR #19 remains a draft. CI
-[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
-checked committed PR head **51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61**, based
+[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
+checked committed PR head **c0104b3775416c5dfd305f6b5fe713b0cad1a995**, based
 on main **86e72e181d00feca1b4db7f30377d5d9d4345b83**. Release handoff, native
 framework composition, exact Rust minimum, Rust format/lint/feature/docs, and
-717/717 installed-wheel public parity on Linux x86-64 and macOS ARM64 passed.
-The Windows candidate job stopped before cases because the oracle dependency
-check still required `uvloop`, which is unavailable on Windows. Linux and
-macOS candidate builds completed, but their identity recorders failed because
-the pinned `maturin` executable was not on PATH. Linux clean-consumer checks
-passed, and the macOS candidate wheel passed 717/717 parity; no complete
-candidate identity bundle was produced. The unified three-repeat coverage
-matrix attributed all 1,071 cases but missed the 100% gate at 13,962/14,134
-regions and 10,290/10,377 lines.
+717/717 installed-wheel public parity on Linux x86-64 passed. The macOS ARM64
+candidate lane passed its platform-applicable parity and artifact checks. The
+Linux candidate artifact is ID `12873042760` with digest
+`sha256:235ab8dc402ab7e21d5dbd859e5270cbed1ec8cfb3ceb96ab4080145027081ec`; its
+clean-consumer and identity checks passed. The macOS candidate artifact is ID
+`12872829196` with digest
+`sha256:25fca7c771538d8eb35bdb32a9d4bd434299a49fe7f2fabd9e1e2e494bf036a8`.
+Windows installed its candidate wheel but stopped before parity cases because
+the H3 probe path omitted the `.exe` suffix. The unified three-repeat coverage
+step is still running; no report has been uploaded.
 
-Local working-tree fixes make `uvloop` platform-specific and resolve the
-pinned Maturin version through `uvx`. Focused syntax, platform-selection,
-manifest, and pinned-tool checks passed locally; the fixes still need hosted
-confirmation. Docs run
-[#183](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137733)
-passed for the committed source.
+Commit `dacecf2fd`, made after CI #467 started, fixes the Windows H3 client
+path and the focused QUIC TLS coverage fault; a local selected fault case passed
+1/1. It also fixes a documentation anchor. Strict local MkDocs validation
+passed, but Docs run
+[#184](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243105)
+failed on the earlier anchor and awaits a fresh deployment. The new source and
+documentation still need hosted confirmation.
 
 The preceding CI [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
 passed **707/707** public parity cases on Linux x86-64 for commit
@@ -56,11 +58,12 @@ pre-4f7 source and must be rebuilt for the current candidate. The standalone
 HTTP/3 consumer compiles against the current local crate source, but that is
 not a clean published-artifact receipt.
 
-The current release blockers are the exact-source 100% coverage result and its
-independent Coverage-MCP receipt, completion of Windows and broader Uvicorn
-0.54.0 compatibility evidence, hosted candidate identity bundles and clean
-consumers, and the matched benchmarks that follow compatibility. CI #466's
-717-case Linux and macOS parity receipts are not the full compatibility matrix.
+The current release blockers are an exact-source 100% coverage result and its
+independent Coverage-MCP receipt, complete Windows and broader Uvicorn 0.54.0
+compatibility evidence, exact-source candidate artifacts and clean consumers,
+and the matched benchmarks that follow compatibility. CI #467 is not exact
+evidence for the later `dacecf2fd` source, and its Windows matrix did not reach
+any cases.
 The previous three-system benchmark is incomplete: Linux ARM64 Hypercorn
 HTTP/3 failed in a slow-reader case, and an HTTP/1 upload timeout remains
 unresolved. Existing measurements do not support a general performance-gain
