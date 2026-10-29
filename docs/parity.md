@@ -4,37 +4,39 @@
 
 ## Current source status (2026-10-29)
 
-PR #19 remains a draft. CI
-[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
-checked committed PR head
-`b44029eb2119bb0a442946030d50d22b9160370f`, based on `main` at
+PR #19 remains a draft. The latest hosted run is
+[#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964), bound
+to committed head `de1c2f351a73654e563231385aae426cff23fcf4` and main base
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux x86-64 installed-wheel
-public parity passed **718/718**; Rust quality/MSRV, native composition, and
-release handoff also passed. Linux candidate packaging and clean-consumer
-checks passed. The macOS ARM64 candidate lane ran 718 cases and had one
-chunked-WSGI log-order mismatch. The Windows candidate lane reported factory,
-multi-worker, and signal failures, then exited `-1073741510` before writing a
-parity report. The unified three-repeat coverage job completed 1,331 indexed
-cases with complete attribution and no transient infrastructure failures, but
-failed at 13,984/14,154 regions and 10,303/10,387 lines. The Python 3.9
-wheel-install job was skipped.
+public parity passed 718/718, and macOS ARM64 candidate parity passed 718/718.
+Rust quality/MSRV, native FastAPI-RS composition, and release-evidence handoff
+also passed.
 
-The local follow-up adds a 250 ms settle interval to the single chunked-WSGI
-input; that selected case passed once on macOS ARM64. Windows HTTP probes now
-run in a private console, allow time for both request and graceful shutdown, and
-kill their server process tree during cleanup. These harness changes are
-committed locally but remain unverified on Windows and were not part of CI
-#468. See the [current coverage status](coverage.md#current-unified-coverage-status-2026-10-29).
+Windows x86-64 built and installed the candidate wheel, but parity did not
+complete: 684/689 executed cases passed; four multi-worker cases differed in
+logs, including one Uvicorn oracle `WinError 10022` worker-start failure. The
+TLS active-stream case failed in the oracle with `IncompleteRead`, leaving two
+later TLS cases not run. The Windows candidate sdist and downstream consumer
+steps were skipped. Retained artifact
+[12918364774](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964/artifacts/12918364774)
+has archive SHA-256
+`ba6e9939d7e5a0940feffcca448abc32ff722caf0d39e1d6e8bfe734d1d53649`.
 
-Two newly added fragmented WebSocket cases pass selected local oracle
-comparisons, including one `permessage-deflate` message. They use dirty local
-source and are not part of CI #462. Their receipts are recorded below.
+The exact-source unified coverage job is still running in #479; see the
+[current coverage status](coverage.md#current-unified-coverage-status-2026-10-29).
+Docs run [#196](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918327024)
+passed for the committed source. A local, unpushed harness commit
+`fbdd375a958038d3506a60b6451007b993a646bc` removes only a Windows
+scheduler-dependent termination notice from normalized logs and records more
+failure diagnostics. Its four selected worker cases passed 4/4 on macOS ARM64;
+this is not Windows evidence. The commit does not resolve the oracle worker
+start or TLS failure.
 
-These hosted results cover Linux x86-64 and the platform-applicable macOS ARM64
-candidate inputs on CPython 3.12.13. They do not establish Windows parity, other
-declared Python versions, or full Uvicorn compatibility. Coverage and
-independent Coverage-MCP acceptance remain open. Benchmarks remain behind
-compatibility acceptance.
+Full Windows parity, the complete current CLI/API/process contract, exact-source
+100% coverage, the independent Coverage-MCP review, and the clean cross-platform
+candidate remain open. Benchmark work stays behind compatibility acceptance.
+The maintainer will run the real FastAPI application trial after repository
+compatibility work is handed off.
 
 ## Focused TLS parity follow-up on the local macOS source (2026-10-28)
 

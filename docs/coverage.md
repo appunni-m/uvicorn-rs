@@ -8,31 +8,32 @@
 ## Current unified coverage status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
-checked committed PR head `b44029eb2119bb0a442946030d50d22b9160370f`, based
-on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The unified matrix
-completed all 1,331 indexed cases with complete attribution and zero transient
-infrastructure failures. Its 100% gate failed at **13,984/14,154 regions**
-(170 missing) and **10,303/10,387 lines** (84 missing). Artifact
-`12880510857` has archive digest
-`sha256:66cc1b9f46dabf33b00268e7bc10deb61a5a5d23b0054a014c6d02b5d1e6edbb`.
-The report is for the CI merge commit
-`1f70ea46dfa255ac90e41b115b997354b8457a01`, which combines the PR head above
-with the stated main base. CI #467 totals remain historical.
+[#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964)
+checked committed PR head `de1c2f351a73654e563231385aae426cff23fcf4` against
+`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The unified job
+`123604808228` is still attributing all indexed cases and repeating the full
+matrix three times; it has not produced coverage totals or an artifact yet.
 
-Other #468 evidence: Linux public parity passed 718/718 and the Linux candidate
-artifact and clean consumers passed. The macOS ARM64 candidate lane had one
-WSGI log-order mismatch. The Windows candidate lane failed after factory,
-multi-worker, and signal cases and exited before writing a parity report. The
-local follow-up changes to those cases and the probe harness are not included
-in #468. Coverage remains open until a report for the follow-up source reaches
-100% regions and lines with passing repeats and complete attribution.
+Other exact-head results in #479: Rust quality/MSRV, native FastAPI-RS
+composition, and release-evidence handoff passed. The Linux installed-wheel
+public matrix passed 718/718; the macOS ARM64 candidate parity matrix passed
+718/718. The Windows candidate lane failed parity with 684/689 executed cases
+passing, four worker log mismatches, one Uvicorn oracle `WinError 10022` worker
+start failure, and one TLS oracle `IncompleteRead`; two following cases were not
+run. The Windows candidate sdist and consumer steps were skipped. Docs run
+[#196](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918327024) passed.
 
-Coverage-MCP could not return an independent review: its local daemon failed
-health checks, then timed out again after a restart. No review receipt was
-created, and `7t4g` remains open. The #468 report is available, but no accepted
-independent receipt is bound to the follow-up source. The saved historical LLVM
-report can guide targeted coverage work but does not satisfy acceptance.
+A local harness commit `fbdd375a958038d3506a60b6451007b993a646bc` is not yet
+pushed. Its selected worker batch passed 4/4 on macOS ARM64. The change
+normalizes only the Windows scheduler-dependent child-termination notice and
+improves diagnostics; it does not resolve the oracle worker-start or TLS
+failure. Therefore #479 will not be relabeled as evidence for that commit.
+
+Coverage-MCP has no accepted independent receipt. `7t4g` remains open; the
+review must be bound to a complete report for the accepted exact-main source.
+The previous exact-main report, CI #396, failed at 10,962/11,375 regions and
+8,130/8,438 lines and predates this source. Do not start the independent review
+or reuse the old report as current acceptance.
 
 ### Prior completed unified coverage result (CI #464)
 

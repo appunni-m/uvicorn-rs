@@ -13,52 +13,47 @@ published.
 
 ## Current status (2026-10-29)
 
-PR #19 remains a draft. CI
-[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
-checked committed PR head `b44029eb2119bb0a442946030d50d22b9160370f`, based
-on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its Linux
-installed-wheel public matrix passed 718/718; Rust quality/MSRV, native
-composition, and release-handoff jobs also passed. Linux candidate packaging
-and clean-consumer checks passed. The macOS ARM64 candidate lane had one
-chunked-WSGI log-order mismatch. The Windows lane reported factory,
-multi-worker, and signal failures, then exited `-1073741510` before writing its
-parity report. The unified three-repeat coverage job completed 1,331 indexed
-cases with complete attribution and zero transient infrastructure failures,
-but failed at 13,984/14,154 regions and 10,303/10,387 lines. A focused local macOS rerun passed
-after adding a settle interval to that one input; Windows console isolation,
-timeout, and process-tree cleanup changes are still unverified on Windows.
-These local changes and the updated docs are not included in CI #468.
+PR #19 remains a draft. The latest hosted run is
+[#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964),
+bound to committed head `de1c2f351a73654e563231385aae426cff23fcf4` based on
+`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV,
+native framework composition, release-evidence handoff, and Linux installed
+wheel parity (718/718) passed. macOS ARM64 candidate parity passed 718/718.
+Windows built and installed its candidate wheel but did not complete parity:
+684/689 executed cases passed; four worker cases differed in logs, one Uvicorn
+oracle worker hit `WinError 10022`, and a TLS active-stream oracle case failed
+with `IncompleteRead`, leaving two following cases not run. Windows sdist and
+consumer steps were skipped. The exact-source coverage job is still running;
+its totals are not available. See the
+[current coverage status](coverage.md#current-unified-coverage-status-2026-10-29)
+and [parity evidence](parity.md).
 
-The package metadata declares Python `>=3.9`. CI #468 skipped installed-wheel
-import on Python 3.9 after the Windows candidate lane failed. A passing floor
-check would not establish Uvicorn 0.54.0 parity:
-the pinned upstream release declares Python `>=3.10` in its
-[versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml).
-The Uvicorn 0.54.0 parity matrix therefore starts at Python 3.10. Any Python
-3.9 runtime-support claim is separate and remains unverified by the install
-check.
+A local, unpushed harness commit
+`fbdd375a958038d3506a60b6451007b993a646bc` normalizes one scheduler-dependent
+Windows worker log and adds failure attribution. Four selected worker cases
+passed 4/4 on macOS ARM64, which does not establish Windows behavior. The
+Windows worker-start and TLS failures remain unresolved. Docs run #196 passed
+for the committed source; the local docs refresh still needs hosted validation.
 
-The Linux result is exact-host installed-wheel evidence, not proof of the
-complete Uvicorn contract. macOS parity has one mismatch; Windows parity has no
-accepted report. The separate Python 3.9 wheel-install check, other declared
-Python versions, a passing 100% coverage result, and the independent
-Coverage-MCP receipt remain open.
+The package metadata declares Python `>=3.9`. Uvicorn 0.54.0 declares Python
+`>=3.10` in its [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml),
+so Uvicorn compatibility evidence starts at Python 3.10. The Python 3.9
+wheel-install check was skipped in #479 and remains separate from parity.
 
 | What you need | Current state |
 | --- | --- |
-| Install from PyPI | Not available. The uvicorn-rs distribution has not been published. |
-| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #468 passed 718 public cases on Linux x86-64; full CLI and settings parity is not proved. |
-| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #468 passed the Linux public matrix; the complete programmatic contract remains open. |
-| Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. CI #468 passed 718/718 on Linux and 717/718 on macOS; Windows parity has no accepted report. |
-| Use workers, reload, sockets, or process controls | Selected parity cases cover some worker, reload, socket, signal, and graceful-shutdown behavior. Other combinations, platforms, and failure paths remain unverified. |
-| Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See benchmark status. |
-| Use the current release candidate on Windows | Not verified. CI #468 failed during Windows factory, multi-worker, and signal parity and exited before producing its report. The current local harness fixes still need a hosted Windows run. |
+| Install from PyPI | Not available. The `uvicorn-rs` distribution has not been published. |
+| Run the `uvicorn` command | The source exposes `uvicorn` and `python -m uvicorn`. Linux and macOS public matrices passed 718 cases each; full CLI/settings parity remains open. |
+| Import and configure `uvicorn` | The source exposes `run`, `Config`, and `Server`. Linux and macOS public matrices passed; the full programmatic contract remains open. |
+| Serve a Python ASGI app | Linux and macOS public parity passed 718/718. Windows parity is incomplete as described above. |
+| Use workers, reload, sockets, or process controls | Selected cases cover these surfaces, but Windows worker and shutdown behavior remains unresolved; not all combinations have passing platform evidence. |
+| Claim a performance advantage | Not supported. Benchmark work follows compatibility acceptance, and the previous three-system run is incomplete. See benchmark status. |
+| Use the current release candidate on Windows | Not verified. The candidate wheel installed, but parity failed before sdist and consumer verification. |
 
 The passing Linux and macOS matrices do not prove full compatibility. Windows,
 other declared Python versions, and unsupported behaviors still need exact
-evidence. The prior benchmark results do not justify a general speed claim.
-See the [support matrix](support-matrix.md), [parity evidence](parity.md), and
-[release gates](releases.md).
+evidence. The prior benchmark results do not justify a general speed claim. See
+the [support matrix](support-matrix.md) and [release gates](releases.md).
 
 ## Historical diagnostic records
 
