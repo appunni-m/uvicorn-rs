@@ -31,8 +31,9 @@ import time
 import uuid
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Iterator
 from urllib.parse import parse_qs, urlsplit
 
 from cryptography import x509
@@ -6278,7 +6279,11 @@ def stop_server(
     if log.closed:
         log_path = getattr(log, "name", None)
         if isinstance(log_path, (str, os.PathLike)):
-            Path(log_path).unlink(missing_ok=True)
+            cleanup_error = unlink_server_log(Path(log_path))
+            if cleanup_error is None:
+                server.pop("log_cleanup_error", None)
+            else:
+                server["log_cleanup_error"] = cleanup_error
         return process.returncode, server.get("captured_log", "")[-6000:]
     if process.poll() is None:
         server["harness_stop_requested"] = True
@@ -6309,14 +6314,61 @@ def stop_server(
     log.seek(0)
     text = log.read()
     log.close()
+    # Preserve diagnostics even if Windows still has a short-lived reader or
+    # subprocess handle when the profile tries to remove its temporary logs.
+    server["captured_log"] = text
     log_path = getattr(log, "name", None)
     if isinstance(log_path, (str, os.PathLike)):
-        Path(log_path).unlink(missing_ok=True)
+        cleanup_error = unlink_server_log(Path(log_path))
+        if cleanup_error is None:
+            server.pop("log_cleanup_error", None)
+        else:
+            server["log_cleanup_error"] = cleanup_error
     # Lifecycle adapters can stop a process before profile finalization, and
     # profiles can restart several processes. Preserve the complete log so
     # validation cannot lose a panic when a handle is closed or a tail grows.
-    server["captured_log"] = text
     return process.returncode, text[-6000:]
+
+
+def unlink_server_log(path: Path) -> str | None:
+    """Remove a closed server log, retrying transient Windows sharing locks."""
+    for attempt in range(5):
+        try:
+            path.unlink(missing_ok=True)
+            return None
+        except OSError as error:
+            # Windows can report ERROR_SHARING_VIOLATION briefly after the
+            # server process exits. A bounded retry handles that race without
+            # hiding a persistent cleanup failure from the parity result.
+            if os.name != "nt" or getattr(error, "winerror", None) != 32:
+                raise
+            if attempt == 4:
+                return str(error)
+            time.sleep(0.05 * (2**attempt))
+
+
+@contextmanager
+def profile_temporary_directory(
+    prefix: str,
+    cleanup_errors: list[dict[str, Any]],
+    profile_id: str,
+) -> Iterator[str]:
+    """Keep Windows temp cleanup failures in the parity receipt."""
+    temporary = tempfile.TemporaryDirectory(prefix=prefix)
+    try:
+        yield temporary.name
+    finally:
+        try:
+            temporary.cleanup()
+        except OSError as error:
+            if os.name != "nt":
+                raise
+            cleanup_errors.append({
+                "profile": profile_id,
+                "server": None,
+                "kind": "profile_tempdir_cleanup_failure",
+                "diagnostic": str(error)[-1000:],
+            })
 
 
 def rust_panic_issues(
@@ -13700,7 +13752,11 @@ def execute_profile(
 
     outcomes = []
     infrastructure_errors = []
-    with tempfile.TemporaryDirectory(prefix=f"uvicorn-rs-parity-{profile['id']}-") as temporary:
+    with profile_temporary_directory(
+        prefix=f"uvicorn-rs-parity-{profile['id']}-",
+        cleanup_errors=infrastructure_errors,
+        profile_id=profile["id"],
+    ) as temporary:
         tempdir = Path(temporary)
         try:
             oracle, target, trust_anchor = start_profile_servers(
@@ -14126,8 +14182,29 @@ def execute_profile(
                     break
         finally:
             for server in server_history:
-                exit_code, logs = stop_server(server)
+                try:
+                    exit_code, logs = stop_server(server)
+                except Exception as error:
+                    logs = server.get("captured_log", "")
+                    if logs.strip():
+                        print(f"--- {server['id']} server log ---\n{logs}", file=sys.stderr)
+                    infrastructure_errors.append({
+                        "profile": profile["id"],
+                        "server": server["id"],
+                        "pid": server["process"].pid,
+                        "kind": "server_cleanup_failure",
+                        "diagnostic": str(error)[-1000:],
+                    })
+                    continue
                 captured_log = server.get("captured_log", logs)
+                if server.get("log_cleanup_error"):
+                    infrastructure_errors.append({
+                        "profile": profile["id"],
+                        "server": server["id"],
+                        "pid": server["process"].pid,
+                        "kind": "server_log_cleanup_failure",
+                        "diagnostic": server["log_cleanup_error"][-1000:],
+                    })
                 if captured_log.strip():
                     print(f"--- {server['id']} server log ---\n{captured_log}", file=sys.stderr)
                 normal_signal_exit = server["id"] in {"uvicorn", "uvicorn-rs"} and (
