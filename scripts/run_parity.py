@@ -5273,11 +5273,11 @@ def load_contract(
             if "idle_transport_prefix_base64" in case["lifecycle"]:
                 lifecycle_keys.add("idle_transport_prefix_base64")
                 if (
-                    case["profile"] not in {"lifecycle", "lifecycle-tls"}
+                    case["profile"] != "lifecycle"
                     or case["operation"] != "lifespan.active-stream-graceful-drain"
                 ):
                     raise ParityError(
-                        f"{case_id}: idle transport prefix requires the HTTP/1.1 or TLS graceful-drain workflow"
+                        f"{case_id}: idle transport prefix requires the HTTP/1.1 graceful-drain workflow"
                     )
                 try:
                     prefix = base64.b64decode(
@@ -5312,7 +5312,7 @@ def load_contract(
                 )
             if case["operation"] == "lifespan.active-stream-graceful-drain":
                 if (
-                    case["profile"] not in {"lifecycle", "lifecycle-tls"}
+                    case["profile"] != "lifecycle"
                     or case["lifecycle"].get("stream_path") != "/stream-shutdown-hold"
                     or "hold_path" in case["lifecycle"]
                     or "keep_alive_state_connection" in case["lifecycle"]
@@ -5321,6 +5321,18 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: active-stream graceful drain requires the dedicated held-stream workflow"
+                    )
+            elif case["operation"] == "lifespan.active-stream-tls-graceful-drain":
+                if (
+                    case["profile"] != "lifecycle-tls"
+                    or case["lifecycle"].get("stream_path") != "/stream-shutdown-hold"
+                    or "hold_path" in case["lifecycle"]
+                    or "keep_alive_state_connection" in case["lifecycle"]
+                    or "reset_connection_after_shutdown" in case["lifecycle"]
+                    or "idle_transport_prefix_base64" in case["lifecycle"]
+                ):
+                    raise ParityError(
+                        f"{case_id}: TLS active-stream graceful drain must isolate the held TLS stream"
                     )
             elif case["operation"] == "lifespan.concurrent-stream-zero-timeout-shutdown":
                 if (

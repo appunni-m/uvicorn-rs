@@ -1902,6 +1902,21 @@
       }
     },
     {
+      "id": "lifespan.active-stream-tls-graceful-drain",
+      "kind": "protocol_operation",
+      "observe": [
+        "state_response",
+        "process_terminated",
+        "application_events",
+        "connection_closed",
+        "listener_closed_before_release"
+      ],
+      "required_observations": {
+        "process_terminated": true,
+        "connection_closed": true
+      }
+    },
+    {
       "id": "lifespan.active-stream-reset-during-shutdown",
       "kind": "protocol_operation",
       "observe": [

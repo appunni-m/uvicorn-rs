@@ -672,7 +672,6 @@ jobs:
               --exclude-case-id cli.invalid-file-descriptor-is-rejected
               --exclude-case-id python-api.run-websocket-over-unix-domain-socket
               --exclude-case-id python-api.server-startup-uds-replaces-existing-socket-and-shuts-down-lifespan
-              --exclude-case-id python-api.fault.uds-permissions-error-propagates-and-cleans-lifespan
               --exclude-case-id python-api.run-applies-concurrency-limit-unix-socket
               --exclude-case-id python-api.module-cli-serves-unix-domain-socket-request
               --exclude-case-id python-api.config-server-serves-unix-domain-socket-request
@@ -738,6 +737,33 @@ jobs:
                 trace_status=$?
                 set -e
                 echo "Focused Windows worker shutdown diagnostic exited with status $trace_status"
+              elif "$candidate_python" - target/parity-windows-x86_64.json <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          tls_drain_case = "lifespan.active-response-stream-drains-on-tls-shutdown"
+          raise SystemExit(
+              0
+              if any(
+                  case.get("case_id") == tls_drain_case
+                  and case.get("status") in {"failed", "infrastructure_failed"}
+                  for case in report.get("cases", [])
+              )
+              else 1
+          )
+          PY
+              then
+                set +e
+                UVICORN_RS_SHUTDOWN_TRACE=1 "$candidate_python" scripts/run_parity.py \
+                  --oracle-python "$oracle_python" \
+                  --installed-candidate \
+                  --case-id lifespan.active-response-stream-drains-on-tls-shutdown \
+                  --output target/windows-lifecycle-tls-shutdown-trace.json
+                trace_status=$?
+                set -e
+                echo "Focused Windows TLS shutdown diagnostic exited with status $trace_status"
               fi
               exit "$parity_status"
             fi
@@ -751,6 +777,7 @@ jobs:
           path: |
             target/parity-${{ matrix.platform }}.json
             target/windows-worker-shutdown-trace.json
+            target/windows-lifecycle-tls-shutdown-trace.json
           if-no-files-found: warn
           retention-days: 90
       - name: Build source distribution
