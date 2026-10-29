@@ -259,6 +259,9 @@ enum CoverageFaultPoint {
     HttpScopeHeadersSetItem,
     HttpScopeClientSetItem,
     HttpScopeServerSetItem,
+    HttpScopeHttp2EarlyHintExtensionSetItem,
+    HttpScopeHttp2ResponseTrailersExtensionSetItem,
+    HttpScopeHttp2ExtensionsSetItem,
     HttpScopeStateCopy,
     HttpScopeStateSetItem,
     HttpRequestTypeSetItem,
@@ -649,6 +652,13 @@ impl CoverageFaultPoint {
             Self::HttpScopeHeadersSetItem => "scope.http.headers.set-item",
             Self::HttpScopeClientSetItem => "scope.http.client.set-item",
             Self::HttpScopeServerSetItem => "scope.http.server.set-item",
+            Self::HttpScopeHttp2EarlyHintExtensionSetItem => {
+                "scope.http2.extensions.early-hint.set-item"
+            }
+            Self::HttpScopeHttp2ResponseTrailersExtensionSetItem => {
+                "scope.http2.extensions.response-trailers.set-item"
+            }
+            Self::HttpScopeHttp2ExtensionsSetItem => "scope.http2.extensions.set-item",
             Self::HttpScopeStateCopy => "scope.state.copy",
             Self::HttpScopeStateSetItem => "scope.state.set-item",
             Self::HttpRequestTypeSetItem => "request.http.type.set-item",
@@ -10578,9 +10588,18 @@ fn build_scope<'py>(
     }
     if request.version == Version::HTTP_2 {
         let extensions = PyDict::new(py);
-        extensions.set_item("http.response.early_hint", PyDict::new(py))?;
-        extensions.set_item("http.response.trailers", PyDict::new(py))?;
-        scope.set_item("extensions", extensions)?;
+        coverage_try!(
+            HttpScopeHttp2EarlyHintExtensionSetItem,
+            extensions.set_item("http.response.early_hint", PyDict::new(py))
+        );
+        coverage_try!(
+            HttpScopeHttp2ResponseTrailersExtensionSetItem,
+            extensions.set_item("http.response.trailers", PyDict::new(py))
+        );
+        coverage_try!(
+            HttpScopeHttp2ExtensionsSetItem,
+            scope.set_item("extensions", extensions)
+        );
     }
     Ok(scope)
 }

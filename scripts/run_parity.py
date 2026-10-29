@@ -68,6 +68,7 @@ ORACLE_PYTHON = Path(sys.executable)
 # Source-tree parity leaves this disabled so its Python adapter is loaded from
 # the checkout beside the instrumented native extension.
 INSTALLED_CANDIDATE_MODE = False
+TRACE_HYPERCORN_H3_EVENTS = False
 # These messages authorize one deliberately injected panic per attempted
 # coverage fault case. They never authorize ordinary target/reference panics
 # or a failing process exit. The hook event, not a repeated JoinError log,
@@ -238,6 +239,9 @@ FAULT_POINTS = {
     "scope.http.headers.set-item",
     "scope.http.client.set-item",
     "scope.http.server.set-item",
+    "scope.http2.extensions.early-hint.set-item",
+    "scope.http2.extensions.response-trailers.set-item",
+    "scope.http2.extensions.set-item",
     "scope.state.copy",
     "scope.state.set-item",
     "request.http.type.set-item",
@@ -706,6 +710,11 @@ HTTP_RESPONSE_START_ERROR_FAULT_POINTS = {
     "http.response.start.headers.get-item",
     "http.response.start.headers.extract",
     "http.response.start.channel-closed",
+}
+HTTP2_SCOPE_FAULT_POINTS = {
+    "scope.http2.extensions.early-hint.set-item",
+    "scope.http2.extensions.response-trailers.set-item",
+    "scope.http2.extensions.set-item",
 }
 
 
@@ -1559,14 +1568,21 @@ def load_contract(
                         f"{case_id}: endpoint accept closure requires startup plus an HTTP/1 follow-up"
                     )
             elif fault["contract"] == "http2-500-generic-error-body":
+                is_application_panic = (
+                    fault["point"] == "http.app-task.panic-before-response-start"
+                    and case.get("operation") == "http.application-error"
+                )
+                is_scope_construction_error = (
+                    fault["point"] in HTTP2_SCOPE_FAULT_POINTS
+                    and case.get("operation") == "http.application-status"
+                )
                 if (
                     case.get("profile") != "http2"
-                    or case.get("operation") != "http.application-error"
-                    or fault["point"] != "http.app-task.panic-before-response-start"
+                    or not (is_application_panic or is_scope_construction_error)
                     or case.get("request", {}).get("path") != "/state"
                 ):
                     raise ParityError(
-                        f"{case_id}: HTTP/2 panic injection requires the pre-response application-failure workflow"
+                        f"{case_id}: HTTP/2 pre-response failures require a generic-error request to /state"
                     )
             elif fault["contract"] == "http3-client-abort-disconnect-followup":
                 if (
@@ -5935,6 +5951,12 @@ def start_server(
         ]
         if profile_id == "http3":
             command.extend(["--quic-bind", f"127.0.0.1:{port}"])
+            if TRACE_HYPERCORN_H3_EVENTS:
+                command = [
+                    sys.executable,
+                    str(ROOT / "scripts" / "trace_hypercorn_h3.py"),
+                    *command[3:],
+                ]
     else:
         raise ParityError(f"unknown server adapter: {server_id}")
 
@@ -14253,8 +14275,16 @@ def main() -> int:
             "without prepending the checkout Python adapter"
         ),
     )
+    parser.add_argument(
+        "--trace-hypercorn-h3-events",
+        action="store_true",
+        help=(
+            "wrap the Hypercorn HTTP/3 oracle with bounded stream-lifecycle tracing; "
+            "requires exactly --case-id http3.early-response-with-open-upload"
+        ),
+    )
     args = parser.parse_args()
-    global INSTALLED_CANDIDATE_MODE, ORACLE_PYTHON
+    global INSTALLED_CANDIDATE_MODE, ORACLE_PYTHON, TRACE_HYPERCORN_H3_EVENTS
     # Keep the venv's python symlink intact; resolving it points at the base
     # interpreter, whose site-packages do not contain the isolated oracle.
     ORACLE_PYTHON = Path(os.path.abspath(args.oracle_python))
@@ -14263,6 +14293,7 @@ def main() -> int:
     if args.installed_candidate and args.coverage_profile_dir:
         parser.error("--installed-candidate cannot be combined with --coverage-profile-dir")
     INSTALLED_CANDIDATE_MODE = args.installed_candidate
+    TRACE_HYPERCORN_H3_EVENTS = args.trace_hypercorn_h3_events
 
     manifest, inputs, input_paths = load_contract()
     if args.case_id:
@@ -14308,6 +14339,13 @@ def main() -> int:
         selected_cases = [case for case in selected_cases if case.get("verification", "oracle-parity") != "fault-contract"]
     if not selected_cases:
         parser.error("no runnable cases remain after applying the selected filters")
+    if TRACE_HYPERCORN_H3_EVENTS and [case["case_id"] for case in selected_cases] != [
+        "http3.early-response-with-open-upload"
+    ]:
+        parser.error(
+            "--trace-hypercorn-h3-events requires exactly "
+            "--case-id http3.early-response-with-open-upload"
+        )
     coverage_profile_dir = args.coverage_profile_dir.resolve() if args.coverage_profile_dir else None
     if coverage_profile_dir is not None:
         if len(selected_cases) != 1 or not args.case_id:

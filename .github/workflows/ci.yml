@@ -372,6 +372,7 @@ jobs:
           fi
           tail -n 5 "$systemd_log"
       - name: Execute complete current public input matrix
+        id: public_parity
         shell: bash
         run: |
           set -euo pipefail
@@ -382,6 +383,18 @@ jobs:
             --output target/asgi-parity/result.json 2>&1 | tee target/asgi-parity/run.log
           .venv/bin/python scripts/check_ci_evidence.py parity \
             target/asgi-parity/result.json --offline --require-clean
+      - name: Trace the Hypercorn HTTP/3 case after a public parity failure
+        if: ${{ failure() && steps.public_parity.outcome == 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_parity.py \
+            --oracle-python "$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle/bin/python" \
+            --installed-candidate \
+            --case-id http3.early-response-with-open-upload \
+            --trace-hypercorn-h3-events \
+            --output target/asgi-parity/h3-early-response-diagnostic.json \
+            2>&1 | tee target/asgi-parity/h3-early-response-diagnostic.log
       - name: Verify normal fault-seam exclusion with existing public cases
         run: >-
           .venv/bin/python scripts/audit_normal_build.py

@@ -288,6 +288,63 @@
       }
     },
     {
+      "case_id": "fault.http2.scope-extension-early-hint-set-item",
+      "profile": "http2",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "scope.http2.extensions.early-hint.set-item",
+        "contract": "http2-500-generic-error-body"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.scope-extension-response-trailers-set-item",
+      "profile": "http2",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "scope.http2.extensions.response-trailers.set-item",
+        "contract": "http2-500-generic-error-body"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.scope-extensions-set-item",
+      "profile": "http2",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "scope.http2.extensions.set-item",
+        "contract": "http2-500-generic-error-body"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http2.scope-preserves-duplicate-headers",
       "profile": "http2",
       "operation": "http.scope-and-body",
