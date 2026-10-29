@@ -1449,6 +1449,31 @@
       ]
     },
     {
+      "id": "fault.http1.native-websocket-session-extension-header-value-error-is-observed",
+      "protocol": "native-core",
+      "operation": "native-http1-websocket",
+      "scenario": "accepted-session-extension-header-value-error",
+      "path": "/native-websocket-session-construction-error",
+      "request_key": "dGhlIHNhbXBsZSBub25jZQ==",
+      "offered_subprotocol": "native.echo.v1",
+      "request_websocket_extensions": "permessage-deflate",
+      "expected_status": 101,
+      "expected_accept": "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=",
+      "expected_subprotocol": "native.echo.v1",
+      "expected_extensions": "permessage-deflate",
+      "expected_server_error_phase": "connection",
+      "expected_server_error_message": "upgraded session failed: WebSocket session failed: IO error: failed to parse header value",
+      "expected_server_error_has_source": true,
+      "server_wait_ms": 1000,
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.session.extension-header-value-error"
+      },
+      "covers": [
+        "websocket.protocol-error"
+      ]
+    },
+    {
       "id": "http1.native-websocket-handler-error-is-observed",
       "protocol": "native-core",
       "operation": "native-http1-websocket",

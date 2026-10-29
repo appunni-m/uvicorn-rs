@@ -8,14 +8,18 @@ PR #19 remains a draft. CI #464 checked committed PR head
 `a4b37c554deb99638d190ecf03e99857ecc49232`, based on `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its Linux installed-wheel public
 matrix passed **717/717**; Rust quality/MSRV, native framework composition,
-and release handoff also passed. Its unified coverage job is still running.
-Linux artifact verification failed while recording the pinned `uvx maturin`
-command, macOS ARM64 parity failed on TLS certificate fixtures rejected by
-Rustls, and Windows candidate setup failed before parity because `uvloop` was
-included in the benchmark dependency set. Local commits
+and release handoff also passed. The unified matrix completed **1,326/1,326**
+selected cases across three repeats, but coverage failed at 13,924/14,108
+regions and 10,257/10,352 lines. Linux artifact verification failed while
+recording the pinned `uvx maturin` command, macOS ARM64 parity failed on TLS
+certificate fixtures rejected by Rustls, and Windows candidate setup failed
+before parity because `uvloop` was included in the benchmark dependency set.
+Local commits
 `eacc9609769928e8b430966199b0845326bdfeb8` and
 `dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address these failures; hosted
-confirmation is pending. See
+confirmation is pending. The full coverage result and report identity are
+recorded in [coverage status](coverage.md#current-unified-coverage-status-2026-10-22).
+See
 [CI #464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247).
 
 Two newly added fragmented WebSocket cases pass selected local oracle

@@ -19,11 +19,12 @@ PR #19 remains a draft. CI
 checked committed head `a4b37c554deb99638d190ecf03e99857ecc49232`, based on
 `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its installed-wheel
 public matrix passed 717/717 on Linux x86-64; Rust quality/MSRV, native
-composition, and release-handoff jobs also passed. Its unified 100% coverage
-job is still running. Linux candidate artifact verification failed while
-recording its pinned `uvx maturin` build command; Windows failed before parity
-because `uvloop` was included in the benchmark dependency set; macOS ARM64 had
-TLS failures on generated CA certificates rejected by Rustls. Local commits
+composition, and release-handoff jobs also passed. Its unified matrix completed
+1,326/1,326 cases over three repeats, but the 100% gate failed at 13,924/14,108
+regions and 10,257/10,352 lines. Linux candidate artifact verification failed
+while recording its pinned `uvx maturin` build command; Windows failed before
+parity because `uvloop` was included in the benchmark dependency set; macOS
+ARM64 had TLS failures on generated CA certificates rejected by Rustls. Local commits
 `eacc9609769928e8b430966199b0845326bdfeb8` and
 `dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address these issues. The latter
 passed all 12 affected TLS cases in focused local macOS parity. Hosted
@@ -100,11 +101,13 @@ directory watching remains covered separately. See the
 
 Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
 drop-in replacement today. CI #464 passed 717/717 public cases on its Linux
-x86-64 wheel. Its unified coverage job is still running, and its macOS and
-Windows candidate parity jobs did not produce accepted full-matrix receipts.
-The full hosted coverage gate and accepted Coverage-MCP receipt remain
-outstanding. Other declared Python versions and full Uvicorn CLI, Python API,
-process, and cross-platform acceptance remain open. See the
+x86-64 wheel. Its unified matrix completed 1,326/1,326 selected cases across
+three repeats, but the 100% coverage gate failed at 13,924/14,108 regions and
+10,257/10,352 lines. Its macOS and Windows candidate parity jobs did not
+produce accepted full-matrix receipts. The full hosted coverage gate and
+accepted Coverage-MCP receipt remain outstanding. Other declared Python
+versions and full Uvicorn CLI, Python API, process, and cross-platform
+acceptance remain open. See the
 [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
 
 One selected POSIX

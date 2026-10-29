@@ -5282,6 +5282,9 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
         "accepted-session-extension-header-error" => {
             Some("websocket.session.extension-to-str-error")
         }
+        "accepted-session-extension-header-value-error" => {
+            Some("websocket.session.extension-header-value-error")
+        }
         _ => None,
     };
     if fault_point != expected_fault_point {
@@ -5308,6 +5311,9 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
         }
         Some("websocket.session.extension-to-str-error") => {
             uvicorn_rs::arm_yawc_session_extension_to_str_error_fault()
+        }
+        Some("websocket.session.extension-header-value-error") => {
+            uvicorn_rs::arm_yawc_session_extension_header_value_error_fault()
         }
         None => false,
         Some(_) => false,
@@ -5428,6 +5434,14 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
                 )
                 .await
             }
+            "accepted-session-extension-header-value-error" => {
+                run_native_websocket_session_construction_error_case(
+                    address,
+                    case,
+                    &observed_server_errors,
+                )
+                .await
+            }
             "accept-after-close" => {
                 run_native_websocket_accept_after_close_case(
                     address,
@@ -5492,6 +5506,9 @@ async fn run_isolated_http1_websocket_case(case: &Value) -> ProbeResult<()> {
             }
             Some("websocket.session.extension-to-str-error") => {
                 uvicorn_rs::finish_yawc_session_extension_to_str_error_fault()
+            }
+            Some("websocket.session.extension-header-value-error") => {
+                uvicorn_rs::finish_yawc_session_extension_header_value_error_fault()
             }
             None | Some(_) => false,
         };
@@ -6684,6 +6701,14 @@ async fn run_isolated_http3_endpoint_close_lifecycle_case(case: &Value) -> Probe
     let server_endpoint =
         quinn::Endpoint::server(quic_server_config, "127.0.0.1:0".parse::<SocketAddr>()?)?;
     let owner_endpoint = server_endpoint.clone();
+    let server_endpoint = uvicorn_rs::Http3Endpoint::from(server_endpoint);
+    let address = server_endpoint.local_addr()?;
+    if address.ip() != std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST) || address.port() == 0 {
+        return Err(io::Error::other(format!(
+            "HTTP/3 endpoint reported unexpected local address {address}"
+        ))
+        .into());
+    }
     let lifecycle: Arc<dyn ApplicationLifecycle> = fixture.hooks.clone();
     let config = uvicorn_rs::ServerConfig {
         application_lifecycle: Some(lifecycle),

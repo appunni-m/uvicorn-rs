@@ -257,6 +257,10 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-websocket",
         "scenario": "accepted-session-extension-header-error",
     },
+    "websocket.session.extension-header-value-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-extension-header-value-error",
+    },
     "websocket.receive.close-reply.flush": {
         "operation": "native-http1-websocket",
         "scenario": "close-reply-flush-failure",

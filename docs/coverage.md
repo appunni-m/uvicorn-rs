@@ -8,15 +8,31 @@
 
 PR #19 remains a draft. CI #464 checked committed PR head
 `a4b37c554deb99638d190ecf03e99857ecc49232`, based on `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its unified three-repeat matrix
-was still running when this status was recorded; it has no completed coverage
-result or accepted Coverage-MCP receipt yet. Release handoff, native
-composition, minimum Rust, Rust quality, and Linux 717/717 installed-wheel
-parity passed. Linux and Windows candidate jobs failed during artifact setup or
-evidence recording, and macOS parity had TLS fixture failures. Local commits
-`eacc9609769928e8b430966199b0845326bdfeb8` and
-`dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address those failures, but are not
-included in #464 and still need exact-source hosted validation.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its unified matrix completed all
+1,326 selected cases across three repeats with complete attribution and no case
+or infrastructure failures. The 100% gate failed at **13,924/14,108 regions**
+and **10,257/10,352 lines** (184 regions and 95 lines missing).
+
+The retained `uvicorn-rs-unified-coverage` artifact is ID `12858010668`, with
+archive SHA-256
+`0dca6fccce5c498361018f34dda30e48c4f1129bc740c32c8b03e30b26ed19e6`; the
+report SHA-256 is
+`b0d73cc53969317c211b65b955585fc451636024a014a0f0bd386c59cc9052a9`. The
+report is a gap-mapping aid, not current full-gate evidence: it was produced on
+synthetic merge revision `d3bd3bcf634a0d83ab4b13748100d6848b659d2b`, while
+the local branch has three changed non-Rust files. All measured Rust source
+hashes match the branch. A compact Coverage-MCP projection grouped the missing
+regions into 52 functions, but reported `source=unverified`; independent
+acceptance remains open.
+
+Release handoff, native composition, minimum Rust, Rust quality, and Linux
+717/717 installed-wheel parity passed. Linux candidate verification rejected
+the pinned `uvx maturin` invocation, Windows candidate setup included unsupported
+`uvloop` before parity, and macOS ARM64 parity rejected the OpenSSL-generated
+TLS fixtures. Local commits `eacc9609769928e8b430966199b0845326bdfeb8` and
+`dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address those issues; CI #464 did
+not include them, so hosted validation is still required. The documentation
+workflow also needs a new deployment for the current docs changes.
 
 The post-change focused receipt is local-only:
 `target/coverage-diagnostic/ci461-startup-shutdown-fault-fix/coverage-report.json`,
@@ -34,9 +50,9 @@ canceled and its retained artifact is not a completed gate receipt. CI #461
 also missed the 100% gate; its current-source focused follow-up covers one case
 only and does not replace the full report. CI #462 is a completed historical
 failure. CI #463 is historical and does not bind to the latest local commits.
-CI #464 is the active full report for PR head `a4b37c5`; inspect its result
-when complete, then require a new exact-source run for the local branch commits.
-An accepted independent Coverage-MCP review is still outstanding.
+CI #464 completed on PR head `a4b37c5`; its result is recorded above. A fresh
+exact-source run is still required for the local branch commits. An accepted
+independent Coverage-MCP review is still outstanding.
 
 ### Prior CI #455 coverage result (source 4a429684)
 

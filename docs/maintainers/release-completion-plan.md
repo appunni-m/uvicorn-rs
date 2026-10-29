@@ -37,25 +37,33 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-1. Consume the latest existing CI run for the current PR head; do not restart it
-   or push while one of its required jobs is active. Preserve the PR branch head
-   and synthetic merge SHA separately. When the run finishes, use its observed
-   outcomes to choose only the failing gates for the next batch. CI
-   [#464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247)
-   checks committed PR head `a4b37c554deb99638d190ecf03e99857ecc49232` against
-   main at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
+1. CI [#464](https://github.com/appunni-m/uvicorn-rs/actions/runs/40772727247)
+   completed on PR head `a4b37c554deb99638d190ecf03e99857ecc49232` and synthetic
+   merge `d3bd3bcf634a0d83ab4b13748100d6848b659d2b`, against `main` at
+   `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
    framework composition, release-evidence handoff, and 717/717 installed-wheel
-   public parity passed; unified parity/coverage is still running. Linux
-   artifact evidence rejected the valid pinned `uvx maturin` build command;
-   Windows candidate setup failed before parity because `uvloop` was included
-   in the benchmark dependency set; macOS ARM64 parity had TLS certificate
-   failures rejected by Rustls. Local commits
+   public parity passed. The unified matrix passed all 1,326 cases across three
+   repeats, but failed the 100% gate at 13,924/14,108 regions and 10,257/10,352
+   lines. Its artifact is `12858010668` (archive SHA-256
+   `0dca6fccce5c498361018f34dda30e48c4f1129bc740c32c8b03e30b26ed19e6`); its
+   report SHA-256 is
+   `b0d73cc53969317c211b65b955585fc451636024a014a0f0bd386c59cc9052a9`.
+   Because the report is bound to the synthetic merge revision and three
+   non-Rust tracked files differ from this checkout, use it to map gaps only;
+   all measured Rust source hashes match. The compact Coverage-MCP projection
+   identified 52 function groups but returned `source=unverified`, so it is not
+   an accepted independent receipt.
+
+   The Linux candidate job rejected the valid pinned `uvx maturin` command;
+   Windows candidate setup included unsupported `uvloop` before parity; and
+   macOS ARM64 parity rejected OpenSSL-generated TLS fixtures. Local commits
    `eacc9609769928e8b430966199b0845326bdfeb8` and
-   `dd525c2b08b47f0c0016073cdf7c53204a29d8c9` fix those issues. The TLS change
-   passed the 12 affected local macOS cases, but no exact-source hosted run has
-   validated these commits. Wait for #464 coverage to complete before pushing.
-   Docs run #181 passed for the earlier committed source; this refresh needs a
-   new docs deployment. Do not repeat unrelated local matrices.
+   `dd525c2b08b47f0c0016073cdf7c53204a29d8c9` address those failures. The TLS
+   fix passed the 12 affected local macOS cases; hosted confirmation remains
+   pending. Docs run #181 passed for earlier documentation, so the refreshed
+   pages also need a new deployment. No #464 job remains active. Continue with
+   a reviewed batch of focused cases/fixes, then push once and consume its
+   hosted run; do not rerun unrelated local matrices.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions

@@ -509,15 +509,23 @@ impl WebSocketSession {
         let stream = match negotiated_extensions {
             Some(extensions) => {
                 #[cfg(coverage)]
-                let extensions = if take_yawc_session_extension_to_str_error_fault() {
-                    HeaderValue::from_bytes(b"\xff").map_err(|error| {
+                let injected_extension_bytes =
+                    if take_yawc_session_extension_header_value_error_fault() {
+                        Some(&b"\n"[..])
+                    } else if take_yawc_session_extension_to_str_error_fault() {
+                        Some(&b"\xff"[..])
+                    } else {
+                        None
+                    };
+                #[cfg(coverage)]
+                let extensions = match injected_extension_bytes {
+                    Some(bytes) => HeaderValue::from_bytes(bytes).map_err(|error| {
                         WebSocketError(TungsteniteError::Io(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
                             error,
                         )))
-                    })?
-                } else {
-                    extensions
+                    })?,
+                    None => extensions,
                 };
                 let extensions = extensions.to_str().map_err(|error| {
                     WebSocketError(TungsteniteError::Io(std::io::Error::new(
@@ -813,6 +821,8 @@ static YAWC_SESSION_CONSTRUCTION_ERROR_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static YAWC_SESSION_EXTENSION_TO_STR_ERROR_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
+static YAWC_SESSION_EXTENSION_HEADER_VALUE_ERROR_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
+#[cfg(coverage)]
 static YAWC_UNEXPECTED_CONTINUATION_FRAME_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
 #[cfg(coverage)]
 static YAWC_INVALID_TEXT_FRAME_FAULT_STATE: AtomicU8 = AtomicU8::new(0);
@@ -1003,6 +1013,29 @@ pub fn finish_yawc_session_extension_to_str_error_fault() -> bool {
 #[cfg(coverage)]
 fn take_yawc_session_extension_to_str_error_fault() -> bool {
     YAWC_SESSION_EXTENSION_TO_STR_ERROR_FAULT_STATE
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Arms the coverage-only invalid negotiated-extension header-value contract.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn arm_yawc_session_extension_header_value_error_fault() -> bool {
+    YAWC_SESSION_EXTENSION_HEADER_VALUE_ERROR_FAULT_STATE
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only invalid negotiated-extension header-value contract.
+#[cfg(coverage)]
+#[doc(hidden)]
+pub fn finish_yawc_session_extension_header_value_error_fault() -> bool {
+    YAWC_SESSION_EXTENSION_HEADER_VALUE_ERROR_FAULT_STATE.swap(0, Ordering::AcqRel) == 2
+}
+
+#[cfg(coverage)]
+fn take_yawc_session_extension_header_value_error_fault() -> bool {
+    YAWC_SESSION_EXTENSION_HEADER_VALUE_ERROR_FAULT_STATE
         .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
         .is_ok()
 }
