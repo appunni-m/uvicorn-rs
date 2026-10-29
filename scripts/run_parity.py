@@ -6002,7 +6002,7 @@ def start_server(
         command = [
             sys.executable, "-m", "hypercorn", f"asgi:{APP}", "--bind", f"127.0.0.1:{port}",
             "--worker-class", default_event_loop(), "--log-level",
-            "error" if observe_connection_errors else "critical", "--access-logfile", "/dev/null",
+            "error" if observe_connection_errors else "critical", "--access-logfile", os.devnull,
             "--certfile", str(certificate), "--keyfile", str(key), "--config", str(config_path),
         ]
         if profile_id == "http3":
@@ -6059,8 +6059,10 @@ def start_server(
                 else "--no-proxy-headers"
             )
         if "forwarded_allow_ips" in server_options:
-            command.extend(
-                ["--forwarded-allow-ips", server_options["forwarded_allow_ips"]]
+            # Click expands bare wildcards on Windows. Keep the wildcard
+            # inside the option token so "*" remains Uvicorn's trust value.
+            command.append(
+                f"--forwarded-allow-ips={server_options['forwarded_allow_ips']}"
             )
         if "ssl_cert_reqs" in server_options:
             command.extend(["--ssl-cert-reqs", str(server_options["ssl_cert_reqs"])])
@@ -6079,7 +6081,18 @@ def start_server(
         if server_options.get("reset_contextvars"):
             command.append("--reset-contextvars")
 
-    log = tempfile.TemporaryFile(mode="w+t")
+    log_fd, log_path = tempfile.mkstemp(
+        prefix=f"uvicorn-rs-{server_id}-",
+        suffix=".log",
+        dir=events_path.parent,
+    )
+    os.close(log_fd)
+    log = open(log_path, "w+t", encoding="utf-8")
+    process_options = (
+        {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+        if os.name == "nt"
+        else {}
+    )
     try:
         process = subprocess.Popen(
             command,
@@ -6090,6 +6103,7 @@ def start_server(
             stderr=log,
             text=True,
             pass_fds=inherited_listener_fds,
+            **process_options,
         )
     finally:
         if inherited_listener is not None:
@@ -6262,16 +6276,29 @@ def stop_server(
     process: subprocess.Popen = server["process"]
     log = server["log"]
     if log.closed:
+        log_path = getattr(log, "name", None)
+        if isinstance(log_path, (str, os.PathLike)):
+            Path(log_path).unlink(missing_ok=True)
         return process.returncode, server.get("captured_log", "")[-6000:]
     if process.poll() is None:
+        server["harness_stop_requested"] = True
         api_control_path = server.get("api_control_path")
         if api_control_path is not None:
             api_control_path.touch()
         elif not signal_sent:
             if signal_number is not None:
-                process.send_signal(signal_number)
+                if os.name == "nt" and signal_number in {
+                    signal.SIGINT,
+                    signal.SIGTERM,
+                }:
+                    process.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    process.send_signal(signal_number)
             elif graceful:
-                process.terminate()
+                if os.name == "nt":
+                    process.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    process.terminate()
             else:
                 process.send_signal(signal.SIGTERM)
         try:
@@ -6282,6 +6309,9 @@ def stop_server(
     log.seek(0)
     text = log.read()
     log.close()
+    log_path = getattr(log, "name", None)
+    if isinstance(log_path, (str, os.PathLike)):
+        Path(log_path).unlink(missing_ok=True)
     # Lifecycle adapters can stop a process before profile finalization, and
     # profiles can restart several processes. Preserve the complete log so
     # validation cannot lose a panic when a handle is closed or a tail grows.
@@ -6418,12 +6448,19 @@ def read_server_log(server: dict[str, Any]) -> str:
     log = server["log"]
     if log.closed:
         return server.get("captured_log", "")
-    # Popen's inherited descriptor shares its write offset with this handle.
-    # Seeking and restoring that offset can overwrite diagnostics emitted
-    # during a live read; pread leaves the child's append position intact.
     log.flush()
     size = os.fstat(log.fileno()).st_size
-    return os.pread(log.fileno(), size, 0).decode("utf-8", errors="replace")
+    if hasattr(os, "pread"):
+        # Popen's inherited descriptor shares its write offset with this
+        # handle. pread leaves the child's append position intact.
+        return os.pread(log.fileno(), size, 0).decode("utf-8", errors="replace")
+    # Windows has no os.pread. Reopen the named temporary log so this reader
+    # uses an independent file position while the server continues writing.
+    log_path = getattr(log, "name", None)
+    if not isinstance(log_path, (str, os.PathLike)):
+        raise ParityError("server log has no independent readable path")
+    with open(log_path, "r", encoding="utf-8", errors="replace") as reader:
+        return reader.read()
 
 
 def server_process_diagnostic(server: dict[str, Any]) -> dict[str, Any]:
@@ -12816,10 +12853,12 @@ def run_python_api_probe(
         else 10,
     )
     probe_options = {}
-    if os.name == "nt" and "run_http" in case["api"]:
-        # A Windows HTTP probe sends CTRL_BREAK_EVENT to its server process
-        # group. Give that probe and its server a private console so the event
-        # cannot interrupt the parity coordinator sharing the runner console.
+    if os.name == "nt" and (
+        "run_http" in case["api"] or "run_http_reload" in case["api"]
+    ):
+        # Windows HTTP probes signal their server processes. Give every probe
+        # a private console so those events cannot interrupt the parity
+        # coordinator sharing the runner console.
         probe_options["creationflags"] = subprocess.CREATE_NEW_CONSOLE
     try:
         completed = subprocess.run(
@@ -14107,6 +14146,14 @@ def execute_profile(
                         for case in server["attempted_cases"]
                     )
                 )
+                expected_windows_cleanup = (
+                    os.name == "nt"
+                    and server.get("harness_stop_requested") is True
+                    # Popen.terminate() uses TerminateProcess on Windows,
+                    # whose requested exit code is 1; this is routine profile
+                    # cleanup after the case observations have been captured.
+                    and exit_code == 1
+                )
                 panic_issues = rust_panic_issues(
                     server, server["attempted_cases"], captured_log
                 )
@@ -14122,7 +14169,7 @@ def execute_profile(
                     })
                 if (
                     (exit_code != 0 and not normal_signal_exit and not expected_startup_error
-                     and not expected_lifespan_shutdown_error)
+                     and not expected_lifespan_shutdown_error and not expected_windows_cleanup)
                 ):
                     infrastructure_errors.append({
                         "profile": profile["id"],

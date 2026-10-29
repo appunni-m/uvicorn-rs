@@ -196,11 +196,6 @@ async def app(scope, receive, send):
         environment = subprocess_environment()
         for name, value in request.get("environment", {}).items():
             environment[name] = value
-        creationflags = (
-            subprocess.CREATE_NEW_PROCESS_GROUP
-            if os.name == "nt"
-            else 0
-        )
         process = subprocess.Popen(
             command,
             cwd=os.getcwd(),
@@ -208,7 +203,6 @@ async def app(scope, receive, send):
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            creationflags=creationflags,
         )
 
         def request_body() -> tuple[int | None, bytes | None]:
@@ -294,20 +288,60 @@ async def app(scope, receive, send):
                     time.sleep(0.2)
 
         shutdown_signal_sent = False
+        previous_sigint_handler = None
         if process.poll() is None:
             try:
-                process.send_signal(signal.SIGINT)
+                if os.name == "nt":
+                    # The probe itself runs in a private console. Reload
+                    # supervisors handle Ctrl+C (SIGINT), not Ctrl+Break
+                    # (SIGBREAK), so broadcast Ctrl+C to that console while
+                    # keeping the probe's own handler harmless.
+                    import ctypes
+
+                    previous_sigint_handler = signal.signal(
+                        signal.SIGINT, lambda _signum, _frame: None
+                    )
+                    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                    kernel32.GenerateConsoleCtrlEvent.argtypes = [
+                        ctypes.c_uint,
+                        ctypes.c_uint,
+                    ]
+                    kernel32.GenerateConsoleCtrlEvent.restype = ctypes.c_int
+                    if not kernel32.GenerateConsoleCtrlEvent(
+                        signal.CTRL_C_EVENT, 0
+                    ):
+                        raise ctypes.WinError(ctypes.get_last_error())
+                else:
+                    process.send_signal(signal.SIGINT)
                 shutdown_signal_sent = True
             except OSError:
                 process.terminate()
         process_timed_out = False
         try:
-            process.wait(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            process_timed_out = True
-            process.kill()
-            process.wait()
-        stdout, stderr = process.communicate()
+            try:
+                process.wait(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                process_timed_out = True
+                if os.name == "nt":
+                    try:
+                        subprocess.run(
+                            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                            stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=5,
+                            check=False,
+                        )
+                    except (OSError, subprocess.TimeoutExpired):
+                        if process.poll() is None:
+                            process.kill()
+                else:
+                    process.kill()
+                process.wait()
+            stdout, stderr = process.communicate()
+        finally:
+            if previous_sigint_handler is not None:
+                signal.signal(signal.SIGINT, previous_sigint_handler)
         if len(stdout) > 4 * 1024 * 1024 or len(stderr) > 4 * 1024 * 1024:
             raise RuntimeError("reload probe process output exceeded the 4 MiB bound")
 
@@ -1150,11 +1184,9 @@ except KeyboardInterrupt:
         raise ValueError("run_http shutdown_signal must be SIGINT or SIGTERM")
     if os.name == "nt":
         process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        stop_signal = (
-            signal.CTRL_BREAK_EVENT
-            if shutdown_signal_name == "SIGINT"
-            else signal.SIGTERM
-        )
+        # Uvicorn's Windows supervisor translates Ctrl+Break into SIGTERM;
+        # this is also its Windows equivalent for a direct SIGINT request.
+        stop_signal = signal.CTRL_BREAK_EVENT
     else:
         stop_signal = getattr(signal, shutdown_signal_name)
         if worker_stall_directory is not None or worker_control_signal_names:
@@ -1555,7 +1587,7 @@ except KeyboardInterrupt:
                     if signal_name == shutdown_signal_name
                     else (
                         signal.CTRL_BREAK_EVENT
-                        if os.name == "nt" and signal_name == "SIGINT"
+                        if os.name == "nt"
                         else getattr(signal, signal_name)
                     )
                 )
