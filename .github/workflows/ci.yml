@@ -696,7 +696,51 @@ jobs:
               --offline --require-clean "$@"
           }
           if [ "$RUNNER_OS" = 'Windows' ]; then
+            set +e
             run_platform_parity "${parity_args[@]}"
+            parity_status=$?
+            set -e
+            if [ "$parity_status" -ne 0 ]; then
+              if "$candidate_python" - target/parity-windows-x86_64.json <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          worker_cases = {
+              "python-api.module-cli-two-workers-serve-request",
+              "python-api.module-cli-two-workers-from-uvicorn-workers-environment",
+              "python-api.module-cli-two-workers-stop-on-sigterm",
+              "python-api.module-cli-web-concurrency-two-workers-serve-request",
+              "python-api.module-cli-explicit-workers-overrides-web-concurrency",
+          }
+          raise SystemExit(
+              0
+              if any(
+                  case.get("case_id") in worker_cases
+                  and case.get("status") in {"failed", "infrastructure_failed"}
+                  for case in report.get("cases", [])
+              )
+              else 1
+          )
+          PY
+              then
+                set +e
+                UVICORN_RS_SHUTDOWN_TRACE=1 "$candidate_python" scripts/run_parity.py \
+                  --oracle-python "$oracle_python" \
+                  --installed-candidate \
+                  --case-id python-api.module-cli-two-workers-serve-request \
+                  --case-id python-api.module-cli-two-workers-from-uvicorn-workers-environment \
+                  --case-id python-api.module-cli-two-workers-stop-on-sigterm \
+                  --case-id python-api.module-cli-web-concurrency-two-workers-serve-request \
+                  --case-id python-api.module-cli-explicit-workers-overrides-web-concurrency \
+                  --output target/windows-worker-shutdown-trace.json
+                trace_status=$?
+                set -e
+                echo "Focused Windows worker shutdown diagnostic exited with status $trace_status"
+              fi
+              exit "$parity_status"
+            fi
           else
             run_platform_parity
           fi
@@ -704,7 +748,9 @@ jobs:
         if: always() && runner.os != 'Linux'
         with:
           name: uvicorn-rs-platform-parity-${{ matrix.platform }}
-          path: target/parity-${{ matrix.platform }}.json
+          path: |
+            target/parity-${{ matrix.platform }}.json
+            target/windows-worker-shutdown-trace.json
           if-no-files-found: warn
           retention-days: 90
       - name: Build source distribution

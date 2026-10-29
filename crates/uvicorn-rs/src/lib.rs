@@ -87,6 +87,31 @@ use tokio::{
 use tokio_rustls::TlsAcceptor;
 use tower_service::Service;
 
+#[cfg(not(coverage))]
+fn write_shutdown_trace(message: fmt::Arguments<'_>) {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *ENABLED.get_or_init(|| std::env::var_os("UVICORN_RS_SHUTDOWN_TRACE").is_some()) {
+        let line = format!(
+            "uvicorn-rs: shutdown-trace pid={} {message}\n",
+            std::process::id()
+        );
+        let mut stderr = std::io::stderr().lock();
+        let _ = std::io::Write::write_all(&mut stderr, line.as_bytes());
+    }
+}
+
+#[cfg(not(coverage))]
+macro_rules! shutdown_trace {
+    ($($argument:tt)*) => {
+        write_shutdown_trace(format_args!($($argument)*))
+    };
+}
+
+#[cfg(coverage)]
+macro_rules! shutdown_trace {
+    ($($argument:tt)*) => {};
+}
+
 type BoxBodyError = Box<dyn Error + Send + Sync + 'static>;
 type BoxedShutdownFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 type BoxedListenerFuture = Pin<Box<dyn Future<Output = Result<(), ServeError>> + Send>>;
@@ -2940,6 +2965,10 @@ where
         )
         .await?
         else {
+            shutdown_trace!(
+                "listener.stop-accepting active_connections={}",
+                connections.len()
+            );
             break;
         };
 
@@ -2986,6 +3015,10 @@ where
         let tls_acceptor = tls_acceptor.clone();
         let request_concurrency = request_concurrency.clone();
         let default_headers = Arc::clone(&default_headers);
+        shutdown_trace!(
+            "listener.accept peer={peer} active_connections={}",
+            connections.len() + 1
+        );
         connections.spawn(async move {
             let _slot = slot;
             let connection = async {
@@ -3102,6 +3135,7 @@ where
                 );
                 tracing::debug!(%peer, %error, "HTTP connection finished with an error");
             }
+            shutdown_trace!("connection.task-finished peer={peer} result={result:?}");
             result
         });
     }
@@ -3109,6 +3143,10 @@ where
     // Stop admitting connections before the graceful drain starts. Keeping
     // the bound socket alive here would let new clients enter while existing
     // connections are being drained.
+    shutdown_trace!(
+        "listener.drain-start active_connections={}",
+        connections.len()
+    );
     drop(listener);
     shutdown_sender.send_replace(true);
     let shutdown_deadline = graceful_shutdown_deadline(config.graceful_shutdown_timeout)?;
@@ -3133,6 +3171,7 @@ where
         }
     }
 
+    shutdown_trace!("listener.drain-complete");
     Ok(())
 }
 
@@ -3543,13 +3582,16 @@ where
             biased;
             _ = shutdown.changed(), if !shutdown_started => {
                 shutdown_started = true;
+                shutdown_trace!("connection.shutdown-observed peer={peer_addr}");
                 upgrade_shutdown_sender.send_replace(true);
                 if connection_result.is_none() {
                     connection.as_mut().graceful_shutdown();
                 }
             }
             result = &mut connection, if connection_result.is_none() => {
-                connection_result = Some(result.map_err(ConnectionError::Http));
+                let result = result.map_err(ConnectionError::Http);
+                shutdown_trace!("connection.hyper-finished peer={peer_addr} result={result:?}");
+                connection_result = Some(result);
                 upgrade_receiver.close();
                 drain_http1_upgrade_sessions(&mut upgrade_receiver, &mut upgrade_sessions);
                 upgrade_receiver_open = false;

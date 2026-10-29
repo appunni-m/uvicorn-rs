@@ -91,6 +91,31 @@ use uvicorn_rs::{
     WebSocketCloseCode as CloseCode, WebSocketCloseFrame as CloseFrame,
     WebSocketMessage as Message, WebSocketSession, WebSocketText,
 };
+
+#[cfg(not(coverage))]
+fn write_shutdown_trace(message: fmt::Arguments<'_>) {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    if *ENABLED.get_or_init(|| std::env::var_os("UVICORN_RS_SHUTDOWN_TRACE").is_some()) {
+        let line = format!(
+            "uvicorn-rs: shutdown-trace pid={} {message}\n",
+            std::process::id()
+        );
+        let mut stderr = std::io::stderr().lock();
+        let _ = std::io::Write::write_all(&mut stderr, line.as_bytes());
+    }
+}
+
+#[cfg(not(coverage))]
+macro_rules! shutdown_trace {
+    ($($argument:tt)*) => {
+        write_shutdown_trace(format_args!($($argument)*))
+    };
+}
+
+#[cfg(coverage)]
+macro_rules! shutdown_trace {
+    ($($argument:tt)*) => {};
+}
 use zeroize::{Zeroize, Zeroizing};
 
 // Simulate a dependency task unwinding only in the instrumented fault runner.
@@ -7974,6 +7999,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             concurrency_limit_observer: server.concurrency_limit_observer.clone(),
             ..uvicorn_rs::ServerConfig::default()
         };
+        shutdown_trace!("native-transport-start");
         let result = match listener {
             BoundListener::Tcp(listeners) => {
                 let mut listener_services = Vec::with_capacity(listeners.len());
@@ -8059,6 +8085,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                 }
             }
         }
+        shutdown_trace!("native-transport-finished");
     }
     #[cfg(not(uvicorn_rs_native_transport))]
     loop {
@@ -8227,6 +8254,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         connection_tasks.abort_all();
         while connection_tasks.join_next().await.is_some() {}
     }
+    shutdown_trace!("request-body-pump-drain-start");
     let mut request_body_tasks = server.request_body_tasks.lock().await;
     #[cfg(coverage)]
     if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpShutdownCancelJoin) {
@@ -8273,6 +8301,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         }
     }
     drop(request_body_tasks);
+    shutdown_trace!("request-body-pump-drain-finished");
     #[cfg(coverage)]
     {
         let completed = server.completed_request_body_pumps.load(Ordering::Acquire);
@@ -8282,6 +8311,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             ));
         }
     }
+    shutdown_trace!("python-task-drain-start");
     server.pending_python_tasks.close();
     if timeout_optional(options.graceful_timeout, server.pending_python_tasks.wait())
         .await
@@ -8308,6 +8338,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             ));
         }
     }
+    shutdown_trace!("python-task-drain-finished");
     // Uvicorn's graceful timeout bounds connection/application draining only.
     // It does not impose a deadline on the ASGI lifespan shutdown handshake.
     #[cfg(coverage)]
@@ -8321,6 +8352,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         };
     #[cfg(not(coverage))]
     let lifespan_shutdown_timeout = None;
+    shutdown_trace!("asgi-lifespan-shutdown-start");
     let shutdown_result = if let Some(lifespan) = lifespan.as_mut() {
         match timeout_optional(lifespan_shutdown_timeout, lifespan.shutdown()).await {
             Ok(result) => result,
@@ -8331,6 +8363,10 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
     } else {
         Ok(())
     };
+    shutdown_trace!(
+        "asgi-lifespan-shutdown-finished success={}",
+        shutdown_result.is_ok()
+    );
     if let Some(lifespan) = lifespan.as_mut() {
         lifespan.cancel_and_wait().await;
     }
