@@ -13,13 +13,22 @@ public parity passed **717/717**; Rust quality/MSRV, native composition, and
 release handoff also passed. The macOS ARM64 candidate lane passed its
 platform-applicable parity and artifact checks. Linux candidate packaging,
 clean consumers, and artifact identity passed. Windows installed its candidate
-wheel but stopped before parity cases because the H3 probe path omitted `.exe`.
-The three-repeat coverage step is still running and has not uploaded a report.
+wheel but stopped before parity cases because the H3 probe path omitted `.exe`;
+the Python 3.9 wheel-install job was skipped. The unified matrix completed with
+1,330/1,330 selected parity and fault cases passing, but the 100% coverage gate
+failed at 13,963/14,134 regions and 10,291/10,377 lines.
 
-The local follow-up is committed as `dacecf2fd`; it fixes the Windows H3 client
-path and the QUIC TLS coverage fault. The focused TLS fault input passed 1/1,
-but that selected result is not full coverage or cross-platform parity evidence.
-CI #467 started before this commit. See the
+The local follow-up `dacecf2fd` fixes the Windows H3 client path and QUIC TLS
+coverage fault. Its focused TLS fault input passed 1/1 and attributes six
+previously missing regions, but is not full coverage or cross-platform parity
+evidence. The added input
+`python-api.run-error-before-response-start-returns-500` also passed 1/1 on the
+dirty local source, matching the oracle's 500 response and configured default
+header. The selected receipt is recorded in
+`target/coverage-2026-10-29-error-before-response-start/coverage-report.json`
+(SHA-256 `8feac14d9e735f1fc6dbd0ed18ba55ee6a85c376bdedc623719149494a79dd08`);
+it does not establish the complete matrix. CI #467 predates these local test
+inputs and the Windows fix. See the
 [current coverage status](coverage.md#current-unified-coverage-status-2026-10-29).
 
 Two newly added fragmented WebSocket cases pass selected local oracle

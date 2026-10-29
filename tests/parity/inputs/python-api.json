@@ -1654,6 +1654,32 @@
       }
     },
     {
+      "case_id": "python-api.run-error-before-response-start-returns-500",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-error-before-response-start",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "api",
+          "root_path": "",
+          "headers": [["X-Python-API-After-Error", "configured"]],
+          "observe_headers": ["x-python-api-after-error"],
+          "required_observations": {
+            "response_received": true,
+            "response_status": 500,
+            "shutdown_signal_sent": true,
+            "process_exit_code": 0,
+            "process_timed_out": false
+          }
+        }
+      }
+    },
+    {
       "case_id": "python-api.run-applies-concurrency-limit",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",

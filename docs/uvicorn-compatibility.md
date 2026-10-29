@@ -23,10 +23,12 @@ lane passed its platform-applicable parity and artifact checks. Linux candidate
 packaging, identity, and clean-consumer checks passed. Windows installed the
 candidate wheel but failed before parity cases because the H3 probe launcher
 omitted `.exe`, and the Python-floor wheel-install job was skipped. The unified
-three-repeat coverage step is still running, with no report uploaded. Commit
-`dacecf2fd` fixes the Windows executable lookup and a QUIC TLS coverage fault;
-that fix and the current documentation have not yet been checked by a newer
-hosted run. Docs run
+three-repeat matrix completed with all 1,330 selected parity and fault cases
+passing, but failed the 100% coverage gate at 13,963/14,134 regions and
+10,291/10,377 lines. Commit `dacecf2fd` fixes the Windows executable lookup and
+a QUIC TLS coverage fault; a local ASGI error-before-start input also passes
+1/1. Those changes and the current documentation have not yet been checked by
+a newer hosted run. Docs run
 [#184](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243105)
 failed on the previous anchor; the strict local documentation build passed
 after the fix.
@@ -41,9 +43,9 @@ The Uvicorn 0.54.0 parity matrix therefore starts at Python 3.10. Any Python
 check.
 
 The Linux and macOS results are exact-host installed-wheel evidence, not proof
-of the complete Uvicorn contract. Windows parity, other declared Python
-versions, a 100% coverage result, and the independent Coverage-MCP receipt
-remain open.
+of the complete Uvicorn contract. Windows parity, the separate Python 3.9
+wheel-install check, other declared Python versions, a passing 100% coverage
+result, and the independent Coverage-MCP receipt remain open.
 
 | What you need | Current state |
 | --- | --- |

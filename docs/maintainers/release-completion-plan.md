@@ -39,18 +39,24 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 1. CI
    [#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
-   is running on committed PR head
-   `c0104b3775416c5dfd305f6b5fe713b0cad1a995`, against `main` at
-   `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
-   framework composition, release-evidence handoff, and Linux installed-wheel
-   parity (717/717) passed. The macOS ARM64 candidate lane passed its
-   platform-applicable parity and artifact checks; the Linux candidate artifact
-   and clean-consumer checks also passed. Windows installed the candidate wheel
-   but stopped before cases because the H3 probe path omitted `.exe`. The
-   separate declared-Python-floor wheel-install job was skipped after the
-   Windows candidate lane failed. The three-repeat coverage step is still
-   running and has not uploaded a report.
-   The Windows failure log is retained in the task history.
+   completed on PR head `c0104b3775416c5dfd305f6b5fe713b0cad1a995`, against
+   `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV,
+   native framework composition, release-evidence handoff, and Linux
+   installed-wheel parity (717/717) passed. The macOS ARM64 candidate lane
+   passed its platform-applicable parity and artifact checks; the Linux
+   candidate artifact and clean-consumer checks also passed. Windows installed
+   the candidate wheel but stopped before cases because the H3 probe path
+   omitted `.exe`; the separate declared-Python-floor wheel-install job was
+   skipped after that failure.
+
+   The complete unified matrix finished with 1,330/1,330 selected parity and
+   fault cases passed, full attribution, and no case or infrastructure retries.
+   The 100% gate failed at 13,963/14,134 regions and 10,291/10,377 lines. Its
+   report SHA-256 is
+   `7d82d7aa0adcd9bae869d1ef27e92e967b3d68ecf6a1d629498c51f6cb9a75f2`; the
+   artifact archive SHA-256 is
+   `941d157371eb9b51bc23b25073c7b7fb10bdd7e5e55fb740272e024afe82ee8e`.
+   The Windows failure log and complete coverage report are retained by CI.
 
    Commit `dacecf2fd` contains the Windows executable resolver, a coverage fault
    fix that drives Quinn's real TLS conversion error, and a corrected coverage
@@ -58,14 +64,16 @@ belong to the release tasks rather than being copied into every prerequisite.
    attributes six previously missing regions in
    `crates/uvicorn-rs/src/http3.rs:84-89`; its selected report is not full-gate
    evidence. Strict local MkDocs validation passed. These changes were made
-   after #467 started, so the run cannot validate them. Wait for its report
-   before pushing, then send one reviewed batch and use one hosted run for the
-   changed source. Docs run #184 failed on the old anchor; the local fix awaits
-   hosted deployment.
+   after #467 started, so the run cannot validate them. The next exact-source
+   hosted run must verify the Windows fix and current parity input and provide a
+   fresh gap map; it is expected to leave the coverage gate open. Use that report
+   to batch the remaining coverage cases before another full run. Do not start
+   benchmarks until the compatibility gate passes. Docs run #184 failed on the
+   old anchor; the local fix awaits hosted deployment.
 
-   CI #467 is gap-mapping evidence until its artifact is available and is
-   bound to `c0104b377`, not the later local commit. Coverage-MCP still has no
-   accepted independent receipt after its prior daemon health/time-out failure.
+   CI #467 is completed gap-mapping evidence bound to `c0104b377`, not the
+   later local commit. Coverage-MCP still has no accepted independent receipt
+   after its prior daemon health/time-out failure.
    See the [coverage status](../coverage.md#current-unified-coverage-status-2026-10-29).
    Reuse completed unchanged Linux/macOS parity and package slices; do not
    rerun them locally.

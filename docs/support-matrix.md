@@ -23,19 +23,21 @@ and release handoff also passed. The macOS ARM64 candidate lane passed its
 platform-applicable parity and artifact checks. Linux candidate packaging,
 clean consumers, and artifact identity checks passed. Windows installed the
 candidate wheel but stopped before parity cases because the runner looked for
-`parity-http3` instead of Cargo's `parity-http3.exe`. The full three-repeat
-coverage step is still running; no report is available yet.
+`parity-http3` instead of Cargo's `parity-http3.exe`. The complete unified
+three-repeat matrix passed all 1,330 selected parity and fault cases, but its
+100% coverage gate failed at 13,963/14,134 regions and 10,291/10,377 lines.
+The Python 3.9 wheel-install job was skipped after the Windows candidate lane
+failed.
 
-The local follow-up is committed as `dacecf2fd`. It resolves the Windows H3
-executable path, fixes the focused QUIC TLS coverage contract, and corrects a
-documentation link. The selected TLS case passed 1/1 and covers six previously
-missing regions, but does not establish full coverage. The strict local docs
-build passed. These changes are newer than CI #467 and still need hosted
-confirmation. CI #467 skipped the Python-floor wheel installation after its
-Windows candidate lane failed. Coverage-MCP acceptance, full Windows parity,
-complete Uvicorn compatibility, and exact-source candidate receipts remain
-open. Benchmarks stay behind parity acceptance. See the [full parity
-history](parity.md).
+The local follow-up `dacecf2fd` resolves the Windows H3 executable path, fixes
+the focused QUIC TLS coverage contract, and corrects a documentation link. Its
+selected TLS case passed 1/1 and covers six previously missing regions. The
+new `python-api.run-error-before-response-start-returns-500` input also passed
+1/1 against the oracle on the dirty local source. The strict local docs build
+passed. These changes are newer than CI #467 and still need hosted confirmation.
+Coverage-MCP acceptance, full Windows parity, complete Uvicorn compatibility,
+and exact-source candidate receipts remain open. Benchmarks stay behind parity
+acceptance. See the [full parity history](parity.md).
 
 The latest completed public parity receipt is CI #467 on Ubuntu 24.04 / x86-64
 / CPython 3.12.13. The macOS ARM64 candidate lane passed its indexed,
@@ -107,9 +109,9 @@ Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
 drop-in replacement today. CI #467 passed Linux public parity 717/717 and the
 macOS ARM64 candidate lane. Windows stopped before parity cases because the H3
 probe launcher omitted `.exe`; the committed fix awaits a new hosted run. The
-three-repeat coverage job is still in progress, and no report or accepted
-Coverage-MCP review is available. Full CLI, Python API, process and
-cross-platform acceptance remain open.
+unified three-repeat matrix completed, but its coverage gate failed with 171
+regions and 86 lines missing. No accepted Coverage-MCP review is available.
+Full CLI, Python API, process and cross-platform acceptance remain open.
 See the
 [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
 

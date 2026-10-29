@@ -23,7 +23,10 @@ behind its optional **http3** feature, the separate
 implemented by the optional **uvicorn-rs-py** adapter. The publisher is
 **.github/workflows/release.yml**; **candidate.yml** only builds and verifies
 candidates. The PyPI trusted publisher tuple is
-**appunni-m/uvicorn-rs / release.yml / pypi**.
+**appunni-m/uvicorn-rs / release.yml / pypi**. The existing Crates.io Trusted
+Publisher entries for **asgi-lifespan-protocol-rs** and **uvicorn-rs** use
+**appunni-m/uvicorn-rs / release.yml / crates-io**; verify these entries in
+place instead of adding duplicates.
 
 PR #19 remains a draft. CI
 [#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
@@ -40,16 +43,24 @@ clean-consumer and identity checks passed. The macOS candidate artifact is ID
 Windows installed its candidate wheel but stopped before parity cases because
 the H3 probe path omitted the `.exe` suffix. The separate declared-Python-floor
 wheel-install job was skipped after the Windows candidate lane failed. The
-unified three-repeat coverage step is still running; no report has been
-uploaded.
+complete unified three-repeat matrix finished with 1,330/1,330 selected parity
+and fault cases passing, complete attribution, and zero infrastructure retries.
+Its 100% gate failed at 13,963/14,134 regions and 10,291/10,377 lines. The
+coverage artifact is ID `12875322424`, archive digest
+`sha256:941d157371eb9b51bc23b25073c7b7fb10bdd7e5e55fb740272e024afe82ee8e`;
+the report digest is
+`7d82d7aa0adcd9bae869d1ef27e92e967b3d68ecf6a1d629498c51f6cb9a75f2`.
 
 Commit `dacecf2fd`, made after CI #467 started, fixes the Windows H3 client
 path and the focused QUIC TLS coverage fault; a local selected fault case passed
-1/1. It also fixes a documentation anchor. Strict local MkDocs validation
-passed, but Docs run
+1/1 and attributes six previous missing regions. The local Python API error
+case `python-api.run-error-before-response-start-returns-500` also passes 1/1
+against Uvicorn 0.54.0. Both are selected local evidence, not replacements for
+the complete exact-source hosted gates. The local docs build passed after the
+anchor fix, but Docs run
 [#184](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243105)
-failed on the earlier anchor and awaits a fresh deployment. The new source and
-documentation still need hosted confirmation.
+failed on the earlier anchor and awaits a fresh deployment. The corrected
+source and documentation still need hosted confirmation.
 
 The preceding CI [#456](https://github.com/appunni-m/uvicorn-rs/actions/runs/40668578840)
 passed **707/707** public parity cases on Linux x86-64 for commit
@@ -63,9 +74,9 @@ not a clean published-artifact receipt.
 The current release blockers are an exact-source 100% coverage result and its
 independent Coverage-MCP receipt, complete Windows and broader Uvicorn 0.54.0
 compatibility evidence, exact-source candidate artifacts and clean consumers,
-and the matched benchmarks that follow compatibility. CI #467 is not exact
-evidence for the later `dacecf2fd` source, and its Windows matrix did not reach
-any cases.
+and the matched benchmarks that follow compatibility. CI #467 is complete but
+does not bind to the later `dacecf2fd` source, and its Windows matrix did not
+reach any cases.
 The previous three-system benchmark is incomplete: Linux ARM64 Hypercorn
 HTTP/3 failed in a slow-reader case, and an HTTP/1 upload timeout remains
 unresolved. Existing measurements do not support a general performance-gain

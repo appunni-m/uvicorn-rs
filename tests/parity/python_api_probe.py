@@ -416,6 +416,8 @@ async def asgi3_app(scope, receive, send):
         logger.error("python-api log-level error sentinel")
         logger.critical("python-api log-level critical sentinel")
     await receive()
+    if scope["path"] == "/python-api-error-before-response-start":
+        raise RuntimeError("python-api response failed before response.start")
     if scope["path"] == "/python-api-second-signal-escalation":
         marker_path = os.environ.get("ASGI_PARITY_SIGNAL_HOLD_MARKER")
         if marker_path is None:
