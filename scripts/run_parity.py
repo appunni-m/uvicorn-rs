@@ -12737,6 +12737,20 @@ def _python_api_server_log_events(
                 message = "Uvicorn running on unix socket <uds> (Press CTRL+C to quit)"
             message = process_pid.sub(r"\1<pid>\3", message)
             message = worker_restart_pid.sub(r"\1<pid>\2", message)
+            if (
+                os.name == "nt"
+                and channel == "stderr"
+                and message == "Terminated child process [<pid>]"
+            ):
+                # Multiprocess.terminate() emits this informational message
+                # only when the child has not exited at the instant the
+                # parent checks its exit code. On Windows, Ctrl+Break also
+                # reaches the workers, so scheduler timing determines whether
+                # they exit before the parent's terminate loop. The process
+                # exit and timeout observations remain part of parity; this
+                # race-dependent log line does not.
+                index += 1
+                continue
             event = {"kind": "message", "level": level, "message": message}
             if logger is not None:
                 event["logger"] = logger
@@ -14222,7 +14236,8 @@ def execute_profile(
                             diagnostic = {
                                 "case_id": case["case_id"],
                                 "profile": profile["id"],
-                                "events": read_events(oracle["events"]),
+                                "oracle_events": read_events(oracle["events"]),
+                                "target_events": read_events(target["events"]),
                                 "server_log": read_server_log(oracle)[-2000:],
                                 "oracle_process": server_process_diagnostic(oracle),
                                 "target_process": server_process_diagnostic(target),
@@ -14321,6 +14336,13 @@ def execute_profile(
                         "profile": profile["id"],
                         "server": server["id"],
                         "pid": server["process"].pid,
+                        "attempted_cases": [
+                            case["case_id"]
+                            for case in server.get("attempted_cases", [])[-8:]
+                        ],
+                        "attempted_case_count": len(
+                            server.get("attempted_cases", [])
+                        ),
                         "kind": "server_log_cleanup_failure",
                         "diagnostic": server["log_cleanup_error"][-1000:],
                     })
@@ -14380,6 +14402,14 @@ def execute_profile(
                     infrastructure_errors.append({
                         "profile": profile["id"],
                         "server": server["id"],
+                        "pid": server["process"].pid,
+                        "attempted_cases": [
+                            case["case_id"]
+                            for case in server.get("attempted_cases", [])[-8:]
+                        ],
+                        "attempted_case_count": len(
+                            server.get("attempted_cases", [])
+                        ),
                         "kind": "server_shutdown_failure",
                         "exit_code": exit_code,
                         "diagnostic": logs[-1000:],
