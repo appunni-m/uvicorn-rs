@@ -4524,9 +4524,14 @@ impl LifespanRuntime {
         #[cfg(not(coverage))]
         let send_result = request_tx.send(LifespanMessage::Startup).await;
         if send_result.is_err() {
-            app_task.as_mut().abort();
-            let _ = app_task.into_handle().await;
-            return Err(PyOSError::new_err("could not send ASGI lifespan startup"));
+            // Uvicorn treats a lifespan callable that returns before it
+            // answers the startup event as a completed lifespan task. The
+            // request channel can close before Startup is enqueued when the
+            // app returns immediately, so handle that race through the same
+            // path as a task that finishes before the startup acknowledgement.
+            let result = app_task.as_mut().await;
+            app_task.into_handle();
+            return Self::without_lifespan(result, state, mode);
         }
 
         tokio::select! {

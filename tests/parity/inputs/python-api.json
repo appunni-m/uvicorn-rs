@@ -2679,6 +2679,7 @@
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [["X-Python-API", "wsgi"]],
           "shutdown_signal": "SIGINT",
+          "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
           "lifespan": "off",
           "invocation": "api",

@@ -1588,21 +1588,10 @@ except KeyboardInterrupt:
                 time.sleep(0.2)
             try:
                 if os.name == "nt":
-                    # Ctrl+C is disabled for subprocesses created in a new
-                    # process group. Ctrl+Break reaches the server and worker
-                    # tree while the private console contains the event.
-                    import ctypes
-
-                    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-                    kernel32.GenerateConsoleCtrlEvent.argtypes = [
-                        ctypes.c_uint,
-                        ctypes.c_uint,
-                    ]
-                    kernel32.GenerateConsoleCtrlEvent.restype = ctypes.c_int
-                    if not kernel32.GenerateConsoleCtrlEvent(
-                        signal.CTRL_BREAK_EVENT, 0
-                    ):
-                        raise ctypes.WinError(ctypes.get_last_error())
+                    # Target the process group created for this server so the
+                    # parity runner and unrelated console processes do not
+                    # receive its shutdown signal.
+                    process.send_signal(signal.CTRL_BREAK_EVENT)
                 else:
                     process.send_signal(getattr(signal, signal_name))
                 shutdown_signals_sent.append(signal_name)
