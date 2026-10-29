@@ -1637,7 +1637,12 @@ except KeyboardInterrupt:
             "process_exit_code": process.returncode,
             "process_timed_out": process_timed_out,
             "graceful_shutdown_cancellation_observed": (
-                signal_cancel_marker is not None and signal_cancel_marker.exists()
+                (signal_cancel_marker is not None and signal_cancel_marker.exists())
+                or (
+                    b"Cancel " in server_stderr
+                    and b"running task(s), timeout graceful shutdown exceeded"
+                    in server_stderr
+                )
             ),
             "request_limit_response_count": response_count,
             "request_limit_range_satisfied": request_limit_range_satisfied,

@@ -31,6 +31,7 @@ from uvicorn.config import (
     SSL_PROTOCOL_VERSION,
     WSProtocolType,
 )
+from uvicorn.server import _ensure_windows_sockets_listening
 
 
 LEVEL_CHOICES = click.Choice(["critical", "error", "warning", "info", "debug", "trace"])
@@ -570,6 +571,7 @@ def run(
 
             listener = config.bind_socket()
             try:
+                _ensure_windows_sockets_listening([listener], config.backlog)
                 ChangeReload(config, target=server.run, sockets=[listener]).run()
             finally:
                 listener.close()
@@ -578,6 +580,7 @@ def run(
 
             listener = config.bind_socket()
             try:
+                _ensure_windows_sockets_listening([listener], config.backlog)
                 Multiprocess(config, sockets=[listener]).run()
             finally:
                 listener.close()

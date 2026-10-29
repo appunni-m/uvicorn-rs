@@ -33,6 +33,17 @@ if sys.platform == "win32":  # pragma: no cover - Windows-specific signal
 logger = logging.getLogger("uvicorn.error")
 
 
+def _ensure_windows_sockets_listening(
+    sockets: list[socket.socket], backlog: int
+) -> None:
+    """Listen on bound Windows sockets once, before they are shared by workers."""
+    if os.name != "nt":
+        return
+    for sock in sockets:
+        if not sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN):
+            sock.listen(backlog)
+
+
 class ServerState:
     """Compatibility state container retained for Uvicorn integrations."""
 
@@ -206,13 +217,11 @@ class Server:
             self._inherited_socket = socket.socket(fileno=os.dup(self.config.fd))
             sockets = [self._inherited_socket]
 
-        if sockets is not None and os.name == "nt":
-            # Uvicorn's Server.startup listens on sockets passed by its
-            # multiprocess/reload supervisors. Config.bind_socket only binds
-            # them, so keep that startup step before the native transport
-            # duplicates a Windows listener handle.
-            for sock in sockets:
-                sock.listen(self.config.backlog)
+        if sockets is not None:
+            # Listen before handing an inherited socket to the native server.
+            # The supervisor also does this in its parent before spawning
+            # Windows workers, so each child sees an already-listening handle.
+            _ensure_windows_sockets_listening(sockets, self.config.backlog)
 
         try:
             native_server = NativeServer(

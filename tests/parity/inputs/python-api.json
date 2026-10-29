@@ -6214,6 +6214,7 @@
           "path": "/python-api-wsgi-environment?name=rust",
           "request_headers": [["X-Python-API", "wsgi-env"]],
           "shutdown_signal": "SIGINT",
+          "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
           "lifespan": "off",
           "invocation": "module-cli",

@@ -10106,7 +10106,14 @@ def run_zero_timeout_concurrent_stream_shutdown(
             )
 
         shutdown_started = time.monotonic()
-        server["process"].terminate()
+        if os.name == "nt":
+            # Popen.terminate() is TerminateProcess on Windows, so the ASGI
+            # requests cannot observe cancellation. Use the same graceful
+            # control event as the active-stream shutdown contract.
+            server["graceful_signal_requested"] = True
+            server["process"].send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            server["process"].terminate()
         aborted = 0
         for _connection, _response, client_socket in streams:
             client_socket.setsockopt(
