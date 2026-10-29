@@ -14,22 +14,21 @@ published.
 ## Current status (2026-10-29)
 
 PR #19 remains a draft. CI
-[#466](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137734)
-checked committed PR head `51c6e4920644d1a4e6fdd9f9ae9571ec8d2d7e61`, based
-on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its installed-wheel
-public matrix passed 717/717 on Linux x86-64 and macOS ARM64. Rust
-quality/MSRV, native composition, and release-handoff jobs also passed. Windows
-stopped before parity because its oracle dependency check still required
-`uvloop`, which is unavailable there. The unified three-repeat coverage matrix
-attributed 1,071/1,071 cases but missed its 100% gate at 13,962/14,134 regions
-and 10,290/10,377 lines. Linux and macOS candidate builds completed, but their identity
-recorders failed because the pinned `maturin` executable was not on PATH;
-Linux clean-consumer checks passed, and the macOS candidate wheel passed
-717/717 parity. Local working-tree fixes make `uvloop` platform-specific and
-resolve the pinned Maturin version through `uvx`; hosted confirmation is
-pending. Docs run
-[#183](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137733)
-passed for the committed source.
+[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
+checked committed PR head `c0104b3775416c5dfd305f6b5fe713b0cad1a995`, based
+on `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its Linux
+installed-wheel public matrix passed 717/717; Rust quality/MSRV, native
+composition, and release-handoff jobs also passed. The macOS ARM64 candidate
+lane passed its platform-applicable parity and artifact checks. Linux candidate
+packaging, identity, and clean-consumer checks passed. Windows installed the
+candidate wheel but failed before parity cases because the H3 probe launcher
+omitted `.exe`. The unified three-repeat coverage step is still running, with
+no report uploaded. Commit `dacecf2fd` fixes the Windows executable lookup and
+a QUIC TLS coverage fault; that fix and the current documentation have not yet
+been checked by a newer hosted run. Docs run
+[#184](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243105)
+failed on the previous anchor; the strict local documentation build passed
+after the fix.
 
 The package metadata declares Python `>=3.9`, and CI checks installed-wheel
 import on Python 3.9. That check does not establish Uvicorn 0.54.0 parity:
@@ -47,12 +46,12 @@ remain open.
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | Not available. The uvicorn-rs distribution has not been published. |
-| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #466 passed 717 public cases on Linux x86-64 and macOS ARM64; full CLI and settings parity is not proved. |
-| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #466 passed the public matrix on Linux x86-64 and macOS ARM64; the complete programmatic contract remains open. |
+| Run the uvicorn command | The checkout exposes the uvicorn command and python -m uvicorn. CI #467 passed 717 public cases on Linux x86-64; full CLI and settings parity is not proved. |
+| Import and configure uvicorn | The checkout exposes run, Config, and Server. CI #467 passed the Linux public matrix; the complete programmatic contract remains open. |
 | Serve a Python ASGI app | The adapter supports selected ASGI3, ASGI2, and WSGI paths through the Rust server. The installed-wheel public matrix passed 717/717 on Linux and macOS; Windows parity did not reach its cases and remains unverified. |
 | Use workers, reload, sockets, or process controls | Selected parity cases cover some worker, reload, socket, signal, and graceful-shutdown behavior. Other combinations, platforms, and failure paths remain unverified. |
 | Claim a performance advantage | Not supported. The previous three-system benchmark is incomplete, and benchmark work remains paused until parity is accepted. See benchmark status. |
-| Use the current release candidate on Windows | Not verified. CI #466 stopped before Windows parity because the oracle dependency check required `uvloop`; a local platform-aware fix needs hosted confirmation. |
+| Use the current release candidate on Windows | Not verified. CI #467 stopped before Windows parity because the H3 probe launcher omitted `.exe`; the fix is committed and needs hosted confirmation. |
 
 The passing Linux and macOS matrices do not prove full compatibility. Windows,
 other declared Python versions, and unsupported behaviors still need exact
