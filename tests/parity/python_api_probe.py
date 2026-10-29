@@ -1179,16 +1179,19 @@ except KeyboardInterrupt:
         )
         worker_stall_resumer.start()
     process_options = {}
+    previous_windows_sigbreak_handler = None
     shutdown_signal_name = request.get("shutdown_signal", "SIGINT")
     if shutdown_signal_name not in {"SIGINT", "SIGTERM"}:
         raise ValueError("run_http shutdown_signal must be SIGINT or SIGTERM")
     if os.name == "nt":
         process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        # Uvicorn's Windows supervisor translates Ctrl+Break into SIGTERM;
-        # this is also its Windows equivalent for a direct SIGINT request.
-        stop_signal = signal.CTRL_BREAK_EVENT
+        # The runner gives this probe a private console. Ignore Ctrl+Break in
+        # the probe so a console-wide event can stop the server tree without
+        # terminating its observer process or the parity coordinator.
+        previous_windows_sigbreak_handler = signal.signal(
+            signal.SIGBREAK, signal.SIG_IGN
+        )
     else:
-        stop_signal = getattr(signal, shutdown_signal_name)
         if worker_stall_directory is not None or worker_control_signal_names:
             process_options["start_new_session"] = True
     if inherited_listeners:
@@ -1226,6 +1229,8 @@ except KeyboardInterrupt:
             worker_stall_resumer.join(timeout=1.0)
         if worker_stall_directory is not None:
             worker_stall_directory.cleanup()
+        if previous_windows_sigbreak_handler is not None:
+            signal.signal(signal.SIGBREAK, previous_windows_sigbreak_handler)
         raise
 
     def kill_server_process_group() -> None:
@@ -1582,15 +1587,24 @@ except KeyboardInterrupt:
             if index:
                 time.sleep(0.2)
             try:
-                process.send_signal(
-                    stop_signal
-                    if signal_name == shutdown_signal_name
-                    else (
-                        signal.CTRL_BREAK_EVENT
-                        if os.name == "nt"
-                        else getattr(signal, signal_name)
-                    )
-                )
+                if os.name == "nt":
+                    # A CTRL_BREAK broadcast reaches the server's worker tree
+                    # even when multiprocessing children share one process
+                    # group. The private console above contains the event.
+                    import ctypes
+
+                    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                    kernel32.GenerateConsoleCtrlEvent.argtypes = [
+                        ctypes.c_uint,
+                        ctypes.c_uint,
+                    ]
+                    kernel32.GenerateConsoleCtrlEvent.restype = ctypes.c_int
+                    if not kernel32.GenerateConsoleCtrlEvent(
+                        signal.CTRL_BREAK_EVENT, 0
+                    ):
+                        raise ctypes.WinError(ctypes.get_last_error())
+                else:
+                    process.send_signal(getattr(signal, signal_name))
                 shutdown_signals_sent.append(signal_name)
                 if (
                     wsgi_final_body_release_after_shutdown
@@ -1673,6 +1687,8 @@ except KeyboardInterrupt:
             inherited_listener.close()
         if bind_conflict_listener is not None:
             bind_conflict_listener.close()
+        if previous_windows_sigbreak_handler is not None:
+            signal.signal(signal.SIGBREAK, previous_windows_sigbreak_handler)
 
 
 def run_websocket_observation(request: dict) -> dict:

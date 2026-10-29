@@ -1999,6 +1999,10 @@ impl WebSocketKeepaliveConfig {
         };
         let timeout = match timeout {
             Some(seconds) if seconds < 0.0 => Some(std::time::Duration::ZERO),
+            // On Windows the pinned Uvicorn/websockets oracle treats a NaN
+            // ping timeout as immediately expired; asyncio timer ordering
+            // makes that observable in the native adapter too.
+            Some(seconds) if seconds.is_nan() && cfg!(windows) => Some(std::time::Duration::ZERO),
             Some(seconds) => Self::duration_from_seconds(seconds),
             None => None,
         };
