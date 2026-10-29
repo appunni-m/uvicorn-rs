@@ -61,7 +61,7 @@ tower-service = "0.3"
 rustix = { version = "1.1.5", features = ["fs", "net"] }
 
 [lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)"] }
 
 [lints.clippy]

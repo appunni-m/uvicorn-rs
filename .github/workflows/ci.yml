@@ -653,9 +653,11 @@ jobs:
           uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
           parity_args=()
           if [ "$RUNNER_OS" = 'Windows' ]; then
-            # These inputs require inherited POSIX descriptors or POSIX-only worker signals.
+            # These inputs require Unix-domain sockets, inherited POSIX
+            # descriptors, a Unix-only transfer race, or POSIX-only signals.
             parity_args+=(
               --exclude-case-id python-api.module-cli-posix-unresponsive-worker-healthcheck-restarts
+              --exclude-case-id python-api.module-cli-inherited-fd-from-uvicorn-environment
               --exclude-case-id python-api.module-cli-serves-request-on-inherited-fd
               --exclude-case-id python-api.module-cli-serves-request-on-inherited-ipv6-fd
               --exclude-case-id python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request
@@ -663,9 +665,17 @@ jobs:
               --exclude-case-id python-api.server-sockets-serves-request-on-multiple-inherited-fds
               --exclude-case-id python-api.config-server-serves-request-on-inherited-fd
               --exclude-case-id python-api.run-serves-request-on-inherited-fd
-              --exclude-case-id python-api.server-serves-request-on-prebound-socket
-              --exclude-case-id python-api.server-serves-request-on-multiple-prebound-sockets
-              --exclude-case-id python-api.server-serves-request-on-multiple-prebound-tls-sockets
+              --exclude-case-id python-api.run-websocket-over-unix-domain-socket
+              --exclude-case-id python-api.server-startup-uds-replaces-existing-socket-and-shuts-down-lifespan
+              --exclude-case-id python-api.fault.uds-permissions-error-propagates-and-cleans-lifespan
+              --exclude-case-id python-api.run-applies-concurrency-limit-unix-socket
+              --exclude-case-id python-api.module-cli-serves-unix-domain-socket-request
+              --exclude-case-id python-api.config-server-serves-unix-domain-socket-request
+              --exclude-case-id python-api.module-cli-serves-tls-over-unix-domain-socket
+              --exclude-case-id python-api.cancel-startup-during-prebound-listener-transfer
+              --exclude-case-id python-api.cancel-startup-during-prebound-transfer-without-lifespan
+              --exclude-case-id cli.uds-startup-and-clean-exit
+              --exclude-case-id cli.uds-from-environment-starts-and-cleans
               --exclude-case-id python-api.module-cli-two-workers-scale-with-ttin-ttou
               --exclude-case-id python-api.module-cli-two-workers-restart-on-sighup
               --exclude-case-id python-api.module-cli-sighup-keeps-workers-after-replacement-startup-failure

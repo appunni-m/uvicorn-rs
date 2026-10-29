@@ -61,8 +61,9 @@ class Server:
             uds: Optional Unix domain socket path. When set, the Rust runtime
                 binds this stream socket and does not create a QUIC listener.
             sockets: Optional non-empty list of pre-bound IPv4 or IPv6 TCP
-                listeners. Their descriptors are transferred to Rust during
-                startup.
+                listeners. Their handles are duplicated for the Rust runtime
+                during startup; Unix uses descriptor passing and Windows uses
+                Winsock socket duplication.
             backlog: Maximum pending TCP connections; negative values are
                 clamped to zero as in Uvicorn's socket-listen path.
             timeout_keep_alive: Idle timeout for persistent HTTP/1 connections
@@ -205,7 +206,12 @@ class Server:
             raise ValueError("at least one pre-bound TCP listener is required")
         transfer_directory = None
         transfer_path = None
-        if self.sockets is not None:
+        prebound_sockets = None
+        if self.sockets is not None and os.name == "nt":
+            # Windows does not support SCM_RIGHTS. Pass the socket objects to
+            # the extension, which duplicates and owns their Winsock handles.
+            prebound_sockets = self.sockets
+        elif self.sockets is not None:
             transfer_directory = tempfile.TemporaryDirectory(
                 prefix="uvrs-", dir="/tmp" if os.path.isdir("/tmp") else None
             )
@@ -270,6 +276,7 @@ class Server:
                     self.ssl_keyfile_password,
                     self.ws_max_queue,
                     self.websocket_enabled,
+                    prebound_sockets,
                 )
             )
             if listener_transfer_stopped is not None:

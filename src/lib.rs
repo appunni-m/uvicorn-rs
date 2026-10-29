@@ -1847,6 +1847,8 @@ struct ServeOptions {
     port: u16,
     uds: Option<String>,
     fd_transfer_path: Option<String>,
+    #[cfg(all(windows, uvicorn_rs_native_transport))]
+    prebound_listeners: Option<Vec<std::net::TcpListener>>,
     backlog: i32,
     timeout_keep_alive: std::time::Duration,
     http1_max_buffer_size: Option<usize>,
@@ -5819,8 +5821,111 @@ impl Body for AsgiBody {
     }
 }
 
+#[cfg(all(windows, uvicorn_rs_native_transport))]
+fn duplicate_prebound_tcp_listeners(
+    py: Python<'_>,
+    sockets: Vec<Py<PyAny>>,
+) -> PyResult<Vec<std::net::TcpListener>> {
+    use std::os::windows::io::RawSocket;
+
+    let socket_module = PyModule::import(py, "socket")?;
+    let low_level_module = PyModule::import(py, "_socket")?;
+    let low_level_socket = low_level_module.getattr("socket")?;
+    let family_descriptor = low_level_socket.getattr("family")?;
+    let duplicate_method = low_level_socket.getattr("dup")?;
+    let detach_method = low_level_socket.getattr("detach")?;
+    let getsockopt_method = low_level_socket.getattr("getsockopt")?;
+    let sol_socket = socket_module.getattr("SOL_SOCKET")?.extract::<i32>()?;
+    let af_inet = socket_module.getattr("AF_INET")?.extract::<i32>()?;
+    let af_inet6 = socket_module.getattr("AF_INET6")?.extract::<i32>()?;
+    let sock_stream = socket_module.getattr("SOCK_STREAM")?.extract::<i32>()?;
+    let so_type = socket_module.getattr("SO_TYPE")?.extract::<i32>()?;
+    let so_acceptconn = socket_module.getattr("SO_ACCEPTCONN")?.extract::<i32>()?;
+
+    if sockets.is_empty() {
+        return Err(PyValueError::new_err(
+            "at least one pre-bound TCP listener is required",
+        ));
+    }
+
+    let mut listeners = Vec::with_capacity(sockets.len());
+    for socket in sockets {
+        let source = socket.bind(py);
+        if !source.is_instance(&low_level_socket)? {
+            return Err(PyValueError::new_err(
+                "pre-bound listeners must be socket.socket instances",
+            ));
+        }
+
+        // Read the built-in socket properties and methods directly so Python
+        // overrides cannot substitute another handle at this boundary.
+        let family = family_descriptor
+            .call_method1("__get__", (source.clone(),))?
+            .extract::<i32>()?;
+        if family != af_inet && family != af_inet6 {
+            return Err(PyValueError::new_err(
+                "only pre-bound IPv4 and IPv6 TCP listeners are supported",
+            ));
+        }
+        let socket_kind = getsockopt_method
+            .call1((source.clone(), sol_socket, so_type))?
+            .extract::<i32>()?;
+        let accepting = getsockopt_method
+            .call1((source.clone(), sol_socket, so_acceptconn))?
+            .extract::<i32>()?;
+        if socket_kind != sock_stream || accepting != 1 {
+            return Err(PyValueError::new_err(
+                "pre-bound sockets must be listening TCP stream sockets",
+            ));
+        }
+
+        // Call the built-in duplication method directly so a Python override
+        // cannot substitute another handle, then detach through the C socket
+        // type to transfer the duplicate's ownership into Rust.
+        let duplicate = duplicate_method.call1((source,))?;
+        if !duplicate.is_instance(&low_level_socket)? {
+            return Err(PyValueError::new_err(
+                "Windows socket sharing did not return a socket object",
+            ));
+        }
+        let detached = detach_method.call1((duplicate,))?;
+        // The C socket detach method returns its owned SOCKET as a Python int.
+        let raw_socket = detached.extract::<RawSocket>()?;
+        if raw_socket == usize::MAX {
+            return Err(PyValueError::new_err(
+                "pre-bound socket duplication returned an invalid handle",
+            ));
+        }
+        // `detach()` transferred the duplicate's live Winsock handle to Rust;
+        // this conversion becomes its sole owner and closes it on drop.
+        let listener = tcp_listener_from_detached_socket(raw_socket);
+        listener.set_nonblocking(true).map_err(|error| {
+            PyOSError::new_err(format!(
+                "could not set inherited TCP listener nonblocking: {error}"
+            ))
+        })?;
+        listeners.push(listener);
+    }
+    Ok(listeners)
+}
+
+#[cfg(all(windows, uvicorn_rs_native_transport))]
+#[allow(unsafe_code)]
+fn tcp_listener_from_detached_socket(
+    raw_socket: std::os::windows::io::RawSocket,
+) -> std::net::TcpListener {
+    use std::os::windows::io::{FromRawSocket, OwnedSocket};
+
+    // SAFETY: this helper is called only with the live SOCKET returned by
+    // `_socket.socket.detach()` for a duplicate validated as a TCP listener.
+    // `detach()` relinquishes the Python socket's ownership, and this creates
+    // its sole Rust owner.
+    let owned_socket = unsafe { OwnedSocket::from_raw_socket(raw_socket) };
+    std::net::TcpListener::from(owned_socket)
+}
+
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, http2_enabled, ws_max_size, ws_per_message_deflate, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback, http1_max_buffer_size=None, ssl_ca_certs=None, ssl_cert_reqs=0, tls12_only=false, ssl_cipher_suites=None, ssl_keyfile_password=None, ws_max_queue=None, websocket_enabled=true))]
+#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, http2_enabled, ws_max_size, ws_per_message_deflate, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback, http1_max_buffer_size=None, ssl_ca_certs=None, ssl_cert_reqs=0, tls12_only=false, ssl_cipher_suites=None, ssl_keyfile_password=None, ws_max_queue=None, websocket_enabled=true, prebound_sockets=None))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -5860,6 +5965,7 @@ fn serve<'py>(
     ssl_keyfile_password: Option<String>,
     ws_max_queue: Option<usize>,
     websocket_enabled: bool,
+    prebound_sockets: Option<Vec<Py<PyAny>>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let lifespan_mode = LifespanMode::from_python(&lifespan)?;
     let websocket_keepalive =
@@ -5924,6 +6030,12 @@ fn serve<'py>(
             ));
         }
     };
+    #[cfg(all(windows, uvicorn_rs_native_transport))]
+    let prebound_listeners = prebound_sockets
+        .map(|sockets| duplicate_prebound_tcp_listeners(py, sockets))
+        .transpose()?;
+    #[cfg(not(all(windows, uvicorn_rs_native_transport)))]
+    let _ = prebound_sockets;
     let locals = coverage_value!(
         ServerGetCurrentLocals,
         pyo3_async_runtimes::tokio::get_current_locals(py)
@@ -5985,6 +6097,8 @@ fn serve<'py>(
             port,
             uds,
             fd_transfer_path,
+            #[cfg(all(windows, uvicorn_rs_native_transport))]
+            prebound_listeners,
             backlog,
             timeout_keep_alive,
             http1_max_buffer_size,
@@ -7387,6 +7501,31 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         return Ok(());
     }
     let listener_setup = async {
+        #[cfg(all(windows, uvicorn_rs_native_transport))]
+        if let Some(prebound_listeners) = options.prebound_listeners.take() {
+            let mut listeners = Vec::with_capacity(prebound_listeners.len());
+            for standard_listener in prebound_listeners {
+                let listener = TcpListener::from_std(standard_listener).map_err(|error| {
+                    PyOSError::new_err(format!(
+                        "could not register inherited TCP listener: {error}"
+                    ))
+                })?;
+                listeners.push(listener);
+            }
+            let server_addr = listeners
+                .first()
+                .ok_or_else(|| {
+                    PyValueError::new_err("at least one pre-bound TCP listener is required")
+                })?
+                .local_addr()
+                .map_err(|error| {
+                    PyOSError::new_err(format!(
+                        "could not inspect inherited TCP listener: {error}"
+                    ))
+                })?;
+            return Ok(Some((BoundListener::Tcp(listeners), server_addr)));
+        }
+
         #[cfg(uvicorn_rs_native_transport)]
         let (listener, server_addr) = if let Some(path) = options.fd_transfer_path.as_deref() {
             let received = tokio::select! {

@@ -13018,7 +13018,11 @@ def run_python_api_probe(
         )
         observation["bind_error_logged"] = any(
             "bind" in event.get("message", "").lower()
-            and "already in use" in event.get("message", "").lower()
+            and (
+                "already in use" in event.get("message", "").lower()
+                or "only one usage of each socket address"
+                in event.get("message", "").lower()
+            )
             for channel in server_log_events.values()
             for event in channel
         )
