@@ -6859,16 +6859,33 @@ fn load_tls_configs(
         vec![b"http/1.1".to_vec()]
     };
 
-    // QUIC requires TLS 1.3 regardless of the selected TCP SSL protocol.
-    let quic_tls = rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
+    // QUIC requires a TLS 1.3 cipher suite regardless of the selected TCP SSL
+    // protocol. The coverage fault supplies a provider with only TLS 1.2
+    // suites so Quinn's real conversion rejects it below.
+    #[cfg(coverage)]
+    let quic_tls_builder = if coverage_fault_take(CoverageFaultPoint::ServerQuicTlsConfigError) {
+        let mut provider = rustls::crypto::ring::default_provider();
+        provider
+            .cipher_suites
+            .retain(|suite| suite.tls13().is_none());
+        rustls::ServerConfig::builder_with_provider(Arc::new(provider))
+            .with_protocol_versions(&[&rustls::version::TLS12])
+            .map_err(|error| {
+                PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}"))
+            })?
+    } else {
+        rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
+    };
+    #[cfg(not(coverage))]
+    let quic_tls_builder =
+        rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13]);
+
+    let quic_tls = quic_tls_builder
         .with_client_cert_verifier(client_cert_verifier)
         .with_single_cert(cert_chain, key)
         .map_err(|error| PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}")))?;
-    let quic_config = coverage_runtime_result!(
-        ServerQuicTlsConfigError,
-        uvicorn_rs::Http3ServerConfig::from_rustls_config(quic_tls)
-    )
-    .map_err(|error| PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}")))?;
+    let quic_config = uvicorn_rs::Http3ServerConfig::from_rustls_config(quic_tls)
+        .map_err(|error| PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}")))?;
 
     Ok((TlsAcceptor::from(Arc::new(tcp_tls)), quic_config))
 }

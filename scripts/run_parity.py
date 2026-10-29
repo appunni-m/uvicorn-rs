@@ -5727,6 +5727,12 @@ def make_client_certificate(directory: Path) -> tuple[Path, Path]:
     return client_certificate, client_key
 
 
+def h3_client_executable_path(*, windows: bool | None = None) -> Path:
+    is_windows = os.name == "nt" if windows is None else windows
+    executable = "parity-http3.exe" if is_windows else "parity-http3"
+    return ROOT / "target" / "release" / executable
+
+
 def build_h3_client() -> Path:
     subprocess.run(
         [
@@ -5737,11 +5743,11 @@ def build_h3_client() -> Path:
         check=True,
         timeout=300,
     )
-    return ROOT / "target" / "release" / "parity-http3"
+    return h3_client_executable_path()
 
 
 def prebuilt_h3_client() -> Path:
-    client = ROOT / "target" / "release" / "parity-http3"
+    client = h3_client_executable_path()
     if not client.is_file():
         raise ParityError(f"prebuild the HTTP/3 parity client before freezing identity: {client}")
     return client
