@@ -452,7 +452,8 @@ def normalize_operation_comparison_observation(
         if traceback_header not in lines:
             warning_separator = b": RuntimeWarning:"
             if not any(
-                b"uvicorn/" in line and warning_separator in line
+                b"uvicorn/" in line.replace(b"\\", b"/")
+                and warning_separator in line
                 for line in lines
             ):
                 normalized[field] = ("raw", stderr)
@@ -523,13 +524,16 @@ def normalize_operation_comparison_observation(
 def required_observations_for_case(
     case: dict[str, Any], operation: dict[str, Any]
 ) -> dict[str, Any]:
-    """Apply an input case's declared run_http requirements over operation defaults.
+    """Apply input-case requirements over operation defaults.
 
     Keep offline evidence validation aligned with the live parity runner. Some
     run_http inputs intentionally expect no response (for example, an invalid
     default header), so the operation-wide success defaults do not apply to
-    those cases.
+    those cases. Python API cases may also override operation requirements at
+    the case level when the expected behavior is specific to one input.
     """
+    if "required_observations" in case:
+        return case["required_observations"]
     run_http = case.get("api", {}).get("run_http", {})
     return run_http.get(
         "required_observations", operation.get("required_observations", {})

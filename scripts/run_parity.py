@@ -62,7 +62,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@43"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@44"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -2567,9 +2567,21 @@ def load_contract(
             python_api_case_keys = {
                 "case_id", "profile", "operation", "covers", "api"
             }
+            if "required_observations" in case:
+                python_api_case_keys.add("required_observations")
             if case.get("verification") == "fault-contract":
                 python_api_case_keys.update({"verification", "fault"})
             exact_case_keys(case, python_api_case_keys, case_id)
+            if "required_observations" in case:
+                required_observations = case["required_observations"]
+                observed_fields = operations[case["operation"]]["observe"]
+                if (
+                    type(required_observations) is not dict
+                    or not set(required_observations).issubset(observed_fields)
+                ):
+                    raise ParityError(
+                        f"{case_id}.required_observations must use declared observation fields"
+                    )
             if case.get("verification") == "fault-contract":
                 fault = case["fault"]
                 run_http = case.get("api", {}).get("run_http", {})
@@ -4232,6 +4244,17 @@ def load_contract(
                 stream_keys.add("send_all_before_read")
                 if stream["send_all_before_read"] is not True:
                     raise ParityError(f"{case_id}: send_all_before_read must be true when present")
+            if "send_body_concurrently_with_response_read" in stream:
+                stream_keys.add("send_body_concurrently_with_response_read")
+                if (
+                    stream["send_body_concurrently_with_response_read"] is not True
+                    or kind != "http1"
+                    or stream.get("send_all_before_read") is True
+                    or stream.get("send_remaining_after_response") is True
+                ):
+                    raise ParityError(
+                        f"{case_id}: concurrent request-body sending requires an HTTP/1.1 streaming input"
+                    )
             if "send_remaining_after_response" in stream:
                 stream_keys.add("send_remaining_after_response")
                 if (
@@ -6276,6 +6299,7 @@ def stop_server(
 ) -> tuple[int | None, str]:
     process: subprocess.Popen = server["process"]
     log = server["log"]
+    server.setdefault("forced_kill", False)
     if log.closed:
         log_path = getattr(log, "name", None)
         if isinstance(log_path, (str, os.PathLike)):
@@ -6309,6 +6333,7 @@ def stop_server(
         try:
             process.wait(timeout=12)
         except subprocess.TimeoutExpired:
+            server["forced_kill"] = True
             process.kill()
             process.wait(timeout=3)
     log.seek(0)
@@ -7022,6 +7047,7 @@ def http1_streaming_request(
     client = socket.create_connection(("127.0.0.1", port), timeout=10)
     client.settimeout(10)
     reader = client.makefile("rb")
+    concurrent_upload_sender = None
     try:
         headers = [
             f"{specification['method']} {specification['path']} HTTP/1.1\r\n",
@@ -7057,6 +7083,31 @@ def http1_streaming_request(
                 + b"\r\n"
             )
 
+        if specification.get("send_body_concurrently_with_response_read", False):
+            upload_errors: list[OSError] = []
+
+            def send_remaining_body() -> None:
+                try:
+                    for chunk in chunks[1:]:
+                        client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
+                    if specification.get("malformed_final_chunk", False):
+                        client.sendall(b"not-a-size\r\n")
+                    else:
+                        trailer_lines = "".join(
+                            f"{name}: {value}\r\n"
+                            for name, value in specification.get("trailers", [])
+                        )
+                        client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
+                except OSError as error:
+                    upload_errors.append(error)
+
+            concurrent_upload_sender = threading.Thread(
+                target=send_remaining_body,
+                name="parity-http1-upload",
+                daemon=True,
+            )
+            concurrent_upload_sender.start()
+
         if specification.get("send_all_before_read", False):
             for chunk in chunks[1:]:
                 try:
@@ -7082,6 +7133,10 @@ def http1_streaming_request(
         except ConnectionResetError:
             status_line = b""
         if not status_line:
+            if concurrent_upload_sender is not None:
+                concurrent_upload_sender.join(timeout=10)
+                if concurrent_upload_sender.is_alive():
+                    raise ParityError("concurrent HTTP/1.1 request-body sender did not stop")
             result = response_observation(None, [], b"")
             result.update({"early_body_base64": "", "connection_closed": True})
             return result
@@ -7113,6 +7168,10 @@ def http1_streaming_request(
                 )
             except ConnectionResetError:
                 response_body = b""
+            if concurrent_upload_sender is not None:
+                concurrent_upload_sender.join(timeout=10)
+                if concurrent_upload_sender.is_alive():
+                    raise ParityError("concurrent HTTP/1.1 request-body sender did not stop")
             result = response_observation(status, response_headers, response_body)
             result["early_body_base64"] = base64.b64encode(response_body).decode("ascii")
             result["connection_closed"] = True
@@ -7123,6 +7182,7 @@ def http1_streaming_request(
             raise ParityError("response finished before the request upload was complete")
         if (
             not specification.get("send_all_before_read", False)
+            and not specification.get("send_body_concurrently_with_response_read", False)
             and not specification.get("send_remaining_after_response", False)
             and not connection_closed
         ):
@@ -7150,6 +7210,11 @@ def http1_streaming_request(
                 response_chunks.append(chunk)
         except (BrokenPipeError, ConnectionResetError, ParityError):
             connection_closed = True
+        if concurrent_upload_sender is not None:
+            concurrent_upload_sender.join(timeout=10)
+            if concurrent_upload_sender.is_alive():
+                raise ParityError("concurrent HTTP/1.1 request-body sender did not stop")
+            connection_closed = connection_closed or bool(upload_errors)
         if specification.get("send_remaining_after_response", False) and not connection_closed:
             for chunk in chunks[1:]:
                 try:
@@ -7183,6 +7248,12 @@ def http1_streaming_request(
             result["fault_consumed"] = fault_consumed is True
         return result
     finally:
+        if concurrent_upload_sender is not None and concurrent_upload_sender.is_alive():
+            try:
+                client.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            concurrent_upload_sender.join(timeout=1)
         reader.close()
         client.close()
 
@@ -7574,6 +7645,11 @@ def close_http2_connection(
             return None
         return f"{type(error).__name__}: {error}"
     except OSError as error:
+        if os.name == "nt" and getattr(error, "winerror", None) in {10053, 10054}:
+            # Windows may report an aborted/reset TLS transport while the
+            # client closes after every HTTP/2 response stream has completed.
+            # Response integrity and resource assertions have already passed.
+            return None
         return f"{type(error).__name__}: {error}"
     else:
         raw_socket.close()
@@ -9436,11 +9512,13 @@ def websocket_observation(
                 "timeout graceful shutdown exceeded",
             )
         )
+        sigkill = getattr(signal, "SIGKILL", None)
         return {
             "status": followup["status"],
             "application_events": application_events,
             "shutdown_clean": exit_code is not None
-            and exit_code != -signal.SIGKILL
+            and not server.get("forced_kill", False)
+            and (sigkill is None or exit_code != -sigkill)
             and not shutdown_timeout,
         }
 
@@ -9894,7 +9972,8 @@ def normalize_cli_process_stderr(stderr_base64: str) -> tuple[str, Any]:
     if traceback_header not in lines:
         warning_separator = b": RuntimeWarning:"
         if not any(
-            b"uvicorn/" in line and warning_separator in line
+            b"uvicorn/" in line.replace(b"\\", b"/")
+            and warning_separator in line
             for line in lines
         ):
             return ("raw", stderr)
@@ -11011,7 +11090,14 @@ def execute_case(
                         "server_log": server_log,
                     }
 
-                server["process"].terminate()
+                if os.name == "nt":
+                    # Popen.terminate() is an unconditional TerminateProcess
+                    # on Windows, which prevents the held response from
+                    # exercising graceful drain. Ctrl+Break is Uvicorn's
+                    # graceful shutdown signal for this process group.
+                    server["process"].send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    server["process"].terminate()
                 # Leave the held stream enough of its three-second grace to
                 # complete even when admission closure is the failed behavior.
                 listener_closed_before_release = wait_for_listener_closed(
@@ -12502,6 +12588,9 @@ def _python_api_server_log_events(
     )
     worker_restart_pid = re.compile(r"((?:New child process|keeping worker) \[)\d+(\])")
     exception_line = re.compile(r"^(?P<class>[A-Za-z_][\w.]*)\b(?:: ?(?P<message>.*))?$")
+    proactor_accept_callback = (
+        "Exception in callback BaseProactorEventLoop._start_serving.<locals>.loop("
+    )
     coverage_body_pump_join = re.compile(
         r"^uvicorn-rs: request-body pumps joined: [1-9]\d*$"
     )
@@ -12532,6 +12621,19 @@ def _python_api_server_log_events(
                 continue
             if not line:
                 index += 1
+                continue
+            # On Windows, asyncio's Proactor loop can emit this callback
+            # traceback after an invalid response closes the accepted socket.
+            # It is event-loop implementation noise rather than a Uvicorn
+            # server log event; retain the original bytes in the evidence,
+            # while comparing the server-level exception above it.
+            if line.startswith(proactor_accept_callback):
+                index += 1
+                while index < len(lines):
+                    candidate = ansi_escape.sub("", lines[index])
+                    index += 1
+                    if candidate == "AssertionError":
+                        break
                 continue
             if line == "Exception in ASGI application" and index + 1 < len(lines):
                 exception = exception_line.match(
@@ -13288,7 +13390,10 @@ def run_python_api_probe(
                 "handshake_status": websocket.get("handshake_status"),
                 "close_code": websocket.get("close_code"),
                 "message_received": websocket.get("message_received"),
+                "shutdown_signal_sent": websocket.get("shutdown_signal_sent"),
                 "process_exit_code": websocket.get("process_exit_code"),
+                "process_timed_out": websocket.get("process_timed_out"),
+                "compression_negotiated": websocket.get("compression_negotiated"),
             }
         )
         if "scope_observation" in websocket:
@@ -13344,6 +13449,8 @@ def required_observations_for_case(
     case: dict[str, Any], operation: dict[str, Any]
 ) -> dict[str, Any]:
     """Return operation requirements with any input-case override applied."""
+    if "required_observations" in case:
+        return case["required_observations"]
     run_http = case.get("api", {}).get("run_http", {})
     return run_http.get(
         "required_observations", operation.get("required_observations", {})

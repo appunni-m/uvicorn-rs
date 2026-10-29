@@ -5829,12 +5829,15 @@ fn duplicate_prebound_tcp_listeners(
     use std::os::windows::io::RawSocket;
 
     let socket_module = PyModule::import(py, "socket")?;
+    let os_module = PyModule::import(py, "os")?;
     let low_level_module = PyModule::import(py, "_socket")?;
     let low_level_socket = low_level_module.getattr("socket")?;
     let family_descriptor = low_level_socket.getattr("family")?;
-    let duplicate_method = low_level_socket.getattr("dup")?;
+    let share_method = low_level_socket.getattr("share")?;
+    let fromshare_function = socket_module.getattr("fromshare")?;
     let detach_method = low_level_socket.getattr("detach")?;
     let getsockopt_method = low_level_socket.getattr("getsockopt")?;
+    let process_id = os_module.getattr("getpid")?.call0()?;
     let sol_socket = socket_module.getattr("SOL_SOCKET")?.extract::<i32>()?;
     let af_inet = socket_module.getattr("AF_INET")?.extract::<i32>()?;
     let af_inet6 = socket_module.getattr("AF_INET6")?.extract::<i32>()?;
@@ -5879,10 +5882,12 @@ fn duplicate_prebound_tcp_listeners(
             ));
         }
 
-        // Call the built-in duplication method directly so a Python override
-        // cannot substitute another handle, then detach through the C socket
-        // type to transfer the duplicate's ownership into Rust.
-        let duplicate = duplicate_method.call1((source,))?;
+        // Windows exposes native socket sharing rather than `dup()` on the
+        // low-level socket type. Share with this process, recreate the
+        // duplicate through the standard-library socket module, then detach
+        // through the C socket type to transfer its ownership into Rust.
+        let share_data = share_method.call1((source, process_id.clone()))?;
+        let duplicate = fromshare_function.call1((share_data,))?;
         if !duplicate.is_instance(&low_level_socket)? {
             return Err(PyValueError::new_err(
                 "Windows socket duplication did not return a socket object",

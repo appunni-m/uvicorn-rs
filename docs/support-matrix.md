@@ -48,7 +48,7 @@ Parity against Uvicorn 0.54.0 therefore starts at Python 3.10; Python 3.9
 runtime support remains a separate package claim and is not established by
 the install check alone.
 
-Current input@43 has a focused 6/6 macOS
+The historical input@43 snapshot has a focused 6/6 macOS
 pass for module-CLI environment behavior: listener host/port settings, a valid
 `UVICORN_LIMIT_CONCURRENCY` limit, and explicit CLI precedence over valid and
 invalid concurrency environment values, WSGI selection through UVICORN_INTERFACE, and explicit ASGI3 precedence over the WSGI environment selection. It does not establish full CLI/API parity. See

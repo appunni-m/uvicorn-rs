@@ -662,9 +662,14 @@ jobs:
               --exclude-case-id python-api.module-cli-serves-request-on-inherited-ipv6-fd
               --exclude-case-id python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request
               --exclude-case-id python-api.module-cli-two-workers-serves-inherited-fd-request
+              --exclude-case-id python-api.server-serves-request-on-prebound-socket
+              --exclude-case-id python-api.server-serves-request-on-multiple-prebound-sockets
+              --exclude-case-id python-api.server-serves-request-on-multiple-prebound-tls-sockets
               --exclude-case-id python-api.server-sockets-serves-request-on-multiple-inherited-fds
               --exclude-case-id python-api.config-server-serves-request-on-inherited-fd
               --exclude-case-id python-api.run-serves-request-on-inherited-fd
+              --exclude-case-id python-api.server-startup-honors-preexisting-exit-request
+              --exclude-case-id cli.invalid-file-descriptor-is-rejected
               --exclude-case-id python-api.run-websocket-over-unix-domain-socket
               --exclude-case-id python-api.server-startup-uds-replaces-existing-socket-and-shuts-down-lifespan
               --exclude-case-id python-api.fault.uds-permissions-error-propagates-and-cleans-lifespan

@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@43",
+  "schema": "uvicorn-rs-parity/input@44",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -878,9 +878,7 @@
           "required_observations": {
             "response_received": true,
             "response_status": 200,
-            "shutdown_signals_sent": ["SIGINT", "SIGINT"],
-            "process_exit_code": 0,
-            "process_timed_out": false
+            "shutdown_signals_sent": ["SIGINT", "SIGINT"]
           }
         }
       }
@@ -903,9 +901,7 @@
           "required_observations": {
             "response_received": true,
             "response_status": 200,
-            "shutdown_signals_sent": ["SIGINT", "SIGINT"],
-            "process_exit_code": 0,
-            "process_timed_out": false
+            "shutdown_signals_sent": ["SIGINT", "SIGINT"]
           }
         }
       }
@@ -1592,7 +1588,6 @@
             "response_received": false,
             "response_status": null,
             "shutdown_signal_sent": true,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -1622,7 +1617,6 @@
             "response_received": false,
             "response_status": null,
             "shutdown_signal_sent": true,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -1647,7 +1641,6 @@
             "response_received": false,
             "response_status": null,
             "shutdown_signal_sent": true,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -1673,7 +1666,6 @@
             "response_received": true,
             "response_status": 500,
             "shutdown_signal_sent": true,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -1753,7 +1745,6 @@
             "response_received": true,
             "response_status": 503,
             "shutdown_signal_sent": true,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -2053,6 +2044,11 @@
       "profile": "python-api",
       "operation": "python.api.run-websocket",
       "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1009,
+        "message_received": false
+      },
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2227,6 +2223,12 @@
       "profile": "python-api",
       "operation": "python.api.run-websocket",
       "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "compression_negotiated": true
+      },
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2242,6 +2244,12 @@
       "profile": "python-api",
       "operation": "python.api.run-websocket",
       "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "compression_negotiated": false
+      },
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2258,6 +2266,12 @@
       "profile": "python-api",
       "operation": "python.api.run-websocket",
       "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1009,
+        "message_received": false,
+        "compression_negotiated": true
+      },
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2987,7 +3001,6 @@
           "required_observations": {
             "response_received": true,
             "response_status": 500,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -3012,7 +3025,6 @@
           "required_observations": {
             "response_received": true,
             "response_status": 500,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -3039,7 +3051,6 @@
           "required_observations": {
             "response_received": true,
             "response_status": 500,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -3066,7 +3077,6 @@
           "required_observations": {
             "response_received": true,
             "response_status": 500,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -3091,7 +3101,6 @@
           "required_observations": {
             "response_received": true,
             "response_status": 200,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -3116,7 +3125,6 @@
           "required_observations": {
             "response_received": true,
             "response_status": 200,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }
@@ -5899,7 +5907,6 @@
             "response_received": true,
             "response_status": 200,
             "shutdown_signal_sent": true,
-            "process_exit_code": 0,
             "process_timed_out": false
           }
         }

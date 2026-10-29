@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@43",
+  "schema": "uvicorn-rs-parity/input@44",
   "cases": [
     {
       "case_id": "http1.scope-query-header-and-body",
@@ -5374,7 +5374,7 @@
             "size_bytes": 196608
           }
         ],
-        "send_all_before_read": true
+        "send_body_concurrently_with_response_read": true
       }
     },
     {

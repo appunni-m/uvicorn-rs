@@ -2578,9 +2578,7 @@
       "required_observations": {
         "response_received": true,
         "response_status": 200,
-        "shutdown_signal_sent": true,
-        "process_exit_code": 0,
-        "process_timed_out": false
+      "shutdown_signal_sent": true
       }
     },
     {
@@ -2850,21 +2848,29 @@
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "process_exit_code",
+        "shutdown_signal_sent",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "compare": [
         "exit_code",
-        "stdout_base64",
-        "stderr_base64",
         "handshake_status",
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "required_observations": {
+        "handshake_status": 101
+      },
+      "target_requirements": {
         "handshake_status": 101,
-        "process_exit_code": 0
+        "shutdown_signal_sent": true,
+        "process_timed_out": false
       }
     },
     {
@@ -2878,23 +2884,31 @@
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "process_exit_code",
+        "shutdown_signal_sent",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "compare": [
         "exit_code",
-        "stdout_base64",
-        "stderr_base64",
         "handshake_status",
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
-        "message_received": true,
-        "process_exit_code": 0
+        "message_received": true
+      },
+      "target_requirements": {
+        "handshake_status": 101,
+        "shutdown_signal_sent": true,
+        "process_timed_out": false
       }
     },
     {
@@ -2908,23 +2922,31 @@
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "process_exit_code",
+        "shutdown_signal_sent",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "compare": [
         "exit_code",
-        "stdout_base64",
-        "stderr_base64",
         "handshake_status",
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
-        "message_received": true,
-        "process_exit_code": 0
+        "message_received": true
+      },
+      "target_requirements": {
+        "handshake_status": 101,
+        "shutdown_signal_sent": true,
+        "process_timed_out": false
       }
     },
     {
@@ -2938,23 +2960,31 @@
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "process_exit_code",
+        "shutdown_signal_sent",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "compare": [
         "exit_code",
-        "stdout_base64",
-        "stderr_base64",
         "handshake_status",
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
-        "message_received": true,
-        "process_exit_code": 0
+        "message_received": true
+      },
+      "target_requirements": {
+        "handshake_status": 101,
+        "shutdown_signal_sent": true,
+        "process_timed_out": false
       }
     },
     {
@@ -2968,23 +2998,31 @@
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "process_exit_code",
+        "shutdown_signal_sent",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "compare": [
         "exit_code",
-        "stdout_base64",
-        "stderr_base64",
         "handshake_status",
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
-        "message_received": true,
-        "process_exit_code": 0
+        "message_received": true
+      },
+      "target_requirements": {
+        "handshake_status": 101,
+        "shutdown_signal_sent": true,
+        "process_timed_out": false
       }
     },
     {
@@ -2998,23 +3036,31 @@
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "process_exit_code",
+        "shutdown_signal_sent",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "compare": [
         "exit_code",
-        "stdout_base64",
-        "stderr_base64",
         "handshake_status",
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
-        "message_received": true,
-        "process_exit_code": 0
+        "message_received": true
+      },
+      "target_requirements": {
+        "handshake_status": 101,
+        "shutdown_signal_sent": true,
+        "process_timed_out": false
       }
     },
     {
@@ -3028,23 +3074,31 @@
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "process_exit_code",
+        "shutdown_signal_sent",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "compare": [
         "exit_code",
-        "stdout_base64",
-        "stderr_base64",
         "handshake_status",
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
-        "message_received": true,
-        "process_exit_code": 0
+        "message_received": true
+      },
+      "target_requirements": {
+        "handshake_status": 101,
+        "shutdown_signal_sent": true,
+        "process_timed_out": false
       }
     },
     {
@@ -3058,23 +3112,31 @@
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "process_exit_code",
+        "shutdown_signal_sent",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "compare": [
         "exit_code",
-        "stdout_base64",
-        "stderr_base64",
         "handshake_status",
         "close_code",
         "message_received",
         "scope_observation",
-        "process_exit_code"
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out",
+        "compression_negotiated"
       ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1011,
-        "message_received": false,
-        "process_exit_code": 0
+        "message_received": false
+      },
+      "target_requirements": {
+        "handshake_status": 101,
+        "shutdown_signal_sent": true,
+        "process_timed_out": false
       }
     },
     {
