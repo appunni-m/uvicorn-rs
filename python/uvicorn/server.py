@@ -24,6 +24,7 @@ from functools import cached_property
 from types import FrameType
 from typing import Any
 
+from ._shutdown_trace import write_shutdown_trace
 from .config import Config
 
 HANDLED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
@@ -126,7 +127,9 @@ class Server:
         self._should_exit = bool(value)
         if self._should_exit and self._native_server is not None:
             self._log_shutdown_status()
+            write_shutdown_trace("server-native-shutdown.request")
             self._native_server.shutdown()
+            write_shutdown_trace("server-native-shutdown.returned")
 
     def _log_shutdown_status(self) -> None:
         """Report shutdown before native draining waits on ASGI tasks."""
@@ -330,9 +333,11 @@ class Server:
         native_task = self._native_task
         try:
             if native_server is not None:
+                write_shutdown_trace("server-shutdown.request")
                 native_server.shutdown()
             if native_task is not None:
                 await native_task
+                write_shutdown_trace("server-native-task.finished")
         finally:
             for sock in sockets or []:
                 sock.close()
@@ -464,6 +469,10 @@ class Server:
 
     def handle_exit(self, sig: int, frame: FrameType | None) -> None:
         """Record a signal and request graceful shutdown from the native server."""
+        write_shutdown_trace(
+            "server-signal.received "
+            f"signal={sig} native_server={self._native_server is not None}"
+        )
         self._captured_signals.append(sig)
         if self._should_exit and sig == signal.SIGINT:
             self.force_exit = True

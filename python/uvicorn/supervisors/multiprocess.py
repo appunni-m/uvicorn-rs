@@ -15,6 +15,7 @@ from multiprocessing import Pipe
 from socket import socket
 
 from uvicorn._ansi import style
+from uvicorn._shutdown_trace import write_shutdown_trace
 from uvicorn._subprocess import get_subprocess
 from uvicorn.config import STARTUP_FAILURE, Config
 from uvicorn.server import Server
@@ -73,10 +74,14 @@ class Process:
             # Windows doesn't support SIGTERM, so we use SIGBREAK instead.
             # And then we raise SIGTERM when SIGBREAK is received.
             # https://learn.microsoft.com/zh-cn/cpp/c-runtime-library/reference/signal?view=msvc-170
-            signal.signal(
-                signal.SIGBREAK,  # type: ignore[attr-defined]
-                lambda sig, frame: signal.raise_signal(signal.SIGTERM),
+            def handle_sigbreak(sig: int, _frame) -> None:
+                write_shutdown_trace(f"worker-sigbreak.received signal={sig}")
+                signal.raise_signal(signal.SIGTERM)
+
+            signal.signal(  # type: ignore[attr-defined]
+                signal.SIGBREAK, handle_sigbreak
             )
+            write_shutdown_trace("worker-sigbreak.handler-installed")
 
         # Each spawned process runs the native server as an ordinary
         # single-worker instance. The parent owns worker supervision.
@@ -113,7 +118,15 @@ class Process:
             if os.name == "nt":  # pragma: py-not-win32
                 # Windows doesn't support SIGTERM.
                 # So send SIGBREAK, and then in process raise SIGTERM.
-                os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+                write_shutdown_trace(
+                    f"worker-shutdown.signal-send pid={self.process.pid}"
+                )
+                os.kill(  # type: ignore[attr-defined]
+                    self.process.pid, signal.CTRL_BREAK_EVENT
+                )
+                write_shutdown_trace(
+                    f"worker-shutdown.signal-sent pid={self.process.pid}"
+                )
             else:
                 os.kill(self.process.pid, signal.SIGTERM)
             logger.info(f"Terminated child process [{self.process.pid}]")
@@ -130,7 +143,11 @@ class Process:
 
     def join(self) -> None:
         logger.info(f"Waiting for child process [{self.process.pid}]")
+        write_shutdown_trace(f"worker-join.wait pid={self.process.pid}")
         self.process.join()
+        write_shutdown_trace(
+            f"worker-join.complete pid={self.process.pid} exitcode={self.process.exitcode}"
+        )
 
     @property
     def server(self) -> Server:
@@ -172,7 +189,11 @@ class Multiprocess:
             self.processes.append(process)
 
     def terminate_all(self) -> None:
+        write_shutdown_trace("supervisor-terminate-all.start")
         for process in self.processes:
+            write_shutdown_trace(
+                f"supervisor-terminate-all.worker pid={process.pid} exitcode={process.exitcode}"
+            )
             process.terminate()
 
     def join_all(self) -> None:
@@ -258,6 +279,7 @@ class Multiprocess:
                 logger.debug(f"Received signal {sig_name}, but no handler is defined for it.")
 
     def handle_int(self) -> None:
+        write_shutdown_trace("supervisor-signal.handled signal=SIGINT")
         logger.info("Received SIGINT, exiting.")
         self.should_exit.set()
 
@@ -266,6 +288,7 @@ class Multiprocess:
         self.should_exit.set()
 
     def handle_break(self) -> None:  # pragma: py-not-win32
+        write_shutdown_trace("supervisor-signal.handled signal=SIGBREAK")
         logger.info("Received SIGBREAK, exiting.")
         self.should_exit.set()
 
