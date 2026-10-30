@@ -1085,7 +1085,7 @@
           "eA==",
           "eA=="
         ],
-        "send_all_before_read": true
+        "send_remaining_after_response": true
       }
     },
     {
