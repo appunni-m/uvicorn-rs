@@ -737,7 +737,8 @@ jobs:
                 trace_status=$?
                 set -e
                 echo "Focused Windows worker shutdown diagnostic exited with status $trace_status"
-              elif "$candidate_python" - target/parity-windows-x86_64.json <<'PY'
+              fi
+              if "$candidate_python" - target/parity-windows-x86_64.json <<'PY'
           import json
           import sys
           from pathlib import Path
