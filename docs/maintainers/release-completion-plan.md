@@ -48,9 +48,11 @@ head `06186c1c64e17fd23ed9fb690a93ed0b1bb00e6d`, merge ref
 Linux installed-wheel parity passed 718/718; its exact candidate artifact and
 consumer checks passed. macOS parity was 717/718 because the runner's immediate
 snapshot missed the ASGI final trailer-send event. Windows parity was 689/691:
-one case differed only by an oracle worker `WinError 10022` log, and another
-timed out in the Uvicorn oracle while the candidate served HTTP 200 and exited
-0. macOS and Windows candidate consumers were skipped. Rust formatting/lints,
+one Uvicorn worker failed startup with `WinError 10022` at
+`asyncio.create_server(..., sock=...)` / `sock.listen`, and candidate and oracle
+shutdown log counts differed; another case timed out in the Uvicorn oracle
+after one worker finished, while the candidate served HTTP 200 and exited 0.
+macOS and Windows candidate consumers were skipped. Rust formatting/lints,
 feature builds, Rust docs/no-Python checks, MSRV, release-evidence contracts,
 native FastAPI-RS composition, and the separate docs deployment passed.
 

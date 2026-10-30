@@ -15,9 +15,12 @@ reported 717/718: the response and trailers matched, but the runner missed the
 ASGI app's final trailer-send event in its immediate event-file snapshot.
 Windows x86-64 reported 689/691. In
 `python-api.module-cli-two-workers-serve-request`, both sides served HTTP 200
-and exited 0, but only the Uvicorn oracle logged a worker `WinError 10022`.
+and exited 0, but a Uvicorn worker failed during startup with `WinError 10022`
+at `asyncio.create_server(..., sock=...)` / `sock.listen`. The candidate logged
+shutdown for both workers while the oracle logged shutdown for one worker.
 In `python-api.module-cli-two-workers-from-uvicorn-workers-environment`, the
-Uvicorn oracle timed out while the candidate served HTTP 200 and exited 0.
+Uvicorn oracle timed out after one worker finished shutdown; the candidate
+served HTTP 200, logged both worker shutdowns, and exited 0.
 macOS and Windows candidate consumer jobs were skipped after parity failed;
 the Linux candidate artifact and consumers passed.
 

@@ -42,10 +42,11 @@ builds, native FastAPI-RS composition, release-evidence checks, and docs
 deployment passed. Linux x86-64 public parity passed 718/718, and its candidate
 artifact and clean consumers passed. macOS ARM64 parity was 717/718 because an
 immediate event snapshot missed the final ASGI trailer-send event. Windows
-x86-64 parity was 689/691: one Uvicorn oracle logged a worker `WinError 10022`
-that the candidate did not, and another Uvicorn oracle timed out while the
-candidate served HTTP 200 and exited 0. macOS and Windows candidate consumer
-checks were skipped.
+x86-64 parity was 689/691: one Uvicorn worker failed at `sock.listen` during
+startup with `WinError 10022`, and candidate/oracle shutdown log counts
+differed; another Uvicorn oracle timed out after one worker finished shutdown
+while the candidate served HTTP 200 and exited 0. macOS and Windows candidate
+consumer checks were skipped.
 
 The three-repeat unified coverage matrix attributed all 1,339 cases but failed
 its 100% gate at 14,132/14,252 regions and 10,410/10,465 lines. The artifact is
