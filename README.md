@@ -2,7 +2,7 @@
 
 A Rust-first server for ASGI applications and Rust services.
 
-## Project status (2026-10-30)
+## Project status (2026-10-31)
 
 The target release is a Python-free `uvicorn-rs` server crate with HTTP/3
 behind `http3`, the separate `asgi-lifespan-protocol-rs` crate, and the PyPI
@@ -15,20 +15,25 @@ PyPI has no `uvicorn-rs` release. The 0.2.2 candidate is not release-qualified.
 See [release status](docs/releases.md).
 
 PR #19 is still a draft against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its latest full run,
-[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064),
-passed Linux and macOS installed-wheel parity at 718/718 cases each. The
-Windows lane reported four failures among 691 cases; its candidate consumer
-steps were skipped. The unified three-repeat report measured 14,118/14,243
-regions and 10,402/10,461 lines, below the required 100% gate. Rust quality,
-MSRV, and native FastAPI-RS composition passed.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
+completed on PR head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`. Linux
+installed-wheel parity passed 718/718, and the Linux 0.2.2 candidate artifact
+and clean consumers passed (artifact `13012012115`, SHA-256
+`656ad0235e3ac25f1680966992e318dd6ce8cc8e0ba4011e242a6743ed13235`). Windows
+candidate parity failed 688/691 with zero infrastructure failures; the three
+failures concern two-worker shutdown and concurrency. macOS candidate artifact
+checks were cancelled. The three-repeat coverage gate remains below 100% at
+14,137/14,252 regions and 10,411/10,465 lines across 1,340 attributed cases.
+Rust quality, MSRV, release-evidence checks, native
+FastAPI-RS composition, and docs deployment #215 passed for head `8a17d98`.
+The latest docs refresh still needs a documentation build and deployment.
 
-Focused Windows diagnostics [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
-and [#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055)
-passed one selected worker case each on diagnostic commit `42f9c0f`. In #523,
-both processes handled the SIGTERM-labelled input, exited 0, and did not time
-out; the trace recorded orderly worker shutdown. These passes did not reproduce
-the #514 failures, establish their root cause, or replace full Windows parity.
+All three Windows failures served HTTP 200. Their differences are in process
+timeouts/exits and worker shutdown log counts; the signal ordering and root
+cause remain unconfirmed. A focused oracle signal trace is committed locally
+and will cover only the three failing inputs; it does
+not change the parity expectations.
 
 The Python package is **not yet a drop-in Uvicorn replacement**. Keep using
 upstream Uvicorn if your application relies on the full Uvicorn command-line,

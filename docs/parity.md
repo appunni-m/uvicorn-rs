@@ -2,46 +2,40 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current source status (2026-10-30)
+## Current source status (2026-10-31)
 
 PR #19 is draft and targets `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Full-mode CI
-[#524](https://github.com/appunni-m/uvicorn-rs/actions/runs/41087118866) ran
-head `06186c1c64e17fd23ed9fb690a93ed0b1bb00e6d` with merge ref
-`46a7c55ec6fe1d9fc778fb061ac6a197c565210e`.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
+completed on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` with merge ref
+`10929063e0dfb420d6ebb7210922ad805528039d`.
 
-The installed-wheel public matrix passed 718/718 on Linux x86-64. macOS ARM64
-reported 717/718: the response and trailers matched, but the runner missed the
-ASGI app's final trailer-send event in its immediate event-file snapshot.
-Windows x86-64 reported 689/691. In
-`python-api.module-cli-two-workers-serve-request`, both sides served HTTP 200
-and exited 0, but a Uvicorn worker failed during startup with `WinError 10022`
-at `asyncio.create_server(..., sock=...)` / `sock.listen`. The candidate logged
-shutdown for both workers while the oracle logged shutdown for one worker.
-In `python-api.module-cli-two-workers-from-uvicorn-workers-environment`, the
-Uvicorn oracle timed out after one worker finished shutdown; the candidate
-served HTTP 200, logged both worker shutdowns, and exited 0.
-macOS and Windows candidate consumer jobs were skipped after parity failed;
-the Linux candidate artifact and consumers passed.
+Linux installed-wheel public parity passed 718/718. The Linux 0.2.2 candidate
+artifact and clean consumers passed (artifact `13012012115`, SHA-256
+`656ad0235e3ac25f1680966992e318dd6ce8cc8e0ba4011e242a6743ed13235`). Windows
+candidate parity executed all 691 cases: 688 passed, 3 failed, and zero had
+infrastructure failures. Its artifact is `13012838178`, SHA-256
+`ab0a3f293329a4cbdbcf2c4be47e9bee4bcee4af9a0ec6975712e0b75144b962`. macOS
+candidate verification was cancelled. Rust quality, MSRV, release-evidence
+checks, and native FastAPI-RS composition passed. Docs deployment #215 passed
+for the earlier 8a17d98 head; this status refresh still needs a documentation
+build and deployment.
 
-The local parity-runner correction captures the H2 event baseline before
-sending the request and waits for required app events before taking its final
-snapshot. `http2.response-trailers-without-te` then passed 1/1 locally. Hosted
-validation remains pending. This observation fix does not resolve the Windows
-worker failures, whose event ordering and root cause remain unconfirmed.
+The three Windows failures are
+`python-api.module-cli-two-workers-stop-on-sigterm`,
+`python-api.module-cli-web-concurrency-two-workers-serve-request`, and
+`python-api.module-cli-explicit-workers-overrides-web-concurrency`. All cases
+served HTTP 200. The mismatches involve process timeouts/exits and worker
+shutdown log counts; observed event ordering and root cause remain unconfirmed.
+Commit `13a4ccbd3f70adfd53e690cc418607e7326f681b` adds an opt-in oracle signal
+trace for a focused Windows run, but it is local and not yet validated.
 
-Focused Windows runs [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
-and [#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055)
-each passed one selected worker case on diagnostic commit
-`42f9c0fc9c3865ce75f5afc08054100e96eea8ac`. Run #523 recorded both processes
-receiving signal 21 (SIGBREAK), draining workers, and exiting 0 without a
-timeout. Neither selected run reproduces or explains the current #524 failures.
-
-Full compatibility and exact-main evidence remain open. The previous
-three-system benchmark is incomplete on Linux ARM64, so parity-first benchmark
-work remains paused. The new full run completed coverage at 14,132/14,252
-regions and 10,410/10,465 lines, but no accepted independent Coverage-MCP
-review exists. Detailed receipts and artifact identities are in the
+The three-repeat coverage job measured 14,137/14,252 regions and 10,411/10,465
+lines across 1,340 attributed cases; no accepted independent Coverage-MCP
+review exists. Full compatibility and exact-main
+evidence remain open. The previous three-system benchmark is incomplete on
+Linux ARM64, so parity-first benchmark work remains paused. Detailed receipts
+and artifact identities are in the
 [release completion plan](maintainers/release-completion-plan.md).
 
 ## Focused unified coverage gap batch (2026-10-30)

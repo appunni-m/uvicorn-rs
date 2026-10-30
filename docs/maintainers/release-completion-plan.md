@@ -37,49 +37,54 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Current receipts — 2026-10-30 (full PR run #524; diagnostics #522–#523)
+### Current receipts — 2026-10-30 (full PR run #528)
 
 PR #19 remains draft/open against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Full CI
-[#524](https://github.com/appunni-m/uvicorn-rs/actions/runs/41087118866) ran on
-head `06186c1c64e17fd23ed9fb690a93ed0b1bb00e6d`, merge ref
-`46a7c55ec6fe1d9fc778fb061ac6a197c565210e`.
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
+completed on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`, merge ref
+`10929063e0dfb420d6ebb7210922ad805528039d`.
 
-Linux installed-wheel parity passed 718/718; its exact candidate artifact and
-consumer checks passed. macOS parity was 717/718 because the runner's immediate
-snapshot missed the ASGI final trailer-send event. Windows parity was 689/691:
-one Uvicorn worker failed startup with `WinError 10022` at
-`asyncio.create_server(..., sock=...)` / `sock.listen`, and candidate and oracle
-shutdown log counts differed; another case timed out in the Uvicorn oracle
-after one worker finished, while the candidate served HTTP 200 and exited 0.
-macOS and Windows candidate consumers were skipped. Rust formatting/lints,
-feature builds, Rust docs/no-Python checks, MSRV, release-evidence contracts,
-native FastAPI-RS composition, and the separate docs deployment passed.
+Linux installed-wheel parity passed 718/718. The Linux 0.2.2 candidate and its
+clean consumers passed; artifact `13012012115` has SHA-256
+`656ad0235e3ac25f1680966992e318dd6ce8cc8e0ba4011e242a6743ed13235`, and its
+build-manifest SHA-256 is
+`085e0903bd8d4f52c0a183b7ab4f44edb4d48f04b05ac4428e8a451bd09b83e4`. Windows
+candidate parity completed 691 cases: 688 passed, 3 failed, and zero had
+infrastructure failures. Its artifact `13012838178` has SHA-256
+`ab0a3f293329a4cbdbcf2c4be47e9bee4bcee4af9a0ec6975712e0b75144b962`. The
+failures are `python-api.module-cli-two-workers-stop-on-sigterm`,
+`python-api.module-cli-web-concurrency-two-workers-serve-request`, and
+`python-api.module-cli-explicit-workers-overrides-web-concurrency`; all served
+HTTP 200, but process timeouts/exits and shutdown log counts differed. Signal
+ordering and root cause remain unconfirmed. macOS candidate verification was
+cancelled. Rust formatting/lints, feature builds, Rust docs/no-Python checks,
+MSRV, release-evidence contracts, native FastAPI-RS composition, Linux clean
+consumers, and separate docs deployment run #215 passed.
 
-The three-repeat coverage matrix attributed all 1,339 cases but failed at
-14,132/14,252 regions and 10,410/10,465 lines. Artifact `12998061379` has
-archive SHA-256
-`83377b0ef945d85b978f2a99b6617e416656913f61afae9074941489bb8244eb`.
-Independent Coverage-MCP review remains open.
+The #528 three-repeat coverage report completed with all 1,340 indexed cases
+attributed, but missed the 100% gate at 14,137/14,252 regions and 10,411/10,465
+lines. Artifact `13016632517` has archive SHA-256
+`4674397eba67621d60dd06f3f1cdb9793e83d9ba7bedfb9b64eacf9dca4177e7`; its
+report source SHA-256 is
+`56d4ce12ebf5dddcad815968f622ac22f5fd6cfd1f8f52212b670d2d7da4fd24` and its
+native-extension SHA-256 is
+`c7e901b397b55d2d72bbedf9ad85eb7c4c213a97246ee2e3c3b5d8df472b5041`.
+Independent Coverage-MCP review remains open because the report is not yet
+zero-gap.
 
 The local H2 parity runner captures the event baseline before request
 submission and waits up to two seconds for case-required app events before its
-final snapshot. `http2.response-trailers-without-te` passed 1/1 locally after
-this harness change. This is selected evidence only; no hosted result yet
-validates it and it does not alter server behavior.
+final snapshot. `http2.response-trailers-without-te` passed 1/1 locally; the
+current Linux hosted parity also passed 718/718. This is runner observation
+evidence and does not change server behavior.
 
-Focused Windows run [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
-passed `python-api.module-cli-explicit-workers-overrides-web-concurrency`
-1/1 on diagnostic head `42f9c0fc9c3865ce75f5afc08054100e96eea8ac`. Its corrected
-trace showed idle accept polls pending, cancellation waking the workers, and
-listener drains completing. Separate focused run
-[#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055) passed
-`python-api.module-cli-two-workers-stop-on-sigterm` 1/1 on the same diagnostic
-head. Its trace records both processes receiving signal 21 (SIGBREAK), workers
-draining, and both processes exiting 0 without a timeout; artifact ID
-`12992306054`. Those selected cases do not reproduce or explain either #524
-Windows failure. The cause remains unconfirmed; these runs are not a full
-Windows pass or runtime fix.
+Focused Windows runs #522 and #523 passed one worker case each on diagnostic
+head `42f9c0f`. Neither explains the three current #528 failures. Commit
+`13a4ccbd3f70adfd53e690cc418607e7326f681b` adds an opt-in Uvicorn-oracle signal
+trace to the focused Windows workflow. It is committed locally and still needs
+a focused run of the three failed case IDs. Do not start a new benchmark before
+compatibility passes.
 
 The active local coverage batch in `/tmp/uvicorn-rs-coverage-batch` adds
 expected Debug/Display output checks to the existing coverage-only

@@ -11,24 +11,26 @@ install `uvicorn-rs` and upstream `uvicorn` in the same environment. The
 replacement and rollback steps below apply only after a compatible version is
 published.
 
-## Current status (2026-10-30)
+## Current status (2026-10-31)
 
 PR #19 is draft and targets `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its latest full workflow,
-[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064),
-passed Linux and macOS installed-wheel parity at 718/718 cases each. Windows
-reported four failures among 691 cases; its candidate consumer checks were
-skipped. The three-repeat coverage report missed the gate at 14,118/14,243
-regions and 10,402/10,461 lines. Exact-source independent coverage review and
-full cross-platform compatibility remain open.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
+completed on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`. Linux installed-
+wheel parity passed 718/718. Windows candidate parity failed 688/691 with zero
+infrastructure failures; macOS candidate verification was cancelled. The
+three-repeat coverage gate missed 100% at 14,137/14,252 regions and
+10,411/10,465 lines after all 1,340 cases were attributed.
+Exact-source independent coverage review and full cross-platform compatibility
+remain open.
 
-Focused Windows diagnostics [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
-and [#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055)
-each passed one worker input on diagnostic commit `42f9c0f`. Run #523's
-SIGTERM-labelled case exited 0 without a timeout, and its trace records orderly
-worker shutdown. These runs did not reproduce the #514 failures and do not
-confirm their cause or establish full Windows parity. The Python 3.9 consumer
-check was skipped in #514. Uvicorn 0.54.0 declares Python `>=3.10` in its [versioned project
+The Windows failures are `module-cli-two-workers-stop-on-sigterm`,
+`module-cli-web-concurrency-two-workers-serve-request`, and
+`module-cli-explicit-workers-overrides-web-concurrency`. Every case served HTTP
+200. Differences are in process timeouts/exits and worker shutdown log counts;
+the signal ordering and root cause remain unconfirmed. An opt-in oracle signal
+trace has been committed locally but not yet run. The Python 3.9 consumer check
+was skipped in #528. Uvicorn 0.54.0 declares Python `>=3.10` in its [versioned project
 metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml), so
 parity against that oracle starts at Python 3.10; the Python 3.9 wheel-install
 check is a separate package claim.
@@ -38,10 +40,10 @@ check is a separate package claim.
 | Install from PyPI | Not available. The `uvicorn-rs` distribution has not been published. |
 | Run the `uvicorn` command | The source exposes `uvicorn` and `python -m uvicorn`; the full CLI/settings contract has not passed across the declared platforms. |
 | Import and configure `uvicorn` | The source exposes `run`, `Config`, and `Server`. The full Python API and platform matrix remains open. |
-| Serve a Python ASGI app | Linux and macOS parity passed 718/718 on #514; the Windows lane reported four failures among 691 cases. |
-| Use workers, reload, sockets, or process controls | Selected cases cover parts of these surfaces. One worker-precedence case passed in #522 and one SIGTERM-labelled worker case passed in #523; full operational parity remains open. |
+| Serve a Python ASGI app | Linux parity passed 718/718 on #528; Windows candidate parity failed 688/691 and macOS candidate verification was cancelled. |
+| Use workers, reload, sockets, or process controls | Selected cases cover parts of these surfaces. Current Windows worker cases remain unconfirmed; a focused signal trace is pending. Full operational parity remains open. |
 | Claim a performance advantage | Not supported. Benchmark work follows compatibility acceptance, and the previous three-system run is incomplete. See benchmark status. |
-| Use the current release candidate on Windows | Not verified. The Windows parity lane failed in #514, so its candidate consumer checks were skipped. |
+| Use the current release candidate on Windows | Not verified. The Windows parity lane failed in #528, so its candidate consumer checks were skipped. |
 
 Passing Linux and macOS parity does not qualify the Windows candidate or close
 the full Uvicorn contract. Remaining behavior and platform claims need exact

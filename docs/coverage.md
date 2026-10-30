@@ -5,26 +5,29 @@
 <a id="current-unified-coverage-status-2026-10-22"></a>
 <a id="current-unified-coverage-status-2026-10-29"></a>
 <a id="current-unified-coverage-status-2026-10-30"></a>
+<a id="current-unified-coverage-status-2026-10-31"></a>
 
-## Current unified coverage status (2026-10-30)
+## Current unified coverage status (2026-10-31)
 
-Full-mode CI [#524](https://github.com/appunni-m/uvicorn-rs/actions/runs/41087118866)
-produced the latest exact-source report for PR #19 head
-`06186c1c64e17fd23ed9fb690a93ed0b1bb00e6d` (merge ref
-`46a7c55ec6fe1d9fc778fb061ac6a197c565210e`). All 1,339 coverage cases were
-attributed, but the three-repeat gate remains below 100%: **14,132/14,252
-executable regions** and **10,410/10,465 lines**. Artifact `12998061379` has
-archive SHA-256
-`83377b0ef945d85b978f2a99b6617e416656913f61afae9074941489bb8244eb`.
+The latest completed exact-source report is full-mode CI
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) for PR #19 head
+`8a17d982a7b98a0074ab7e56acad4c508d9d2c73` (merge ref
+`10929063e0dfb420d6ebb7210922ad805528039d`). All 1,340 indexed coverage
+cases completed with attribution. The three-repeat gate remains below 100%:
+**14,137/14,252 executable regions** (115 missing) and **10,411/10,465 lines**
+(54 missing). Artifact `13016632517` has archive SHA-256
+`4674397eba67621d60dd06f3f1cdb9793e83d9ba7bedfb9b64eacf9dca4177e7`; the
+report records source SHA-256
+`56d4ce12ebf5dddcad815968f622ac22f5fd6cfd1f8f52212b670d2d7da4fd24` and
+native-extension SHA-256
+`c7e901b397b55d2d72bbedf9ad85eb7c4c213a97246ee2e3c3b5d8df472b5041`.
 
-The same run passed Linux x86-64 public parity and the Linux candidate
-artifact/consumer checks. macOS ARM64 parity was 717/718 because the runner
-snapshotted the app-event log before the HTTP/2 final trailer-send event was
-recorded. Windows x86-64 parity was 689/691: one case had an oracle-only
-`WinError 10022` worker-log entry, and another timed out in the Uvicorn oracle
-while the candidate served HTTP 200 and exited 0. macOS and Windows candidate
-consumer jobs were skipped. Rust quality, MSRV, feature builds, native
-FastAPI-RS composition, release-evidence checks, and docs deployment passed.
+Linux x86-64 installed-wheel parity and candidate consumers passed. Windows
+parity was 688/691 with three process/shutdown differences; macOS ARM64
+candidate verification was cancelled. Rust quality, MSRV, feature builds,
+Rust docs/no-Python checks, native FastAPI-RS composition, release-evidence
+checks, and separate docs deployment passed. No accepted independent
+Coverage-MCP receipt exists.
 
 The parity runner now captures its event baseline before sending the H2
 request and waits up to two seconds for the required app events before taking
@@ -32,7 +35,7 @@ the final observation. The affected case passed 1/1 locally after that change;
 this is selected harness evidence, not hosted validation or a server behavior
 fix. No accepted independent Coverage-MCP receipt exists. `7t4g` remains open.
 
-A diagnostic projection of the same artifact groups the 120 missing regions
+A historical diagnostic projection of the #524 artifact grouped its 120 missing regions
 into 37 functions in `src/lib.rs`; the largest groups are the `serve_forever`
 startup/shutdown path (18), `AsgiIo::send` (8), a nested `serve` path (7), and
 `LifespanRuntime::shutdown` (6). The remaining groups include TLS and

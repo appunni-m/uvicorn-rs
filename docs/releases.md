@@ -30,36 +30,30 @@ The maintainer confirms these entries are already present; do not add duplicates
 
 A read-only registry check on 2026-10-30 found crates.io versions
 `uvicorn-rs` 0.2.1 and `asgi-lifespan-protocol-rs` 0.2.1 present and unyanked;
-PyPI returned 404 for `uvicorn-rs`. The source declares version 0.2.2, but no
-clean exact-source candidate or release tag is qualified.
+PyPI returned 404 for `uvicorn-rs`. The source declares version 0.2.2. CI #528
+has a successful Linux x86-64 0.2.2 candidate artifact and clean-consumer
+receipt, but it is for a PR commit and does not qualify a release from `main`.
 
 PR #19 remains a draft against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Full CI
-[#524](https://github.com/appunni-m/uvicorn-rs/actions/runs/41087118866) ran on
-head `06186c1c64e17fd23ed9fb690a93ed0b1bb00e6d` (merge ref
-`46a7c55ec6fe1d9fc778fb061ac6a197c565210e`). Rust quality, MSRV, feature
-builds, native FastAPI-RS composition, release-evidence checks, and docs
-deployment passed. Linux x86-64 public parity passed 718/718, and its candidate
-artifact and clean consumers passed. macOS ARM64 parity was 717/718 because an
-immediate event snapshot missed the final ASGI trailer-send event. Windows
-x86-64 parity was 689/691: one Uvicorn worker failed at `sock.listen` during
-startup with `WinError 10022`, and candidate/oracle shutdown log counts
-differed; another Uvicorn oracle timed out after one worker finished shutdown
-while the candidate served HTTP 200 and exited 0. macOS and Windows candidate
-consumer checks were skipped.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
+completed on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` (merge ref
+`10929063e0dfb420d6ebb7210922ad805528039d`). Rust quality, MSRV, feature
+builds, native FastAPI-RS composition, release-evidence checks, Linux public
+parity at 718/718, the Linux candidate artifact/consumer checks, and docs
+deployment passed. Windows candidate parity was 688/691 with zero
+infrastructure failures; the three differences concern two-worker shutdown and
+concurrency. macOS candidate verification was cancelled. No all-platform
+candidate acceptance exists.
 
-The three-repeat unified coverage matrix attributed all 1,339 cases but failed
-its 100% gate at 14,132/14,252 regions and 10,410/10,465 lines. The artifact is
-`12998061379` (archive SHA-256
-`83377b0ef945d85b978f2a99b6617e416656913f61afae9074941489bb8244eb`). No
-accepted independent Coverage-MCP review exists for a passing report. The
-affected H2 app-event case passes 1/1 locally after a runner synchronization
-change; this selected result awaits hosted validation. Focused Windows runs
-[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) and
-[#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055) each
-passed one worker case, but do not reproduce or explain the #524 failures.
+The #528 three-repeat unified coverage job completed with all 1,340 indexed
+cases attributed but missed the 100% gate at 14,137/14,252 regions and
+10,411/10,465 lines. Artifact `13016632517` has archive SHA-256
+`4674397eba67621d60dd06f3f1cdb9793e83d9ba7bedfb9b64eacf9dca4177e7`. No
+accepted independent Coverage-MCP review exists. A focused oracle signal trace
+for the three Windows worker failures is committed locally but not yet run.
 
-No current-source candidate bundle is ready. Exact-source 100% coverage and
+No exact-main release candidate is ready. Exact-source 100% coverage and
 independent review, complete compatibility, macOS/Windows candidate consumers,
 and clean Cargo/PyPI artifact checks remain open. The previous benchmark matrix
 is incomplete on Linux ARM64 and does not establish a broad Python FastAPI
