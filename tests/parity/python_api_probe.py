@@ -868,9 +868,33 @@ except KeyboardInterrupt:
         bind_conflict_listener.listen()
         port = bind_conflict_listener.getsockname()[1]
     else:
-        with socket.socket(address_family, socket.SOCK_STREAM) as reservation:
-            reservation.bind((host, 0))
-            port = reservation.getsockname()[1]
+        reserve_quic_port = (
+            request.get("tls")
+            and os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn-rs"
+        )
+        last_port_error: OSError | None = None
+        for _ in range(512):
+            with socket.socket(address_family, socket.SOCK_STREAM) as reservation:
+                try:
+                    reservation.bind((host, 0))
+                    port = reservation.getsockname()[1]
+                    if reserve_quic_port:
+                        # The TLS-enabled candidate binds its HTTP/3 QUIC
+                        # endpoint on UDP at the same port. Confirm that UDP
+                        # can claim the selected port too; TCP-only ephemeral
+                        # ports can be excluded on Windows.
+                        with socket.socket(
+                            address_family, socket.SOCK_DGRAM
+                        ) as udp_reservation:
+                            udp_reservation.bind((host, port))
+                    break
+                except OSError as error:
+                    last_port_error = error
+        else:
+            raise OSError(
+                "could not find an available test port after 512 attempts: "
+                f"{last_port_error}"
+            )
 
     if request["invocation"] == "module-cli":
         if request.get("callable_instance"):

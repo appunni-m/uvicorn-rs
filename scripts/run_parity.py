@@ -10650,6 +10650,17 @@ def execute_case(
             )
             if (
                 fault is not None
+                and fault["contract"] == "http3-stream-reset-on-runtime-error"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip()
+                    == fault["point"]
+                ):
+                    raise ParityError("HTTP/3 stream runtime-error fault was not consumed")
+                observation["fault_consumed"] = True
+            if (
+                fault is not None
                 and fault["contract"] == "http3-legacy-default-header-error-resets-stream"
             ):
                 if (
