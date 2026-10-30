@@ -13175,6 +13175,26 @@ def run_python_api_probe(
             ) from error
         if type(run_http_observation) is not dict:
             raise ParityError(f"{case['case_id']}: HTTP API observation must be an object")
+        shutdown_trace_output = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE_OUTPUT")
+        if shutdown_trace_output and server_id == "uvicorn-rs":
+            encoded_stderr = run_http_observation.get("server_stderr_base64", "")
+            try:
+                server_stderr = base64.b64decode(
+                    encoded_stderr, validate=True
+                ).decode("utf-8", errors="replace")
+            except (ValueError, TypeError):
+                server_stderr = ""
+            trace_lines = [
+                line
+                for line in server_stderr.splitlines()
+                if line.startswith("uvicorn-rs: shutdown-trace ")
+            ]
+            if trace_lines:
+                trace_path = Path(shutdown_trace_output)
+                trace_path.parent.mkdir(parents=True, exist_ok=True)
+                with trace_path.open("a", encoding="utf-8") as trace_file:
+                    for line in trace_lines:
+                        trace_file.write(f"{case['case_id']} {line}\n")
         observation.update(
             {
                 name: run_http_observation.get(name)

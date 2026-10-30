@@ -423,11 +423,11 @@ run another full local matrix merely to duplicate the hosted run.
 For focused Windows parity, dispatch `.github/workflows/ci.yml` in
 `focused-windows-parity` mode with one or more comma-separated case IDs (up to
 20). It builds and installs the candidate wheel, compares only those cases
-with the isolated Uvicorn oracle, and retains failure-only shutdown traces. Use
-it for Windows-specific fixes before the next full CI batch; its selected
-result is diagnostic evidence and does not replace the full platform matrix
-required for compatibility acceptance. Full mode remains the default for
-manual CI runs.
+with the isolated Uvicorn oracle, and retains the candidate's raw shutdown
+trace in the artifact beside the parity report. Use it for Windows-specific
+fixes before the next full CI batch; its selected result is diagnostic evidence
+and does not replace the full platform matrix required for compatibility
+acceptance. Full mode remains the default for manual CI runs.
 
 For a qualified normal benchmark build, follow [benchmark preparation](../benchmarks.md#run-the-complete-comparison-with-one-command-interface):
 build all required binaries first, capture identity, run normal public parity
