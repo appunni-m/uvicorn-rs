@@ -11140,10 +11140,24 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     static NATIVE_RUNTIME: OnceLock<Result<tokio::runtime::Runtime, std::io::Error>> =
         OnceLock::new();
     let runtime = NATIVE_RUNTIME.get_or_init(|| {
+        #[cfg(not(coverage))]
+        let tokio_worker_threads = if shutdown_trace_enabled() {
+            std::env::var("UVICORN_RS_SHUTDOWN_TRACE_TOKIO_THREADS")
+                .ok()
+                .and_then(|value| value.parse::<usize>().ok())
+                .filter(|threads| *threads > 0)
+                .unwrap_or(TOKIO_WORKER_THREADS)
+        } else {
+            TOKIO_WORKER_THREADS
+        };
+        #[cfg(coverage)]
+        let tokio_worker_threads = TOKIO_WORKER_THREADS;
+
         let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
         runtime_builder
-            .worker_threads(TOKIO_WORKER_THREADS)
+            .worker_threads(tokio_worker_threads)
             .enable_all();
+        shutdown_trace!("native-runtime.worker-threads={tokio_worker_threads}");
         #[cfg(coverage)]
         {
             if coverage_fault_take(CoverageFaultPoint::NativeRuntimeBuildError) {

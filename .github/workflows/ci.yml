@@ -852,6 +852,7 @@ jobs:
           PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
           UVICORN_RS_SHUTDOWN_TRACE: "1"
           UVICORN_RS_SHUTDOWN_TRACE_OUTPUT: target/focused-windows/shutdown-trace.log
+          UVICORN_RS_SHUTDOWN_TRACE_TOKIO_THREADS: "2"
         run: |
           set -euo pipefail
           uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard \
