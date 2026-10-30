@@ -2813,6 +2813,11 @@
         "point": "http3.native-body-pump.stop-wait",
         "contract": "http3-body-pump-error-stop-disconnect-followup-200"
       },
+      "server_options": {
+        "headers": [
+          "X-ASGI-Coverage-Probe:present"
+        ]
+      },
       "request": {
         "method": "POST",
         "path": "/h3-upload-disconnect",
@@ -2837,6 +2842,11 @@
       "fault": {
         "point": "http3.native-body-pump.error-stop-wait",
         "contract": "http3-body-pump-error-stop-disconnect-followup-200"
+      },
+      "server_options": {
+        "headers": [
+          "X-ASGI-Coverage-Probe:present"
+        ]
       },
       "request": {
         "method": "POST",
@@ -3125,6 +3135,11 @@
       "fault": {
         "point": "http3.body-pump.error.request-stop",
         "contract": "http3-body-pump-error-stop-disconnect-followup-200"
+      },
+      "server_options": {
+        "headers": [
+          "X-ASGI-Coverage-Probe:present"
+        ]
       },
       "request": {
         "method": "POST",
