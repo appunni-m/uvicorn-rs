@@ -6575,6 +6575,24 @@ def read_server_log(server: dict[str, Any]) -> str:
         return reader.read()
 
 
+def persist_shutdown_trace(case_id: str, server: dict[str, Any], server_log: str) -> None:
+    """Keep opt-in Rust/Python shutdown trace lines in focused diagnostic artifacts."""
+    trace_output = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE_OUTPUT")
+    if not trace_output or server.get("id") != "uvicorn-rs":
+        return
+    lines = [
+        line for line in server_log.splitlines()
+        if line.startswith("uvicorn-rs: shutdown-trace ")
+    ]
+    if not lines:
+        return
+    trace_path = Path(trace_output)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    with trace_path.open("a", encoding="utf-8") as trace_file:
+        for line in lines:
+            trace_file.write(f"{case_id} {line}\n")
+
+
 def server_process_diagnostic(server: dict[str, Any]) -> dict[str, Any]:
     """Return bounded process state when a live adapter fails."""
     process: subprocess.Popen = server["process"]
@@ -14065,7 +14083,14 @@ def execute_profile(
                             fault_control_path.write_text("", encoding="utf-8")
                         target_raw = execute_case(case, target, profile, trust_anchor, h3_client)
                     except Exception as error:
+                        persist_shutdown_trace(
+                            case["case_id"], target, read_server_log(target)
+                        )
                         raise ParityError(f"target uvicorn-rs adapter failed: {error}") from error
+                    target_server_log = target_raw.get("server_log")
+                    if not isinstance(target_server_log, str):
+                        target_server_log = read_server_log(target)
+                    persist_shutdown_trace(case["case_id"], target, target_server_log)
                     operation = operations[case["operation"]]
                     target_result = project_observation(target_raw, operation)
                     if case.get("verification", "oracle-parity") == "fault-contract":
