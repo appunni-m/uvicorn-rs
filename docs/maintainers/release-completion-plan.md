@@ -37,7 +37,7 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Current receipts — 2026-10-30 12:05 UTC
+### Current receipts — 2026-10-30 12:12 UTC
 
 Full-mode CI [#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961)
 ran from branch commit `5a3866e125afdc454c7f61ad94a45669d2e59d82`, against
@@ -48,6 +48,13 @@ macOS candidate artifacts and clean consumers passed. Windows x86-64 executed
 `python-api.module-cli-two-workers-serve-request` and
 `http1.upload-remains-unread-after-early-response`. Its candidate consumer
 steps were skipped after the parity failure.
+
+The worker case's Uvicorn oracle returned HTTP 200 but did not exit within its
+12-second shutdown bound: the captured log ends while the parent waits for a
+child. The candidate exited with code 0. The early-upload case recorded no
+response status or body from the oracle; the candidate returned HTTP 200 with
+`upload-ignored`. Neither failure's cause is confirmed. Focused run #507 passed
+both inputs, but that alone does not establish a full Windows pass.
 
 Focused Windows run
 [#507](https://github.com/appunni-m/uvicorn-rs/actions/runs/41050476209),
@@ -60,12 +67,15 @@ hashes differ, so this focused result does not replace the failed full Windows
 lane or establish a clean full-matrix receipt.
 
 The unified three-repeat coverage job in #506 remains in progress; no final
-report artifact or 100% result is available. No benchmark has started, following
-the maintainer's parity-first direction. PR #19 remains a draft against the
-same `main` commit; exact-main checks, complete Windows parity and consumers,
-independent coverage review, and benchmark evidence remain outstanding. The
-current docs-only branch head is `a8c38d2d0bf26cdc73ef97a7d5330c71b0f6a612`;
-its strict local MkDocs build passed.
+report artifact or 100% result is available. It has not been restarted. No
+benchmark has started, following the maintainer's parity-first direction. PR
+#19 remains a draft against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`; exact-main checks, complete Windows
+parity and consumers, independent coverage review, and benchmark evidence
+remain outstanding. Current branch head is
+`d587381ffdca8bf4859d8be210059ab6f762b010`; changes after #506 are limited to
+the release workflow/version guard and documentation. The strict local MkDocs
+build passed for the docs changes.
 
 1. The previous full-mode CI run was
    [#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350),
