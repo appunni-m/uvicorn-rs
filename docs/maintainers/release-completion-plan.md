@@ -37,35 +37,32 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-1. The latest full candidate checks are in CI
-   [#489](https://github.com/appunni-m/uvicorn-rs/actions/runs/40999924044),
-   on PR head `27733501e05cda09b11ce5b28cc22e51e4c4d1ff` against `main` at
-   `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
-   composition, release-evidence handoff, normal-wheel public parity, and
-   Linux x86-64 candidate artifacts/consumers passed. macOS ARM64 candidate
-   parity failed only on `python-api.module-cli-serves-wsgi-request`; the input
-   lacked the 0.25 second post-response settle already used by adjacent WSGI
-   cases. That single adjusted case passes locally, but the hosted artifact was
-   built before the adjustment. Windows candidate parity also failed. Its
-   focused trace shows both workers receive and return from native shutdown,
-   while only the request-serving worker observes listener cancellation; the
-   idle worker remains in `listener.accept()`. The causal boundary is narrowed
-   to cancellation/wakeup after the Python request, but the root cause is not
-   confirmed. Hypercorn cleanup errors and the TLS oracle shutdown error are
-   separate infrastructure failures. The unified coverage job completed all
-   1,331/1,331 cases but failed the 100% gate at 14,033/14,203 regions and
-   10,340/10,424 lines. Run #489 is complete and is bound to the older source;
-   it does not qualify current branch head
-   `872d0d6ff770d5815a250d39fac2dfb66d70c0e3`.
+1. The latest full-mode CI run is
+   [#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350),
+   on branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5` against
+   `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality, MSRV,
+   native FastAPI-RS composition, and release-evidence checks passed. Linux
+   installed-wheel parity selected 718 cases: 715 passed, no behavior
+   mismatches were reported, one infrastructure case failed, and two later TLS
+   cases were not run. The failing active-response stream case raised Broken
+   pipe; its target log shows the ASGI send failed with “client disconnected
+   before response body.” The graceful-timeout message in the same profile is
+   from the immediately preceding TLS cancellation case, which passed. The
+   failed active-stream run has no shutdown trace, so its ordering and cause
+   remain unknown. The three-repeat coverage job is still running. macOS/Windows
+   candidate parity and Python-floor jobs were skipped after Linux parity
+   failed.
 
-   Focused Windows follow-ups passed the six worker cases in #492, the TLS
-   stream-drain case in #493, and the three HTTP/3 cases in
-   [#496](https://github.com/appunni-m/uvicorn-rs/actions/runs/41009518264).
-   Run #496 is on current branch head `872d0d6ff770d5815a250d39fac2dfb66d70c0e3`;
-   all three selected cases passed with zero failed, not-run, or infrastructure
-   cases. This verifies the Hypercorn cleanup change but is not a full platform
-   matrix. The next CI run should consume one full current-source batch after
-   these related parity fixes; do not start benchmarks until complete
+   Focused Linux run #499 passed the active-stream case once without retaining
+   a trace. Exact-source focused CI
+   [#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998), on
+   branch revision `3ff0999665f8face9dbb8bf03984b734e4293d22`, passed the
+   active-stream, reset-during-shutdown, and unfinished-handshake cases 3/3
+   with zero failures, infrastructure errors, or not-run cases. Artifact
+   12967259667 retains shutdown traces. The successful trace shows shutdown
+   wakeup, listener drain completion, and lifespan shutdown completion; it
+   does not reproduce or explain the full-run failure. The current branch has
+   no full-source platform matrix yet. Do not start benchmarks until complete
    compatibility parity passes. Coverage and independent review remain
    mandatory release gates.
 2. Audit the fixed compatibility inventory and architecture against current

@@ -14,40 +14,41 @@ candidate artifacts and downstream consumer checks remain open; see
 
 ## Current verification status (2026-10-30)
 
-PR #19 remains a draft. The latest completed full candidate/parity run is CI
-[#489](https://github.com/appunni-m/uvicorn-rs/actions/runs/40999924044),
-from older commit `27733501e05cda09b11ce5b28cc22e51e4c4d1ff`. Linux candidate,
-composition, Rust quality, and MSRV jobs passed. macOS parity had one WSGI
-module-CLI log-event failure. Windows parity passed 682 cases, failed six
-multi-worker shutdown cases, recorded six infrastructure errors, and left two
-TLS cases unrun. Its unified coverage job completed all 1,331 cases but failed
-the 100% gate at 14,033/14,203 regions and 10,340/10,424 lines. These results
-are not a complete run of the current branch, now at
-`872d0d6ff770d5815a250d39fac2dfb66d70c0e3`.
+PR #19 is open and targets `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The current branch has docs and
+parity-diagnostic updates after its latest tested revision; it has no full
+source matrix yet.
 
-Focused Windows follow-ups on later commits passed the six worker cases 6/6 in
-[#492](https://github.com/appunni-m/uvicorn-rs/actions/runs/41006402856) and
-the TLS stream-drain shutdown case 1/1 in
-[#493](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007521764). The
-three HTTP/3 cases passed in
-[#495](https://github.com/appunni-m/uvicorn-rs/actions/runs/41008650687), but
-the valid report records three cleanup infrastructure errors: Hypercorn log
-files remained locked after its process exited, followed by a profile temp
-directory cleanup failure. Focused run
-[#496](https://github.com/appunni-m/uvicorn-rs/actions/runs/41009518264) then
-passed the same three cases on current commit
-`872d0d6ff770d5815a250d39fac2dfb66d70c0e3` with zero failed, not-run, or
-infrastructure cases. This resolves the focused Hypercorn cleanup check; it is
-not full Windows parity. The branch still needs a full current-source platform
-run. Exact-source full coverage, independent Coverage-MCP acceptance, complete
-Uvicorn compatibility, and clean cross-platform candidate receipts remain
-open. Benchmarks stay behind parity acceptance. See the
-[full parity history](parity.md).
+The latest full-mode CI run,
+[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350),
+tested earlier branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`.
+Rust quality, MSRV, native FastAPI-RS composition, and release-evidence checks
+passed. Linux installed-wheel parity selected 718 cases: 715 passed, no
+behavior mismatches were reported, one infrastructure case failed, and two
+later TLS cases were not run. In the failed active-response stream case, the
+target reported Broken pipe and logged that the ASGI send saw “client
+disconnected before response body.” A graceful-timeout log in the same profile
+belongs to the preceding TLS cancellation case, which passed. The failed run
+has no shutdown trace, so its event ordering and cause remain unknown.
 
-The newest full coverage report remains run #489 above. The older `main` report
-from run
-[#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928):
-10,962/11,375 regions and 8,130/8,438 lines. It is not bound to this branch.
+Focused run
+[#499](https://github.com/appunni-m/uvicorn-rs/actions/runs/41035866808) passed
+the drain case once. Exact-source focused run
+[#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) on
+revision `3ff0999665f8face9dbb8bf03984b734e4293d22` passed
+the drain, reset-during-shutdown, and unfinished-handshake cases 3/3 with zero
+failures, infrastructure errors, or not-run cases; its trace is artifact
+12967259667. This evidence leaves the full installed-wheel matrix open. The
+three-repeat coverage job in #497 is still running; macOS/Windows candidate
+parity and Python-floor jobs were skipped after Linux parity failed.
+
+Exact-source full coverage, independent Coverage-MCP acceptance, complete
+Uvicorn compatibility, and clean cross-platform candidate receipts remain open.
+The previous completed coverage report is CI #489 and belongs to an older
+source. The older exact-main report,
+[#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928),
+failed at 10,962/11,375 regions and 8,130/8,438 lines. Benchmarks remain behind
+full parity acceptance. See the [full parity history](parity.md).
 
 These results do not establish the complete Uvicorn contract or release
 support. The declared Python 3.9 wheel-install job was skipped after the

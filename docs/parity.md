@@ -4,31 +4,43 @@
 
 ## Current source status (2026-10-30)
 
-PR #19 remains a draft. The candidate lanes in CI
-[#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403) tested
-prior head `8d64ab95c5ec756e47459061fa6d5e73491397b5` against main
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux x86-64 installed-wheel
-parity passed 718/718 and macOS ARM64 candidate parity passed 718/718. Rust
-quality/MSRV, native FastAPI-RS composition, and release-evidence handoff passed.
+PR #19 is open against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The current branch has docs and
+parity-diagnostic updates after its latest tested revision; no full-source
+parity matrix includes those edits.
 
-Windows x86-64 built and installed its candidate wheel, but parity was
-incomplete: 684/689 executed cases passed, with four worker failures, six
-infrastructure failures, and two not-run cases. The focused trace shows the
-first worker stop signal without a native-shutdown request; a later signal
-reaches the native call while the listener remains waiting in accept. The TLS
-active-stream diagnostic failed in the Uvicorn oracle. The Windows candidate
-consumer steps were skipped.
+Full-mode CI
+[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350) ran on
+earlier branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`. Linux
+installed-wheel parity selected 718 cases: 715 passed, no behavior mismatches
+were reported, one infrastructure case failed, and two later TLS cases were
+not run. The active-response stream case raised Broken pipe; the target log
+shows the ASGI send failed with “client disconnected before response body.” The
+graceful-timeout message in the same profile is from the preceding TLS
+cancellation case, which passed. The failing active-stream run has no shutdown
+trace, so the event ordering and cause remain unknown. Rust quality, MSRV,
+native FastAPI-RS composition, and release-evidence checks passed. The
+three-repeat coverage job remains in progress, and macOS/Windows candidate
+parity and Python-floor jobs were skipped after Linux parity failed.
 
-Commits `e8157fe61` and `93d1d6c39` are now pushed. The former filters shutdown
-trace lines from parity logs; the latter moves native cancellation ahead of
-synchronous shutdown logging. The two selected multi-worker cases pass locally
-on macOS ARM64, but do not validate Windows. No exact-source hosted result is
-available for these follow-ups yet; the current docs refresh also needs hosted
-validation. Full Windows parity, the complete CLI/API/process contract,
-exact-source 100% coverage, independent Coverage-MCP review, and clean
-cross-platform candidate artifacts remain open. Benchmark work stays behind
-compatibility acceptance. The maintainer will run the real FastAPI application
-trial after repository compatibility work is handed off.
+Focused run
+[#499](https://github.com/appunni-m/uvicorn-rs/actions/runs/41035866808) passed
+the active-stream case once without a retained trace. Exact-source focused run
+[#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) on
+revision `3ff0999665f8face9dbb8bf03984b734e4293d22` passed
+the active-stream, reset-during-shutdown, and unfinished-handshake cases 3/3
+with zero failures, infrastructure errors, or not-run cases. Its trace artifact
+12967259667 has SHA-256
+`9bb62526c985d65b8b5413149d830686e98ae5d3f2a0339ddf7141aba898e090`. The
+successful trace shows native shutdown wakeup, listener drain completion, and
+completed lifespan shutdown. These focused cases do not resolve the full-run
+failure or establish cross-platform parity.
+
+Complete Uvicorn compatibility, current-source full platform parity, 100%
+coverage, independent Coverage-MCP review, and clean cross-platform candidate
+artifacts remain open. Benchmark work stays behind compatibility acceptance.
+The maintainer will run the real FastAPI application trial after repository
+compatibility work is handed off.
 
 ## Focused TLS parity follow-up on the local macOS source (2026-10-28)
 

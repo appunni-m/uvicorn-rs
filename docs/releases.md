@@ -27,43 +27,45 @@ candidates. The PyPI trusted publisher is **appunni-m/uvicorn-rs / release.yml
 **appunni-m/uvicorn-rs / release.yml / crates-io**. The user confirmed the
 lifecycle publisher is already configured; do not add duplicates.
 
-PR #19 remains a draft. The current branch is
-`codex/uvicorn-rs-consolidation` at **872d0d6ff770d5815a250d39fac2dfb66d70c0e3**;
-it has not been merged to `main` at
-**86e72e181d00feca1b4db7f30377d5d9d4345b83**. The latest completed full
-candidate/parity CI run is
-[#489](https://github.com/appunni-m/uvicorn-rs/actions/runs/40999924044),
-from older commit `27733501e05cda09b11ce5b28cc22e51e4c4d1ff`. Linux candidate,
-composition, Rust quality, and MSRV jobs passed. macOS parity had one WSGI
-module-CLI log-event failure. Windows parity passed 682 cases, failed six
-multi-worker shutdown cases, recorded six infrastructure errors, and left two
-TLS cases unrun. Its unified coverage job completed all 1,331 cases but failed
-the 100% gate at 14,033/14,203 regions and 10,340/10,424 lines. These outcomes
-do not qualify the current branch.
+PR #19 is open and targets `main` at
+**86e72e181d00feca1b4db7f30377d5d9d4345b83**. The branch
+`codex/uvicorn-rs-consolidation` has documentation and parity-diagnostic
+updates after the latest tested revision; those changes have not had a full
+source matrix.
 
-Focused Windows follow-ups passed the six selected worker cases 6/6 in
-[#492](https://github.com/appunni-m/uvicorn-rs/actions/runs/41006402856) and
-the TLS stream-drain case 1/1 in
-[#493](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007521764). Three
-Windows HTTP/3 cases passed in
-[#495](https://github.com/appunni-m/uvicorn-rs/actions/runs/41008650687), but
-the valid report records three cleanup infrastructure errors: two Hypercorn
-log files remained locked after their server processes exited, and the profile
-temp directory then failed to clean up. The current working change asks the
-Hypercorn oracle to shut down gracefully on Windows. Focused CI
-[#496](https://github.com/appunni-m/uvicorn-rs/actions/runs/41009518264), on the
-current branch commit above, passed the same three HTTP/3 cases with zero failed,
-not-run, or infrastructure cases. Its parity report is artifact 12956958252
-(SHA-256 `fbd1a1c796b00bbd58ab891cf011780d310e1e951bc1bcc7f644d67b86dc093e`);
-the `parity.json` SHA-256 is
-`dafe3010594bcd56b6363968b31f948319f2e1c57391631f0fe4686b0c17cf7c`. These
-focused runs are not full parity. The newest full coverage measurement on the
-branch is #489, above; the earlier `main` report from
-[#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928):
-10,962/11,375 regions and 8,130/8,438 lines. It is not bound to the current
-branch. No full parity or coverage run has yet qualified current commit
-`872d0d6ff770d5815a250d39fac2dfb66d70c0e3`, and no accepted independent
-Coverage-MCP review exists for it.
+The latest full-mode CI run is
+[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350), on
+branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`. Rust quality,
+MSRV, native FastAPI-RS composition, and release-evidence checks passed. Linux
+installed-wheel parity selected 718 cases: 715 passed, no behavior mismatches
+were reported, one infrastructure case failed, and two later TLS cases were
+not run. The failed case,
+`lifespan.active-response-stream-drains-on-tls-shutdown`, raised Broken pipe;
+its target log shows the ASGI send failed with “client disconnected before
+response body.” The graceful-timeout message in that profile belongs to the
+immediately preceding TLS cancellation case, which passed. The failing
+active-stream run has no shutdown trace, so its event ordering and cause remain
+unknown. macOS/Windows candidate parity and Python-floor jobs were skipped after
+Linux parity failed. The three-repeat coverage job is still running; its report
+is not available yet.
+
+Focused Linux run
+[#499](https://github.com/appunni-m/uvicorn-rs/actions/runs/41035866808) passed
+the active-stream case once without retaining a trace. Exact-source run
+[#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) on
+revision `3ff0999665f8face9dbb8bf03984b734e4293d22` passed the active-stream, reset-during-shutdown, and
+unfinished-handshake cases 3/3 with zero failures, infrastructure errors, or
+not-run cases. Its trace artifact is 12967259667 (SHA-256
+`9bb62526c985d65b8b5413149d830686e98ae5d3f2a0339ddf7141aba898e090`). The
+successful trace records native shutdown wakeup, listener drain completion,
+and completed lifespan shutdown. This focused evidence does not resolve the
+#497 failure or establish complete platform parity.
+
+The previous full coverage report is CI #489, with 14,033/14,203 regions and
+10,340/10,424 lines; it predates this branch revision. The exact-main report
+from [#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
+had 10,962/11,375 regions and 8,130/8,438 lines. No accepted independent
+Coverage-MCP review exists for the current source.
 
 The full benchmark run
 [#39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)

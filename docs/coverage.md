@@ -8,39 +8,24 @@
 
 ## Current unified coverage status (2026-10-30)
 
-CI [#488](https://github.com/appunni-m/uvicorn-rs/actions/runs/40990187513)
-ran on branch head `40404ff2890413a7901a073a62e0741231f0d05d`; its coverage
-report records synthetic merge revision
-`56a4b72c5a3a54fd11378c988e42ae72e3bbb6c5`. All seven tracked Rust source
-hashes in the report match that branch head. The required three-repeat matrix
-failed, with 7, 7, and 8 parity failures in the respective repeats. Most are a
-coverage-only request-body-pump marker interleaving with Python shutdown logs;
-the aggregated instrumented pass also recorded an HTTP/2 disconnect mismatch
-for `http2.reset-after-complete-upload-keeps-sibling-stream-healthy`. Coverage
-reached **14,022/14,193 regions** and **10,334/10,419 lines** (171 regions and
-85 lines remain uncovered). The retained artifact is
-[#12951922128](https://github.com/appunni-m/uvicorn-rs/actions/runs/40990187513/artifacts/12951922128),
-archive SHA-256 `ba089705714fc38d1907845d1029d8a89a9bdc3b969dbda92d023f07beee5ff2`;
-the report SHA-256 is
-`a96436f1aa6f3da03040b49a5cee4033cba382a20ad2c4fa014394df0cab0dd1`.
+The three-repeat unified coverage job in full-mode CI
+[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350) is
+still running on branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`.
+GitHub has not published its coverage artifact yet, so current totals and gaps
+are unavailable. This revision predates the latest parity-tested revision
+`3ff0999665f8face9dbb8bf03984b734e4293d22` and subsequent documentation and
+parity-diagnostic updates; its report, once complete, will not qualify that
+later source.
 
-A local selected-coverage follow-up at
-`target/kata-progress/coverage-marker-report.json` passes the 8 H3 peer-close
-cases, 3 WSGI upload cases, and the body-pump shutdown fault contract (12/12).
-It is diagnostic evidence for the atomic coverage-marker write, not a full
-coverage or independent-review receipt. Its report SHA-256 is
-`4b377fdcd84e1a8cfcc01f169215c3cb7732376a3d01db89d95f6f7d27c6ce37`, source
-SHA-256 `1fe9c5daef218c7700be46dd29ecd54abe7c5418d8bde0dbbbe9a0d82f26782f`,
-and instrumented extension SHA-256
-`2833ae31a0f44c185df19f97f9cede2f6f1cf91fad3760fc150068068bfa1b44`. The
-worktree source is dirty because this follow-up has not been committed.
+The last completed full coverage report is CI #489 on an older branch source.
+It completed 1,331/1,331 cases and failed the 100% gate at **14,033/14,203
+regions** and **10,340/10,424 lines**. Use it for historical comparison only.
+The previous exact-main report, CI #396, failed at 10,962/11,375 regions and
+8,130/8,438 lines.
 
-Coverage-MCP has no accepted independent receipt. `7t4g` remains open; its
-review must be bound to a complete passing report for the accepted exact-main
-source. The previous exact-main report, CI #396, failed at 10,962/11,375 regions
-and 8,130/8,438 lines and predates this source. The failed #488 report is only
-for gap diagnosis; the selected local report and all prior-source reports are
-not current acceptance.
+Coverage-MCP has no accepted independent receipt. `7t4g` remains open; review
+must bind to a complete passing report for the accepted exact-main source.
+Older reports and selected local reports are gap-mapping evidence only.
 
 ### Prior completed unified coverage result (CI #464)
 

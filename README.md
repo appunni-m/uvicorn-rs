@@ -13,22 +13,24 @@ crates.io serves `uvicorn-rs` 0.2.1 and `asgi-lifespan-protocol-rs` 0.2.1;
 PyPI has no `uvicorn-rs` release. The current 0.2.2 source has no clean,
 exact-source candidate or release tag yet. See [release status](docs/releases.md).
 
-The latest full candidate/parity run, CI
-[#489](https://github.com/appunni-m/uvicorn-rs/actions/runs/40999924044),
-used an older source commit and did not pass all parity cases. Follow-up
-Windows-only runs passed the six selected worker cases in
-[#492](https://github.com/appunni-m/uvicorn-rs/actions/runs/41006402856) and
-the TLS stream-drain case in
-[#493](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007521764).
-Three selected Windows HTTP/3 cases passed in
-[#495](https://github.com/appunni-m/uvicorn-rs/actions/runs/41008650687), but
-the run recorded three Hypercorn log-file cleanup errors (Windows sharing
-violations) after the requests passed. The current working change asks the
-Hypercorn oracle to shut down gracefully on Windows; only those three cases
-need rerunning to verify that cleanup path.
-The latest full coverage measurement is still the earlier `main` report:
-10,962/11,375 regions and 8,130/8,438 lines. It is not a measurement of the
-current branch. Exact-source full coverage, independent Coverage-MCP review,
+The latest full-mode CI run,
+[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350),
+used branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`. Linux
+installed-wheel parity selected 718 cases: 715 passed, one infrastructure case
+failed, and two later TLS cases were not run. The failed active-stream case
+raised Broken pipe; its target log says the ASGI send saw “client disconnected
+before response body.” The graceful-timeout message belongs to the preceding
+TLS cancellation case, which passed. The failed case has no shutdown trace, so
+its cause is unknown. The three-repeat coverage job is still running; candidate
+parity on macOS/Windows and the Python-floor job were skipped.
+
+Focused CI
+[#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) passed
+three TLS shutdown cases 3/3 on revision
+`3ff0999665f8face9dbb8bf03984b734e4293d22`; this does not resolve the full-run
+failure or establish cross-platform parity. The current branch has docs and
+parity-diagnostic updates after that tested revision, with no full-source
+matrix yet. Exact-source full coverage, independent Coverage-MCP review,
 complete compatibility, candidate artifacts and consumers, and parity-first
 benchmarks remain open. See [coverage evidence](docs/coverage.md),
 [parity evidence](docs/parity.md), and

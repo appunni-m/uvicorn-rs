@@ -28,6 +28,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 import uuid
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -6573,6 +6574,13 @@ def read_server_log(server: dict[str, Any]) -> str:
         raise ParityError("server log has no independent readable path")
     with open(log_path, "r", encoding="utf-8", errors="replace") as reader:
         return reader.read()
+
+
+def format_adapter_exception(error: Exception) -> str:
+    """Retain the Python call site for adapter failures in parity artifacts."""
+    return "".join(
+        traceback.format_exception(type(error), error, error.__traceback__)
+    )[-8_000:]
 
 
 def persist_shutdown_trace(case_id: str, server: dict[str, Any], server_log: str) -> None:
@@ -14086,7 +14094,10 @@ def execute_profile(
                         persist_shutdown_trace(
                             case["case_id"], target, read_server_log(target)
                         )
-                        raise ParityError(f"target uvicorn-rs adapter failed: {error}") from error
+                        raise ParityError(
+                            f"target uvicorn-rs adapter failed: {error}\n"
+                            f"{format_adapter_exception(error)}"
+                        ) from error
                     target_server_log = target_raw.get("server_log")
                     if not isinstance(target_server_log, str):
                         target_server_log = read_server_log(target)
@@ -14339,7 +14350,8 @@ def execute_profile(
                             }
                             raise ParityError(
                                 f"oracle {oracle['id']} adapter failed: {error}; "
-                                f"diagnostic={json.dumps(diagnostic, sort_keys=True)}"
+                                f"diagnostic={json.dumps(diagnostic, sort_keys=True)}\n"
+                                f"{format_adapter_exception(error)}"
                             ) from error
                         oracle_result = project_observation(oracle_raw, operation)
                         comparison_fields = operation.get("compare", operation["observe"])
