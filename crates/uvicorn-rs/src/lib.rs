@@ -2818,10 +2818,30 @@ async fn next_unix_listener_event(
                 }
                 accepted = async {
                     #[cfg(coverage)]
-                    if take_listener_accept_fault() {
-                        return Err(io::Error::other("injected listener accept failure"));
+                    {
+                        if take_listener_accept_fault() {
+                            return Err(io::Error::other("injected listener accept failure"));
+                        }
+                        listener.accept().await
                     }
-                    listener.accept().await
+                    #[cfg(not(coverage))]
+                    {
+                        if std::env::var_os("UVICORN_RS_SHUTDOWN_TRACE").is_some() {
+                            let mut accept = Box::pin(listener.accept());
+                            std::future::poll_fn(|context| {
+                                shutdown_trace!("listener.accept.poll-enter");
+                                let result = accept.as_mut().poll(context);
+                                shutdown_trace!(
+                                    "listener.accept.poll-return ready={}",
+                                    result.is_ready()
+                                );
+                                result
+                            })
+                            .await
+                        } else {
+                            listener.accept().await
+                        }
+                    }
                 } => {
                     let (stream, _peer) = accepted.map_err(ServeError::Accept)?;
                     return Ok(UnixListenerEvent::Accepted { stream, slot });
