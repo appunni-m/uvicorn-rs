@@ -112,24 +112,53 @@ fn write_shutdown_trace(message: fmt::Arguments<'_>) {
 }
 
 #[cfg(not(coverage))]
+struct ShutdownTraceHeartbeat {
+    tokio: tokio::task::JoinHandle<()>,
+    stop_os_thread: Arc<AtomicBool>,
+    os_thread: std::thread::JoinHandle<()>,
+}
+
+#[cfg(not(coverage))]
 fn spawn_shutdown_trace_heartbeat(
     cancellation: CancellationToken,
-) -> Option<tokio::task::JoinHandle<()>> {
+) -> Option<ShutdownTraceHeartbeat> {
     if !shutdown_trace_enabled() {
         return None;
     }
-    Some(tokio::spawn(async move {
+    let stop_os_thread = Arc::new(AtomicBool::new(false));
+    let os_thread_stop = Arc::clone(&stop_os_thread);
+    let tokio_cancellation = cancellation.clone();
+    let os_thread = std::thread::Builder::new()
+        .name("uvicorn-rs-shutdown-trace".into())
+        .spawn(move || {
+            while !os_thread_stop.load(Ordering::Acquire) {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if cancellation.is_cancelled() {
+                    write_shutdown_trace(format_args!(
+                        "os-thread.heartbeat cancelled=true thread={:?}",
+                        std::thread::current().id()
+                    ));
+                }
+            }
+        })
+        .ok()?;
+    let tokio = tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(250));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            let cancelled = cancellation.is_cancelled();
+            let cancelled = tokio_cancellation.is_cancelled();
             write_shutdown_trace(format_args!(
                 "tokio-worker.heartbeat cancelled={cancelled} thread={:?}",
                 std::thread::current().id()
             ));
         }
-    }))
+    });
+    Some(ShutdownTraceHeartbeat {
+        tokio,
+        stop_os_thread,
+        os_thread,
+    })
 }
 
 #[cfg(not(coverage))]
@@ -8195,8 +8224,10 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         };
         #[cfg(not(coverage))]
         if let Some(heartbeat) = shutdown_heartbeat {
-            heartbeat.abort();
-            let _ = heartbeat.await;
+            heartbeat.stop_os_thread.store(true, Ordering::Release);
+            let _ = heartbeat.os_thread.join();
+            heartbeat.tokio.abort();
+            let _ = heartbeat.tokio.await;
         }
         if let Err(error) = result {
             match error {
