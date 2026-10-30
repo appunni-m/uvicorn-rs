@@ -3191,8 +3191,15 @@ async fn next_listener_event(
     shutdown: &mut BoxedShutdownFuture<'_>,
 ) -> Result<ListenerEvent, ServeError> {
     loop {
+        shutdown_trace!(
+            "listener.next-event.wait stage=connection-slot active_connections={}",
+            connections.len()
+        );
         let slot = tokio::select! {
-            _ = shutdown.as_mut() => return Ok(ListenerEvent::Shutdown),
+            _ = shutdown.as_mut() => {
+                shutdown_trace!("listener.next-event.shutdown stage=connection-slot");
+                return Ok(ListenerEvent::Shutdown);
+            }
             joined = connections.join_next(), if !connections.is_empty() => {
                 joined.into_iter().for_each(observe_connection);
                 continue;
@@ -3203,8 +3210,15 @@ async fn next_listener_event(
         };
 
         loop {
+            shutdown_trace!(
+                "listener.next-event.wait stage=accept active_connections={}",
+                connections.len()
+            );
             tokio::select! {
-                _ = shutdown.as_mut() => return Ok(ListenerEvent::Shutdown),
+                _ = shutdown.as_mut() => {
+                    shutdown_trace!("listener.next-event.shutdown stage=accept");
+                    return Ok(ListenerEvent::Shutdown);
+                }
                 joined = connections.join_next(), if !connections.is_empty() => {
                     joined.into_iter().for_each(observe_connection);
                 }
@@ -3216,6 +3230,7 @@ async fn next_listener_event(
                     listener.accept().await
                 } => {
                     let (stream, peer) = accepted.map_err(ServeError::Accept)?;
+                    shutdown_trace!("listener.next-event.accepted peer={peer}");
                     return Ok(ListenerEvent::Accepted { stream, peer, slot });
                 }
             }
