@@ -37,7 +37,37 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-1. The latest full-mode CI run is
+### Current receipts — 2026-10-30 12:05 UTC
+
+Full-mode CI [#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961)
+ran from branch commit `5a3866e125afdc454c7f61ad94a45669d2e59d82`, against
+`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its installed-wheel
+parity passed 718/718 on Linux x86-64 and 718/718 on macOS ARM64. Linux and
+macOS candidate artifacts and clean consumers passed. Windows x86-64 executed
+691 cases: 689 passed and two failed:
+`python-api.module-cli-two-workers-serve-request` and
+`http1.upload-remains-unread-after-early-response`. Its candidate consumer
+steps were skipped after the parity failure.
+
+Focused Windows run
+[#507](https://github.com/appunni-m/uvicorn-rs/actions/runs/41050476209),
+from branch commit `dc720811219e24a04f79c87774c9b9878d3e5528`, selected those
+two cases and passed 2/2 with no failures, infrastructure failures, or not-run
+cases. Both Windows reports have the same 211 parity-source file hashes,
+source digest `c5b9c9bcce020d9d674b9af59393ae705d9c6d471ec07f5f4ce3510522f54a4d`,
+manifest digest, and selected input digests. Their commits and native-extension
+hashes differ, so this focused result does not replace the failed full Windows
+lane or establish a clean full-matrix receipt.
+
+The unified three-repeat coverage job in #506 remains in progress; no final
+report artifact or 100% result is available. No benchmark has started, following
+the maintainer's parity-first direction. PR #19 remains a draft against the
+same `main` commit; exact-main checks, complete Windows parity and consumers,
+independent coverage review, and benchmark evidence remain outstanding. The
+current docs-only branch head is `a8c38d2d0bf26cdc73ef97a7d5330c71b0f6a612`;
+its strict local MkDocs build passed.
+
+1. The previous full-mode CI run was
    [#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350),
    on branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5` against
    `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality, MSRV,
