@@ -28,22 +28,27 @@ candidates. The PyPI trusted publisher is **appunni-m/uvicorn-rs / release.yml
 lifecycle publisher is already configured; do not add duplicates.
 
 PR #19 remains a draft and targets main
-**86e72e181d00feca1b4db7f30377d5d9d4345b83**. The latest completed candidate
-lanes are in CI
-[#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403), on
-prior PR head **8d64ab95c5ec756e47459061fa6d5e73491397b5**. Linux installed
-wheel parity passed 718/718, macOS ARM64 candidate parity passed 718/718, and
-Linux candidate wheel/sdist, clean consumers, and Python-free Cargo package
-checks passed. Windows parity was incomplete: 684/689 executed cases passed,
-with worker failures, infrastructure failures, and two not-run cases. The TLS
-shutdown diagnostic failed in the Uvicorn oracle. The Windows candidate
-consumer lane did not complete.
+**86e72e181d00feca1b4db7f30377d5d9d4345b83**. The latest completed checks are
+in CI
+[#488](https://github.com/appunni-m/uvicorn-rs/actions/runs/40990187513), on
+PR head **40404ff2890413a7901a073a62e0741231f0d05d**. Rust quality/MSRV,
+native composition, normal-wheel parity, Linux x86-64 candidate
+artifacts/consumers, and macOS ARM64 candidate artifacts/consumers passed.
+Windows candidate parity failed three behavioral cases, recorded six
+infrastructure failure records, and left two TLS cases unrun. The Windows
+candidate consumer lane did not complete. The coverage report records the
+synthetic merge revision `56a4b72c5a3a54fd11378c988e42ae72e3bbb6c5`; all seven
+tracked Rust source hashes match the PR head. Its three-repeat matrix failed
+with 7, 7, and 8 parity mismatches, and its coverage gate reached 14,022/14,193
+regions and 10,334/10,419 lines.
 
-The current PR source adds commits `e8157fe61` and `93d1d6c39`; two selected
-multi-worker cases pass locally on macOS ARM64. CI #486 did not produce a
-coverage report before these updates. Its candidate results are bound to the
-prior source. No exact-current-source candidate bundle or accepted independent
-Coverage-MCP receipt was available for this status snapshot.
+A local selected-coverage follow-up changed the coverage-only request-body-pump
+marker to one atomic write. The 8 affected H3 peer-close cases, 3 WSGI upload
+cases, and body-pump fault contract passed 12/12. This subset does not qualify
+full coverage or an independent review. The instrumented HTTP/2
+reset-after-complete-upload mismatch, Windows worker behavior, 171 uncovered
+regions, complete compatibility, and the full exact-source candidate bundle
+remain open. No benchmark has started because parity is not complete.
 
 The last saved GitHub settings audit found active **Protect main** and
 **Protect version tags** rulesets. Main requires pull requests and configured CI

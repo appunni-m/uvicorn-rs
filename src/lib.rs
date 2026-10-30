@@ -1041,6 +1041,15 @@ fn log_error(message: fmt::Arguments<'_>) {
     let _ = std::io::Write::write_fmt(&mut std::io::stderr().lock(), format_args!("{message}\n"));
 }
 
+#[cfg(coverage)]
+fn log_coverage_marker(message: fmt::Arguments<'_>) {
+    // Keep coverage-only markers separate from operational errors and emit the
+    // complete line in one write so concurrent Python logs cannot split it.
+    let line = format!("{message}\n");
+    let mut stderr = std::io::stderr().lock();
+    let _ = std::io::Write::write_all(&mut stderr, line.as_bytes());
+}
+
 fn log_lifespan_info(message: &str) {
     let _ = Python::attach(|py| -> PyResult<()> {
         macro_rules! logging_call {
@@ -8315,7 +8324,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
     {
         let completed = server.completed_request_body_pumps.load(Ordering::Acquire);
         if completed > 0 {
-            log_error(format_args!(
+            log_coverage_marker(format_args!(
                 "uvicorn-rs: request-body pumps joined: {completed}"
             ));
         }

@@ -27,8 +27,13 @@ release evidence. The latest exact-main run, CI run
 on `86e72e181d00feca1b4db7f30377d5d9d4345b83`, completed its matrix but failed
 the 100% gate at 10,962/11,375 regions and 8,130/8,438 lines. Independent
 Coverage-MCP review and complete three-system performance evidence remain
-pending. See the
-[current coverage record](coverage.md#current-unified-coverage-status-2026-10-22)
+pending. The latest PR candidate and coverage checks are in CI
+[#488](https://github.com/appunni-m/uvicorn-rs/actions/runs/40990187513), on
+head `40404ff2890413a7901a073a62e0741231f0d05d`; its coverage gate also failed
+and Windows candidate parity remains incomplete. A local selected fix for a
+coverage-only log interleaving passed 12 affected cases, but does not replace a
+new full hosted run. See the
+[current coverage record](coverage.md#current-unified-coverage-status-2026-10-30)
 and [benchmark status](benchmark-status.md). The PyPI distribution is
 named `uvicorn-rs`; the source provides the `uvicorn` import namespace and
 primary `uvicorn` and `python -m uvicorn` commands. The root Cargo/PyO3

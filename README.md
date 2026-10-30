@@ -13,23 +13,18 @@ been published from this consolidated source. See
 [release status](docs/releases.md).
 
 The latest completed candidate checks are from CI
-[#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403),
-which tested prior PR head `8d64ab95c5ec756e47459061fa6d5e73491397b5` against
-`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux installed-wheel
-parity passed 718/718; macOS ARM64 candidate parity passed 718/718. Linux
-candidate wheel/sdist, clean-consumer checks, and Python-free Cargo package
-checks passed. Windows parity was incomplete: 684/689 executed cases passed,
-with worker shutdown failures, infrastructure failures, and a TLS oracle
-failure. The Windows consumer lane did not complete.
-
-The current PR head includes a focused shutdown-order fix and parity log
-normalization; two selected multi-worker cases pass locally on macOS ARM64.
-The hosted coverage run on the prior head did not produce a report before this
-follow-up, so exact-source 100% coverage and independent Coverage-MCP review
-remain open. Those CI results are bound to the prior source. Full
-Windows/Uvicorn compatibility, clean candidate artifacts and consumers for
-every supported platform, and the matched benchmarks remain release gates.
-Benchmark work follows parity. See
+[#488](https://github.com/appunni-m/uvicorn-rs/actions/runs/40990187513)
+on PR head `40404ff2890413a7901a073a62e0741231f0d05d`, against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
+composition, normal-wheel parity, Linux x86-64 candidate artifacts/consumers,
+and macOS ARM64 candidate artifacts/consumers passed. Windows parity failed
+three behavioral cases, recorded six infrastructure failure records, and left
+two TLS cases unrun. The unified coverage gate also failed at 14,022/14,193
+regions and 10,334/10,419 lines. The follow-up fixes coverage-only log
+interleaving for the H3 peer-close and WSGI upload inputs; its selected local
+coverage check passed 12/12. Full coverage, the instrumented HTTP/2 disconnect
+case, Windows worker shutdown, independent Coverage-MCP review, and complete
+compatibility remain open. Matched benchmarks follow parity. See
 [coverage evidence](docs/coverage.md), [parity evidence](docs/parity.md), and
 [replacement status](docs/uvicorn-compatibility.md).
 

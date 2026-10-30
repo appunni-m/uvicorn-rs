@@ -38,31 +38,28 @@ belong to the release tasks rather than being copied into every prerequisite.
 ## Execution order and stopping rules
 
 1. The latest candidate checks are in CI
-   [#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403),
-   which tested prior PR head `8d64ab95c5ec756e47459061fa6d5e73491397b5`
-   against `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux
-   installed-wheel parity passed 718/718; macOS ARM64 candidate parity passed
-   718/718. Rust quality/MSRV, native composition, release-evidence handoff,
-   Linux candidate wheel/sdist and clean consumers passed. Windows parity was
-   incomplete (684/689 executed cases passed, with worker and infrastructure
-   failures plus a TLS oracle error); its candidate consumer lane did not
-   complete.
+   [#488](https://github.com/appunni-m/uvicorn-rs/actions/runs/40990187513),
+   on PR head `40404ff2890413a7901a073a62e0741231f0d05d` against `main` at
+   `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
+   composition, release-evidence handoff, public parity on the normal wheel,
+   Linux x86-64 candidate artifacts/consumers, and macOS ARM64 candidate
+   artifacts/consumers passed. Windows candidate parity failed with three
+   behavioral cases, six infrastructure failure records, and two not-run TLS
+   cases. The Windows artifact traces both workers entering shutdown, but only
+   one completes; a supervisor signal race remains a hypothesis. Do not call
+   this Windows contract complete.
 
-   CI #486's unified coverage step was still running when the source follow-up
-   was pushed, so it produced no report usable for the updated source. Commits
-   `e8157fe61` and `93d1d6c39` now filter shutdown traces and request native
-   cancellation before synchronous shutdown logging. Two selected multi-worker
-   cases pass locally on macOS ARM64; Windows behavior still needs hosted
-   validation. The candidate and composition results above are bound to the
-   prior source. Reuse unchanged receipts only where their source identities
-   match. Do not start
-   benchmarks until the compatibility gate passes.
-
-   The latest completed coverage report is still a prior-source failure; see
-   the [coverage status](../coverage.md#current-unified-coverage-status-2026-10-30).
-   There is no accepted independent Coverage-MCP receipt. After the current
-   source and docs batch is stable, consume one hosted full run and review its
-   exact report once.
+   The three-repeat unified coverage matrix also failed. Its report matches all
+   seven measured Rust source hashes to the PR head, while recording GitHub's
+   synthetic merge revision. Coverage is 14,022/14,193 regions and
+   10,334/10,419 lines; the repeats contain 7, 7, and 8 parity failures. A
+   local selected-coverage change now emits the coverage-only request-body
+   pump marker in one write; the affected H3 peer-close and WSGI upload cases
+   plus their body-pump fault contract pass 12/12. The instrumented HTTP/2
+   reset-after-complete-upload mismatch and uncovered regions remain open.
+   No hosted report or independent review qualifies this follow-up yet. See the
+   [coverage status](../coverage.md#current-unified-coverage-status-2026-10-30).
+   Benchmarks remain after compatibility parity and have not been started.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions
