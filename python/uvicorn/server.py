@@ -126,10 +126,12 @@ class Server:
     def should_exit(self, value: bool) -> None:
         self._should_exit = bool(value)
         if self._should_exit and self._native_server is not None:
-            self._log_shutdown_status()
+            # Cancel the Rust accept loop before synchronous logging so a slow
+            # log handler cannot postpone transport shutdown after a signal.
             write_shutdown_trace("server-native-shutdown.request")
             self._native_server.shutdown()
             write_shutdown_trace("server-native-shutdown.returned")
+            self._log_shutdown_status()
 
     def _log_shutdown_status(self) -> None:
         """Report shutdown before native draining waits on ASGI tasks."""
