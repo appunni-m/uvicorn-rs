@@ -69,8 +69,14 @@ response body`. Its trace shows a readiness probe accepted after SIGTERM and
 then canceled during shutdown. The one-second graceful-timeout line came from
 the preceding passing cancellation case and does not explain the active-stream
 failure. The case requests a three-second grace period. Local changes add
-bounded diagnostics for the effective Rust timeout and probe duration; they
-remain unverified on Linux and have not had a full-source matrix.
+bounded diagnostics for the effective Rust timeout and probe duration.
+Focused Linux run
+[#502](https://github.com/appunni-m/uvicorn-rs/actions/runs/41043210309) on
+`ee236c8bdfc0b2f270853a40a6ff3c4feb20db43` passed the same two cases 2/2 with
+zero infrastructure failures or not-run cases. It confirmed the active-stream
+server received a three-second timeout and drained successfully; the #501
+failure remains unexplained. No full-source matrix has run on the current
+branch.
 
 The previous full coverage report is CI #489, with 14,033/14,203 regions and
 10,340/10,424 lines; it predates this branch revision. The exact-main report

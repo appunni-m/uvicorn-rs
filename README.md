@@ -35,11 +35,16 @@ case passed, while the active-stream case failed with an ASGI send error,
 accepted the held stream and a separate readiness probe after SIGTERM, then
 canceled the probe connection during shutdown. The one-second graceful-timeout
 message came from the preceding cancellation case, not the active-stream case;
-the failure's cause remains unconfirmed. The current local changes record the
-effective Rust timeout, probe duration, and adapter traceback. Those diagnostic
-changes still need a focused Linux run and a full-source matrix. Exact-source
-full coverage, independent Coverage-MCP review, complete compatibility,
-candidate artifacts and consumers, and parity-first benchmarks remain open.
+the failure's cause remains unconfirmed. Focused Linux run
+[#502](https://github.com/appunni-m/uvicorn-rs/actions/runs/41043210309) on
+`ee236c8bdfc0b2f270853a40a6ff3c4feb20db43` passed the same two cases 2/2 with
+zero infrastructure failures or not-run cases. Its trace confirms the expected
+one-second cancellation timeout and three-second active-stream timeout; the
+active connection finished successfully and the listener drain completed. This
+pass does not explain the earlier failure or replace a full-source matrix.
+Exact-source full coverage, independent Coverage-MCP review, complete
+compatibility, candidate artifacts and consumers, and parity-first benchmarks
+remain open.
 See [coverage evidence](docs/coverage.md),
 [parity evidence](docs/parity.md), and
 [replacement status](docs/uvicorn-compatibility.md).

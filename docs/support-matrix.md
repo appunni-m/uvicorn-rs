@@ -38,9 +38,16 @@ the drain case once. Exact-source focused run
 revision `3ff0999665f8face9dbb8bf03984b734e4293d22` passed
 the drain, reset-during-shutdown, and unfinished-handshake cases 3/3 with zero
 failures, infrastructure errors, or not-run cases; its trace is artifact
-12967259667. This evidence leaves the full installed-wheel matrix open. The
-three-repeat coverage job in #497 is still running; macOS/Windows candidate
-parity and Python-floor jobs were skipped after Linux parity failed.
+12967259667. Focused Linux #501 reproduced the active-stream infrastructure
+failure after the held-request cancellation case passed. The one-second timeout
+log belongs to that first case; the second case's root cause remains unknown.
+Focused Linux #502 on `ee236c8bdfc0b2f270853a40a6ff3c4feb20db43` passed the
+same pair 2/2 and confirmed the active-stream timeout is three seconds and the
+connection drains successfully. These selected runs leave the full
+installed-wheel matrix open. Three-repeat coverage in #497 completed at
+14,032/14,203 regions and 10,343/10,428 lines, below 100%. macOS/Windows
+candidate parity and the Python-floor job were skipped after Linux parity
+failed.
 
 Exact-source full coverage, independent Coverage-MCP acceptance, complete
 Uvicorn compatibility, and clean cross-platform candidate receipts remain open.

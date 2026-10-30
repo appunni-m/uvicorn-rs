@@ -22,19 +22,22 @@ infrastructure case failed, and two later TLS cases were not run. The active
 stream case raised Broken pipe and its target log says the ASGI send saw
 “client disconnected before response body.” The graceful-timeout message is
 from the preceding TLS cancellation case, which passed. The failed stream has
-no shutdown trace, so its cause remains unknown. macOS/Windows candidate
-parity and the Python-floor consumer were skipped after Linux parity failed.
+no shutdown trace. macOS/Windows candidate parity and the Python-floor consumer
+were skipped after Linux parity failed.
 
 Exact-source focused CI
 [#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) passed
 three TLS shutdown cases 3/3 on revision
-`3ff0999665f8face9dbb8bf03984b734e4293d22`. This selected evidence does not
-resolve the full-run failure or establish cross-platform parity. The current
-branch has documentation and parity-diagnostic updates after that tested
-revision; it has no full-source matrix. Exact-source unified coverage,
-independent Coverage-MCP review, complete CLI/API/process compatibility, and
-clean candidate artifacts remain open. See the [current support
-matrix](support-matrix.md) and [parity evidence](parity.md).
+`3ff0999665f8face9dbb8bf03984b734e4293d22`. Focused Linux #501 then reproduced
+the active-stream infrastructure failure in a two-case sequence; the
+one-second timeout log belonged to the preceding cancellation case. Focused
+Linux #502 on `ee236c8bdfc0b2f270853a40a6ff3c4feb20db43` passed the same two
+cases 2/2 and confirmed the active-stream server received a three-second
+timeout and drained successfully. The #501 cause remains unknown, and neither
+selected run establishes the full-source matrix or cross-platform parity.
+Exact-source unified coverage, independent Coverage-MCP review, complete
+CLI/API/process compatibility, and clean candidate artifacts remain open. See
+the [current support matrix](support-matrix.md) and [parity evidence](parity.md).
 
 The package metadata declares Python `>=3.9`. Uvicorn 0.54.0 declares Python
 `>=3.10` in its [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml),

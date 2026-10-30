@@ -66,9 +66,10 @@ belong to the release tasks rather than being copied into every prerequisite.
    cases; the first passed and the second reproduced the ASGI send failure. Its
    trace shows a readiness probe accepted after SIGTERM and then canceled. The
    one-second graceful-timeout line belongs to the preceding cancellation case,
-   so the active-stream cause remains unresolved. Local changes now capture the
-   effective Rust deadline, listener-probe duration, and adapter traceback; a
-   focused Linux run on those diagnostics is next. The current branch has no
+   so the active-stream cause remains unresolved. Focused Linux #502 on
+   `ee236c8bdfc0b2f270853a40a6ff3c4feb20db43` passed the same two cases 2/2 and
+   confirmed the expected one-second and three-second Rust timeouts; the active
+   connection completed and drained. This pass does not explain #501. The current branch has no
    full-source platform matrix yet. Do not start benchmarks until complete
    compatibility parity passes. Coverage and independent review remain
    mandatory release gates.

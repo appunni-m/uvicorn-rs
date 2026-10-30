@@ -46,10 +46,14 @@ it does not establish the active-stream case's timeout or cause. Artifact
 12970357343 has SHA-256
 `e7e344671865ea030a3042a8aed761e3fd655009e48e91f0d4de539b502b50af`. The
 case declares a three-second grace period. Local macOS ARM64 runs passed this
-case alone 1/1 and with the preceding case 2/2, so the Linux result remains
-unresolved. Local diagnostic changes now record the effective Rust deadline,
-listener-probe duration, and adapter traceback; they still need a focused Linux
-run. Neither focused run establishes complete platform parity.
+case alone 1/1 and with the preceding case 2/2. Focused Linux run
+[#502](https://github.com/appunni-m/uvicorn-rs/actions/runs/41043210309) on
+`ee236c8bdfc0b2f270853a40a6ff3c4feb20db43` passed the same two cases 2/2, with
+zero infrastructure failures or not-run cases. The Rust trace confirms the
+selected servers received `Some(1s)` for the cancellation case and `Some(3s)`
+for the active-stream case; the active connection finished `Ok(())` and the
+drain completed. This does not identify why #501 failed. The targeted Linux
+result is still not complete platform parity.
 
 Complete Uvicorn compatibility, current-source full platform parity, 100%
 coverage, independent Coverage-MCP review, and clean cross-platform candidate
