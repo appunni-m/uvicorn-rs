@@ -86,6 +86,16 @@ infrastructure-failed, or not-run cases). Artifact 12970969486 has SHA-256
 `c615fb7d703361f36d378a4b3ce37f204b85dd09ec6917cfac5771c3e270ee99`. This
 does not replace the installed-wheel full matrix.
 
+Focused Linux CI
+[#505](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045372516) on
+exact source `5a3866e125afdc454c7f61ad94a45669d2e59d82` passed the active TLS
+response-stream shutdown case 1/1, with no failures, infrastructure failures,
+or not-run cases. Artifact 12972650846 has SHA-256
+`b33487e9b06622452222883e4d6ae1e01cada100268aa8dbfd57daaa37c3ec1e`. The
+TCP listener now prioritizes a ready shutdown signal over accept; its trace
+supports, but does not conclusively establish, the intermittent-race fix. The
+full matrix is running in CI [#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961).
+
 The previous full coverage report is CI #489, with 14,033/14,203 regions and
 10,340/10,424 lines; it predates this branch revision. The exact-main report
 from [#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)

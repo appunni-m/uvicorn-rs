@@ -58,6 +58,14 @@ WebSocket text cases 2/2, with no failed, infrastructure-failed, or not-run
 cases. Artifact 12972595056 has SHA-256
 `c55dc16bd056f7cdc29b074828e13ea5bb74319a189c57a64383e1a4b3f35350`.
 This confirms those two input contracts only.
+Focused Linux run
+[#505](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045372516) on
+`5a3866e125afdc454c7f61ad94a45669d2e59d82` passed the previously failing
+active TLS response-stream shutdown case 1/1 with zero infrastructure or
+unrun cases. Artifact 12972650846 has SHA-256
+`b33487e9b06622452222883e4d6ae1e01cada100268aa8dbfd57daaa37c3ec1e`.
+The change gives a ready shutdown signal priority over TCP accept. The focused
+trace supports the race diagnosis; the full matrix is running in #506.
 Exact-source full coverage, independent Coverage-MCP review, complete
 compatibility, candidate artifacts and consumers, and parity-first benchmarks
 remain open.

@@ -67,6 +67,21 @@ and passed, with zero failed, infrastructure-failed, or not-run cases. Artifact
 This is exact-source hosted confirmation for these strict-order inputs; it
 does not establish the full H1/H2 response-header matrix or H3 raw wire order.
 
+The Linux run
+[#505](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045372516) on
+exact source `5a3866e125afdc454c7f61ad94a45669d2e59d82` selected only
+`lifespan.active-response-stream-drains-on-tls-shutdown`; it passed 1/1 with
+zero failures, infrastructure failures, or not-run cases. Artifact 12972650846
+has SHA-256
+`b33487e9b06622452222883e4d6ae1e01cada100268aa8dbfd57daaa37c3ec1e`.
+The code now prioritizes a ready shutdown signal in the TCP listener's slot
+and accept waits. The #501 trace showed a probe accept after the shutdown
+request but before the shutdown token woke; #505 showed no accept between the
+token waking and listener stop. This supports the scheduling-race diagnosis,
+but one pass does not prove it eliminated the intermittent failure. Full CI
+[#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961) is
+checking the changed source across the complete matrix.
+
 Complete Uvicorn compatibility, current-source full platform parity, 100%
 coverage, independent Coverage-MCP review, and clean cross-platform candidate
 artifacts remain open. Benchmark work stays behind compatibility acceptance.
