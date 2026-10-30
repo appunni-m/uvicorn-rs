@@ -49,9 +49,9 @@ belong to the release tasks rather than being copied into every prerequisite.
    before response body.” The graceful-timeout message in the same profile is
    from the immediately preceding TLS cancellation case, which passed. The
    failed active-stream run has no shutdown trace, so its ordering and cause
-   remain unknown. The three-repeat coverage job is still running. macOS/Windows
-   candidate parity and Python-floor jobs were skipped after Linux parity
-   failed.
+   remain unknown. macOS/Windows candidate parity and the Python-floor job were
+   skipped after Linux parity failed. Three-repeat coverage completed at
+   14,032/14,203 regions and 10,343/10,428 lines, below the 100% gate.
 
    Focused Linux run #499 passed the active-stream case once without retaining
    a trace. Exact-source focused CI
@@ -61,8 +61,15 @@ belong to the release tasks rather than being copied into every prerequisite.
    with zero failures, infrastructure errors, or not-run cases. Artifact
    12967259667 retains shutdown traces. The successful trace shows shutdown
    wakeup, listener drain completion, and lifespan shutdown completion; it
-   does not reproduce or explain the full-run failure. The current branch has
-   no full-source platform matrix yet. Do not start benchmarks until complete
+   does not reproduce or explain the full-run failure. Focused Linux #501
+   selected the preceding held-request cancellation and active-stream TLS
+   cases; the first passed and the second reproduced the ASGI send failure. Its
+   trace shows a readiness probe accepted after SIGTERM and then canceled. The
+   one-second graceful-timeout line belongs to the preceding cancellation case,
+   so the active-stream cause remains unresolved. Local changes now capture the
+   effective Rust deadline, listener-probe duration, and adapter traceback; a
+   focused Linux run on those diagnostics is next. The current branch has no
+   full-source platform matrix yet. Do not start benchmarks until complete
    compatibility parity passes. Coverage and independent review remain
    mandatory release gates.
 2. Audit the fixed compatibility inventory and architecture against current

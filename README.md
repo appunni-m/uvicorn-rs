@@ -20,19 +20,27 @@ installed-wheel parity selected 718 cases: 715 passed, one infrastructure case
 failed, and two later TLS cases were not run. The failed active-stream case
 raised Broken pipe; its target log says the ASGI send saw “client disconnected
 before response body.” The graceful-timeout message belongs to the preceding
-TLS cancellation case, which passed. The failed case has no shutdown trace, so
-its cause is unknown. The three-repeat coverage job is still running; candidate
-parity on macOS/Windows and the Python-floor job were skipped.
+TLS cancellation case, which passed. Three-repeat coverage completed at
+14,032/14,203 regions and 10,343/10,428 lines, so the 100% gate failed.
+Candidate parity on macOS/Windows and the Python-floor job were skipped.
 
 Focused CI
 [#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) passed
 three TLS shutdown cases 3/3 on revision
-`3ff0999665f8face9dbb8bf03984b734e4293d22`; this does not resolve the full-run
-failure or establish cross-platform parity. The current branch has docs and
-parity-diagnostic updates after that tested revision, with no full-source
-matrix yet. Exact-source full coverage, independent Coverage-MCP review,
-complete compatibility, candidate artifacts and consumers, and parity-first
-benchmarks remain open. See [coverage evidence](docs/coverage.md),
+`3ff0999665f8face9dbb8bf03984b734e4293d22`. Focused Linux run
+[#501](https://github.com/appunni-m/uvicorn-rs/actions/runs/41040800079) then
+reproduced the full-run failure in the two-case sequence: the held-request
+case passed, while the active-stream case failed with an ASGI send error,
+“client disconnected before response body.” Its trace shows the server
+accepted the held stream and a separate readiness probe after SIGTERM, then
+canceled the probe connection during shutdown. The one-second graceful-timeout
+message came from the preceding cancellation case, not the active-stream case;
+the failure's cause remains unconfirmed. The current local changes record the
+effective Rust timeout, probe duration, and adapter traceback. Those diagnostic
+changes still need a focused Linux run and a full-source matrix. Exact-source
+full coverage, independent Coverage-MCP review, complete compatibility,
+candidate artifacts and consumers, and parity-first benchmarks remain open.
+See [coverage evidence](docs/coverage.md),
 [parity evidence](docs/parity.md), and
 [replacement status](docs/uvicorn-compatibility.md).
 

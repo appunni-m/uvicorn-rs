@@ -3149,6 +3149,10 @@ where
     );
     drop(listener);
     shutdown_sender.send_replace(true);
+    shutdown_trace!(
+        "listener.graceful-shutdown-start timeout={:?}",
+        config.graceful_shutdown_timeout
+    );
     let shutdown_deadline = graceful_shutdown_deadline(config.graceful_shutdown_timeout)?;
     loop {
         let joined = match shutdown_deadline {

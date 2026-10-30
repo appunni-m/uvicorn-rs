@@ -9,12 +9,15 @@
 ## Current unified coverage status (2026-10-30)
 
 The three-repeat unified coverage job in full-mode CI
-[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350) is
-still running on branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`.
-GitHub has not published its coverage artifact yet, so current totals and gaps
-are unavailable. This revision predates the latest parity-tested revision
-`3ff0999665f8face9dbb8bf03984b734e4293d22` and subsequent documentation and
-parity-diagnostic updates; its report, once complete, will not qualify that
+[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350)
+completed on branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`.
+It attributed all 1,331 indexed cases but failed the 100% gate at **14,032/14,203
+regions** and **10,343/10,428 lines**. Artifact `12969649926`
+(`uvicorn-rs-unified-coverage`, archive SHA-256
+`ebb2fa1bb345bf77045e78184e7af9d3bfde6337bbd5226e5083c6db6dc9c1ef`) retains
+the report and raw per-case records. This revision predates the latest
+parity-tested revision `3ff0999665f8face9dbb8bf03984b734e4293d22` and the
+subsequent diagnostics and documentation updates; it is not evidence for that
 later source.
 
 The last completed full coverage report is CI #489 on an older branch source.

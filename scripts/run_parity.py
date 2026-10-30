@@ -11169,14 +11169,39 @@ def execute_case(
                     server["process"].terminate()
                 # Leave the held stream enough of its three-second grace to
                 # complete even when admission closure is the failed behavior.
+                trace_shutdown = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE") == "1"
+                listener_probe_started = time.monotonic()
+                if trace_shutdown:
+                    print(
+                        "uvicorn-rs: parity-shutdown-trace "
+                        f"listener-close-probe.start timeout_s=1 "
+                        f"held_stream_socket_open={connection.sock is not None}",
+                        flush=True,
+                    )
                 listener_closed_before_release = wait_for_listener_closed(
                     server, timeout=1, tls_context=tls_context
                 )
+                if trace_shutdown:
+                    print(
+                        "uvicorn-rs: parity-shutdown-trace "
+                        "listener-close-probe.finished "
+                        f"elapsed_s={time.monotonic() - listener_probe_started:.6f} "
+                        f"closed={listener_closed_before_release} "
+                        f"server_running={server['process'].poll() is None} "
+                        f"held_stream_socket_open={connection.sock is not None}",
+                        flush=True,
+                    )
                 if server["process"].poll() is not None:
                     raise ParityError("server exited before the held response stream was released")
                 if "response.shutdown.finished" in read_events(server["events"]):
                     raise ParityError("response stream finished before its shutdown release")
                 release_path.touch()
+                if trace_shutdown:
+                    print(
+                        "uvicorn-rs: parity-shutdown-trace "
+                        "held-stream-release.sent",
+                        flush=True,
+                    )
                 # Consume the remaining TLS response while graceful shutdown
                 # is in progress. On Windows, the stock Uvicorn oracle cannot
                 # finish its TLS close handshake if the client waits for the

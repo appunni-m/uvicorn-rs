@@ -45,9 +45,9 @@ its target log shows the ASGI send failed with “client disconnected before
 response body.” The graceful-timeout message in that profile belongs to the
 immediately preceding TLS cancellation case, which passed. The failing
 active-stream run has no shutdown trace, so its event ordering and cause remain
-unknown. macOS/Windows candidate parity and Python-floor jobs were skipped after
-Linux parity failed. The three-repeat coverage job is still running; its report
-is not available yet.
+unknown. macOS/Windows candidate parity and the Python-floor job were skipped
+after Linux parity failed. Three-repeat coverage completed at 14,032/14,203
+regions and 10,343/10,428 lines, below the 100% gate.
 
 Focused Linux run
 [#499](https://github.com/appunni-m/uvicorn-rs/actions/runs/41035866808) passed
@@ -60,6 +60,17 @@ not-run cases. Its trace artifact is 12967259667 (SHA-256
 successful trace records native shutdown wakeup, listener drain completion,
 and completed lifespan shutdown. This focused evidence does not resolve the
 #497 failure or establish complete platform parity.
+
+Focused Linux run
+[#501](https://github.com/appunni-m/uvicorn-rs/actions/runs/41040800079) then
+ran the held-request cancellation and active-stream TLS cases in sequence. The
+first passed; the second failed with `OSError: client disconnected before
+response body`. Its trace shows a readiness probe accepted after SIGTERM and
+then canceled during shutdown. The one-second graceful-timeout line came from
+the preceding passing cancellation case and does not explain the active-stream
+failure. The case requests a three-second grace period. Local changes add
+bounded diagnostics for the effective Rust timeout and probe duration; they
+remain unverified on Linux and have not had a full-source matrix.
 
 The previous full coverage report is CI #489, with 14,033/14,203 regions and
 10,340/10,424 lines; it predates this branch revision. The exact-main report

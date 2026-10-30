@@ -17,24 +17,39 @@ were reported, one infrastructure case failed, and two later TLS cases were
 not run. The active-response stream case raised Broken pipe; the target log
 shows the ASGI send failed with “client disconnected before response body.” The
 graceful-timeout message in the same profile is from the preceding TLS
-cancellation case, which passed. The failing active-stream run has no shutdown
-trace, so the event ordering and cause remain unknown. Rust quality, MSRV,
-native FastAPI-RS composition, and release-evidence checks passed. The
-three-repeat coverage job remains in progress, and macOS/Windows candidate
-parity and Python-floor jobs were skipped after Linux parity failed.
+cancellation case, which passed. Rust quality, MSRV, native FastAPI-RS
+composition, and release-evidence checks passed. Three-repeat coverage
+completed at 14,032/14,203 regions and 10,343/10,428 lines, below the 100%
+gate. macOS/Windows candidate parity and the Python-floor job were skipped
+after Linux parity failed.
 
 Focused run
 [#499](https://github.com/appunni-m/uvicorn-rs/actions/runs/41035866808) passed
 the active-stream case once without a retained trace. Exact-source focused run
 [#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) on
-revision `3ff0999665f8face9dbb8bf03984b734e4293d22` passed
-the active-stream, reset-during-shutdown, and unfinished-handshake cases 3/3
-with zero failures, infrastructure errors, or not-run cases. Its trace artifact
-12967259667 has SHA-256
-`9bb62526c985d65b8b5413149d830686e98ae5d3f2a0339ddf7141aba898e090`. The
-successful trace shows native shutdown wakeup, listener drain completion, and
-completed lifespan shutdown. These focused cases do not resolve the full-run
-failure or establish cross-platform parity.
+revision `3ff0999665f8face9dbb8bf03984b734e4293d22` passed the active-stream,
+reset-during-shutdown, and unfinished-handshake cases 3/3. Artifact 12967259667
+has SHA-256
+`9bb62526c985d65b8b5413149d830686e98ae5d3f2a0339ddf7141aba898e090`; its
+successful trace records listener drain and lifespan shutdown completion.
+
+Focused Linux run
+[#501](https://github.com/appunni-m/uvicorn-rs/actions/runs/41040800079), also
+on `3ff0999665f8face9dbb8bf03984b734e4293d22`, selected the preceding held-
+request cancellation and active-stream TLS cases. The first passed; the second
+reproduced the infrastructure failure. Its trace shows the listener accepted
+the stream and a separate readiness probe after the shutdown signal, then
+canceled the probe connection during shutdown. The active response's ASGI send
+raised `OSError: client disconnected before response body`. The one-second
+graceful-timeout message belongs to the preceding passing cancellation case;
+it does not establish the active-stream case's timeout or cause. Artifact
+12970357343 has SHA-256
+`e7e344671865ea030a3042a8aed761e3fd655009e48e91f0d4de539b502b50af`. The
+case declares a three-second grace period. Local macOS ARM64 runs passed this
+case alone 1/1 and with the preceding case 2/2, so the Linux result remains
+unresolved. Local diagnostic changes now record the effective Rust deadline,
+listener-probe duration, and adapter traceback; they still need a focused Linux
+run. Neither focused run establishes complete platform parity.
 
 Complete Uvicorn compatibility, current-source full platform parity, 100%
 coverage, independent Coverage-MCP review, and clean cross-platform candidate
