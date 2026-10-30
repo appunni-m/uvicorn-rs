@@ -4682,12 +4682,17 @@ impl LifespanRuntime {
     }
 
     async fn cancel_and_wait(&mut self) {
+        shutdown_trace!(
+            "asgi-lifespan-task.cancel-and-wait-start present={}",
+            self.app_task.is_some()
+        );
         if let Some(mut app_task) = self.app_task.take() {
             // Await native task destruction before waiting for Python cleanup:
             // dropping the bridge registers cancellation on its owning loop.
             app_task.as_mut().abort();
             let _ = app_task.into_handle().await;
         }
+        shutdown_trace!("asgi-lifespan-task.cancel-and-wait-finished");
     }
 
     async fn shutdown(&mut self) -> PyResult<()> {
@@ -6207,6 +6212,10 @@ fn serve<'py>(
             diagnostics: diagnostics.clone(),
         })
         .await;
+        shutdown_trace!(
+            "native-server.serve-future-finished success={}",
+            result.is_ok()
+        );
         diagnostics.report();
         result
     })
@@ -8382,6 +8391,7 @@ async fn wait_for_lifespan_cleanup(
     graceful_timeout: Option<std::time::Duration>,
 ) {
     tracker.close();
+    shutdown_trace!("asgi-lifespan-cleanup.wait-start tasks={}", tracker.len());
     let cleanup_timeout =
         graceful_timeout.map(|timeout| timeout.max(std::time::Duration::from_millis(100)));
     if timeout_optional(cleanup_timeout, tracker.wait())
@@ -8394,6 +8404,10 @@ async fn wait_for_lifespan_cleanup(
             "uvicorn-rs: Python ASGI lifespan cancellation cleanup exceeded the graceful timeout"
         ));
     }
+    shutdown_trace!(
+        "asgi-lifespan-cleanup.wait-finished tasks={}",
+        tracker.len()
+    );
 }
 
 async fn timeout_optional<T>(
