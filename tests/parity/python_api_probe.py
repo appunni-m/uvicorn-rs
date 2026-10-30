@@ -918,6 +918,8 @@ except KeyboardInterrupt:
                 else "tests.parity.app:lifespan_probe_app"
             )
         command = [sys.executable, "-m", "uvicorn", app_target]
+        if request.get("http_backend") is not None:
+            command.extend(("--http", request["http_backend"]))
         if host_from_environment is None:
             command.extend(("--host", host))
         if port_from_environment != "@probe-port":

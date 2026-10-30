@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@44",
+  "schema": "uvicorn-rs-parity/input@45",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -801,6 +801,24 @@
           "lifespan": "off",
           "invocation": "module-cli",
           "root_path": ""
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-h11-backend-serves-request",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": ["python.api.run-http"],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/module-cli-h11-backend",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "http_backend": "h11"
         }
       }
     },

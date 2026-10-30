@@ -63,7 +63,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@44"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@45"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -2869,6 +2869,7 @@ def load_contract(
                     "request_body_base64",
                     "request_body_chunks_base64",
                     "http_version",
+                    "http_backend",
                     "observe_scope",
                     "proxy_headers",
                     "forwarded_allow_ips",
@@ -2988,6 +2989,17 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.invocation must be api, module-cli, config-server, or server-sockets"
                     )
+                if "http_backend" in run_http:
+                    if type(run_http["http_backend"]) is not str or run_http[
+                        "http_backend"
+                    ] not in {"auto", "h11", "httptools", "zttp"}:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.http_backend must be auto, h11, httptools, or zttp"
+                        )
+                    if run_http["invocation"] != "module-cli":
+                        raise ParityError(
+                            f"{case_id}.api.run_http.http_backend requires module-cli invocation"
+                        )
                 if "factory" in run_http and type(run_http["factory"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.factory must be a boolean"
