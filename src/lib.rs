@@ -8060,7 +8060,11 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                         let error = CoverageInvalidDefaultHeaderSourceError {
                             source: InvalidDefaultHeader::Name,
                         };
-                        contains_invalid_default_header_error(&error)
+                        let debug = std::hint::black_box(format!("{error:?}"));
+                        let display = std::hint::black_box(error.to_string());
+                        debug == "CoverageInvalidDefaultHeaderSourceError"
+                            && display == "coverage error wrapper"
+                            && contains_invalid_default_header_error(&error)
                     } else {
                         contains_invalid_default_header_error(event.error())
                     };

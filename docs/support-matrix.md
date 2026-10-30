@@ -14,116 +14,39 @@ candidate artifacts and downstream consumer checks remain open; see
 
 ## Current verification status (2026-10-30)
 
-PR #19 is open and targets `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The current branch has docs and
-parity-diagnostic updates after its latest tested revision; it has no full
-source matrix yet.
+PR #19 is draft and targets `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its latest full run,
+[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064),
+passed Linux and macOS installed-wheel parity at 718/718 cases each. Windows
+reported four failures among 691 cases, so its candidate consumers were
+skipped. Rust quality, MSRV, native FastAPI-RS composition, and release-evidence
+checks passed.
 
-The latest full-mode CI run,
-[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350),
-tested earlier branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`.
-Rust quality, MSRV, native FastAPI-RS composition, and release-evidence checks
-passed. Linux installed-wheel parity selected 718 cases: 715 passed, no
-behavior mismatches were reported, one infrastructure case failed, and two
-later TLS cases were not run. In the failed active-response stream case, the
-target reported Broken pipe and logged that the ASGI send saw “client
-disconnected before response body.” A graceful-timeout log in the same profile
-belongs to the preceding TLS cancellation case, which passed. The failed run
-has no shutdown trace, so its event ordering and cause remain unknown.
+The same run completed the three-repeat coverage matrix but missed the 100%
+gate: 14,118/14,243 executable regions and 10,402/10,461 lines. No accepted
+independent Coverage-MCP review exists for a passing report. Focused Windows
+run [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
+passed one selected worker-precedence case on diagnostic commit `42f9c0f`; its
+trace did not reproduce the earlier intermittent shutdown timeout. This does
+not replace the failing full lane or complete worker/process parity.
 
-Focused run
-[#499](https://github.com/appunni-m/uvicorn-rs/actions/runs/41035866808) passed
-the drain case once. Exact-source focused run
-[#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) on
-revision `3ff0999665f8face9dbb8bf03984b734e4293d22` passed
-the drain, reset-during-shutdown, and unfinished-handshake cases 3/3 with zero
-failures, infrastructure errors, or not-run cases; its trace is artifact
-12967259667. Focused Linux #501 reproduced the active-stream infrastructure
-failure after the held-request cancellation case passed. The one-second timeout
-log belongs to that first case; the second case's root cause remains unknown.
-Focused Linux #502 on `ee236c8bdfc0b2f270853a40a6ff3c4feb20db43` passed the
-same pair 2/2 and confirmed the active-stream timeout is three seconds and the
-connection drains successfully. These selected runs leave the full
-installed-wheel matrix open. Three-repeat coverage in #497 completed at
-14,032/14,203 regions and 10,343/10,428 lines, below 100%. macOS/Windows
-candidate parity and the Python-floor job were skipped after Linux parity
-failed.
-
-Exact-source full coverage, independent Coverage-MCP acceptance, complete
-Uvicorn compatibility, and clean cross-platform candidate receipts remain open.
-The previous completed coverage report is CI #489 and belongs to an older
-source. The older exact-main report,
-[#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928),
-failed at 10,962/11,375 regions and 8,130/8,438 lines. Benchmarks remain behind
-full parity acceptance. See the [full parity history](parity.md).
-
-These results do not establish the complete Uvicorn contract or release
-support. The declared Python 3.9 wheel-install job was skipped after the
-Windows candidate lane failed. The project metadata declares Python `>=3.9`,
-but Uvicorn 0.54.0 declares Python `>=3.10` in its [versioned project
-metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml). Parity
-against Uvicorn 0.54.0 therefore starts at Python 3.10; Python 3.9 runtime
-support remains a separate package claim and is not established by the install
-check alone.
-
-The historical input@43 snapshot has a focused 6/6 macOS
-pass for module-CLI environment behavior: listener host/port settings, a valid
-`UVICORN_LIMIT_CONCURRENCY` limit, and explicit CLI precedence over valid and
-invalid concurrency environment values, WSGI selection through UVICORN_INTERFACE, and explicit ASGI3 precedence over the WSGI environment selection. It does not establish full CLI/API parity. See
-the [parity receipt](parity.md#module-cli-environment-parity-2026-10-27). Two selected CLI process cases cover malformed `UVICORN_INTERFACE=invalid`
-rejection and explicit `--interface asgi3` precedence over that value; a focused
-two-case group also passes 2/2 for malformed `UVICORN_LOG_LEVEL` and explicit
-`--log-level` precedence. A separate selected case passes 1/1 when explicit
-`--timeout-graceful-shutdown 1` overrides malformed
-`UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN`; this checks parsing/startup precedence,
-while held-request cases cover actual timeout behavior. Two additional
-selected cases pass 2/2 when explicit `--ws-max-size` and `--ws-ping-timeout`
-override malformed environment values; they verify parse/startup precedence,
-not WebSocket session behavior. See the [interface result](parity.md#invalid-module-cli-interface-environment-2026-10-27),
-[log-level result](parity.md#module-cli-log-level-environment-parity-2026-10-27),
-[graceful-shutdown precedence result](parity.md#explicit-module-cli-graceful-shutdown-value-overrides-malformed-environment-2026-10-27), and
-[WebSocket precedence result](parity.md#module-cli-websocket-environment-precedence-2026-10-27).
-Four additional focused CLI cases pass 4/4: malformed
-`UVICORN_LIMIT_MAX_REQUESTS` and `UVICORN_LIMIT_MAX_REQUESTS_JITTER` values
-produce matching diagnostics, and explicit zero-valued CLI options override
-each malformed value. See the [request-limit environment result](parity.md#module-cli-request-limit-environment-validation-and-precedence-2026-10-27).
-Six more selected cases pass 6/6 for malformed backlog, keep-alive timeout,
-and worker-healthcheck timeout environment values and explicit CLI overrides.
-See the [numeric settings environment result](parity.md#module-cli-numeric-settings-environment-validation-and-precedence-2026-10-28).
-Seven additional selected cases pass 7/7 for malformed WebSocket max-queue,
-ping-interval, and per-message-deflate environment values with explicit CLI
-overrides, plus explicit concurrency-limit precedence over malformed
-environment. See the [WebSocket and concurrency environment result](parity.md#module-cli-websocket-and-concurrency-environment-precedence-2026-10-28).
-Ten focused cases also pass 10/10 for malformed HTTP, WebSocket, lifespan,
-worker-count, and reload-delay environment values with explicit valid CLI
-overrides. See the [selector and process-setting environment result](parity.md#module-cli-selector-and-process-setting-environment-precedence-2026-10-28).
-Four additional focused process cases pass 4/4 for environment resolution and
-explicit flag precedence for `UVICORN_APP_DIR` and `UVICORN_ENV_FILE`; these
-verify app import and env-file diagnostics, not the full CLI environment
-contract. See the [app-dir and env-file result](parity.md#module-cli-app-dir-and-env-file-environment-precedence-2026-10-28).
-Four more focused HTTP cases pass 4/4 for `UVICORN_ACCESS_LOG=false`,
-`UVICORN_USE_COLORS=true`, and explicit access-log/no-color options overriding
-opposing environment values. Request results and normalized log observations
-match. See the [logging environment result](parity.md#module-cli-logging-boolean-environment-precedence-2026-10-28).
-Two additional request cases cover environment suppression of the default
-`Server` and `Date` headers, plus explicit `--server-header` precedence over
-its false environment value. The environment-only case passed; after excluding
-the dynamic timestamp from comparison, the explicit case passed 1/1. See the
-[header environment result](parity.md#module-cli-header-environment-behavior-2026-10-28).
-Three focused CLI process cases pass 3/3 for a valid `UVICORN_RELOAD_DIRS`
-path, rejection of a missing environment path, and explicit `--reload-dir`
-precedence over that invalid value. They verify parsing and precedence; live
-directory watching remains covered separately. See the
-[reload-directory environment result](parity.md#module-cli-reload-directory-environment-binding-2026-10-28). Two focused live reload cases pass 2/2 with `UVICORN_RELOAD_INCLUDES=*.txt` and `UVICORN_RELOAD_EXCLUDES=ignored.txt`: the excluded-file change does not reload, the included-file change does, and explicit `--reload-include`/`--reload-exclude` flags override conflicting environment patterns. Both exit cleanly on SIGINT. See the [reload-filter environment result](parity.md#module-cli-reload-filters-from-environment-2026-10-28).
+Full Uvicorn 0.54.0 parity, exact-source 100% coverage and independent review,
+Windows candidate consumers, and clean exact-source artifacts remain open. The
+metadata declares Python `>=3.9`, but Uvicorn 0.54.0 declares Python `>=3.10`
+in its [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml).
+Parity against that oracle starts at Python 3.10; the Python 3.9 consumer check
+is a separate package claim. Benchmarks remain behind complete parity, and the
+existing Linux ARM64 HTTP/3 workload is incomplete. See the [parity history](parity.md),
+[coverage evidence](coverage.md), and [release status](releases.md).
 
 ## Can I replace Uvicorn?
 
 Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
-drop-in replacement today. The latest full candidate/parity run is from an
-older commit and has unresolved macOS and Windows failures; later focused
-Windows passes cover only selected cases. Full current-source parity and
-coverage, an accepted Coverage-MCP review, complete CLI/API/process behavior,
-and clean candidate artifacts remain open. See the
+drop-in replacement today. Run #514 passed Linux and macOS parity but reported
+four Windows failures; a later selected Windows diagnostic does not replace
+that full lane. Full current-source parity and coverage, an accepted
+Coverage-MCP review, complete CLI/API/process behavior, and clean candidate
+artifacts remain open. See the
 [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
 
 One selected POSIX

@@ -37,7 +37,51 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Current receipts — 2026-10-30 13:28 UTC
+### Current receipts — 2026-10-30 (full PR run #514 and Windows diagnostic #522)
+
+PR #19 remains draft/open against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its head is
+`e6064abdaa43fc13f064a026f9c346dc790bed46`; full CI #514 used merge ref
+`4c952851fe59795e2d57cadc4a58452c5a036599`.
+
+Full-mode CI [#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064)
+passed Linux and macOS installed-wheel parity at 718/718 cases each. Windows
+reported four failures among 691 cases, and the Windows candidate consumer
+steps were skipped. Linux and macOS candidate artifacts/consumers, Rust
+quality, MSRV, native FastAPI-RS composition, and release-evidence checks
+passed. The three-repeat coverage matrix completed with passing case outcomes
+and complete attribution, but the gate failed at 14,118/14,243 regions and
+10,402/10,461 lines. Independent Coverage-MCP review remains open.
+
+Focused Windows run [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
+passed `python-api.module-cli-explicit-workers-overrides-web-concurrency`
+1/1 on diagnostic head `42f9c0fc9c3865ce75f5afc08054100e96eea8ac`. Its corrected
+trace showed idle accept polls pending, cancellation waking the workers, and
+listener drains completing. The earlier shutdown timeout did not reproduce;
+its cause remains unconfirmed. This is selected evidence only, not a full
+Windows pass or runtime fix.
+
+The active local coverage batch in `/tmp/uvicorn-rs-coverage-batch` adds
+expected Debug/Display output checks to the existing coverage-only
+source-chain fault path. The affected case passed 1/1 with no retries or
+repeats and complete attribution. The selected report is
+`target/coverage-batch/default-header-source-chain-asserted.json` (SHA-256
+`f043e8c35779b7ce0e1d26e20e88d573c75c26393f7fe552869fa695923fcecf`); it binds
+to dirty `src/lib.rs` SHA-256
+`5be5c51b29d1a5e8fe533f1c20b259b196471435ac7634384c703f79fc26a9a3` and native
+extension SHA-256
+`c5890f6e4a134d0d7cae9c387551ad28b0d6630a4e438a24de48c115c83960c2`. This
+subset does not replace the clean full report.
+
+The publisher entries, main/tag rulesets, and release environments have been
+verified; the maintainer confirms both crates.io Trusted Publisher entries are
+already configured. A 2026-10-30 registry check lists Cargo 0.2.1 for both
+release crates and no PyPI `uvicorn-rs` project. No 0.2.2 candidate, tag, or
+published package is accepted. No benchmark has started after the parity-first
+direction; the older Linux ARM64 HTTP/3 benchmark remains incomplete. Do not
+publish until the exact-main gates pass.
+
+### Prior platform receipts — 2026-10-30 13:28 UTC
 
 Full-mode CI [#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961)
 completed from branch commit `5a3866e125afdc454c7f61ad94a45669d2e59d82`,

@@ -4,44 +4,32 @@
 
 ## Current source status (2026-10-30)
 
-PR #19 is open against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The full platform reports below
-use 211 runtime-source files with digest
-`c5b9c9bcce020d9d674b9af59393ae705d9c6d471ec07f5f4ce3510522f54a4d`, matching
-the runtime sources at commit `f3b54549a3243523c475551cbcf83e241f2b93b4`.
-The parity harness and one indexed HTTP/1 input changed after the full run;
-targeted replacements cover the affected rows. Focused coverage batches added
-coverage-only Rust fault selectors and fault-contract inputs after that run, so
-their selected reports are not full-run evidence.
+PR #19 is draft and targets `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its head is
+`e6064abdaa43fc13f064a026f9c346dc790bed46`; the full workflow's merge ref is
+`4c952851fe59795e2d57cadc4a58452c5a036599`.
 
 Full-mode CI
-[#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961)
-completed with 718/718 cases on Linux x86-64, 718/718 on macOS ARM64, and
-689/691 on Windows x86-64. Windows' only two failing rows were
-`python-api.module-cli-two-workers-serve-request` and
-`http1.upload-remains-unread-after-early-response`. Its three-repeat coverage
-gate also completed below target at 14,032/14,203 regions and 10,343/10,428
-lines.
+[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064)
+passed the installed-wheel public matrix at 718/718 on Linux x86-64 and
+718/718 on macOS ARM64. The Windows x86-64 lane reported four failures among
+691 cases, and its candidate consumer steps were skipped. Linux and macOS
+candidate artifact and consumer jobs passed. Rust quality, MSRV, native
+FastAPI-RS composition, and release-evidence checks passed.
 
-Current-source focused receipts replace the affected Windows rows: run
-[#510](https://github.com/appunni-m/uvicorn-rs/actions/runs/41056892023) passed
-the early-upload case 1/1, and
-[#511](https://github.com/appunni-m/uvicorn-rs/actions/runs/41057465056) passed
-the two-worker CLI request 1/1. The early-upload case also passed 1/1 on Linux
-in [#512](https://github.com/appunni-m/uvicorn-rs/actions/runs/41058428280)
-and on a clean local macOS ARM64 checkout. The HTTP/1 input SHA changed from
-`9d649c5a38ca99757153b5ea95a78c549d01a822be946010dd19cfa9e560e23c` to
-`9199b7421b01f767bc0208e212b7586a7168df0124246fdc267d84d54d1cfe5b` only for
-that early-upload case. The runner change only classifies
-`ConnectionAbortedError` during the same deliberate write after the response.
-The full-run reports and these replacements bind to identical runtime-source
-file hashes and the same manifest; every affected case was rerun on each
-applicable platform. The resulting case-level installed-wheel matrix is
-718/718 Linux, 718/718 macOS, and 691/691 Windows with no failures,
-infrastructure failures, or not-run cases. This is a composition of actual
-receipts, not a claim that one CI run executed all current cases. The details
-and artifact/report digests are recorded in
-[the release completion plan](maintainers/release-completion-plan.md).
+A later Windows diagnostic
+[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
+selected `python-api.module-cli-explicit-workers-overrides-web-concurrency`
+and passed 1/1 on diagnostic commit `42f9c0fc9c3865ce75f5afc08054100e96eea8ac`.
+The corrected trace showed both idle accept polls pending before cancellation,
+then both workers draining. It did not reproduce the earlier shutdown timeout;
+no root cause is confirmed. This is one selected case, not a replacement for
+the failing full Windows lane.
+
+Full compatibility and exact-main evidence remain open. The previous
+three-system benchmark is incomplete on Linux ARM64, so parity-first benchmark
+work has not resumed. Detailed case receipts and artifact identities are in
+the [release completion plan](maintainers/release-completion-plan.md).
 
 ## Focused unified coverage gap batch (2026-10-30)
 

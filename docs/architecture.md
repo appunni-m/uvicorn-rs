@@ -2,14 +2,13 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-This document describes the PyO3/ASGI source implementation intended for the
-not-yet-published `uvicorn-rs` PyPI distribution and the Python-free
-`uvicorn-rs` server crate. The earlier Cargo 0.2.1 release came from clean
-source commit `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`; the maintainer later
-reported removing the old `uvicorn-rs` registry entry. A current crates.io API
-check from this environment returned HTTP 403, so the registry's current state
-must be confirmed by the release preflight. The root Cargo integration package
-and optional extra console script are named `uvicorn-rs-py`.
+This document describes the PyO3/ASGI implementation for the PyPI distribution
+`uvicorn-rs` and the Python-free Cargo server crate `uvicorn-rs`. The root Cargo
+integration package and optional extra console script are named
+`uvicorn-rs-py`. A read-only registry check on 2026-10-30 found Cargo 0.2.1
+versions of `uvicorn-rs` and `asgi-lifespan-protocol-rs`; no PyPI version of
+`uvicorn-rs` has been published. The PyPI Trusted Publisher is configured for
+`appunni-m/uvicorn-rs`, workflow `release.yml`, environment `pypi`.
 Every Cargo feature configuration of the Python adapter delegates HTTP/1.1,
 HTTP/2 over TCP/TLS, and HTTP/3 over Quinn to the native crate through Rust
 services. Feature selection no longer switches to a second protocol stack.
@@ -21,25 +20,29 @@ remain on the Python side. Coverage builds still compile limited legacy H3
 helpers for fault-contract attribution; ordinary builds do not use that path.
 Historical hosted CI on clean commit
 [`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5)
-passed the unified 761-case coverage matrix; that run is not current-main
-release evidence. The latest exact-main run, CI run
-[39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
-on `86e72e181d00feca1b4db7f30377d5d9d4345b83`, completed its matrix but failed
-the 100% gate at 10,962/11,375 regions and 8,130/8,438 lines. Independent
-Coverage-MCP review and complete three-system performance evidence remain
-pending. The latest PR candidate and coverage checks are in CI
-[#488](https://github.com/appunni-m/uvicorn-rs/actions/runs/40990187513), on
-head `40404ff2890413a7901a073a62e0741231f0d05d`; its coverage gate also failed
-and Windows candidate parity remains incomplete. A local selected fix for a
-coverage-only log interleaving passed 12 affected cases, but does not replace a
-new full hosted run. See the
-[current coverage record](coverage.md#current-unified-coverage-status-2026-10-30)
-and [benchmark status](benchmark-status.md). The PyPI distribution is
-named `uvicorn-rs`; the source provides the `uvicorn` import namespace and
-primary `uvicorn` and `python -m uvicorn` commands. The root Cargo/PyO3
-integration package remains `uvicorn-rs-py`; it also retains an optional
-`uvicorn-rs-py` console alias. The PyPI distribution has not had its first
-release.
+passed the unified 761-case coverage matrix; that run is not current release
+evidence. The latest hosted candidate run is CI
+[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064) on PR
+head `e6064abdaa43fc13f064a026f9c346dc790bed46`. Linux x86-64 and macOS ARM64
+installed-wheel parity each passed 718/718 cases. Windows x86-64 passed 687 of
+691 cases; its four failures are confined to multi-worker process behavior,
+and Windows candidate-consumer checks were skipped. Linux and macOS candidate
+artifacts and consumers passed. Rust quality, MSRV, native FastAPI-RS
+composition, and release-evidence checks passed.
+
+The three-repeat unified coverage matrix completed but missed the 100% gate at
+14,118/14,243 regions and 10,402/10,461 lines. The report has no accepted
+independent Coverage-MCP review. A focused Windows diagnostic
+[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) passed
+one worker-precedence case with shutdown tracing; it does not resolve the
+separate intermittent multi-worker shutdown failures. Complete Uvicorn
+compatibility and the three-system benchmark remain open. See the
+[current coverage record](coverage.md#current-unified-coverage-status-2026-10-30),
+[parity evidence](parity.md), and [benchmark status](benchmark-status.md).
+The PyPI distribution provides the `uvicorn` namespace and primary
+`uvicorn`/`python -m uvicorn` commands. The root Cargo/PyO3 integration package
+remains `uvicorn-rs-py` and retains an optional `uvicorn-rs-py` console alias.
+The distribution has not had its first release.
 Earlier local candidate builds used `uvicorn-rs-py` as their distribution
 metadata name, but that name was never published to PyPI and is not the current
 distribution name.

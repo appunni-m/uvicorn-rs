@@ -8,27 +8,38 @@
 
 ## Current unified coverage status (2026-10-30)
 
-The three-repeat unified coverage job in full-mode CI
-[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350)
-completed on branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`.
-It attributed all 1,331 indexed cases but failed the 100% gate at **14,032/14,203
-regions** and **10,343/10,428 lines**. Artifact `12969649926`
-(`uvicorn-rs-unified-coverage`, archive SHA-256
-`ebb2fa1bb345bf77045e78184e7af9d3bfde6337bbd5226e5083c6db6dc9c1ef`) retains
-the report and raw per-case records. This revision predates the latest
-parity-tested revision `3ff0999665f8face9dbb8bf03984b734e4293d22` and the
-subsequent diagnostics and documentation updates; it is not evidence for that
-later source.
+Full-mode CI
+[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064)
+produced the latest exact-source report for PR #19 head
+`e6064abdaa43fc13f064a026f9c346dc790bed46` (merge ref
+`4c952851fe59795e2d57cadc4a58452c5a036599`). The three-repeat matrix completed
+with passing test outcomes and complete case attribution, but failed the 100%
+coverage gate: **14,118/14,243 executable regions** and **10,402/10,461 lines**.
+Artifact `12985983788` has archive SHA-256
+`4092e9d54f26ea465f87b35d10a38132fc3c4da1b4eb64533f86d0dda7565722`; the
+canonical report SHA-256 is
+`84b1c093fda320c4cad5ec4ccfc5aa0f58cc8472e86c94c534816788988dec5a`.
 
-The last completed full coverage report is CI #489 on an older branch source.
-It completed 1,331/1,331 cases and failed the 100% gate at **14,033/14,203
-regions** and **10,340/10,424 lines**. Use it for historical comparison only.
-The previous exact-main report, CI #396, failed at 10,962/11,375 regions and
-8,130/8,438 lines.
+The exact report was projected locally to map its uncovered spans. Direct
+Coverage-MCP requests against the large report and its canonical projection
+timed out, so no independent receipt was created. `7t4g` remains open and
+requires the passing clean report before independent review.
 
-Coverage-MCP has no accepted independent receipt. `7t4g` remains open; review
-must bind to a complete passing report for the accepted exact-main source.
-Older reports and selected local reports are gap-mapping evidence only.
+A focused local case,
+`python-api.fault.connection-invalid-default-header-source-chain-suppresses-connection-log`,
+passed 1/1 after the coverage-only fault branch began checking its Debug and
+Display output. It had complete attribution and no infrastructure failure,
+retry, or repeat. Its selected-subset report is
+`target/coverage-batch/default-header-source-chain-asserted.json`; it binds to
+a dirty aggregate source SHA-256
+`bf9e7ad2f580e33a9871a6e1449b89d57d53640912f8f02094d7334983855e50` and
+instrumented extension SHA-256
+`c5890f6e4a134d0d7cae9c387551ad28b0d6630a4e438a24de48c115c83960c2`. This
+selected result proves only the exercised case and does not replace a clean
+full-source report or the independent review.
+
+The earlier CI #497 and #489 reports below remain historical gap-mapping
+records; they are not current full-gate evidence.
 
 ### Prior completed unified coverage result (CI #464)
 

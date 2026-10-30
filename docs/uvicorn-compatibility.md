@@ -13,53 +13,39 @@ published.
 
 ## Current status (2026-10-30)
 
-PR #19 is open and targets `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The latest full-mode CI run,
-[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350),
-tested earlier branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`.
-Linux installed-wheel parity selected 718 cases: 715 passed, one
-infrastructure case failed, and two later TLS cases were not run. The active
-stream case raised Broken pipe and its target log says the ASGI send saw
-“client disconnected before response body.” The graceful-timeout message is
-from the preceding TLS cancellation case, which passed. The failed stream has
-no shutdown trace. macOS/Windows candidate parity and the Python-floor consumer
-were skipped after Linux parity failed.
+PR #19 is draft and targets `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its latest full workflow,
+[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064),
+passed Linux and macOS installed-wheel parity at 718/718 cases each. Windows
+reported four failures among 691 cases; its candidate consumer checks were
+skipped. The three-repeat coverage report missed the gate at 14,118/14,243
+regions and 10,402/10,461 lines. Exact-source independent coverage review and
+full cross-platform compatibility remain open.
 
-Exact-source focused CI
-[#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) passed
-three TLS shutdown cases 3/3 on revision
-`3ff0999665f8face9dbb8bf03984b734e4293d22`. Focused Linux #501 then reproduced
-the active-stream infrastructure failure in a two-case sequence; the
-one-second timeout log belonged to the preceding cancellation case. Focused
-Linux #502 on `ee236c8bdfc0b2f270853a40a6ff3c4feb20db43` passed the same two
-cases 2/2 and confirmed the active-stream server received a three-second
-timeout and drained successfully. The #501 cause remains unknown, and neither
-selected run establishes the full-source matrix or cross-platform parity.
-Exact-source unified coverage, independent Coverage-MCP review, complete
-CLI/API/process compatibility, and clean candidate artifacts remain open. See
-the [current support matrix](support-matrix.md) and [parity evidence](parity.md).
-
-The package metadata declares Python `>=3.9`. Uvicorn 0.54.0 declares Python
-`>=3.10` in its [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml),
-so Uvicorn compatibility evidence starts at Python 3.10. The Python 3.9
-wheel-install check was skipped in #486 and #497; it remains separate from
-parity.
+Focused Windows run
+[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
+passed one worker-precedence input 1/1 on diagnostic commit `42f9c0f`. Its trace
+did not reproduce the earlier intermittent timeout; it is not full Windows
+parity and does not confirm the cause. The Python 3.9 consumer check was skipped
+in #514. Uvicorn 0.54.0 declares Python `>=3.10` in its [versioned project
+metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml), so
+parity against that oracle starts at Python 3.10; the Python 3.9 wheel-install
+check is a separate package claim.
 
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | Not available. The `uvicorn-rs` distribution has not been published. |
-| Run the `uvicorn` command | The source exposes `uvicorn` and `python -m uvicorn`. The full Linux matrix is incomplete on #497; full CLI/settings parity remains open. |
+| Run the `uvicorn` command | The source exposes `uvicorn` and `python -m uvicorn`; the full CLI/settings contract has not passed across the declared platforms. |
 | Import and configure `uvicorn` | The source exposes `run`, `Config`, and `Server`. The full Python API and platform matrix remains open. |
-| Serve a Python ASGI app | Linux public parity was 715/718 on #497 with one infrastructure failure and two not-run cases. Current-source macOS/Windows candidate parity has not completed. |
-| Use workers, reload, sockets, or process controls | Selected cases cover these surfaces; full platform evidence remains open. Focused Windows worker cases passed in #492, not the current full matrix. |
+| Serve a Python ASGI app | Linux and macOS parity passed 718/718 on #514; the Windows lane reported four failures among 691 cases. |
+| Use workers, reload, sockets, or process controls | Selected cases cover parts of these surfaces. One Windows worker-precedence case passed in #522; full operational parity remains open. |
 | Claim a performance advantage | Not supported. Benchmark work follows compatibility acceptance, and the previous three-system run is incomplete. See benchmark status. |
-| Use the current release candidate on Windows | Not verified. Windows candidate parity and consumer steps were skipped in #497 after Linux parity failed; older Windows evidence does not qualify the current source. |
+| Use the current release candidate on Windows | Not verified. The Windows parity lane failed in #514, so its candidate consumer checks were skipped. |
 
-The earlier Linux and macOS matrices do not prove the current branch. Full
-current-source parity, other declared Python versions, and unsupported
-behaviors still need exact evidence. The prior benchmark results do not justify
-a general speed claim. See the [support matrix](support-matrix.md) and
-[release gates](releases.md).
+Passing Linux and macOS parity does not qualify the Windows candidate or close
+the full Uvicorn contract. Remaining behavior and platform claims need exact
+receipts, and the prior benchmark results do not justify a general speed claim.
+See the [support matrix](support-matrix.md) and [release gates](releases.md).
 
 ## Historical diagnostic records
 

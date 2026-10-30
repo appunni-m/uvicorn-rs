@@ -22,119 +22,46 @@ behind its optional **http3** feature, the separate
 **asgi-lifespan-protocol-rs** crate, and the PyPI distribution **uvicorn-rs**
 implemented by the optional internal **uvicorn-rs-py** adapter. The publisher
 is **.github/workflows/release.yml**; **candidate.yml** only builds and verifies
-candidates. The PyPI trusted publisher is **appunni-m/uvicorn-rs / release.yml
-/ pypi**. Both crates.io Trusted Publisher entries already exist for
-**appunni-m/uvicorn-rs / release.yml / crates-io**. The user confirmed the
-lifecycle publisher is already configured; do not add duplicates.
+candidates. The PyPI Trusted Publisher
+`uvicorn-rs / GitHub / appunni-m/uvicorn-rs / release.yml / pypi` is configured.
+Both crates.io Trusted Publisher entries for `asgi-lifespan-protocol-rs` and
+`uvicorn-rs` already use `appunni-m/uvicorn-rs / release.yml / crates-io`.
+The maintainer confirms these entries are already present; do not add duplicates.
 
-PR #19 is open and targets `main` at
-**86e72e181d00feca1b4db7f30377d5d9d4345b83**. The branch
-`codex/uvicorn-rs-consolidation` has documentation and parity-diagnostic
-updates after the latest full-tested code revision. Full current-source
-parity/coverage CI #506 is running against server code commit
-`5a3866e125afdc454c7f61ad94a45669d2e59d82`.
+A read-only registry check on 2026-10-30 found crates.io versions
+`uvicorn-rs` 0.2.1 and `asgi-lifespan-protocol-rs` 0.2.1 present and unyanked;
+PyPI returned 404 for `uvicorn-rs`. The source declares version 0.2.2, but no
+clean exact-source candidate or release tag is qualified.
 
-A read-only crates.io API check on 2026-10-30 lists both `uvicorn-rs` 0.2.1 and
-`asgi-lifespan-protocol-rs` 0.2.1 as present and unyanked; version 0.2.2 is not
-yet listed. This is an update release for both existing crate names, not a
-first publication. Recheck exact registry versions and checksums when release
-gates pass.
+PR #19 remains a draft against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Full CI
+[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064) ran on
+head `e6064abdaa43fc13f064a026f9c346dc790bed46`. Rust quality, MSRV, native
+FastAPI-RS composition, and release-evidence checks passed. Linux and macOS
+installed-wheel parity passed 718/718 cases each; Windows reported four
+failures among 691 cases and skipped its candidate consumer checks. Linux and
+macOS candidate artifacts and consumers passed.
 
-The latest full-mode CI run is
-[#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350), on
-branch revision `255ec35af35d44c78423d35c4cb9ee539c7a4ab5`. Rust quality,
-MSRV, native FastAPI-RS composition, and release-evidence checks passed. Linux
-installed-wheel parity selected 718 cases: 715 passed, no behavior mismatches
-were reported, one infrastructure case failed, and two later TLS cases were
-not run. The failed case,
-`lifespan.active-response-stream-drains-on-tls-shutdown`, raised Broken pipe;
-its target log shows the ASGI send failed with “client disconnected before
-response body.” The graceful-timeout message in that profile belongs to the
-immediately preceding TLS cancellation case, which passed. The failing
-active-stream run has no shutdown trace, so its event ordering and cause remain
-unknown. macOS/Windows candidate parity and the Python-floor job were skipped
-after Linux parity failed. Three-repeat coverage completed at 14,032/14,203
-regions and 10,343/10,428 lines, below the 100% gate.
+The three-repeat unified coverage matrix completed but failed its 100% gate at
+14,118/14,243 regions and 10,402/10,461 lines. No accepted independent
+Coverage-MCP review exists for a passing report. A focused Windows diagnostic
+[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) passed
+one worker-precedence case on diagnostic commit `42f9c0f`; it did not reproduce
+the earlier intermittent shutdown timeout and does not replace the full lane.
 
-Focused Linux run
-[#499](https://github.com/appunni-m/uvicorn-rs/actions/runs/41035866808) passed
-the active-stream case once without retaining a trace. Exact-source run
-[#500](https://github.com/appunni-m/uvicorn-rs/actions/runs/41036703998) on
-revision `3ff0999665f8face9dbb8bf03984b734e4293d22` passed the active-stream, reset-during-shutdown, and
-unfinished-handshake cases 3/3 with zero failures, infrastructure errors, or
-not-run cases. Its trace artifact is 12967259667 (SHA-256
-`9bb62526c985d65b8b5413149d830686e98ae5d3f2a0339ddf7141aba898e090`). The
-successful trace records native shutdown wakeup, listener drain completion,
-and completed lifespan shutdown. This focused evidence does not resolve the
-#497 failure or establish complete platform parity.
+No current-source candidate bundle is ready. Exact-source coverage and
+independent review, complete compatibility, full Windows candidate consumers,
+and clean Cargo/PyPI artifact checks remain open. The previous benchmark matrix
+is incomplete on Linux ARM64 and does not establish a broad Python FastAPI
+speed gain. Per the parity-first plan, do not start a new benchmark matrix
+until compatibility passes. Do not create a tag or publish packages before all
+release gates pass.
 
-Focused Linux run
-[#501](https://github.com/appunni-m/uvicorn-rs/actions/runs/41040800079) then
-ran the held-request cancellation and active-stream TLS cases in sequence. The
-first passed; the second failed with `OSError: client disconnected before
-response body`. Its trace shows a readiness probe accepted after SIGTERM and
-then canceled during shutdown. The one-second graceful-timeout line came from
-the preceding passing cancellation case and does not explain the active-stream
-failure. The case requests a three-second grace period. Local changes add
-bounded diagnostics for the effective Rust timeout and probe duration.
-Focused Linux run
-[#502](https://github.com/appunni-m/uvicorn-rs/actions/runs/41043210309) on
-`ee236c8bdfc0b2f270853a40a6ff3c4feb20db43` passed the same two cases 2/2 with
-zero infrastructure failures or not-run cases. It confirmed the active-stream
-server received a three-second timeout and drained successfully; the #501
-failure remains unexplained. No full-source matrix has run on the current
-branch as of #502.
-
-Focused Linux run
-[#503](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044156010) on
-`98c90076748337ec2ef3f34a49b94bffd5ffcd22` passed the selected strict H1
-header cases and the strict H2 ordered-header case 3/3 (zero failed,
-infrastructure-failed, or not-run cases). Artifact 12970969486 has SHA-256
-`c615fb7d703361f36d378a4b3ce37f204b85dd09ec6917cfac5771c3e270ee99`. This
-does not replace the installed-wheel full matrix.
-
-Focused Linux CI
-[#505](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045372516) on
-exact source `5a3866e125afdc454c7f61ad94a45669d2e59d82` passed the active TLS
-response-stream shutdown case 1/1, with no failures, infrastructure failures,
-or not-run cases. Artifact 12972650846 has SHA-256
-`b33487e9b06622452222883e4d6ae1e01cada100268aa8dbfd57daaa37c3ec1e`. The
-TCP listener now prioritizes a ready shutdown signal over accept; its trace
-supports, but does not conclusively establish, the intermittent-race fix. The
-full matrix is running in CI [#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961).
-Separate docs run [#207](https://github.com/appunni-m/uvicorn-rs/actions/runs/41046155871)
-passed for branch commit `4c92b74328630cc188ddc42c2a474518d6d744b8`; its Pages
-deploy job was correctly skipped because this is not `main`.
-
-The previous full coverage report is CI #489, with 14,033/14,203 regions and
-10,340/10,424 lines; it predates this branch revision. The exact-main report
-from [#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
-had 10,962/11,375 regions and 8,130/8,438 lines. No accepted independent
-Coverage-MCP review exists for the current source.
-
-The full benchmark run
-[#39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
-is incomplete: Linux x86-64 and macOS ARM64 passed, while Linux ARM64 failed in
-Hypercorn's HTTP/3 slow-reader case. The HTTP/1 upload timeout also remains
-unresolved. Current FastAPI results do not establish a broad speed gain; one
-route was slower. Do not repeat the benchmark matrix until parity is complete.
-
-The last saved GitHub settings audit found active **Protect main** and
-**Protect version tags** rulesets. Main requires pull requests and configured CI
-checks with zero required approvals for the sole maintainer. Version tags
-`v*` allow creation while blocking updates, deletion, and force-push. The
-`pypi` and `crates-io` environments are restricted to `main`; `appunni-m` is
-the reviewer and self-review is allowed for the sole maintainer. Do not publish
-until exact-source coverage, independent review, full compatibility, completed
-parity-first benchmarks, and candidate artifacts/consumers pass.
-
-Direct registry API checks on 2026-10-30 show crates.io versions
-`uvicorn-rs` 0.2.1 and `asgi-lifespan-protocol-rs` 0.2.1 as current, while
-PyPI returns 404 for `uvicorn-rs`. The 0.2.1 Cargo releases are registry-visible
-from an earlier source; they are not evidence for the current branch. The
-current source declares 0.2.2, but there is no clean exact-source candidate,
-no 0.2.2 tag or package, and no first PyPI upload. Verify candidate bytes and
-consumers before dispatching the authorized release workflow.
+Main and version-tag protection rulesets, the `pypi` and `crates-io`
+environments, and trusted-publisher configuration were verified. The
+maintainer is the sole collaborator and allowed self-review for the current
+PyPI environment. See the [release completion plan](maintainers/release-completion-plan.md),
+[parity evidence](parity.md), and [coverage evidence](coverage.md).
 
 ## Registry and packaging audit (2026-10-27; earlier source snapshot)
 
@@ -197,8 +124,8 @@ The `release.yml` Cargo jobs use that environment and GitHub OIDC. The `crates-i
 and `pypi` GitHub environments are restricted to `main`, require reviewer
 `appunni-m`, allow the sole maintainer to approve (Prevent self-review is off),
 disable administrator bypass, and contain no secrets or variables. The PyPI
-pending publisher is for project `uvicorn-rs`, repository `appunni-m/uvicorn-rs`,
-workflow `release.yml`, and environment `pypi`.
+pending-publisher record is registered for project `uvicorn-rs`, repository
+`appunni-m/uvicorn-rs`, workflow `release.yml`, and environment `pypi`.
 
 No 0.2.2 package or tag has been published. The release workflow remains
 blocked until the exact-source evidence gates pass and clean candidate artifacts
@@ -414,8 +341,8 @@ to `main`. Administrator bypass is disabled, and neither environment has
 secrets or variables. Add a distinct eligible reviewer when another maintainer
 joins. The PyPI Trusted Publisher tuple is project
 `uvicorn-rs`, repository `appunni-m/uvicorn-rs`, workflow `release.yml`, and
-environment `pypi`; the pending publisher record has not been verified through
-a publication. Both crates.io Trusted Publisher entries are now verified as
+environment `pypi`; automated publication remains unverified because no PyPI
+release has run. Both crates.io Trusted Publisher entries are verified as
 recorded above. The local Cargo archive hashes and standalone H3 archive
 consumer are verified, but the exact-main candidate workflow bundle, PyPI
 distribution, and clean consumer checks remain outstanding. The two Cargo
