@@ -12625,7 +12625,12 @@ def _python_api_server_log_events(
     coverage_body_pump_join = re.compile(
         r"^uvicorn-rs: request-body pumps joined: [1-9]\d*$"
     )
-    shutdown_trace = re.compile(r"^uvicorn-rs: shutdown-trace pid=\d+ ")
+    shutdown_trace = re.compile(
+        r"^uvicorn-rs: shutdown-trace (?:"
+        r"pid=\d+ |"
+        r"python t_ns=\d+ pid=\d+ thread=[^ ]+ "
+        r")"
+    )
 
     normalized: dict[str, list[dict[str, str]]] = {"stdout": [], "stderr": []}
     custom_level_prefix = re.compile(
