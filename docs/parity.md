@@ -17,14 +17,15 @@ passed the installed-wheel public matrix at 718/718 on Linux x86-64 and
 candidate artifact and consumer jobs passed. Rust quality, MSRV, native
 FastAPI-RS composition, and release-evidence checks passed.
 
-A later Windows diagnostic
-[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
-selected `python-api.module-cli-explicit-workers-overrides-web-concurrency`
-and passed 1/1 on diagnostic commit `42f9c0fc9c3865ce75f5afc08054100e96eea8ac`.
-The corrected trace showed both idle accept polls pending before cancellation,
-then both workers draining. It did not reproduce the earlier shutdown timeout;
-no root cause is confirmed. This is one selected case, not a replacement for
-the failing full Windows lane.
+Windows diagnostic [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
+passed `python-api.module-cli-explicit-workers-overrides-web-concurrency`
+1/1, and [#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055)
+passed `python-api.module-cli-two-workers-stop-on-sigterm` 1/1 on diagnostic
+commit `42f9c0fc9c3865ce75f5afc08054100e96eea8ac`. The #523 trace records both
+processes receiving signal 21 (SIGBREAK), draining workers, and exiting 0
+without a timeout. Neither selected run reproduced the earlier #514 shutdown
+timeout; no root cause is confirmed. These diagnostics do not replace the
+failing full Windows lane.
 
 Full compatibility and exact-main evidence remain open. The previous
 three-system benchmark is incomplete on Linux ARM64, so parity-first benchmark

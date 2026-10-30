@@ -25,9 +25,11 @@ checks passed.
 The same run completed the three-repeat coverage matrix but missed the 100%
 gate: 14,118/14,243 executable regions and 10,402/10,461 lines. No accepted
 independent Coverage-MCP review exists for a passing report. Focused Windows
-run [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
-passed one selected worker-precedence case on diagnostic commit `42f9c0f`; its
-trace did not reproduce the earlier intermittent shutdown timeout. This does
+runs [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
+and [#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055)
+passed one worker case each on diagnostic commit `42f9c0f`. Run #523's trace
+records orderly shutdown and exit 0 for both processes in the SIGTERM-labelled
+case. Neither run reproduces the #514 failures or confirms their cause; they do
 not replace the failing full lane or complete worker/process parity.
 
 Full Uvicorn 0.54.0 parity, exact-source 100% coverage and independent review,
@@ -43,7 +45,7 @@ existing Linux ARM64 HTTP/3 workload is incomplete. See the [parity history](par
 
 Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
 drop-in replacement today. Run #514 passed Linux and macOS parity but reported
-four Windows failures; a later selected Windows diagnostic does not replace
+four Windows failures; selected Windows diagnostics #522 and #523 do not replace
 that full lane. Full current-source parity and coverage, an accepted
 Coverage-MCP review, complete CLI/API/process behavior, and clean candidate
 artifacts remain open. See the

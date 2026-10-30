@@ -22,12 +22,13 @@ skipped. The three-repeat coverage report missed the gate at 14,118/14,243
 regions and 10,402/10,461 lines. Exact-source independent coverage review and
 full cross-platform compatibility remain open.
 
-Focused Windows run
-[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
-passed one worker-precedence input 1/1 on diagnostic commit `42f9c0f`. Its trace
-did not reproduce the earlier intermittent timeout; it is not full Windows
-parity and does not confirm the cause. The Python 3.9 consumer check was skipped
-in #514. Uvicorn 0.54.0 declares Python `>=3.10` in its [versioned project
+Focused Windows diagnostics [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
+and [#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055)
+each passed one worker input on diagnostic commit `42f9c0f`. Run #523's
+SIGTERM-labelled case exited 0 without a timeout, and its trace records orderly
+worker shutdown. These runs did not reproduce the #514 failures and do not
+confirm their cause or establish full Windows parity. The Python 3.9 consumer
+check was skipped in #514. Uvicorn 0.54.0 declares Python `>=3.10` in its [versioned project
 metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml), so
 parity against that oracle starts at Python 3.10; the Python 3.9 wheel-install
 check is a separate package claim.
@@ -38,7 +39,7 @@ check is a separate package claim.
 | Run the `uvicorn` command | The source exposes `uvicorn` and `python -m uvicorn`; the full CLI/settings contract has not passed across the declared platforms. |
 | Import and configure `uvicorn` | The source exposes `run`, `Config`, and `Server`. The full Python API and platform matrix remains open. |
 | Serve a Python ASGI app | Linux and macOS parity passed 718/718 on #514; the Windows lane reported four failures among 691 cases. |
-| Use workers, reload, sockets, or process controls | Selected cases cover parts of these surfaces. One Windows worker-precedence case passed in #522; full operational parity remains open. |
+| Use workers, reload, sockets, or process controls | Selected cases cover parts of these surfaces. One worker-precedence case passed in #522 and one SIGTERM-labelled worker case passed in #523; full operational parity remains open. |
 | Claim a performance advantage | Not supported. Benchmark work follows compatibility acceptance, and the previous three-system run is incomplete. See benchmark status. |
 | Use the current release candidate on Windows | Not verified. The Windows parity lane failed in #514, so its candidate consumer checks were skipped. |
 

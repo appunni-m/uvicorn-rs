@@ -37,7 +37,7 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Current receipts — 2026-10-30 (full PR run #514 and Windows diagnostic #522)
+### Current receipts — 2026-10-30 (full PR run #514 and Windows diagnostics #522–#523)
 
 PR #19 remains draft/open against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its head is
@@ -57,9 +57,14 @@ Focused Windows run [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/
 passed `python-api.module-cli-explicit-workers-overrides-web-concurrency`
 1/1 on diagnostic head `42f9c0fc9c3865ce75f5afc08054100e96eea8ac`. Its corrected
 trace showed idle accept polls pending, cancellation waking the workers, and
-listener drains completing. The earlier shutdown timeout did not reproduce;
-its cause remains unconfirmed. This is selected evidence only, not a full
-Windows pass or runtime fix.
+listener drains completing. Separate focused run
+[#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055) passed
+`python-api.module-cli-two-workers-stop-on-sigterm` 1/1 on the same diagnostic
+head. Its trace records both processes receiving signal 21 (SIGBREAK), workers
+draining, and both processes exiting 0 without a timeout; artifact ID
+`12992306054`. The #514 timeout did not reproduce in either selected run. The
+cause remains unconfirmed, and these runs are not a full Windows pass or runtime
+fix.
 
 The active local coverage batch in `/tmp/uvicorn-rs-coverage-batch` adds
 expected Debug/Display output checks to the existing coverage-only

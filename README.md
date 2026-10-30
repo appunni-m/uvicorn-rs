@@ -23,12 +23,12 @@ steps were skipped. The unified three-repeat report measured 14,118/14,243
 regions and 10,402/10,461 lines, below the required 100% gate. Rust quality,
 MSRV, and native FastAPI-RS composition passed.
 
-A later focused Windows diagnostic,
-[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177),
-passed one worker-precedence case on diagnostic commit `42f9c0f`. Its corrected
-trace showed listener accept polls pending until shutdown cancellation, then
-both workers drained. The earlier timeout did not reproduce, so this selected
-pass does not establish full Windows parity or a confirmed root cause.
+Focused Windows diagnostics [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
+and [#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055)
+passed one selected worker case each on diagnostic commit `42f9c0f`. In #523,
+both processes handled the SIGTERM-labelled input, exited 0, and did not time
+out; the trace recorded orderly worker shutdown. These passes did not reproduce
+the #514 failures, establish their root cause, or replace full Windows parity.
 
 The Python package is **not yet a drop-in Uvicorn replacement**. Keep using
 upstream Uvicorn if your application relies on the full Uvicorn command-line,

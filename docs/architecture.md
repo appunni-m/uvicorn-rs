@@ -32,11 +32,14 @@ composition, and release-evidence checks passed.
 
 The three-repeat unified coverage matrix completed but missed the 100% gate at
 14,118/14,243 regions and 10,402/10,461 lines. The report has no accepted
-independent Coverage-MCP review. A focused Windows diagnostic
-[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) passed
-one worker-precedence case with shutdown tracing; it does not resolve the
-separate intermittent multi-worker shutdown failures. Complete Uvicorn
-compatibility and the three-system benchmark remain open. See the
+independent Coverage-MCP review. Focused Windows diagnostics
+[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) and
+[#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055) each
+passed one worker case with shutdown tracing. Run #523 did not reproduce the
+SIGTERM-labelled case's earlier timeout; its trace records both processes
+exiting 0 after orderly shutdown. The cause of the #514 failures remains
+unconfirmed. Complete Uvicorn compatibility and the three-system benchmark
+remain open. See the
 [current coverage record](coverage.md#current-unified-coverage-status-2026-10-30),
 [parity evidence](parity.md), and [benchmark status](benchmark-status.md).
 The PyPI distribution provides the `uvicorn` namespace and primary

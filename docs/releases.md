@@ -44,10 +44,13 @@ macOS candidate artifacts and consumers passed.
 
 The three-repeat unified coverage matrix completed but failed its 100% gate at
 14,118/14,243 regions and 10,402/10,461 lines. No accepted independent
-Coverage-MCP review exists for a passing report. A focused Windows diagnostic
-[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) passed
-one worker-precedence case on diagnostic commit `42f9c0f`; it did not reproduce
-the earlier intermittent shutdown timeout and does not replace the full lane.
+Coverage-MCP review exists for a passing report. Focused Windows diagnostics
+[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) and
+[#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055) each
+passed one worker case on diagnostic commit `42f9c0f`. Run #523's SIGTERM-labelled
+case exited 0 without timing out and its trace records orderly worker shutdown.
+Neither selected pass reproduces or resolves the intermittent #514 failures,
+confirms their cause, or replaces the full Windows lane.
 
 No current-source candidate bundle is ready. Exact-source coverage and
 independent review, complete compatibility, full Windows candidate consumers,
