@@ -8,45 +8,31 @@
 
 ## Current unified coverage status (2026-10-30)
 
-PR #19 remains a draft. CI
-[#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964)
-checked PR head `de1c2f351a73654e563231385aae426cff23fcf4` against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`; its coverage report is bound to
-the clean synthetic merge source `3d594b2fbc99da99942b0a4c51e4a0cce6acbc22`.
-The unified job completed but failed: 1,330 of 1,331 cases passed, and the
-`fault.lifespan.startup-send-channel-closed` contract failed on all three
-repeats without producing its LLVM profile. Coverage reached 13,985/14,164
-regions and 10,305/10,392 lines (179 regions and 87 lines remain uncovered).
-The retained artifact is
+The current PR source is newer than the latest report. The most recent completed
+coverage report is from CI
+[#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964),
+bound to prior head `de1c2f351a73654e563231385aae426cff23fcf4` and synthetic
+merge source `3d594b2fbc99da99942b0a4c51e4a0cce6acbc22`. It failed: 1,330 of
+1,331 cases passed, while `fault.lifespan.startup-send-channel-closed` failed
+on all three repeats without producing its LLVM profile. Coverage reached
+13,985/14,164 regions and 10,305/10,392 lines (179 regions and 87 lines remain
+uncovered). The retained artifact is
 [#12923585243](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964/artifacts/12923585243),
 archive SHA-256 `5b0f0346ae1a3393d608dc40d4a9c06477f96df5ba663873417d27af6e040084`;
 the report SHA-256 is
 `7a73cba42d0f889342d47751e88f05b1409f93a4d722902a4f495d848efc624f`.
 
-Other exact-head results in #479: Rust quality/MSRV, native FastAPI-RS
-composition, and release-evidence handoff passed. The Linux installed-wheel
-public matrix passed 718/718; the macOS ARM64 candidate parity matrix passed
-718/718. The Windows candidate lane failed parity with 684/689 executed cases
-passing, four worker log mismatches, one Uvicorn oracle `WinError 10022` worker
-start failure, and one TLS oracle `IncompleteRead`; two following cases were not
-run. The Windows candidate sdist and consumer steps were skipped. Docs run
-[#196](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918327024) passed.
+CI #486 started the full three-repeat matrix on pre-follow-up head
+`8d64ab95c5ec756e47459061fa6d5e73491397b5`, but had not produced a report
+when the current source updates were pushed. It is not current acceptance. The
+current PR includes commits `e8157fe61` and `93d1d6c39`; the next full hosted
+coverage report must bind to the updated source after this docs refresh.
 
-A focused local follow-up now closes the request receiver before the injected
-startup send and isolates the case under `lifespan=on`; it passes 1/1 with
-complete selected-case attribution. One related normal lifespan parity case
-also passes 1/1. These selected results are diagnostic only. The source and
-input changes still need one hosted exact-source full matrix. The separate
-local harness commit `fbdd375a958038d3506a60b6451007b993a646bc` normalizes only
-the Windows scheduler-dependent child-termination notice; its four selected
-worker cases passed 4/4 on macOS ARM64, not Windows. Neither change resolves
-the Windows oracle worker-start or TLS failure.
-
-Coverage-MCP has no accepted independent receipt. `7t4g` remains open; the
+Coverage-MCP has no accepted independent receipt. `7t4g` remains open; its
 review must be bound to a complete passing report for the accepted exact-main
 source. The previous exact-main report, CI #396, failed at 10,962/11,375 regions
-and 8,130/8,438 lines and predates this source. Do not reuse either failed
-report as current acceptance.
+and 8,130/8,438 lines and predates this source. Do not reuse failed or
+pre-follow-up reports as current acceptance.
 
 ### Prior completed unified coverage result (CI #464)
 

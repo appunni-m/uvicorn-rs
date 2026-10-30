@@ -1,16 +1,18 @@
 # Native FastAPI-RS composition evidence
 
-## Latest hosted pinned composition pass (2026-10-29)
+## Latest hosted pinned composition pass (2026-10-30)
 
 The native FastAPI-RS composition job in CI
-[#467](https://github.com/appunni-m/uvicorn-rs/actions/runs/40816243135)
-passed for committed PR head `c0104b3775416c5dfd305f6b5fe713b0cad1a995`.
+[#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403)
+passed for PR head `8d64ab95c5ec756e47459061fa6d5e73491397b5`, before the
+current Python shutdown-order follow-up.
 It used FastAPI-RS `0afccce9f35447f38ebb5e94d0e67fd338ea7ea4` and its pinned
 Starlette-RS revision `4139a72449bf5751e8902fb1c7175ee7f191d338`, confirmed the
 locked normal/build graph excluded PyO3, and passed all 17 declared H1/H2
 real-socket inputs. This is source-bound hosted composition evidence for that
 commit; it does not establish H3, TLS, WebSockets, full framework semantics,
-cross-platform behavior, or performance.
+cross-platform behavior, or performance. These results are tied to the prior
+head and do not establish exact-current-source release acceptance.
 
 ## Current mainline source check (2026-10-25)
 

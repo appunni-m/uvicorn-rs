@@ -37,36 +37,32 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-1. CI
-   [#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829)
-   checked PR head `b44029eb2119bb0a442946030d50d22b9160370f`, against `main`
-   at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
-   framework composition, release-evidence handoff, and Linux installed-wheel
-   parity (718/718) passed. Linux candidate packaging and clean consumers
-   passed. The macOS ARM64 lane had one chunked-WSGI log-order mismatch. The
-   Windows lane reported factory, worker, and signal failures, then exited
-   `-1073741510` without a parity report. The unified three-repeat job completed
-   all 1,331 indexed cases with complete attribution and zero transient
-   infrastructure failures, but failed the 100% gate at 13,984/14,154 regions
-   and 10,303/10,387 lines. Artifact `12880510857` is bound to the run's merge
-   commit `1f70ea46dfa255ac90e41b115b997354b8457a01`.
+1. The latest candidate checks are in CI
+   [#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403),
+   which tested prior PR head `8d64ab95c5ec756e47459061fa6d5e73491397b5`
+   against `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux
+   installed-wheel parity passed 718/718; macOS ARM64 candidate parity passed
+   718/718. Rust quality/MSRV, native composition, release-evidence handoff,
+   Linux candidate wheel/sdist and clean consumers passed. Windows parity was
+   incomplete (684/689 executed cases passed, with worker and infrastructure
+   failures plus a TLS oracle error); its candidate consumer lane did not
+   complete.
 
-   The local follow-up commit gives the WSGI chunked-POST input a 250 ms
-   settle interval; its selected macOS case passed 1/1. It also isolates each
-   Windows HTTP probe in a private console, allows both the response and
-   shutdown deadlines, and kills server process trees during cleanup. Windows
-   behavior still needs hosted confirmation. These changes are not included in
-   #468. Do not start benchmarks until the compatibility gate passes.
+   CI #486's unified coverage step was still running when the source follow-up
+   was pushed, so it produced no report usable for the updated source. Commits
+   `e8157fe61` and `93d1d6c39` now filter shutdown traces and request native
+   cancellation before synchronous shutdown logging. Two selected multi-worker
+   cases pass locally on macOS ARM64; Windows behavior still needs hosted
+   validation. The candidate and composition results above are bound to the
+   prior source. Reuse unchanged receipts only where their source identities
+   match. Do not start
+   benchmarks until the compatibility gate passes.
 
-   CI #467 remains a completed historical gap map for `c0104b377`, not current
-   coverage evidence. Its 1,330/1,330 cases passed with complete attribution,
-   but the gate failed at 13,963/14,134 regions and 10,291/10,377 lines.
-   Coverage-MCP has no accepted independent receipt after its prior daemon
-   health/time-out failure; the #468 report is available, but its independent
-   review is not accepted and it does not include the local follow-up commit. See the
-   [coverage status](../coverage.md#current-unified-coverage-status-2026-10-29).
-   Reuse completed unchanged Linux parity and package receipts; do not rerun
-   those locally.
+   The latest completed coverage report is still a prior-source failure; see
+   the [coverage status](../coverage.md#current-unified-coverage-status-2026-10-30).
+   There is no accepted independent Coverage-MCP receipt. After the current
+   source and docs batch is stable, consume one hosted full run and review its
+   exact report once.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions

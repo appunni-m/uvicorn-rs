@@ -2,39 +2,36 @@
 
 A Rust-first server for ASGI applications and Rust services.
 
-## Project status
+## Project status (2026-10-30)
 
-The 2026-10-27 registry audit recorded Cargo 0.2.1 releases from the earlier
-crate layout. The maintainer has since reported removing the old `uvicorn-rs`
-crate entry. A current crates.io API check from this environment returned
-HTTP 403, so the registry's current state is not independently confirmed;
-the release workflow must resolve it in its preflight. The PyPI
-`uvicorn-rs` project API returned 404, so the distribution has not had its
-first upload. See [release status](docs/releases.md).
-
-PR #19 remains a draft. The latest CI run,
-[#468](https://github.com/appunni-m/uvicorn-rs/actions/runs/40826636829),
-checked PR head `b44029eb2119bb0a442946030d50d22b9160370f` against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
-FastAPI-RS composition, release handoff, and Linux x86-64 installed-wheel
-parity (718/718) passed. The macOS ARM64 candidate lane had one WSGI log-order
-mismatch; the Windows lane reported factory, worker, and signal failures, then
-exited before writing its parity report. Linux candidate packaging and clean
-consumer checks passed. The three-repeat coverage job completed all 1,331
-indexed cases with complete attribution and no transient infrastructure
-failures, but its gate remains short: 13,984/14,154 regions and 10,303/10,387
-lines. The local harness changes for the macOS timing race and Windows
-control-event handling are not part of CI #468 and still need hosted
-confirmation. See
-[coverage evidence](docs/coverage.md), [parity evidence](docs/parity.md), and
+The release target is a Python-free `uvicorn-rs` server crate with HTTP/3
+behind `http3`, the separate `asgi-lifespan-protocol-rs` crate, and the PyPI
+distribution `uvicorn-rs`. The optional `uvicorn-rs-py` package remains the
+internal Cargo/PyO3 adapter. The publisher is `.github/workflows/release.yml`;
+`.github/workflows/candidate.yml` verifies candidates. No package or tag has
+been published from this consolidated source. See
 [release status](docs/releases.md).
 
-Docs run
-[#183](https://github.com/appunni-m/uvicorn-rs/actions/runs/40807137733)
-passed for the then-committed source. Independent Coverage-MCP acceptance, full
-Uvicorn 0.54.0 compatibility across the declared OS/Python matrix, the hosted
-candidate artifact bundle and clean consumers, and parity-first benchmark
-evidence remain open. No 0.2.2 release tag or package has been published.
+The latest completed candidate checks are from CI
+[#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403),
+which tested prior PR head `8d64ab95c5ec756e47459061fa6d5e73491397b5` against
+`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux installed-wheel
+parity passed 718/718; macOS ARM64 candidate parity passed 718/718. Linux
+candidate wheel/sdist, clean-consumer checks, and Python-free Cargo package
+checks passed. Windows parity was incomplete: 684/689 executed cases passed,
+with worker shutdown failures, infrastructure failures, and a TLS oracle
+failure. The Windows consumer lane did not complete.
+
+The current PR head includes a focused shutdown-order fix and parity log
+normalization; two selected multi-worker cases pass locally on macOS ARM64.
+The hosted coverage run on the prior head did not produce a report before this
+follow-up, so exact-source 100% coverage and independent Coverage-MCP review
+remain open. Those CI results are bound to the prior source. Full
+Windows/Uvicorn compatibility, clean candidate artifacts and consumers for
+every supported platform, and the matched benchmarks remain release gates.
+Benchmark work follows parity. See
+[coverage evidence](docs/coverage.md), [parity evidence](docs/parity.md), and
+[replacement status](docs/uvicorn-compatibility.md).
 
 The Python adapter is **not yet a drop-in Uvicorn replacement**. If your
 application depends on Uvicorn's full command-line, Python API, worker, or

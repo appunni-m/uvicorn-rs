@@ -15,59 +15,44 @@ Use these state labels precisely:
 - **Released:** the authorized distribution decision and required verification
   are complete.
 
-## Current release gates (2026-10-29)
+## Current release gates (2026-10-30)
 
 The release set is one Python-free **uvicorn-rs** server crate with HTTP/3
 behind its optional **http3** feature, the separate
 **asgi-lifespan-protocol-rs** crate, and the PyPI distribution **uvicorn-rs**
-implemented by the optional **uvicorn-rs-py** adapter. The publisher is
-**.github/workflows/release.yml**; **candidate.yml** only builds and verifies
-candidates. The PyPI trusted publisher tuple is
-**appunni-m/uvicorn-rs / release.yml / pypi**. The existing Crates.io Trusted
-Publisher entries for **asgi-lifespan-protocol-rs** and **uvicorn-rs** use
-**appunni-m/uvicorn-rs / release.yml / crates-io**; verify these entries in
-place instead of adding duplicates.
+implemented by the optional internal **uvicorn-rs-py** adapter. The publisher
+is **.github/workflows/release.yml**; **candidate.yml** only builds and verifies
+candidates. The PyPI trusted publisher is **appunni-m/uvicorn-rs / release.yml
+/ pypi**. Both crates.io Trusted Publisher entries already exist for
+**appunni-m/uvicorn-rs / release.yml / crates-io**. The user confirmed the
+lifecycle publisher is already configured; do not add duplicates.
 
-PR #19 remains a draft. The latest exact-head run is CI
-[#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964) on PR
-head **de1c2f351a73654e563231385aae426cff23fcf4**, based on main
-**86e72e181d00feca1b4db7f30377d5d9d4345b83**. Rust quality/MSRV, native
-FastAPI-RS composition, release-evidence handoff, and Linux x86-64 installed
-wheel parity (718/718) passed. macOS ARM64 candidate parity passed 718/718.
-The Linux candidate artifact is version 0.2.2; its Rust archives, wheel, sdist,
-and clean Linux consumers passed. Its exact hashes are retained in the PR body.
+PR #19 remains a draft and targets main
+**86e72e181d00feca1b4db7f30377d5d9d4345b83**. The latest completed candidate
+lanes are in CI
+[#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403), on
+prior PR head **8d64ab95c5ec756e47459061fa6d5e73491397b5**. Linux installed
+wheel parity passed 718/718, macOS ARM64 candidate parity passed 718/718, and
+Linux candidate wheel/sdist, clean consumers, and Python-free Cargo package
+checks passed. Windows parity was incomplete: 684/689 executed cases passed,
+with worker failures, infrastructure failures, and two not-run cases. The TLS
+shutdown diagnostic failed in the Uvicorn oracle. The Windows candidate
+consumer lane did not complete.
 
-Windows x86-64 built and installed the candidate wheel, then failed parity:
-684/689 executed cases passed, four worker cases differed in server logs, and
-the Uvicorn oracle hit `WinError 10022` in one worker-start case. A TLS
-active-stream case failed in the oracle with `IncompleteRead`; two following
-cases were not run. The Windows sdist and downstream consumer steps were
-skipped. The retained Windows parity artifact is
-[12918364774](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964/artifacts/12918364774).
-The exact-source three-repeat coverage job `123604808228` completed but failed:
-13,985/14,164 regions, 10,305/10,392 lines, and one startup fault case failed
-in all three repeats. No independent Coverage-MCP receipt is accepted. Docs run
-[#196](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918327024) passed
-for the committed source.
+The current PR source adds commits `e8157fe61` and `93d1d6c39`; two selected
+multi-worker cases pass locally on macOS ARM64. CI #486 did not produce a
+coverage report before these updates. Its candidate results are bound to the
+prior source. No exact-current-source candidate bundle or accepted independent
+Coverage-MCP receipt was available for this status snapshot.
 
-A local harness commit, `fbdd375a958038d3506a60b6451007b993a646bc`, now
-normalizes only the Windows scheduler-dependent child-termination notice and
-adds target/oracle event traces and bounded case attribution to infrastructure
-diagnostics. Its four selected worker cases passed 4/4 on macOS ARM64. The
-focused startup-send-closed case now passes 1/1 after closing the actual
-receiver and selecting `lifespan=on`; one regular lifespan parity case passes
-1/1. These selected results do not resolve the Windows oracle-start or TLS
-failure. No full coverage report or independent Coverage-MCP receipt is bound
-to the follow-up changes.
-
-An earlier exact-main coverage run
-[`39689988928`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
-reported 10,962/11,375 regions and 8,130/8,438 lines. That source predates the
-consolidation branch and is not current release evidence. The current release
-blockers are a completed exact-source 100% coverage result, independent
-Coverage-MCP review, complete Windows and broader Uvicorn 0.54.0 compatibility evidence,
-exact-source candidate artifacts and clean consumers for all supported systems,
-and the matched benchmarks that follow compatibility.
+The last saved GitHub settings audit found active **Protect main** and
+**Protect version tags** rulesets. Main requires pull requests and configured CI
+checks with zero required approvals for the sole maintainer. Version tags
+`v*` allow creation while blocking updates, deletion, and force-push. The
+`pypi` and `crates-io` environments are restricted to `main`; `appunni-m` is
+the reviewer and self-review is allowed for the sole maintainer. Do not publish
+until exact-source coverage, independent review, full compatibility, completed
+parity-first benchmarks, and candidate artifacts/consumers pass.
 
 The maintainer reports deleting the earlier `uvicorn-rs` server-crate entry
 from crates.io. A direct API request from this environment returned HTTP 403,
@@ -75,15 +60,6 @@ so current registry visibility is not independently confirmed; the release
 workflow preflight must make the final present/absent determination. The PyPI
 project API returned 404 on 2026-10-28, consistent with no first PyPI upload.
 No 0.2.2 tag or package has been published.
-
-The last saved GitHub settings audit found **Protect main** and version-tag
-protection active. The `pypi` and `crates-io` environments are restricted to
-`main`, list `appunni-m` as the required reviewer, allow sole-maintainer
-self-review, and disable administrator bypass. The PyPI Trusted Publisher is
-**appunni-m/uvicorn-rs / release.yml / pypi**. The maintainer confirmed that
-both Cargo Trusted Publisher entries already exist as
-**appunni-m/uvicorn-rs / release.yml / crates-io**; do not add duplicates.
-Do not publish until all release gates pass.
 
 ## Registry and packaging audit (2026-10-27; earlier source snapshot)
 

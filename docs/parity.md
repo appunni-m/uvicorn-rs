@@ -4,43 +4,31 @@
 
 ## Current source status (2026-10-30)
 
-PR #19 remains a draft. The latest hosted run is
-[#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964), bound
-to committed head `de1c2f351a73654e563231385aae426cff23fcf4` and main base
+PR #19 remains a draft. The candidate lanes in CI
+[#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403) tested
+prior head `8d64ab95c5ec756e47459061fa6d5e73491397b5` against main
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux x86-64 installed-wheel
-public parity passed 718/718, and macOS ARM64 candidate parity passed 718/718.
-Rust quality/MSRV, native FastAPI-RS composition, and release-evidence handoff
-also passed.
+parity passed 718/718 and macOS ARM64 candidate parity passed 718/718. Rust
+quality/MSRV, native FastAPI-RS composition, and release-evidence handoff passed.
 
-Windows x86-64 built and installed the candidate wheel, but parity did not
-complete: 684/689 executed cases passed; four multi-worker cases differed in
-logs, including one Uvicorn oracle `WinError 10022` worker-start failure. The
-TLS active-stream case failed in the oracle with `IncompleteRead`, leaving two
-later TLS cases not run. The Windows candidate sdist and downstream consumer
-steps were skipped. Retained artifact
-[12918364774](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964/artifacts/12918364774)
-has archive SHA-256
-`ba6e9939d7e5a0940feffcca448abc32ff722caf0d39e1d6e8bfe734d1d53649`.
+Windows x86-64 built and installed its candidate wheel, but parity was
+incomplete: 684/689 executed cases passed, with four worker failures, six
+infrastructure failures, and two not-run cases. The focused trace shows the
+first worker stop signal without a native-shutdown request; a later signal
+reaches the native call while the listener remains waiting in accept. The TLS
+active-stream diagnostic failed in the Uvicorn oracle. The Windows candidate
+consumer steps were skipped.
 
-The unified coverage job completed in #479 but failed at 13,985/14,164 regions
-and 10,305/10,392 lines; one startup fault case failed in each of three repeats.
-See the [current coverage status](coverage.md#current-unified-coverage-status-2026-10-30).
-Docs run [#196](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918327024)
-passed for the committed source. A local, unpushed harness commit
-`fbdd375a958038d3506a60b6451007b993a646bc` removes only a Windows
-scheduler-dependent termination notice from normalized logs and records more
-failure diagnostics. Its four selected worker cases passed 4/4 on macOS ARM64;
-this is not Windows evidence. The commit does not resolve the oracle worker
-start or TLS failure.
-
-The focused local startup-send-closed repair passes 1/1 under its dedicated
-`lifespan=on` profile, and one regular lifespan parity case passes 1/1. These
-changes are not covered by a hosted run yet. Full Windows parity, the complete
-current CLI/API/process contract, exact-source 100% coverage, the independent
-Coverage-MCP review, and the clean cross-platform candidate remain open.
-Benchmark work stays behind compatibility acceptance.
-The maintainer will run the real FastAPI application trial after repository
-compatibility work is handed off.
+Commits `e8157fe61` and `93d1d6c39` are now pushed. The former filters shutdown
+trace lines from parity logs; the latter moves native cancellation ahead of
+synchronous shutdown logging. The two selected multi-worker cases pass locally
+on macOS ARM64, but do not validate Windows. No exact-source hosted result is
+available for these follow-ups yet; the current docs refresh also needs hosted
+validation. Full Windows parity, the complete CLI/API/process contract,
+exact-source 100% coverage, independent Coverage-MCP review, and clean
+cross-platform candidate artifacts remain open. Benchmark work stays behind
+compatibility acceptance. The maintainer will run the real FastAPI application
+trial after repository compatibility work is handed off.
 
 ## Focused TLS parity follow-up on the local macOS source (2026-10-28)
 

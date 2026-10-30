@@ -13,36 +13,28 @@ published.
 
 ## Current status (2026-10-30)
 
-PR #19 remains a draft. The latest hosted run is
-[#479](https://github.com/appunni-m/uvicorn-rs/actions/runs/40918326964),
-bound to committed head `de1c2f351a73654e563231385aae426cff23fcf4` based on
-`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV,
-native framework composition, release-evidence handoff, and Linux installed
-wheel parity (718/718) passed. macOS ARM64 candidate parity passed 718/718.
-Windows built and installed its candidate wheel but did not complete parity:
-684/689 executed cases passed; four worker cases differed in logs, one Uvicorn
-oracle worker hit `WinError 10022`, and a TLS active-stream oracle case failed
-with `IncompleteRead`, leaving two following cases not run. Windows sdist and
-consumer steps were skipped. The completed unified coverage job failed at
-13,985/14,164 regions and 10,305/10,392 lines after one startup fault case
-failed in each of three repeats. See the
-[current coverage status](coverage.md#current-unified-coverage-status-2026-10-30)
-and [parity evidence](parity.md).
+PR #19 remains a draft. The latest candidate checks are from CI
+[#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403),
+which tested prior head `8d64ab95c5ec756e47459061fa6d5e73491397b5` based on `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux installed-wheel parity
+passed 718/718 and macOS ARM64 candidate parity passed 718/718. Windows
+parity was incomplete: 684/689 executed cases passed, with worker shutdown
+failures and infrastructure errors; a TLS active-stream diagnostic failed in
+the Uvicorn oracle. Windows candidate consumers did not complete. See the
+[current support matrix](support-matrix.md) and [parity evidence](parity.md).
 
-The local harness change
-`fbdd375a958038d3506a60b6451007b993a646bc` normalizes one scheduler-dependent
-Windows worker log and adds failure attribution. Four selected worker cases
-passed 4/4 on macOS ARM64, which does not establish Windows behavior. A focused
-startup-send-closed fault case and one regular lifespan parity case also pass
-1/1 each on the local source; these selected results do not establish hosted
-Windows or full-suite behavior. The Windows worker-start and TLS failures remain
-unresolved. Docs run #196 passed for the committed source; the local docs
-refresh still needs hosted validation.
+The current source adds two follow-ups: commit `e8157fe61` filters shutdown
+trace lines from parity logs, and commit `93d1d6c39` requests native shutdown
+before synchronous shutdown logging. The two selected multi-worker cases pass
+locally on macOS ARM64. They do not establish Windows or full-suite behavior.
+Exact-source unified coverage, independent Coverage-MCP review, full Windows
+parity, complete CLI/API/process compatibility, and clean candidate artifacts
+remain open. The hosted results above are bound to the prior source.
 
 The package metadata declares Python `>=3.9`. Uvicorn 0.54.0 declares Python
 `>=3.10` in its [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml),
 so Uvicorn compatibility evidence starts at Python 3.10. The Python 3.9
-wheel-install check was skipped in #479 and remains separate from parity.
+wheel-install check was skipped in #486 and remains separate from parity.
 
 | What you need | Current state |
 | --- | --- |
