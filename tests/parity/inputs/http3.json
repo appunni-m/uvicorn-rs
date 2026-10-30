@@ -2707,6 +2707,31 @@
       }
     },
     {
+      "case_id": "fault.http3.legacy-default-header-error-resets-stream",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.legacy-path.selection",
+        "contract": "http3-legacy-default-header-error-resets-stream"
+      },
+      "server_options": {
+        "headers": [
+          "invalid name: value"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
       "case_id": "fault.http3.body-pump-connection-closed",
       "profile": "http3",
       "operation": "http3.body-pump-early-exit",

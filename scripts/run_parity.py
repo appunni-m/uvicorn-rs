@@ -533,6 +533,7 @@ FAULT_CONTRACTS = {
     "http3-legacy-peer-close-unknown-code-ignored",
     "http3-legacy-peer-close-classification-error",
     "http3-stream-reset-on-runtime-error",
+    "http3-legacy-default-header-error-resets-stream",
     "http3-request-task-error-before-peer-close-followup-200",
     "http3-body-pump-early-exit-500",
     "http3-upload-body-pump-preserves-data",
@@ -1347,6 +1348,18 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 stream-error faults require the reset-observation workflow"
+                    )
+            elif fault["contract"] == "http3-legacy-default-header-error-resets-stream":
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.injected-stream-error"
+                    or fault["point"] != "http3.legacy-path.selection"
+                    or case.get("server_options", {}).get("headers") != ["invalid name: value"]
+                    or case.get("request", {}).get("path") != "/state"
+                    or case.get("request", {}).get("expect_response_error") is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 legacy default-header failure requires the invalid-header stream-reset workflow"
                     )
             elif fault["contract"] == "http3-peer-close-classification-defensive-error":
                 if (
@@ -10635,6 +10648,16 @@ def execute_case(
                 events_path=server["events"],
                 events_before=events_before,
             )
+            if (
+                fault is not None
+                and fault["contract"] == "http3-legacy-default-header-error-resets-stream"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]
+                ):
+                    raise ParityError("HTTP/3 legacy path selection fault was not consumed")
+                observation["fault_consumed"] = True
             if fault is not None and fault["contract"] == "http3-body-pump-early-exit-500":
                 if (
                     fault_control_path is None
@@ -11921,6 +11944,14 @@ def fault_contract_matches(
         return (
             observation.get("stream_reset") is True
             or observation.get("connection_closed") is True
+        )
+    if fault["contract"] == "http3-legacy-default-header-error-resets-stream":
+        return (
+            observation.get("fault_consumed") is True
+            and (
+                observation.get("stream_reset") is True
+                or observation.get("connection_closed") is True
+            )
         )
     if fault["contract"] == "http3-peer-close-classification-defensive-error":
         followup = observation.get("followup_response")

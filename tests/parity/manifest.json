@@ -2127,7 +2127,8 @@
       "observe": [
         "connection_closed",
         "stream_reset",
-        "status"
+        "status",
+        "fault_consumed"
       ]
     },
     {
