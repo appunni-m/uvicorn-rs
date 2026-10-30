@@ -7280,7 +7280,7 @@ def http1_streaming_request(
             for chunk in chunks[1:]:
                 try:
                     client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
-                except (BrokenPipeError, ConnectionResetError):
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                     connection_closed = True
                     break
             if not connection_closed:
