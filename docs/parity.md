@@ -10,9 +10,9 @@ use 211 runtime-source files with digest
 `c5b9c9bcce020d9d674b9af59393ae705d9c6d471ec07f5f4ce3510522f54a4d`, matching
 the runtime sources at commit `f3b54549a3243523c475551cbcf83e241f2b93b4`.
 The parity harness and one indexed HTTP/1 input changed after the full run;
-targeted replacements cover the affected rows. The current dirty working tree
-adds a coverage-only Rust fault selector and two fault-contract inputs, so it
-is not the full-run source identity.
+targeted replacements cover the affected rows. Focused coverage batches added
+coverage-only Rust fault selectors and fault-contract inputs after that run, so
+their selected reports are not full-run evidence.
 
 Full-mode CI
 [#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961)
@@ -60,8 +60,29 @@ The selected diagnostic report is
 source digest is `ff885bc0a79cad1f710e8a2f57cbb63b1e70687759c0a3da4094e8369e3ce208`.
 It was built from a dirty macOS ARM64 checkout and is not full-coverage or
 independent-review evidence. The full 100% gate and accepted Coverage-MCP
-review remain open; the next reported group is response-send error handling in
-`AsgiIo::send`.
+review remain open. The next response-send error-handling batch is recorded
+below.
+
+## Focused HTTP/2 response-event coverage batch (2026-10-30)
+
+Six target-only cases exercise the `AsgiIo::send` early-hint disconnect and
+closed-channel errors, plus trailer disconnect, closed-channel, backpressure,
+and full-channel-send failure paths. All six passed with complete attribution,
+and each fault selector was consumed. The existing successful early-hints and
+negotiated-trailers cases also passed 2/2 against the same instrumented source.
+
+The fault-case report is
+`target/completion/coverage-http2-response-event-faults.json`, SHA-256
+`7195d53c48890deaf796ebc15e69f7b4a810bf59df7c240c797b09ecca117436`. The
+success-case report is
+`target/completion/coverage-http2-response-event-success.json`, SHA-256
+`5f3f8cc9a6f027b4e80eb13be50b1e0b96915ff2f9f855d9f59546952d912fa1`. Both
+reports use source digest
+`95fc7f8fa9c39625d59d189aa4cf622096388505a907c6cc098963639e9b6f1d` and
+native extension SHA-256
+`e2ba67fd41950c85637b42821da2f9a30d87a983d83e049aaea821544eca13ad`. These
+are separate selected-subset reports; neither is a full-suite coverage result
+or independent review, and their totals are not presented as the full gate.
 
 Full-mode CI
 [#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350) ran on

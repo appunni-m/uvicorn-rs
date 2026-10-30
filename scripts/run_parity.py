@@ -182,6 +182,12 @@ FAULT_POINTS = {
     "http.response.body.more-body.extract",
     "http.response.start.channel-closed",
     "http.response.body.channel-closed",
+    "http.response.early-hint.disconnected",
+    "http.response.early-hint.channel-closed",
+    "http.response.trailers.disconnected",
+    "http.response.trailers.channel-closed",
+    "http.response.trailers.channel-full",
+    "http.response.trailers.full-send-closed",
     "http.response.body-consumer.pause",
     "http.response.body-poll.receiver-pending.pause",
     "http.app-task.panic-before-response-start",
@@ -479,6 +485,7 @@ FAULT_CONTRACTS = {
     "asgi-spec-version-2.5",
     "server-connection-invalid-default-header-source-chain",
     "server-default-header-finalization-error-closes-connection",
+    "http2-response-event-fault-consumed-and-status-observed",
     "python-ssl-ca-verifier-error-propagates",
     "python-ssl-ca-verifier-success-fallback-propagates",
     "python-ssl-keyfile-error-propagates",
@@ -2420,6 +2427,39 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: default-header finalization faults require one invalid configured header and a /state request"
+                    )
+            elif fault["contract"] == "http2-response-event-fault-consumed-and-status-observed":
+                point = fault["point"]
+                request = case.get("request", {})
+                early_hint_fault = point in {
+                    "http.response.early-hint.disconnected",
+                    "http.response.early-hint.channel-closed",
+                }
+                trailer_fault = point in {
+                    "http.response.trailers.disconnected",
+                    "http.response.trailers.channel-closed",
+                    "http.response.trailers.channel-full",
+                    "http.response.trailers.full-send-closed",
+                }
+                has_trailer_negotiation = any(
+                    name.lower() == "te" and value.lower() == "trailers"
+                    for name, value in request.get("headers", [])
+                )
+                if (
+                    case.get("profile") != "http2"
+                    or case.get("operation") != "http.invalid-asgi-message-status"
+                    or request.get("method") != "GET"
+                    or request.get("body_base64") != ""
+                    or not (
+                        early_hint_fault
+                        and request.get("path") == "/response-early-hints"
+                        or trailer_fault
+                        and request.get("path") == "/response-trailers"
+                        and has_trailer_negotiation
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/2 response-event faults require their declared early-hint or negotiated-trailer route"
                     )
             elif fault["contract"] == "websocket-server-shutdown-force-abort":
                 if (
@@ -10468,7 +10508,7 @@ def execute_case(
                 "http2.response-trailers",
                 "http2.response-trailers-without-te",
             }
-            return http2_request(
+            observation = http2_request(
                 server["port"],
                 case["request"],
                 observe_response_extensions=response_extension_operation,
@@ -10479,6 +10519,19 @@ def execute_case(
                 }
                 else None,
             )
+            if (
+                fault is not None
+                and fault["contract"]
+                == "http2-response-event-fault-consumed-and-status-observed"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip()
+                    == fault["point"]
+                ):
+                    raise ParityError("HTTP/2 response-event fault was not consumed")
+                observation["fault_consumed"] = True
+            return observation
         if profile_id == "http3":
             if trust_anchor is None or h3_client is None:
                 raise ParityError("HTTP/3 adapter is missing its certificate or client")
@@ -11437,6 +11490,20 @@ def fault_contract_matches(
             fault["point"] == "server.default-header.response-finalization"
             and observation.get("fault_consumed") is True
             and observation.get("connection_closed") is True
+        )
+    if fault["contract"] == "http2-response-event-fault-consumed-and-status-observed":
+        expected_status = (
+            500
+            if fault["point"]
+            in {
+                "http.response.early-hint.disconnected",
+                "http.response.early-hint.channel-closed",
+            }
+            else 200
+        )
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("status") == expected_status
         )
     if fault["contract"] == "python-ssl-ca-verifier-error-propagates":
         expected_message = (
@@ -14223,6 +14290,11 @@ def execute_profile(
                                 "fault_consumed": target_raw.get("fault_consumed"),
                             }
                         elif case["fault"]["contract"] == "server-default-header-finalization-error-closes-connection":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] == "http2-response-event-fault-consumed-and-status-observed":
                             fault_observation = {
                                 **target_result,
                                 "fault_consumed": target_raw.get("fault_consumed"),

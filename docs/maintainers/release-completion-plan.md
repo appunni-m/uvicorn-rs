@@ -63,6 +63,22 @@ It was built from a dirty working tree and is diagnostic subset evidence only. T
 retained full report projection still lists those eight regions as missing.
 The full coverage gate and independent review remain open.
 
+The next focused coverage batch adds six HTTP/2 response-event fault cases in
+`AsgiIo::send`: early-hint disconnect/channel closure and trailer
+disconnect/channel closure/channel backpressure/full-send closure. All six
+fault cases passed with complete attribution and consumed selectors. The
+existing successful early-hints and negotiated-trailers cases passed 2/2 on
+the same instrumented source. Fault report SHA-256 is
+`7195d53c48890deaf796ebc15e69f7b4a810bf59df7c240c797b09ecca117436`; success
+report SHA-256 is
+`5f3f8cc9a6f027b4e80eb13be50b1e0b96915ff2f9f855d9f59546952d912fa1`. Both
+bind to source digest
+`95fc7f8fa9c39625d59d189aa4cf622096388505a907c6cc098963639e9b6f1d` and native
+extension SHA-256
+`e2ba67fd41950c85637b42821da2f9a30d87a983d83e049aaea821544eca13ad`. These
+selected reports document the changed paths only. They do not replace the full
+three-repeat coverage gate or independent Coverage-MCP review.
+
 The worker case's Uvicorn oracle returned HTTP 200 but did not exit within its
 12-second shutdown bound: the captured log ends while the parent waits for a
 child. The candidate exited with code 0. The early-upload case recorded no

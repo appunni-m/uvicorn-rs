@@ -326,6 +326,12 @@ enum CoverageFaultPoint {
     HttpResponseTaskWinsStartSelect,
     HttpResponseStartChannelClosed,
     HttpResponseBodyChannelClosed,
+    HttpResponseEarlyHintDisconnected,
+    HttpResponseEarlyHintChannelClosed,
+    HttpResponseTrailersDisconnected,
+    HttpResponseTrailersChannelClosed,
+    HttpResponseTrailersChannelFull,
+    HttpResponseTrailersFullSendClosed,
     HttpResponseBodyConsumerPause,
     HttpResponseBodyPollPendingPause,
     HttpAppTaskPanicBeforeResponseStart,
@@ -736,6 +742,12 @@ impl CoverageFaultPoint {
             Self::HttpResponseTaskWinsStartSelect => "http.response.task-wins-start-select",
             Self::HttpResponseStartChannelClosed => "http.response.start.channel-closed",
             Self::HttpResponseBodyChannelClosed => "http.response.body.channel-closed",
+            Self::HttpResponseEarlyHintDisconnected => "http.response.early-hint.disconnected",
+            Self::HttpResponseEarlyHintChannelClosed => "http.response.early-hint.channel-closed",
+            Self::HttpResponseTrailersDisconnected => "http.response.trailers.disconnected",
+            Self::HttpResponseTrailersChannelClosed => "http.response.trailers.channel-closed",
+            Self::HttpResponseTrailersChannelFull => "http.response.trailers.channel-full",
+            Self::HttpResponseTrailersFullSendClosed => "http.response.trailers.full-send-closed",
             Self::HttpResponseBodyConsumerPause => "http.response.body-consumer.pause",
             Self::HttpResponseBodyPollPendingPause => {
                 "http.response.body-poll.receiver-pending.pause"
@@ -3882,9 +3894,15 @@ impl AsgiIo {
                 }
             }
             AsgiEventType::HttpResponseEarlyHint => {
-                if slf.connection_closed.is_closed()
-                    || slf.request_disconnected.load(Ordering::Acquire)
-                {
+                #[cfg(coverage)]
+                let disconnected =
+                    coverage_fault_take(CoverageFaultPoint::HttpResponseEarlyHintDisconnected)
+                        || slf.connection_closed.is_closed()
+                        || slf.request_disconnected.load(Ordering::Acquire);
+                #[cfg(not(coverage))]
+                let disconnected = slf.connection_closed.is_closed()
+                    || slf.request_disconnected.load(Ordering::Acquire);
+                if disconnected {
                     return Err(PyOSError::new_err(
                         "client disconnected before response early hint",
                     ));
@@ -3912,16 +3930,32 @@ impl AsgiIo {
                     response.headers_mut().append(http::header::LINK, value);
                 }
                 pyo3_async_runtimes::tokio::future_into_py(py, async move {
-                    sender.send(response).await.map_err(|()| {
+                    #[cfg(coverage)]
+                    let send_result = if coverage_fault_take(
+                        CoverageFaultPoint::HttpResponseEarlyHintChannelClosed,
+                    ) {
+                        Err(())
+                    } else {
+                        sender.send(response).await.map_err(|_| ())
+                    };
+                    #[cfg(not(coverage))]
+                    let send_result = sender.send(response).await.map_err(|_| ());
+                    send_result.map_err(|()| {
                         PyOSError::new_err("HTTP/2 informational response channel closed")
                     })?;
                     Python::attach(|py| Ok(py.None()))
                 })
             }
             AsgiEventType::HttpResponseTrailers => {
-                if slf.connection_closed.is_closed()
-                    || slf.request_disconnected.load(Ordering::Acquire)
-                {
+                #[cfg(coverage)]
+                let disconnected =
+                    coverage_fault_take(CoverageFaultPoint::HttpResponseTrailersDisconnected)
+                        || slf.connection_closed.is_closed()
+                        || slf.request_disconnected.load(Ordering::Acquire);
+                #[cfg(not(coverage))]
+                let disconnected = slf.connection_closed.is_closed()
+                    || slf.request_disconnected.load(Ordering::Acquire);
+                if disconnected {
                     return Err(PyOSError::new_err(
                         "client disconnected before response trailers",
                     ));
@@ -3989,7 +4023,22 @@ impl AsgiIo {
                         ResponseChunk::End
                     }
                 };
-                match slf.body.try_send(chunk) {
+                #[cfg(coverage)]
+                let trailer_send_result =
+                    if coverage_fault_take(CoverageFaultPoint::HttpResponseTrailersChannelClosed) {
+                        Err(TrySendError::Closed(chunk))
+                    } else if coverage_fault_take(
+                        CoverageFaultPoint::HttpResponseTrailersChannelFull,
+                    ) || coverage_fault_is_armed(
+                        CoverageFaultPoint::HttpResponseTrailersFullSendClosed,
+                    ) {
+                        Err(TrySendError::Full(chunk))
+                    } else {
+                        slf.body.try_send(chunk)
+                    };
+                #[cfg(not(coverage))]
+                let trailer_send_result = slf.body.try_send(chunk);
+                match trailer_send_result {
                     Ok(()) => Ok(py.None().into_bound(py)),
                     Err(TrySendError::Closed(_)) => {
                         Err(PyOSError::new_err("server response body channel closed"))
@@ -3997,7 +4046,17 @@ impl AsgiIo {
                     Err(TrySendError::Full(chunk)) => {
                         let sender = slf.body.clone();
                         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-                            sender.send(chunk).await.map_err(|_| {
+                            #[cfg(coverage)]
+                            let send_result = if coverage_fault_take(
+                                CoverageFaultPoint::HttpResponseTrailersFullSendClosed,
+                            ) {
+                                Err(())
+                            } else {
+                                sender.send(chunk).await.map_err(|_| ())
+                            };
+                            #[cfg(not(coverage))]
+                            let send_result = sender.send(chunk).await.map_err(|_| ());
+                            send_result.map_err(|()| {
                                 PyOSError::new_err("server response body channel closed")
                             })?;
                             Python::attach(|py| Ok(py.None()))
