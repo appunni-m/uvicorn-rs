@@ -836,6 +836,7 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "",
+          "post_response_settle_seconds": 1,
           "workers": 2
         }
       }
@@ -854,6 +855,7 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "",
+          "post_response_settle_seconds": 1,
           "environment": {
             "UVICORN_WORKERS": "2"
           }
@@ -874,6 +876,7 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "",
+          "post_response_settle_seconds": 1,
           "workers": 2
         }
       }
