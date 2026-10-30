@@ -378,12 +378,20 @@ compatibility acceptance or the start of benchmarks.
 
 ## m8mx — Publish and verify the consolidated release
 
-**Work:** Once zep3, x3az and v5fe qualify, use a valid new version if registry
-state requires it. Recheck the exact source, immutable tag, selected artifacts
-and current registry state, then execute the maintainer-authorized combined
-Cargo/PyPI release. Publish lifecycle before server; use the exact accepted
-wheels/sdist. Use the existing Trusted Publisher environments. Reconcile any
-already-published version by checksum rather than attempting to overwrite it.
+**Work:** Once zep3, x3az and v5fe qualify, recheck the exact source, immutable
+tag, selected artifacts and current registry state. For the 0.2.2 candidate,
+the maintainer requested local Cargo publication before PyPI. The 2026-10-30
+crates.io API snapshot shows both crate names at unyanked 0.2.1, so 0.2.2 is an
+update, not a first publication. From a separate clean checkout of the exact
+accepted tag, compare both `cargo package --locked` archives with the candidate;
+publish `asgi-lifespan-protocol-rs` first, wait for its exact index checksum,
+then publish dependent `uvicorn-rs`. Use a short-lived token restricted to both
+crate names and `publish-update`, entered locally through Cargo; logout and
+revoke it after use. Verify registry checksums and clean consumers, then run
+`release.yml` on `main` with action `pypi` to publish the exact accepted
+wheel/sdist without selecting Cargo publisher jobs. Recheck the registry before
+retrying any upload; never overwrite an existing version. Do not publish while
+any required release gate is open.
 
 **Close with:** Registry versions and bytes match the accepted candidate,
 registry-based Cargo/Python consumers pass, documentation/docs.rs reflects the

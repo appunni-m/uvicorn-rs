@@ -346,12 +346,15 @@ jobs:
           if pypi_selected or inspect_all:
               pypi_absent = check_pypi()
 
-          if cargo_selected and not crate_exists[crate_names[0]]:
+          first_crates = [name for name in crate_names if not crate_exists[name]]
+          if cargo_selected and first_crates:
+              names = ", ".join(first_crates)
               raise SystemExit(
-                  f"{crate_names[0]} is a first crates.io publication. crates.io Trusted Publishing "
-                  "cannot be configured until its initial version is published manually. After the "
-                  "authorized bootstrap and publisher setup, rerun this workflow; it will verify "
-                  "the exact lifecycle checksum before publishing uvicorn-rs."
+                  f"{names} require a first crates.io publication. Trusted Publishing "
+                  "cannot create a crate's initial version. Publish the exact CI-verified "
+                  "crate locally from a clean checkout with a short-lived publish-new "
+                  "token; after registry visibility, rerun this workflow and verify "
+                  "the exact crate checksum before any automated upload."
               )
 
           publish_lifecycle = cargo_selected and crate_absent[crate_names[0]]

@@ -185,12 +185,15 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
     required_bootstrap_checks = (
         "def check_crate_exists(name):",
         'f"https://crates.io/api/v1/crates/{name}"',
-        "if cargo_selected and not crate_exists[crate_names[0]]:",
-        "is a first crates.io publication",
+        "first_crates = [name for name in crate_names if not crate_exists[name]]",
+        "if cargo_selected and first_crates:",
+        "a first crates.io publication",
+        "Trusted Publishing",
+        "publish-new",
     )
     if any(check not in registry_script for check in required_bootstrap_checks):
         raise ValueError(
-            "release.yml must stop before Cargo publication when the lifecycle crate needs its first manual bootstrap"
+            "release.yml must stop before Cargo publication when any crate needs its first manual bootstrap"
         )
 
     def locked_package(lock_name: str, package_name: str, *, editable: bool = False) -> dict:

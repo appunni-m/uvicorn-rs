@@ -30,8 +30,15 @@ lifecycle publisher is already configured; do not add duplicates.
 PR #19 is open and targets `main` at
 **86e72e181d00feca1b4db7f30377d5d9d4345b83**. The branch
 `codex/uvicorn-rs-consolidation` has documentation and parity-diagnostic
-updates after the latest tested revision; those changes have not had a full
-source matrix.
+updates after the latest full-tested code revision. Full current-source
+parity/coverage CI #506 is running against server code commit
+`5a3866e125afdc454c7f61ad94a45669d2e59d82`.
+
+A read-only crates.io API check on 2026-10-30 lists both `uvicorn-rs` 0.2.1 and
+`asgi-lifespan-protocol-rs` 0.2.1 as present and unyanked; version 0.2.2 is not
+yet listed. This is an update release for both existing crate names, not a
+first publication. Recheck exact registry versions and checksums when release
+gates pass.
 
 The latest full-mode CI run is
 [#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350), on
@@ -76,7 +83,7 @@ Focused Linux run
 zero infrastructure failures or not-run cases. It confirmed the active-stream
 server received a three-second timeout and drained successfully; the #501
 failure remains unexplained. No full-source matrix has run on the current
-branch.
+branch as of #502.
 
 Focused Linux run
 [#503](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044156010) on
@@ -95,6 +102,9 @@ or not-run cases. Artifact 12972650846 has SHA-256
 TCP listener now prioritizes a ready shutdown signal over accept; its trace
 supports, but does not conclusively establish, the intermittent-race fix. The
 full matrix is running in CI [#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961).
+Separate docs run [#207](https://github.com/appunni-m/uvicorn-rs/actions/runs/41046155871)
+passed for branch commit `4c92b74328630cc188ddc42c2a474518d6d744b8`; its Pages
+deploy job was correctly skipped because this is not `main`.
 
 The previous full coverage report is CI #489, with 14,033/14,203 regions and
 10,340/10,424 lines; it predates this branch revision. The exact-main report
@@ -245,9 +255,19 @@ publication records. Do not publish separate H3 or Quinn crates. The 0.2.1
 Cargo crates were published manually from a clean source commit. The current
 crates.io settings confirm per-crate Trusted Publisher entries for owner
 `appunni-m`, repository `appunni-m/uvicorn-rs`, workflow `release.yml`, and
-environment `crates-io`. The 0.2.2 path uses the staged `release.yml` OIDC jobs.
-No long-lived Cargo token is needed for that path.
-No release workflow creates or moves a tag.
+environment `crates-io`. For 0.2.2, the maintainer requested local Cargo
+publication before PyPI. After all gates pass, use a separate clean checkout of
+the accepted tag, compare both `cargo package --locked` archives with the
+candidate, publish `asgi-lifespan-protocol-rs` first, wait for its exact checksum
+in the index, and then publish dependent `uvicorn-rs`. Both crate names already
+exist, so use a short-lived, crate-restricted `publish-update` token entered
+locally through Cargo; never put it in chat, logs, history, or repository
+files. Logout and revoke it after both uploads. Verify registry checksums and
+clean consumers, then run `release.yml` on `main` with action `pypi` to publish
+the exact candidate distributions. Do not select Cargo publication in that
+workflow for this release. The workflow blocks Cargo publication if a crate
+name lacks its required initial manual upload; later versions may use the
+configured OIDC publishers. No release workflow creates or moves a tag.
 
 Release direction (2026-10-25): the maintainer authorized a coordinated Cargo
 and PyPI release and specified local Cargo publication first. The 0.2.1 local
@@ -255,10 +275,12 @@ publication was completed on 2026-10-26: `asgi-lifespan-protocol-rs` was
 published before its dependent `uvicorn-rs`, and both registry artifacts were
 verified. PyPI `uvicorn-rs` remains pending. Dirty-source 0.2.2 inspection
 artifacts have been prepared, but no clean current-source candidate has passed
-its release gates. The local workflow offers
+its release gates. The 2026-10-30 registry API check confirms both 0.2.1
+versions remain visible and unyanked, so the requested 0.2.2 local uploads use
+`publish-update`, not a first-publish token. The local workflow offers
 `prepare-only`, `cargo`, `pypi`, and `cargo-and-pypi`; its combined path waits
-for the Cargo publisher jobs before publishing to PyPI. This does not bypass candidate
-gates: release still requires a clean tagged commit on `main`, a successful
+for the Cargo publisher jobs before publishing to PyPI. This does not bypass
+candidate gates: release still requires a clean tagged commit on `main`, a successful
 exact candidate artifact, all required release evidence, configured publisher
 trust, and the typed confirmation.
 
