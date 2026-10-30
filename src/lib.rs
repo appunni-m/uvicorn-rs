@@ -93,16 +93,43 @@ use uvicorn_rs::{
 };
 
 #[cfg(not(coverage))]
-fn write_shutdown_trace(message: fmt::Arguments<'_>) {
+fn shutdown_trace_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
-    if *ENABLED.get_or_init(|| std::env::var_os("UVICORN_RS_SHUTDOWN_TRACE").is_some()) {
-        let line = format!(
-            "uvicorn-rs: shutdown-trace pid={} {message}\n",
-            std::process::id()
-        );
-        let mut stderr = std::io::stderr().lock();
-        let _ = std::io::Write::write_all(&mut stderr, line.as_bytes());
+    *ENABLED.get_or_init(|| std::env::var_os("UVICORN_RS_SHUTDOWN_TRACE").is_some())
+}
+
+#[cfg(not(coverage))]
+fn write_shutdown_trace(message: fmt::Arguments<'_>) {
+    if !shutdown_trace_enabled() {
+        return;
     }
+    let line = format!(
+        "uvicorn-rs: shutdown-trace pid={} {message}\n",
+        std::process::id()
+    );
+    let mut stderr = std::io::stderr().lock();
+    let _ = std::io::Write::write_all(&mut stderr, line.as_bytes());
+}
+
+#[cfg(not(coverage))]
+fn spawn_shutdown_trace_heartbeat(
+    cancellation: CancellationToken,
+) -> Option<tokio::task::JoinHandle<()>> {
+    if !shutdown_trace_enabled() {
+        return None;
+    }
+    Some(tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(250));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let cancelled = cancellation.is_cancelled();
+            write_shutdown_trace(format_args!(
+                "tokio-worker.heartbeat cancelled={cancelled} thread={:?}",
+                std::thread::current().id()
+            ));
+        }
+    }))
 }
 
 #[cfg(not(coverage))]
@@ -8085,6 +8112,8 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             ..uvicorn_rs::ServerConfig::default()
         };
         shutdown_trace!("native-transport-start");
+        #[cfg(not(coverage))]
+        let shutdown_heartbeat = spawn_shutdown_trace_heartbeat(cancellation.clone());
         let result = match listener {
             BoundListener::Tcp(listeners) => {
                 let mut listener_services = Vec::with_capacity(listeners.len());
@@ -8164,6 +8193,11 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                 }
             }
         };
+        #[cfg(not(coverage))]
+        if let Some(heartbeat) = shutdown_heartbeat {
+            heartbeat.abort();
+            let _ = heartbeat.await;
+        }
         if let Err(error) = result {
             match error {
                 uvicorn_rs::ServeError::GracefulShutdownTimedOut => log_error(format_args!(
