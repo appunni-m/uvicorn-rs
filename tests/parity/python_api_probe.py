@@ -1035,6 +1035,12 @@ except KeyboardInterrupt:
         ]
 
     environment = subprocess_environment()
+    if os.environ.get("ASGI_PARITY_TRACE_ORACLE_SIGNAL") == "1":
+        signal_trace_site = str(Path(__file__).parent / "oracle_signal_trace")
+        environment["PYTHONPATH"] = os.pathsep.join(
+            path for path in (signal_trace_site, environment.get("PYTHONPATH")) if path
+        )
+        environment["ASGI_PARITY_TRACE_ORACLE_SIGNAL_ACTIVE"] = "1"
     if request.get("callable_instance"):
         environment["ASGI_PARITY_CALLABLE_INSTANCE"] = "1"
     if request.get("implicit_factory"):

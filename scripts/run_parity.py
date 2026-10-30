@@ -13162,6 +13162,12 @@ def run_python_api_probe(
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
     environment["ASGI_PARITY_SERVER_ID"] = server_id
+    if (
+        os.name == "nt"
+        and server_id == "uvicorn"
+        and os.environ.get("UVICORN_RS_TRACE_ORACLE_SIGNAL") == "1"
+    ):
+        environment["ASGI_PARITY_TRACE_ORACLE_SIGNAL"] = "1"
     source_python_path = str(ROOT / "python")
     target_source_path = (
         source_python_path
@@ -13414,7 +13420,11 @@ def run_python_api_probe(
         if type(run_http_observation) is not dict:
             raise ParityError(f"{case['case_id']}: HTTP API observation must be an object")
         shutdown_trace_output = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE_OUTPUT")
-        if shutdown_trace_output and server_id == "uvicorn-rs":
+        trace_oracle_signal = (
+            server_id == "uvicorn"
+            and os.environ.get("UVICORN_RS_TRACE_ORACLE_SIGNAL") == "1"
+        )
+        if shutdown_trace_output and (server_id == "uvicorn-rs" or trace_oracle_signal):
             encoded_stderr = run_http_observation.get("server_stderr_base64", "")
             try:
                 server_stderr = base64.b64decode(
