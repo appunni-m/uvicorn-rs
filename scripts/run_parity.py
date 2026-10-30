@@ -11137,8 +11137,14 @@ def execute_case(
                 if "response.shutdown.finished" in read_events(server["events"]):
                     raise ParityError("response stream finished before its shutdown release")
                 release_path.touch()
-                exit_code, server_log = stop_server(server, graceful=True, signal_sent=True)
+                # Consume the remaining TLS response while graceful shutdown
+                # is in progress. On Windows, the stock Uvicorn oracle cannot
+                # finish its TLS close handshake if the client waits for the
+                # server process to exit before reading the response body.
+                # That ordering can make this parity probe time out after the
+                # ASGI stream and lifespan have both already completed.
                 stream_body = first_chunk + response.read()
+                exit_code, server_log = stop_server(server, graceful=True, signal_sent=True)
                 state = response_observation(
                     response.status, response.getheaders(), stream_body
                 )
