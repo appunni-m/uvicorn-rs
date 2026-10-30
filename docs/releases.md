@@ -44,11 +44,13 @@ Focused Windows follow-ups passed the six selected worker cases 6/6 in
 the TLS stream-drain case 1/1 in
 [#493](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007521764). Three
 Windows HTTP/3 cases passed in
-[#494](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007991624), but
-that run failed while building the report because the cleanup diagnostic used
-an undefined variable. The diagnostic bug is fixed in the current working
-changes; rerun only those three cases to produce a valid receipt. These focused
-runs are not full parity. The latest full coverage measurement
+[#495](https://github.com/appunni-m/uvicorn-rs/actions/runs/41008650687), but
+the valid report records three cleanup infrastructure errors: two Hypercorn
+log files remained locked after their server processes exited, and the profile
+temp directory then failed to clean up. The current working change asks the
+Hypercorn oracle to shut down gracefully on Windows; rerun only these three
+cases to verify cleanup. These focused runs are not full parity. The latest
+full coverage measurement
 is the earlier `main` report from
 [#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928):
 10,962/11,375 regions and 8,130/8,438 lines. It is not bound to the current

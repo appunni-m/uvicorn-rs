@@ -21,10 +21,11 @@ Windows-only runs passed the six selected worker cases in
 the TLS stream-drain case in
 [#493](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007521764).
 Three selected Windows HTTP/3 cases passed in
-[#494](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007991624), but
-that workflow failed while writing its result because the new diagnostic code
-referenced an undefined variable. The diagnostic fix is in the current working
-changes; those three cases need one focused rerun for a complete receipt.
+[#495](https://github.com/appunni-m/uvicorn-rs/actions/runs/41008650687), but
+the run recorded three Hypercorn log-file cleanup errors (Windows sharing
+violations) after the requests passed. The current working change asks the
+Hypercorn oracle to shut down gracefully on Windows; only those three cases
+need rerunning to verify that cleanup path.
 The latest full coverage measurement is still the earlier `main` report:
 10,962/11,375 regions and 8,130/8,438 lines. It is not a measurement of the
 current branch. Exact-source full coverage, independent Coverage-MCP review,

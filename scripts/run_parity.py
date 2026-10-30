@@ -6318,6 +6318,16 @@ def stop_server(
 ) -> tuple[int | None, str]:
     process: subprocess.Popen = server["process"]
     log = server["log"]
+    # Hypercorn 0.18's asyncio worker handles SIGBREAK as a graceful shutdown
+    # request. On Windows, terminating it directly may leave its H3 log locked
+    # while the QUIC server tasks are being torn down.
+    windows_hypercorn_cleanup = (
+        os.name == "nt"
+        and server.get("id") == "hypercorn"
+        and signal_number is None
+        and not signal_sent
+    )
+    graceful_cleanup = graceful or windows_hypercorn_cleanup
     server.setdefault("forced_kill", False)
     if log.closed:
         log_path = getattr(log, "name", None)
@@ -6332,7 +6342,7 @@ def stop_server(
         return process.returncode, server.get("captured_log", "")[-6000:]
     if process.poll() is None:
         server["harness_stop_requested"] = True
-        if graceful or signal_number is not None:
+        if graceful_cleanup or signal_number is not None:
             server["graceful_signal_requested"] = True
         api_control_path = server.get("api_control_path")
         if api_control_path is not None:
@@ -6346,7 +6356,7 @@ def stop_server(
                     process.send_signal(signal.CTRL_BREAK_EVENT)
                 else:
                     process.send_signal(signal_number)
-            elif graceful:
+            elif graceful_cleanup:
                 if os.name == "nt":
                     process.send_signal(signal.CTRL_BREAK_EVENT)
                 else:
