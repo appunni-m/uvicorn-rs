@@ -5,6 +5,20 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Run the full CI matrix or only selected Windows parity cases
+        required: true
+        type: choice
+        default: full
+        options:
+          - full
+          - focused-windows-parity
+      parity_case_ids:
+        description: Comma-separated case IDs for focused-windows-parity mode (up to 20)
+        required: false
+        type: string
+        default: python-api.module-cli-two-workers-serve-request
 
 permissions:
   contents: read
@@ -34,6 +48,7 @@ env:
 
 jobs:
   release-evidence-contracts:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'focused-windows-parity'
     name: Release artifact and Coverage-MCP handoff contract
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -48,6 +63,7 @@ jobs:
         run: python scripts/test_coverage_mcp_handoff.py
 
   rust:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'focused-windows-parity'
     name: Rust formatting, lints, feature builds and documentation
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -123,6 +139,7 @@ jobs:
           overwrite: true
 
   native-framework-composition:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'focused-windows-parity'
     name: Pinned native FastAPI-RS composition inputs
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -192,6 +209,7 @@ jobs:
             --locked -- "$workspace/uvicorn-rs/examples/native-fastapi-contracts/manifest.json"
 
   msrv:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'focused-windows-parity'
     name: Compile the exact Rust minimum
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -210,6 +228,7 @@ jobs:
             cargo check -p uvicorn-rs --all-targets --features http3 --locked
 
   python-package:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'focused-windows-parity'
     name: Complete public parity on the installed normal wheel
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -416,6 +435,7 @@ jobs:
           overwrite: true
 
   unified-coverage:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'focused-windows-parity'
     name: All parity and fault contracts, 100% native regions and lines
     runs-on: ubuntu-24.04
     timeout-minutes: 150
@@ -502,6 +522,7 @@ jobs:
           overwrite: true
 
   release-candidate:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'focused-windows-parity'
     name: Build and verify ${{ matrix.platform }} package artifacts
     # Platform builds and their installed-wheel parity are independent evidence.
     # Run them beside unified coverage; the candidate/release handoff still
@@ -695,79 +716,7 @@ jobs:
               --offline --require-clean "$@"
           }
           if [ "$RUNNER_OS" = 'Windows' ]; then
-            set +e
             run_platform_parity "${parity_args[@]}"
-            parity_status=$?
-            set -e
-            if [ "$parity_status" -ne 0 ]; then
-              if "$candidate_python" - target/parity-windows-x86_64.json <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-          worker_cases = {
-              "python-api.module-cli-two-workers-serve-request",
-              "python-api.module-cli-two-workers-from-uvicorn-workers-environment",
-              "python-api.module-cli-two-workers-stop-on-sigterm",
-              "python-api.module-cli-web-concurrency-two-workers-serve-request",
-              "python-api.module-cli-explicit-workers-overrides-web-concurrency",
-          }
-          raise SystemExit(
-              0
-              if any(
-                  case.get("case_id") in worker_cases
-                  and case.get("status") in {"failed", "infrastructure_failed"}
-                  for case in report.get("cases", [])
-              )
-              else 1
-          )
-          PY
-              then
-                set +e
-                UVICORN_RS_SHUTDOWN_TRACE=1 "$candidate_python" scripts/run_parity.py \
-                  --oracle-python "$oracle_python" \
-                  --installed-candidate \
-                  --case-id python-api.module-cli-two-workers-serve-request \
-                  --case-id python-api.module-cli-two-workers-from-uvicorn-workers-environment \
-                  --case-id python-api.module-cli-two-workers-stop-on-sigterm \
-                  --case-id python-api.module-cli-web-concurrency-two-workers-serve-request \
-                  --case-id python-api.module-cli-explicit-workers-overrides-web-concurrency \
-                  --output target/windows-worker-shutdown-trace.json
-                trace_status=$?
-                set -e
-                echo "Focused Windows worker shutdown diagnostic exited with status $trace_status"
-              fi
-              if "$candidate_python" - target/parity-windows-x86_64.json <<'PY'
-          import json
-          import sys
-          from pathlib import Path
-
-          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-          tls_drain_case = "lifespan.active-response-stream-drains-on-tls-shutdown"
-          raise SystemExit(
-              0
-              if any(
-                  case.get("case_id") == tls_drain_case
-                  and case.get("status") in {"failed", "infrastructure_failed"}
-                  for case in report.get("cases", [])
-              )
-              else 1
-          )
-          PY
-              then
-                set +e
-                UVICORN_RS_SHUTDOWN_TRACE=1 "$candidate_python" scripts/run_parity.py \
-                  --oracle-python "$oracle_python" \
-                  --installed-candidate \
-                  --case-id lifespan.active-response-stream-drains-on-tls-shutdown \
-                  --output target/windows-lifecycle-tls-shutdown-trace.json
-                trace_status=$?
-                set -e
-                echo "Focused Windows TLS shutdown diagnostic exited with status $trace_status"
-              fi
-              exit "$parity_status"
-            fi
           else
             run_platform_parity
           fi
@@ -777,8 +726,6 @@ jobs:
           name: uvicorn-rs-platform-parity-${{ matrix.platform }}
           path: |
             target/parity-${{ matrix.platform }}.json
-            target/windows-worker-shutdown-trace.json
-            target/windows-lifecycle-tls-shutdown-trace.json
           if-no-files-found: warn
           retention-days: 90
       - name: Build source distribution
@@ -843,6 +790,7 @@ jobs:
           overwrite: true
 
   python-floor:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'focused-windows-parity'
     name: Install abi3 wheel on the declared Python floor
     needs: release-candidate
     runs-on: ubuntu-24.04
@@ -874,3 +822,83 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           overwrite: true
+
+  focused-windows-parity:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'focused-windows-parity'
+    name: Selected Windows parity cases
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed stable action
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Build and run only the selected Windows cases
+        shell: bash
+        env:
+          PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
+          UVICORN_RS_SHUTDOWN_TRACE: "1"
+        run: |
+          set -euo pipefail
+          uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard \
+            --no-install-project --frozen
+          wheel_python="$(uv python find --managed-python "$PYTHON_VERSION")"
+          wheel_python="$(cygpath --unix "$wheel_python")"
+          mkdir -p target/focused-windows/wheels
+          uvx --from "maturin==$MATURIN_VERSION" maturin build --release --locked \
+            --interpreter "$wheel_python" --out target/focused-windows/wheels
+          wheels=(target/focused-windows/wheels/*.whl)
+          test "${#wheels[@]}" -eq 1
+
+          candidate_environment="$RUNNER_TEMP/uvicorn-rs-focused-candidate"
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-focused-oracle"
+          UV_PROJECT_ENVIRONMENT="$candidate_environment" uv sync \
+            --python "$PYTHON_VERSION" --group benchmark --extra standard \
+            --no-install-project --frozen
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync \
+            --python "$PYTHON_VERSION" --only-group benchmark \
+            --only-group uvicorn-oracle --no-install-project --frozen
+
+          candidate_python="$candidate_environment/Scripts/python.exe"
+          oracle_python="$oracle_environment/Scripts/python.exe"
+          uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
+
+          IFS=',' read -r -a case_ids <<< "$PARITY_CASE_IDS"
+          if (( ${#case_ids[@]} == 0 || ${#case_ids[@]} > 20 )); then
+            echo "Select between 1 and 20 case IDs" >&2
+            exit 2
+          fi
+          parity_args=()
+          for case_id in "${case_ids[@]}"; do
+            case_id="${case_id#"${case_id%%[![:space:]]*}"}"
+            case_id="${case_id%"${case_id##*[![:space:]]}"}"
+            if [[ ! "$case_id" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+              echo "Invalid parity case ID: $case_id" >&2
+              exit 2
+            fi
+            parity_args+=(--case-id "$case_id")
+          done
+          mkdir -p target/focused-windows
+          "$candidate_python" scripts/run_parity.py \
+            --oracle-python "$oracle_python" \
+            --installed-candidate \
+            "${parity_args[@]}" \
+            --output target/focused-windows/parity.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: uvicorn-rs-focused-windows-parity
+          path: target/focused-windows/
+          if-no-files-found: error
+          retention-days: 30

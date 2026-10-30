@@ -38,28 +38,27 @@ belong to the release tasks rather than being copied into every prerequisite.
 ## Execution order and stopping rules
 
 1. The latest candidate checks are in CI
-   [#488](https://github.com/appunni-m/uvicorn-rs/actions/runs/40990187513),
-   on PR head `40404ff2890413a7901a073a62e0741231f0d05d` against `main` at
+   [#489](https://github.com/appunni-m/uvicorn-rs/actions/runs/40999924044),
+   on PR head `27733501e05cda09b11ce5b28cc22e51e4c4d1ff` against `main` at
    `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
-   composition, release-evidence handoff, public parity on the normal wheel,
-   Linux x86-64 candidate artifacts/consumers, and macOS ARM64 candidate
-   artifacts/consumers passed. Windows candidate parity failed with three
-   behavioral cases, six infrastructure failure records, and two not-run TLS
-   cases. The Windows artifact traces both workers entering shutdown, but only
-   one completes; a supervisor signal race remains a hypothesis. Do not call
-   this Windows contract complete.
+   composition, release-evidence handoff, normal-wheel public parity, and
+   Linux x86-64 candidate artifacts/consumers passed. macOS ARM64 candidate
+   parity failed only on `python-api.module-cli-serves-wsgi-request`; the input
+   lacked the 0.25 second post-response settle already used by adjacent WSGI
+   cases. That single adjusted case passes locally, but the hosted artifact was
+   built before the adjustment. Windows candidate parity also failed. Its
+   focused trace shows both workers receive and return from native shutdown,
+   while only the request-serving worker observes listener cancellation; the
+   idle worker remains in `listener.accept()`. The causal boundary is narrowed
+   to cancellation/wakeup after the Python request, but the root cause is not
+   confirmed. Hypercorn cleanup errors and the TLS oracle shutdown error are
+   separate infrastructure failures. Do not call cross-platform compatibility
+   complete.
 
-   The three-repeat unified coverage matrix also failed. Its report matches all
-   seven measured Rust source hashes to the PR head, while recording GitHub's
-   synthetic merge revision. Coverage is 14,022/14,193 regions and
-   10,334/10,419 lines; the repeats contain 7, 7, and 8 parity failures. A
-   local selected-coverage change now emits the coverage-only request-body
-   pump marker in one write; the affected H3 peer-close and WSGI upload cases
-   plus their body-pump fault contract pass 12/12. The instrumented HTTP/2
-   reset-after-complete-upload mismatch and uncovered regions remain open.
-   No hosted report or independent review qualifies this follow-up yet. See the
-   [coverage status](../coverage.md#current-unified-coverage-status-2026-10-30).
-   Benchmarks remain after compatibility parity and have not been started.
+   The three-repeat unified coverage matrix is still running in #489. Consume
+   that result once; do not start another full matrix while its required job is
+   active. Benchmarks remain after compatibility parity and have not been
+   started.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions
@@ -420,6 +419,15 @@ Repeat `--case-id` for a related batch. Use `native:<id>` for a native coverage
 case. Selected coverage is debugging evidence; it does not pass the full gate.
 Run the hosted three-repeat job once after the source batch is ready. Do not
 run another full local matrix merely to duplicate the hosted run.
+
+For focused Windows parity, dispatch `.github/workflows/ci.yml` in
+`focused-windows-parity` mode with one or more comma-separated case IDs (up to
+20). It builds and installs the candidate wheel, compares only those cases
+with the isolated Uvicorn oracle, and retains failure-only shutdown traces. Use
+it for Windows-specific fixes before the next full CI batch; its selected
+result is diagnostic evidence and does not replace the full platform matrix
+required for compatibility acceptance. Full mode remains the default for
+manual CI runs.
 
 For a qualified normal benchmark build, follow [benchmark preparation](../benchmarks.md#run-the-complete-comparison-with-one-command-interface):
 build all required binaries first, capture identity, run normal public parity

@@ -4909,6 +4909,10 @@ impl ServerControl {
 
     fn shutdown(&self) {
         self.cancellation.cancel();
+        shutdown_trace!(
+            "server-control.shutdown.cancelled={}",
+            self.cancellation.is_cancelled()
+        );
     }
 
     fn force_shutdown(&self) {
@@ -8041,7 +8045,10 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                         uvicorn_rs::serve_tls_listeners_with_date_header(
                             listener_services,
                             acceptor,
-                            async move { shutdown.cancelled().await },
+                            async move {
+                                shutdown.cancelled().await;
+                                shutdown_trace!("server-shutdown.token-woken transport=tls");
+                            },
                             config,
                             server.date_header,
                         )
@@ -8051,7 +8058,10 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                         let shutdown = cancellation.clone();
                         uvicorn_rs::serve_tcp_listeners_with_date_header(
                             listener_services,
-                            async move { shutdown.cancelled().await },
+                            async move {
+                                shutdown.cancelled().await;
+                                shutdown_trace!("server-shutdown.token-woken transport=tcp");
+                            },
                             config,
                             server.date_header,
                         )

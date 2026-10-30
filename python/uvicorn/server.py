@@ -380,6 +380,7 @@ class Server:
                 raise
 
             if should_exit:
+                write_shutdown_trace("server-main-loop.exit-observed")
                 native_server.shutdown()
 
             if native_task.done():
