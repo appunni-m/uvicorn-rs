@@ -89,6 +89,7 @@ class Process:
         self.config._worker_mode = True
         threading.Thread(target=self.always_pong, daemon=True).start()
         self.server.run(sockets)
+        write_shutdown_trace("worker.server-run.returned")
 
     def is_alive(self, timeout: float = 5) -> bool:
         if not self.process.is_alive():
@@ -240,6 +241,7 @@ class Multiprocess:
         message = f"Stopping parent process [{os.getpid()}]"
         color_message = "Stopping parent process [{}]".format(style(str(os.getpid()), fg="cyan", bold=True))
         logger.info(message, extra={"color_message": color_message})
+        write_shutdown_trace("supervisor.run.returned")
 
     def keep_subprocess_alive(self) -> None:
         if self.should_exit.is_set():

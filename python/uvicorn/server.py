@@ -518,3 +518,4 @@ class Server:
             finally:
                 asyncio.set_event_loop(None)
                 loop.close()
+        write_shutdown_trace("server.run.returned")
