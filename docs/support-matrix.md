@@ -15,22 +15,24 @@ candidate artifacts and downstream consumer checks remain open; see
 ## Current verification status (2026-10-30)
 
 PR #19 is draft and targets `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its latest full run,
-[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064),
-passed Linux and macOS installed-wheel parity at 718/718 cases each. Windows
-reported four failures among 691 cases, so its candidate consumers were
-skipped. Rust quality, MSRV, native FastAPI-RS composition, and release-evidence
-checks passed.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Full CI
+[#524](https://github.com/appunni-m/uvicorn-rs/actions/runs/41087118866) passed
+Linux x86-64 installed-wheel parity at 718/718. macOS ARM64 reported 717/718
+because the parity runner missed the final ASGI trailer-send event in its
+snapshot. Windows x86-64 reported 689/691, with an oracle-only `WinError 10022`
+worker-log difference and a Uvicorn oracle timeout; its candidate consumers
+were skipped. Linux candidate artifact and consumer checks passed; macOS
+candidate parity and consumers and Windows candidate parity and consumers did
+not complete. Rust quality, MSRV, native FastAPI-RS composition,
+release-evidence checks, and docs deployment passed.
 
-The same run completed the three-repeat coverage matrix but missed the 100%
-gate: 14,118/14,243 executable regions and 10,402/10,461 lines. No accepted
-independent Coverage-MCP review exists for a passing report. Focused Windows
-runs [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
+The three-repeat coverage matrix attributed all 1,339 cases but missed the
+100% gate: 14,132/14,252 regions and 10,410/10,465 lines. No accepted
+independent Coverage-MCP review exists. The H2 event observation is fixed in a
+local runner change and its selected case passed 1/1; hosted validation is
+pending. Focused Windows runs [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
 and [#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055)
-passed one worker case each on diagnostic commit `42f9c0f`. Run #523's trace
-records orderly shutdown and exit 0 for both processes in the SIGTERM-labelled
-case. Neither run reproduces the #514 failures or confirms their cause; they do
-not replace the failing full lane or complete worker/process parity.
+passed one worker case each, but do not reproduce or explain the #524 failures.
 
 Full Uvicorn 0.54.0 parity, exact-source 100% coverage and independent review,
 Windows candidate consumers, and clean exact-source artifacts remain open. The
@@ -44,11 +46,11 @@ existing Linux ARM64 HTTP/3 workload is incomplete. See the [parity history](par
 ## Can I replace Uvicorn?
 
 Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
-drop-in replacement today. Run #514 passed Linux and macOS parity but reported
-four Windows failures; selected Windows diagnostics #522 and #523 do not replace
-that full lane. Full current-source parity and coverage, an accepted
-Coverage-MCP review, complete CLI/API/process behavior, and clean candidate
-artifacts remain open. See the
+drop-in replacement today. Run #524 has unresolved macOS event-observation and
+Windows worker parity failures; focused Windows diagnostics #522 and #523 do
+not replace that full lane. Full current-source parity and coverage, an
+accepted Coverage-MCP review, complete CLI/API/process behavior, and clean
+candidate artifacts remain open. See the
 [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
 
 One selected POSIX

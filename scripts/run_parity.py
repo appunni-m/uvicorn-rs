@@ -7786,6 +7786,7 @@ def http2_request(
     *,
     observe_response_extensions: bool = False,
     events_path: Path | None = None,
+    expected_application_events: list[str] | None = None,
 ) -> dict[str, Any]:
     body = base64.b64decode(request["body_base64"], validate=True)
     context = ssl._create_unverified_context()
@@ -7798,6 +7799,7 @@ def http2_request(
     connection = H2Connection(config=H2Configuration(client_side=True, header_encoding="utf-8"))
     connection.initiate_connection()
     tls_socket.sendall(connection.data_to_send())
+    events_before = len(read_events(events_path)) if events_path is not None else 0
     stream_id = connection.get_next_available_stream_id()
     headers = [
         (":method", request["method"]),
@@ -7819,7 +7821,6 @@ def http2_request(
     early_hints: list[dict[str, Any]] = []
     early_hint_before_final_start = False
     response_trailers: list[list[str]] = []
-    events_before = len(read_events(events_path)) if events_path is not None else 0
 
     def observation() -> dict[str, Any]:
         result = response_observation(status, response_headers, bytes(response_body))
@@ -7830,7 +7831,17 @@ def http2_request(
                 "response_trailers": response_trailers,
             })
         if events_path is not None:
-            result["application_events"] = read_events(events_path)[events_before:]
+            application_events = read_events(events_path)[events_before:]
+            if expected_application_events:
+                expected_events = set(expected_application_events)
+                deadline = time.monotonic() + 2
+                while (
+                    not expected_events.issubset(application_events)
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.005)
+                    application_events = read_events(events_path)[events_before:]
+            result["application_events"] = application_events
         return result
 
     try:
@@ -10518,6 +10529,9 @@ def execute_case(
                     "http2.response-trailers-without-te",
                 }
                 else None,
+                expected_application_events=case.get("required_observations", {}).get(
+                    "application_events"
+                ),
             )
             if (
                 fault is not None

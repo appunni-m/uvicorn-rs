@@ -8,22 +8,42 @@
 
 ## Current unified coverage status (2026-10-30)
 
-Full-mode CI
-[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064)
+Full-mode CI [#524](https://github.com/appunni-m/uvicorn-rs/actions/runs/41087118866)
 produced the latest exact-source report for PR #19 head
-`e6064abdaa43fc13f064a026f9c346dc790bed46` (merge ref
-`4c952851fe59795e2d57cadc4a58452c5a036599`). The three-repeat matrix completed
-with passing test outcomes and complete case attribution, but failed the 100%
-coverage gate: **14,118/14,243 executable regions** and **10,402/10,461 lines**.
-Artifact `12985983788` has archive SHA-256
-`4092e9d54f26ea465f87b35d10a38132fc3c4da1b4eb64533f86d0dda7565722`; the
-canonical report SHA-256 is
-`84b1c093fda320c4cad5ec4ccfc5aa0f58cc8472e86c94c534816788988dec5a`.
+`06186c1c64e17fd23ed9fb690a93ed0b1bb00e6d` (merge ref
+`46a7c55ec6fe1d9fc778fb061ac6a197c565210e`). All 1,339 coverage cases were
+attributed, but the three-repeat gate remains below 100%: **14,132/14,252
+executable regions** and **10,410/10,465 lines**. Artifact `12998061379` has
+archive SHA-256
+`83377b0ef945d85b978f2a99b6617e416656913f61afae9074941489bb8244eb`.
 
-The exact report was projected locally to map its uncovered spans. Direct
-Coverage-MCP requests against the large report and its canonical projection
-timed out, so no independent receipt was created. `7t4g` remains open and
-requires the passing clean report before independent review.
+The same run passed Linux x86-64 public parity and the Linux candidate
+artifact/consumer checks. macOS ARM64 parity was 717/718 because the runner
+snapshotted the app-event log before the HTTP/2 final trailer-send event was
+recorded. Windows x86-64 parity was 689/691: one case had an oracle-only
+`WinError 10022` worker-log entry, and another timed out in the Uvicorn oracle
+while the candidate served HTTP 200 and exited 0. macOS and Windows candidate
+consumer jobs were skipped. Rust quality, MSRV, feature builds, native
+FastAPI-RS composition, release-evidence checks, and docs deployment passed.
+
+The parity runner now captures its event baseline before sending the H2
+request and waits up to two seconds for the required app events before taking
+the final observation. The affected case passed 1/1 locally after that change;
+this is selected harness evidence, not hosted validation or a server behavior
+fix. No accepted independent Coverage-MCP receipt exists. `7t4g` remains open.
+
+A diagnostic projection of the same artifact groups the 120 missing regions
+into 37 functions in `src/lib.rs`; the largest groups are the `serve_forever`
+startup/shutdown path (18), `AsgiIo::send` (8), a nested `serve` path (7), and
+`LifespanRuntime::shutdown` (6). The remaining groups include TLS and
+traditional encrypted-key handling, request/body cleanup, WebSocket driving,
+listener setup, and HTTP/3 response handling. Coverage-MCP also reports 56
+line-location groups for the 55 missing lines. A local hash check confirms all
+seven report-context source hashes match files in the PR worktree. The MCP tool
+still labels the projection `source=unverified` because
+its connected checkout is the separate main workspace; this diagnostic map
+is not an accepted independent receipt. Use the exact PR worktree and this
+artifact when selecting the next coverage batch.
 
 A focused local case,
 `python-api.fault.connection-invalid-default-header-source-chain-suppresses-connection-log`,
@@ -38,8 +58,8 @@ instrumented extension SHA-256
 selected result proves only the exercised case and does not replace a clean
 full-source report or the independent review.
 
-The earlier CI #497 and #489 reports below remain historical gap-mapping
-records; they are not current full-gate evidence.
+CI #514 and the earlier CI #497 and #489 reports below remain historical
+gap-mapping records; they are not current full-gate evidence.
 
 ### Prior completed unified coverage result (CI #464)
 

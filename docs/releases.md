@@ -35,25 +35,31 @@ clean exact-source candidate or release tag is qualified.
 
 PR #19 remains a draft against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Full CI
-[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064) ran on
-head `e6064abdaa43fc13f064a026f9c346dc790bed46`. Rust quality, MSRV, native
-FastAPI-RS composition, and release-evidence checks passed. Linux and macOS
-installed-wheel parity passed 718/718 cases each; Windows reported four
-failures among 691 cases and skipped its candidate consumer checks. Linux and
-macOS candidate artifacts and consumers passed.
+[#524](https://github.com/appunni-m/uvicorn-rs/actions/runs/41087118866) ran on
+head `06186c1c64e17fd23ed9fb690a93ed0b1bb00e6d` (merge ref
+`46a7c55ec6fe1d9fc778fb061ac6a197c565210e`). Rust quality, MSRV, feature
+builds, native FastAPI-RS composition, release-evidence checks, and docs
+deployment passed. Linux x86-64 public parity passed 718/718, and its candidate
+artifact and clean consumers passed. macOS ARM64 parity was 717/718 because an
+immediate event snapshot missed the final ASGI trailer-send event. Windows
+x86-64 parity was 689/691: one Uvicorn oracle logged a worker `WinError 10022`
+that the candidate did not, and another Uvicorn oracle timed out while the
+candidate served HTTP 200 and exited 0. macOS and Windows candidate consumer
+checks were skipped.
 
-The three-repeat unified coverage matrix completed but failed its 100% gate at
-14,118/14,243 regions and 10,402/10,461 lines. No accepted independent
-Coverage-MCP review exists for a passing report. Focused Windows diagnostics
+The three-repeat unified coverage matrix attributed all 1,339 cases but failed
+its 100% gate at 14,132/14,252 regions and 10,410/10,465 lines. The artifact is
+`12998061379` (archive SHA-256
+`83377b0ef945d85b978f2a99b6617e416656913f61afae9074941489bb8244eb`). No
+accepted independent Coverage-MCP review exists for a passing report. The
+affected H2 app-event case passes 1/1 locally after a runner synchronization
+change; this selected result awaits hosted validation. Focused Windows runs
 [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) and
 [#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055) each
-passed one worker case on diagnostic commit `42f9c0f`. Run #523's SIGTERM-labelled
-case exited 0 without timing out and its trace records orderly worker shutdown.
-Neither selected pass reproduces or resolves the intermittent #514 failures,
-confirms their cause, or replaces the full Windows lane.
+passed one worker case, but do not reproduce or explain the #524 failures.
 
-No current-source candidate bundle is ready. Exact-source coverage and
-independent review, complete compatibility, full Windows candidate consumers,
+No current-source candidate bundle is ready. Exact-source 100% coverage and
+independent review, complete compatibility, macOS/Windows candidate consumers,
 and clean Cargo/PyPI artifact checks remain open. The previous benchmark matrix
 is incomplete on Linux ARM64 and does not establish a broad Python FastAPI
 speed gain. Per the parity-first plan, do not start a new benchmark matrix

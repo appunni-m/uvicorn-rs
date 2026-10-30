@@ -37,21 +37,34 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Current receipts — 2026-10-30 (full PR run #514 and Windows diagnostics #522–#523)
+### Current receipts — 2026-10-30 (full PR run #524; diagnostics #522–#523)
 
 PR #19 remains draft/open against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its head is
-`e6064abdaa43fc13f064a026f9c346dc790bed46`; full CI #514 used merge ref
-`4c952851fe59795e2d57cadc4a58452c5a036599`.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Full CI
+[#524](https://github.com/appunni-m/uvicorn-rs/actions/runs/41087118866) ran on
+head `06186c1c64e17fd23ed9fb690a93ed0b1bb00e6d`, merge ref
+`46a7c55ec6fe1d9fc778fb061ac6a197c565210e`.
 
-Full-mode CI [#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064)
-passed Linux and macOS installed-wheel parity at 718/718 cases each. Windows
-reported four failures among 691 cases, and the Windows candidate consumer
-steps were skipped. Linux and macOS candidate artifacts/consumers, Rust
-quality, MSRV, native FastAPI-RS composition, and release-evidence checks
-passed. The three-repeat coverage matrix completed with passing case outcomes
-and complete attribution, but the gate failed at 14,118/14,243 regions and
-10,402/10,461 lines. Independent Coverage-MCP review remains open.
+Linux installed-wheel parity passed 718/718; its exact candidate artifact and
+consumer checks passed. macOS parity was 717/718 because the runner's immediate
+snapshot missed the ASGI final trailer-send event. Windows parity was 689/691:
+one case differed only by an oracle worker `WinError 10022` log, and another
+timed out in the Uvicorn oracle while the candidate served HTTP 200 and exited
+0. macOS and Windows candidate consumers were skipped. Rust formatting/lints,
+feature builds, Rust docs/no-Python checks, MSRV, release-evidence contracts,
+native FastAPI-RS composition, and the separate docs deployment passed.
+
+The three-repeat coverage matrix attributed all 1,339 cases but failed at
+14,132/14,252 regions and 10,410/10,465 lines. Artifact `12998061379` has
+archive SHA-256
+`83377b0ef945d85b978f2a99b6617e416656913f61afae9074941489bb8244eb`.
+Independent Coverage-MCP review remains open.
+
+The local H2 parity runner captures the event baseline before request
+submission and waits up to two seconds for case-required app events before its
+final snapshot. `http2.response-trailers-without-te` passed 1/1 locally after
+this harness change. This is selected evidence only; no hosted result yet
+validates it and it does not alter server behavior.
 
 Focused Windows run [#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177)
 passed `python-api.module-cli-explicit-workers-overrides-web-concurrency`
@@ -62,9 +75,9 @@ listener drains completing. Separate focused run
 `python-api.module-cli-two-workers-stop-on-sigterm` 1/1 on the same diagnostic
 head. Its trace records both processes receiving signal 21 (SIGBREAK), workers
 draining, and both processes exiting 0 without a timeout; artifact ID
-`12992306054`. The #514 timeout did not reproduce in either selected run. The
-cause remains unconfirmed, and these runs are not a full Windows pass or runtime
-fix.
+`12992306054`. Those selected cases do not reproduce or explain either #524
+Windows failure. The cause remains unconfirmed; these runs are not a full
+Windows pass or runtime fix.
 
 The active local coverage batch in `/tmp/uvicorn-rs-coverage-batch` adds
 expected Debug/Display output checks to the existing coverage-only
