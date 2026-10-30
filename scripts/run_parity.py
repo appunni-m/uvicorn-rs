@@ -6323,6 +6323,8 @@ def stop_server(
         log_path = getattr(log, "name", None)
         if isinstance(log_path, (str, os.PathLike)):
             cleanup_error = unlink_server_log(Path(log_path))
+            server["process_exit_code"] = process.returncode
+            server["process_alive_after_stop"] = process.poll() is None
             if cleanup_error is None:
                 server.pop("log_cleanup_error", None)
             else:
@@ -6363,6 +6365,8 @@ def stop_server(
     # Preserve diagnostics even if Windows still has a short-lived reader or
     # subprocess handle when the profile tries to remove its temporary logs.
     server["captured_log"] = text
+    server["process_exit_code"] = process.returncode
+    server["process_alive_after_stop"] = process.poll() is None
     log_path = getattr(log, "name", None)
     if isinstance(log_path, (str, os.PathLike)):
         cleanup_error = unlink_server_log(Path(log_path))
@@ -14398,6 +14402,16 @@ def execute_profile(
                         ],
                         "attempted_case_count": len(
                             server.get("attempted_cases", [])
+                        ),
+                        "process_exit_code": server.get("process_exit_code"),
+                        "process_alive_after_stop": server.get(
+                            "process_alive_after_stop"
+                        ),
+                        "forced_kill": server.get("forced_kill", False),
+                        "log_path_exists": (
+                            Path(log.name).exists()
+                            if isinstance(log.name, (str, os.PathLike))
+                            else None
                         ),
                         "kind": "server_log_cleanup_failure",
                         "diagnostic": server["log_cleanup_error"][-1000:],
