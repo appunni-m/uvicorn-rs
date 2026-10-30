@@ -14392,6 +14392,7 @@ def execute_profile(
                     continue
                 captured_log = server.get("captured_log", logs)
                 if server.get("log_cleanup_error"):
+                    log_path = getattr(server.get("log"), "name", None)
                     infrastructure_errors.append({
                         "profile": profile["id"],
                         "server": server["id"],
@@ -14408,11 +14409,9 @@ def execute_profile(
                             "process_alive_after_stop"
                         ),
                         "forced_kill": server.get("forced_kill", False),
-                        "log_path_exists": (
-                            Path(log.name).exists()
-                            if isinstance(log.name, (str, os.PathLike))
-                            else None
-                        ),
+                        "log_path_exists": Path(log_path).exists()
+                        if isinstance(log_path, (str, os.PathLike))
+                        else None,
                         "kind": "server_log_cleanup_failure",
                         "diagnostic": server["log_cleanup_error"][-1000:],
                     })

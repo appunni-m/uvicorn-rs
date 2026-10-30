@@ -8,24 +8,29 @@ The release target is a Python-free `uvicorn-rs` server crate with HTTP/3
 behind `http3`, the separate `asgi-lifespan-protocol-rs` crate, and the PyPI
 distribution `uvicorn-rs`. The optional `uvicorn-rs-py` package remains the
 internal Cargo/PyO3 adapter. The publisher is `.github/workflows/release.yml`;
-`.github/workflows/candidate.yml` verifies candidates. No package or tag has
-been published from this consolidated source. See
-[release status](docs/releases.md).
+`.github/workflows/candidate.yml` verifies candidates. As of 2026-10-30,
+crates.io serves `uvicorn-rs` 0.2.1 and `asgi-lifespan-protocol-rs` 0.2.1;
+PyPI has no `uvicorn-rs` release. The current 0.2.2 source has no clean,
+exact-source candidate or release tag yet. See [release status](docs/releases.md).
 
-The latest completed candidate checks are from CI
-[#488](https://github.com/appunni-m/uvicorn-rs/actions/runs/40990187513)
-on PR head `40404ff2890413a7901a073a62e0741231f0d05d`, against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
-composition, normal-wheel parity, Linux x86-64 candidate artifacts/consumers,
-and macOS ARM64 candidate artifacts/consumers passed. Windows parity failed
-three behavioral cases, recorded six infrastructure failure records, and left
-two TLS cases unrun. The unified coverage gate also failed at 14,022/14,193
-regions and 10,334/10,419 lines. The follow-up fixes coverage-only log
-interleaving for the H3 peer-close and WSGI upload inputs; its selected local
-coverage check passed 12/12. Full coverage, the instrumented HTTP/2 disconnect
-case, Windows worker shutdown, independent Coverage-MCP review, and complete
-compatibility remain open. Matched benchmarks follow parity. See
-[coverage evidence](docs/coverage.md), [parity evidence](docs/parity.md), and
+The latest full candidate/parity run, CI
+[#489](https://github.com/appunni-m/uvicorn-rs/actions/runs/40999924044),
+used an older source commit and did not pass all parity cases. Follow-up
+Windows-only runs passed the six selected worker cases in
+[#492](https://github.com/appunni-m/uvicorn-rs/actions/runs/41006402856) and
+the TLS stream-drain case in
+[#493](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007521764).
+Three selected Windows HTTP/3 cases passed in
+[#494](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007991624), but
+that workflow failed while writing its result because the new diagnostic code
+referenced an undefined variable. The diagnostic fix is in the current working
+changes; those three cases need one focused rerun for a complete receipt.
+The latest full coverage measurement is still the earlier `main` report:
+10,962/11,375 regions and 8,130/8,438 lines. It is not a measurement of the
+current branch. Exact-source full coverage, independent Coverage-MCP review,
+complete compatibility, candidate artifacts and consumers, and parity-first
+benchmarks remain open. See [coverage evidence](docs/coverage.md),
+[parity evidence](docs/parity.md), and
 [replacement status](docs/uvicorn-compatibility.md).
 
 The Python adapter is **not yet a drop-in Uvicorn replacement**. If your

@@ -14,29 +14,31 @@ candidate artifacts and downstream consumer checks remain open; see
 
 ## Current verification status (2026-10-30)
 
-PR #19 remains a draft. The latest candidate checks are from CI
-[#486](https://github.com/appunni-m/uvicorn-rs/actions/runs/40982217403),
-which tested prior head `8d64ab95c5ec756e47459061fa6d5e73491397b5` against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Linux installed-wheel parity
-passed 718/718, and macOS ARM64 candidate parity passed 718/718. Rust
-quality/MSRV, native composition, and release-evidence handoff passed. Linux
-candidate wheel/sdist, consumer checks, and Python-free Cargo package checks
-passed.
+PR #19 remains a draft. The latest completed full candidate/parity run is CI
+[#489](https://github.com/appunni-m/uvicorn-rs/actions/runs/40999924044),
+from older commit `27733501e05cda09b11ce5b28cc22e51e4c4d1ff`. Linux candidate,
+composition, Rust quality, and MSRV jobs passed. macOS parity had one WSGI
+module-CLI log-event failure. Windows parity passed 682 cases, failed six
+multi-worker shutdown cases, recorded six infrastructure errors, and left two
+TLS cases unrun. These results are not a complete run of the current branch.
 
-Windows candidate parity was incomplete: 684/689 executed cases passed, with
-four worker failures, six infrastructure failures, and two not-run cases. A
-focused trace showed a worker's first stop signal without native shutdown
-progress, then a later signal reaching the native shutdown call while the Rust
-listener was still waiting in accept. The TLS shutdown diagnostic failed in
-the Uvicorn oracle. The Windows consumer lane did not complete.
-
-Commit `93d1d6c39b696a0c5dbb386e0ed91f05ad44e615` adds the shutdown-order fix;
-commit `e8157fe61` adds parity trace normalization. Two selected multi-worker
-cases pass locally on macOS ARM64; this is not Windows evidence. Exact-source
-coverage, independent Coverage-MCP acceptance, full Windows parity, complete
+Focused Windows follow-ups on later commits passed the six worker cases 6/6 in
+[#492](https://github.com/appunni-m/uvicorn-rs/actions/runs/41006402856) and
+the TLS stream-drain shutdown case 1/1 in
+[#493](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007521764). The
+three HTTP/3 cases passed in
+[#494](https://github.com/appunni-m/uvicorn-rs/actions/runs/41007991624), but
+that run failed afterward because the new cleanup diagnostic referenced an
+undefined variable while building the report. The diagnostic bug is fixed in
+the current working changes; rerun only these three cases to produce a valid
+receipt. This is not full Windows parity.
+The latest full coverage measurement is the older `main` report from run
+[#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928):
+10,962/11,375 regions and 8,130/8,438 lines. It is not bound to this branch.
+Exact-source full coverage, independent Coverage-MCP acceptance, complete
 Uvicorn compatibility, and clean cross-platform candidate receipts remain
-open. The hosted results above are bound to the prior source. Benchmarks stay
-behind parity acceptance. See the [full parity history](parity.md).
+open. Benchmarks stay behind parity acceptance. See the
+[full parity history](parity.md).
 
 These results do not establish the complete Uvicorn contract or release
 support. The declared Python 3.9 wheel-install job was skipped after the
@@ -100,14 +102,12 @@ directory watching remains covered separately. See the
 ## Can I replace Uvicorn?
 
 Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
-drop-in replacement today. The latest candidate checks in CI #486 passed Linux
-installed-wheel parity and macOS candidate parity 718/718 each. Windows parity
-is incomplete (684/689 executed cases passed, with worker and infrastructure
-failures); its TLS shutdown diagnostic failed in the Uvicorn oracle. The latest
-completed coverage report remains the prior-source #479 report at
-13,985/14,164 regions and 10,305/10,392 lines. No accepted Coverage-MCP review
-is available. Full CLI, Python API, process and cross-platform acceptance
-remain open. See the [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
+drop-in replacement today. The latest full candidate/parity run is from an
+older commit and has unresolved macOS and Windows failures; later focused
+Windows passes cover only selected cases. Full current-source parity and
+coverage, an accepted Coverage-MCP review, complete CLI/API/process behavior,
+and clean candidate artifacts remain open. See the
+[maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
 
 One selected POSIX
 case verifies replacement after a worker stops answering health checks. A
