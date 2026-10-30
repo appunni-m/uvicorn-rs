@@ -42,6 +42,22 @@ zero infrastructure failures or not-run cases. Its trace confirms the expected
 one-second cancellation timeout and three-second active-stream timeout; the
 active connection finished successfully and the listener drain completed. This
 pass does not explain the earlier failure or replace a full-source matrix.
+Focused Linux run
+[#503](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044156010) on
+`98c90076748337ec2ef3f34a49b94bffd5ffcd22` passed the two strict HTTP/1
+response-header cases and the strict HTTP/2 ordered-header case 3/3, with zero
+failures, infrastructure failures, or not-run cases. Artifact 12970969486 has
+SHA-256
+`c615fb7d703361f36d378a4b3ce37f204b85dd09ec6917cfac5771c3e270ee99`. This
+confirms these selected inputs on the exact candidate source, not the full
+protocol matrix; HTTP/3 raw wire order remains unverified.
+Focused Linux run
+[#504](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044728003) on
+the same source passed the uncompressed and per-message-deflate fragmented
+WebSocket text cases 2/2, with no failed, infrastructure-failed, or not-run
+cases. Artifact 12972595056 has SHA-256
+`c55dc16bd056f7cdc29b074828e13ea5bb74319a189c57a64383e1a4b3f35350`.
+This confirms those two input contracts only.
 Exact-source full coverage, independent Coverage-MCP review, complete
 compatibility, candidate artifacts and consumers, and parity-first benchmarks
 remain open.

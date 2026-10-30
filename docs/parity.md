@@ -55,6 +55,18 @@ for the active-stream case; the active connection finished `Ok(())` and the
 drain completed. This does not identify why #501 failed. The targeted Linux
 result is still not complete platform parity.
 
+Focused Linux run
+[#503](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044156010) on
+`98c90076748337ec2ef3f34a49b94bffd5ffcd22` selected
+`http1.response-headers-preserve-duplicate-value-order`,
+`http1.header-policy-custom-header-and-disabled-defaults`, and
+`http2.response-headers-preserve-asgi-order`. All 3 selected cases executed
+and passed, with zero failed, infrastructure-failed, or not-run cases. Artifact
+12970969486 has SHA-256
+`c615fb7d703361f36d378a4b3ce37f204b85dd09ec6917cfac5771c3e270ee99`.
+This is exact-source hosted confirmation for these strict-order inputs; it
+does not establish the full H1/H2 response-header matrix or H3 raw wire order.
+
 Complete Uvicorn compatibility, current-source full platform parity, 100%
 coverage, independent Coverage-MCP review, and clean cross-platform candidate
 artifacts remain open. Benchmark work stays behind compatibility acceptance.
@@ -109,6 +121,13 @@ fixture and runner SHA-256 values are
 `3dd858f128dc2a6e22b5bf9486bee0ed166c3009883d61a6acfbfa87e4f43b23`.
 This is focused local evidence; cross-platform hosted acceptance, other
 compression extension parameters, and broader backend behavior remain open.
+Hosted Linux CI [#504](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044728003)
+on exact source `98c90076748337ec2ef3f34a49b94bffd5ffcd22` selected both inputs
+and passed 2/2, with zero failed, infrastructure-failed, or not-run cases.
+Artifact 12972595056 has SHA-256
+`c55dc16bd056f7cdc29b074828e13ea5bb74319a189c57a64383e1a4b3f35350`. This
+promotes the two cases to exact-source hosted evidence; other compression
+parameters, cross-platform behavior, and broader backend behavior remain open.
 
 The compressed case passed in selected run
 `da2487e44182437fbf56e5db536cff78`; receipt
@@ -2344,8 +2363,9 @@ ASGI HTTP 2.5 response-start contract is stricter and requires preserving the
 application order. See [RFC 9110 §5.3](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.3),
 the [ASGI HTTP specification](https://asgi.readthedocs.io/en/latest/specs/www.html),
 and the [support matrix](support-matrix.md#supported-behaviors). Per-run
-receipts are local ignored artifacts. The H2 receipt needs hosted exact-source
-confirmation.
+receipts are local ignored artifacts. The H2 case has hosted exact-source
+confirmation in [focused Linux run #503](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044156010);
+the full H1/H2 response-header matrix and H3 raw wire order remain unverified.
 For this operation, manifest `observe` retains the wire order and its optional
 `compare` list selects the normalized fields used for parity; other operations
 compare every observed field by default. The offline CI evidence checker uses

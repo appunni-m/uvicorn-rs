@@ -3194,12 +3194,16 @@ async fn next_listener_event(
     connections: &mut JoinSet<Result<(), ConnectionError>>,
     shutdown: &mut BoxedShutdownFuture<'_>,
 ) -> Result<ListenerEvent, ServeError> {
+    // A TLS readiness probe can race shutdown. Give the signal priority over
+    // connection-slot acquisition and accept so no new connection is admitted
+    // once shutdown is ready.
     loop {
         shutdown_trace!(
             "listener.next-event.wait stage=connection-slot active_connections={}",
             connections.len()
         );
         let slot = tokio::select! {
+            biased;
             _ = shutdown.as_mut() => {
                 shutdown_trace!("listener.next-event.shutdown stage=connection-slot");
                 return Ok(ListenerEvent::Shutdown);
@@ -3219,6 +3223,7 @@ async fn next_listener_event(
                 connections.len()
             );
             tokio::select! {
+                biased;
                 _ = shutdown.as_mut() => {
                     shutdown_trace!("listener.next-event.shutdown stage=accept");
                     return Ok(ListenerEvent::Shutdown);

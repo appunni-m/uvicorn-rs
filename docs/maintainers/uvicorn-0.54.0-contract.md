@@ -883,9 +883,12 @@ CPython 3.12.13 / Rust 1.98.1 (receipt SHA-256
 observed close code 1000 with reason `queue drained`. This checks one queue
 setting and delayed-reader path. The native bound counts
 complete ASGI messages, while upstream `websockets` applies its high-water
-mark to frames. Separate raw-frame inputs now verify one uncompressed and one
-per-message-deflate compressed fragmented text message against the oracle;
-their selected local results are in [parity results](../parity.md#focused-fragmented-websocket-text-message-parity-2026-10-28).
+mark to frames. Separate raw-frame inputs verify one uncompressed and one
+per-message-deflate compressed fragmented text message against the oracle.
+Hosted Linux CI [#504](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044728003)
+on exact source `98c90076748337ec2ef3f34a49b94bffd5ffcd22` passed both inputs
+2/2 with zero failures, infrastructure failures, or not-run cases; see [parity
+results](../parity.md#focused-fragmented-websocket-text-message-parity-2026-10-28).
 Fragmentation under queue pressure, other queue thresholds, and flow-control
 timing remain unverified. The Python API inputs also
 include `python-api.run-loads-env-file-before-factory`, which
@@ -1221,9 +1224,15 @@ runtime source identity `d4a24fb5874abc0d7529a5ce89e855081acf9bf13c3bb867c0e12ab
 includes the vendored H2 source; native extension SHA-256
 `0966e3dfa1b0a7e9e266311e1a7d5f4d76f3ec56e3e002607634b0d1f81a6e6f`.
 The source was dirty at revision `659e7f18cc7b1dcf5eb83b1310b41d2f6bb3192f`.
-This is focused local evidence only; the exact-source hosted matrix remains
-pending. Other H2 response cases use the normalized comparison, and H3 raw
-wire order remains unverified.
+This is focused local evidence only; the full exact-source hosted matrix
+remains pending. Hosted Linux CI [#503](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044156010)
+on exact source `98c90076748337ec2ef3f34a49b94bffd5ffcd22` selected this H2
+case together with the two strict H1 response-header cases; all three passed
+with zero failed, infrastructure-failed, or not-run cases. Artifact 12970969486
+has SHA-256
+`c615fb7d703361f36d378a4b3ce37f204b85dd09ec6917cfac5771c3e270ee99`. This
+confirms only those selected inputs: other H2 response cases use the normalized
+comparison, and H3 raw wire order remains unverified.
 
 A local abi3 wheel built from that dirty source passed the isolated
 `scripts/check_replacement_install.py` smoke: clean install exposes the
@@ -1484,8 +1493,9 @@ dirty-source SHA-256 is
 `503c0558a1f9c1df86ff9f82ce8c908b0045d74535a5198fe4d1f56da5389df9`.
 This historical receipt verifies one compressed text exchange and normal
 closure; other extension parameters and broad backend compatibility remain
-open. A later selected raw-frame comparison verifies one `permessage-deflate`
-fragmented text message on a dirty local source; see [current parity evidence](../parity.md#focused-fragmented-websocket-text-message-parity-2026-10-28).
+open. Hosted exact-source Linux CI [#504](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044728003)
+passes one uncompressed and one `permessage-deflate` fragmented text message
+2/2; see [current parity evidence](../parity.md#focused-fragmented-websocket-text-message-parity-2026-10-28).
 The subsequent `rustfmt` pass changed layout only; current Rust
 source SHA-256 is `b1baa699fdc0b1a385d3be0e4149bb8d45fdb3294f646c9e919db913389e6836`.
 The formatted source passes `cargo check -p uvicorn-rs-py`; parity was not rerun

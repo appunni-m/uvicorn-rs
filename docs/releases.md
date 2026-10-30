@@ -78,6 +78,14 @@ server received a three-second timeout and drained successfully; the #501
 failure remains unexplained. No full-source matrix has run on the current
 branch.
 
+Focused Linux run
+[#503](https://github.com/appunni-m/uvicorn-rs/actions/runs/41044156010) on
+`98c90076748337ec2ef3f34a49b94bffd5ffcd22` passed the selected strict H1
+header cases and the strict H2 ordered-header case 3/3 (zero failed,
+infrastructure-failed, or not-run cases). Artifact 12970969486 has SHA-256
+`c615fb7d703361f36d378a4b3ce37f204b85dd09ec6917cfac5771c3e270ee99`. This
+does not replace the installed-wheel full matrix.
+
 The previous full coverage report is CI #489, with 14,033/14,203 regions and
 10,340/10,424 lines; it predates this branch revision. The exact-main report
 from [#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)
