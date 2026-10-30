@@ -15,8 +15,9 @@ published.
 
 PR #19 is draft and targets `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
-completed on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`. Linux installed-
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran
+on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`; the overall workflow
+conclusion was cancelled. Linux installed-
 wheel parity passed 718/718. Windows candidate parity failed 688/691 with zero
 infrastructure failures; macOS candidate verification was cancelled. The
 three-repeat coverage gate missed 100% at 14,137/14,252 regions and
@@ -27,9 +28,12 @@ remain open.
 The Windows failures are `module-cli-two-workers-stop-on-sigterm`,
 `module-cli-web-concurrency-two-workers-serve-request`, and
 `module-cli-explicit-workers-overrides-web-concurrency`. Every case served HTTP
-200. Differences are in process timeouts/exits and worker shutdown log counts;
-the signal ordering and root cause remain unconfirmed. An opt-in oracle signal
-trace has been committed locally but not yet run. The Python 3.9 consumer check
+200. Focused Windows run [#530](https://github.com/appunni-m/uvicorn-rs/actions/runs/41137831335)
+passed these three cases (3/3) on head `158b82b4e0364f439f2390a694bbd53e0849f03c`
+with shutdown tracing enabled. Oracle and candidate exited 0 without timing
+out and produced matching normalized shutdown events. Artifact `13016614526`
+has SHA-256 `d8497ab002d4199ec58c4b873ef7569e7bfe3348c8c92284603df812fcbd1bd3`.
+The full Windows matrix and root-cause explanation remain open. The Python 3.9 consumer check
 was skipped in #528. Uvicorn 0.54.0 declares Python `>=3.10` in its [versioned project
 metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml), so
 parity against that oracle starts at Python 3.10; the Python 3.9 wheel-install

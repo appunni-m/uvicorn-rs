@@ -16,8 +16,9 @@ See [release status](docs/releases.md).
 
 PR #19 is still a draft against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
-completed on PR head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`. Linux
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran on
+PR head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` and ended with a cancelled
+workflow conclusion. Linux
 installed-wheel parity passed 718/718, and the Linux 0.2.2 candidate artifact
 and clean consumers passed (artifact `13012012115`, SHA-256
 `656ad0235e3ac25f1680966992e318dd6ce8cc8e0ba4011e242a6743ed13235`). Windows
@@ -27,13 +28,17 @@ checks were cancelled. The three-repeat coverage gate remains below 100% at
 14,137/14,252 regions and 10,411/10,465 lines across 1,340 attributed cases.
 Rust quality, MSRV, release-evidence checks, native
 FastAPI-RS composition, and docs deployment #215 passed for head `8a17d98`.
-The latest docs refresh still needs a documentation build and deployment.
+The latest docs refresh passes the strict local documentation build; deployment
+for the refreshed pages is pending.
 
-All three Windows failures served HTTP 200. Their differences are in process
-timeouts/exits and worker shutdown log counts; the signal ordering and root
-cause remain unconfirmed. A focused oracle signal trace is committed locally
-and will cover only the three failing inputs; it does
-not change the parity expectations.
+Focused Windows run [#530](https://github.com/appunni-m/uvicorn-rs/actions/runs/41137831335)
+on head `158b82b4e0364f439f2390a694bbd53e0849f03c` passed all three previously
+failing cases with tracing enabled. Oracle and candidate both returned HTTP
+200, exited 0 without timing out, and produced matching normalized shutdown
+events. Artifact `13016614526` has SHA-256
+`d8497ab002d4199ec58c4b873ef7569e7bfe3348c8c92284603df812fcbd1bd3`. This
+focused result does not replace a full Windows matrix receipt or establish why
+the earlier full run differed.
 
 The Python package is **not yet a drop-in Uvicorn replacement**. Keep using
 upstream Uvicorn if your application relies on the full Uvicorn command-line,

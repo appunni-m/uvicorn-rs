@@ -6,9 +6,11 @@
 
 PR #19 is draft and targets `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
-completed on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` with merge ref
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran on
+head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` with merge ref
 `10929063e0dfb420d6ebb7210922ad805528039d`.
+The workflow conclusion is cancelled; its completed job results are listed
+below.
 
 Linux installed-wheel public parity passed 718/718. The Linux 0.2.2 candidate
 artifact and clean consumers passed (artifact `13012012115`, SHA-256
@@ -18,8 +20,17 @@ infrastructure failures. Its artifact is `13012838178`, SHA-256
 `ab0a3f293329a4cbdbcf2c4be47e9bee4bcee4af9a0ec6975712e0b75144b962`. macOS
 candidate verification was cancelled. Rust quality, MSRV, release-evidence
 checks, and native FastAPI-RS composition passed. Docs deployment #215 passed
-for the earlier 8a17d98 head; this status refresh still needs a documentation
-build and deployment.
+for the earlier 8a17d98 head; the refreshed pages pass a strict local build and
+still need deployment.
+
+Focused Windows run [#530](https://github.com/appunni-m/uvicorn-rs/actions/runs/41137831335)
+on head `158b82b4e0364f439f2390a694bbd53e0849f03c` passed those same three
+cases (3/3, no infrastructure failures) with shutdown tracing enabled. Oracle
+and candidate both returned HTTP 200, exited 0 without timing out, and had
+matching normalized shutdown events. Artifact `13016614526` has SHA-256
+`d8497ab002d4199ec58c4b873ef7569e7bfe3348c8c92284603df812fcbd1bd3`. This is
+focused evidence only; the full Windows matrix and trace-based root-cause
+explanation remain open.
 
 The three Windows failures are
 `python-api.module-cli-two-workers-stop-on-sigterm`,
@@ -27,8 +38,10 @@ The three Windows failures are
 `python-api.module-cli-explicit-workers-overrides-web-concurrency`. All cases
 served HTTP 200. The mismatches involve process timeouts/exits and worker
 shutdown log counts; observed event ordering and root cause remain unconfirmed.
-Commit `13a4ccbd3f70adfd53e690cc418607e7326f681b` adds an opt-in oracle signal
-trace for a focused Windows run, but it is local and not yet validated.
+Commit `13a4ccbd3f70adfd53e690cc418607e7326f681b` adds an opt-in Uvicorn
+oracle signal trace. Focused run #530 passed all three cases; its artifact
+records the trace and matching candidate/oracle shutdown behavior. A full
+Windows matrix receipt is still required.
 
 The three-repeat coverage job measured 14,137/14,252 regions and 10,411/10,465
 lines across 1,340 attributed cases; no accepted independent Coverage-MCP

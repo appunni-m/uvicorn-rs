@@ -37,13 +37,17 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Current receipts — 2026-10-30 (full PR run #528)
+### Current receipts — 2026-10-31 (PR run #528; overall conclusion cancelled)
 
 PR #19 remains draft/open against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Full CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
-completed on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`, merge ref
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran on
+head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`, merge ref
 `10929063e0dfb420d6ebb7210922ad805528039d`.
+
+The overall workflow conclusion is cancelled. Individual completed job
+receipts below are recorded by their own result; a successful sub-job does not
+turn the workflow into a passing CI run.
 
 Linux installed-wheel parity passed 718/718. The Linux 0.2.2 candidate and its
 clean consumers passed; artifact `13012012115` has SHA-256
@@ -79,24 +83,27 @@ final snapshot. `http2.response-trailers-without-te` passed 1/1 locally; the
 current Linux hosted parity also passed 718/718. This is runner observation
 evidence and does not change server behavior.
 
-Focused Windows runs #522 and #523 passed one worker case each on diagnostic
-head `42f9c0f`. Neither explains the three current #528 failures. Commit
-`13a4ccbd3f70adfd53e690cc418607e7326f681b` adds an opt-in Uvicorn-oracle signal
-trace to the focused Windows workflow. It is committed locally and still needs
-a focused run of the three failed case IDs. Do not start a new benchmark before
-compatibility passes.
+Focused Windows run [#530](https://github.com/appunni-m/uvicorn-rs/actions/runs/41137831335)
+on head `158b82b4e0364f439f2390a694bbd53e0849f03c` passed all three failed
+case IDs (3/3, no infrastructure failures) with opt-in shutdown tracing. Both
+oracle and candidate returned HTTP 200, exited 0 without timing out, and had
+matching normalized shutdown events. Artifact `13016614526` has SHA-256
+`d8497ab002d4199ec58c4b873ef7569e7bfe3348c8c92284603df812fcbd1bd3`. This
+does not replace a full Windows matrix receipt or prove the root cause of the
+earlier differences. Do not start a new benchmark before compatibility passes.
 
-The active local coverage batch in `/tmp/uvicorn-rs-coverage-batch` adds
-expected Debug/Display output checks to the existing coverage-only
-source-chain fault path. The affected case passed 1/1 with no retries or
-repeats and complete attribution. The selected report is
+The earlier selected-case coverage batch added expected Debug/Display output
+checks to the existing coverage-only source-chain fault path. The affected case
+passed 1/1 with no retries or repeats and complete attribution. The selected report is
 `target/coverage-batch/default-header-source-chain-asserted.json` (SHA-256
 `f043e8c35779b7ce0e1d26e20e88d573c75c26393f7fe552869fa695923fcecf`); it binds
 to dirty `src/lib.rs` SHA-256
 `5be5c51b29d1a5e8fe533f1c20b259b196471435ac7634384c703f79fc26a9a3` and native
 extension SHA-256
-`c5890f6e4a134d0d7cae9c387551ad28b0d6630a4e438a24de48c115c83960c2`. This
-subset does not replace the clean full report.
+`c5890f6e4a134d0d7cae9c387551ad28b0d6630a4e438a24de48c115c83960c2`. The
+source change is now committed, but this dirty selected-case receipt remains
+diagnostic only; the clean #528 full report is authoritative and still has
+nonzero gaps.
 
 The publisher entries, main/tag rulesets, and release environments have been
 verified; the maintainer confirms both crates.io Trusted Publisher entries are

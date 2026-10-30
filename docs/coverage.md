@@ -9,7 +9,7 @@
 
 ## Current unified coverage status (2026-10-31)
 
-The latest completed exact-source report is full-mode CI
+The latest completed exact-source coverage report is from full-mode CI
 [#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) for PR #19 head
 `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` (merge ref
 `10929063e0dfb420d6ebb7210922ad805528039d`). All 1,340 indexed coverage
@@ -22,7 +22,8 @@ report records source SHA-256
 native-extension SHA-256
 `c7e901b397b55d2d72bbedf9ad85eb7c4c213a97246ee2e3c3b5d8df472b5041`.
 
-Linux x86-64 installed-wheel parity and candidate consumers passed. Windows
+The overall #528 workflow conclusion is cancelled. Its Linux x86-64
+installed-wheel parity and candidate consumers passed. Windows
 parity was 688/691 with three process/shutdown differences; macOS ARM64
 candidate verification was cancelled. Rust quality, MSRV, feature builds,
 Rust docs/no-Python checks, native FastAPI-RS composition, release-evidence

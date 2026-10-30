@@ -36,22 +36,34 @@ receipt, but it is for a PR commit and does not qualify a release from `main`.
 
 PR #19 remains a draft against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457)
-completed on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` (merge ref
+[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran on
+head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` (merge ref
 `10929063e0dfb420d6ebb7210922ad805528039d`). Rust quality, MSRV, feature
 builds, native FastAPI-RS composition, release-evidence checks, Linux public
 parity at 718/718, the Linux candidate artifact/consumer checks, and docs
-deployment passed. Windows candidate parity was 688/691 with zero
+deployment passed. The overall workflow conclusion was cancelled. Windows
+candidate parity was 688/691 with zero
 infrastructure failures; the three differences concern two-worker shutdown and
 concurrency. macOS candidate verification was cancelled. No all-platform
 candidate acceptance exists.
+
+Focused Windows run [#530](https://github.com/appunni-m/uvicorn-rs/actions/runs/41137831335)
+on head `158b82b4e0364f439f2390a694bbd53e0849f03c` passed the three affected
+cases (3/3) with tracing enabled; oracle and candidate both returned HTTP 200,
+exited 0 without timing out, and matched normalized shutdown events. Artifact
+`13016614526` has SHA-256
+`d8497ab002d4199ec58c4b873ef7569e7bfe3348c8c92284603df812fcbd1bd3`. This does
+not supply a full Windows matrix receipt. Docs deployment #215 covers the older
+head; the latest docs refresh passes a strict local build and still needs
+deployment.
 
 The #528 three-repeat unified coverage job completed with all 1,340 indexed
 cases attributed but missed the 100% gate at 14,137/14,252 regions and
 10,411/10,465 lines. Artifact `13016632517` has archive SHA-256
 `4674397eba67621d60dd06f3f1cdb9793e83d9ba7bedfb9b64eacf9dca4177e7`. No
-accepted independent Coverage-MCP review exists. A focused oracle signal trace
-for the three Windows worker failures is committed locally but not yet run.
+accepted independent Coverage-MCP review exists. Focused Windows run #530
+passed those three cases under shutdown tracing; a complete Windows matrix
+receipt and root-cause explanation remain open.
 
 No exact-main release candidate is ready. Exact-source 100% coverage and
 independent review, complete compatibility, macOS/Windows candidate consumers,
