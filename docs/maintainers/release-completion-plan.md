@@ -37,7 +37,7 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-1. The latest candidate checks are in CI
+1. The latest full candidate checks are in CI
    [#489](https://github.com/appunni-m/uvicorn-rs/actions/runs/40999924044),
    on PR head `27733501e05cda09b11ce5b28cc22e51e4c4d1ff` against `main` at
    `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/MSRV, native
@@ -52,13 +52,22 @@ belong to the release tasks rather than being copied into every prerequisite.
    idle worker remains in `listener.accept()`. The causal boundary is narrowed
    to cancellation/wakeup after the Python request, but the root cause is not
    confirmed. Hypercorn cleanup errors and the TLS oracle shutdown error are
-   separate infrastructure failures. Do not call cross-platform compatibility
-   complete.
+   separate infrastructure failures. The unified coverage job completed all
+   1,331/1,331 cases but failed the 100% gate at 14,033/14,203 regions and
+   10,340/10,424 lines. Run #489 is complete and is bound to the older source;
+   it does not qualify current branch head
+   `872d0d6ff770d5815a250d39fac2dfb66d70c0e3`.
 
-   The three-repeat unified coverage matrix is still running in #489. Consume
-   that result once; do not start another full matrix while its required job is
-   active. Benchmarks remain after compatibility parity and have not been
-   started.
+   Focused Windows follow-ups passed the six worker cases in #492, the TLS
+   stream-drain case in #493, and the three HTTP/3 cases in
+   [#496](https://github.com/appunni-m/uvicorn-rs/actions/runs/41009518264).
+   Run #496 is on current branch head `872d0d6ff770d5815a250d39fac2dfb66d70c0e3`;
+   all three selected cases passed with zero failed, not-run, or infrastructure
+   cases. This verifies the Hypercorn cleanup change but is not a full platform
+   matrix. The next CI run should consume one full current-source batch after
+   these related parity fixes; do not start benchmarks until complete
+   compatibility parity passes. Coverage and independent review remain
+   mandatory release gates.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions

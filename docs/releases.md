@@ -28,7 +28,7 @@ candidates. The PyPI trusted publisher is **appunni-m/uvicorn-rs / release.yml
 lifecycle publisher is already configured; do not add duplicates.
 
 PR #19 remains a draft. The current branch is
-`codex/uvicorn-rs-consolidation` at **f7f3ef445e7d0b55a988c4b08f20dbc16614b992**;
+`codex/uvicorn-rs-consolidation` at **872d0d6ff770d5815a250d39fac2dfb66d70c0e3**;
 it has not been merged to `main` at
 **86e72e181d00feca1b4db7f30377d5d9d4345b83**. The latest completed full
 candidate/parity CI run is
@@ -37,7 +37,9 @@ from older commit `27733501e05cda09b11ce5b28cc22e51e4c4d1ff`. Linux candidate,
 composition, Rust quality, and MSRV jobs passed. macOS parity had one WSGI
 module-CLI log-event failure. Windows parity passed 682 cases, failed six
 multi-worker shutdown cases, recorded six infrastructure errors, and left two
-TLS cases unrun. These outcomes do not qualify the current branch.
+TLS cases unrun. Its unified coverage job completed all 1,331 cases but failed
+the 100% gate at 14,033/14,203 regions and 10,340/10,424 lines. These outcomes
+do not qualify the current branch.
 
 Focused Windows follow-ups passed the six selected worker cases 6/6 in
 [#492](https://github.com/appunni-m/uvicorn-rs/actions/runs/41006402856) and
@@ -48,14 +50,20 @@ Windows HTTP/3 cases passed in
 the valid report records three cleanup infrastructure errors: two Hypercorn
 log files remained locked after their server processes exited, and the profile
 temp directory then failed to clean up. The current working change asks the
-Hypercorn oracle to shut down gracefully on Windows; rerun only these three
-cases to verify cleanup. These focused runs are not full parity. The latest
-full coverage measurement
-is the earlier `main` report from
+Hypercorn oracle to shut down gracefully on Windows. Focused CI
+[#496](https://github.com/appunni-m/uvicorn-rs/actions/runs/41009518264), on the
+current branch commit above, passed the same three HTTP/3 cases with zero failed,
+not-run, or infrastructure cases. Its parity report is artifact 12956958252
+(SHA-256 `fbd1a1c796b00bbd58ab891cf011780d310e1e951bc1bcc7f644d67b86dc093e`);
+the `parity.json` SHA-256 is
+`dafe3010594bcd56b6363968b31f948319f2e1c57391631f0fe4686b0c17cf7c`. These
+focused runs are not full parity. The newest full coverage measurement on the
+branch is #489, above; the earlier `main` report from
 [#39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928):
 10,962/11,375 regions and 8,130/8,438 lines. It is not bound to the current
-branch, and no accepted independent Coverage-MCP review exists for the current
-source.
+branch. No full parity or coverage run has yet qualified current commit
+`872d0d6ff770d5815a250d39fac2dfb66d70c0e3`, and no accepted independent
+Coverage-MCP review exists for it.
 
 The full benchmark run
 [#39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
