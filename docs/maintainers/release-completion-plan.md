@@ -37,17 +37,31 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Current receipts — 2026-10-30 12:12 UTC
+### Current receipts — 2026-10-30 13:28 UTC
 
 Full-mode CI [#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961)
-ran from branch commit `5a3866e125afdc454c7f61ad94a45669d2e59d82`, against
-`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its installed-wheel
-parity passed 718/718 on Linux x86-64 and 718/718 on macOS ARM64. Linux and
-macOS candidate artifacts and clean consumers passed. Windows x86-64 executed
-691 cases: 689 passed and two failed:
+completed from branch commit `5a3866e125afdc454c7f61ad94a45669d2e59d82`,
+against `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its
+installed-wheel parity passed 718/718 on Linux x86-64 and 718/718 on macOS
+ARM64. Linux and macOS candidate artifacts and clean consumers passed. Windows
+x86-64 executed 691 cases: 689 passed and two failed:
 `python-api.module-cli-two-workers-serve-request` and
 `http1.upload-remains-unread-after-early-response`. Its candidate consumer
-steps were skipped after the parity failure.
+steps were skipped after the parity failure. The unified three-repeat coverage
+job completed at 14,032/14,203 regions and 10,343/10,428 lines, below both
+100% gates; the report and its source-bound artifact are retained locally.
+
+Focused coverage batch on 2026-10-30 added a coverage-only response-finalization
+fault selector and two HTTP/1 fault-contract cases for invalid configured
+default-header names and values. Both selected cases passed with complete case
+attribution and observed a closed connection; each per-case profile covered
+all eight regions of `invalid_default_header_error`. The selected report is
+`target/completion/coverage-default-header-finalization.json`, SHA-256
+`bfeb37ad737ab2f16043b26243321e610b50c902a89aef95bc9fb166184b639e`; its
+source digest is `ff885bc0a79cad1f710e8a2f57cbb63b1e70687759c0a3da4094e8369e3ce208`.
+It was built from a dirty working tree and is diagnostic subset evidence only. The
+retained full report projection still lists those eight regions as missing.
+The full coverage gate and independent review remain open.
 
 The worker case's Uvicorn oracle returned HTTP 200 but did not exit within its
 12-second shutdown bound: the captured log ends while the parent waits for a
@@ -60,22 +74,88 @@ Focused Windows run
 [#507](https://github.com/appunni-m/uvicorn-rs/actions/runs/41050476209),
 from branch commit `dc720811219e24a04f79c87774c9b9878d3e5528`, selected those
 two cases and passed 2/2 with no failures, infrastructure failures, or not-run
-cases. Both Windows reports have the same 211 parity-source file hashes,
-source digest `c5b9c9bcce020d9d674b9af59393ae705d9c6d471ec07f5f4ce3510522f54a4d`,
-manifest digest, and selected input digests. Their commits and native-extension
-hashes differ, so this focused result does not replace the failed full Windows
-lane or establish a clean full-matrix receipt.
+cases. Its commits and native-extension hash differ from #506, so it did not
+replace the failed full Windows lane.
 
-The unified three-repeat coverage job in #506 remains in progress; no final
-report artifact or 100% result is available. It has not been restarted. No
-benchmark has started, following the maintainer's parity-first direction. PR
+The early-upload failure was traced to the parity harness writing the remaining
+request body after the response while Windows can report
+`ConnectionAbortedError`. Commit `f3b54549a3243523c475551cbcf83e241f2b93b4`
+now treats that error like the existing broken-pipe/reset outcomes for this
+deliberate post-response write. Focused Windows run
+[#510](https://github.com/appunni-m/uvicorn-rs/actions/runs/41056892023) on
+that commit selected only `http1.upload-remains-unread-after-early-response`
+and passed 1/1, with zero failures, infrastructure failures, or not-run cases.
+Its report and native-extension hashes are retained in
+`target/completion/focused-windows-510.zip` and the extracted local completion
+directory.
+
+Focused Windows run
+[#511](https://github.com/appunni-m/uvicorn-rs/actions/runs/41057465056)
+selected only `python-api.module-cli-two-workers-serve-request` on the same
+commit and passed 1/1, with zero failures, infrastructure failures, or not-run
+cases. On Windows Server 2022 AMD64 / CPython 3.12.13, both Uvicorn 0.54.0 and
+the installed candidate served HTTP 200 with matching bodies and exited 0
+without timeout. The clean target revision is `f3b54549a3243523c475551cbcf83e241f2b93b4`;
+manifest SHA-256 is `ad378727082f70c19ca003d64f0e2c4ddb6083a584853cb229499d228c72e348`,
+Python API input SHA-256 is `a2b21acd01a3fdff2af61a55182c3b725a51c59bed639d8588b7b61b4778a27c`,
+runner SHA-256 is `34aceefefacb4a196c6917b43dd5dbcbe2adf2fa11647b436a7d2ed6231dc9af`,
+and native extension SHA-256 is
+`621524090a99a8aa8f1a22b7a443cfbb4f93e362929327fa97d23340a314a4ca`. Artifact
+12976754359 has SHA-256
+`ef0712618965f4fe6bb9c744d7d28bed54d16acfcc03ed4aa5e822db5cfd9e77`; the
+parity report SHA-256 is
+`d2bea7f2836456438b314a9fe128f82d7c4d0bfa608e9f864993d9ba065c8ceb`.
+
+Focused Linux run
+[#512](https://github.com/appunni-m/uvicorn-rs/actions/runs/41058428280)
+selected only `http1.upload-remains-unread-after-early-response` on the same
+commit and passed 1/1 on Linux x86-64 / CPython 3.12.13. Artifact 12978226870
+has SHA-256
+`dd8f71974d78c507a198731d35e18745e223512fa2bbdbd54cd018fb3bfac16b`; report
+SHA-256 is
+`29a624de9fa145629736ce4a5d487c83bde7236b0b97c775053e3ad3964d58d0`. The
+installed wheel consumer smoke also passed. The selected case has current
+HTTP/1 input SHA-256
+`9199b7421b01f767bc0208e212b7586a7168df0124246fdc267d84d54d1cfe5b` and
+native-extension SHA-256
+`700979d131e71a2c74ae044a2fcded061b71ac29c1678e96d19fa32530b52170`.
+
+The same changed upload input passed 1/1 on a clean local macOS 15.7.7 ARM64 /
+CPython 3.12.13 checkout at `f3b54549a3243523c475551cbcf83e241f2b93b4`.
+The local report is `target/completion/mac-upload-current-clean.json`,
+SHA-256 `557f58828a78a43df8a406d05a103a932ccb1b1b80cdbc671fed9474e12c29a7`;
+its runtime source SHA-256, manifest, input and runner hashes match #512. It
+has zero failures, infrastructure failures, or not-run cases.
+
+`4fvf`'s all-platform installed-wheel matrix is now complete as a case-level
+composition. Full #506 ran 718/718 on Linux x86-64, 718/718 on macOS ARM64,
+and 689/691 on Windows x86-64. All three full reports have the same 211
+runtime-source file hashes and source SHA-256 `c5b9c9bcce020d9d674b9af59393ae705d9c6d471ec07f5f4ce3510522f54a4d`
+as the current f3 receipts, with the same manifest. The only normal-matrix
+input changed since #506 was the early-upload case; it has current-source
+passing replacements on all three platforms. The only parity-runner change
+adds `ConnectionAbortedError` handling to that case's deliberate post-response
+write. The two #506 Windows failures are replaced by #510's upload pass and
+#511's worker pass. The resulting matrix is 718/718 Linux, 718/718 macOS, and
+691/691 Windows, with no failed, infrastructure-failed, or not-run cases. This
+is a receipt composition, not a claim that one workflow ran all three full
+matrices at the f3 commit. The automatic pull-request run #509 was canceled
+after focused checks began and is not evidence.
+
+No benchmark has started, following the maintainer's parity-first direction. PR
 #19 remains a draft against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`; exact-main checks, complete Windows
-parity and consumers, independent coverage review, and benchmark evidence
-remain outstanding. Current branch head is
-`d587381ffdca8bf4859d8be210059ab6f762b010`; changes after #506 are limited to
-the release workflow/version guard and documentation. The strict local MkDocs
-build passed for the docs changes.
+consumer qualification, independent coverage review, complete Uvicorn
+compatibility, and benchmark evidence remain outstanding. Current branch head
+before this focused local batch is
+`f3b54549a3243523c475551cbcf83e241f2b93b4`; since #506, changes include the
+parity runner's Windows exception classification, its indexed HTTP/1 input,
+the release workflow/version guard, documentation, and the current
+coverage-only default-header finalization selector with two fault-contract
+inputs. The selected coverage report is dirty and does not qualify as the
+clean full-source gate. The local strict MkDocs build passed for the prior
+plan update on Python 3.12.13 with the hash-locked `requirements-docs.txt`
+dependencies.
 
 1. The previous full-mode CI run was
    [#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350),
@@ -410,6 +490,13 @@ protection, `pypi` and `crates-io` environments and Trusted Publisher tuples for
 configuration already requested. Verify no retired package is in the publish
 inventory and that replacement/uninstall/rollback consumers pass.
 
+The 2026-10-30 GitHub settings audit found the active `Protect main` and
+`Protect version tags` rulesets, plus `pypi` and `crates-io` environments
+restricted to `main`, with `appunni-m` as reviewer and self-review prevention
+off. The maintainer confirms both crates.io Trusted Publisher entries already
+exist; do not create duplicates. PyPI publisher identity is recorded as
+`uvicorn-rs` / GitHub / `appunni-m/uvicorn-rs` / `release.yml` / `pypi`.
+
 **Close with:** Accepted Cargo/PyPI bytes and consumers, all existing release
 gates including benchmarks/coverage/review proven, and release controls verified
 against the actual workflow and environment identities. This task is a child of
@@ -487,9 +574,14 @@ For focused Windows parity, dispatch `.github/workflows/ci.yml` in
 20). It builds and installs the candidate wheel, compares only those cases
 with the isolated Uvicorn oracle, and retains the candidate's raw shutdown
 trace in the artifact beside the parity report. Use it for Windows-specific
-fixes before the next full CI batch; its selected result is diagnostic evidence
-and does not replace the full platform matrix required for compatibility
-acceptance. Full mode remains the default for manual CI runs.
+fixes before a broad run. Focused receipts can replace specific rows from an
+older full matrix only when runtime source-file hashes, manifest, platform,
+oracle and dependencies match, the per-case input is unchanged or rerun, and
+any changed harness behavior is isolated to the replaced cases. Record both
+the base and replacement receipts and their build identities. This produces an
+auditable case-level matrix without presenting separate runs as one workflow;
+do not reuse a failed row or infer unexecuted cases. Full mode remains the
+default for manual CI runs.
 
 For a qualified normal benchmark build, follow [benchmark preparation](../benchmarks.md#run-the-complete-comparison-with-one-command-interface):
 build all required binaries first, capture identity, run normal public parity

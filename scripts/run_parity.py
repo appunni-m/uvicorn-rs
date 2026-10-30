@@ -123,6 +123,7 @@ FAULT_POINTS = {
     "server.serve.control.borrow-conflict",
     "server.graceful-timeout.overflow",
     "server.connection.invalid-default-header.source-chain",
+    "server.default-header.response-finalization",
     "server.python-locals.get-current",
     "python.task-completion.allocate",
     "http.request.empty-body.channel-closed",
@@ -477,6 +478,7 @@ EAGER_REGISTRATION_CLEANUP_CONTRACTS = (
 FAULT_CONTRACTS = {
     "asgi-spec-version-2.5",
     "server-connection-invalid-default-header-source-chain",
+    "server-default-header-finalization-error-closes-connection",
     "python-ssl-ca-verifier-error-propagates",
     "python-ssl-ca-verifier-success-fallback-propagates",
     "python-ssl-keyfile-error-propagates",
@@ -2397,6 +2399,27 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: source-chain filtering requires an invalid default-header API request"
+                    )
+            elif fault["contract"] == "server-default-header-finalization-error-closes-connection":
+                headers = case.get("server_options", {}).get("headers", [])
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.invalid-response-header"
+                    or fault["point"] != "server.default-header.response-finalization"
+                    or len(headers) != 1
+                    or not (
+                        headers[0].startswith("Invalid Header:")
+                        or (
+                            headers[0].startswith("X-Invalid: bad")
+                            and any(ord(character) < 32 for character in headers[0])
+                        )
+                    )
+                    or request.get("method") != "GET"
+                    or request.get("path") != "/state"
+                ):
+                    raise ParityError(
+                        f"{case_id}: default-header finalization faults require one invalid configured header and a /state request"
                     )
             elif fault["contract"] == "websocket-server-shutdown-force-abort":
                 if (
@@ -10423,7 +10446,22 @@ def execute_case(
                         observe_tls_version=case["operation"] == "tls.protocol-version",
                         observe_tls_cipher=case["operation"] == "tls.negotiated-cipher",
                     )
-            return http1_request(server["port"], case["request"], ssl_context=ssl_context)
+            observation = http1_request(
+                server["port"], case["request"], ssl_context=ssl_context
+            )
+            if (
+                fault is not None
+                and fault["contract"]
+                == "server-default-header-finalization-error-closes-connection"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip()
+                    == fault["point"]
+                ):
+                    raise ParityError("default-header finalization fault was not consumed")
+                observation["fault_consumed"] = True
+            return observation
         if profile_id == "http2":
             response_extension_operation = case["operation"] in {
                 "http2.response-early-hints",
@@ -11393,6 +11431,12 @@ def fault_contract_matches(
                 and event.get("message") == "Invalid HTTP header name."
                 for event in stderr_events
             )
+        )
+    if fault["contract"] == "server-default-header-finalization-error-closes-connection":
+        return (
+            fault["point"] == "server.default-header.response-finalization"
+            and observation.get("fault_consumed") is True
+            and observation.get("connection_closed") is True
         )
     if fault["contract"] == "python-ssl-ca-verifier-error-propagates":
         expected_message = (
@@ -14174,6 +14218,11 @@ def execute_profile(
                         elif case["fault"]["contract"] == "server-startup-failure":
                             fault_observation = {**target_result, "server_log": read_server_log(target)}
                         elif case["fault"]["contract"] == "server-unix-listener-permission-error-startup-propagates":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] == "server-default-header-finalization-error-closes-connection":
                             fault_observation = {
                                 **target_result,
                                 "fault_consumed": target_raw.get("fault_consumed"),

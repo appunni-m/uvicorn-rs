@@ -607,6 +607,50 @@
       }
     },
     {
+      "case_id": "fault.http1.default-response-header-name-finalization-error-closes-connection",
+      "profile": "http1",
+      "operation": "http.invalid-response-header",
+      "covers": [
+        "http.invalid-response-header"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.default-header.response-finalization",
+        "contract": "server-default-header-finalization-error-closes-connection"
+      },
+      "server_options": {
+        "headers": ["Invalid Header: value"]
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http1.default-response-header-value-finalization-error-closes-connection",
+      "profile": "http1",
+      "operation": "http.invalid-response-header",
+      "covers": [
+        "http.invalid-response-header"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.default-header.response-finalization",
+        "contract": "server-default-header-finalization-error-closes-connection"
+      },
+      "server_options": {
+        "headers": ["X-Invalid: bad\u0001value"]
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http1.invalid-asgi-event-type-is-not-string",
       "profile": "http1",
       "operation": "http.invalid-asgi-message",

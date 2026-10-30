@@ -297,6 +297,7 @@ enum CoverageFaultPoint {
     HttpReceiveLockContention,
     HttpConnectionPeerReadFailedWaitComplete,
     ServerConnectionInvalidDefaultHeaderSourceChain,
+    ServerDefaultHeaderResponseFinalization,
     ServerConnectionTaskServiceError,
     ServerConnectionInfoMissing,
     ServerConnectionLifetimeMissing,
@@ -474,6 +475,9 @@ impl CoverageFaultPoint {
             }
             Self::ServerConnectionInvalidDefaultHeaderSourceChain => {
                 "server.connection.invalid-default-header.source-chain"
+            }
+            Self::ServerDefaultHeaderResponseFinalization => {
+                "server.default-header.response-finalization"
             }
             Self::HttpBodyPumpFirstPollPause => "http.body-pump.first-poll-pause",
             Self::HttpBodyPumpBatchLimitOneByte => "http.body-pump.batch-limit.one-byte",
@@ -9561,6 +9565,14 @@ async fn handle_request_parts(
         .get::<hyper::ext::Http2InformationalSender>()
         .cloned();
     let diagnostics = context.server.diagnostics.clone();
+    #[cfg(coverage)]
+    let default_header_error =
+        if coverage_fault_take(CoverageFaultPoint::ServerDefaultHeaderResponseFinalization) {
+            None
+        } else {
+            context.server.default_header_error
+        };
+    #[cfg(not(coverage))]
     let default_header_error = context.server.default_header_error;
     diagnostics.http_request_started();
     let response_latency_started = diagnostics.http_response_latency_started();

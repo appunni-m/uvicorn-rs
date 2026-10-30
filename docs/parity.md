@@ -5,9 +5,63 @@
 ## Current source status (2026-10-30)
 
 PR #19 is open against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The current branch has docs and
-parity-diagnostic updates after its latest tested revision; no full-source
-parity matrix includes those edits.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The full platform reports below
+use 211 runtime-source files with digest
+`c5b9c9bcce020d9d674b9af59393ae705d9c6d471ec07f5f4ce3510522f54a4d`, matching
+the runtime sources at commit `f3b54549a3243523c475551cbcf83e241f2b93b4`.
+The parity harness and one indexed HTTP/1 input changed after the full run;
+targeted replacements cover the affected rows. The current dirty working tree
+adds a coverage-only Rust fault selector and two fault-contract inputs, so it
+is not the full-run source identity.
+
+Full-mode CI
+[#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961)
+completed with 718/718 cases on Linux x86-64, 718/718 on macOS ARM64, and
+689/691 on Windows x86-64. Windows' only two failing rows were
+`python-api.module-cli-two-workers-serve-request` and
+`http1.upload-remains-unread-after-early-response`. Its three-repeat coverage
+gate also completed below target at 14,032/14,203 regions and 10,343/10,428
+lines.
+
+Current-source focused receipts replace the affected Windows rows: run
+[#510](https://github.com/appunni-m/uvicorn-rs/actions/runs/41056892023) passed
+the early-upload case 1/1, and
+[#511](https://github.com/appunni-m/uvicorn-rs/actions/runs/41057465056) passed
+the two-worker CLI request 1/1. The early-upload case also passed 1/1 on Linux
+in [#512](https://github.com/appunni-m/uvicorn-rs/actions/runs/41058428280)
+and on a clean local macOS ARM64 checkout. The HTTP/1 input SHA changed from
+`9d649c5a38ca99757153b5ea95a78c549d01a822be946010dd19cfa9e560e23c` to
+`9199b7421b01f767bc0208e212b7586a7168df0124246fdc267d84d54d1cfe5b` only for
+that early-upload case. The runner change only classifies
+`ConnectionAbortedError` during the same deliberate write after the response.
+The full-run reports and these replacements bind to identical runtime-source
+file hashes and the same manifest; every affected case was rerun on each
+applicable platform. The resulting case-level installed-wheel matrix is
+718/718 Linux, 718/718 macOS, and 691/691 Windows with no failures,
+infrastructure failures, or not-run cases. This is a composition of actual
+receipts, not a claim that one CI run executed all current cases. The details
+and artifact/report digests are recorded in
+[the release completion plan](maintainers/release-completion-plan.md).
+
+## Focused unified coverage gap batch (2026-10-30)
+
+Coverage-MCP identifies eight missing regions in
+`uvicorn_rs::invalid_default_header_error` in the retained full report. The
+normal ASGI response path rejects invalid configured default headers earlier,
+so two target-only fault-contract cases suppress only that early check in an
+instrumented build and exercise the finalization errors for an invalid name
+and value. Both cases passed, consumed the selector, observed a closed
+connection, and have complete per-case attribution. Each case profile hits all
+eight regions in the helper.
+
+The selected diagnostic report is
+`target/completion/coverage-default-header-finalization.json`, SHA-256
+`bfeb37ad737ab2f16043b26243321e610b50c902a89aef95bc9fb166184b639e`. Its
+source digest is `ff885bc0a79cad1f710e8a2f57cbb63b1e70687759c0a3da4094e8369e3ce208`.
+It was built from a dirty macOS ARM64 checkout and is not full-coverage or
+independent-review evidence. The full 100% gate and accepted Coverage-MCP
+review remain open; the next reported group is response-send error handling in
+`AsgiIo::send`.
 
 Full-mode CI
 [#497](https://github.com/appunni-m/uvicorn-rs/actions/runs/41031606350) ran on
@@ -79,14 +133,14 @@ and accept waits. The #501 trace showed a probe accept after the shutdown
 request but before the shutdown token woke; #505 showed no accept between the
 token waking and listener stop. This supports the scheduling-race diagnosis,
 but one pass does not prove it eliminated the intermittent failure. Full CI
-[#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961) is
-checking the changed source across the complete matrix.
+[#506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41045789961) later
+completed with the platform outcomes summarized above.
 
-Complete Uvicorn compatibility, current-source full platform parity, 100%
-coverage, independent Coverage-MCP review, and clean cross-platform candidate
-artifacts remain open. Benchmark work stays behind compatibility acceptance.
-The maintainer will run the real FastAPI application trial after repository
-compatibility work is handed off.
+Complete Uvicorn API/behavior compatibility, 100% coverage, independent
+Coverage-MCP review, current exact-main evidence, and Windows candidate
+consumer qualification remain open. Benchmark work stays behind compatibility
+acceptance. The maintainer will run the real FastAPI application trial after
+repository compatibility work is handed off.
 
 ## Focused TLS parity follow-up on the local macOS source (2026-10-28)
 
