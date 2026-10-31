@@ -6,7 +6,12 @@ build-backend = "maturin"
 name = "uvicorn-rs"
 version = "0.3.0"
 license = "BSD-3-Clause OR MIT"
-license-files = ["LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT"]
+license-files = [
+    "LICENSE",
+    "LICENSE-BSD-3-Clause",
+    "LICENSE-MIT",
+    "LICENSE-PSF-2.0",
+]
 description = "Python ASGI client for the Rust-native Uvicorn-RS server"
 readme = "README.md"
 requires-python = ">=3.9"

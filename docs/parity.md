@@ -4,6 +4,32 @@
 
 ## Current source status (2026-10-31)
 
+### Windows worker signal follow-up (2026-11-01)
+
+PR #19 CI [#559](https://github.com/appunni-m/uvicorn-rs/actions/runs/41229020477)
+completed on head `4477b96d9fe2828d8f99e4f47945bcb202e59d8c` (merge ref
+`38302d39fe623fbb484c44b22c9b11e38c690223`). Windows parity executed 727 cases:
+724 passed and 3 were infrastructure failures, with no behavior mismatches or
+not-run cases. The failures were
+`python-api.module-cli-two-workers-serve-request` and
+`python-api.module-cli-two-workers-from-uvicorn-workers-environment` in the
+pinned Uvicorn oracle, plus
+`python-api.module-cli-explicit-workers-overrides-web-concurrency` in the
+candidate. Logs show each supervisor waiting for one worker after Ctrl+C.
+
+Focused signal traces on this source family show nondeterministic console
+Ctrl+C delivery: one run delivered SIGINT to the supervisor and one of its two
+workers; another delivered it to both workers. CPython's Windows spawn creates
+workers without `CREATE_NEW_PROCESS_GROUP`, while Uvicorn's supervisor fallback
+sends `CTRL_BREAK_EVENT` to each worker PID. That flag gives each child a
+targetable process group and prevents the console broadcast from racing with
+the supervisor's orderly worker shutdown. The current candidate adds that flag
+only to Uvicorn workers. For parity, the pinned oracle receives the same
+process-group creation behavior through a test-only shim; application inputs,
+signals to the supervisor, and compared observations remain unchanged. The
+three focused cases must pass on this revised source before this diagnosis is
+accepted. Full Windows parity is still required afterward.
+
 PR #19 is draft and targets `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
 [#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran on

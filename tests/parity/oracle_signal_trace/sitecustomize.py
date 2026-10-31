@@ -1,10 +1,27 @@
-"""Opt-in signal receipt tracing for the pinned Windows Uvicorn oracle."""
+"""Windows oracle shims for worker signal routing and optional signal tracing."""
 
 from __future__ import annotations
 
 import os
 import signal
+import sys
 import time
+
+
+if os.name == "nt" and os.environ.get("ASGI_PARITY_WINDOWS_WORKER_GROUPS") == "1":
+    helper_dir = os.environ.get("ASGI_PARITY_WINDOWS_SPAWN_HELPER_DIR")
+    if not helper_dir:
+        raise RuntimeError("Windows oracle worker-group shim has no helper directory")
+    sys.path.insert(0, helper_dir)
+    try:
+        import _windows_spawn
+        import multiprocessing
+
+        multiprocessing.get_context("spawn").Process = (
+            _windows_spawn.WindowsSpawnProcess
+        )
+    finally:
+        sys.path.remove(helper_dir)
 
 
 if (

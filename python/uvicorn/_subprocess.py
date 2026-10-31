@@ -53,7 +53,13 @@ def get_subprocess(
         "stdin_fileno": stdin_fileno,
     }
 
-    return spawn.Process(target=subprocess_started, kwargs=kwargs)
+    if os.name == "nt":
+        from uvicorn._windows_spawn import WindowsSpawnProcess
+
+        process_class = WindowsSpawnProcess
+    else:
+        process_class = spawn.Process
+    return process_class(target=subprocess_started, kwargs=kwargs)
 
 
 def subprocess_started(

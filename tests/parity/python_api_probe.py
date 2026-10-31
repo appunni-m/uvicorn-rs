@@ -1115,6 +1115,17 @@ except KeyboardInterrupt:
         ]
 
     environment = subprocess_environment()
+    if (
+        os.name == "nt"
+        and os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn"
+    ):
+        # Uvicorn's Windows supervisor sends CTRL_BREAK_EVENT to each worker
+        # PID. Give the pinned oracle the same process-group support as the
+        # candidate so that this per-worker signal is routable.
+        environment["ASGI_PARITY_WINDOWS_WORKER_GROUPS"] = "1"
+        environment["ASGI_PARITY_WINDOWS_SPAWN_HELPER_DIR"] = str(
+            Path(__file__).resolve().parents[2] / "python" / "uvicorn"
+        )
     if os.environ.get("ASGI_PARITY_TRACE_ORACLE_SIGNAL") == "1":
         signal_trace_site = str(Path(__file__).parent / "oracle_signal_trace")
         environment["PYTHONPATH"] = os.pathsep.join(

@@ -37,6 +37,32 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
+### Windows worker shutdown diagnosis — 2026-11-01
+
+PR #19 CI [#559](https://github.com/appunni-m/uvicorn-rs/actions/runs/41229020477)
+completed on head `4477b96d9fe2828d8f99e4f47945bcb202e59d8c` (merge ref
+`38302d39fe623fbb484c44b22c9b11e38c690223`). The Windows installed-wheel
+matrix executed 727 cases: 724 passed, zero behavior mismatches, 3
+infrastructure failures, and zero not-run cases. Two failures were Uvicorn
+oracle shutdown timeouts; one was a candidate shutdown timeout. Traces from
+focused runs #560 and #561 establish that Ctrl+C reached only one worker in the
+failing observation and both workers in the passing observation. CPython's
+Windows multiprocessing spawn creates worker processes without
+`CREATE_NEW_PROCESS_GROUP`; Uvicorn's Windows supervisor then sends
+`CTRL_BREAK_EVENT` to worker PIDs, which are not separate console process
+groups.
+
+The candidate fix gives each Uvicorn worker its own process group so the
+supervisor can target it with Ctrl+Break. The focused oracle uses a test-only
+shim for the same process creation flag; its app, CLI arguments, supervisor
+signal and observed parity fields stay the same. This is an intentional
+platform-process-group adaptation to make the documented graceful multi-worker
+shutdown behavior deterministic, not a claim that stock Uvicorn already sets
+the flag. Rerun only the three affected Windows parity IDs on the revised
+source; require 3/3 and zero infrastructure failures before applying the fix
+to the release branch. The full Windows matrix must still pass on the final
+candidate source.
+
 ### Current PR validation — 2026-10-31
 
 PR #19 is open and draft against `main` at
