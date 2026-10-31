@@ -15,6 +15,7 @@ import tempfile
 from typing import Any
 
 from coverage_contract import pending_coverage_mcp_request
+from check_ci_evidence import source_constant
 from project_coverage_mcp import uncovered_llvm_functions
 
 
@@ -164,6 +165,14 @@ def check_uncovered_function_projection() -> None:
 
 
 def main() -> int:
+    # The installed-wheel exclusion audit must inspect this registry without
+    # importing or executing the parity runner. A starred set expansion once
+    # let all live cases pass but made the subsequent binary audit unreadable.
+    runner = ROOT / "scripts/run_parity.py"
+    fault_points = source_constant(runner, "FAULT_POINTS")
+    tls_failures = source_constant(runner, "TLS_INITIALIZATION_FAILURES")
+    if not isinstance(fault_points, set) or not set(tls_failures) <= fault_points:
+        raise AssertionError("native fault registry must remain literal and include TLS initialization selectors")
     check_uncovered_function_projection()
     (ROOT / "target").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-coverage-handoff-", dir=ROOT / "target") as temp:

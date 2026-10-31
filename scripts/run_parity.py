@@ -139,7 +139,12 @@ FAULT_POINTS = {
     "websocket.app-task.panic-before-handshake",
     "websocket.native-upgrade.extension-removed-after-dispatch",
     "server.quic-tls.config-error",
-    *TLS_INITIALIZATION_FAILURES,
+    # Keep this set literal: the normal-wheel audit reads it with
+    # ast.literal_eval so registry extraction never executes runner code.
+    "tls.traditional-key.cipher-init-error",
+    "tls.provider.empty-cipher-suites",
+    "tls.client-verifier.empty-roots",
+    "tls.quic.invalid-identity",
     "tls.provider.unavailable",
     "python.ssl.ca-verifier.import",
     "python.ssl.ca-verifier.protocol",
