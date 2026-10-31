@@ -1118,10 +1118,12 @@ except KeyboardInterrupt:
     if (
         os.name == "nt"
         and os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn"
+        and request.get("workers") is not None
+        and int(request["workers"]) > 1
     ):
-        # Uvicorn's Windows supervisor sends CTRL_BREAK_EVENT to each worker
-        # PID. Give the pinned oracle the same process-group support as the
-        # candidate so that this per-worker signal is routable.
+        # Multi-worker Uvicorn-RS sends CTRL_BREAK_EVENT to each worker PID.
+        # Give only those oracle inputs matching process-group support; reload
+        # subprocesses keep stock Uvicorn's shared-console signal behavior.
         environment["ASGI_PARITY_WINDOWS_WORKER_GROUPS"] = "1"
         environment["ASGI_PARITY_WINDOWS_SPAWN_HELPER_DIR"] = str(
             Path(__file__).resolve().parents[2] / "python" / "uvicorn"

@@ -39,7 +39,12 @@ class Process:
         self._server: Server | None = None
 
         self.parent_conn, self.child_conn = Pipe()
-        self.process = get_subprocess(config, self.target, sockets)
+        self.process = get_subprocess(
+            config,
+            self.target,
+            sockets,
+            windows_process_group=os.name == "nt",
+        )
 
     def _healthcheck(self, timeout: float) -> bool | None:
         """Receives a timeout and returns the worker's startup flag, or None if it does not answer in time."""
