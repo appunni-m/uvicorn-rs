@@ -52,16 +52,25 @@ Windows multiprocessing spawn creates worker processes without
 `CTRL_BREAK_EVENT` to worker PIDs, which are not separate console process
 groups.
 
-The candidate fix gives each Uvicorn worker its own process group so the
-supervisor can target it with Ctrl+Break. The focused oracle uses a test-only
-shim for the same process creation flag; its app, CLI arguments, supervisor
-signal and observed parity fields stay the same. This is an intentional
-platform-process-group adaptation to make the documented graceful multi-worker
-shutdown behavior deterministic, not a claim that stock Uvicorn already sets
-the flag. Rerun only the three affected Windows parity IDs on the revised
-source; require 3/3 and zero infrastructure failures before applying the fix
-to the release branch. The full Windows matrix must still pass on the final
-candidate source.
+The candidate gives each Uvicorn worker its own process group so the supervisor
+can target it with Ctrl+Break. The focused oracle uses a test-only shim for the
+same process creation flag. Its app, CLI arguments, supervisor signal, and
+compared results stay unchanged. This platform process group change makes
+graceful shutdown deterministic; it does not claim stock Uvicorn already sets
+the flag.
+
+Focused run [#562](https://github.com/appunni-m/uvicorn-rs/actions/runs/41235353193)
+on `a2908d3ac2b77e72e21ad5538c03f323ee8d4078` passed two of three cases. In
+`python-api.module-cli-two-workers-serve-request`, both oracle workers installed
+signal handlers and the supervisor received SIGINT, but only worker 3832
+recorded SIGBREAK and exited; worker 3252 had no recorded handler event. The
+candidate did not report a shutdown failure. The trace omitted the actual
+supervisor `os.kill` requests because the wrapper watched `SIGBREAK` (21) while
+Windows `CTRL_BREAK_EVENT` is passed as 1. The next diagnostic records the
+control-event codes and worker process-group creation flags. Rerun only this
+case after the trace change. Require 3/3 focused passes and zero infrastructure
+failures before accepting the fix; the full Windows matrix must still pass on
+the final candidate source.
 
 ### Current PR validation — 2026-10-31
 

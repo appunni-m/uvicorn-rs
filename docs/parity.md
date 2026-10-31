@@ -17,18 +17,22 @@ pinned Uvicorn oracle, plus
 `python-api.module-cli-explicit-workers-overrides-web-concurrency` in the
 candidate. Logs show each supervisor waiting for one worker after Ctrl+C.
 
-Focused signal traces on this source family show nondeterministic console
-Ctrl+C delivery: one run delivered SIGINT to the supervisor and one of its two
-workers; another delivered it to both workers. CPython's Windows spawn creates
-workers without `CREATE_NEW_PROCESS_GROUP`, while Uvicorn's supervisor fallback
-sends `CTRL_BREAK_EVENT` to each worker PID. That flag gives each child a
-targetable process group and prevents the console broadcast from racing with
-the supervisor's orderly worker shutdown. The current candidate adds that flag
-only to Uvicorn workers. For parity, the pinned oracle receives the same
-process-group creation behavior through a test-only shim; application inputs,
-signals to the supervisor, and compared observations remain unchanged. The
-three focused cases must pass on this revised source before this diagnosis is
-accepted. Full Windows parity is still required afterward.
+The test-only oracle process-group shim was exercised in focused CI [#562](https://github.com/appunni-m/uvicorn-rs/actions/runs/41235353193)
+on commit `a2908d3ac2b77e72e21ad5538c03f323ee8d4078`. Two of the three selected
+cases passed. In `python-api.module-cli-two-workers-serve-request`, the
+candidate did not report a shutdown failure, but the Uvicorn oracle timed out:
+both workers installed signal handlers, the supervisor received SIGINT, and
+only worker PID 3832 recorded SIGBREAK before exiting; PID 3252 recorded no
+signal handler event. This does not establish the event ordering or prove the
+oracle shim reached both worker groups.
+
+The trace wrapper missed the supervisor's `os.kill` requests because it watched
+Python's `SIGBREAK` value (`21`) while Uvicorn passes Windows'
+`CTRL_BREAK_EVENT` value (`1`) to `os.kill`. The next diagnostic records both
+control-event constants and the oracle workers' `CREATE_NEW_PROCESS_GROUP`
+creation flags. Rerun only the remaining case after that trace change; do not
+accept this compatibility result until all three focused cases pass. Full
+Windows parity is still required afterward.
 
 PR #19 is draft and targets `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI

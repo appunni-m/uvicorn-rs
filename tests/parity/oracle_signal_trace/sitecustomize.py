@@ -38,6 +38,11 @@ if (
         )
         if value is not None
     }
+    _control_events = {
+        int(getattr(signal, name)): name
+        for name in ("CTRL_C_EVENT", "CTRL_BREAK_EVENT")
+        if getattr(signal, name, None) is not None
+    }
     _original_signal = signal.signal
     _original_raise_signal = getattr(signal, "raise_signal", None)
     _original_kill = os.kill
@@ -70,6 +75,23 @@ if (
             os.write(2, (line + "\n").encode("ascii", errors="backslashreplace"))
         except Exception:
             pass
+
+    if os.environ.get("ASGI_PARITY_WINDOWS_WORKER_GROUPS") == "1":
+        _windows_spawn = sys.modules["_windows_spawn"]
+        _original_spawn_popen = _windows_spawn.WindowsSpawnProcess._Popen
+
+        def _trace_spawn(process_obj):
+            popen = _original_spawn_popen(process_obj)
+            group_flag = int(_windows_spawn._winapi.CREATE_NEW_PROCESS_GROUP)
+            _write(
+                "worker-spawn",
+                getattr(signal, "SIGBREAK", None),
+                f"child_pid={popen.pid} group_id={popen.pid} "
+                f"creation_flag={group_flag}",
+            )
+            return popen
+
+        _windows_spawn.WindowsSpawnProcess._Popen = staticmethod(_trace_spawn)
 
     def _trace_signal(signum, handler):
         number = _number(signum)
@@ -105,9 +127,27 @@ if (
         return _original_raise_signal(signum)
 
     def _trace_kill(pid, signum):
-        if _number(signum) in _watched:
-            _write("kill", signum, f"target_pid={pid}")
-        return _original_kill(pid, signum)
+        number = _number(signum)
+        control_event = _control_events.get(number)
+        should_trace = number in _watched or control_event is not None
+        detail = f"target_pid={pid}"
+        if control_event is not None:
+            detail += f" control_event={control_event}"
+        if should_trace:
+            _write("kill-request", signum, detail)
+        try:
+            result = _original_kill(pid, signum)
+        except BaseException as error:
+            if should_trace:
+                _write(
+                    "kill-error",
+                    signum,
+                    f"{detail} error={type(error).__name__}:{error}",
+                )
+            raise
+        if should_trace:
+            _write("kill-return", signum, detail)
+        return result
 
     def _console_process_snapshot() -> None:
         try:
