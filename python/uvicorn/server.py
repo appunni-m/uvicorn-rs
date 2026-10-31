@@ -262,7 +262,15 @@ class Server:
                 ws_ping_interval=self.config.ws_ping_interval,
                 ws_ping_timeout=self.config.ws_ping_timeout,
                 _http1_max_buffer_size=(
-                    self.config.h11_max_incomplete_event_size
+                    # Hyper rejects an incomplete head when its buffer reaches
+                    # this size; h11 permits the configured size and rejects
+                    # only the next byte. Its default is 16 KiB.
+                    (
+                        self.config.h11_max_incomplete_event_size
+                        if self.config.h11_max_incomplete_event_size is not None
+                        else 16 * 1024
+                    )
+                    + 1
                     if self.config.http == "h11"
                     else None
                 ),

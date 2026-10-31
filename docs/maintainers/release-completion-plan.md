@@ -20,7 +20,7 @@ a prerequisite for completing the repository work.
   `tests/parity/manifest.json`, its indexed inputs, `tests/native-core/manifest.json`,
   and `examples/native-fastapi-contracts/manifest.json`. Do not create a second
   operation inventory or require arbitrary combinations outside this contract.
-- The current manifest has 137 operations and 89 execution profiles. Those counts
+- The current manifest has 139 operations and 90 execution profiles. Those counts
   describe its inventory, not completeness of upstream compatibility.
 - Platform acceptance uses the existing CI profiles: Linux x86-64, macOS ARM64,
   Windows x86-64 on CPython 3.12.13, plus the declared Python 3.9 wheel-consumer
@@ -37,81 +37,73 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Current receipts — 2026-10-31 (PR run #528; overall conclusion cancelled)
+### Current receipts — 2026-10-31 (PR run #531 and focused current-input receipts)
 
 PR #19 remains draft/open against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Full CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran on
-head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`, merge ref
-`10929063e0dfb420d6ebb7210922ad805528039d`.
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. This working batch starts from branch head
+`ed60fef231667468f01a42ba11417924b5ec3dd4`. It changes the h11 adapter/parser;
+the working runtime-source SHA-256 is
+`c00038a3885178b4bb1146fc315a51eb70c5e149a1742a16d3bdada8c7bee50f`. The
+latest full hosted run
+[#531](https://github.com/appunni-m/uvicorn-rs/actions/runs/41140694132) ran
+on branch head `48aba59dc12ab4fa9c6195d95d2fabd226b4a052`, merge ref
+`0e76ef265977050836044fcb6ef9550b1352fcda`. The two commits after that run changed only the input set and documentation.
+The h11 runtime change in this batch requires fresh hosted evidence.
 
-The overall workflow conclusion is cancelled. Individual completed job
-receipts below are recorded by their own result; a successful sub-job does not
-turn the workflow into a passing CI run.
+The Linux installed-wheel public parity in #531 passed 719/719. Windows ran
+692 cases: 689 passed and three two-worker shutdown cases failed. Their only
+input changes since that run add a one-second startup settle. Focused Windows
+[#534](https://github.com/appunni-m/uvicorn-rs/actions/runs/41145100547) and
+Linux [#535](https://github.com/appunni-m/uvicorn-rs/actions/runs/41145558362)
+each pass the three current worker inputs 3/3 with zero infrastructure
+failures. The full local macOS ARM64 / CPython 3.12.13 installed-wheel run on
+exact head `ed60fef` passed 719/719, zero failed/infra/not-run; receipt
+`4f0fd48142f34ddd931639928a6daf4d`, report SHA-256
+`17215002f939d255069c6fef20f0c1cd43ca1d17e981e2c29d2e6edbb6a07780`. This
+case-level union does not replace one full exact-current-input hosted Linux
+and Windows matrix.
 
-Linux installed-wheel parity passed 718/718. The Linux 0.2.2 candidate and its
-clean consumers passed; artifact `13012012115` has SHA-256
-`656ad0235e3ac25f1680966992e318dd6ce8cc8e0ba4011e242a6743ed13235`, and its
-build-manifest SHA-256 is
-`085e0903bd8d4f52c0a183b7ab4f44edb4d48f04b05ac4428e8a451bd09b83e4`. Windows
-candidate parity completed 691 cases: 688 passed, 3 failed, and zero had
-infrastructure failures. Its artifact `13012838178` has SHA-256
-`ab0a3f293329a4cbdbcf2c4be47e9bee4bcee4af9a0ec6975712e0b75144b962`. The
-failures are `python-api.module-cli-two-workers-stop-on-sigterm`,
-`python-api.module-cli-web-concurrency-two-workers-serve-request`, and
-`python-api.module-cli-explicit-workers-overrides-web-concurrency`; all served
-HTTP 200, but process timeouts/exits and shutdown log counts differed. Signal
-ordering and root cause remain unconfirmed. macOS candidate verification was
-cancelled. Rust formatting/lints, feature builds, Rust docs/no-Python checks,
-MSRV, release-evidence contracts, native FastAPI-RS composition, Linux clean
-consumers, and separate docs deployment run #215 passed.
+The #531 three-repeat coverage job has completed, attributing 1,341/1,341
+indexed cases, but fails both 100% gates: 14,137/14,252 regions and
+10,411/10,465 lines. Artifact `13022180254` has archive SHA-256
+`95e4eed1095c0068fcd4423ff2c122e3ae1bd35aabfe05ff7d81cd4af03cf5da`; the
+report binds to source SHA-256
+`9acb1ef935d10af060a0e41a39d33d4b4484cb75c079c2ee33d277a4eceed6ed` and
+native extension SHA-256
+`7203618868604435f0db762af850704452bd722c8c2fce54f14ad50e481e40db`. It
+ran against the earlier merge ref, so it is diagnostic rather than an exact
+receipt for the current input set. Independent Coverage-MCP review remains
+open; no large archive has been downloaded again.
 
-The #528 three-repeat coverage report completed with all 1,340 indexed cases
-attributed, but missed the 100% gate at 14,137/14,252 regions and 10,411/10,465
-lines. Artifact `13016632517` has archive SHA-256
-`4674397eba67621d60dd06f3f1cdb9793e83d9ba7bedfb9b64eacf9dca4177e7`; its
-report source SHA-256 is
-`56d4ce12ebf5dddcad815968f622ac22f5fd6cfd1f8f52212b670d2d7da4fd24` and its
-native-extension SHA-256 is
-`c7e901b397b55d2d72bbedf9ad85eb7c4c213a97246ee2e3c3b5d8df472b5041`.
-Independent Coverage-MCP review remains open because the report is not yet
-zero-gap.
+Other #531 jobs: Linux 0.2.2 candidate artifact and clean consumers passed;
+Windows candidate verification failed after the worker parity failure, and
+macOS candidate verification was cancelled. Rust formatting/lints, feature
+builds, Rust docs/no-Python checks, MSRV, release-evidence contracts, and
+native FastAPI-RS composition passed. The separate docs deployment run #215
+passed for earlier docs; current edits need a new deployment receipt.
+
+The CLI/settings surface now has a 52-parameter map and 118-case argv/environment
+index at [`uvicorn-cli-option-map.md`](uvicorn-cli-option-map.md). Six new live
+module-CLI WebSocket cases passed locally 6/6 on the preceding runtime. Four new
+h11 boundary cases exposed early rejection and HTTP 431 instead of 400. The
+adapter/parser fix now passes those four plus the expanded-header case 5/5,
+including a 1 KiB limit. Receipt `4e60b47b7f194528b326a9619456db01`, report SHA-256
+`3850085052d81114891c617ea7fdf101b4cd2734dc8de49412c8bf6c46de6f06`. These are local
+dirty-draft subset receipts. `9kbx` and `x3az` remain open for complete hosted
+acceptance of the committed source and current inputs.
+
+The publisher entries, main/tag rulesets, and release environments are
+configured. The maintainer confirms both crates.io Trusted Publisher entries
+are already present, and the PyPI `uvicorn-rs` pending publisher for
+`release.yml` / environment `pypi` is saved. A 2026-10-30 registry check lists
+Cargo 0.2.1 for both release crates and no PyPI `uvicorn-rs` project. No 0.2.2
+candidate, tag, or package is accepted for publication. The older Linux ARM64
+HTTP/3 benchmark remains incomplete; the user's parity-first direction keeps
+all new benchmarks blocked until compatibility passes.
 
 The local H2 parity runner captures the event baseline before request
 submission and waits up to two seconds for case-required app events before its
-final snapshot. `http2.response-trailers-without-te` passed 1/1 locally; the
-current Linux hosted parity also passed 718/718. This is runner observation
-evidence and does not change server behavior.
-
-Focused Windows run [#530](https://github.com/appunni-m/uvicorn-rs/actions/runs/41137831335)
-on head `158b82b4e0364f439f2390a694bbd53e0849f03c` passed all three failed
-case IDs (3/3, no infrastructure failures) with opt-in shutdown tracing. Both
-oracle and candidate returned HTTP 200, exited 0 without timing out, and had
-matching normalized shutdown events. Artifact `13016614526` has SHA-256
-`d8497ab002d4199ec58c4b873ef7569e7bfe3348c8c92284603df812fcbd1bd3`. This
-does not replace a full Windows matrix receipt or prove the root cause of the
-earlier differences. Do not start a new benchmark before compatibility passes.
-
-The earlier selected-case coverage batch added expected Debug/Display output
-checks to the existing coverage-only source-chain fault path. The affected case
-passed 1/1 with no retries or repeats and complete attribution. The selected report is
-`target/coverage-batch/default-header-source-chain-asserted.json` (SHA-256
-`f043e8c35779b7ce0e1d26e20e88d573c75c26393f7fe552869fa695923fcecf`); it binds
-to dirty `src/lib.rs` SHA-256
-`5be5c51b29d1a5e8fe533f1c20b259b196471435ac7634384c703f79fc26a9a3` and native
-extension SHA-256
-`c5890f6e4a134d0d7cae9c387551ad28b0d6630a4e438a24de48c115c83960c2`. The
-source change is now committed, but this dirty selected-case receipt remains
-diagnostic only; the clean #528 full report is authoritative and still has
-nonzero gaps.
-
-The publisher entries, main/tag rulesets, and release environments have been
-verified; the maintainer confirms both crates.io Trusted Publisher entries are
-already configured. A 2026-10-30 registry check lists Cargo 0.2.1 for both
-release crates and no PyPI `uvicorn-rs` project. No 0.2.2 candidate, tag, or
-published package is accepted. No benchmark has started after the parity-first
-direction; the older Linux ARM64 HTTP/3 benchmark remains incomplete. Do not
-publish until the exact-main gates pass.
+final snapshot. This runner change has no server behavior effect.
 
 ### Prior platform receipts — 2026-10-30 13:28 UTC
 
@@ -331,10 +323,14 @@ behavior to obtain completion.
 
 **Work:** Audit all 52 declared upstream Click parameters, their environment
 bindings, aliases, defaults, validation, and precedence against the pinned
-contract. Use `tests/parity/inputs/cli.json` and the relevant Python API inputs.
-For a missing mapping, name the parameter and exact observation before adding a
-case. A setting that affects serving needs a live behavioral observation, not
-only successful parsing. Resolve all inventory mismatches and ignored options.
+contract. The complete declaration and case map is
+[`uvicorn-cli-option-map.md`](uvicorn-cli-option-map.md). It indexes all 118
+`cli.json` process inputs and links the live `module-cli` cases. The six new
+WebSocket cases passed their selected local group; the four new h11 boundary
+cases exposed a runtime mismatch that is now fixed and passes the five-case
+h11 group. Consume one full hosted matrix for this reviewed batch. Resolve
+any inventory mismatch or ignored option found in that review; do not repeat
+unchanged passing groups.
 
 **Close with:** A complete parameter-to-case mapping; all mapped cases pass on
 their applicable CI platforms with argv, output, and exit status retained.

@@ -507,7 +507,8 @@ impl Http1Transaction for Server {
             Kind::Parse(Parse::Method)
             | Kind::Parse(Parse::Header(_))
             | Kind::Parse(Parse::Uri)
-            | Kind::Parse(Parse::Version) => StatusCode::BAD_REQUEST,
+            | Kind::Parse(Parse::Version)
+            | Kind::Parse(Parse::IncompleteTooLarge) => StatusCode::BAD_REQUEST,
             Kind::Parse(Parse::TooLarge) => StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE,
             Kind::Parse(Parse::UriTooLong) => StatusCode::URI_TOO_LONG,
             _ => return None,

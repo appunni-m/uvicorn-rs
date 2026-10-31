@@ -14,53 +14,64 @@ candidate artifacts and downstream consumer checks remain open; see
 
 ## Current verification status (2026-10-31)
 
-PR #19 is draft and targets `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran
-on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`; the overall workflow
-conclusion was cancelled. Linux x86-64
-installed-wheel parity passed 718/718. Its 0.2.2 candidate artifact and clean
-consumer checks passed. Windows x86-64 candidate parity failed 688/691 with no
-infrastructure failures; macOS candidate checks were cancelled. The
-three-repeat coverage job missed 100% at 14,137/14,252 regions and
-10,411/10,465 lines after attributing all 1,340 cases. Rust quality, MSRV, native
-FastAPI-RS composition, and release-evidence checks passed. Docs deployment
-#215 passed for the earlier 8a17d98 head; the refreshed pages pass a strict
-local build and still need deployment.
+PR #19 is draft against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. This batch starts from
+`ed60fef231667468f01a42ba11417924b5ec3dd4` and changes the h11 adapter/parser;
+working runtime-source SHA-256 is
+`c00038a3885178b4bb1146fc315a51eb70c5e149a1742a16d3bdada8c7bee50f`.
+Its focused local receipts require a fresh clean hosted matrix.
 
-The three Windows failures were `module-cli-two-workers-stop-on-sigterm`,
-`module-cli-web-concurrency-two-workers-serve-request`, and
-`module-cli-explicit-workers-overrides-web-concurrency`. All served HTTP 200;
-the differences involve process timeouts/exits and shutdown log counts. The
-signal event ordering and root cause remain unconfirmed. Focused run
-[#530](https://github.com/appunni-m/uvicorn-rs/actions/runs/41137831335)
-passed the three cases on head `158b82b4e0364f439f2390a694bbd53e0849f03c`
-with tracing enabled: both implementations returned HTTP 200, exited 0 without
-timing out, and matched normalized shutdown events. Its artifact
-`13016614526` has SHA-256
-`d8497ab002d4199ec58c4b873ef7569e7bfe3348c8c92284603df812fcbd1bd3`. The full
-Windows matrix and root-cause explanation remain open. The previous completed
-coverage report missed the 100% gate at 14,137/14,252 regions and 10,411/10,465
-lines. No accepted independent Coverage-MCP review exists.
+Full hosted CI [#531](https://github.com/appunni-m/uvicorn-rs/actions/runs/41140694132)
+ran on the previous branch head `48aba59dc12ab4fa9c6195d95d2fabd226b4a052`.
+Linux installed-wheel parity passed 719/719. Windows passed 689/692; its only
+three failures were two-worker shutdown cases. Those case inputs now pass 3/3
+on focused current-input runs for Windows
+[#534](https://github.com/appunni-m/uvicorn-rs/actions/runs/41145100547) and
+Linux [#535](https://github.com/appunni-m/uvicorn-rs/actions/runs/41145558362).
+A full local macOS ARM64 / CPython 3.12.13 installed-wheel run on baseline
+`ed60fef` passed 719/719, zero failed/infra/not-run; report run
+`4f0fd48142f34ddd931639928a6daf4d`, SHA-256
+`17215002f939d255069c6fef20f0c1cd43ca1d17e981e2c29d2e6edbb6a07780`. The
+focused case union is useful evidence but is not a full exact-current-input
+hosted Linux and Windows matrix.
 
-Full Uvicorn 0.54.0 parity, exact-source 100% coverage and independent review,
-Windows candidate consumers, and clean exact-source artifacts remain open. The
-metadata declares Python `>=3.9`, but Uvicorn 0.54.0 declares Python `>=3.10`
-in its [versioned project metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml).
-Parity against that oracle starts at Python 3.10; the Python 3.9 consumer check
-is a separate package claim. Benchmarks remain behind complete parity, and the
-existing Linux ARM64 HTTP/3 workload is incomplete. See the [parity history](parity.md),
-[coverage evidence](coverage.md), and [release status](releases.md).
+The #531 three-repeat coverage run attributed 1,341/1,341 cases but missed the
+100% gate at 14,137/14,252 regions and 10,411/10,465 lines. Its report binds to
+the earlier merge ref. No accepted exact-source Coverage-MCP review exists.
+The Linux 0.2.2 candidate artifact and clean consumers passed on that earlier
+ref; Windows candidate verification failed after parity and macOS candidate
+verification was cancelled. The docs deployment run #215 passed for an earlier
+revision; the current docs edits still need deployment. Details and artifact
+identity are in the [maintainer completion plan](maintainers/release-completion-plan.md).
+
+The current CLI map covers 52 declared parameters and indexes 118 CLI process
+inputs. Six new live CLI WebSocket cases passed 6/6 locally on the preceding
+runtime. Four new h11 boundary inputs exposed early rejection and HTTP 431
+instead of 400; the fix passes those four and the existing expanded-header
+case 5/5, including a 1 KiB limit. See the
+[CLI/settings map](maintainers/uvicorn-cli-option-map.md).
+The API and protocol children remain open for exact committed-source hosted
+acceptance. Full Uvicorn 0.54.0 compatibility and 100% coverage are not
+established.
+
+Cargo `uvicorn-rs` and `asgi-lifespan-protocol-rs` are published at 0.2.1;
+0.2.2 is still a candidate. The PyPI `uvicorn-rs` project remains unpublished.
+The `release.yml` PyPI pending publisher is saved, and the maintainer confirms
+both crates.io Trusted Publisher entries are already configured. No candidate
+is accepted for publication. Benchmarks remain behind complete parity; the
+older Linux ARM64 HTTP/3 benchmark is incomplete. The declared Python 3.9
+consumer check is separate from the Uvicorn 0.54.0 parity baseline, which
+starts at Python 3.10. See [coverage evidence](coverage.md), [parity history](parity.md),
+and [release status](releases.md).
 
 ## Can I replace Uvicorn?
 
-Not yet. The `uvicorn-rs` PyPI distribution is unpublished and is not a
-drop-in replacement today. Run #528 has unresolved Windows worker parity
-failures, and macOS candidate verification was cancelled. Full current-source
-parity and coverage, an accepted Coverage-MCP review, complete CLI/API/process
-behavior, and clean cross-platform candidate artifacts remain open. See the
+Not yet. The `uvicorn-rs` PyPI distribution is unpublished and the full
+compatibility matrix and coverage gate have not passed. A clean candidate is
+not accepted across all required platforms. The new CLI WebSocket and h11
+observations still need the full hosted matrix. The real FastAPI application trial is for
+the maintainer to run after repository acceptance. See the
 [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
-
 One selected POSIX
 case verifies replacement after a worker stops answering health checks. A
 separate two-worker SIGTERM input passed 1/1 on the local dirty draft on macOS

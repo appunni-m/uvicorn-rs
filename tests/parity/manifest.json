@@ -2566,6 +2566,30 @@
       }
     },
     {
+      "id": "python.api.run-http-incomplete-header",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "response_received",
+        "response_status",
+        "raw_connection_open_after_timeout",
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out"
+      ],
+      "compare": [
+        "exit_code",
+        "response_received",
+        "response_status",
+        "raw_connection_open_after_timeout",
+        "shutdown_signal_sent",
+        "process_exit_code",
+        "process_timed_out"
+      ]
+    },
+    {
       "id": "python.api.run-http-signal-sequence",
       "kind": "command_operation",
       "observe": [
@@ -2854,7 +2878,8 @@
         "process_exit_code",
         "shutdown_signal_sent",
         "process_timed_out",
-        "compression_negotiated"
+        "compression_negotiated",
+        "server_ping_observed"
       ],
       "compare": [
         "exit_code",
@@ -2865,7 +2890,8 @@
         "shutdown_signal_sent",
         "process_exit_code",
         "process_timed_out",
-        "compression_negotiated"
+        "compression_negotiated",
+        "server_ping_observed"
       ],
       "required_observations": {
         "handshake_status": 101

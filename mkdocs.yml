@@ -77,6 +77,7 @@ nav:
           - Case inventory: asgi-case-inventory.md
           - ASGI implementation evidence: maintainers/asgi-support-evidence.md
           - Uvicorn 0.54.0 contract: maintainers/uvicorn-0.54.0-contract.md
+          - Uvicorn CLI and settings map: maintainers/uvicorn-cli-option-map.md
           - Deployment validation: maintainers/deployment-validation.md
       - Performance:
           - Benchmark method: benchmarks.md

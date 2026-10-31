@@ -63,7 +63,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@45"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@46"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -996,6 +996,7 @@ def load_contract(
         "exit_code", "stdout_base64", "stderr_base64",
         "response_received", "response_status", "response_content_type",
         "response_body_base64", "listener_responses", "shutdown_signal_sent", "shutdown_signals_sent", "process_timed_out",
+        "raw_connection_open_after_timeout",
         "graceful_shutdown_cancellation_observed",
         "server_log_events", "worker_replacement_observed", "request_limit_response_count",
         "request_limit_range_satisfied",
@@ -1010,6 +1011,7 @@ def load_contract(
         "process_stdout_base64", "process_stderr_base64",
         "workers_ignored_warning", "excluded_change_reloaded",
         "included_change_reloaded", "scope_observation", "compression_negotiated",
+        "server_ping_observed",
         "lifespan_startup_entered_before_cancel", "server_started_before_cancel",
         "serve_cancelled", "serve_task_finished",
         "listener_accepting_after_cancel", "listener_transfer_blocked",
@@ -2849,6 +2851,7 @@ def load_contract(
                             )
             elif case["operation"] in {
                 "python.api.run-http",
+                "python.api.run-http-incomplete-header",
                 "python.api.run-http-signal-sequence",
                 "python.api.run-http-graceful-timeout",
                 "python.api.run-http-request-limit",
@@ -2908,6 +2911,8 @@ def load_contract(
                     "fd",
                     "prebound_socket_count",
                     "client_timeout_seconds",
+                    "h11_max_incomplete_event_size",
+                    "incomplete_request_buffer_length",
                     "post_response_settle_seconds",
                     "reset_contextvars",
                     "bind_conflict",
@@ -2937,6 +2942,7 @@ def load_contract(
                         "process_exit_code",
                         "process_timed_out",
                         "worker_replacement_observed",
+                        "raw_connection_open_after_timeout",
                     }
                     if type(required) is not dict or not set(required).issubset(
                         allowed_required
@@ -2949,6 +2955,7 @@ def load_contract(
                         "shutdown_signal_sent",
                         "process_timed_out",
                         "worker_replacement_observed",
+                        "raw_connection_open_after_timeout",
                     ):
                         if field in required and type(required[field]) is not bool:
                             raise ParityError(
@@ -3000,6 +3007,45 @@ def load_contract(
                         raise ParityError(
                             f"{case_id}.api.run_http.http_backend requires module-cli invocation"
                         )
+                h11_max_incomplete_event_size = run_http.get(
+                    "h11_max_incomplete_event_size"
+                )
+                if h11_max_incomplete_event_size is not None and (
+                    type(h11_max_incomplete_event_size) is not int
+                    or not 1 <= h11_max_incomplete_event_size <= 65536
+                    or run_http["invocation"] != "module-cli"
+                    or run_http.get("http_backend") != "h11"
+                ):
+                    raise ParityError(
+                        f"{case_id}: h11_max_incomplete_event_size requires a bounded integer and module-cli h11"
+                    )
+                incomplete_request_buffer_length = run_http.get(
+                    "incomplete_request_buffer_length"
+                )
+                if incomplete_request_buffer_length is not None and (
+                    type(incomplete_request_buffer_length) is not int
+                    or not 64 <= incomplete_request_buffer_length <= 65536
+                    or case["operation"]
+                    != "python.api.run-http-incomplete-header"
+                    or h11_max_incomplete_event_size is None
+                    or incomplete_request_buffer_length
+                    not in {
+                        h11_max_incomplete_event_size,
+                        h11_max_incomplete_event_size + 1,
+                    }
+                ):
+                    raise ParityError(
+                        f"{case_id}: incomplete request buffer length must equal the h11 maximum or one byte over"
+                    )
+                if case["operation"] == "python.api.run-http-incomplete-header" and (
+                    incomplete_request_buffer_length is None
+                    or h11_max_incomplete_event_size is None
+                    or run_http["invocation"] != "module-cli"
+                    or run_http.get("http_backend") != "h11"
+                ):
+                    raise ParityError(
+                        f"{case_id}: h11 incomplete-header operation requires the module CLI and both size fields"
+                    )
                 if "factory" in run_http and type(run_http["factory"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.factory must be a boolean"
@@ -3706,9 +3752,14 @@ def load_contract(
                 run_websocket_keys.update(
                     key
                     for key in (
+                        "invocation",
+                        "ws_backend",
+                        "send_count",
                         "ws_max_queue",
                         "uds",
                         "observe_scope",
+                        "observe_server_pings",
+                        "suppress_server_pongs",
                         "ws_ping_interval",
                         "ws_ping_timeout",
                         "keepalive_idle_seconds",
@@ -3741,7 +3792,48 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_websocket.ws_max_queue must be an integer"
                     )
-                for key in ("uds", "observe_scope", "ws_per_message_deflate", "observe_compression"):
+                if run_websocket.get("invocation", "api") not in {"api", "module-cli"}:
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.invocation must be api or module-cli"
+                    )
+                if "ws_backend" in run_websocket and (
+                    run_websocket.get("invocation") != "module-cli"
+                    or run_websocket["ws_backend"]
+                    not in {"auto", "websockets", "websockets-sansio", "wsproto"}
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.ws_backend requires module-cli and a supported selector"
+                    )
+                if "send_count" in run_websocket and (
+                    type(run_websocket["send_count"]) is not int
+                    or not 1 <= run_websocket["send_count"] <= 32
+                    or run_websocket.get("path") != "/ws-queue-delayed-reader"
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.send_count is limited to 1 through 32 on the delayed-reader fixture"
+                    )
+                if "observe_server_pings" in run_websocket and (
+                    type(run_websocket["observe_server_pings"]) is not bool
+                    or run_websocket.get("invocation") != "module-cli"
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.observe_server_pings requires module-cli"
+                    )
+                if run_websocket.get("suppress_server_pongs", False) and (
+                    run_websocket.get("observe_server_pings") is not True
+                    or run_websocket.get("invocation") != "module-cli"
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.suppress_server_pongs requires observed module-CLI server pings"
+                    )
+                for key in (
+                    "uds",
+                    "observe_scope",
+                    "observe_server_pings",
+                    "suppress_server_pongs",
+                    "ws_per_message_deflate",
+                    "observe_compression",
+                ):
                     if key in run_websocket and type(run_websocket[key]) is not bool:
                         raise ParityError(
                             f"{case_id}.api.run_websocket.{key} must be a boolean"
@@ -3777,6 +3869,19 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_websocket.keepalive_idle_seconds must be positive and at most 2 seconds"
                     )
+                if run_websocket.get("observe_server_pings"):
+                    interval = run_websocket.get("ws_ping_interval")
+                    idle_seconds = run_websocket.get("keepalive_idle_seconds")
+                    if (
+                        type(interval) not in {int, float}
+                        or not math.isfinite(interval)
+                        or interval <= 0
+                        or type(idle_seconds) not in {int, float}
+                        or idle_seconds < 2 * interval
+                    ):
+                        raise ParityError(
+                            f"{case_id}: server Ping observation requires a positive finite interval and at least two intervals of idle time"
+                        )
                 if case["operation"] == "python.api.run-websocket-keepalive-no-timeout":
                     interval = run_websocket.get("ws_ping_interval")
                     idle_seconds = run_websocket.get("keepalive_idle_seconds")
@@ -13412,6 +13517,7 @@ def run_python_api_probe(
         )
     if case["operation"] in {
         "python.api.run-http",
+        "python.api.run-http-incomplete-header",
         "python.api.run-http-signal-sequence",
         "python.api.run-http-graceful-timeout",
         "python.api.run-http-request-limit",
@@ -13461,6 +13567,7 @@ def run_python_api_probe(
                 for name in (
                     "response_received",
                     "response_status",
+                    "raw_connection_open_after_timeout",
                     "response_content_type",
                     "response_body_base64",
                     "listener_responses",
@@ -13729,6 +13836,7 @@ def run_python_api_probe(
                 "process_exit_code": websocket.get("process_exit_code"),
                 "process_timed_out": websocket.get("process_timed_out"),
                 "compression_negotiated": websocket.get("compression_negotiated"),
+                "server_ping_observed": websocket.get("server_ping_observed"),
             }
         )
         if "scope_observation" in websocket:

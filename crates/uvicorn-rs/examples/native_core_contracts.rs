@@ -9466,7 +9466,7 @@ async fn run_server_config_validation_case(case: &Value) -> ProbeResult<()> {
             config.max_connections = tokio::sync::Semaphore::MAX_PERMITS + 1;
         }
         "graceful-timeout-overflow" => config.graceful_shutdown_timeout = Some(Duration::MAX),
-        "http1-max-buffer-too-small" => config.http1_max_buffer_size = Some(8 * 1024 - 1),
+        "http1-max-buffer-too-small" => config.http1_max_buffer_size = Some(0),
         "lifecycle-timeout-overflow" => {
             config.application_startup_timeout = Duration::MAX;
         }

@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@45",
+  "schema": "uvicorn-rs-parity/input@46",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
@@ -2078,6 +2078,145 @@
           "ws_max_size": 4,
           "ws_max_queue": 1,
           "timeout_seconds": 5
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-websocket-message-size-limit",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1009,
+        "message_received": false
+      },
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "12345",
+          "ws_max_size": 4,
+          "ws_max_queue": 1,
+          "timeout_seconds": 5,
+          "invocation": "module-cli",
+          "ws_backend": "auto"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-websocket-wsproto-exchange",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true
+      },
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "cli-wsproto-echo",
+          "ws_max_size": 64,
+          "timeout_seconds": 5,
+          "invocation": "module-cli",
+          "ws_backend": "wsproto"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-websocket-bounded-queue-drains-burst",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000
+      },
+      "api": {
+        "run_websocket": {
+          "path": "/ws-queue-delayed-reader",
+          "message": "queued-message",
+          "ws_max_size": 64,
+          "ws_max_queue": 1,
+          "timeout_seconds": 5,
+          "invocation": "module-cli",
+          "ws_backend": "websockets",
+          "send_count": 3
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-websocket-server-ping-interval",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1011,
+        "message_received": false,
+        "server_ping_observed": true
+      },
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "cli-ping-observed",
+          "ws_max_size": 64,
+          "timeout_seconds": 5,
+          "invocation": "module-cli",
+          "ws_backend": "auto",
+          "ws_ping_interval": 0.1,
+          "ws_ping_timeout": 0.1,
+          "keepalive_idle_seconds": 0.5,
+          "observe_server_pings": true,
+          "suppress_server_pongs": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-websocket-default-per-message-deflate",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "compression_negotiated": true
+      },
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "uvicorn-rs-cli-deflate-uvicorn-rs-cli-deflate-uvicorn-rs-cli-deflate-uvicorn-rs-cli-deflate",
+          "ws_max_size": 256,
+          "timeout_seconds": 5,
+          "invocation": "module-cli",
+          "ws_backend": "auto",
+          "observe_compression": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-websocket-disabled-per-message-deflate",
+      "profile": "python-api",
+      "operation": "python.api.run-websocket",
+      "covers": ["python.api.run-websocket"],
+      "required_observations": {
+        "handshake_status": 101,
+        "close_code": 1000,
+        "message_received": true,
+        "compression_negotiated": false
+      },
+      "api": {
+        "run_websocket": {
+          "path": "/ws",
+          "message": "uvicorn-rs-cli-deflate-uvicorn-rs-cli-deflate-uvicorn-rs-cli-deflate-uvicorn-rs-cli-deflate",
+          "ws_max_size": 256,
+          "timeout_seconds": 5,
+          "invocation": "module-cli",
+          "ws_backend": "auto",
+          "ws_per_message_deflate": false,
+          "observe_compression": true
         }
       }
     },
@@ -6489,6 +6628,134 @@
             "UVICORN_SSL_VERSION": "5",
             "UVICORN_SSL_CIPHERS": "DEFAULT"
           }
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-h11-incomplete-event-size-exact",
+      "profile": "python-api",
+      "operation": "python.api.run-http-incomplete-header",
+      "covers": [
+        "python.api.run-http-incomplete-header"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "response_received": false,
+        "response_status": null,
+        "raw_connection_open_after_timeout": true,
+        "shutdown_signal_sent": true,
+        "process_exit_code": 0,
+        "process_timed_out": false
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "client_timeout_seconds": 1,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "http_backend": "h11",
+          "h11_max_incomplete_event_size": 8192,
+          "incomplete_request_buffer_length": 8192
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-h11-incomplete-event-size-one-byte-over",
+      "profile": "python-api",
+      "operation": "python.api.run-http-incomplete-header",
+      "covers": [
+        "python.api.run-http-incomplete-header"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "response_received": true,
+        "response_status": 400,
+        "raw_connection_open_after_timeout": false,
+        "shutdown_signal_sent": true,
+        "process_exit_code": 0,
+        "process_timed_out": false
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "client_timeout_seconds": 1,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "http_backend": "h11",
+          "h11_max_incomplete_event_size": 8192,
+          "incomplete_request_buffer_length": 8193
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-h11-incomplete-event-size-1024-exact",
+      "profile": "python-api",
+      "operation": "python.api.run-http-incomplete-header",
+      "covers": [
+        "python.api.run-http-incomplete-header"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "response_received": false,
+        "response_status": null,
+        "raw_connection_open_after_timeout": true,
+        "shutdown_signal_sent": true,
+        "process_exit_code": 0,
+        "process_timed_out": false
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "client_timeout_seconds": 1,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "http_backend": "h11",
+          "h11_max_incomplete_event_size": 1024,
+          "incomplete_request_buffer_length": 1024
+        }
+      }
+    },
+    {
+      "case_id": "python-api.module-cli-h11-incomplete-event-size-1024-one-byte-over",
+      "profile": "python-api",
+      "operation": "python.api.run-http-incomplete-header",
+      "covers": [
+        "python.api.run-http-incomplete-header"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "response_received": true,
+        "response_status": 400,
+        "raw_connection_open_after_timeout": false,
+        "shutdown_signal_sent": true,
+        "process_exit_code": 0,
+        "process_timed_out": false
+      },
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "client_timeout_seconds": 1,
+          "lifespan": "off",
+          "invocation": "module-cli",
+          "root_path": "",
+          "http_backend": "h11",
+          "h11_max_incomplete_event_size": 1024,
+          "incomplete_request_buffer_length": 1025
         }
       }
     }

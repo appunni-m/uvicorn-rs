@@ -920,6 +920,13 @@ except KeyboardInterrupt:
         command = [sys.executable, "-m", "uvicorn", app_target]
         if request.get("http_backend") is not None:
             command.extend(("--http", request["http_backend"]))
+        if request.get("h11_max_incomplete_event_size") is not None:
+            command.extend(
+                (
+                    "--h11-max-incomplete-event-size",
+                    str(request["h11_max_incomplete_event_size"]),
+                )
+            )
         if host_from_environment is None:
             command.extend(("--host", host))
         if port_from_environment != "@probe-port":
@@ -1322,6 +1329,7 @@ except KeyboardInterrupt:
     listener_responses = [None] * len(probe_ports)
     response_count = 0
     idle_connection_closed = None
+    raw_connection_open_after_timeout = None
     connection_timeout = request.get("client_timeout_seconds")
     if connection_timeout is None:
         connection_timeout = (
@@ -1382,8 +1390,68 @@ except KeyboardInterrupt:
         request_limit_jitter = 0
     deadline = time.monotonic() + request["timeout_seconds"]
     try:
+        incomplete_request_buffer_length = request.get(
+            "incomplete_request_buffer_length"
+        )
+        if incomplete_request_buffer_length is not None:
+            prefix = (
+                b"GET / HTTP/1.1\r\n"
+                b"Host: localhost\r\n"
+                b"X-Parity-Incomplete: "
+            )
+            if incomplete_request_buffer_length < len(prefix):
+                raise RuntimeError(
+                    "incomplete request buffer is shorter than its HTTP header prefix"
+                )
+            request_bytes = prefix + b"a" * (
+                incomplete_request_buffer_length - len(prefix)
+            )
+            raw_socket = None
+            connect_deadline = time.monotonic() + request["timeout_seconds"]
+            while time.monotonic() < connect_deadline and process.poll() is None:
+                try:
+                    raw_socket = socket.create_connection(
+                        (probe_host, probe_ports[0]), timeout=0.5
+                    )
+                    break
+                except OSError:
+                    time.sleep(0.025)
+            if raw_socket is not None:
+                with raw_socket:
+                    raw_socket.sendall(request_bytes)
+                    raw_socket.settimeout(connection_timeout)
+                    response_bytes = bytearray()
+                    peer_closed = False
+                    try:
+                        while True:
+                            chunk = raw_socket.recv(4096)
+                            if not chunk:
+                                peer_closed = True
+                                break
+                            response_bytes.extend(chunk)
+                    except TimeoutError:
+                        pass
+                    except ConnectionResetError:
+                        peer_closed = True
+                    raw_connection_open_after_timeout = not peer_closed
+                status_line = bytes(response_bytes).split(b"\r\n", 1)[0]
+                status_parts = status_line.split()
+                if (
+                    len(status_parts) >= 2
+                    and status_parts[0].startswith(b"HTTP/")
+                    and status_parts[1].isdigit()
+                ):
+                    response = {
+                        "status": int(status_parts[1]),
+                        "content_type": None,
+                        "body_base64": "",
+                        "observed_headers": {},
+                    }
+                    listener_responses[0] = response
+                    response_count = 1
         while (
-            not request.get("bind_conflict", False)
+            request.get("incomplete_request_buffer_length") is None
+            and not request.get("bind_conflict", False)
             and time.monotonic() < deadline
             and process.poll() is None
         ):
@@ -1667,6 +1735,7 @@ except KeyboardInterrupt:
             "response_body_base64": response["body_base64"] if response is not None else "",
             "listener_responses": listener_responses,
             "idle_connection_closed": idle_connection_closed,
+            "raw_connection_open_after_timeout": raw_connection_open_after_timeout,
             "shutdown_signal_sent": shutdown_signal_sent,
             "shutdown_signals_sent": shutdown_signals_sent,
             "process_exit_code": process.returncode,
@@ -1716,8 +1785,31 @@ def run_websocket_observation(request: dict) -> dict:
     """Exercise WebSocket options through the public ``uvicorn.run`` API."""
 
     from websockets.exceptions import ConnectionClosed, InvalidStatus
+    from websockets.frames import Frame, Opcode
+    from websockets.sync.client import ClientConnection
     from websockets.sync.client import connect as websocket_connect
     from websockets.sync.client import unix_connect
+
+    class PingObservingConnection(ClientConnection):
+        def __init__(self, sock, protocol, **kwargs):
+            super().__init__(sock, protocol, **kwargs)
+            self.server_ping_observed = False
+            receive_frame = protocol.recv_frame
+
+            def observe_server_ping(frame):
+                if frame.opcode is Opcode.PING:
+                    self.server_ping_observed = True
+                    if request.get("suppress_server_pongs"):
+                        protocol.events.append(frame)
+                        return
+                receive_frame(frame)
+
+            protocol.recv_frame = observe_server_ping
+
+        def process_event(self, event):
+            if isinstance(event, Frame) and event.opcode is Opcode.PING:
+                self.server_ping_observed = True
+            super().process_event(event)
 
     child_code = r'''
 import json
@@ -1793,6 +1885,15 @@ uvicorn.run(
             port = reservation.getsockname()[1]
 
     environment = subprocess_environment()
+    for name in (
+        "UVICORN_WS",
+        "UVICORN_WS_MAX_SIZE",
+        "UVICORN_WS_MAX_QUEUE",
+        "UVICORN_WS_PING_INTERVAL",
+        "UVICORN_WS_PING_TIMEOUT",
+        "UVICORN_WS_PER_MESSAGE_DEFLATE",
+    ):
+        environment.pop(name, None)
     process_options = {}
     if os.name == "nt":
         process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -1800,8 +1901,36 @@ uvicorn.run(
     else:
         stop_signal = signal.SIGINT
 
-    process = subprocess.Popen(
-        [
+    if request.get("invocation") == "module-cli":
+        command = [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "tests.parity.app:python_api_websocket_cli_probe_app",
+            "--lifespan",
+            "off",
+            "--ws-max-size",
+            str(request["ws_max_size"]),
+        ]
+        if uds_path is None:
+            command.extend(("--host", "127.0.0.1", "--port", str(port)))
+        else:
+            command.extend(("--uds", uds_path))
+        if request.get("ws_backend") is not None:
+            command.extend(("--ws", request["ws_backend"]))
+        if "ws_max_queue" in request:
+            command.extend(("--ws-max-queue", str(request["ws_max_queue"])))
+        if request.get("ws_ping_interval") is not None:
+            command.extend(("--ws-ping-interval", str(request["ws_ping_interval"])))
+        if request.get("ws_ping_timeout") is not None:
+            command.extend(("--ws-ping-timeout", str(request["ws_ping_timeout"])))
+        if request.get("ws_per_message_deflate") is not None:
+            if request["ws_per_message_deflate"]:
+                command.append("--ws-per-message-deflate")
+            else:
+                environment["UVICORN_WS_PER_MESSAGE_DEFLATE"] = "false"
+    else:
+        command = [
             sys.executable,
             "-c",
             child_code,
@@ -1813,7 +1942,9 @@ uvicorn.run(
             json.dumps(request.get("ws_ping_interval", 20)),
             json.dumps(request.get("ws_ping_timeout", 20)),
             "0" if request.get("ws_per_message_deflate") is False else "1",
-        ],
+        ]
+    process = subprocess.Popen(
+        command,
         cwd=os.getcwd(),
         env=environment,
         stdin=subprocess.DEVNULL,
@@ -1828,6 +1959,7 @@ uvicorn.run(
     message_received = False
     scope_observation = None
     compression_negotiated = None
+    server_ping_observed = False
     try:
         uri = f"ws://127.0.0.1:{port}{request['path']}"
         while time.monotonic() < deadline and process.poll() is None:
@@ -1838,6 +1970,8 @@ uvicorn.run(
                     "max_size": None,
                     "legacy": True,
                 }
+                if request.get("observe_server_pings"):
+                    connect_options["create_connection"] = PingObservingConnection
                 if uds_path is not None:
                     connection = unix_connect(uds_path, uri, **connect_options)
                 else:
@@ -1866,7 +2000,8 @@ uvicorn.run(
                 if request.get("keepalive_idle_seconds"):
                     time.sleep(request["keepalive_idle_seconds"])
                 try:
-                    connection.send(request["message"])
+                    for _ in range(request.get("send_count", 1)):
+                        connection.send(request["message"])
                     try:
                         connection.recv(timeout=max(deadline - time.monotonic(), 0.01))
                         message_received = True
@@ -1880,6 +2015,9 @@ uvicorn.run(
                 pass
             if close_code is None:
                 close_code = connection.close_code
+            server_ping_observed = bool(
+                getattr(connection, "server_ping_observed", False)
+            )
             connection.close()
             if close_code is None:
                 close_code = connection.close_code
@@ -1908,6 +2046,7 @@ uvicorn.run(
             "close_code": close_code,
             "message_received": message_received,
             "scope_observation": scope_observation,
+            "server_ping_observed": server_ping_observed,
             "shutdown_signal_sent": shutdown_signal_sent,
             "process_exit_code": process.returncode,
             "process_timed_out": process_timed_out,

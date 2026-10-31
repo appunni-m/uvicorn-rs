@@ -2079,3 +2079,39 @@ class PythonApiASGI3Callable:
 
 
 python_api_asgi3_callable_app = PythonApiASGI3Callable()
+
+
+async def python_api_websocket_cli_probe_app(scope, receive, send):
+    """Serve the focused CLI WebSocket parity probes as ASGI 3."""
+
+    if scope["type"] != "websocket":
+        return
+    message = await receive()
+    if message["type"] != "websocket.connect":
+        return
+    await send({"type": "websocket.accept"})
+    if scope["path"] == "/ws-queue-delayed-reader":
+        await asyncio.sleep(0.1)
+        for _ in range(3):
+            message = await receive()
+            if message["type"] == "websocket.disconnect":
+                return
+        await send(
+            {
+                "type": "websocket.close",
+                "code": 1000,
+                "reason": "queue drained",
+            }
+        )
+        return
+    while True:
+        message = await receive()
+        if message["type"] == "websocket.disconnect":
+            return
+        if message["type"] == "websocket.receive":
+            response = {"type": "websocket.send"}
+            if "text" in message:
+                response["text"] = message["text"]
+            else:
+                response["bytes"] = message.get("bytes", b"")
+            await send(response)

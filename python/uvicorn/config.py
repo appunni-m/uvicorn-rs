@@ -571,15 +571,6 @@ class Config:
             (self.ssl_context_factory is not None, "ssl_context_factory"),
             (self.ssl_version not in supported_ssl_versions, "ssl_version"),
         )
-        if (
-            self.http == "h11"
-            and self.h11_max_incomplete_event_size is not None
-            and self.h11_max_incomplete_event_size < 8 * 1024
-        ):
-            raise ValueError(
-                "h11_max_incomplete_event_size must be at least 8192 bytes "
-                "for the native HTTP/1 parser"
-            )
         unsupported.extend(name for enabled, name in checks if enabled)
         if unsupported:
             names = ", ".join(unsupported)

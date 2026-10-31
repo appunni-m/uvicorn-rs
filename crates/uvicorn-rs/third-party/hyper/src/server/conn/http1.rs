@@ -391,16 +391,17 @@ impl Builder {
 
     /// Set the maximum buffer size for the connection.
     ///
+    /// An incomplete request head that reaches this size receives a
+    /// `400 Bad Request` response. Complete header-size violations use
+    /// `431 Request Header Fields Too Large`.
+    ///
     /// Default is ~400kb.
     ///
     /// # Panics
     ///
-    /// The minimum value allowed is 8192. This method panics if the passed `max` is less than the minimum.
+    /// This method panics if `max` is zero.
     pub fn max_buf_size(&mut self, max: usize) -> &mut Self {
-        assert!(
-            max >= proto::h1::MINIMUM_MAX_BUFFER_SIZE,
-            "the max_buf_size cannot be smaller than the minimum that h1 specifies."
-        );
+        assert!(max > 0, "the max_buf_size must be greater than zero.");
         self.max_buf_size = Some(max);
         self
     }

@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@45",
+  "schema": "uvicorn-rs-parity/input@46",
   "cases": [
     {
       "case_id": "fault.lifespan-fault-asgi-shutdown-failed.shutdown-failed-classification",

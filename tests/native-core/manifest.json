@@ -484,7 +484,7 @@
       "operation": "server-config-validation",
       "invalid_configuration": "http1-max-buffer-too-small",
       "expected_error": "invalid-http1-max-buffer-size",
-      "expected_error_display": "HTTP/1 max buffer size must be at least 8192 bytes"
+      "expected_error_display": "HTTP/1 max buffer size must be greater than zero"
     },
     {
       "id": "api.server-config-lifecycle-timeout-overflow-error",

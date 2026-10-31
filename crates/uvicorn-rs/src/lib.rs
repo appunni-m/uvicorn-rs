@@ -1252,8 +1252,8 @@ pub struct ServerConfig {
     pub http1_keep_alive_timeout: Option<Duration>,
     /// Maximum HTTP/1 connection read buffer in bytes.
     ///
-    /// `None` retains the server's default limit. Values smaller than the
-    /// Hyper HTTP/1 parser minimum are rejected before serving starts.
+    /// `None` retains the server's default limit. Zero is rejected before
+    /// serving starts.
     pub http1_max_buffer_size: Option<usize>,
     /// Whether TCP connections accept HTTP/2, including prior-knowledge h2c.
     /// TLS callers must configure their acceptor's ALPN list consistently.
@@ -2003,7 +2003,7 @@ impl fmt::Display for ServeError {
                 formatter.write_str("graceful shutdown timeout exceeds the runtime clock range")
             }
             Self::InvalidHttp1MaxBufferSize => {
-                formatter.write_str("HTTP/1 max buffer size must be at least 8192 bytes")
+                formatter.write_str("HTTP/1 max buffer size must be greater than zero")
             }
             Self::InvalidApplicationLifecycleTimeout => {
                 formatter.write_str("application lifecycle timeout exceeds the runtime clock range")
@@ -2090,10 +2090,7 @@ fn validate_server_config(config: &ServerConfig) -> Result<(), ServeError> {
     if config.max_connections > Semaphore::MAX_PERMITS {
         return Err(ServeError::ConnectionLimitTooLarge);
     }
-    if config
-        .http1_max_buffer_size
-        .is_some_and(|size| size < 8 * 1024)
-    {
+    if config.http1_max_buffer_size.is_some_and(|size| size == 0) {
         return Err(ServeError::InvalidHttp1MaxBufferSize);
     }
     let now = Instant::now();
