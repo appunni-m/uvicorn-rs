@@ -13,45 +13,43 @@ published.
 
 ## Current status (2026-10-31)
 
-PR #19 is draft and targets `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran
-on head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73`; the overall workflow
-conclusion was cancelled. Linux installed-
-wheel parity passed 718/718. Windows candidate parity failed 688/691 with zero
-infrastructure failures; macOS candidate verification was cancelled. The
-three-repeat coverage gate missed 100% at 14,137/14,252 regions and
-10,411/10,465 lines after all 1,340 cases were attributed.
-Exact-source independent coverage review and full cross-platform compatibility
-remain open.
+PR #19 remains draft against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`.
+[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
+checks head `9b0309406704e1d03c5f3e99a416f2b634d5f749`. Its Linux normal
+wheel passed all 731 live parity cases, then failed strict evidence validation
+on duplicate JSON fields. The MSRV job rejected TOML syntax before compiling,
+so new macOS/Windows package and Python-floor receipts were skipped. Both
+issues are corrected in the follow-up branch; their fixes still need hosted
+acceptance. The full coverage job remains active.
 
-The Windows failures are `module-cli-two-workers-stop-on-sigterm`,
-`module-cli-web-concurrency-two-workers-serve-request`, and
-`module-cli-explicit-workers-overrides-web-concurrency`. Every case served HTTP
-200. Focused Windows run [#530](https://github.com/appunni-m/uvicorn-rs/actions/runs/41137831335)
-passed these three cases (3/3) on head `158b82b4e0364f439f2390a694bbd53e0849f03c`
-with shutdown tracing enabled. Oracle and candidate exited 0 without timing
-out and produced matching normalized shutdown events. Artifact `13016614526`
-has SHA-256 `d8497ab002d4199ec58c4b873ef7569e7bfe3348c8c92284603df812fcbd1bd3`.
-The full Windows matrix and root-cause explanation remain open. The Python 3.9 consumer check
-was skipped in #528. Uvicorn 0.54.0 declares Python `>=3.10` in its [versioned project
-metadata](https://github.com/Kludex/uvicorn/blob/0.54.0/pyproject.toml), so
-parity against that oracle starts at Python 3.10; the Python 3.9 wheel-install
-check is a separate package claim.
+The latest completed coverage report, from
+[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481),
+attributed and passed all 1,351 cases and three verification repeats, but
+missed the gate at 14,137/14,251 regions and 10,410/10,463 lines. It applies to
+the earlier source. No accepted current-source independent Coverage-MCP
+receipt or complete current-platform candidate bundle exists.
+
+[Documentation #218](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891137)
+passed for the #537 source. Later local fixes cover Content-Length completion,
+parser-specific CONNECT admission and WebSocket keepalive error handling.
+A normal macOS ARM64 wheel from clean commit `52c9e74a8d604d8489a71db387077cbcbb5ae753`
+passes its installed consumer checks and the nine affected public inputs;
+this subset is not full platform acceptance. Exact receipts are in the
+[maintainer completion plan](maintainers/release-completion-plan.md).
 
 | What you need | Current state |
 | --- | --- |
-| Install from PyPI | Not available. The `uvicorn-rs` distribution has not been published. |
-| Run the `uvicorn` command | The source exposes `uvicorn` and `python -m uvicorn`; the full CLI/settings contract has not passed across the declared platforms. |
-| Import and configure `uvicorn` | The source exposes `run`, `Config`, and `Server`. The full Python API and platform matrix remains open. |
-| Serve a Python ASGI app | Linux parity passed 718/718 on #528; Windows candidate parity failed 688/691 and macOS candidate verification was cancelled. |
-| Use workers, reload, sockets, or process controls | Selected cases cover parts of these surfaces. Current Windows worker cases remain unconfirmed; a focused signal trace is pending. Full operational parity remains open. |
-| Claim a performance advantage | Not supported. Benchmark work follows compatibility acceptance, and the previous three-system run is incomplete. See benchmark status. |
-| Use the current release candidate on Windows | Not verified. The Windows parity lane failed in #528, so its candidate consumer checks were skipped. |
+| Install from PyPI | `uvicorn-rs` has no published release. |
+| Use the `uvicorn` CLI or Python API | Implemented public inventory; complete platform acceptance remains open. |
+| Serve an ASGI app | 731 Linux live inputs pass on #537; its evidence job failed metadata validation. |
+| Use workers, reload, sockets or process controls | Maintained live inputs exist; current full macOS/Windows receipts remain pending. |
+| Install the Windows candidate | Current-source package qualification is pending. |
+| Claim a performance advantage | No broad Python FastAPI gain is established. Benchmark work follows parity. |
 
-Passing Linux and macOS parity does not qualify the Windows candidate or close
-the full Uvicorn contract. Remaining behavior and platform claims need exact
-receipts, and the prior benchmark results do not justify a general speed claim.
+The Python 3.9 wheel-consumer check is a separate package claim. The pinned
+Uvicorn 0.54.0 oracle requires Python 3.10 or later; its versioned metadata is
+retained by the [public contract](maintainers/uvicorn-0.54.0-contract.md).
 See the [support matrix](support-matrix.md) and [release gates](releases.md).
 
 ## Historical diagnostic records

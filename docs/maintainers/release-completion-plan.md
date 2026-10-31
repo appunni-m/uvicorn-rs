@@ -132,6 +132,20 @@ deadline, instead of an async branch that waits forever when keepalive is
 disabled. Existing timed-out, timeout-disabled, infinite-interval and
 keepalive-disabled inputs pass 4/4 in `target/ci536/optional-keepalive/`.
 
+A clean normal macOS ARM64 abi3 wheel from `52c9e74a8d604d8489a71db387077cbcbb5ae753`
+passes installed-package HTTP/lifespan/context/cancellation and CLI/TLS/shutdown
+checks, plus all nine affected public parity inputs (9/9, zero failed,
+infrastructure-failed or not-run). Receipts are in `target/normal-52c9e74a8/`.
+Wheel SHA-256: `26261cd60703aa911a3598dcd99a945262a88840fa06783ba5c437bca4700192`;
+consumer report: `9f8782c926bca881fbb35ff18ff22e14286b095b786e7b2f0de9a7a8aeda2763`;
+parity report: `ff09f9f6eee7e1e8b9ccb8b76265b18bfba1016e40b39fda577e58d943debcc0`.
+This is selected normal-build evidence, not a complete platform or release
+candidate receipt. The documentation refresh removes stale current-status
+claims and corrects the CLI map: the pinned Uvicorn 0.54.0 command does declare
+`--http2`. README documentation links are absolute so the PyPI description can
+resolve them. The strict MkDocs build and structural documentation audit pass;
+the audit's only review item is unlabeled fences in vendored H2 contributor docs.
+
 The Linux installed-wheel public parity in #531 passed 719/719. Windows ran
 692 cases: 689 passed and three two-worker shutdown cases failed. Their only
 input changes since that run add a one-second startup settle. Focused Windows

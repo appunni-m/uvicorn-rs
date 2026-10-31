@@ -9,24 +9,26 @@
 
 ## Current unified coverage status (2026-10-31)
 
-The latest completed full coverage report is from
-[CI #531](https://github.com/appunni-m/uvicorn-rs/actions/runs/41140694132),
-PR #19 head `48aba59dc12ab4fa9c6195d95d2fabd226b4a052`, merge ref
-`0e76ef265977050836044fcb6ef9550b1352fcda`. All 1,341 indexed cases were
-attributed. The three-repeat gate remains below 100%:
-**14,137/14,252 executable regions** (115 missing) and **10,411/10,465 lines**
-(54 missing). Artifact `13022180254` has archive SHA-256
-`95e4eed1095c0068fcd4423ff2c122e3ae1bd35aabfe05ff7d81cd4af03cf5da`;
-source SHA-256 is
-`9acb1ef935d10af060a0e41a39d33d4b4484cb75c079c2ee33d277a4eceed6ed`.
-This earlier-source report is diagnostic, rather than current acceptance.
+The latest completed full report is from
+[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481),
+head `6342b20402bf0cceabd8eafde3f067e1620bafba`, merge ref
+`15cf322f9f005b4823167620d0d17c570b992ff2`. All 1,351 indexed cases and the
+three full verification repeats passed. Coverage remains below 100%:
+**14,137/14,251 regions** (114 missing) and **10,410/10,463 lines** (53 missing).
+Its report SHA-256 is
+`336eadc77922d0f981039c1ec8ad18c35229bf2199811ea960ceb7e9e98eea32`.
+All missing regions are in the Python adapter. This report is diagnostic for
+that earlier source, not acceptance for later fixes.
 
-[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481)
-checks the h11 fix and ten new CLI observations committed in
-`6342b20402bf0cceabd8eafde3f067e1620bafba`. Its full coverage and parity jobs
-are still running. Rust quality, feature builds, MSRV, native composition and
-release-evidence contracts passed. No accepted independent Coverage-MCP
-receipt exists; `7t4g` remains open.
+[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
+is running the next complete coverage matrix at head
+`9b0309406704e1d03c5f3e99a416f2b634d5f749`. Additional focused startup, TLS,
+listener, response-completion and WebSocket receipts are recorded in the
+[completion plan](maintainers/release-completion-plan.md). They do not supply
+a new global coverage total. No current-source independent Coverage-MCP
+receipt is accepted; `7t4g` remains open. The normal build excludes fault controls.
+
+### Earlier focused coverage batches
 
 A separate follow-up batch on `codex/uvicorn-rs-coverage-events` adds nine
 coverage-only HTTP/2 response-event failure cases: early-hint/trailer event

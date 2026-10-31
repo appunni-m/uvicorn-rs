@@ -15,7 +15,7 @@ Use these state labels precisely:
 - **Released:** the authorized distribution decision and required verification
   are complete.
 
-## Current release gates (2026-10-30)
+## Current release gates (2026-10-31)
 
 The release set is one Python-free **uvicorn-rs** server crate with HTTP/3
 behind its optional **http3** feature, the separate
@@ -28,50 +28,42 @@ Both crates.io Trusted Publisher entries for `asgi-lifespan-protocol-rs` and
 `uvicorn-rs` already use `appunni-m/uvicorn-rs / release.yml / crates-io`.
 The maintainer confirms these entries are already present; do not add duplicates.
 
-A read-only registry check on 2026-10-30 found crates.io versions
-`uvicorn-rs` 0.2.1 and `asgi-lifespan-protocol-rs` 0.2.1 present and unyanked;
-PyPI returned 404 for `uvicorn-rs`. The source declares version 0.2.2. CI #528
-has a successful Linux x86-64 0.2.2 candidate artifact and clean-consumer
-receipt, but it is for a PR commit and does not qualify a release from `main`.
+A read-only registry check on 2026-10-31 found `uvicorn-rs` and
+`asgi-lifespan-protocol-rs` at 0.2.1, both unyanked. PyPI returned 404 for
+`uvicorn-rs`. The synchronized candidate source declares 0.2.2.
 
-PR #19 remains a draft against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran on
-head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` (merge ref
-`10929063e0dfb420d6ebb7210922ad805528039d`). Rust quality, MSRV, feature
-builds, native FastAPI-RS composition, release-evidence checks, Linux public
-parity at 718/718, the Linux candidate artifact/consumer checks, and docs
-deployment passed. The overall workflow conclusion was cancelled. Windows
-candidate parity was 688/691 with zero
-infrastructure failures; the three differences concern two-worker shutdown and
-concurrency. macOS candidate verification was cancelled. No all-platform
-candidate acceptance exists.
+PR #19 remains draft against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`.
+[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
+checks head `9b0309406704e1d03c5f3e99a416f2b634d5f749`. Its Linux normal
+wheel passed all 731 live parity cases, then failed strict evidence validation
+on duplicate JSON fields. The MSRV job rejected TOML syntax before compiling,
+so new macOS/Windows package and Python-floor receipts were skipped. Both
+issues are corrected in the follow-up branch; their fixes still need hosted
+acceptance. The full coverage job remains active.
 
-Focused Windows run [#530](https://github.com/appunni-m/uvicorn-rs/actions/runs/41137831335)
-on head `158b82b4e0364f439f2390a694bbd53e0849f03c` passed the three affected
-cases (3/3) with tracing enabled; oracle and candidate both returned HTTP 200,
-exited 0 without timing out, and matched normalized shutdown events. Artifact
-`13016614526` has SHA-256
-`d8497ab002d4199ec58c4b873ef7569e7bfe3348c8c92284603df812fcbd1bd3`. This does
-not supply a full Windows matrix receipt. Docs deployment #215 covers the older
-head; the latest docs refresh passes a strict local build and still needs
-deployment.
+The latest completed coverage report, from
+[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481),
+attributed and passed all 1,351 cases and three verification repeats, but
+missed the gate at 14,137/14,251 regions and 10,410/10,463 lines. It applies to
+the earlier source. No accepted current-source independent Coverage-MCP
+receipt or complete current-platform candidate bundle exists.
 
-The #528 three-repeat unified coverage job completed with all 1,340 indexed
-cases attributed but missed the 100% gate at 14,137/14,252 regions and
-10,411/10,465 lines. Artifact `13016632517` has archive SHA-256
-`4674397eba67621d60dd06f3f1cdb9793e83d9ba7bedfb9b64eacf9dca4177e7`. No
-accepted independent Coverage-MCP review exists. Focused Windows run #530
-passed those three cases under shutdown tracing; a complete Windows matrix
-receipt and root-cause explanation remain open.
+[Documentation #218](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891137)
+passed for the #537 source. Later local fixes cover Content-Length completion,
+parser-specific CONNECT admission and WebSocket keepalive error handling.
+A normal macOS ARM64 wheel from clean commit `52c9e74a8d604d8489a71db387077cbcbb5ae753`
+passes its installed consumer checks and the nine affected public inputs;
+this subset is not full platform acceptance. Exact receipts are in the
+[maintainer completion plan](maintainers/release-completion-plan.md).
 
-No exact-main release candidate is ready. Exact-source 100% coverage and
-independent review, complete compatibility, macOS/Windows candidate consumers,
-and clean Cargo/PyPI artifact checks remain open. The previous benchmark matrix
-is incomplete on Linux ARM64 and does not establish a broad Python FastAPI
-speed gain. Per the parity-first plan, do not start a new benchmark matrix
-until compatibility passes. Do not create a tag or publish packages before all
-release gates pass.
+No exact-main candidate is ready. Complete compatibility, 100% coverage and
+independent review, three-system performance evidence, clean artifact
+inspection and downstream consumers remain release gates. The older Linux
+ARM64 benchmark is incomplete and establishes no general Python FastAPI gain.
+Run parity before benchmarks. Create the immutable version tag only after the
+required evidence is accepted; publish the qualified artifacts in dependency
+order using the maintainer-directed path below.
 
 Main and version-tag protection rulesets, the `pypi` and `crates-io`
 environments, and trusted-publisher configuration were verified. The

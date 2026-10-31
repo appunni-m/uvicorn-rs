@@ -96,7 +96,7 @@ Parameters: `--loop`, `--http`, `--http2`, `--ws`, `--lifespan`, `--interface`.
 
 - Process validation: `cli.invalid-loop-environment-is-rejected`, `cli.explicit-loop-over-invalid-environment`, `cli.invalid-http-selector-is-rejected`, `cli.invalid-http-selector-environment-is-rejected`, `cli.explicit-http-over-invalid-environment`, `cli.invalid-websocket-selector-is-rejected`, `cli.explicit-websocket-selector-over-invalid-environment`, `cli.invalid-lifespan-selector-is-rejected`, `cli.invalid-interface-selector-is-rejected`, and `cli.explicit-interface-over-invalid-environment`.
 - Live module-CLI behavior: `python-api.module-cli-h11-backend-serves-request`, `python-api.module-cli-explicit-asgi2-interface`, `python-api.module-cli-uses-wsgi-interface-from-environment`, `python-api.module-cli-http-with-lifespan-disabled`, and `cli.custom-loop-factory-is-invoked`.
-- `--http2` is an uvicorn-rs extension: Uvicorn 0.54.0 does not provide this option. Its input cases are target-specific and do not establish Uvicorn parity.
+- Uvicorn 0.54.0 declares `--http2` (default `false`) and requires its experimental `zttp` backend. The pinned live HTTP/2 oracle selects `--http zttp --http2`; uvicorn-rs handles the transport in Rust. Backend validation and the maintained HTTP/2 cases establish only their declared observations.
 
 ### `websocket`
 
