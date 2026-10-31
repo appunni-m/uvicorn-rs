@@ -1180,7 +1180,7 @@
     {
       "case_id": "python-api.module-cli-explicit-workers-overrides-web-concurrency",
       "profile": "python-api",
-      "operation": "python.api.run-http",
+      "operation": "python.api.run-http-worker-precedence",
       "covers": [
         "python.api.run-http"
       ],
